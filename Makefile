@@ -8,15 +8,17 @@ VERSION = 0.1.0
 CFLAGS = -g -O0 -DDEBUG
 
 
-.PHONY: all clean
-
+.PHONY: all
 all:
+	./build_dev.sh
+	./build_release.sh
 	@echo "Building $(PROJECT) v$(VERSION)"
 	@echo "Flags: $(CFLAGS)"
 
 	@echo "Logging enabled to build.log"
 
 
+.PHONY: clean
 clean:
 	@echo "Cleaning $(PROJECT)"
 	rm -rf ./build

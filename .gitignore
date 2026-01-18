@@ -23,6 +23,6 @@ target
 
 # Added by cargo
 
-/target
+/target/
 
 /.rsb_cache.json
