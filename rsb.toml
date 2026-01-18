@@ -13,3 +13,6 @@ args = []
 
 [completions]
 shells = ["bash"]
+
+[cache]
+restore_method = "hardlink"  # or "copy"
