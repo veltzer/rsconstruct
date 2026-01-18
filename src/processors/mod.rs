@@ -1,10 +1,12 @@
 mod linter;
+mod sleep;
 mod template;
 
 use anyhow::Result;
 
 pub use crate::graph::{BuildGraph, Product};
 pub use linter::Linter;
+pub use sleep::SleepProcessor;
 pub use template::TemplateProcessor;
 
 /// Trait for processors that can discover products for the build graph

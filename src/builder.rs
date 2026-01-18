@@ -7,7 +7,7 @@ use crate::cli::{GraphFormat, GraphViewer};
 use crate::config::Config;
 use crate::executor::Executor;
 use crate::graph::BuildGraph;
-use crate::processors::{Linter, ProductDiscovery, TemplateProcessor};
+use crate::processors::{Linter, ProductDiscovery, SleepProcessor, TemplateProcessor};
 
 const CACHE_FILE: &str = ".rsb_cache.json";
 
@@ -108,6 +108,10 @@ impl Builder {
         // Lint processor
         let linter = Linter::new(self.project_root.clone(), self.config.lint.clone());
         processors.insert("lint".to_string(), Box::new(linter));
+
+        // Sleep processor (for testing parallelism)
+        let sleep_proc = SleepProcessor::new(self.project_root.clone());
+        processors.insert("sleep".to_string(), Box::new(sleep_proc));
 
         processors
     }

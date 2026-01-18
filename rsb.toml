@@ -3,7 +3,7 @@
 parallel = 1
 
 [processors]
-enabled = ["template", "lint"]
+enabled = ["template", "lint", "sleep"]
 
 [lint]
 linter = "ruff"

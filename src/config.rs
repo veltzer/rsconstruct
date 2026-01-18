@@ -44,7 +44,7 @@ pub struct ProcessorsConfig {
 }
 
 fn default_processors() -> Vec<String> {
-    vec!["template".to_string(), "lint".to_string()]
+    vec!["template".to_string(), "lint".to_string(), "sleep".to_string()]
 }
 
 impl Default for ProcessorsConfig {
