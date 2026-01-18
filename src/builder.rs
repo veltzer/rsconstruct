@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use crate::checksum::ChecksumCache;
-use crate::cli::GraphFormat;
+use crate::cli::{GraphFormat, GraphViewer};
 use crate::config::Config;
 use crate::graph::BuildGraph;
 use crate::processors::{BuildStats, Linter, ProcessStats, ProductDiscovery, TemplateProcessor};
@@ -171,18 +171,7 @@ impl Builder {
 
     /// Print the dependency graph in the specified format
     pub fn print_graph(&self, format: GraphFormat) -> Result<()> {
-        // Create processors and discover products
-        let processors = self.create_processors();
-        let mut graph = BuildGraph::new();
-
-        for (name, processor) in &processors {
-            if self.config.processors.is_enabled(name) {
-                processor.discover(&mut graph)?;
-            }
-        }
-
-        // Resolve dependencies
-        graph.resolve_dependencies();
+        let graph = self.build_graph()?;
 
         // Output in the requested format
         let output = match format {
@@ -193,6 +182,100 @@ impl Builder {
         };
 
         println!("{}", output);
+        Ok(())
+    }
+
+    /// View the dependency graph in a viewer
+    pub fn view_graph(&self, viewer: GraphViewer) -> Result<()> {
+        use std::process::Command;
+
+        let graph = self.build_graph()?;
+
+        // Create temp file
+        let temp_dir = std::env::temp_dir();
+
+        match viewer {
+            GraphViewer::Mermaid => {
+                let html_path = temp_dir.join("rsb_graph.html");
+                let html_content = graph.to_html();
+                fs::write(&html_path, html_content)
+                    .context("Failed to write HTML file")?;
+
+                // Open in browser
+                self.open_file(&html_path)?;
+                println!("Opened graph in browser: {}", html_path.display());
+            }
+            GraphViewer::Dot => {
+                // Check if dot is available
+                let dot_check = Command::new("dot").arg("-V").output();
+                if dot_check.is_err() || !dot_check.unwrap().status.success() {
+                    anyhow::bail!("Graphviz 'dot' command not found. Install Graphviz or use --view=mermaid");
+                }
+
+                let dot_path = temp_dir.join("rsb_graph.dot");
+                let svg_path = temp_dir.join("rsb_graph.svg");
+
+                // Write DOT file
+                let dot_content = graph.to_dot();
+                fs::write(&dot_path, dot_content)
+                    .context("Failed to write DOT file")?;
+
+                // Convert to SVG
+                let output = Command::new("dot")
+                    .arg("-Tsvg")
+                    .arg(&dot_path)
+                    .arg("-o")
+                    .arg(&svg_path)
+                    .output()
+                    .context("Failed to run dot command")?;
+
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    anyhow::bail!("dot command failed: {}", stderr);
+                }
+
+                // Open SVG
+                self.open_file(&svg_path)?;
+                println!("Opened graph: {}", svg_path.display());
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Build the dependency graph
+    fn build_graph(&self) -> Result<BuildGraph> {
+        let processors = self.create_processors();
+        let mut graph = BuildGraph::new();
+
+        for (name, processor) in &processors {
+            if self.config.processors.is_enabled(name) {
+                processor.discover(&mut graph)?;
+            }
+        }
+
+        graph.resolve_dependencies();
+        Ok(graph)
+    }
+
+    /// Open a file with the system default application
+    fn open_file(&self, path: &std::path::Path) -> Result<()> {
+        use std::process::Command;
+
+        #[cfg(target_os = "linux")]
+        let cmd = "xdg-open";
+
+        #[cfg(target_os = "macos")]
+        let cmd = "open";
+
+        #[cfg(target_os = "windows")]
+        let cmd = "start";
+
+        Command::new(cmd)
+            .arg(path)
+            .spawn()
+            .context(format!("Failed to open file with {}", cmd))?;
+
         Ok(())
     }
 }

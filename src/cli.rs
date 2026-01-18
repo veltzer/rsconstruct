@@ -29,6 +29,16 @@ pub enum GraphFormat {
     Text,
 }
 
+/// Viewer for opening the graph
+#[derive(Debug, Clone, Copy, Default, ValueEnum)]
+pub enum GraphViewer {
+    /// Open as HTML with Mermaid in browser (no dependencies)
+    #[default]
+    Mermaid,
+    /// Use Graphviz dot command to generate and open image
+    Dot,
+}
+
 #[derive(Subcommand)]
 pub enum Commands {
     /// Execute an incremental build
@@ -47,9 +57,13 @@ pub enum Commands {
     },
     /// Display the build dependency graph
     Graph {
-        /// Output format
+        /// Output format (ignored if --view is used)
         #[arg(short, long, value_enum, default_value = "dot")]
         format: GraphFormat,
+
+        /// Open graph in viewer
+        #[arg(long, value_enum)]
+        view: Option<GraphViewer>,
     },
 }
 

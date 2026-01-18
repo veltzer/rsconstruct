@@ -44,9 +44,13 @@ fn main() -> Result<()> {
                 print_completions(shell);
             }
         }
-        Commands::Graph { format } => {
+        Commands::Graph { format, view } => {
             let builder = Builder::new()?;
-            builder.print_graph(format)?;
+            if let Some(viewer) = view {
+                builder.view_graph(viewer)?;
+            } else {
+                builder.print_graph(format)?;
+            }
         }
     }
 

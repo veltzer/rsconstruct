@@ -218,51 +218,97 @@ impl Default for BuildGraph {
 }
 
 impl BuildGraph {
-    /// Generate a short label for a product (used in graph output)
-    fn product_label(&self, product: &Product) -> String {
-        let outputs: Vec<_> = product.outputs.iter()
-            .filter_map(|p| p.file_name())
-            .filter_map(|n| n.to_str())
-            .collect();
-        format!("[{}] {}", product.processor, outputs.join(", "))
+    /// Generate a safe node ID from a path
+    fn path_node_id(path: &PathBuf) -> String {
+        let name = path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown");
+        // Make safe for DOT/Mermaid: replace special chars
+        format!("f_{}", name.replace('.', "_").replace('-', "_").replace('/', "_"))
     }
 
-    /// Generate a node ID for a product (safe for DOT/Mermaid)
-    fn product_node_id(&self, product: &Product) -> String {
-        format!("p{}", product.id)
+    /// Generate a node ID for a processor
+    fn processor_node_id(product: &Product) -> String {
+        format!("proc_{}", product.id)
+    }
+
+    /// Get file label (just the filename)
+    fn file_label(path: &PathBuf) -> String {
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string()
     }
 
     /// Format graph as DOT (Graphviz)
     pub fn to_dot(&self) -> String {
+        use std::collections::HashSet;
+
         let mut lines = Vec::new();
         lines.push("digraph build_graph {".to_string());
         lines.push("    rankdir=LR;".to_string());
-        lines.push("    node [shape=box];".to_string());
         lines.push("".to_string());
 
-        // Add nodes
+        // Collect all unique input and output files
+        let mut input_files: HashSet<PathBuf> = HashSet::new();
+        let mut output_files: HashSet<PathBuf> = HashSet::new();
+
         for product in &self.products {
-            let node_id = self.product_node_id(product);
-            let label = self.product_label(product);
+            for input in &product.inputs {
+                input_files.insert(input.clone());
+            }
+            for output in &product.outputs {
+                output_files.insert(output.clone());
+            }
+        }
+
+        // Add file nodes (inputs that are not outputs = source files)
+        lines.push("    // Source files".to_string());
+        for file in &input_files {
+            if !output_files.contains(file) {
+                let node_id = Self::path_node_id(file);
+                let label = Self::file_label(file);
+                lines.push(format!("    {} [label=\"{}\" shape=note style=filled fillcolor=white];", node_id, label));
+            }
+        }
+
+        lines.push("".to_string());
+        lines.push("    // Generated files".to_string());
+        for file in &output_files {
+            let node_id = Self::path_node_id(file);
+            let label = Self::file_label(file);
+            let color = if input_files.contains(file) { "lightgreen" } else { "lightyellow" };
+            lines.push(format!("    {} [label=\"{}\" shape=note style=filled fillcolor={}];", node_id, label, color));
+        }
+
+        lines.push("".to_string());
+        lines.push("    // Processors".to_string());
+        for product in &self.products {
+            let node_id = Self::processor_node_id(product);
             let color = match product.processor.as_str() {
                 "template" => "lightblue",
                 "lint" => "lightyellow",
                 _ => "lightgray",
             };
-            lines.push(format!("    {} [label=\"{}\" style=filled fillcolor={}];",
-                node_id, label, color));
+            lines.push(format!("    {} [label=\"{}\" shape=box style=filled fillcolor={}];",
+                node_id, product.processor, color));
         }
 
         lines.push("".to_string());
-
-        // Add edges
+        lines.push("    // Edges".to_string());
         for product in &self.products {
-            if let Some(deps) = self.dependents.get(&product.id) {
-                for &dep_id in deps {
-                    let from = self.product_node_id(product);
-                    let to = self.product_node_id(&self.products[dep_id]);
-                    lines.push(format!("    {} -> {};", from, to));
-                }
+            let proc_id = Self::processor_node_id(product);
+
+            // Input files -> processor
+            for input in &product.inputs {
+                let input_id = Self::path_node_id(input);
+                lines.push(format!("    {} -> {};", input_id, proc_id));
+            }
+
+            // Processor -> output files
+            for output in &product.outputs {
+                let output_id = Self::path_node_id(output);
+                lines.push(format!("    {} -> {};", proc_id, output_id));
             }
         }
 
@@ -272,45 +318,81 @@ impl BuildGraph {
 
     /// Format graph as Mermaid
     pub fn to_mermaid(&self) -> String {
+        use std::collections::HashSet;
+
         let mut lines = Vec::new();
         lines.push("graph LR".to_string());
 
-        // Add nodes with styling
+        // Collect all unique input and output files
+        let mut input_files: HashSet<PathBuf> = HashSet::new();
+        let mut output_files: HashSet<PathBuf> = HashSet::new();
+
         for product in &self.products {
-            let node_id = self.product_node_id(product);
-            let label = self.product_label(product);
-            lines.push(format!("    {}[\"{}\" ]", node_id, label));
+            for input in &product.inputs {
+                input_files.insert(input.clone());
+            }
+            for output in &product.outputs {
+                output_files.insert(output.clone());
+            }
         }
 
         lines.push("".to_string());
+        lines.push("    %% Source files".to_string());
+        for file in &input_files {
+            if !output_files.contains(file) {
+                let node_id = Self::path_node_id(file);
+                let label = Self::file_label(file);
+                lines.push(format!("    {}[/\"{}\"/]", node_id, label));
+            }
+        }
 
-        // Add edges
+        lines.push("".to_string());
+        lines.push("    %% Generated files".to_string());
+        for file in &output_files {
+            let node_id = Self::path_node_id(file);
+            let label = Self::file_label(file);
+            lines.push(format!("    {}[/\"{}\"/]", node_id, label));
+        }
+
+        lines.push("".to_string());
+        lines.push("    %% Processors".to_string());
         for product in &self.products {
-            if let Some(deps) = self.dependents.get(&product.id) {
-                for &dep_id in deps {
-                    let from = self.product_node_id(product);
-                    let to = self.product_node_id(&self.products[dep_id]);
-                    lines.push(format!("    {} --> {}", from, to));
-                }
+            let node_id = Self::processor_node_id(product);
+            lines.push(format!("    {}[\"{}\" ]", node_id, product.processor));
+        }
+
+        lines.push("".to_string());
+        lines.push("    %% Edges".to_string());
+        for product in &self.products {
+            let proc_id = Self::processor_node_id(product);
+
+            for input in &product.inputs {
+                let input_id = Self::path_node_id(input);
+                lines.push(format!("    {} --> {}", input_id, proc_id));
+            }
+
+            for output in &product.outputs {
+                let output_id = Self::path_node_id(output);
+                lines.push(format!("    {} --> {}", proc_id, output_id));
             }
         }
 
         // Add styling
         lines.push("".to_string());
-        let template_nodes: Vec<_> = self.products.iter()
+        let template_procs: Vec<_> = self.products.iter()
             .filter(|p| p.processor == "template")
-            .map(|p| self.product_node_id(p))
+            .map(|p| Self::processor_node_id(p))
             .collect();
-        let lint_nodes: Vec<_> = self.products.iter()
+        let lint_procs: Vec<_> = self.products.iter()
             .filter(|p| p.processor == "lint")
-            .map(|p| self.product_node_id(p))
+            .map(|p| Self::processor_node_id(p))
             .collect();
 
-        if !template_nodes.is_empty() {
-            lines.push(format!("    style {} fill:#add8e6", template_nodes.join(",")));
+        if !template_procs.is_empty() {
+            lines.push(format!("    style {} fill:#add8e6", template_procs.join(",")));
         }
-        if !lint_nodes.is_empty() {
-            lines.push(format!("    style {} fill:#ffffe0", lint_nodes.join(",")));
+        if !lint_procs.is_empty() {
+            lines.push(format!("    style {} fill:#ffffe0", lint_procs.join(",")));
         }
 
         lines.join("\n")
@@ -400,5 +482,44 @@ impl BuildGraph {
         }
 
         lines.join("\n")
+    }
+
+    /// Generate a self-contained HTML file with Mermaid diagram
+    pub fn to_html(&self) -> String {
+        let mermaid_content = self.to_mermaid();
+        format!(r#"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>RSB Build Graph</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 40px;
+            background: #f5f5f5;
+        }}
+        h1 {{
+            color: #333;
+        }}
+        .mermaid {{
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+    </style>
+</head>
+<body>
+    <h1>RSB Build Graph</h1>
+    <div class="mermaid">
+{mermaid_content}
+    </div>
+    <script>
+        mermaid.initialize({{ startOnLoad: true, theme: 'default' }});
+    </script>
+</body>
+</html>
+"#)
     }
 }
