@@ -1,10 +1,9 @@
-mod graph;
 mod linter;
 mod template;
 
 use anyhow::Result;
 
-pub use graph::{BuildGraph, Product};
+pub use crate::graph::{BuildGraph, Product};
 pub use linter::Linter;
 pub use template::TemplateProcessor;
 

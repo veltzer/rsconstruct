@@ -1,4 +1,4 @@
-use clap::{CommandFactory, Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
 use std::io;
 use std::str::FromStr;
@@ -13,6 +13,20 @@ pub struct Cli {
 
     #[command(subcommand)]
     pub command: Commands,
+}
+
+/// Output format for the dependency graph
+#[derive(Debug, Clone, Copy, Default, ValueEnum)]
+pub enum GraphFormat {
+    /// DOT format (Graphviz)
+    #[default]
+    Dot,
+    /// Mermaid diagram format (Markdown-friendly)
+    Mermaid,
+    /// JSON format (machine-readable)
+    Json,
+    /// Plain text hierarchical view
+    Text,
 }
 
 #[derive(Subcommand)]
@@ -31,11 +45,17 @@ pub enum Commands {
         #[arg(value_enum)]
         shells: Vec<Shell>,
     },
+    /// Display the build dependency graph
+    Graph {
+        /// Output format
+        #[arg(short, long, value_enum, default_value = "dot")]
+        format: GraphFormat,
+    },
 }
 
 /// Parse a shell name string into a Shell enum
 pub fn parse_shell(name: &str) -> Option<Shell> {
-    Shell::from_str(name).ok()
+    <Shell as FromStr>::from_str(name).ok()
 }
 
 /// Generate shell completions and print to stdout

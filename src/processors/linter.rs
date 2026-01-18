@@ -5,7 +5,8 @@ use std::process::Command;
 use walkdir::WalkDir;
 
 use crate::config::LintConfig;
-use super::{BuildGraph, Product, ProductDiscovery};
+use crate::graph::{BuildGraph, Product};
+use super::ProductDiscovery;
 
 const LINT_STUB_DIR: &str = "out/lint";
 

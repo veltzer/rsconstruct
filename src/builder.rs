@@ -3,8 +3,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use crate::checksum::ChecksumCache;
+use crate::cli::GraphFormat;
 use crate::config::Config;
-use crate::processors::{BuildGraph, BuildStats, Linter, ProcessStats, ProductDiscovery, TemplateProcessor};
+use crate::graph::BuildGraph;
+use crate::processors::{BuildStats, Linter, ProcessStats, ProductDiscovery, TemplateProcessor};
 
 const CACHE_FILE: &str = ".rsb_cache.json";
 
@@ -164,6 +166,33 @@ impl Builder {
 
     fn save_cache(&self) -> Result<()> {
         self.checksum_cache.save_to_file(&self.cache_file_path)?;
+        Ok(())
+    }
+
+    /// Print the dependency graph in the specified format
+    pub fn print_graph(&self, format: GraphFormat) -> Result<()> {
+        // Create processors and discover products
+        let processors = self.create_processors();
+        let mut graph = BuildGraph::new();
+
+        for (name, processor) in &processors {
+            if self.config.processors.is_enabled(name) {
+                processor.discover(&mut graph)?;
+            }
+        }
+
+        // Resolve dependencies
+        graph.resolve_dependencies();
+
+        // Output in the requested format
+        let output = match format {
+            GraphFormat::Dot => graph.to_dot(),
+            GraphFormat::Mermaid => graph.to_mermaid(),
+            GraphFormat::Json => graph.to_json(),
+            GraphFormat::Text => graph.to_text(),
+        };
+
+        println!("{}", output);
         Ok(())
     }
 }

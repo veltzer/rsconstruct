@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tera::{Context as TeraContext, Function, Tera, Value as TeraValue, to_value};
 
-use super::{BuildGraph, Product, ProductDiscovery};
+use crate::graph::{BuildGraph, Product};
+use super::ProductDiscovery;
 
 /// Represents a single template file to be processed
 struct TemplateItem {

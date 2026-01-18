@@ -2,6 +2,7 @@ mod builder;
 mod checksum;
 mod cli;
 mod config;
+mod graph;
 mod processors;
 
 use anyhow::{bail, Result};
@@ -42,6 +43,10 @@ fn main() -> Result<()> {
             for shell in shells_to_generate {
                 print_completions(shell);
             }
+        }
+        Commands::Graph { format } => {
+            let builder = Builder::new()?;
+            builder.print_graph(format)?;
         }
     }
 

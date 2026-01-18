@@ -216,3 +216,189 @@ impl Default for BuildGraph {
         Self::new()
     }
 }
+
+impl BuildGraph {
+    /// Generate a short label for a product (used in graph output)
+    fn product_label(&self, product: &Product) -> String {
+        let outputs: Vec<_> = product.outputs.iter()
+            .filter_map(|p| p.file_name())
+            .filter_map(|n| n.to_str())
+            .collect();
+        format!("[{}] {}", product.processor, outputs.join(", "))
+    }
+
+    /// Generate a node ID for a product (safe for DOT/Mermaid)
+    fn product_node_id(&self, product: &Product) -> String {
+        format!("p{}", product.id)
+    }
+
+    /// Format graph as DOT (Graphviz)
+    pub fn to_dot(&self) -> String {
+        let mut lines = Vec::new();
+        lines.push("digraph build_graph {".to_string());
+        lines.push("    rankdir=LR;".to_string());
+        lines.push("    node [shape=box];".to_string());
+        lines.push("".to_string());
+
+        // Add nodes
+        for product in &self.products {
+            let node_id = self.product_node_id(product);
+            let label = self.product_label(product);
+            let color = match product.processor.as_str() {
+                "template" => "lightblue",
+                "lint" => "lightyellow",
+                _ => "lightgray",
+            };
+            lines.push(format!("    {} [label=\"{}\" style=filled fillcolor={}];",
+                node_id, label, color));
+        }
+
+        lines.push("".to_string());
+
+        // Add edges
+        for product in &self.products {
+            if let Some(deps) = self.dependents.get(&product.id) {
+                for &dep_id in deps {
+                    let from = self.product_node_id(product);
+                    let to = self.product_node_id(&self.products[dep_id]);
+                    lines.push(format!("    {} -> {};", from, to));
+                }
+            }
+        }
+
+        lines.push("}".to_string());
+        lines.join("\n")
+    }
+
+    /// Format graph as Mermaid
+    pub fn to_mermaid(&self) -> String {
+        let mut lines = Vec::new();
+        lines.push("graph LR".to_string());
+
+        // Add nodes with styling
+        for product in &self.products {
+            let node_id = self.product_node_id(product);
+            let label = self.product_label(product);
+            lines.push(format!("    {}[\"{}\" ]", node_id, label));
+        }
+
+        lines.push("".to_string());
+
+        // Add edges
+        for product in &self.products {
+            if let Some(deps) = self.dependents.get(&product.id) {
+                for &dep_id in deps {
+                    let from = self.product_node_id(product);
+                    let to = self.product_node_id(&self.products[dep_id]);
+                    lines.push(format!("    {} --> {}", from, to));
+                }
+            }
+        }
+
+        // Add styling
+        lines.push("".to_string());
+        let template_nodes: Vec<_> = self.products.iter()
+            .filter(|p| p.processor == "template")
+            .map(|p| self.product_node_id(p))
+            .collect();
+        let lint_nodes: Vec<_> = self.products.iter()
+            .filter(|p| p.processor == "lint")
+            .map(|p| self.product_node_id(p))
+            .collect();
+
+        if !template_nodes.is_empty() {
+            lines.push(format!("    style {} fill:#add8e6", template_nodes.join(",")));
+        }
+        if !lint_nodes.is_empty() {
+            lines.push(format!("    style {} fill:#ffffe0", lint_nodes.join(",")));
+        }
+
+        lines.join("\n")
+    }
+
+    /// Format graph as JSON
+    pub fn to_json(&self) -> String {
+        let mut nodes = Vec::new();
+        for product in &self.products {
+            let inputs: Vec<_> = product.inputs.iter()
+                .map(|p| p.display().to_string())
+                .collect();
+            let outputs: Vec<_> = product.outputs.iter()
+                .map(|p| p.display().to_string())
+                .collect();
+            nodes.push(format!(
+                r#"    {{
+      "id": {},
+      "processor": "{}",
+      "inputs": {:?},
+      "outputs": {:?},
+      "depends_on": {:?}
+    }}"#,
+                product.id,
+                product.processor,
+                inputs,
+                outputs,
+                self.dependencies.get(&product.id).unwrap_or(&Vec::new())
+            ));
+        }
+
+        format!("{{\n  \"products\": [\n{}\n  ]\n}}", nodes.join(",\n"))
+    }
+
+    /// Format graph as plain text
+    pub fn to_text(&self) -> String {
+        let mut lines = Vec::new();
+        lines.push("Build Dependency Graph".to_string());
+        lines.push("======================".to_string());
+        lines.push("".to_string());
+
+        // Get topological order
+        let order = match self.topological_sort() {
+            Ok(o) => o,
+            Err(_) => {
+                lines.push("Error: Cycle detected in graph".to_string());
+                return lines.join("\n");
+            }
+        };
+
+        for id in order {
+            let product = &self.products[id];
+            let inputs: Vec<_> = product.inputs.iter()
+                .filter_map(|p| p.file_name())
+                .filter_map(|n| n.to_str())
+                .collect();
+            let outputs: Vec<_> = product.outputs.iter()
+                .filter_map(|p| p.file_name())
+                .filter_map(|n| n.to_str())
+                .collect();
+
+            lines.push(format!("[{}] {} -> {}",
+                product.processor,
+                inputs.join(", "),
+                outputs.join(", ")));
+
+            // Show dependencies
+            if let Some(deps) = self.dependencies.get(&product.id) {
+                if !deps.is_empty() {
+                    let dep_names: Vec<_> = deps.iter()
+                        .map(|&d| {
+                            let dep = &self.products[d];
+                            let out: Vec<_> = dep.outputs.iter()
+                                .filter_map(|p| p.file_name())
+                                .filter_map(|n| n.to_str())
+                                .collect();
+                            out.join(", ")
+                        })
+                        .collect();
+                    lines.push(format!("    depends on: {}", dep_names.join(", ")));
+                }
+            }
+        }
+
+        if self.products.is_empty() {
+            lines.push("(empty graph)".to_string());
+        }
+
+        lines.join("\n")
+    }
+}
