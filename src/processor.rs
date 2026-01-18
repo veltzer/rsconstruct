@@ -55,13 +55,13 @@ impl Processor {
         // Check if item has changed
         if !force && cache.get_by_key(&cache_key) == Some(&current_checksum) {
             if verbose {
-                println!("  [{}] Skipping (unchanged): {}", self.name, display_name);
+                println!("[{}] Skipping (unchanged): {}", self.name, display_name);
             }
             return Ok(ProcessResult::Skipped);
         }
 
         // Process the item
-        println!("  [{}] Processing: {}", self.name, display_name);
+        println!("[{}] Processing: {}", self.name, display_name);
         item.process()?;
 
         // Update cache on success
