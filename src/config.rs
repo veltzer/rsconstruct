@@ -191,6 +191,10 @@ pub struct CcConfig {
     #[serde(default)]
     pub ldflags: Vec<String>,
 
+    /// Additional include paths (passed as -I flags)
+    #[serde(default)]
+    pub include_paths: Vec<String>,
+
     /// Source directory (default: src)
     #[serde(default = "default_source_dir")]
     pub source_dir: String,
@@ -216,6 +220,7 @@ impl Default for CcConfig {
             cflags: Vec::new(),
             cxxflags: Vec::new(),
             ldflags: Vec::new(),
+            include_paths: Vec::new(),
             source_dir: default_source_dir(),
         }
     }
