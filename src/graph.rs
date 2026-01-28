@@ -28,12 +28,10 @@ impl Product {
     /// Display name for logging
     pub fn display(&self) -> String {
         let inputs: Vec<_> = self.inputs.iter()
-            .filter_map(|p| p.file_name())
-            .filter_map(|n| n.to_str())
+            .map(|p| p.display().to_string())
             .collect();
         let outputs: Vec<_> = self.outputs.iter()
-            .filter_map(|p| p.file_name())
-            .filter_map(|n| n.to_str())
+            .map(|p| p.display().to_string())
             .collect();
         format!("input: {}, output: {}", inputs.join(", "), outputs.join(", "))
     }
