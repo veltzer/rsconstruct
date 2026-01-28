@@ -58,6 +58,10 @@ pub enum Commands {
         /// Continue building after errors, skipping dependents of failed products
         #[arg(short = 'k', long)]
         keep_going: bool,
+
+        /// Show what would be built without executing anything
+        #[arg(short = 'n', long)]
+        dry_run: bool,
     },
     /// Clean all build artifacts
     Clean,
@@ -75,6 +79,20 @@ pub enum Commands {
         /// The shells to generate completions for (if none specified, uses config file)
         #[arg(value_enum)]
         shells: Vec<Shell>,
+    },
+    /// Watch source files and auto-rebuild on changes
+    Watch {
+        /// Number of parallel jobs (overrides config file)
+        #[arg(short, long)]
+        jobs: Option<usize>,
+
+        /// Show per-product and total build timing information
+        #[arg(long)]
+        timings: bool,
+
+        /// Continue building after errors, skipping dependents of failed products
+        #[arg(short = 'k', long)]
+        keep_going: bool,
     },
     /// Display the build dependency graph
     Graph {
@@ -96,6 +114,8 @@ pub enum CacheAction {
     Size,
     /// Remove unreferenced objects from cache
     Trim,
+    /// List all cache entries and their status
+    List,
 }
 
 /// Parse a shell name string into a Shell enum

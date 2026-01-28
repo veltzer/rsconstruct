@@ -58,6 +58,52 @@ impl Builder {
         Ok(())
     }
 
+    /// Show what would happen without executing anything
+    pub fn dry_run(&self, force: bool) -> Result<()> {
+        let processors = self.create_processors();
+        let graph = self.build_graph_with_processors(&processors)?;
+
+        let order = graph.topological_sort()?;
+        if order.is_empty() {
+            println!("No products discovered.");
+            return Ok(());
+        }
+
+        let mut skip_count = 0usize;
+        let mut restore_count = 0usize;
+        let mut build_count = 0usize;
+
+        for &id in &order {
+            let product = graph.get_product(id).unwrap();
+            let cache_key = product.cache_key();
+            let input_checksum = match ObjectStore::combined_input_checksum(&product.inputs) {
+                Ok(cs) => cs,
+                Err(_) => {
+                    println!("  {} [{}] {}", color::yellow("BUILD"), product.processor, product.display());
+                    build_count += 1;
+                    continue;
+                }
+            };
+
+            if !force && !self.object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs) {
+                println!("  {} [{}] {}", color::dim("SKIP"), product.processor, product.display());
+                skip_count += 1;
+            } else if !force && self.object_store.can_restore(&cache_key, &input_checksum, &product.outputs) {
+                println!("  {} [{}] {}", color::cyan("RESTORE"), product.processor, product.display());
+                restore_count += 1;
+            } else {
+                println!("  {} [{}] {}", color::yellow("BUILD"), product.processor, product.display());
+                build_count += 1;
+            }
+        }
+
+        println!();
+        println!("{}: {} skip, {} restore, {} build",
+            color::bold("Summary"), skip_count, restore_count, build_count);
+
+        Ok(())
+    }
+
     /// Show the status of each product in the build graph
     pub fn status(&self) -> Result<()> {
         let processors = self.create_processors();

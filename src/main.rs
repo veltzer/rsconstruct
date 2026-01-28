@@ -6,6 +6,7 @@ mod executor;
 mod graph;
 mod object_store;
 mod processors;
+mod watcher;
 
 use anyhow::{bail, Result};
 use clap::Parser;
@@ -21,9 +22,14 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Build { force, jobs, timings, keep_going } => {
-            let mut builder = Builder::new()?;
-            builder.build(force, cli.verbose, jobs, timings, keep_going)?;
+        Commands::Build { force, jobs, timings, keep_going, dry_run } => {
+            if dry_run {
+                let builder = Builder::new()?;
+                builder.dry_run(force)?;
+            } else {
+                let mut builder = Builder::new()?;
+                builder.build(force, cli.verbose, jobs, timings, keep_going)?;
+            }
         }
         Commands::Clean => {
             let mut builder = Builder::new()?;
@@ -55,6 +61,26 @@ fn main() -> Result<()> {
                     store.save()?;
                     println!("Removed {} bytes ({} unreferenced objects)", bytes, count);
                 }
+                CacheAction::List => {
+                    let entries = store.list();
+                    if entries.is_empty() {
+                        println!("No cache entries.");
+                    } else {
+                        for entry in &entries {
+                            println!("{} [{}]", color::bold(&entry.cache_key), entry.input_checksum);
+                            for (path, exists) in &entry.outputs {
+                                let status = if *exists {
+                                    color::green("ok")
+                                } else {
+                                    color::red("missing")
+                                };
+                                println!("  {} {}", status, path);
+                            }
+                        }
+                        println!();
+                        println!("{} cache entries.", entries.len());
+                    }
+                }
             }
         }
         Commands::Complete { shells } => {
@@ -76,6 +102,9 @@ fn main() -> Result<()> {
             for shell in shells_to_generate {
                 print_completions(shell);
             }
+        }
+        Commands::Watch { jobs, timings, keep_going } => {
+            watcher::watch(cli.verbose, jobs, timings, keep_going)?;
         }
         Commands::Graph { format, view } => {
             let builder = Builder::new()?;

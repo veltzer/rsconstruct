@@ -68,6 +68,14 @@ struct OutputEntry {
     checksum: String,
 }
 
+/// Information about a cache entry for display
+pub struct CacheListEntry {
+    pub cache_key: String,
+    pub input_checksum: String,
+    /// Output paths and whether the object exists in the store
+    pub outputs: Vec<(String, bool)>,
+}
+
 impl ObjectStore {
     pub fn new(project_root: PathBuf, restore_method: RestoreMethod) -> Result<Self> {
         let rsb_dir = project_root.join(RSB_DIR);
@@ -387,6 +395,27 @@ impl ObjectStore {
         }
 
         Ok((removed_bytes, removed_count))
+    }
+
+    /// List all cache entries with their status
+    pub fn list(&self) -> Vec<CacheListEntry> {
+        let mut entries: Vec<CacheListEntry> = self.index.entries.iter().map(|(key, entry)| {
+            let outputs = entry.outputs.iter().map(|o| {
+                let exists = self.has_object(&o.checksum);
+                (o.path.clone(), exists)
+            }).collect();
+            CacheListEntry {
+                cache_key: key.clone(),
+                input_checksum: if entry.input_checksum.len() > 12 {
+                    entry.input_checksum[..12].to_string()
+                } else {
+                    entry.input_checksum.clone()
+                },
+                outputs,
+            }
+        }).collect();
+        entries.sort_by(|a, b| a.cache_key.cmp(&b.cache_key));
+        entries
     }
 
     /// Get the combined input checksum for a list of input files
