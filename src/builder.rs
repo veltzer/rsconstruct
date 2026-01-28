@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use crate::cli::{GraphFormat, GraphViewer};
+use crate::color;
 use crate::config::Config;
 use crate::executor::Executor;
 use crate::graph::BuildGraph;
@@ -29,7 +30,7 @@ impl Builder {
     }
 
     /// Execute an incremental build using the dependency graph
-    pub fn build(&mut self, force: bool, verbose: bool, jobs: Option<usize>) -> Result<()> {
+    pub fn build(&mut self, force: bool, verbose: bool, jobs: Option<usize>, timings: bool, keep_going: bool) -> Result<()> {
         // Create processors
         let processors = self.create_processors();
 
@@ -41,20 +42,70 @@ impl Builder {
         let executor = Executor::new(&processors, parallel);
 
         // Execute the build
-        let stats = executor.execute(&graph, &mut self.object_store, force, verbose)?;
+        let stats = executor.execute(&graph, &mut self.object_store, force, verbose, timings, keep_going)?;
 
         // Save object store index
         self.object_store.save()?;
 
-        // Print summary (only in verbose mode)
-        stats.print_summary(verbose);
+        // Print summary (in verbose mode or when timings requested)
+        stats.print_summary(verbose, timings);
+
+        // Return error if there were failures in keep-going mode
+        if stats.failed_count > 0 {
+            anyhow::bail!("Build completed with {} error(s)", stats.failed_count);
+        }
+
+        Ok(())
+    }
+
+    /// Show the status of each product in the build graph
+    pub fn status(&self) -> Result<()> {
+        let processors = self.create_processors();
+        let graph = self.build_graph_with_processors(&processors)?;
+
+        let products = graph.products();
+        if products.is_empty() {
+            println!("No products discovered.");
+            return Ok(());
+        }
+
+        let mut up_to_date = 0usize;
+        let mut stale = 0usize;
+        let mut restorable = 0usize;
+
+        for product in products {
+            let cache_key = product.cache_key();
+            let input_checksum = match ObjectStore::combined_input_checksum(&product.inputs) {
+                Ok(cs) => cs,
+                Err(_) => {
+                    println!("  {} [{}] {}", color::yellow("STALE"), product.processor, product.display());
+                    stale += 1;
+                    continue;
+                }
+            };
+
+            if !self.object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs) {
+                println!("  {} [{}] {}", color::green("UP-TO-DATE"), product.processor, product.display());
+                up_to_date += 1;
+            } else if self.object_store.can_restore(&cache_key, &input_checksum, &product.outputs) {
+                println!("  {} [{}] {}", color::cyan("RESTORABLE"), product.processor, product.display());
+                restorable += 1;
+            } else {
+                println!("  {} [{}] {}", color::yellow("STALE"), product.processor, product.display());
+                stale += 1;
+            }
+        }
+
+        println!();
+        println!("{}: {} up-to-date, {} stale, {} restorable",
+            color::bold("Summary"), up_to_date, stale, restorable);
 
         Ok(())
     }
 
     /// Clean all build artifacts using the dependency graph
     pub fn clean(&mut self) -> Result<()> {
-        println!("Cleaning build artifacts...");
+        println!("{}", color::bold("Cleaning build artifacts..."));
 
         // Create processors and build graph
         let processors = self.create_processors();
@@ -83,7 +134,7 @@ impl Builder {
             println!("Removed sleep stub directory: {}", sleep_stub_dir.display());
         }
 
-        println!("Clean completed!");
+        println!("{}", color::green("Clean completed!"));
         Ok(())
     }
 

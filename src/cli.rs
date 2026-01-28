@@ -50,9 +50,21 @@ pub enum Commands {
         /// Number of parallel jobs (overrides config file)
         #[arg(short, long)]
         jobs: Option<usize>,
+
+        /// Show per-product and total build timing information
+        #[arg(long)]
+        timings: bool,
+
+        /// Continue building after errors, skipping dependents of failed products
+        #[arg(short = 'k', long)]
+        keep_going: bool,
     },
     /// Clean all build artifacts
     Clean,
+    /// Show the status of each product (up-to-date, stale, or restorable)
+    Status,
+    /// Initialize a new rsb project in the current directory
+    Init,
     /// Manage the build cache
     Cache {
         #[command(subcommand)]

@@ -197,6 +197,32 @@ impl ObjectStore {
         false
     }
 
+    /// Check if outputs can be restored from cache (read-only, does not restore)
+    /// Returns true if all missing outputs are available in cache
+    pub fn can_restore(&self, cache_key: &str, input_checksum: &str, output_paths: &[PathBuf]) -> bool {
+        let entry = match self.index.entries.get(cache_key) {
+            Some(e) if e.input_checksum == input_checksum => e,
+            _ => return false,
+        };
+
+        for output_path in output_paths {
+            if output_path.exists() {
+                continue;
+            }
+
+            let rel_path = self.relative_path(output_path);
+            let cached_output = entry.outputs.iter()
+                .find(|o| o.path == rel_path);
+
+            match cached_output {
+                Some(out) if self.has_object(&out.checksum) => {}
+                _ => return false,
+            }
+        }
+
+        true
+    }
+
     /// Try to restore outputs from cache
     /// Returns true if all outputs were restored
     pub fn restore_from_cache(&self, cache_key: &str, input_checksum: &str, output_paths: &[PathBuf]) -> Result<bool> {

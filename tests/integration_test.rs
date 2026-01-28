@@ -24,6 +24,17 @@ fn run_rsb(dir: &Path, args: &[&str]) -> std::process::Output {
         .expect("Failed to execute rsb")
 }
 
+/// Helper to run rsb command with extra environment variables
+fn run_rsb_with_env(dir: &Path, args: &[&str], env_vars: &[(&str, &str)]) -> std::process::Output {
+    let rsb_path = env!("CARGO_BIN_EXE_rsb");
+    let mut cmd = Command::new(rsb_path);
+    cmd.current_dir(dir).args(args);
+    for (key, val) in env_vars {
+        cmd.env(key, val);
+    }
+    cmd.output().expect("Failed to execute rsb")
+}
+
 #[test]
 fn test_template_to_file_translation() {
     let temp_dir = setup_test_project();
@@ -75,7 +86,7 @@ optimization = 3
     ).expect("Failed to write template file");
 
     // Run rsb build
-    let output = run_rsb(project_path, &["build"]);
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "rsb build failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Check that the output file was created
@@ -118,13 +129,13 @@ fn test_incremental_build() {
     ).expect("Failed to write template");
 
     // First build
-    let output1 = run_rsb(project_path, &["build"]);
+    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(stdout1.contains("[template] Processing:"));
 
     // Second build (should skip unchanged template - use verbose to see skip message)
-    let output2 = run_rsb(project_path, &["build", "--verbose"]);
+    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("[template] Skipping (unchanged):"));
@@ -186,7 +197,7 @@ fn test_force_rebuild() {
     run_rsb(project_path, &["build"]);
 
     // Force rebuild
-    let output = run_rsb(project_path, &["build", "--force"]);
+    let output = run_rsb_with_env(project_path, &["build", "--force"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("[template] Processing:"));
@@ -272,7 +283,7 @@ fn test_cache_operations() {
     fs::remove_file(project_path.join("cached.txt")).unwrap();
     assert!(!project_path.join("cached.txt").exists());
 
-    let restore_output = run_rsb(project_path, &["build", "--verbose"]);
+    let restore_output = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(restore_output.status.success());
     let restore_stdout = String::from_utf8_lossy(&restore_output.stdout);
     assert!(restore_stdout.contains("Restored from cache:"));
@@ -317,7 +328,7 @@ fn test_sleep_processor() {
     ).unwrap();
 
     // Build
-    let output = run_rsb(project_path, &["build"]);
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "rsb build failed: {}", String::from_utf8_lossy(&output.stderr));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("[sleep] Processing:"));
@@ -329,7 +340,7 @@ fn test_sleep_processor() {
     assert!(stub_content.contains("slept for 0.1 seconds"));
 
     // Second build should skip (incremental)
-    let output2 = run_rsb(project_path, &["build", "--verbose"]);
+    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("[sleep] Skipping (unchanged):"));
@@ -338,4 +349,241 @@ fn test_sleep_processor() {
     let clean_output = run_rsb(project_path, &["clean"]);
     assert!(clean_output.status.success());
     assert!(!stub_path.exists(), "Sleep stub should be removed after clean");
+}
+
+// ========== New tests for developer experience features ==========
+
+#[test]
+fn test_no_color_env() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create a sleep file so there's something to process
+    fs::create_dir_all(project_path.join("sleep")).unwrap();
+    fs::write(project_path.join("sleep/color_test.sleep"), "0.01").unwrap();
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processors]\nenabled = [\"sleep\"]\n"
+    ).unwrap();
+
+    // Run with NO_COLOR set
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // ANSI escape codes start with \x1b[
+    assert!(!stdout.contains("\x1b["), "Output should not contain ANSI escape codes when NO_COLOR is set");
+}
+
+#[test]
+fn test_timings_flag() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create a sleep file
+    fs::create_dir_all(project_path.join("sleep")).unwrap();
+    fs::write(project_path.join("sleep/timing_test.sleep"), "0.01").unwrap();
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processors]\nenabled = [\"sleep\"]\n"
+    ).unwrap();
+
+    // Run with --timings
+    let output = run_rsb_with_env(project_path, &["build", "--timings"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Should contain timing information
+    assert!(stdout.contains("Timing:"), "Output should contain 'Timing:' header");
+    assert!(stdout.contains("Total:"), "Output should contain 'Total:' line");
+}
+
+#[test]
+fn test_no_timings_by_default() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create a sleep file
+    fs::create_dir_all(project_path.join("sleep")).unwrap();
+    fs::write(project_path.join("sleep/no_timing.sleep"), "0.01").unwrap();
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processors]\nenabled = [\"sleep\"]\n"
+    ).unwrap();
+
+    // Run without --timings (and without --verbose)
+    let output = run_rsb(project_path, &["build"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Should NOT contain timing information
+    assert!(!stdout.contains("Timing:"), "Output should not contain timing info without --timings flag");
+    assert!(!stdout.contains("Total:"), "Output should not contain total timing without --timings flag");
+}
+
+#[test]
+fn test_keep_going_continues_after_failure() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create sleep directory with one bad file and one good file
+    fs::create_dir_all(project_path.join("sleep")).unwrap();
+    fs::write(project_path.join("sleep/bad.sleep"), "not_a_number").unwrap();
+    fs::write(project_path.join("sleep/good.sleep"), "0.01").unwrap();
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processors]\nenabled = [\"sleep\"]\n"
+    ).unwrap();
+
+    // Run with --keep-going
+    let output = run_rsb_with_env(project_path, &["build", "--keep-going"], &[("NO_COLOR", "1")]);
+
+    // Should exit non-zero because of the failure
+    assert!(!output.status.success(), "Build should fail with bad sleep file");
+
+    // The good sleep file should still have been processed
+    let good_stub = project_path.join("out/sleep/good.done");
+    assert!(good_stub.exists(), "Good sleep file should still be processed with --keep-going");
+}
+
+#[test]
+fn test_keep_going_short_flag() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create sleep directory with one bad file
+    fs::create_dir_all(project_path.join("sleep")).unwrap();
+    fs::write(project_path.join("sleep/bad_k.sleep"), "invalid").unwrap();
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processors]\nenabled = [\"sleep\"]\n"
+    ).unwrap();
+
+    // Run with -k (short form)
+    let output = run_rsb_with_env(project_path, &["build", "-k"], &[("NO_COLOR", "1")]);
+
+    // Should exit non-zero since the sleep file has invalid content
+    assert!(!output.status.success(), "Build should fail with bad sleep file");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Should contain error reporting in stdout or stderr
+    let combined = format!("{}{}", stdout, stderr);
+    assert!(combined.contains("error") || combined.contains("Error"),
+        "Should report errors: stdout={}, stderr={}", stdout, stderr);
+}
+
+#[test]
+fn test_status_command() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create a sleep file
+    fs::create_dir_all(project_path.join("sleep")).unwrap();
+    fs::write(project_path.join("sleep/status_test.sleep"), "0.01").unwrap();
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processors]\nenabled = [\"sleep\"]\n"
+    ).unwrap();
+
+    // Before building, should be STALE
+    let status1 = run_rsb_with_env(project_path, &["status"], &[("NO_COLOR", "1")]);
+    assert!(status1.status.success());
+    let stdout1 = String::from_utf8_lossy(&status1.stdout);
+    assert!(stdout1.contains("STALE"), "Before build, product should be STALE: {}", stdout1);
+
+    // Build it
+    let build = run_rsb(project_path, &["build"]);
+    assert!(build.status.success());
+
+    // After building, should be UP-TO-DATE
+    let status2 = run_rsb_with_env(project_path, &["status"], &[("NO_COLOR", "1")]);
+    assert!(status2.status.success());
+    let stdout2 = String::from_utf8_lossy(&status2.stdout);
+    assert!(stdout2.contains("UP-TO-DATE"), "After build, product should be UP-TO-DATE: {}", stdout2);
+
+    // Delete output, should be RESTORABLE (cache still exists)
+    fs::remove_file(project_path.join("out/sleep/status_test.done")).unwrap();
+    let status3 = run_rsb_with_env(project_path, &["status"], &[("NO_COLOR", "1")]);
+    assert!(status3.status.success());
+    let stdout3 = String::from_utf8_lossy(&status3.stdout);
+    assert!(stdout3.contains("RESTORABLE"), "After deleting output, product should be RESTORABLE: {}", stdout3);
+
+    // Check summary line
+    assert!(stdout3.contains("Summary"), "Status output should contain Summary line");
+}
+
+#[test]
+fn test_status_empty_project() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // No sleep dir, no templates to process — disable all processors
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processors]\nenabled = []\n"
+    ).unwrap();
+
+    let output = run_rsb(project_path, &["status"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("No products discovered"), "Empty project should show 'No products discovered': {}", stdout);
+}
+
+#[test]
+fn test_init_creates_project() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    let output = run_rsb(project_path, &["init"]);
+    assert!(output.status.success(), "rsb init failed: {}", String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Check files/dirs were created
+    assert!(project_path.join("rsb.toml").exists(), "rsb.toml should be created");
+    assert!(project_path.join("templates").exists(), "templates/ should be created");
+    assert!(project_path.join("config").exists(), "config/ should be created");
+
+    // Verify rsb.toml has content
+    let toml_content = fs::read_to_string(project_path.join("rsb.toml")).unwrap();
+    assert!(toml_content.contains("[build]"), "rsb.toml should contain [build] section");
+    assert!(toml_content.contains("[processors]"), "rsb.toml should contain [processors] section");
+
+    assert!(stdout.contains("Created"), "Output should mention Created");
+}
+
+#[test]
+fn test_init_fails_if_exists() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    // Create rsb.toml first
+    fs::write(project_path.join("rsb.toml"), "# existing").unwrap();
+
+    let output = run_rsb(project_path, &["init"]);
+    assert!(!output.status.success(), "rsb init should fail if rsb.toml exists");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("already exists"), "Error should mention 'already exists': {}", stderr);
+}
+
+#[test]
+fn test_init_preserves_existing_dirs() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    // Create templates dir with a file
+    fs::create_dir_all(project_path.join("templates")).unwrap();
+    fs::write(project_path.join("templates/existing.txt"), "do not delete").unwrap();
+
+    let output = run_rsb(project_path, &["init"]);
+    assert!(output.status.success());
+
+    // Existing file should still be there
+    assert!(project_path.join("templates/existing.txt").exists(),
+        "Existing files in templates/ should be preserved");
+    let content = fs::read_to_string(project_path.join("templates/existing.txt")).unwrap();
+    assert_eq!(content, "do not delete");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("already exists"), "Should mention that directory already exists");
 }

@@ -1,5 +1,6 @@
 mod builder;
 mod cli;
+mod color;
 mod config;
 mod executor;
 mod graph;
@@ -13,18 +14,27 @@ use config::Config;
 use builder::Builder;
 use object_store::ObjectStore;
 use std::env;
+use std::fs;
+use std::path::Path;
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Build { force, jobs } => {
+        Commands::Build { force, jobs, timings, keep_going } => {
             let mut builder = Builder::new()?;
-            builder.build(force, cli.verbose, jobs)?;
+            builder.build(force, cli.verbose, jobs, timings, keep_going)?;
         }
         Commands::Clean => {
             let mut builder = Builder::new()?;
             builder.clean()?;
+        }
+        Commands::Status => {
+            let builder = Builder::new()?;
+            builder.status()?;
+        }
+        Commands::Init => {
+            init_project()?;
         }
         Commands::Cache { action } => {
             let project_root = env::current_dir()?;
@@ -77,5 +87,68 @@ fn main() -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+/// Initialize a new rsb project in the current directory
+fn init_project() -> Result<()> {
+    let cwd = env::current_dir()?;
+    let config_path = cwd.join("rsb.toml");
+
+    if config_path.exists() {
+        bail!("rsb.toml already exists in the current directory");
+    }
+
+    // Create rsb.toml with commented defaults
+    let config_content = r#"# RSB Build Tool Configuration
+
+[build]
+# Number of parallel jobs (1 = sequential, 0 = auto-detect CPU cores)
+# parallel = 1
+
+[processors]
+# enabled = ["template", "lint", "sleep"]
+
+[cache]
+# restore_method = "hardlink"  # or "copy"
+
+[template]
+# strict = true
+# extensions = [".tera"]
+# trim_blocks = false
+
+[lint]
+# linter = "ruff"
+# args = []
+
+[completions]
+# shells = ["bash"]
+"#;
+    fs::write(&config_path, config_content)?;
+    println!("Created {}", config_path.display());
+
+    // Create directories (preserve existing)
+    let templates_dir = cwd.join("templates");
+    let config_dir = cwd.join("config");
+
+    if !templates_dir.exists() {
+        create_dir_and_print(&templates_dir)?;
+    } else {
+        println!("Directory already exists: {}", templates_dir.display());
+    }
+
+    if !config_dir.exists() {
+        create_dir_and_print(&config_dir)?;
+    } else {
+        println!("Directory already exists: {}", config_dir.display());
+    }
+
+    println!("{}", color::green("Project initialized successfully!"));
+    Ok(())
+}
+
+fn create_dir_and_print(path: &Path) -> Result<()> {
+    fs::create_dir_all(path)?;
+    println!("Created {}", path.display());
     Ok(())
 }
