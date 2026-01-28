@@ -131,6 +131,7 @@ impl TemplateProcessor {
             }
         }
 
+        items.sort_by(|a, b| a.source_path.cmp(&b.source_path));
         Ok(items)
     }
 }

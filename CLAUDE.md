@@ -43,6 +43,16 @@ trim_blocks = false     # Remove newline after block tags
 linter = "ruff"
 args = []
 
+[cc]
+cc = "gcc"              # C compiler (default: gcc)
+cxx = "g++"             # C++ compiler (default: g++)
+cflags = []             # C compiler flags
+cxxflags = []           # C++ compiler flags
+ldflags = []            # Linker flags
+include_paths = []      # Additional -I paths (relative to project root)
+source_dir = "src"      # Source directory (default: src)
+output_suffix = ".elf"  # Suffix for output executables (default: .elf)
+
 [completions]
 shells = ["bash"]
 ```
@@ -54,17 +64,60 @@ project/
 ├── rsb.toml          # Configuration file
 ├── config/           # Python config files
 ├── templates/        # .tera template files
+├── src/              # C/C++ source files
 ├── sleep/            # .sleep files (for parallel testing)
-├── out/              # Generated stub files (lint, sleep)
-└── .rsb_cache.json   # Auto-generated checksum cache
+├── out/
+│   ├── cc/           # Compiled executables
+│   ├── lint/         # Lint stub files
+│   └── sleep/        # Sleep stub files
+└── .rsb/             # Cache (index.json, objects/, deps/)
 ```
+
+## C/C++ Processor
+
+The cc processor compiles C (`.c`) and C++ (`.cc`) source files from the source directory into executables under `out/cc/`, mirroring the directory structure. Source files: `src/a/b.c` → `out/cc/a/b.elf`.
+
+### Per-file flags
+
+Per-file compile and link flags can be set via comments in source files:
+
+```c
+// EXTRA_COMPILE_FLAGS_BEFORE=-pthread
+// EXTRA_COMPILE_FLAGS_AFTER=-O2 -DNDEBUG
+// EXTRA_LINK_FLAGS_BEFORE=-L/usr/local/lib
+// EXTRA_LINK_FLAGS_AFTER=-lX11
+// EXTRA_COMPILE_CMD=pkg-config --cflags gtk+-3.0
+// EXTRA_LINK_CMD=pkg-config --libs gtk+-3.0
+```
+
+Supported comment styles: `//`, `/* ... */` (single-line), and `*`-prefixed block comment continuation lines:
+
+```c
+/*
+ * EXTRA_LINK_FLAGS_AFTER=-lX11
+ */
+```
+
+`EXTRA_*_FLAGS_*` values are literal flags (with backtick expansion for command substitution).
+`EXTRA_*_CMD` values are executed as subprocesses and stdout is used as flags.
+
+### Command line ordering
+
+The compiler command is constructed in this order:
+
+```
+compiler -MMD -MF deps -I... [compile_before] [cflags/cxxflags] [compile_after] -o output source [link_before] [ldflags] [link_after]
+```
+
+Link flags come after the source file so the linker can resolve symbols correctly.
 
 ## Architecture
 
-- **Processors** implement `ProductDiscovery` trait (template, lint, sleep)
+- **Processors** implement `ProductDiscovery` trait (template, lint, sleep, cc)
 - **Products** have inputs (source files) and outputs (generated files)
 - **BuildGraph** manages dependencies between products
 - **Executor** runs products in dependency order, with optional parallelism
+- **Build order** is deterministic — file discovery, processor iteration, and topological sort are all sorted
 
 ## How Templates Work
 

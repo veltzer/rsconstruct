@@ -35,16 +35,16 @@ impl Builder {
     }
 
     /// Execute an incremental build using the dependency graph
-    pub fn build(&mut self, force: bool, verbose: bool, jobs: Option<usize>, timings: bool, keep_going: bool) -> Result<()> {
+    pub fn build(&mut self, force: bool, verbose: bool, jobs: Option<usize>, timings: bool, keep_going: bool, processor_verbose: u8) -> Result<()> {
         // Create processors
-        let processors = self.create_processors();
+        let processors = self.create_processors(processor_verbose);
 
         // Build the dependency graph
         let graph = self.build_graph_with_processors(&processors)?;
 
         // Create executor with parallelism from command line or config
         let parallel = jobs.unwrap_or(self.config.build.parallel);
-        let executor = Executor::new(&processors, parallel);
+        let executor = Executor::new(&processors, parallel, processor_verbose);
 
         // Execute the build
         let stats = executor.execute(&graph, &mut self.object_store, force, verbose, timings, keep_going)?;
@@ -65,7 +65,7 @@ impl Builder {
 
     /// Show what would happen without executing anything
     pub fn dry_run(&self, force: bool) -> Result<()> {
-        let processors = self.create_processors();
+        let processors = self.create_processors(0);
         let graph = self.build_graph_with_processors(&processors)?;
 
         let order = graph.topological_sort()?;
@@ -84,20 +84,20 @@ impl Builder {
             let input_checksum = match ObjectStore::combined_input_checksum(&product.inputs) {
                 Ok(cs) => cs,
                 Err(_) => {
-                    println!("  {} [{}] {}", color::yellow("BUILD"), product.processor, product.display());
+                    println!("  {} [{}] {}", color::yellow("BUILD"), product.processor, product.display_compact());
                     build_count += 1;
                     continue;
                 }
             };
 
             if !force && !self.object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs) {
-                println!("  {} [{}] {}", color::dim("SKIP"), product.processor, product.display());
+                println!("  {} [{}] {}", color::dim("SKIP"), product.processor, product.display_compact());
                 skip_count += 1;
             } else if !force && self.object_store.can_restore(&cache_key, &input_checksum, &product.outputs) {
-                println!("  {} [{}] {}", color::cyan("RESTORE"), product.processor, product.display());
+                println!("  {} [{}] {}", color::cyan("RESTORE"), product.processor, product.display_compact());
                 restore_count += 1;
             } else {
-                println!("  {} [{}] {}", color::yellow("BUILD"), product.processor, product.display());
+                println!("  {} [{}] {}", color::yellow("BUILD"), product.processor, product.display_compact());
                 build_count += 1;
             }
         }
@@ -111,7 +111,7 @@ impl Builder {
 
     /// Show the status of each product in the build graph
     pub fn status(&self) -> Result<()> {
-        let processors = self.create_processors();
+        let processors = self.create_processors(0);
         let graph = self.build_graph_with_processors(&processors)?;
 
         let products = graph.products();
@@ -129,20 +129,20 @@ impl Builder {
             let input_checksum = match ObjectStore::combined_input_checksum(&product.inputs) {
                 Ok(cs) => cs,
                 Err(_) => {
-                    println!("  {} [{}] {}", color::yellow("STALE"), product.processor, product.display());
+                    println!("  {} [{}] {}", color::yellow("STALE"), product.processor, product.display_compact());
                     stale += 1;
                     continue;
                 }
             };
 
             if !self.object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs) {
-                println!("  {} [{}] {}", color::green("UP-TO-DATE"), product.processor, product.display());
+                println!("  {} [{}] {}", color::green("UP-TO-DATE"), product.processor, product.display_compact());
                 up_to_date += 1;
             } else if self.object_store.can_restore(&cache_key, &input_checksum, &product.outputs) {
-                println!("  {} [{}] {}", color::cyan("RESTORABLE"), product.processor, product.display());
+                println!("  {} [{}] {}", color::cyan("RESTORABLE"), product.processor, product.display_compact());
                 restorable += 1;
             } else {
-                println!("  {} [{}] {}", color::yellow("STALE"), product.processor, product.display());
+                println!("  {} [{}] {}", color::yellow("STALE"), product.processor, product.display_compact());
                 stale += 1;
             }
         }
@@ -159,11 +159,11 @@ impl Builder {
         println!("{}", color::bold("Cleaning build artifacts..."));
 
         // Create processors and build graph
-        let processors = self.create_processors();
+        let processors = self.create_processors(0);
         let graph = self.build_graph_with_processors(&processors)?;
 
         // Use executor to clean
-        let executor = Executor::new(&processors, 1);
+        let executor = Executor::new(&processors, 1, 0);
         executor.clean(&graph)?;
 
         // Clear the object store cache
@@ -206,7 +206,7 @@ impl Builder {
     }
 
     /// Create all available processors
-    fn create_processors(&self) -> HashMap<String, Box<dyn ProductDiscovery>> {
+    fn create_processors(&self, processor_verbose: u8) -> HashMap<String, Box<dyn ProductDiscovery>> {
         let mut processors: HashMap<String, Box<dyn ProductDiscovery>> = HashMap::new();
 
         // Template processor
@@ -225,7 +225,7 @@ impl Builder {
         processors.insert("sleep".to_string(), Box::new(sleep_proc));
 
         // C/C++ compiler processor
-        let cc_proc = CcProcessor::new(self.project_root.clone(), self.config.cc.clone(), Arc::clone(&self.ignore_rules));
+        let cc_proc = CcProcessor::new(self.project_root.clone(), self.config.cc.clone(), Arc::clone(&self.ignore_rules), processor_verbose);
         processors.insert("cc".to_string(), Box::new(cc_proc));
 
         processors
@@ -309,9 +309,11 @@ impl Builder {
     fn build_graph_with_processors(&self, processors: &HashMap<String, Box<dyn ProductDiscovery>>) -> Result<BuildGraph> {
         let mut graph = BuildGraph::new();
 
-        for (name, processor) in processors {
+        let mut names: Vec<&String> = processors.keys().collect();
+        names.sort();
+        for name in names {
             if self.config.processors.is_enabled(name) {
-                processor.discover(&mut graph)?;
+                processors[name].discover(&mut graph)?;
             }
         }
 
@@ -321,7 +323,7 @@ impl Builder {
 
     /// Build the dependency graph (creates processors internally)
     fn build_graph(&self) -> Result<BuildGraph> {
-        let processors = self.create_processors();
+        let processors = self.create_processors(0);
         self.build_graph_with_processors(&processors)
     }
 

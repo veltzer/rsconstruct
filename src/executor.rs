@@ -14,13 +14,25 @@ use crate::processors::{BuildStats, ProcessStats, ProductDiscovery, ProductTimin
 pub struct Executor<'a> {
     processors: &'a HashMap<String, Box<dyn ProductDiscovery>>,
     parallel: usize,
+    processor_verbose: u8,
 }
 
 impl<'a> Executor<'a> {
-    pub fn new(processors: &'a HashMap<String, Box<dyn ProductDiscovery>>, parallel: usize) -> Self {
+    pub fn new(processors: &'a HashMap<String, Box<dyn ProductDiscovery>>, parallel: usize, processor_verbose: u8) -> Self {
         Self {
             processors,
             parallel,
+            processor_verbose,
+        }
+    }
+
+    /// Display a product's inputs — compact (first input only) by default,
+    /// full (all inputs including headers) at processor_verbose >= 2.
+    fn product_display(&self, product: &crate::graph::Product) -> String {
+        if self.processor_verbose >= 2 {
+            product.display()
+        } else {
+            product.display_compact()
         }
     }
 
@@ -75,7 +87,7 @@ impl<'a> Executor<'a> {
                 if verbose {
                     println!("[{}] {} {}", product.processor,
                         color::yellow("Skipping (dependency failed):"),
-                        product.display());
+                        self.product_display(product));
                 }
                 failed_products.insert(id);
                 continue;
@@ -89,7 +101,7 @@ impl<'a> Executor<'a> {
                 if verbose {
                     println!("[{}] {} {}", product.processor,
                         color::dim("Skipping (unchanged):"),
-                        product.display());
+                        self.product_display(product));
                 }
                 let stats = stats_by_processor
                     .entry(product.processor.clone())
@@ -103,7 +115,7 @@ impl<'a> Executor<'a> {
                 if verbose {
                     println!("[{}] {} {}", product.processor,
                         color::cyan("Restored from cache:"),
-                        product.display());
+                        self.product_display(product));
                 }
                 let stats = stats_by_processor
                     .entry(product.processor.clone())
@@ -116,7 +128,7 @@ impl<'a> Executor<'a> {
             if let Some(processor) = self.processors.get(&product.processor) {
                 println!("[{}] {} {}", product.processor,
                     color::green("Processing:"),
-                    product.display());
+                    self.product_display(product));
 
                 let product_start = Instant::now();
                 match processor.execute(product) {
@@ -133,7 +145,7 @@ impl<'a> Executor<'a> {
                         stats.duration += duration;
                         if timings {
                             stats.product_timings.push(ProductTiming {
-                                display: product.display(),
+                                display: self.product_display(product),
                                 processor: product.processor.clone(),
                                 duration,
                             });
@@ -141,7 +153,7 @@ impl<'a> Executor<'a> {
                     }
                     Err(e) => {
                         if keep_going {
-                            let msg = format!("[{}] {}: {}", product.processor, product.display(), e);
+                            let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
                             println!("{}", color::red(&format!("Error: {}", msg)));
                             failed_products.insert(id);
                             failed_messages.push(msg);
@@ -199,7 +211,7 @@ impl<'a> Executor<'a> {
                         if verbose {
                             println!("[{}] {} {}", product.processor,
                                 color::yellow("Skipping (dependency failed):"),
-                                product.display());
+                                self.product_display(product));
                         }
                         skipped_ids.push(id);
                     }
@@ -226,7 +238,7 @@ impl<'a> Executor<'a> {
                         Ok(cs) => cs,
                         Err(e) => {
                             if keep_going {
-                                let msg = format!("[{}] {}: {}", product.processor, product.display(), e);
+                                let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
                                 println!("{}", color::red(&format!("Error: {}", msg)));
                                 failed_products.lock().unwrap().insert(id);
                                 failed_messages.lock().unwrap().push(msg);
@@ -263,7 +275,7 @@ impl<'a> Executor<'a> {
                                 if verbose {
                                     println!("[{}] {} {}", product.processor,
                                         color::dim("Skipping (unchanged):"),
-                                        product.display());
+                                        self.product_display(product));
                                 }
                                 let mut stats = stats_ref.lock().unwrap();
                                 let proc_stats = stats
@@ -284,7 +296,7 @@ impl<'a> Executor<'a> {
                                         if verbose {
                                             println!("[{}] {} {}", product.processor,
                                                 color::cyan("Restored from cache:"),
-                                                product.display());
+                                                self.product_display(product));
                                         }
                                         let mut stats = stats_ref.lock().unwrap();
                                         let proc_stats = stats
@@ -295,7 +307,7 @@ impl<'a> Executor<'a> {
                                     }
                                     Err(e) => {
                                         if keep_going {
-                                            let msg = format!("[{}] {}: {}", product.processor, product.display(), e);
+                                            let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
                                             println!("{}", color::red(&format!("Error: {}", msg)));
                                             failed_ref.lock().unwrap().insert(*id);
                                             failed_msgs_ref.lock().unwrap().push(msg);
@@ -311,7 +323,7 @@ impl<'a> Executor<'a> {
                             if let Some(processor) = self.processors.get(&product.processor) {
                                 println!("[{}] {} {}", product.processor,
                                     color::green("Processing:"),
-                                    product.display());
+                                    self.product_display(product));
 
                                 let product_start = Instant::now();
                                 match processor.execute(product) {
@@ -323,7 +335,7 @@ impl<'a> Executor<'a> {
                                             let mut store_guard = store_ref.lock().unwrap();
                                             if let Err(e) = store_guard.cache_outputs(&cache_key, input_checksum, &product.outputs) {
                                                 if keep_going {
-                                                    let msg = format!("[{}] {}: {}", product.processor, product.display(), e);
+                                                    let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
                                                     println!("{}", color::red(&format!("Error: {}", msg)));
                                                     failed_ref.lock().unwrap().insert(*id);
                                                     failed_msgs_ref.lock().unwrap().push(msg);
@@ -342,7 +354,7 @@ impl<'a> Executor<'a> {
                                         proc_stats.duration += duration;
                                         if timings {
                                             proc_stats.product_timings.push(ProductTiming {
-                                                display: product.display(),
+                                                display: self.product_display(product),
                                                 processor: product.processor.clone(),
                                                 duration,
                                             });
@@ -350,7 +362,7 @@ impl<'a> Executor<'a> {
                                     }
                                     Err(e) => {
                                         if keep_going {
-                                            let msg = format!("[{}] {}: {}", product.processor, product.display(), e);
+                                            let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
                                             println!("{}", color::red(&format!("Error: {}", msg)));
                                             failed_ref.lock().unwrap().insert(*id);
                                             failed_msgs_ref.lock().unwrap().push(msg);

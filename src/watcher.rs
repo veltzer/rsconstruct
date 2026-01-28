@@ -69,7 +69,7 @@ pub fn watch(verbose: bool, jobs: Option<usize>, timings: bool, keep_going: bool
     println!("{}", color::bold("Running initial build..."));
     {
         let mut builder = Builder::new()?;
-        if let Err(e) = builder.build(false, verbose, jobs, timings, keep_going) {
+        if let Err(e) = builder.build(false, verbose, jobs, timings, keep_going, 0) {
             println!("{}", color::red(&format!("Initial build error: {}", e)));
         }
     }
@@ -136,7 +136,7 @@ pub fn watch(verbose: bool, jobs: Option<usize>, timings: bool, keep_going: bool
         println!("{}", color::bold("Change detected, rebuilding..."));
         {
             let mut builder = Builder::new()?;
-            if let Err(e) = builder.build(false, verbose, jobs, timings, keep_going) {
+            if let Err(e) = builder.build(false, verbose, jobs, timings, keep_going, 0) {
                 println!("{}", color::red(&format!("Build error: {}", e)));
             }
         }

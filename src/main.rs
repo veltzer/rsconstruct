@@ -23,13 +23,13 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Build { force, jobs, timings, keep_going, dry_run } => {
+        Commands::Build { force, jobs, timings, keep_going, dry_run, processor_verbose } => {
             if dry_run {
                 let builder = Builder::new()?;
                 builder.dry_run(force)?;
             } else {
                 let mut builder = Builder::new()?;
-                builder.build(force, cli.verbose, jobs, timings, keep_going)?;
+                builder.build(force, cli.verbose, jobs, timings, keep_going, processor_verbose)?;
             }
         }
         Commands::Clean => {

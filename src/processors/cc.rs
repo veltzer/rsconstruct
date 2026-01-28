@@ -22,21 +22,29 @@ struct SourceFlags {
 /// Parse per-file flags from C/C++ source comment lines.
 ///
 /// Supported comment formats:
-///   // EXTRA_COMPILE_ARGS_BEFORE=...
-///   /* EXTRA_COMPILE_ARGS_BEFORE=... */
+///   // EXTRA_COMPILE_FLAGS_BEFORE=-pthread -I/usr/local/include
+///   /* EXTRA_COMPILE_FLAGS_AFTER=-O2 -DNDEBUG */
+///   // EXTRA_COMPILE_CMD=pkg-config --cflags ACE
+///   // EXTRA_LINK_CMD=pkg-config --libs ACE
 ///
-/// Values wrapped in backticks are executed as shell commands.
+/// `EXTRA_*_FLAGS_*` values are literal flags (with backtick expansion).
+/// `EXTRA_*_CMD` values are executed as a subprocess and stdout is used as flags.
 fn parse_source_flags(source: &Path) -> Result<SourceFlags> {
     let content = fs::read_to_string(source)
         .context(format!("Failed to read source file: {}", source.display()))?;
 
     let mut flags = SourceFlags::default();
 
-    let var_names = [
-        "EXTRA_COMPILE_ARGS_BEFORE",
-        "EXTRA_COMPILE_ARGS_AFTER",
-        "EXTRA_LINK_ARGS_BEFORE",
-        "EXTRA_LINK_ARGS_AFTER",
+    let args_var_names = [
+        "EXTRA_COMPILE_FLAGS_BEFORE",
+        "EXTRA_COMPILE_FLAGS_AFTER",
+        "EXTRA_LINK_FLAGS_BEFORE",
+        "EXTRA_LINK_FLAGS_AFTER",
+    ];
+
+    let cmd_var_names = [
+        "EXTRA_COMPILE_CMD",
+        "EXTRA_LINK_CMD",
     ];
 
     for line in content.lines() {
@@ -46,9 +54,20 @@ fn parse_source_flags(source: &Path) -> Result<SourceFlags> {
         let value_part = if let Some(rest) = trimmed.strip_prefix("//") {
             Some(rest.trim())
         }
-        // Try /* ... */ comment style
+        // Try /* ... */ comment style (single-line)
         else if let Some(rest) = trimmed.strip_prefix("/*") {
             rest.strip_suffix("*/").map(|s| s.trim())
+        }
+        // Try block comment continuation line: * EXTRA_...
+        else if let Some(rest) = trimmed.strip_prefix('*') {
+            let rest = rest.trim();
+            // Skip closing */ lines and empty * lines
+            if rest.is_empty() || rest == "/" {
+                None
+            } else {
+                // Strip optional trailing */
+                Some(rest.strip_suffix("*/").map(|s| s.trim()).unwrap_or(rest))
+            }
         } else {
             None
         };
@@ -57,7 +76,7 @@ fn parse_source_flags(source: &Path) -> Result<SourceFlags> {
             continue;
         };
 
-        for var_name in &var_names {
+        for var_name in &args_var_names {
             if let Some(rest) = value_part.strip_prefix(var_name) {
                 if let Some(raw_value) = rest.strip_prefix('=') {
                     let expanded = expand_backticks(raw_value.trim())?;
@@ -66,10 +85,23 @@ fn parse_source_flags(source: &Path) -> Result<SourceFlags> {
                         .map(String::from)
                         .collect();
                     match *var_name {
-                        "EXTRA_COMPILE_ARGS_BEFORE" => flags.compile_args_before.extend(args),
-                        "EXTRA_COMPILE_ARGS_AFTER" => flags.compile_args_after.extend(args),
-                        "EXTRA_LINK_ARGS_BEFORE" => flags.link_args_before.extend(args),
-                        "EXTRA_LINK_ARGS_AFTER" => flags.link_args_after.extend(args),
+                        "EXTRA_COMPILE_FLAGS_BEFORE" => flags.compile_args_before.extend(args),
+                        "EXTRA_COMPILE_FLAGS_AFTER" => flags.compile_args_after.extend(args),
+                        "EXTRA_LINK_FLAGS_BEFORE" => flags.link_args_before.extend(args),
+                        "EXTRA_LINK_FLAGS_AFTER" => flags.link_args_after.extend(args),
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        for var_name in &cmd_var_names {
+            if let Some(rest) = value_part.strip_prefix(var_name) {
+                if let Some(raw_value) = rest.strip_prefix('=') {
+                    let args = run_command_for_flags(raw_value.trim())?;
+                    match *var_name {
+                        "EXTRA_COMPILE_CMD" => flags.compile_args_after.extend(args),
+                        "EXTRA_LINK_CMD" => flags.link_args_after.extend(args),
                         _ => {}
                     }
                 }
@@ -78,6 +110,30 @@ fn parse_source_flags(source: &Path) -> Result<SourceFlags> {
     }
 
     Ok(flags)
+}
+
+/// Run a command as a subprocess and return its stdout split into args.
+/// The value is split on whitespace: first token is the program, rest are arguments.
+fn run_command_for_flags(cmd_line: &str) -> Result<Vec<String>> {
+    let parts: Vec<&str> = cmd_line.split_whitespace().collect();
+    if parts.is_empty() {
+        return Ok(Vec::new());
+    }
+    let program = parts[0];
+    let args = &parts[1..];
+
+    let output = Command::new(program)
+        .args(args)
+        .output()
+        .context(format!("Failed to execute command: {}", cmd_line))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("Command failed: {} — {}", cmd_line, stderr);
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    Ok(stdout.split_whitespace().map(String::from).collect())
 }
 
 /// Expand backtick-wrapped portions in a string by running them as shell commands.
@@ -115,6 +171,19 @@ fn expand_backticks(value: &str) -> Result<String> {
     Ok(result)
 }
 
+/// Format a Command as a shell-like string for display.
+fn format_command(cmd: &Command) -> String {
+    let program = cmd.get_program().to_string_lossy().to_string();
+    let args: Vec<String> = cmd.get_args()
+        .map(|a| a.to_string_lossy().to_string())
+        .collect();
+    if args.is_empty() {
+        program
+    } else {
+        format!("{} {}", program, args.join(" "))
+    }
+}
+
 pub struct CcProcessor {
     project_root: PathBuf,
     config: CcConfig,
@@ -122,10 +191,11 @@ pub struct CcProcessor {
     output_dir: PathBuf,
     deps_dir: PathBuf,
     ignore_rules: Arc<IgnoreRules>,
+    verbose: u8,
 }
 
 impl CcProcessor {
-    pub fn new(project_root: PathBuf, config: CcConfig, ignore_rules: Arc<IgnoreRules>) -> Self {
+    pub fn new(project_root: PathBuf, config: CcConfig, ignore_rules: Arc<IgnoreRules>, verbose: u8) -> Self {
         let source_dir = project_root.join(&config.source_dir);
         let output_dir = project_root.join("out/cc");
         let deps_dir = project_root.join(".rsb/deps");
@@ -136,6 +206,7 @@ impl CcProcessor {
             output_dir,
             deps_dir,
             ignore_rules,
+            verbose,
         }
     }
 
@@ -150,7 +221,7 @@ impl CcProcessor {
             return Vec::new();
         }
 
-        WalkDir::new(&self.source_dir)
+        let mut files: Vec<(PathBuf, bool)> = WalkDir::new(&self.source_dir)
             .into_iter()
             .filter_map(|e| e.ok())
             .filter_map(|e| {
@@ -164,17 +235,20 @@ impl CcProcessor {
                     _ => None,
                 }
             })
-            .collect()
+            .collect();
+        files.sort_by(|a, b| a.0.cmp(&b.0));
+        files
     }
 
     /// Get executable path for a source file.
-    /// Mirrors directory structure: src/a/b.c -> out/cc/a/b
+    /// Mirrors directory structure: src/a/b.c -> out/cc/a/b.elf (suffix is configurable)
     fn get_executable_path(&self, source: &Path) -> PathBuf {
         let relative = source
             .strip_prefix(&self.source_dir)
             .unwrap_or(source);
-        let exe_name = relative.with_extension("");
-        self.output_dir.join(exe_name)
+        let stem = relative.with_extension("");
+        let name = format!("{}{}", stem.display(), self.config.output_suffix);
+        self.output_dir.join(name)
     }
 
     /// Get deps file path for a source file.
@@ -229,13 +303,13 @@ impl CcProcessor {
         let source_flags = parse_source_flags(source)?;
 
         let mut cmd = Command::new(compiler);
-        for arg in &source_flags.compile_args_before {
-            cmd.arg(arg);
-        }
         cmd.arg("-MM");
         cmd.arg(format!("-I{}", self.source_dir.display()));
         for inc in &self.config.include_paths {
             cmd.arg(format!("-I{}", self.project_root.join(inc).display()));
+        }
+        for arg in &source_flags.compile_args_before {
+            cmd.arg(arg);
         }
         for flag in flags {
             cmd.arg(flag);
@@ -245,6 +319,10 @@ impl CcProcessor {
         }
         cmd.arg(source);
         cmd.current_dir(&self.project_root);
+
+        if self.verbose >= 1 {
+            println!("[cc] {}", format_command(&cmd));
+        }
 
         let output = cmd
             .output()
@@ -330,9 +408,6 @@ impl CcProcessor {
         }
 
         let mut cmd = Command::new(compiler);
-        for arg in &source_flags.compile_args_before {
-            cmd.arg(arg);
-        }
         cmd.arg("-MMD");
         cmd.arg("-MF");
         cmd.arg(deps_file);
@@ -340,12 +415,18 @@ impl CcProcessor {
         for inc in &self.config.include_paths {
             cmd.arg(format!("-I{}", self.project_root.join(inc).display()));
         }
+        for arg in &source_flags.compile_args_before {
+            cmd.arg(arg);
+        }
         for flag in flags {
             cmd.arg(flag);
         }
         for arg in &source_flags.compile_args_after {
             cmd.arg(arg);
         }
+        cmd.arg("-o");
+        cmd.arg(executable);
+        cmd.arg(source);
         for arg in &source_flags.link_args_before {
             cmd.arg(arg);
         }
@@ -355,10 +436,11 @@ impl CcProcessor {
         for arg in &source_flags.link_args_after {
             cmd.arg(arg);
         }
-        cmd.arg("-o");
-        cmd.arg(executable);
-        cmd.arg(source);
         cmd.current_dir(&self.project_root);
+
+        if self.verbose >= 1 {
+            println!("[cc] {}", format_command(&cmd));
+        }
 
         let output = cmd
             .output()

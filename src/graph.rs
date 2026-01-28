@@ -25,7 +25,7 @@ impl Product {
         }
     }
 
-    /// Display name for logging
+    /// Display name for logging (all inputs)
     pub fn display(&self) -> String {
         let inputs: Vec<_> = self.inputs.iter()
             .map(|p| p.display().to_string())
@@ -34,6 +34,17 @@ impl Product {
             .map(|p| p.display().to_string())
             .collect();
         format!("input: {}, output: {}", inputs.join(", "), outputs.join(", "))
+    }
+
+    /// Compact display: only shows the first input (e.g. source file, not headers)
+    pub fn display_compact(&self) -> String {
+        let first_input = self.inputs.first()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "?".to_string());
+        let outputs: Vec<_> = self.outputs.iter()
+            .map(|p| p.display().to_string())
+            .collect();
+        format!("input: {}, output: {}", first_input, outputs.join(", "))
     }
 
     /// Cache key for checksum tracking
@@ -114,6 +125,7 @@ impl BuildGraph {
             .filter(|&(_, deg)| *deg == 0)
             .map(|(&id, _)| id)
             .collect();
+        queue.sort_by(|a, b| b.cmp(a));
 
         let mut result = Vec::new();
         let mut visited = HashSet::new();
@@ -127,13 +139,18 @@ impl BuildGraph {
 
             // Reduce in-degree of dependents
             if let Some(deps) = self.dependents.get(&id) {
+                let mut newly_ready = Vec::new();
                 for &dep_id in deps {
                     if let Some(deg) = in_degree.get_mut(&dep_id) {
                         *deg = deg.saturating_sub(1);
                         if *deg == 0 && !visited.contains(&dep_id) {
-                            queue.push(dep_id);
+                            newly_ready.push(dep_id);
                         }
                     }
+                }
+                if !newly_ready.is_empty() {
+                    queue.extend(newly_ready);
+                    queue.sort_by(|a, b| b.cmp(a));
                 }
             }
         }

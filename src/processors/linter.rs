@@ -61,17 +61,19 @@ impl Linter {
     }
 
     fn find_py_files_in_dir(&self, dir: &Path) -> Vec<PathBuf> {
-        WalkDir::new(dir)
+        let mut files: Vec<PathBuf> = WalkDir::new(dir)
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("py"))
             .map(|e| e.path().to_path_buf())
             .filter(|p| !self.ignore_rules.is_ignored(p))
-            .collect()
+            .collect();
+        files.sort();
+        files
     }
 
     fn find_py_files_in_project(&self) -> Vec<PathBuf> {
-        WalkDir::new(&self.project_root)
+        let mut files: Vec<PathBuf> = WalkDir::new(&self.project_root)
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| {
@@ -96,7 +98,9 @@ impl Linter {
             })
             .map(|e| e.path().to_path_buf())
             .filter(|p| !self.ignore_rules.is_ignored(p))
-            .collect()
+            .collect();
+        files.sort();
+        files
     }
 
     /// Get stub path for a Python file

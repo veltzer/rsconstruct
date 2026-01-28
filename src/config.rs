@@ -198,6 +198,10 @@ pub struct CcConfig {
     /// Source directory (default: src)
     #[serde(default = "default_source_dir")]
     pub source_dir: String,
+
+    /// Suffix for output executables (default: .elf)
+    #[serde(default = "default_output_suffix")]
+    pub output_suffix: String,
 }
 
 fn default_cc() -> String {
@@ -212,6 +216,10 @@ fn default_source_dir() -> String {
     "src".to_string()
 }
 
+fn default_output_suffix() -> String {
+    ".elf".to_string()
+}
+
 impl Default for CcConfig {
     fn default() -> Self {
         Self {
@@ -222,6 +230,7 @@ impl Default for CcConfig {
             ldflags: Vec::new(),
             include_paths: Vec::new(),
             source_dir: default_source_dir(),
+            output_suffix: default_output_suffix(),
         }
     }
 }

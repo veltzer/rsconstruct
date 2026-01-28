@@ -28,7 +28,18 @@ impl IgnoreRules {
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
-            let glob = Glob::new(trimmed)
+            // Strip leading '/' — patterns are already matched against
+            // project-root-relative paths, so '/' just means "anchored to root"
+            // (same semantics as .gitignore).
+            let pattern = trimmed.strip_prefix('/').unwrap_or(trimmed);
+            // Trailing '/' means "this directory and everything in it",
+            // like .gitignore. Append '**' so the glob matches all contents.
+            let pattern = if pattern.ends_with('/') {
+                format!("{}**", pattern)
+            } else {
+                pattern.to_string()
+            };
+            let glob = Glob::new(&pattern)
                 .with_context(|| format!("Invalid glob pattern in {}: {}", IGNORE_FILE, trimmed))?;
             builder.add(glob);
         }

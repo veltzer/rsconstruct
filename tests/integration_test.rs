@@ -837,7 +837,7 @@ fn test_cc_compile_single_c_file() {
         String::from_utf8_lossy(&output.stderr));
 
     // Check executable exists
-    assert!(project_path.join("out/cc/main").exists(), "Executable should exist");
+    assert!(project_path.join("out/cc/main.elf").exists(), "Executable should exist");
 }
 
 #[test]
@@ -933,8 +933,8 @@ fn test_cc_mixed_c_and_cpp() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/cc/helper").exists(), "C executable should exist");
-    assert!(project_path.join("out/cc/main").exists(), "C++ executable should exist");
+    assert!(project_path.join("out/cc/helper.elf").exists(), "C executable should exist");
+    assert!(project_path.join("out/cc/main.elf").exists(), "C++ executable should exist");
 }
 
 #[test]
@@ -952,7 +952,7 @@ fn test_cc_clean() {
     // Build
     let build_output = run_rsb(project_path, &["build"]);
     assert!(build_output.status.success());
-    assert!(project_path.join("out/cc/main").exists());
+    assert!(project_path.join("out/cc/main.elf").exists());
 
     // Clean
     let clean_output = run_rsb(project_path, &["clean"]);
@@ -982,7 +982,7 @@ fn test_cc_dry_run() {
     assert!(stdout.contains("BUILD"), "Dry run should show BUILD for cc products: {}", stdout);
 
     // Verify nothing was built
-    assert!(!project_path.join("out/cc/main").exists(), "Dry run should not compile");
+    assert!(!project_path.join("out/cc/main.elf").exists(), "Dry run should not compile");
 }
 
 // ========== .rsbignore tests ==========
@@ -1139,10 +1139,134 @@ fn test_rsbignore_cc_processor() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/cc/included").exists(),
+    assert!(project_path.join("out/cc/included.elf").exists(),
         "included.c should be compiled");
-    assert!(!project_path.join("out/cc/excluded/skip").exists(),
+    assert!(!project_path.join("out/cc/excluded/skip.elf").exists(),
         "excluded/skip.c should not be compiled");
+}
+
+#[test]
+fn test_rsbignore_leading_slash() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    setup_cc_project(project_path);
+
+    fs::write(
+        project_path.join("src/keep.c"),
+        "int main() { return 0; }\n"
+    ).unwrap();
+
+    fs::create_dir_all(project_path.join("src/skip_dir")).unwrap();
+    fs::write(
+        project_path.join("src/skip_dir/skip.c"),
+        "int main() { return 0; }\n"
+    ).unwrap();
+
+    // Leading '/' should work like .gitignore (anchored to project root)
+    fs::write(
+        project_path.join(".rsbignore"),
+        "/src/skip_dir/**\n"
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "Build failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    assert!(project_path.join("out/cc/keep.elf").exists(),
+        "keep.c should be compiled");
+    assert!(!project_path.join("out/cc/skip_dir/skip.elf").exists(),
+        "skip_dir/skip.c should be excluded by /src/skip_dir/** pattern");
+}
+
+#[test]
+fn test_rsbignore_trailing_slash() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    setup_cc_project(project_path);
+
+    fs::write(
+        project_path.join("src/keep.c"),
+        "int main() { return 0; }\n"
+    ).unwrap();
+
+    fs::create_dir_all(project_path.join("src/skipme")).unwrap();
+    fs::write(
+        project_path.join("src/skipme/deep.c"),
+        "int main() { return 0; }\n"
+    ).unwrap();
+
+    // Trailing '/' should exclude the directory and all its contents
+    fs::write(
+        project_path.join(".rsbignore"),
+        "/src/skipme/\n"
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "Build failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    assert!(project_path.join("out/cc/keep.elf").exists(),
+        "keep.c should be compiled");
+    assert!(!project_path.join("out/cc/skipme/deep.elf").exists(),
+        "skipme/deep.c should be excluded by /src/skipme/ pattern");
+}
+
+// ========== Deterministic build order tests ==========
+
+#[test]
+fn test_deterministic_build_order() {
+    // Run two separate builds with multiple sleep files and verify
+    // that the processing order is identical both times.
+    let outputs: Vec<Vec<String>> = (0..2).map(|_| {
+        let temp_dir = setup_test_project();
+        let project_path = temp_dir.path();
+
+        fs::create_dir_all(project_path.join("sleep")).unwrap();
+        // Create several sleep files with distinct names
+        for name in &["zebra", "alpha", "mango", "banana", "cherry"] {
+            fs::write(
+                project_path.join(format!("sleep/{}.sleep", name)),
+                "0.01"
+            ).unwrap();
+        }
+
+        fs::write(
+            project_path.join("rsb.toml"),
+            "[processors]\nenabled = [\"sleep\"]\n"
+        ).unwrap();
+
+        let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+        assert!(output.status.success(),
+            "Build failed: {}",
+            String::from_utf8_lossy(&output.stderr));
+
+        // Extract only the sleep file basenames from "[sleep] Processing:" lines
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let processing_names: Vec<String> = stdout
+            .lines()
+            .filter(|l| l.contains("[sleep] Processing:"))
+            .filter_map(|l| {
+                // Extract the sleep filename from the input path
+                l.split("input: ")
+                    .nth(1)
+                    .and_then(|s| s.split(',').next())
+                    .and_then(|s| s.rsplit('/').next())
+                    .map(|s| s.to_string())
+            })
+            .collect();
+        assert_eq!(processing_names.len(), 5, "Should process all 5 sleep files");
+        processing_names
+    }).collect();
+
+    assert_eq!(outputs[0], outputs[1],
+        "Build order must be deterministic across runs.\nFirst:  {:?}\nSecond: {:?}",
+        outputs[0], outputs[1]);
 }
 
 // ========== Per-file compile/link flags tests ==========
@@ -1154,10 +1278,10 @@ fn test_cc_per_file_compile_flags() {
 
     setup_cc_project(project_path);
 
-    // Source with EXTRA_COMPILE_ARGS_AFTER defining a macro
+    // Source with EXTRA_COMPILE_FLAGS_AFTER defining a macro
     fs::write(
         project_path.join("src/flagtest.c"),
-        r#"// EXTRA_COMPILE_ARGS_AFTER=-DTEST_VALUE=42
+        r#"// EXTRA_COMPILE_FLAGS_AFTER=-DTEST_VALUE=42
 #include <stdio.h>
 int main() {
     printf("%d\n", TEST_VALUE);
@@ -1172,11 +1296,11 @@ int main() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/cc/flagtest").exists(),
+    assert!(project_path.join("out/cc/flagtest.elf").exists(),
         "Executable with per-file compile flags should exist");
 
     // Run the executable and verify it outputs 42
-    let run_output = Command::new(project_path.join("out/cc/flagtest"))
+    let run_output = Command::new(project_path.join("out/cc/flagtest.elf"))
         .output()
         .expect("Failed to run flagtest");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
@@ -1194,7 +1318,7 @@ fn test_cc_per_file_link_flags() {
     // Source that uses math library (sqrt), linked via per-file flag
     fs::write(
         project_path.join("src/mathtest.c"),
-        r#"// EXTRA_LINK_ARGS_AFTER=-lm
+        r#"// EXTRA_LINK_FLAGS_AFTER=-lm
 #include <stdio.h>
 #include <math.h>
 int main() {
@@ -1210,11 +1334,11 @@ int main() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/cc/mathtest").exists(),
+    assert!(project_path.join("out/cc/mathtest.elf").exists(),
         "Executable with per-file link flags should exist");
 
     // Run the executable and verify it outputs 12
-    let run_output = Command::new(project_path.join("out/cc/mathtest"))
+    let run_output = Command::new(project_path.join("out/cc/mathtest.elf"))
         .output()
         .expect("Failed to run mathtest");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
@@ -1232,7 +1356,7 @@ fn test_cc_per_file_backtick_substitution() {
     // Source with backtick command substitution to define a macro
     fs::write(
         project_path.join("src/backtick.c"),
-        r#"// EXTRA_COMPILE_ARGS_AFTER=`echo -DBACKTICK_VAL=99`
+        r#"// EXTRA_COMPILE_FLAGS_AFTER=`echo -DBACKTICK_VAL=99`
 #include <stdio.h>
 int main() {
     printf("%d\n", BACKTICK_VAL);
@@ -1247,11 +1371,11 @@ int main() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/cc/backtick").exists(),
+    assert!(project_path.join("out/cc/backtick.elf").exists(),
         "Executable with backtick substitution should exist");
 
     // Run the executable and verify it outputs 99
-    let run_output = Command::new(project_path.join("out/cc/backtick"))
+    let run_output = Command::new(project_path.join("out/cc/backtick.elf"))
         .output()
         .expect("Failed to run backtick");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
@@ -1283,13 +1407,125 @@ int main() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/cc/plain").exists(),
+    assert!(project_path.join("out/cc/plain.elf").exists(),
         "Executable without per-file flags should exist");
 
-    let run_output = Command::new(project_path.join("out/cc/plain"))
+    let run_output = Command::new(project_path.join("out/cc/plain.elf"))
         .output()
         .expect("Failed to run plain");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
     assert!(stdout.trim() == "hello",
         "Executable should output hello, got: {}", stdout.trim());
+}
+
+#[test]
+fn test_cc_per_file_compile_cmd() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    setup_cc_project(project_path);
+
+    // EXTRA_COMPILE_CMD runs a command as subprocess; use echo to produce a -D flag
+    fs::write(
+        project_path.join("src/compilecmd.c"),
+        r#"// EXTRA_COMPILE_CMD=echo -DCMD_VAL=77
+#include <stdio.h>
+int main() {
+    printf("%d\n", CMD_VAL);
+    return 0;
+}
+"#
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "Build with EXTRA_COMPILE_CMD failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    assert!(project_path.join("out/cc/compilecmd.elf").exists(),
+        "Executable with EXTRA_COMPILE_CMD should exist");
+
+    let run_output = Command::new(project_path.join("out/cc/compilecmd.elf"))
+        .output()
+        .expect("Failed to run compilecmd");
+    let stdout = String::from_utf8_lossy(&run_output.stdout);
+    assert!(stdout.trim() == "77",
+        "Executable should output 77, got: {}", stdout.trim());
+}
+
+#[test]
+fn test_cc_per_file_link_cmd() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    setup_cc_project(project_path);
+
+    // EXTRA_LINK_CMD runs a command; use echo to produce -lm
+    fs::write(
+        project_path.join("src/linkcmd.c"),
+        r#"// EXTRA_LINK_CMD=echo -lm
+#include <stdio.h>
+#include <math.h>
+int main() {
+    printf("%.0f\n", sqrt(144.0));
+    return 0;
+}
+"#
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "Build with EXTRA_LINK_CMD failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    assert!(project_path.join("out/cc/linkcmd.elf").exists(),
+        "Executable with EXTRA_LINK_CMD should exist");
+
+    let run_output = Command::new(project_path.join("out/cc/linkcmd.elf"))
+        .output()
+        .expect("Failed to run linkcmd");
+    let stdout = String::from_utf8_lossy(&run_output.stdout);
+    assert!(stdout.trim() == "12",
+        "Executable should output 12, got: {}", stdout.trim());
+}
+
+#[test]
+fn test_cc_per_file_block_comment_star_prefix() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    setup_cc_project(project_path);
+
+    // Block comment continuation line with * prefix
+    fs::write(
+        project_path.join("src/blockstar.c"),
+        r#"/*
+ * EXTRA_LINK_FLAGS_AFTER=-lm
+ */
+#include <stdio.h>
+#include <math.h>
+int main() {
+    printf("%.0f\n", sqrt(144.0));
+    return 0;
+}
+"#
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "Build with block comment * prefix failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    assert!(project_path.join("out/cc/blockstar.elf").exists(),
+        "Executable with block comment * prefix should exist");
+
+    let run_output = Command::new(project_path.join("out/cc/blockstar.elf"))
+        .output()
+        .expect("Failed to run blockstar");
+    let stdout = String::from_utf8_lossy(&run_output.stdout);
+    assert!(stdout.trim() == "12",
+        "Executable should output 12, got: {}", stdout.trim());
 }

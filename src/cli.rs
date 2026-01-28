@@ -62,6 +62,10 @@ pub enum Commands {
         /// Show what would be built without executing anything
         #[arg(short = 'n', long)]
         dry_run: bool,
+
+        /// Processor verbosity level: 1 = print commands, 2 = also show all inputs (e.g. headers)
+        #[arg(long, default_value = "0")]
+        processor_verbose: u8,
     },
     /// Clean all build artifacts
     Clean,
