@@ -984,3 +984,312 @@ fn test_cc_dry_run() {
     // Verify nothing was built
     assert!(!project_path.join("out/cc/main").exists(), "Dry run should not compile");
 }
+
+// ========== .rsbignore tests ==========
+
+#[test]
+fn test_rsbignore_excludes_sleep_files() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create sleep directory with two files
+    fs::create_dir_all(project_path.join("sleep")).unwrap();
+    fs::write(project_path.join("sleep/included.sleep"), "0.01").unwrap();
+    fs::write(project_path.join("sleep/excluded.sleep"), "0.01").unwrap();
+
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processors]\nenabled = [\"sleep\"]\n"
+    ).unwrap();
+
+    // Create .rsbignore that excludes one file
+    fs::write(
+        project_path.join(".rsbignore"),
+        "sleep/excluded.sleep\n"
+    ).unwrap();
+
+    // Build
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(), "rsb build failed: {}", String::from_utf8_lossy(&output.stderr));
+
+    // The included file should be processed
+    assert!(project_path.join("out/sleep/included.done").exists(),
+        "Included sleep file should be processed");
+
+    // The excluded file should NOT be processed
+    assert!(!project_path.join("out/sleep/excluded.done").exists(),
+        "Excluded sleep file should not be processed");
+}
+
+#[test]
+fn test_rsbignore_glob_pattern() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create sleep directory with subdirectory
+    fs::create_dir_all(project_path.join("sleep/subdir")).unwrap();
+    fs::write(project_path.join("sleep/keep.sleep"), "0.01").unwrap();
+    fs::write(project_path.join("sleep/subdir/skip1.sleep"), "0.01").unwrap();
+    fs::write(project_path.join("sleep/subdir/skip2.sleep"), "0.01").unwrap();
+
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processors]\nenabled = [\"sleep\"]\n"
+    ).unwrap();
+
+    // Use a glob pattern to exclude the entire subdirectory
+    fs::write(
+        project_path.join(".rsbignore"),
+        "# Exclude all files in subdir\nsleep/subdir/**\n"
+    ).unwrap();
+
+    // Build
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(), "rsb build failed: {}", String::from_utf8_lossy(&output.stderr));
+
+    // keep.sleep should be processed
+    assert!(project_path.join("out/sleep/keep.done").exists(),
+        "keep.sleep should be processed");
+
+    // subdir files should be excluded
+    assert!(!project_path.join("out/sleep/skip1.done").exists(),
+        "subdir/skip1.sleep should be excluded");
+    assert!(!project_path.join("out/sleep/skip2.done").exists(),
+        "subdir/skip2.sleep should be excluded");
+}
+
+#[test]
+fn test_rsbignore_no_file() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create sleep directory — no .rsbignore
+    fs::create_dir_all(project_path.join("sleep")).unwrap();
+    fs::write(project_path.join("sleep/normal.sleep"), "0.01").unwrap();
+
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processors]\nenabled = [\"sleep\"]\n"
+    ).unwrap();
+
+    // Build should work fine without .rsbignore
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(), "rsb build failed without .rsbignore: {}",
+        String::from_utf8_lossy(&output.stderr));
+
+    assert!(project_path.join("out/sleep/normal.done").exists(),
+        "Sleep file should be processed when no .rsbignore exists");
+}
+
+#[test]
+fn test_rsbignore_comments_and_blank_lines() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    fs::create_dir_all(project_path.join("sleep")).unwrap();
+    fs::write(project_path.join("sleep/a.sleep"), "0.01").unwrap();
+    fs::write(project_path.join("sleep/b.sleep"), "0.01").unwrap();
+
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processors]\nenabled = [\"sleep\"]\n"
+    ).unwrap();
+
+    // .rsbignore with comments, blank lines, and one real pattern
+    fs::write(
+        project_path.join(".rsbignore"),
+        "# This is a comment\n\n   \n# Another comment\nsleep/b.sleep\n\n"
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success());
+
+    assert!(project_path.join("out/sleep/a.done").exists(), "a.sleep should be processed");
+    assert!(!project_path.join("out/sleep/b.done").exists(), "b.sleep should be ignored");
+}
+
+#[test]
+fn test_rsbignore_cc_processor() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    setup_cc_project(project_path);
+
+    // Create two C files
+    fs::write(
+        project_path.join("src/included.c"),
+        "int main() { return 0; }\n"
+    ).unwrap();
+
+    fs::create_dir_all(project_path.join("src/excluded")).unwrap();
+    fs::write(
+        project_path.join("src/excluded/skip.c"),
+        "int main() { return 0; }\n"
+    ).unwrap();
+
+    // Exclude the subdirectory
+    fs::write(
+        project_path.join(".rsbignore"),
+        "src/excluded/**\n"
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "Build failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    assert!(project_path.join("out/cc/included").exists(),
+        "included.c should be compiled");
+    assert!(!project_path.join("out/cc/excluded/skip").exists(),
+        "excluded/skip.c should not be compiled");
+}
+
+// ========== Per-file compile/link flags tests ==========
+
+#[test]
+fn test_cc_per_file_compile_flags() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    setup_cc_project(project_path);
+
+    // Source with EXTRA_COMPILE_ARGS_AFTER defining a macro
+    fs::write(
+        project_path.join("src/flagtest.c"),
+        r#"// EXTRA_COMPILE_ARGS_AFTER=-DTEST_VALUE=42
+#include <stdio.h>
+int main() {
+    printf("%d\n", TEST_VALUE);
+    return 0;
+}
+"#
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "Build with per-file compile flags failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    assert!(project_path.join("out/cc/flagtest").exists(),
+        "Executable with per-file compile flags should exist");
+
+    // Run the executable and verify it outputs 42
+    let run_output = Command::new(project_path.join("out/cc/flagtest"))
+        .output()
+        .expect("Failed to run flagtest");
+    let stdout = String::from_utf8_lossy(&run_output.stdout);
+    assert!(stdout.trim() == "42",
+        "Executable should output 42, got: {}", stdout.trim());
+}
+
+#[test]
+fn test_cc_per_file_link_flags() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    setup_cc_project(project_path);
+
+    // Source that uses math library (sqrt), linked via per-file flag
+    fs::write(
+        project_path.join("src/mathtest.c"),
+        r#"// EXTRA_LINK_ARGS_AFTER=-lm
+#include <stdio.h>
+#include <math.h>
+int main() {
+    printf("%.0f\n", sqrt(144.0));
+    return 0;
+}
+"#
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "Build with per-file link flags failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    assert!(project_path.join("out/cc/mathtest").exists(),
+        "Executable with per-file link flags should exist");
+
+    // Run the executable and verify it outputs 12
+    let run_output = Command::new(project_path.join("out/cc/mathtest"))
+        .output()
+        .expect("Failed to run mathtest");
+    let stdout = String::from_utf8_lossy(&run_output.stdout);
+    assert!(stdout.trim() == "12",
+        "Executable should output 12, got: {}", stdout.trim());
+}
+
+#[test]
+fn test_cc_per_file_backtick_substitution() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    setup_cc_project(project_path);
+
+    // Source with backtick command substitution to define a macro
+    fs::write(
+        project_path.join("src/backtick.c"),
+        r#"// EXTRA_COMPILE_ARGS_AFTER=`echo -DBACKTICK_VAL=99`
+#include <stdio.h>
+int main() {
+    printf("%d\n", BACKTICK_VAL);
+    return 0;
+}
+"#
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "Build with backtick substitution failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    assert!(project_path.join("out/cc/backtick").exists(),
+        "Executable with backtick substitution should exist");
+
+    // Run the executable and verify it outputs 99
+    let run_output = Command::new(project_path.join("out/cc/backtick"))
+        .output()
+        .expect("Failed to run backtick");
+    let stdout = String::from_utf8_lossy(&run_output.stdout);
+    assert!(stdout.trim() == "99",
+        "Executable should output 99, got: {}", stdout.trim());
+}
+
+#[test]
+fn test_cc_per_file_no_flags() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    setup_cc_project(project_path);
+
+    // Source without any special comments
+    fs::write(
+        project_path.join("src/plain.c"),
+        r#"#include <stdio.h>
+int main() {
+    printf("hello\n");
+    return 0;
+}
+"#
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "Build without per-file flags failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    assert!(project_path.join("out/cc/plain").exists(),
+        "Executable without per-file flags should exist");
+
+    let run_output = Command::new(project_path.join("out/cc/plain"))
+        .output()
+        .expect("Failed to run plain");
+    let stdout = String::from_utf8_lossy(&run_output.stdout);
+    assert!(stdout.trim() == "hello",
+        "Executable should output hello, got: {}", stdout.trim());
+}

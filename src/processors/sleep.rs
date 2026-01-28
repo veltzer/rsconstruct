@@ -1,11 +1,13 @@
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use walkdir::WalkDir;
 
 use crate::graph::{BuildGraph, Product};
+use crate::ignore::IgnoreRules;
 use super::ProductDiscovery;
 
 const SLEEP_DIR: &str = "sleep";
@@ -14,15 +16,17 @@ const SLEEP_STUB_DIR: &str = "out/sleep";
 pub struct SleepProcessor {
     sleep_dir: PathBuf,
     stub_dir: PathBuf,
+    ignore_rules: Arc<IgnoreRules>,
 }
 
 impl SleepProcessor {
-    pub fn new(project_root: PathBuf) -> Self {
+    pub fn new(project_root: PathBuf, ignore_rules: Arc<IgnoreRules>) -> Self {
         let sleep_dir = project_root.join(SLEEP_DIR);
         let stub_dir = project_root.join(SLEEP_STUB_DIR);
         Self {
             sleep_dir,
             stub_dir,
+            ignore_rules,
         }
     }
 
@@ -42,6 +46,7 @@ impl SleepProcessor {
             .filter_map(|e| e.ok())
             .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("sleep"))
             .map(|e| e.path().to_path_buf())
+            .filter(|p| !self.ignore_rules.is_ignored(p))
             .collect()
     }
 

@@ -2,11 +2,13 @@ use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Arc;
 use crate::cli::{GraphFormat, GraphViewer};
 use crate::color;
 use crate::config::Config;
 use crate::executor::Executor;
 use crate::graph::BuildGraph;
+use crate::ignore::IgnoreRules;
 use crate::object_store::ObjectStore;
 use crate::processors::{CcProcessor, Linter, ProductDiscovery, SleepProcessor, TemplateProcessor};
 
@@ -14,6 +16,7 @@ pub struct Builder {
     project_root: PathBuf,
     object_store: ObjectStore,
     config: Config,
+    ignore_rules: Arc<IgnoreRules>,
 }
 
 impl Builder {
@@ -21,11 +24,13 @@ impl Builder {
         let project_root = std::env::current_dir()?;
         let config = Config::load(&project_root)?;
         let object_store = ObjectStore::new(project_root.clone(), config.cache.restore_method)?;
+        let ignore_rules = Arc::new(IgnoreRules::load(&project_root)?);
 
         Ok(Self {
             project_root,
             object_store,
             config,
+            ignore_rules,
         })
     }
 
@@ -207,20 +212,20 @@ impl Builder {
         // Template processor
         let templates_dir = self.project_root.join("templates");
         let output_dir = self.project_root.clone();
-        if let Ok(template_proc) = TemplateProcessor::new(templates_dir, output_dir, self.config.template.clone()) {
+        if let Ok(template_proc) = TemplateProcessor::new(templates_dir, output_dir, self.config.template.clone(), Arc::clone(&self.ignore_rules)) {
             processors.insert("template".to_string(), Box::new(template_proc));
         }
 
         // Lint processor
-        let linter = Linter::new(self.project_root.clone(), self.config.lint.clone());
+        let linter = Linter::new(self.project_root.clone(), self.config.lint.clone(), Arc::clone(&self.ignore_rules));
         processors.insert("lint".to_string(), Box::new(linter));
 
         // Sleep processor (for testing parallelism)
-        let sleep_proc = SleepProcessor::new(self.project_root.clone());
+        let sleep_proc = SleepProcessor::new(self.project_root.clone(), Arc::clone(&self.ignore_rules));
         processors.insert("sleep".to_string(), Box::new(sleep_proc));
 
         // C/C++ compiler processor
-        let cc_proc = CcProcessor::new(self.project_root.clone(), self.config.cc.clone());
+        let cc_proc = CcProcessor::new(self.project_root.clone(), self.config.cc.clone(), Arc::clone(&self.ignore_rules));
         processors.insert("cc".to_string(), Box::new(cc_proc));
 
         processors

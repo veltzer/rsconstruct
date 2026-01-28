@@ -4,6 +4,7 @@ mod color;
 mod config;
 mod executor;
 mod graph;
+mod ignore;
 mod object_store;
 mod processors;
 mod watcher;

@@ -4,10 +4,12 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 use tera::{Context as TeraContext, Function, Tera, Value as TeraValue, to_value};
 
 use crate::config::TemplateConfig;
 use crate::graph::{BuildGraph, Product};
+use crate::ignore::IgnoreRules;
 use super::ProductDiscovery;
 
 /// Represents a single template file to be processed
@@ -82,14 +84,16 @@ pub struct TemplateProcessor {
     templates_dir: PathBuf,
     output_dir: PathBuf,
     config: TemplateConfig,
+    ignore_rules: Arc<IgnoreRules>,
 }
 
 impl TemplateProcessor {
-    pub fn new(templates_dir: PathBuf, output_dir: PathBuf, config: TemplateConfig) -> Result<Self> {
+    pub fn new(templates_dir: PathBuf, output_dir: PathBuf, config: TemplateConfig, ignore_rules: Arc<IgnoreRules>) -> Result<Self> {
         Ok(Self {
             templates_dir,
             output_dir,
             config,
+            ignore_rules,
         })
     }
 
@@ -106,6 +110,10 @@ impl TemplateProcessor {
             let path = entry.path();
 
             if path.is_file() {
+                if self.ignore_rules.is_ignored(&path) {
+                    continue;
+                }
+
                 let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
                 // Check if file matches any configured extension

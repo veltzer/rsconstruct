@@ -893,6 +893,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "dirs",
+ "globset",
  "hex",
  "notify",
  "serde",

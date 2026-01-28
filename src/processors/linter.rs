@@ -2,10 +2,12 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 use walkdir::WalkDir;
 
 use crate::config::LintConfig;
 use crate::graph::{BuildGraph, Product};
+use crate::ignore::IgnoreRules;
 use super::ProductDiscovery;
 
 const LINT_STUB_DIR: &str = "out/lint";
@@ -14,15 +16,17 @@ pub struct Linter {
     project_root: PathBuf,
     lint_config: LintConfig,
     stub_dir: PathBuf,
+    ignore_rules: Arc<IgnoreRules>,
 }
 
 impl Linter {
-    pub fn new(project_root: PathBuf, lint_config: LintConfig) -> Self {
+    pub fn new(project_root: PathBuf, lint_config: LintConfig, ignore_rules: Arc<IgnoreRules>) -> Self {
         let stub_dir = project_root.join(LINT_STUB_DIR);
         Self {
             project_root,
             lint_config,
             stub_dir,
+            ignore_rules,
         }
     }
 
@@ -62,6 +66,7 @@ impl Linter {
             .filter_map(|e| e.ok())
             .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("py"))
             .map(|e| e.path().to_path_buf())
+            .filter(|p| !self.ignore_rules.is_ignored(p))
             .collect()
     }
 
@@ -90,6 +95,7 @@ impl Linter {
                 path.extension().and_then(|s| s.to_str()) == Some("py")
             })
             .map(|e| e.path().to_path_buf())
+            .filter(|p| !self.ignore_rules.is_ignored(p))
             .collect()
     }
 
