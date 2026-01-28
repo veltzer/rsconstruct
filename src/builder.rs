@@ -64,6 +64,9 @@ impl Builder {
         let executor = Executor::new(&processors, 1);
         executor.clean(&graph)?;
 
+        // Clear the object store cache
+        self.object_store.clear()?;
+
         // Also clean the lint stub directory if it exists
         let lint_stub_dir = self.project_root.join("out/lint");
         if lint_stub_dir.exists() {

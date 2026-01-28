@@ -129,8 +129,8 @@ fn test_incremental_build() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("[template] Skipping (unchanged):"));
 
-    // Verify cache file exists
-    assert!(project_path.join(".rsb_cache.json").exists());
+    // Verify cache directory exists
+    assert!(project_path.join(".rsb/index.json").exists());
 }
 
 #[test]
@@ -155,7 +155,7 @@ fn test_clean_command() {
 
     // Verify files exist
     assert!(project_path.join("cleanme.txt").exists());
-    assert!(project_path.join(".rsb_cache.json").exists());
+    assert!(project_path.join(".rsb/index.json").exists());
 
     // Clean
     let clean_output = run_rsb(project_path, &["clean"]);
@@ -163,7 +163,7 @@ fn test_clean_command() {
 
     // Verify files are removed
     assert!(!project_path.join("cleanme.txt").exists());
-    assert!(!project_path.join(".rsb_cache.json").exists());
+    assert!(!project_path.join(".rsb").exists());
 }
 
 #[test]
