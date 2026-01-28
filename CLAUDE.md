@@ -26,10 +26,13 @@ A fast, incremental build tool written in Rust with template support, Python lin
 
 ```toml
 [build]
-parallel = 1  # Number of parallel jobs (1 = sequential)
+parallel = 1  # Number of parallel jobs (1 = sequential, 0 = auto-detect CPU cores)
 
 [processors]
 enabled = ["template", "lint", "sleep"]
+
+[cache]
+restore_method = "hardlink"  # or "copy" (hardlink is faster, copy works across filesystems)
 
 [template]
 strict = true           # Fail on undefined variables (default: true)
