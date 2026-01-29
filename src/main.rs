@@ -104,9 +104,18 @@ fn main() -> Result<()> {
             let config = Config::load(&project_root)?;
 
             match action {
-                ProcessorAction::List => {
-                    let all_processors = ["template", "pylint", "sleep", "cc", "cpplint"];
-                    for name in &all_processors {
+                ProcessorAction::List { all } => {
+                    let all_processors: [(&str, bool); 5] = [
+                        ("template", false),
+                        ("pylint", false),
+                        ("sleep", true),
+                        ("cc", false),
+                        ("cpplint", false),
+                    ];
+                    for (name, hidden) in &all_processors {
+                        if *hidden && !all {
+                            continue;
+                        }
                         let status = if config.processor.is_enabled(name) {
                             color::green("enabled")
                         } else {

@@ -135,7 +135,11 @@ pub enum CacheAction {
 #[derive(Subcommand)]
 pub enum ProcessorAction {
     /// List all available processors and their status
-    List,
+    List {
+        /// Show all processors, including hidden ones
+        #[arg(short, long)]
+        all: bool,
+    },
 }
 
 /// Parse a shell name string into a Shell enum
