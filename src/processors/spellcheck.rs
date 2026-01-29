@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use walkdir::WalkDir;
 
 use crate::config::{SpellcheckConfig, config_hash, resolve_extra_inputs};
@@ -18,6 +18,10 @@ pub struct SpellcheckProcessor {
     spellcheck_config: SpellcheckConfig,
     stub_dir: PathBuf,
     ignore_rules: Arc<IgnoreRules>,
+    /// Cached dictionary, built once on first use and reused across all execute() calls
+    cached_dict: OnceLock<Result<zspell::Dictionary, String>>,
+    /// Cached custom words, loaded once on first use
+    cached_words: OnceLock<HashSet<String>>,
 }
 
 impl SpellcheckProcessor {
@@ -28,6 +32,8 @@ impl SpellcheckProcessor {
             spellcheck_config,
             stub_dir,
             ignore_rules,
+            cached_dict: OnceLock::new(),
+            cached_words: OnceLock::new(),
         }
     }
 
@@ -118,6 +124,22 @@ impl SpellcheckProcessor {
             .context("Failed to build spellcheck dictionary")?;
 
         Ok(dict)
+    }
+
+    /// Get or build the cached dictionary (built once, reused across all files)
+    fn get_dictionary(&self) -> Result<&zspell::Dictionary> {
+        let result = self.cached_dict.get_or_init(|| {
+            self.build_dictionary().map_err(|e| e.to_string())
+        });
+        match result {
+            Ok(dict) => Ok(dict),
+            Err(msg) => anyhow::bail!("{}", msg),
+        }
+    }
+
+    /// Get or load the cached custom words (loaded once, reused across all files)
+    fn get_custom_words(&self) -> &HashSet<String> {
+        self.cached_words.get_or_init(|| self.load_custom_words())
     }
 
     /// Extract words from markdown text, stripping code blocks, inline code, URLs, and HTML tags
@@ -293,11 +315,11 @@ impl ProductDiscovery for SpellcheckProcessor {
                 .context("Failed to create spellcheck stub directory")?;
         }
 
-        let dict = self.build_dictionary()?;
-        let custom_words = self.load_custom_words();
+        let dict = self.get_dictionary()?;
+        let custom_words = self.get_custom_words();
 
         // First input is always the doc file
-        self.check_file(&product.inputs[0], &product.outputs[0], &dict, &custom_words)
+        self.check_file(&product.inputs[0], &product.outputs[0], dict, custom_words)
     }
 
     fn clean(&self, product: &Product) -> Result<()> {
