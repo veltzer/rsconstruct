@@ -43,7 +43,7 @@ A fast, incremental build tool written in Rust with template support, Python lin
 parallel = 1  # Number of parallel jobs (1 = sequential, 0 = auto-detect CPU cores)
 
 [processor]
-enabled = ["template", "pylint", "sleep", "cc", "cpplint"]
+enabled = ["template", "pylint", "sleep", "cc", "cpplint", "spellcheck"]
 
 [cache]
 restore_method = "hardlink"  # or "copy" (hardlink is faster, copy works across filesystems)
@@ -61,6 +61,11 @@ args = []
 checker = "cppcheck"  # C/C++ static checker (default: cppcheck)
 args = ["--error-exitcode=1", "--enable=warning,style,performance,portability"]
 # To use a suppressions file: add "--suppressions-list=.cppcheck-suppressions" to args
+
+[processor.spellcheck]
+extensions = [".md"]                    # File extensions to check
+language = "en_US"                      # Hunspell dictionary language
+words_file = ".spellcheck-words"        # Path to custom words file (relative to project root)
 
 [processor.cc]
 cc = "gcc"              # C compiler (default: gcc)
@@ -83,8 +88,9 @@ shells = ["bash"]
 
 ```
 project/
-├── rsb.toml          # Configuration file
-├── config/           # Python config files
+├── rsb.toml              # Configuration file
+├── .spellcheck-words     # Custom words for spellcheck (one per line)
+├── config/               # Python config files
 ├── templates/        # .tera template files
 ├── src/              # C/C++ source files
 ├── sleep/            # .sleep files (for parallel testing)
@@ -92,6 +98,7 @@ project/
 │   ├── cc/           # Compiled executables
 │   ├── pylint/       # Python lint stub files
 │   ├── cpplint/      # C/C++ lint stub files
+│   ├── spellcheck/   # Spellcheck stub files
 │   └── sleep/        # Sleep stub files
 └── .rsb/             # Cache (index.json, objects/, deps/)
 ```
@@ -144,9 +151,19 @@ Link flags come after the source file so the linker can resolve symbols correctl
 - **2** — adds source file path: `out/cc/main.elf <- src/main.c`
 - **3** — adds all inputs including headers: `out/cc/main.elf <- src/main.c, src/utils.h`
 
+## Spellcheck Processor
+
+The spellcheck processor checks documentation files for spelling errors using the `zspell` crate (pure Rust, compatible with Hunspell dictionary format). It reads system Hunspell dictionaries from `/usr/share/hunspell/`.
+
+- Default file extensions: `.md`
+- Default language: `en_US` (requires `hunspell-en-us` package or equivalent)
+- Custom words file: `.spellcheck-words` at project root (one word per line, `#` comments supported)
+- Markdown-aware: strips code blocks, inline code, URLs, and HTML tags before checking
+- Output: stub files in `out/spellcheck/`
+
 ## Architecture
 
-- **Processors** implement `ProductDiscovery` trait (template, pylint, sleep, cc, cpplint)
+- **Processors** implement `ProductDiscovery` trait (template, pylint, sleep, cc, cpplint, spellcheck)
 - **Products** have inputs (source files) and outputs (generated files)
 - **BuildGraph** manages dependencies between products
 - **Executor** runs products in dependency order, with optional parallelism

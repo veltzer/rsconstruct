@@ -1643,3 +1643,173 @@ fn test_cc_config_change_triggers_rebuild() {
     assert!(stdout3.contains("[cc] Processing:"),
         "Build after config change should reprocess, not skip: {}", stdout3);
 }
+
+// ========== Spellcheck processor tests ==========
+
+#[test]
+fn test_spellcheck_correct_spelling() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create a markdown file with correct spelling
+    fs::write(
+        project_path.join("README.md"),
+        "# Hello World\n\nThis is a simple document with correct spelling.\n"
+    ).unwrap();
+
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"spellcheck\"]\n"
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "Build should succeed with correct spelling: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    // Verify stub file was created
+    let stub_dir = project_path.join("out/spellcheck");
+    assert!(stub_dir.exists(), "Spellcheck stub directory should exist");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("[spellcheck] Processing:"),
+        "Should process spellcheck: {}", stdout);
+}
+
+#[test]
+fn test_spellcheck_misspelled_word() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create a markdown file with a misspelled word
+    fs::write(
+        project_path.join("README.md"),
+        "# Hello World\n\nThis document has a speling error.\n"
+    ).unwrap();
+
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"spellcheck\"]\n"
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(!output.status.success(),
+        "Build should fail with misspelled word");
+
+    let combined = format!("{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+    assert!(combined.contains("speling"),
+        "Error should mention the misspelled word: {}", combined);
+}
+
+#[test]
+fn test_spellcheck_custom_words_file() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create a markdown file with a "misspelled" word that is actually a custom word
+    fs::write(
+        project_path.join("README.md"),
+        "# Hello World\n\nThis uses rsb for building.\n"
+    ).unwrap();
+
+    // Add "rsb" to custom words file
+    fs::write(
+        project_path.join(".spellcheck-words"),
+        "# Custom project words\nrsb\n"
+    ).unwrap();
+
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"spellcheck\"]\n"
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "Build should succeed with custom words: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+}
+
+#[test]
+fn test_spellcheck_incremental_skip() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    fs::write(
+        project_path.join("README.md"),
+        "# Hello World\n\nThis is correct.\n"
+    ).unwrap();
+
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"spellcheck\"]\n"
+    ).unwrap();
+
+    // First build
+    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output1.status.success());
+    let stdout1 = String::from_utf8_lossy(&output1.stdout);
+    assert!(stdout1.contains("[spellcheck] Processing:"),
+        "First build should process: {}", stdout1);
+
+    // Second build should skip
+    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(output2.status.success());
+    let stdout2 = String::from_utf8_lossy(&output2.stdout);
+    assert!(stdout2.contains("[spellcheck] Skipping (unchanged):"),
+        "Second build should skip: {}", stdout2);
+}
+
+#[test]
+fn test_spellcheck_clean() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    fs::write(
+        project_path.join("README.md"),
+        "# Hello World\n\nThis is correct.\n"
+    ).unwrap();
+
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"spellcheck\"]\n"
+    ).unwrap();
+
+    // Build
+    let build_output = run_rsb(project_path, &["build"]);
+    assert!(build_output.status.success());
+    assert!(project_path.join("out/spellcheck").exists(),
+        "Spellcheck stub directory should exist after build");
+
+    // Clean
+    let clean_output = run_rsb(project_path, &["clean"]);
+    assert!(clean_output.status.success());
+    assert!(!project_path.join("out/spellcheck").exists(),
+        "Spellcheck stub directory should be removed after clean");
+}
+
+#[test]
+fn test_spellcheck_ignores_code_blocks() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create a markdown file with misspelled words inside code blocks — should pass
+    fs::write(
+        project_path.join("README.md"),
+        "# Hello\n\nThis is correct.\n\n```\nxyzqwert notaword\n```\n\nAlso `inlinecode` is fine.\n"
+    ).unwrap();
+
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"spellcheck\"]\n"
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "Build should succeed — code blocks should be ignored: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+}

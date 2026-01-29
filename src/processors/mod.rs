@@ -2,6 +2,7 @@ mod cc;
 mod cpplint;
 mod pylint;
 mod sleep;
+mod spellcheck;
 mod template;
 
 use anyhow::Result;
@@ -14,6 +15,7 @@ pub use cc::CcProcessor;
 pub use cpplint::Cpplinter;
 pub use pylint::Pylinter;
 pub use sleep::SleepProcessor;
+pub use spellcheck::SpellcheckProcessor;
 pub use template::TemplateProcessor;
 
 /// Trait for processors that can discover products for the build graph

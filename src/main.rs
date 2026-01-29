@@ -103,15 +103,17 @@ fn main() -> Result<()> {
             let project_root = env::current_dir()?;
             let config = Config::load(&project_root)?;
 
+            let all_processors: [(&str, bool); 6] = [
+                ("template", false),
+                ("pylint", false),
+                ("sleep", true),
+                ("cc", false),
+                ("cpplint", false),
+                ("spellcheck", false),
+            ];
+
             match action {
                 ProcessorAction::List { all } => {
-                    let all_processors: [(&str, bool); 5] = [
-                        ("template", false),
-                        ("pylint", false),
-                        ("sleep", true),
-                        ("cc", false),
-                        ("cpplint", false),
-                    ];
                     for (name, hidden) in &all_processors {
                         if *hidden && !all {
                             continue;
@@ -122,6 +124,21 @@ fn main() -> Result<()> {
                             color::dim("disabled")
                         };
                         println!("{} {}", name, status);
+                    }
+                }
+                ProcessorAction::All => {
+                    for (name, hidden) in &all_processors {
+                        let enabled_status = if config.processor.is_enabled(name) {
+                            color::green("enabled")
+                        } else {
+                            color::dim("disabled")
+                        };
+                        let hidden_status = if *hidden {
+                            format!(" {}", color::dim("(hidden)"))
+                        } else {
+                            String::new()
+                        };
+                        println!("{} {}{}", name, enabled_status, hidden_status);
                     }
                 }
             }

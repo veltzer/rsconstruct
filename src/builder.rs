@@ -10,7 +10,7 @@ use crate::executor::Executor;
 use crate::graph::BuildGraph;
 use crate::ignore::IgnoreRules;
 use crate::object_store::ObjectStore;
-use crate::processors::{CcProcessor, Cpplinter, Pylinter, ProductDiscovery, SleepProcessor, TemplateProcessor};
+use crate::processors::{CcProcessor, Cpplinter, Pylinter, ProductDiscovery, SleepProcessor, SpellcheckProcessor, TemplateProcessor};
 
 pub struct Builder {
     project_root: PathBuf,
@@ -205,6 +205,14 @@ impl Builder {
             println!("Removed cc output directory: {}", cc_output_dir.display());
         }
 
+        // Also clean the spellcheck stub directory if it exists
+        let spellcheck_stub_dir = self.project_root.join("out/spellcheck");
+        if spellcheck_stub_dir.exists() {
+            fs::remove_dir_all(&spellcheck_stub_dir)
+                .context("Failed to remove spellcheck stub directory")?;
+            println!("Removed spellcheck stub directory: {}", spellcheck_stub_dir.display());
+        }
+
         println!("{}", color::green("Clean completed!"));
         Ok(())
     }
@@ -257,6 +265,10 @@ impl Builder {
         // C/C++ lint processor
         let cpplinter = Cpplinter::new(self.project_root.clone(), self.config.processor.cpplint.clone(), self.config.processor.cc.clone(), Arc::clone(&self.ignore_rules));
         processors.insert("cpplint".to_string(), Box::new(cpplinter));
+
+        // Spellcheck processor
+        let spellcheck_proc = SpellcheckProcessor::new(self.project_root.clone(), self.config.processor.spellcheck.clone(), Arc::clone(&self.ignore_rules));
+        processors.insert("spellcheck".to_string(), Box::new(spellcheck_proc));
 
         processors
     }

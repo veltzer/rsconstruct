@@ -86,10 +86,12 @@ pub struct ProcessorConfig {
     pub cc: CcConfig,
     #[serde(default)]
     pub cpplint: CpplintConfig,
+    #[serde(default)]
+    pub spellcheck: SpellcheckConfig,
 }
 
 fn default_processors() -> Vec<String> {
-    vec!["template".to_string(), "pylint".to_string(), "sleep".to_string(), "cc".to_string(), "cpplint".to_string()]
+    vec!["template".to_string(), "pylint".to_string(), "sleep".to_string(), "cc".to_string(), "cpplint".to_string(), "spellcheck".to_string()]
 }
 
 impl Default for ProcessorConfig {
@@ -100,6 +102,7 @@ impl Default for ProcessorConfig {
             pylint: PylintConfig::default(),
             cc: CcConfig::default(),
             cpplint: CpplintConfig::default(),
+            spellcheck: SpellcheckConfig::default(),
         }
     }
 }
@@ -279,6 +282,43 @@ impl Default for CcConfig {
             include_paths: Vec::new(),
             source_dir: default_source_dir(),
             output_suffix: default_output_suffix(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct SpellcheckConfig {
+    /// File extensions to check (default: [".md"])
+    #[serde(default = "default_spellcheck_extensions")]
+    pub extensions: Vec<String>,
+
+    /// Hunspell dictionary language (default: "en_US")
+    #[serde(default = "default_spellcheck_language")]
+    pub language: String,
+
+    /// Path to custom words file (default: ".spellcheck-words")
+    #[serde(default = "default_spellcheck_words_file")]
+    pub words_file: String,
+}
+
+fn default_spellcheck_extensions() -> Vec<String> {
+    vec![".md".to_string()]
+}
+
+fn default_spellcheck_language() -> String {
+    "en_US".to_string()
+}
+
+fn default_spellcheck_words_file() -> String {
+    ".spellcheck-words".to_string()
+}
+
+impl Default for SpellcheckConfig {
+    fn default() -> Self {
+        Self {
+            extensions: default_spellcheck_extensions(),
+            language: default_spellcheck_language(),
+            words_file: default_spellcheck_words_file(),
         }
     }
 }
