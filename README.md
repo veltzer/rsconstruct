@@ -69,6 +69,7 @@ args = []
 [processor.cpplint]
 checker = "cppcheck"  # C/C++ static checker (default: cppcheck)
 args = ["--error-exitcode=1", "--enable=warning,style,performance,portability"]
+# To use a suppressions file: add "--suppressions-list=.cppcheck-suppressions" to args
 
 [completions]
 shells = ["bash"]
