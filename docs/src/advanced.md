@@ -131,11 +131,11 @@ extra_inputs = ["Makefile.inc"]
 extra_inputs = ["custom-dictionary.txt"]
 ```
 
-Paths are relative to the project root. Files that don't exist are silently ignored, so you can list optional files without causing errors.
+Paths are relative to the project root. Missing files cause a build error, so all listed files must exist.
 
 The `extra_inputs` paths are included in the processor's config hash, so adding or removing entries triggers a rebuild even if the files themselves haven't changed. The file contents are also checksummed as part of the product's input set, so any content change is detected by the incremental build system.
 
-All five configurable processors support `extra_inputs`: template, pylint, cpplint, cc, and spellcheck. The sleep processor (used for testing) does not.
+All six processors support `extra_inputs`: template, pylint, cpplint, cc, spellcheck, and sleep.
 
 ## Graceful interrupt
 

@@ -71,6 +71,9 @@ language = "en_US"                      # Hunspell dictionary language
 words_file = ".spellcheck-words"        # Path to custom words file (relative to project root)
 extra_inputs = []                       # Additional files that trigger rebuilds when changed
 
+[processor.sleep]
+extra_inputs = []                       # Additional files that trigger rebuilds when changed
+
 [processor.cc]
 cc = "gcc"              # C compiler (default: gcc)
 cxx = "g++"             # C++ compiler (default: g++)

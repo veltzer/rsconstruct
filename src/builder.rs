@@ -255,7 +255,7 @@ impl Builder {
         processors.insert("pylint".to_string(), Box::new(pylinter));
 
         // Sleep processor (for testing parallelism)
-        let sleep_proc = SleepProcessor::new(self.project_root.clone(), Arc::clone(&self.ignore_rules));
+        let sleep_proc = SleepProcessor::new(self.project_root.clone(), self.config.processor.sleep.clone(), Arc::clone(&self.ignore_rules));
         processors.insert("sleep".to_string(), Box::new(sleep_proc));
 
         // C/C++ compiler processor

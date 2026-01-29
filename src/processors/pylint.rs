@@ -164,7 +164,7 @@ impl ProductDiscovery for Pylinter {
 
         let py_files = self.find_python_files();
         let config_hash = Some(config_hash(&self.pylint_config));
-        let extra = resolve_extra_inputs(&self.project_root, &self.pylint_config.extra_inputs);
+        let extra = resolve_extra_inputs(&self.project_root, &self.pylint_config.extra_inputs)?;
 
         for py_file in py_files {
             let stub_path = self.get_stub_path(&py_file);

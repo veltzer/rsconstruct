@@ -6,13 +6,17 @@ use std::path::{Path, PathBuf};
 
 const CONFIG_FILE: &str = "rsb.toml";
 
-/// Resolve extra_inputs paths relative to project root, returning only those that exist.
-pub fn resolve_extra_inputs(project_root: &Path, extra_inputs: &[String]) -> Vec<PathBuf> {
-    extra_inputs
-        .iter()
-        .map(|p| project_root.join(p))
-        .filter(|p| p.exists())
-        .collect()
+/// Resolve extra_inputs paths relative to project root, failing if any file does not exist.
+pub fn resolve_extra_inputs(project_root: &Path, extra_inputs: &[String]) -> Result<Vec<PathBuf>> {
+    let mut resolved = Vec::new();
+    for p in extra_inputs {
+        let path = project_root.join(p);
+        if !path.exists() {
+            anyhow::bail!("extra_inputs file not found: {}", p);
+        }
+        resolved.push(path);
+    }
+    Ok(resolved)
 }
 
 /// Compute a SHA-256 hash of any serializable config value.
@@ -97,6 +101,8 @@ pub struct ProcessorConfig {
     pub cpplint: CpplintConfig,
     #[serde(default)]
     pub spellcheck: SpellcheckConfig,
+    #[serde(default)]
+    pub sleep: SleepConfig,
 }
 
 fn default_processors() -> Vec<String> {
@@ -112,6 +118,7 @@ impl Default for ProcessorConfig {
             cc: CcConfig::default(),
             cpplint: CpplintConfig::default(),
             spellcheck: SpellcheckConfig::default(),
+            sleep: SleepConfig::default(),
         }
     }
 }
@@ -352,6 +359,21 @@ impl Default for SpellcheckConfig {
             extensions: default_spellcheck_extensions(),
             language: default_spellcheck_language(),
             words_file: default_spellcheck_words_file(),
+            extra_inputs: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct SleepConfig {
+    /// Additional input files that trigger rebuilds when changed
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+}
+
+impl Default for SleepConfig {
+    fn default() -> Self {
+        Self {
             extra_inputs: Vec::new(),
         }
     }

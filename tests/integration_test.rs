@@ -1967,7 +1967,7 @@ fn extra_inputs_triggers_rebuild() {
 }
 
 #[test]
-fn extra_inputs_nonexistent_file_ignored() {
+fn extra_inputs_nonexistent_file_fails() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
@@ -1982,18 +1982,73 @@ fn extra_inputs_nonexistent_file_ignored() {
         "{% set c = load_python(path='config/simple.py') %}{{ c.val }}"
     ).unwrap();
 
-    // Configure with a nonexistent extra_input — should not cause errors
+    // Configure with a nonexistent extra_input — should cause an error
     fs::write(
         project_path.join("rsb.toml"),
         "[processor]\nenabled = [\"template\"]\n\n[processor.template]\nextra_inputs = [\"nonexistent_file.txt\"]\n"
     ).unwrap();
 
     let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(),
-        "Build should succeed with nonexistent extra_input: stdout={}, stderr={}",
+    assert!(!output.status.success(),
+        "Build should fail with nonexistent extra_input: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("simple.txt").exists(),
-        "Output file should be created despite nonexistent extra_input");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("extra_inputs file not found") || stderr.contains("nonexistent_file.txt"),
+        "Error should mention missing extra_inputs file: {}", stderr);
+}
+
+#[test]
+fn sleep_extra_inputs_valid() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create sleep directory and file
+    fs::create_dir_all(project_path.join("sleep")).unwrap();
+    fs::write(project_path.join("sleep/test.sleep"), "0.01").unwrap();
+
+    // Create an extra input file
+    fs::write(project_path.join("extra.txt"), "extra data").unwrap();
+
+    // Configure sleep processor with extra_inputs
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"sleep\"]\n\n[processor.sleep]\nextra_inputs = [\"extra.txt\"]\n"
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "Build should succeed with valid sleep extra_inputs: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    assert!(project_path.join("out/sleep/test.done").exists(),
+        "Sleep stub should be created");
+}
+
+#[test]
+fn sleep_extra_inputs_nonexistent_fails() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create sleep directory and file
+    fs::create_dir_all(project_path.join("sleep")).unwrap();
+    fs::write(project_path.join("sleep/test.sleep"), "0.01").unwrap();
+
+    // Configure sleep processor with nonexistent extra_input
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"sleep\"]\n\n[processor.sleep]\nextra_inputs = [\"does_not_exist.txt\"]\n"
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(!output.status.success(),
+        "Build should fail with nonexistent sleep extra_input: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("extra_inputs file not found") || stderr.contains("does_not_exist.txt"),
+        "Error should mention missing extra_inputs file: {}", stderr);
 }

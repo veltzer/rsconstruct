@@ -6,6 +6,7 @@ use std::thread;
 use std::time::Duration;
 use walkdir::WalkDir;
 
+use crate::config::{SleepConfig, config_hash, resolve_extra_inputs};
 use crate::graph::{BuildGraph, Product};
 use crate::ignore::IgnoreRules;
 use super::ProductDiscovery;
@@ -14,18 +15,22 @@ const SLEEP_DIR: &str = "sleep";
 const SLEEP_STUB_DIR: &str = "out/sleep";
 
 pub struct SleepProcessor {
+    project_root: PathBuf,
     sleep_dir: PathBuf,
     stub_dir: PathBuf,
+    config: SleepConfig,
     ignore_rules: Arc<IgnoreRules>,
 }
 
 impl SleepProcessor {
-    pub fn new(project_root: PathBuf, ignore_rules: Arc<IgnoreRules>) -> Self {
+    pub fn new(project_root: PathBuf, config: SleepConfig, ignore_rules: Arc<IgnoreRules>) -> Self {
         let sleep_dir = project_root.join(SLEEP_DIR);
         let stub_dir = project_root.join(SLEEP_STUB_DIR);
         Self {
+            project_root,
             sleep_dir,
             stub_dir,
+            config,
             ignore_rules,
         }
     }
@@ -94,14 +99,18 @@ impl ProductDiscovery for SleepProcessor {
         }
 
         let sleep_files = self.find_sleep_files();
+        let cfg_hash = Some(config_hash(&self.config));
+        let extra = resolve_extra_inputs(&self.project_root, &self.config.extra_inputs)?;
 
         for sleep_file in sleep_files {
             let stub_path = self.get_stub_path(&sleep_file);
+            let mut inputs = vec![sleep_file];
+            inputs.extend(extra.clone());
             graph.add_product(
-                vec![sleep_file],
+                inputs,
                 vec![stub_path],
                 "sleep",
-                None,
+                cfg_hash.clone(),
             );
         }
 
@@ -109,8 +118,8 @@ impl ProductDiscovery for SleepProcessor {
     }
 
     fn execute(&self, product: &Product) -> Result<()> {
-        if product.inputs.len() != 1 || product.outputs.len() != 1 {
-            anyhow::bail!("Sleep product must have exactly one input and one output");
+        if product.inputs.is_empty() || product.outputs.len() != 1 {
+            anyhow::bail!("Sleep product must have at least one input and exactly one output");
         }
 
         // Ensure stub directory exists

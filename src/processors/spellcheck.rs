@@ -262,7 +262,7 @@ impl ProductDiscovery for SpellcheckProcessor {
         let config_hash = Some(config_hash(&self.spellcheck_config));
         let words_file = self.words_file_path();
         let words_file_exists = words_file.exists();
-        let extra = resolve_extra_inputs(&self.project_root, &self.spellcheck_config.extra_inputs);
+        let extra = resolve_extra_inputs(&self.project_root, &self.spellcheck_config.extra_inputs)?;
 
         for doc_file in doc_files {
             let stub_path = self.get_stub_path(&doc_file);

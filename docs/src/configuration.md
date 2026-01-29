@@ -48,6 +48,9 @@ language = "en_US"                      # Hunspell dictionary language
 words_file = ".spellcheck-words"        # Path to custom words file (relative to project root)
 extra_inputs = []                       # Additional files that trigger rebuilds when changed
 
+[processor.sleep]
+extra_inputs = []                       # Additional files that trigger rebuilds when changed
+
 [graph]
 viewer = "google-chrome"  # Command to open graph files (default: platform-specific)
 
@@ -123,6 +126,12 @@ See [C/C++ Processor Details](cc-details.md) for full documentation.
 | `extensions` | array | `[".md"]` | File extensions to check |
 | `language` | string | `"en_US"` | Hunspell dictionary language |
 | `words_file` | string | `".spellcheck-words"` | Path to custom words file (relative to project root) |
+| `extra_inputs` | array | `[]` | Additional files that trigger rebuilds when changed |
+
+### `[processor.sleep]`
+
+| Key | Type | Default | Description |
+|---|---|---|---|
 | `extra_inputs` | array | `[]` | Additional files that trigger rebuilds when changed |
 
 ### `[graph]`

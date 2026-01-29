@@ -128,7 +128,7 @@ impl ProductDiscovery for Cpplinter {
 
         let source_files = self.find_source_files();
         let config_hash = Some(config_hash(&self.cpplint_config));
-        let extra = resolve_extra_inputs(&self.project_root, &self.cpplint_config.extra_inputs);
+        let extra = resolve_extra_inputs(&self.project_root, &self.cpplint_config.extra_inputs)?;
 
         for source_file in source_files {
             let stub_path = self.get_stub_path(&source_file);

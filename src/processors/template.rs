@@ -139,7 +139,7 @@ impl TemplateProcessor {
 impl ProductDiscovery for TemplateProcessor {
     fn discover(&self, graph: &mut BuildGraph) -> Result<()> {
         let items = self.find_templates()?;
-        let extra = resolve_extra_inputs(&self.output_dir, &self.config.extra_inputs);
+        let extra = resolve_extra_inputs(&self.output_dir, &self.config.extra_inputs)?;
 
         for item in items {
             let mut inputs = vec![item.source_path.clone()];

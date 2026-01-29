@@ -507,7 +507,7 @@ impl ProductDiscovery for CcProcessor {
         }
 
         let config_hash = Some(config_hash(&self.config));
-        let extra = resolve_extra_inputs(&self.project_root, &self.config.extra_inputs);
+        let extra = resolve_extra_inputs(&self.project_root, &self.config.extra_inputs)?;
 
         for (source, is_cpp) in &source_files {
             let executable = self.get_executable_path(source);
