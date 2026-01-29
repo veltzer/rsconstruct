@@ -4,7 +4,7 @@ use std::io;
 use std::str::FromStr;
 
 #[derive(Parser)]
-#[command(name = "rsb")]
+#[command(name = "rsb", version)]
 #[command(about = "Rust Build Tool - Incremental build system with templates", long_about = None)]
 pub struct Cli {
     /// Show verbose output
