@@ -7,7 +7,7 @@ use std::process::Command;
 use std::sync::Arc;
 use tera::{Context as TeraContext, Function, Tera, Value as TeraValue, to_value};
 
-use crate::config::TemplateConfig;
+use crate::config::{TemplateConfig, config_hash};
 use crate::graph::{BuildGraph, Product};
 use crate::ignore::IgnoreRules;
 use super::ProductDiscovery;
@@ -145,7 +145,7 @@ impl ProductDiscovery for TemplateProcessor {
                 vec![item.source_path.clone()],
                 vec![item.output_path.clone()],
                 "template",
-                None,
+                Some(config_hash(&self.config)),
             );
         }
 

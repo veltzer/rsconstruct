@@ -5,7 +5,7 @@ use std::process::Command;
 use std::sync::Arc;
 use walkdir::WalkDir;
 
-use crate::config::PylintConfig;
+use crate::config::{PylintConfig, config_hash};
 use crate::graph::{BuildGraph, Product};
 use crate::ignore::IgnoreRules;
 use super::ProductDiscovery;
@@ -163,7 +163,7 @@ impl ProductDiscovery for Pylinter {
         }
 
         let py_files = self.find_python_files();
-        let config_hash = Some(self.pylint_config.config_hash());
+        let config_hash = Some(config_hash(&self.pylint_config));
 
         for py_file in py_files {
             let stub_path = self.get_stub_path(&py_file);

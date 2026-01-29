@@ -1,10 +1,18 @@
 use anyhow::{Context, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::Path;
 
 const CONFIG_FILE: &str = "rsb.toml";
+
+/// Compute a SHA-256 hash of any serializable config value.
+/// Uses JSON serialization (deterministic for structs) to produce the hash input.
+pub fn config_hash(value: &impl Serialize) -> String {
+    let json = serde_json::to_string(value).expect("config serialization failed");
+    let hash = Sha256::digest(json.as_bytes());
+    hex::encode(hash)
+}
 
 #[derive(Debug, Deserialize, Default)]
 pub struct Config {
@@ -102,7 +110,7 @@ impl ProcessorConfig {
     }
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TemplateConfig {
     /// Fail on undefined variables (default: true)
     #[serde(default = "default_true")]
@@ -154,7 +162,7 @@ impl Default for CompletionsConfig {
     }
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PylintConfig {
     /// The Python linter to use (ruff, pylint, flake8, etc.)
     #[serde(default = "default_pylinter")]
@@ -178,20 +186,7 @@ impl Default for PylintConfig {
     }
 }
 
-impl PylintConfig {
-    /// Compute a SHA-256 hash of all build-affecting config fields.
-    pub fn config_hash(&self) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(self.linter.as_bytes());
-        for arg in &self.args {
-            hasher.update(b"\0");
-            hasher.update(arg.as_bytes());
-        }
-        hex::encode(hasher.finalize())
-    }
-}
-
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CpplintConfig {
     /// The C/C++ static checker to use (default: cppcheck)
     #[serde(default = "default_cpplint_checker")]
@@ -222,20 +217,7 @@ impl Default for CpplintConfig {
     }
 }
 
-impl CpplintConfig {
-    /// Compute a SHA-256 hash of all build-affecting config fields.
-    pub fn config_hash(&self) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(self.checker.as_bytes());
-        for arg in &self.args {
-            hasher.update(b"\0");
-            hasher.update(arg.as_bytes());
-        }
-        hex::encode(hasher.finalize())
-    }
-}
-
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CcConfig {
     /// C compiler (default: gcc)
     #[serde(default = "default_cc")]
@@ -298,39 +280,6 @@ impl Default for CcConfig {
             source_dir: default_source_dir(),
             output_suffix: default_output_suffix(),
         }
-    }
-}
-
-impl CcConfig {
-    /// Compute a SHA-256 hash of all build-affecting config fields.
-    pub fn config_hash(&self) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(self.cc.as_bytes());
-        hasher.update(b"\x01");
-        hasher.update(self.cxx.as_bytes());
-        hasher.update(b"\x01");
-        for flag in &self.cflags {
-            hasher.update(flag.as_bytes());
-            hasher.update(b"\0");
-        }
-        hasher.update(b"\x01");
-        for flag in &self.cxxflags {
-            hasher.update(flag.as_bytes());
-            hasher.update(b"\0");
-        }
-        hasher.update(b"\x01");
-        for flag in &self.ldflags {
-            hasher.update(flag.as_bytes());
-            hasher.update(b"\0");
-        }
-        hasher.update(b"\x01");
-        for path in &self.include_paths {
-            hasher.update(path.as_bytes());
-            hasher.update(b"\0");
-        }
-        hasher.update(b"\x01");
-        hasher.update(self.output_suffix.as_bytes());
-        hex::encode(hasher.finalize())
     }
 }
 

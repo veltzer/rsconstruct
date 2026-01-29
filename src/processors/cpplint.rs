@@ -5,7 +5,7 @@ use std::process::Command;
 use std::sync::Arc;
 use walkdir::WalkDir;
 
-use crate::config::{CcConfig, CpplintConfig};
+use crate::config::{CcConfig, CpplintConfig, config_hash};
 use crate::graph::{BuildGraph, Product};
 use crate::ignore::IgnoreRules;
 use super::ProductDiscovery;
@@ -127,7 +127,7 @@ impl ProductDiscovery for Cpplinter {
         }
 
         let source_files = self.find_source_files();
-        let config_hash = Some(self.cpplint_config.config_hash());
+        let config_hash = Some(config_hash(&self.cpplint_config));
 
         for source_file in source_files {
             let stub_path = self.get_stub_path(&source_file);

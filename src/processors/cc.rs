@@ -5,7 +5,7 @@ use std::process::Command;
 use std::sync::Arc;
 use walkdir::WalkDir;
 
-use crate::config::CcConfig;
+use crate::config::{CcConfig, config_hash};
 use crate::graph::{BuildGraph, Product};
 use crate::ignore::IgnoreRules;
 use super::ProductDiscovery;
@@ -506,7 +506,7 @@ impl ProductDiscovery for CcProcessor {
             return Ok(());
         }
 
-        let config_hash = Some(self.config.config_hash());
+        let config_hash = Some(config_hash(&self.config));
 
         for (source, is_cpp) in &source_files {
             let executable = self.get_executable_path(source);
