@@ -90,6 +90,10 @@ impl Cpplinter {
         let mut cmd = Command::new(&self.cpplint_config.checker);
 
         cmd.arg("--error-exitcode=1");
+        // Enable useful checks but exclude 'information' severity which produces
+        // non-actionable noise (e.g. normalCheckLevelMaxBranches)
+        cmd.arg("--enable=warning,style,performance,portability");
+        cmd.arg("--suppress=missingIncludeSystem");
 
         // Add any configured arguments
         for arg in &self.cpplint_config.args {
