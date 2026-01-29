@@ -4,7 +4,7 @@ use std::io;
 use std::str::FromStr;
 
 #[derive(Parser)]
-#[command(name = "rsb", version)]
+#[command(name = "rsb")]
 #[command(about = "Rust Build Tool - Incremental build system with templates", long_about = None)]
 pub struct Cli {
     /// Show verbose output
@@ -108,6 +108,8 @@ pub enum Commands {
         #[command(subcommand)]
         action: ProcessorAction,
     },
+    /// Print version information
+    Version,
     /// Display the build dependency graph
     Graph {
         /// Output format (ignored if --view is used)
