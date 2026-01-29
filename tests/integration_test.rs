@@ -172,9 +172,9 @@ fn test_clean_command() {
     let clean_output = run_rsb(project_path, &["clean"]);
     assert!(clean_output.status.success());
 
-    // Verify files are removed
+    // Verify build outputs are removed but cache is preserved
     assert!(!project_path.join("cleanme.txt").exists());
-    assert!(!project_path.join(".rsb").exists());
+    assert!(project_path.join(".rsb").exists());
 }
 
 #[test]
@@ -958,9 +958,9 @@ fn test_cc_clean() {
     let clean_output = run_rsb(project_path, &["clean"]);
     assert!(clean_output.status.success());
 
-    // Verify outputs are removed
+    // Verify outputs are removed but cache is preserved
     assert!(!project_path.join("out/cc").exists(), "out/cc/ should be removed after clean");
-    assert!(!project_path.join(".rsb/deps").exists(), "deps cache should be removed after clean");
+    assert!(project_path.join(".rsb/deps").exists(), "deps cache should be preserved after clean");
 }
 
 #[test]
