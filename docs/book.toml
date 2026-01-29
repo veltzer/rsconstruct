@@ -1,7 +1,6 @@
 [book]
 authors = ["veltzer"]
 language = "en"
-multilingual = false
 src = "src"
 title = "RSB - Rust Build Tool"
 
