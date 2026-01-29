@@ -36,9 +36,9 @@ pub enum GraphFormat {
 pub enum GraphViewer {
     /// Open as HTML with Mermaid in browser (no dependencies)
     Mermaid,
-    /// Use Graphviz dot command to generate and open SVG
+    /// Generate and open SVG using Graphviz dot
     #[default]
-    Dot,
+    Svg,
 }
 
 #[derive(Subcommand)]
@@ -113,7 +113,7 @@ pub enum Commands {
         format: GraphFormat,
 
         /// Open graph in viewer
-        #[arg(long, value_enum)]
+        #[arg(long, value_enum, num_args = 0..=1, default_missing_value = "svg")]
         view: Option<GraphViewer>,
     },
 }

@@ -275,7 +275,7 @@ impl Builder {
                 self.open_file(&html_path)?;
                 println!("Opened graph in browser: {}", html_path.display());
             }
-            GraphViewer::Dot => {
+            GraphViewer::Svg => {
                 // Check if dot is available
                 let dot_check = Command::new("dot").arg("-V").output();
                 if dot_check.is_err() || !dot_check.unwrap().status.success() {
