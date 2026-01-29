@@ -173,9 +173,6 @@ impl Builder {
         let executor = Executor::new(&processors, 1, 0, Arc::new(std::sync::atomic::AtomicBool::new(false)));
         executor.clean(&graph)?;
 
-        // Clear the object store cache
-        self.object_store.clear()?;
-
         // Also clean the lint stub directory if it exists
         let lint_stub_dir = self.project_root.join("out/lint");
         if lint_stub_dir.exists() {
@@ -198,14 +195,6 @@ impl Builder {
             fs::remove_dir_all(&cc_output_dir)
                 .context("Failed to remove cc output directory")?;
             println!("Removed cc output directory: {}", cc_output_dir.display());
-        }
-
-        // Also clean the deps cache directory if it exists
-        let deps_dir = self.project_root.join(".rsb/deps");
-        if deps_dir.exists() {
-            fs::remove_dir_all(&deps_dir)
-                .context("Failed to remove deps cache directory")?;
-            println!("Removed deps cache directory: {}", deps_dir.display());
         }
 
         println!("{}", color::green("Clean completed!"));

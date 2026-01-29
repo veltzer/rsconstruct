@@ -18,7 +18,7 @@ A fast, incremental build tool written in Rust with template support, Python lin
 - `rsb build --force` - Force full rebuild
 - `rsb build -j4` - Build with 4 parallel jobs
 - `rsb build --processor-verbose 2` - Show source paths in build output
-- `rsb clean` - Remove build artifacts and cache
+- `rsb clean` - Remove build artifacts (preserves cache)
 - `rsb distclean` - Remove all build directories (.rsb/ and out/) in one shot
 - `rsb graph` - Print dependency graph (formats: dot, mermaid, json, text)
 - `rsb graph --view` - Open graph in browser (mermaid) or as SVG (dot)
