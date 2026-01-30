@@ -147,6 +147,44 @@ fn spellcheck_clean() {
 }
 
 #[test]
+fn spellcheck_stops_after_first_error() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create two markdown files, both with spelling errors.
+    // "aaa.md" sorts before "bbb.md", so it will be processed first.
+    fs::write(
+        project_path.join("aaa.md"),
+        "# First\n\nThis has a speling error.\n"
+    ).unwrap();
+
+    fs::write(
+        project_path.join("bbb.md"),
+        "# Second\n\nThis has a diferent error.\n"
+    ).unwrap();
+
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"spellcheck\"]\n"
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(!output.status.success(),
+        "Build should fail with misspelled words");
+
+    let combined = format!("{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    // Only the first file (aaa.md) should have been checked
+    assert!(combined.contains("speling"),
+        "Should report the error from the first file (aaa.md): {}", combined);
+    assert!(!combined.contains("diferent"),
+        "Should NOT report the error from the second file (bbb.md) — \
+         rsb stops after the first failure: {}", combined);
+}
+
+#[test]
 fn spellcheck_ignores_code_blocks() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
