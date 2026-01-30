@@ -1,0 +1,54 @@
+# Project name and tools
+rsb
+API
+CLI
+CPU
+HTML
+JSON
+SHA
+SVG
+URLs
+
+# Proper nouns and product names
+BuildGraph
+GitHub
+Hunspell
+Linux
+Mutex
+Pylint
+Cpplint
+Tera
+
+# Technical terms
+args
+basename
+bool
+booleans
+cflags
+checksummed
+checksums
+codebase
+config
+cppcheck
+cpplint
+executables
+filesystem
+filesystems
+gcc
+hardlinks
+json
+ldflags
+mutexes
+pylint
+stdout
+struct
+subprocess
+suppressions
+templating
+toml
+unreferenced
+
+# Contractions and fragments
+aren
+Ctrl
+pre
