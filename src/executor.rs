@@ -77,6 +77,7 @@ impl<'a> Executor<'a> {
         let mut failed_products: HashSet<usize> = HashSet::new();
         let mut failed_messages: Vec<String> = Vec::new();
         let mut first_error: Option<anyhow::Error> = None;
+        let mut silenced_processors: HashSet<String> = HashSet::new();
 
         for &id in order {
             // Check for Ctrl+C before starting next product
@@ -132,9 +133,16 @@ impl<'a> Executor<'a> {
 
             // Find the processor and execute
             if let Some(processor) = self.processors.get(&product.processor) {
-                println!("[{}] {} {}", product.processor,
-                    color::green("Processing:"),
-                    self.product_display(product));
+                // In non-keep-going mode, once a processor has failed, silently
+                // continue executing its remaining products (for caching) but
+                // suppress output to avoid confusing the user
+                let silenced = !keep_going && silenced_processors.contains(&product.processor);
+
+                if !silenced {
+                    println!("[{}] {} {}", product.processor,
+                        color::green("Processing:"),
+                        self.product_display(product));
+                }
 
                 let product_start = Instant::now();
                 match processor.execute(product) {
@@ -150,7 +158,7 @@ impl<'a> Executor<'a> {
                         stats.processed += 1;
                         stats.files_created += product.outputs.len();
                         stats.duration += duration;
-                        if timings {
+                        if timings && !silenced {
                             stats.product_timings.push(ProductTiming {
                                 display: self.product_display(product),
                                 processor: product.processor.clone(),
@@ -169,12 +177,14 @@ impl<'a> Executor<'a> {
                             failed_products.insert(id);
                             failed_messages.push(msg);
                         } else {
-                            // Record first error but continue processing
-                            // independent products so they get cached
+                            // Record first error and silence remaining products
+                            // from this processor — they still execute (for caching)
+                            // but don't print output
                             if first_error.is_none() {
                                 first_error = Some(e);
                             }
                             failed_products.insert(id);
+                            silenced_processors.insert(product.processor.clone());
                         }
                     }
                 }
@@ -218,6 +228,7 @@ impl<'a> Executor<'a> {
         let errors: Arc<Mutex<Vec<anyhow::Error>>> = Arc::new(Mutex::new(Vec::new()));
         let failed_products: Arc<Mutex<HashSet<usize>>> = Arc::new(Mutex::new(HashSet::new()));
         let failed_messages: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let failed_processors: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
 
         for level in levels {
             // Check for Ctrl+C before starting next level
@@ -254,12 +265,20 @@ impl<'a> Executor<'a> {
             // Second pass: determine work items for non-skipped products
             {
                 let store_guard = store.lock().unwrap();
+                let fp_guard = failed_processors.lock().unwrap();
                 for &id in &level {
                     if skipped_ids.contains(&id) {
                         continue;
                     }
 
                     let product = graph.get_product(id).unwrap();
+
+                    // In non-keep-going mode, silently skip products from a
+                    // processor that failed in a previous level
+                    if !keep_going && fp_guard.contains(&product.processor) {
+                        failed_products.lock().unwrap().insert(id);
+                        continue;
+                    }
                     let cache_key = product.cache_key();
                     let input_checksum = match ObjectStore::combined_input_checksum(&product.inputs) {
                         Ok(cs) => cs,
@@ -293,6 +312,7 @@ impl<'a> Executor<'a> {
                     let errors_ref = Arc::clone(&errors);
                     let failed_ref = Arc::clone(&failed_products);
                     let failed_msgs_ref = Arc::clone(&failed_messages);
+                    let failed_procs_ref = Arc::clone(&failed_processors);
 
                     let interrupted_ref = &self.interrupted;
                     s.spawn(move || {
@@ -413,6 +433,7 @@ impl<'a> Executor<'a> {
                                             failed_msgs_ref.lock().unwrap().push(msg);
                                         } else {
                                             failed_ref.lock().unwrap().insert(*id);
+                                            failed_procs_ref.lock().unwrap().insert(product.processor.clone());
                                             errors_ref.lock().unwrap().push(e);
                                         }
                                         continue;

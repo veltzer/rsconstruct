@@ -28,6 +28,7 @@ pub fn config_hash(value: &impl Serialize) -> String {
 }
 
 #[derive(Debug, Deserialize, Serialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(default)]
     pub build: BuildConfig,
