@@ -108,7 +108,7 @@ fn main() -> Result<()> {
                 ("ruff", "Lint Python files with ruff", false),
                 ("pylint", "Lint Python files with pylint", false),
                 ("sleep", "Sleep for a duration (testing)", true),
-                ("cc", "Compile C/C++ source files into executables", false),
+                ("cc_single_file", "Compile C/C++ source files into executables (single-file)", false),
                 ("cpplint", "Run static analysis on C/C++ source files", false),
                 ("spellcheck", "Check documentation files for spelling errors", false),
             ];
@@ -245,7 +245,7 @@ fn init_project() -> Result<()> {
 
 [processor]
 # auto_detect = true
-# enabled = ["template", "ruff", "pylint", "sleep", "cc", "cpplint", "spellcheck"]
+# enabled = ["template", "ruff", "pylint", "sleep", "cc_single_file", "cpplint", "spellcheck"]
 
 [cache]
 # restore_method = "hardlink"  # or "copy"
@@ -262,7 +262,7 @@ fn init_project() -> Result<()> {
 [processor.pylint]
 # args = []
 
-[processor.cc]
+[processor.cc_single_file]
 # cc = "gcc"
 # cxx = "g++"
 # cflags = []

@@ -238,7 +238,7 @@ pub struct CcProcessor {
 impl CcProcessor {
     pub fn new(project_root: PathBuf, config: CcConfig, ignore_rules: Arc<IgnoreRules>, verbose: u8) -> Self {
         let source_dir = project_root.join(&config.source_dir);
-        let output_dir = project_root.join("out/cc");
+        let output_dir = project_root.join("out/cc_single_file");
         let deps_dir = project_root.join(".rsb/deps");
         Self {
             project_root,
@@ -347,7 +347,7 @@ impl CcProcessor {
         cmd.current_dir(&self.project_root);
 
         if self.verbose >= 1 {
-            println!("[cc] {}", format_command(&cmd));
+            println!("[cc_single_file] {}", format_command(&cmd));
         }
 
         let output = cmd
@@ -464,7 +464,7 @@ impl CcProcessor {
         cmd.current_dir(&self.project_root);
 
         if self.verbose >= 1 {
-            println!("[cc] {}", format_command(&cmd));
+            println!("[cc_single_file] {}", format_command(&cmd));
         }
 
         let output = cmd
@@ -516,7 +516,7 @@ impl ProductDiscovery for CcProcessor {
             graph.add_product(
                 inputs,
                 vec![executable],
-                "cc",
+                "cc_single_file",
                 config_hash.clone(),
             );
         }

@@ -13,7 +13,7 @@ Processors implement the `ProductDiscovery` trait. Each processor:
 3. Creates **products** describing what to build
 4. Executes the build for each product
 
-Available processors: `template`, `ruff`, `pylint`, `cc`, `cpplint`, `spellcheck`, `sleep`.
+Available processors: `template`, `ruff`, `pylint`, `cc_single_file`, `cpplint`, `spellcheck`, `sleep`.
 
 ### Auto-detection
 
@@ -35,8 +35,8 @@ Detection heuristics per processor:
 | `template` | `templates/` directory contains files matching configured extensions |
 | `ruff` | `pyproject.toml` exists, or `tests/` contains `.py` files |
 | `pylint` | Same as `ruff` |
-| `cc` | Configured source directory contains `.c` or `.cc` files |
-| `cpplint` | Same as `cc` |
+| `cc_single_file` | Configured source directory contains `.c` or `.cc` files |
+| `cpplint` | Same as `cc_single_file` |
 | `spellcheck` | Project contains files matching configured extensions (e.g., `.md`) |
 | `sleep` | `sleep/` directory contains `.sleep` files |
 

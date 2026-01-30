@@ -63,9 +63,9 @@ Control the detail level of build output with `--processor-verbose N`:
 | Level | Output |
 |---|---|
 | **0** (default) | Target basename only: `main.elf` |
-| **1** | Target path: `out/cc/main.elf`; cc processor also prints compiler commands |
-| **2** | Adds source path: `out/cc/main.elf <- src/main.c` |
-| **3** | Adds all inputs: `out/cc/main.elf <- src/main.c, src/utils.h` |
+| **1** | Target path: `out/cc_single_file/main.elf`; cc_single_file processor also prints compiler commands |
+| **2** | Adds source path: `out/cc_single_file/main.elf <- src/main.c` |
+| **3** | Adds all inputs: `out/cc_single_file/main.elf <- src/main.c, src/utils.h` |
 
 ## Dry run
 
@@ -127,7 +127,7 @@ extra_inputs = ["pyproject.toml"]
 [processor.cpplint]
 extra_inputs = [".cppcheck-suppressions"]
 
-[processor.cc]
+[processor.cc_single_file]
 extra_inputs = ["Makefile.inc"]
 
 [processor.spellcheck]

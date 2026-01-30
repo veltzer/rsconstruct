@@ -101,7 +101,7 @@ pub struct ProcessorConfig {
     #[serde(default)]
     pub pylint: PylintConfig,
     #[serde(default)]
-    pub cc: CcConfig,
+    pub cc_single_file: CcConfig,
     #[serde(default)]
     pub cpplint: CpplintConfig,
     #[serde(default)]
@@ -111,7 +111,7 @@ pub struct ProcessorConfig {
 }
 
 fn default_processors() -> Vec<String> {
-    vec!["template".to_string(), "ruff".to_string(), "pylint".to_string(), "sleep".to_string(), "cc".to_string(), "cpplint".to_string(), "spellcheck".to_string()]
+    vec!["template".to_string(), "ruff".to_string(), "pylint".to_string(), "sleep".to_string(), "cc_single_file".to_string(), "cpplint".to_string(), "spellcheck".to_string()]
 }
 
 impl Default for ProcessorConfig {
@@ -122,7 +122,7 @@ impl Default for ProcessorConfig {
             template: TemplateConfig::default(),
             ruff: RuffConfig::default(),
             pylint: PylintConfig::default(),
-            cc: CcConfig::default(),
+            cc_single_file: CcConfig::default(),
             cpplint: CpplintConfig::default(),
             spellcheck: SpellcheckConfig::default(),
             sleep: SleepConfig::default(),

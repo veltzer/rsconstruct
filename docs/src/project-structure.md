@@ -12,7 +12,7 @@ project/
 ├── templates/        # .tera template files
 ├── src/              # C/C++ source files
 ├── out/
-│   ├── cc/           # Compiled executables
+│   ├── cc_single_file/ # Compiled executables
 │   ├── ruff/         # Ruff lint stub files
 │   ├── pylint/       # Pylint lint stub files
 │   ├── cpplint/      # C/C++ lint stub files
@@ -34,10 +34,10 @@ Files in `templates/` with configured extensions (default `.tera`) are rendered 
 
 ### C/C++ sources
 
-Files in the source directory (default `src/`) are compiled to executables under `out/cc/`, preserving the directory structure:
+Files in the source directory (default `src/`) are compiled to executables under `out/cc_single_file/`, preserving the directory structure:
 
-- `src/main.c` produces `out/cc/main.elf`
-- `src/utils/helper.cc` produces `out/cc/utils/helper.elf`
+- `src/main.c` produces `out/cc_single_file/main.elf`
+- `src/utils/helper.cc` produces `out/cc_single_file/utils/helper.elf`
 
 ### Python files
 

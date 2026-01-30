@@ -42,6 +42,6 @@ pub fn setup_cc_project(project_path: &Path) {
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
         project_path.join("rsb.toml"),
-        "[processor]\nenabled = [\"cc\"]\n"
+        "[processor]\nenabled = [\"cc_single_file\"]\n"
     ).unwrap();
 }

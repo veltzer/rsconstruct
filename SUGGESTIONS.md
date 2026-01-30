@@ -13,7 +13,7 @@
 ## Naming Inconsistencies
 
 ### Processor struct names
-- Most processors are named `{Name}Processor` (`RuffProcessor`, `PylintProcessor`, `CcProcessor`, `SpellcheckProcessor`, `SleepProcessor`, `TemplateProcessor`).
+- Most processors are named `{Name}Processor` (`RuffProcessor`, `PylintProcessor`, `CcProcessor` (cc_single_file), `SpellcheckProcessor`, `SleepProcessor`, `TemplateProcessor`).
 - `Cpplinter` breaks this convention. Rename to `CpplintProcessor`.
 
 ## Error Handling

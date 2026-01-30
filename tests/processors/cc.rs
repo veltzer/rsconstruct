@@ -22,7 +22,7 @@ fn cc_compile_single_c_file() {
         String::from_utf8_lossy(&output.stderr));
 
     // Check executable exists
-    assert!(project_path.join("out/cc/main.elf").exists(), "Executable should exist");
+    assert!(project_path.join("out/cc_single_file/main.elf").exists(), "Executable should exist");
 }
 
 #[test]
@@ -41,13 +41,13 @@ fn cc_incremental_skip() {
     let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
-    assert!(stdout1.contains("[cc] Processing:"), "First build should process: {}", stdout1);
+    assert!(stdout1.contains("[cc_single_file] Processing:"), "First build should process: {}", stdout1);
 
     // Second build - should skip
     let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
-    assert!(stdout2.contains("[cc] Skipping (unchanged):"), "Second build should skip: {}", stdout2);
+    assert!(stdout2.contains("[cc_single_file] Skipping (unchanged):"), "Second build should skip: {}", stdout2);
 }
 
 #[test]
@@ -91,7 +91,7 @@ fn cc_header_dependency() {
         String::from_utf8_lossy(&output2.stdout),
         String::from_utf8_lossy(&output2.stderr));
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
-    assert!(stdout2.contains("[cc] Processing:"),
+    assert!(stdout2.contains("[cc_single_file] Processing:"),
         "Should recompile after header change: {}", stdout2);
 }
 
@@ -118,8 +118,8 @@ fn cc_mixed_c_and_cpp() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/cc/helper.elf").exists(), "C executable should exist");
-    assert!(project_path.join("out/cc/main.elf").exists(), "C++ executable should exist");
+    assert!(project_path.join("out/cc_single_file/helper.elf").exists(), "C executable should exist");
+    assert!(project_path.join("out/cc_single_file/main.elf").exists(), "C++ executable should exist");
 }
 
 #[test]
@@ -137,14 +137,14 @@ fn cc_clean() {
     // Build
     let build_output = run_rsb(project_path, &["build"]);
     assert!(build_output.status.success());
-    assert!(project_path.join("out/cc/main.elf").exists());
+    assert!(project_path.join("out/cc_single_file/main.elf").exists());
 
     // Clean
     let clean_output = run_rsb(project_path, &["clean"]);
     assert!(clean_output.status.success());
 
     // Verify outputs are removed but cache is preserved
-    assert!(!project_path.join("out/cc").exists(), "out/cc/ should be removed after clean");
+    assert!(!project_path.join("out/cc").exists(), "out/cc_single_file/ should be removed after clean");
     assert!(project_path.join(".rsb/deps").exists(), "deps cache should be preserved after clean");
 }
 
@@ -167,7 +167,7 @@ fn cc_dry_run() {
     assert!(stdout.contains("BUILD"), "Dry run should show BUILD for cc products: {}", stdout);
 
     // Verify nothing was built
-    assert!(!project_path.join("out/cc/main.elf").exists(), "Dry run should not compile");
+    assert!(!project_path.join("out/cc_single_file/main.elf").exists(), "Dry run should not compile");
 }
 
 #[test]
@@ -189,18 +189,18 @@ fn cc_config_change_triggers_rebuild() {
         String::from_utf8_lossy(&output1.stdout),
         String::from_utf8_lossy(&output1.stderr));
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
-    assert!(stdout1.contains("[cc] Processing:"), "First build should process: {}", stdout1);
+    assert!(stdout1.contains("[cc_single_file] Processing:"), "First build should process: {}", stdout1);
 
     // Second build — should skip (nothing changed)
     let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
-    assert!(stdout2.contains("[cc] Skipping (unchanged):"), "Second build should skip: {}", stdout2);
+    assert!(stdout2.contains("[cc_single_file] Skipping (unchanged):"), "Second build should skip: {}", stdout2);
 
     // Change cflags in rsb.toml
     fs::write(
         project_path.join("rsb.toml"),
-        "[processor]\nenabled = [\"cc\"]\n\n[processor.cc]\ncflags = [\"-O2\"]\n"
+        "[processor]\nenabled = [\"cc_single_file\"]\n\n[processor.cc_single_file]\ncflags = [\"-O2\"]\n"
     ).unwrap();
 
     // Third build — should rebuild because config changed
@@ -210,7 +210,7 @@ fn cc_config_change_triggers_rebuild() {
         String::from_utf8_lossy(&output3.stdout),
         String::from_utf8_lossy(&output3.stderr));
     let stdout3 = String::from_utf8_lossy(&output3.stdout);
-    assert!(stdout3.contains("[cc] Processing:"),
+    assert!(stdout3.contains("[cc_single_file] Processing:"),
         "Build after config change should reprocess, not skip: {}", stdout3);
 }
 
@@ -239,11 +239,11 @@ int main() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/cc/flagtest.elf").exists(),
+    assert!(project_path.join("out/cc_single_file/flagtest.elf").exists(),
         "Executable with per-file compile flags should exist");
 
     // Run the executable and verify it outputs 42
-    let run_output = Command::new(project_path.join("out/cc/flagtest.elf"))
+    let run_output = Command::new(project_path.join("out/cc_single_file/flagtest.elf"))
         .output()
         .expect("Failed to run flagtest");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
@@ -277,11 +277,11 @@ int main() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/cc/mathtest.elf").exists(),
+    assert!(project_path.join("out/cc_single_file/mathtest.elf").exists(),
         "Executable with per-file link flags should exist");
 
     // Run the executable and verify it outputs 12
-    let run_output = Command::new(project_path.join("out/cc/mathtest.elf"))
+    let run_output = Command::new(project_path.join("out/cc_single_file/mathtest.elf"))
         .output()
         .expect("Failed to run mathtest");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
@@ -314,11 +314,11 @@ int main() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/cc/backtick.elf").exists(),
+    assert!(project_path.join("out/cc_single_file/backtick.elf").exists(),
         "Executable with backtick substitution should exist");
 
     // Run the executable and verify it outputs 99
-    let run_output = Command::new(project_path.join("out/cc/backtick.elf"))
+    let run_output = Command::new(project_path.join("out/cc_single_file/backtick.elf"))
         .output()
         .expect("Failed to run backtick");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
@@ -350,10 +350,10 @@ int main() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/cc/plain.elf").exists(),
+    assert!(project_path.join("out/cc_single_file/plain.elf").exists(),
         "Executable without per-file flags should exist");
 
-    let run_output = Command::new(project_path.join("out/cc/plain.elf"))
+    let run_output = Command::new(project_path.join("out/cc_single_file/plain.elf"))
         .output()
         .expect("Failed to run plain");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
@@ -386,10 +386,10 @@ int main() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/cc/compilecmd.elf").exists(),
+    assert!(project_path.join("out/cc_single_file/compilecmd.elf").exists(),
         "Executable with EXTRA_COMPILE_CMD should exist");
 
-    let run_output = Command::new(project_path.join("out/cc/compilecmd.elf"))
+    let run_output = Command::new(project_path.join("out/cc_single_file/compilecmd.elf"))
         .output()
         .expect("Failed to run compilecmd");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
@@ -423,10 +423,10 @@ int main() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/cc/linkcmd.elf").exists(),
+    assert!(project_path.join("out/cc_single_file/linkcmd.elf").exists(),
         "Executable with EXTRA_LINK_CMD should exist");
 
-    let run_output = Command::new(project_path.join("out/cc/linkcmd.elf"))
+    let run_output = Command::new(project_path.join("out/cc_single_file/linkcmd.elf"))
         .output()
         .expect("Failed to run linkcmd");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
@@ -462,10 +462,10 @@ int main() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/cc/blockstar.elf").exists(),
+    assert!(project_path.join("out/cc_single_file/blockstar.elf").exists(),
         "Executable with block comment * prefix should exist");
 
-    let run_output = Command::new(project_path.join("out/cc/blockstar.elf"))
+    let run_output = Command::new(project_path.join("out/cc_single_file/blockstar.elf"))
         .output()
         .expect("Failed to run blockstar");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
@@ -498,10 +498,10 @@ int main() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/cc/compileshell.elf").exists(),
+    assert!(project_path.join("out/cc_single_file/compileshell.elf").exists(),
         "Executable with EXTRA_COMPILE_SHELL should exist");
 
-    let run_output = Command::new(project_path.join("out/cc/compileshell.elf"))
+    let run_output = Command::new(project_path.join("out/cc_single_file/compileshell.elf"))
         .output()
         .expect("Failed to run compileshell");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
@@ -535,10 +535,10 @@ int main() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/cc/linkshell.elf").exists(),
+    assert!(project_path.join("out/cc_single_file/linkshell.elf").exists(),
         "Executable with EXTRA_LINK_SHELL should exist");
 
-    let run_output = Command::new(project_path.join("out/cc/linkshell.elf"))
+    let run_output = Command::new(project_path.join("out/cc_single_file/linkshell.elf"))
         .output()
         .expect("Failed to run linkshell");
     let stdout = String::from_utf8_lossy(&run_output.stdout);

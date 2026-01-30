@@ -1,18 +1,18 @@
-# CC Processor
+# CC Single File Processor
 
 ## Purpose
 
-Compiles C (`.c`) and C++ (`.cc`) source files into executables.
+Compiles C (`.c`) and C++ (`.cc`) source files into executables, one source file per executable.
 
 ## How It Works
 
 Source files under the configured source directory are compiled into executables
-under `out/cc/`, mirroring the directory structure:
+under `out/cc_single_file/`, mirroring the directory structure:
 
 ```
-src/main.c       →  out/cc/main.elf
-src/a/b.c        →  out/cc/a/b.elf
-src/app.cc       →  out/cc/app.elf
+src/main.c       →  out/cc_single_file/main.elf
+src/a/b.c        →  out/cc_single_file/a/b.elf
+src/app.cc       →  out/cc_single_file/app.elf
 ```
 
 Header dependencies are automatically tracked via compiler-generated `.d` files
@@ -21,7 +21,7 @@ Header dependencies are automatically tracked via compiler-generated `.d` files
 ## Source Files
 
 - Input: `{source_dir}/**/*.c`, `{source_dir}/**/*.cc`
-- Output: `out/cc/{relative_path}{output_suffix}`
+- Output: `out/cc_single_file/{relative_path}{output_suffix}`
 
 ## Per-File Flags
 
@@ -103,10 +103,10 @@ Link flags come **after** the source file so the linker can resolve symbols corr
 | Position | Source |
 |---|---|
 | `compile_before` | `EXTRA_COMPILE_FLAGS_BEFORE` + `EXTRA_COMPILE_CMD` + `EXTRA_COMPILE_SHELL` |
-| `cflags/cxxflags` | `[processor.cc]` config `cflags` or `cxxflags` |
+| `cflags/cxxflags` | `[processor.cc_single_file]` config `cflags` or `cxxflags` |
 | `compile_after` | `EXTRA_COMPILE_FLAGS_AFTER` |
 | `link_before` | `EXTRA_LINK_FLAGS_BEFORE` + `EXTRA_LINK_CMD` + `EXTRA_LINK_SHELL` |
-| `ldflags` | `[processor.cc]` config `ldflags` |
+| `ldflags` | `[processor.cc_single_file]` config `ldflags` |
 | `link_after` | `EXTRA_LINK_FLAGS_AFTER` |
 
 ## Verbosity Levels (`--processor-verbose N`)
@@ -114,14 +114,14 @@ Link flags come **after** the source file so the linker can resolve symbols corr
 | Level | Output |
 |-------|--------|
 | 0 (default) | Target basename: `main.elf` |
-| 1 | Target path + compiler commands: `out/cc/main.elf` |
-| 2 | Adds source path: `out/cc/main.elf <- src/main.c` |
-| 3 | Adds all inputs: `out/cc/main.elf <- src/main.c, src/utils.h` |
+| 1 | Target path + compiler commands: `out/cc_single_file/main.elf` |
+| 2 | Adds source path: `out/cc_single_file/main.elf <- src/main.c` |
+| 3 | Adds all inputs: `out/cc_single_file/main.elf <- src/main.c, src/utils.h` |
 
 ## Configuration
 
 ```toml
-[processor.cc]
+[processor.cc_single_file]
 cc = "gcc"                # C compiler (default: "gcc")
 cxx = "g++"               # C++ compiler (default: "g++")
 cflags = []               # C compiler flags

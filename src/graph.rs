@@ -284,7 +284,7 @@ impl BuildGraph {
             let color = match product.processor.as_str() {
                 "template" => "lightblue",
                 "lint" => "lightyellow",
-                "cc" => "lightsalmon",
+                "cc_single_file" => "lightsalmon",
                 _ => "lightgray",
             };
             lines.push(format!("    {} [label=\"{}\" shape=box style=filled fillcolor={}];",
@@ -388,7 +388,7 @@ impl BuildGraph {
             .map(|p| Self::processor_node_id(p))
             .collect();
         let cc_procs: Vec<_> = self.products.iter()
-            .filter(|p| p.processor == "cc")
+            .filter(|p| p.processor == "cc_single_file")
             .map(|p| Self::processor_node_id(p))
             .collect();
 

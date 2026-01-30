@@ -35,7 +35,7 @@ Processors implement the `ProductDiscovery` trait. Each processor discovers prod
 
 Available processors:
 - **template** — Tera template processing (`templates/{X}.tera` → `{X}`)
-- **cc** — C/C++ compilation with automatic header dependency tracking
+- **cc_single_file** — C/C++ single-file compilation with automatic header dependency tracking
 - **pylint** — Python linting with ruff (configurable)
 - **cpplint** — C/C++ static analysis with cppcheck (configurable)
 - **sleep** — sleep for testing parallel execution

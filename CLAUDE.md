@@ -45,7 +45,7 @@ A fast, incremental build tool written in Rust with template support, Python lin
 parallel = 1  # Number of parallel jobs (1 = sequential, 0 = auto-detect CPU cores)
 
 [processor]
-enabled = ["template", "ruff", "pylint", "sleep", "cc", "cpplint", "spellcheck"]
+enabled = ["template", "ruff", "pylint", "sleep", "cc_single_file", "cpplint", "spellcheck"]
 
 [cache]
 restore_method = "hardlink"  # or "copy" (hardlink is faster, copy works across filesystems)
@@ -70,7 +70,7 @@ project/
 ├── src/                  # C/C++ source files
 ├── sleep/                # .sleep files (for parallel testing)
 ├── out/
-│   ├── cc/               # Compiled executables
+│   ├── cc_single_file/   # Compiled executables
 │   ├── ruff/             # Ruff lint stub files
 │   ├── pylint/           # Pylint lint stub files
 │   ├── cpplint/          # C/C++ lint stub files
@@ -83,7 +83,7 @@ project/
 
 ## Architecture
 
-- **Processors** implement `ProductDiscovery` trait (template, ruff, pylint, sleep, cc, cpplint, spellcheck)
+- **Processors** implement `ProductDiscovery` trait (template, ruff, pylint, sleep, cc_single_file, cpplint, spellcheck)
 - **Products** have inputs (source files) and outputs (generated files)
 - **BuildGraph** manages dependencies between products
 - **Executor** runs products in dependency order, with optional parallelism

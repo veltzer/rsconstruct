@@ -205,12 +205,12 @@ impl Builder {
             println!("Removed sleep stub directory: {}", sleep_stub_dir.display());
         }
 
-        // Also clean the cc output directory if it exists
-        let cc_output_dir = self.project_root.join("out/cc");
+        // Also clean the cc_single_file output directory if it exists
+        let cc_output_dir = self.project_root.join("out/cc_single_file");
         if cc_output_dir.exists() {
             fs::remove_dir_all(&cc_output_dir)
-                .context("Failed to remove cc output directory")?;
-            println!("Removed cc output directory: {}", cc_output_dir.display());
+                .context("Failed to remove cc_single_file output directory")?;
+            println!("Removed cc_single_file output directory: {}", cc_output_dir.display());
         }
 
         // Also clean the spellcheck stub directory if it exists
@@ -270,12 +270,12 @@ impl Builder {
         let sleep_proc = SleepProcessor::new(self.project_root.clone(), self.config.processor.sleep.clone(), Arc::clone(&self.ignore_rules));
         processors.insert("sleep".to_string(), Box::new(sleep_proc));
 
-        // C/C++ compiler processor
-        let cc_proc = CcProcessor::new(self.project_root.clone(), self.config.processor.cc.clone(), Arc::clone(&self.ignore_rules), processor_verbose);
-        processors.insert("cc".to_string(), Box::new(cc_proc));
+        // C/C++ compiler processor (single-file compilation)
+        let cc_proc = CcProcessor::new(self.project_root.clone(), self.config.processor.cc_single_file.clone(), Arc::clone(&self.ignore_rules), processor_verbose);
+        processors.insert("cc_single_file".to_string(), Box::new(cc_proc));
 
         // C/C++ lint processor
-        let cpplinter = Cpplinter::new(self.project_root.clone(), self.config.processor.cpplint.clone(), self.config.processor.cc.clone(), Arc::clone(&self.ignore_rules));
+        let cpplinter = Cpplinter::new(self.project_root.clone(), self.config.processor.cpplint.clone(), self.config.processor.cc_single_file.clone(), Arc::clone(&self.ignore_rules));
         processors.insert("cpplint".to_string(), Box::new(cpplinter));
 
         // Spellcheck processor

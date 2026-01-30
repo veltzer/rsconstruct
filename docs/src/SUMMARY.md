@@ -9,7 +9,7 @@
     - [Template](processors/template.md)
     - [Ruff](processors/ruff.md)
     - [Pylint](processors/pylint.md)
-    - [CC](processors/cc.md)
+    - [CC Single File](processors/cc.md)
     - [Cpplint](processors/cpplint.md)
     - [Spellcheck](processors/spellcheck.md)
     - [Sleep](processors/sleep.md)
