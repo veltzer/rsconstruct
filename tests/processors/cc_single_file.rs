@@ -4,7 +4,7 @@ use tempfile::TempDir;
 use crate::common::{setup_cc_project, run_rsb, run_rsb_with_env};
 
 #[test]
-fn cc_compile_single_c_file() {
+fn cc_single_file_compile_single_c_file() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -26,7 +26,7 @@ fn cc_compile_single_c_file() {
 }
 
 #[test]
-fn cc_incremental_skip() {
+fn cc_single_file_incremental_skip() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -51,7 +51,7 @@ fn cc_incremental_skip() {
 }
 
 #[test]
-fn cc_header_dependency() {
+fn cc_single_file_header_dependency() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -96,7 +96,7 @@ fn cc_header_dependency() {
 }
 
 #[test]
-fn cc_mixed_c_and_cpp() {
+fn cc_single_file_mixed_c_and_cpp() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -123,7 +123,7 @@ fn cc_mixed_c_and_cpp() {
 }
 
 #[test]
-fn cc_clean() {
+fn cc_single_file_clean() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -144,12 +144,12 @@ fn cc_clean() {
     assert!(clean_output.status.success());
 
     // Verify outputs are removed but cache is preserved
-    assert!(!project_path.join("out/cc").exists(), "out/cc_single_file/ should be removed after clean");
+    assert!(!project_path.join("out/cc_single_file").exists(), "out/cc_single_file/ should be removed after clean");
     assert!(project_path.join(".rsb/deps").exists(), "deps cache should be preserved after clean");
 }
 
 #[test]
-fn cc_dry_run() {
+fn cc_single_file_dry_run() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -171,7 +171,7 @@ fn cc_dry_run() {
 }
 
 #[test]
-fn cc_config_change_triggers_rebuild() {
+fn cc_single_file_config_change_triggers_rebuild() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -215,7 +215,7 @@ fn cc_config_change_triggers_rebuild() {
 }
 
 #[test]
-fn cc_per_file_compile_flags() {
+fn cc_single_file_per_file_compile_flags() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -252,7 +252,7 @@ int main() {
 }
 
 #[test]
-fn cc_per_file_link_flags() {
+fn cc_single_file_per_file_link_flags() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -290,7 +290,7 @@ int main() {
 }
 
 #[test]
-fn cc_per_file_backtick_substitution() {
+fn cc_single_file_per_file_backtick_substitution() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -327,7 +327,7 @@ int main() {
 }
 
 #[test]
-fn cc_per_file_no_flags() {
+fn cc_single_file_per_file_no_flags() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -362,7 +362,7 @@ int main() {
 }
 
 #[test]
-fn cc_per_file_compile_cmd() {
+fn cc_single_file_per_file_compile_cmd() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -398,7 +398,7 @@ int main() {
 }
 
 #[test]
-fn cc_per_file_link_cmd() {
+fn cc_single_file_per_file_link_cmd() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -435,7 +435,7 @@ int main() {
 }
 
 #[test]
-fn cc_per_file_block_comment_star_prefix() {
+fn cc_single_file_per_file_block_comment_star_prefix() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -474,7 +474,7 @@ int main() {
 }
 
 #[test]
-fn cc_per_file_compile_shell() {
+fn cc_single_file_per_file_compile_shell() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -510,7 +510,7 @@ int main() {
 }
 
 #[test]
-fn cc_per_file_link_shell() {
+fn cc_single_file_per_file_link_shell() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 

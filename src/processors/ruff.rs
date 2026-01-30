@@ -29,24 +29,9 @@ impl RuffProcessor {
         }
     }
 
-    /// Check if linting should be enabled for this project
-    fn should_lint(&self) -> bool {
-        let pyproject_exists = self.project_root.join("pyproject.toml").exists();
-        let tests_dir = self.project_root.join("tests");
-        let tests_has_python = tests_dir.exists()
-            && !find_files(&tests_dir, &[".py"], &[], &self.ignore_rules, true).is_empty();
-
-        pyproject_exists || tests_has_python
-    }
-
     /// Find all Python files that should be linted
     fn find_python_files(&self) -> Vec<PathBuf> {
-        if self.project_root.join("pyproject.toml").exists() {
-            find_files(&self.project_root, &[".py"], PYTHON_EXCLUDE_DIRS, &self.ignore_rules, true)
-        } else {
-            let tests_dir = self.project_root.join("tests");
-            find_files(&tests_dir, &[".py"], &[], &self.ignore_rules, true)
-        }
+        find_files(&self.project_root, &[".py"], PYTHON_EXCLUDE_DIRS, &self.ignore_rules, true)
     }
 
     /// Get stub path for a Python file
@@ -102,15 +87,14 @@ impl RuffProcessor {
 
 impl ProductDiscovery for RuffProcessor {
     fn auto_detect(&self) -> bool {
-        self.should_lint()
+        !self.find_python_files().is_empty()
     }
 
     fn discover(&self, graph: &mut BuildGraph) -> Result<()> {
-        if !self.should_lint() {
+        let py_files = self.find_python_files();
+        if py_files.is_empty() {
             return Ok(());
         }
-
-        let py_files = self.find_python_files();
         let config_hash = Some(config_hash(&self.ruff_config));
         let extra = resolve_extra_inputs(&self.project_root, &self.ruff_config.extra_inputs)?;
 

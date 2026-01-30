@@ -64,7 +64,7 @@ fn cache_operations() {
     let size_after = run_rsb(project_path, &["cache", "size"]);
     assert!(size_after.status.success());
     let size_after_stdout = String::from_utf8_lossy(&size_after.stdout);
-    assert!(size_after_stdout.contains("0 bytes"));
+    assert!(size_after_stdout.contains("0 B"));
     assert!(size_after_stdout.contains("0 objects"));
 }
 

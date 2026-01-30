@@ -1013,6 +1013,7 @@ dependencies = [
  "dirs",
  "globset",
  "hex",
+ "humansize",
  "notify",
  "serde",
  "serde_json",

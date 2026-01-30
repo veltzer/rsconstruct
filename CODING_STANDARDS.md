@@ -12,6 +12,14 @@ an error. The user must fix their configuration or their project, not the code.
 Optional features must be opt-in via explicit configuration (default off).
 When the user enables a feature, all resources it requires must exist.
 
+## Test naming for processors
+
+Test functions for a processor must be prefixed with the processor name.
+For example, tests for the `cc_single_file` processor must be named
+`cc_single_file_compile`, `cc_single_file_incremental_skip`, etc.
+Tests for the `sleep` processor must be named `sleep_processor`,
+`sleep_extra_inputs_valid`, etc.
+
 ## Never hard-code counts of dynamic sets
 
 Documentation and code must never state the number of processors, commands,

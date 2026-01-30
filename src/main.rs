@@ -70,7 +70,7 @@ fn main() -> Result<()> {
                 }
                 CacheAction::Size => {
                     let (bytes, count) = store.size()?;
-                    println!("Cache size: {} bytes ({} objects)", bytes, count);
+                    println!("Cache size: {} ({} objects)", humansize::format_size(bytes, humansize::BINARY), count);
                 }
                 CacheAction::Trim => {
                     let (bytes, count) = store.trim()?;

@@ -33,7 +33,7 @@ Detection heuristics per processor:
 | Processor | Detected when |
 |---|---|
 | `template` | `templates/` directory contains files matching configured extensions |
-| `ruff` | `pyproject.toml` exists, or `tests/` contains `.py` files |
+| `ruff` | Project contains `.py` files (excluding `.venv/`, `__pycache__/`, etc.) |
 | `pylint` | Same as `ruff` |
 | `cc_single_file` | Configured source directory contains `.c` or `.cc` files |
 | `cpplint` | Same as `cc_single_file` |

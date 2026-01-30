@@ -375,9 +375,12 @@ impl Builder {
         let mut names: Vec<&String> = processors.keys().collect();
         names.sort();
         for name in names {
-            let explicitly_enabled = self.config.processor.is_enabled(name);
-            let auto_detected = self.config.processor.auto_detect && processors[name].auto_detect();
-            if explicitly_enabled || auto_detected {
+            let in_enabled_list = self.config.processor.is_enabled(name);
+            if !in_enabled_list {
+                continue;
+            }
+            let should_run = !self.config.processor.auto_detect || processors[name].auto_detect();
+            if should_run {
                 processors[name].discover(&mut graph)?;
             }
         }
