@@ -1,6 +1,2 @@
 [processor]
 enabled = ["pylint", "ruff"]
-
-[processor.ruff]
-linter = "ruff"
-args = []
