@@ -13,7 +13,8 @@ project/
 ├── src/              # C/C++ source files
 ├── out/
 │   ├── cc/           # Compiled executables
-│   ├── pylint/       # Python lint stub files
+│   ├── ruff/         # Ruff lint stub files
+│   ├── pylint/       # Pylint lint stub files
 │   ├── cpplint/      # C/C++ lint stub files
 │   └── sleep/        # Sleep stub files
 └── .rsb/             # Cache directory
@@ -40,7 +41,7 @@ Files in the source directory (default `src/`) are compiled to executables under
 
 ### Python files
 
-Python files are linted and stub outputs are written to `out/pylint/`.
+Python files are linted and stub outputs are written to `out/ruff/` (ruff processor) or `out/pylint/` (pylint processor).
 
 ### Build artifacts
 

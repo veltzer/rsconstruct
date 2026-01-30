@@ -11,7 +11,7 @@ mod watcher;
 
 use anyhow::{bail, Result};
 use clap::Parser;
-use cli::{CacheAction, Cli, Commands, ProcessorAction, parse_shell, print_completions};
+use cli::{CacheAction, Cli, Commands, ConfigAction, ProcessorAction, parse_shell, print_completions};
 use config::Config;
 use builder::Builder;
 use object_store::ObjectStore;
@@ -103,18 +103,19 @@ fn main() -> Result<()> {
             let project_root = env::current_dir()?;
             let config = Config::load(&project_root)?;
 
-            let all_processors: [(&str, bool); 6] = [
-                ("template", false),
-                ("pylint", false),
-                ("sleep", true),
-                ("cc", false),
-                ("cpplint", false),
-                ("spellcheck", false),
+            let all_processors: [(&str, &str, bool); 7] = [
+                ("template", "Render Tera templates into output files", false),
+                ("ruff", "Lint Python files with ruff", false),
+                ("pylint", "Lint Python files with pylint", false),
+                ("sleep", "Sleep for a duration (testing)", true),
+                ("cc", "Compile C/C++ source files into executables", false),
+                ("cpplint", "Run static analysis on C/C++ source files", false),
+                ("spellcheck", "Check documentation files for spelling errors", false),
             ];
 
             match action {
                 ProcessorAction::List { all } => {
-                    for (name, hidden) in &all_processors {
+                    for (name, _desc, hidden) in &all_processors {
                         if *hidden && !all {
                             continue;
                         }
@@ -127,7 +128,7 @@ fn main() -> Result<()> {
                     }
                 }
                 ProcessorAction::All => {
-                    for (name, hidden) in &all_processors {
+                    for (name, desc, hidden) in &all_processors {
                         let enabled_status = if config.processor.is_enabled(name) {
                             color::green("enabled")
                         } else {
@@ -138,7 +139,7 @@ fn main() -> Result<()> {
                         } else {
                             String::new()
                         };
-                        println!("{} {}{}", name, enabled_status, hidden_status);
+                        println!("{} {}{} — {}", name, enabled_status, hidden_status, color::dim(desc));
                     }
                 }
             }
@@ -169,6 +170,17 @@ fn main() -> Result<()> {
         Commands::Version => {
             println!("rsb {}", env!("CARGO_PKG_VERSION"));
         }
+        Commands::Config { action } => {
+            let project_root = env::current_dir()?;
+            let config = Config::load(&project_root)?;
+            match action {
+                ConfigAction::Show => {
+                    let output = toml::to_string_pretty(&config)?;
+                    let annotated = annotate_config(&output);
+                    println!("{}", annotated);
+                }
+            }
+        }
         Commands::Graph { format, view } => {
             let builder = Builder::new()?;
             if let Some(viewer) = view {
@@ -180,6 +192,23 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Annotate TOML config output with comments for constrained values
+fn annotate_config(toml: &str) -> String {
+    toml.lines()
+        .map(|line| {
+            let trimmed = line.trim();
+            if trimmed.starts_with("parallel = ") {
+                format!("{} # 0 = auto-detect CPU cores", line)
+            } else if trimmed.starts_with("restore_method = ") {
+                format!("{} # options: hardlink, copy", line)
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Initialize a new rsb project in the current directory
@@ -199,7 +228,7 @@ fn init_project() -> Result<()> {
 # parallel = 1
 
 [processor]
-# enabled = ["template", "pylint", "sleep", "cc", "cpplint"]
+# enabled = ["template", "ruff", "pylint", "sleep", "cc", "cpplint", "spellcheck"]
 
 [cache]
 # restore_method = "hardlink"  # or "copy"
@@ -209,8 +238,11 @@ fn init_project() -> Result<()> {
 # extensions = [".tera"]
 # trim_blocks = false
 
-[processor.pylint]
+[processor.ruff]
 # linter = "ruff"
+# args = []
+
+[processor.pylint]
 # args = []
 
 [processor.cc]

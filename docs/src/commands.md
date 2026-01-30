@@ -77,6 +77,14 @@ rsb cache trim     # Remove unreferenced objects
 rsb cache list     # List all cache entries and their status
 ```
 
+## `rsb config`
+
+Show or inspect the active configuration (merged defaults + rsb.toml).
+
+```bash
+rsb config show    # Show the active configuration as TOML
+```
+
 ## `rsb processor`
 
 ```bash

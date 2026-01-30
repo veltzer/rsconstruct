@@ -1,6 +1,7 @@
 mod cc;
 mod cpplint;
 mod pylint;
+mod ruff;
 mod sleep;
 mod spellcheck;
 mod template;
@@ -13,7 +14,8 @@ use crate::color;
 pub use crate::graph::{BuildGraph, Product};
 pub use cc::CcProcessor;
 pub use cpplint::Cpplinter;
-pub use pylint::Pylinter;
+pub use pylint::PylintProcessor;
+pub use ruff::RuffProcessor;
 pub use sleep::SleepProcessor;
 pub use spellcheck::SpellcheckProcessor;
 pub use template::TemplateProcessor;

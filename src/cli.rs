@@ -110,6 +110,11 @@ pub enum Commands {
     },
     /// Print version information
     Version,
+    /// Show or inspect configuration
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
+    },
     /// Display the build dependency graph
     Graph {
         /// Output format (ignored if --view is used)
@@ -132,6 +137,12 @@ pub enum CacheAction {
     Trim,
     /// List all cache entries and their status
     List,
+}
+
+#[derive(Subcommand)]
+pub enum ConfigAction {
+    /// Show the active configuration
+    Show,
 }
 
 #[derive(Subcommand)]

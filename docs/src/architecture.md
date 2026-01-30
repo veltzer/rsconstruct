@@ -12,7 +12,7 @@ Processors implement the `ProductDiscovery` trait. Each processor:
 2. Creates **products** describing what to build
 3. Executes the build for each product
 
-Available processors: `template`, `pylint`, `cc`, `cpplint`, `sleep`.
+Available processors: `template`, `ruff`, `pylint`, `cc`, `cpplint`, `spellcheck`, `sleep`.
 
 ### Products
 

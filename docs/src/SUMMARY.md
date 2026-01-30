@@ -7,6 +7,7 @@
 - [Project Structure](project-structure.md)
 - [Processors](processors.md)
     - [Template](processors/template.md)
+    - [Ruff](processors/ruff.md)
     - [Pylint](processors/pylint.md)
     - [CC](processors/cc.md)
     - [Cpplint](processors/cpplint.md)

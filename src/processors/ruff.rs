@@ -5,26 +5,26 @@ use std::process::Command;
 use std::sync::Arc;
 use walkdir::WalkDir;
 
-use crate::config::{PylintConfig, config_hash, resolve_extra_inputs};
+use crate::config::{RuffConfig, config_hash, resolve_extra_inputs};
 use crate::graph::{BuildGraph, Product};
 use crate::ignore::IgnoreRules;
 use super::ProductDiscovery;
 
-const PYLINT_STUB_DIR: &str = "out/pylint";
+const RUFF_STUB_DIR: &str = "out/ruff";
 
-pub struct PylintProcessor {
+pub struct RuffProcessor {
     project_root: PathBuf,
-    pylint_config: PylintConfig,
+    ruff_config: RuffConfig,
     stub_dir: PathBuf,
     ignore_rules: Arc<IgnoreRules>,
 }
 
-impl PylintProcessor {
-    pub fn new(project_root: PathBuf, pylint_config: PylintConfig, ignore_rules: Arc<IgnoreRules>) -> Self {
-        let stub_dir = project_root.join(PYLINT_STUB_DIR);
+impl RuffProcessor {
+    pub fn new(project_root: PathBuf, ruff_config: RuffConfig, ignore_rules: Arc<IgnoreRules>) -> Self {
+        let stub_dir = project_root.join(RUFF_STUB_DIR);
         Self {
             project_root,
-            pylint_config,
+            ruff_config,
             stub_dir,
             ignore_rules,
         }
@@ -109,18 +109,20 @@ impl PylintProcessor {
             .strip_prefix(&self.project_root)
             .unwrap_or(py_file);
         let stub_name = format!(
-            "{}.pylint",
+            "{}.ruff",
             relative_path.display().to_string().replace(['/', '\\'], "_")
         );
         self.stub_dir.join(stub_name)
     }
 
-    /// Run pylint on a single file and create stub
+    /// Run the configured linter on a single file and create stub
     fn lint_file(&self, py_file: &Path, stub_path: &Path) -> Result<()> {
-        let mut cmd = Command::new("pylint");
+        let linter = &self.ruff_config.linter;
+        let mut cmd = Command::new(linter);
+        cmd.arg("check");
 
         // Add any configured arguments
-        for arg in &self.pylint_config.args {
+        for arg in &self.ruff_config.args {
             cmd.arg(arg);
         }
 
@@ -129,13 +131,14 @@ impl PylintProcessor {
 
         let output = cmd
             .output()
-            .context("Failed to run pylint")?;
+            .context(format!("Failed to run {}", linter))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stdout = String::from_utf8_lossy(&output.stdout);
             return Err(anyhow::anyhow!(
-                "Pylint failed:\n{}{}",
+                "{} linting failed:\n{}{}",
+                linter,
                 stdout,
                 stderr
             ));
@@ -145,21 +148,21 @@ impl PylintProcessor {
         if let Some(parent) = stub_path.parent() {
             fs::create_dir_all(parent)?;
         }
-        fs::write(stub_path, "linted").context("Failed to create pylint stub file")?;
+        fs::write(stub_path, "linted").context("Failed to create ruff stub file")?;
 
         Ok(())
     }
 }
 
-impl ProductDiscovery for PylintProcessor {
+impl ProductDiscovery for RuffProcessor {
     fn discover(&self, graph: &mut BuildGraph) -> Result<()> {
         if !self.should_lint() {
             return Ok(());
         }
 
         let py_files = self.find_python_files();
-        let config_hash = Some(config_hash(&self.pylint_config));
-        let extra = resolve_extra_inputs(&self.project_root, &self.pylint_config.extra_inputs)?;
+        let config_hash = Some(config_hash(&self.ruff_config));
+        let extra = resolve_extra_inputs(&self.project_root, &self.ruff_config.extra_inputs)?;
 
         for py_file in py_files {
             let stub_path = self.get_stub_path(&py_file);
@@ -168,7 +171,7 @@ impl ProductDiscovery for PylintProcessor {
             graph.add_product(
                 inputs,
                 vec![stub_path],
-                "pylint",
+                "ruff",
                 config_hash.clone(),
             );
         }
@@ -178,13 +181,13 @@ impl ProductDiscovery for PylintProcessor {
 
     fn execute(&self, product: &Product) -> Result<()> {
         if product.inputs.is_empty() || product.outputs.len() != 1 {
-            anyhow::bail!("Pylint product must have at least one input and exactly one output");
+            anyhow::bail!("Ruff product must have at least one input and exactly one output");
         }
 
         // Ensure stub directory exists
         if !self.stub_dir.exists() {
             fs::create_dir_all(&self.stub_dir)
-                .context("Failed to create pylint stub directory")?;
+                .context("Failed to create ruff stub directory")?;
         }
 
         self.lint_file(&product.inputs[0], &product.outputs[0])
@@ -194,7 +197,7 @@ impl ProductDiscovery for PylintProcessor {
         for output in &product.outputs {
             if output.exists() {
                 fs::remove_file(output)?;
-                println!("Removed pylint stub: {}", output.display());
+                println!("Removed ruff stub: {}", output.display());
             }
         }
         Ok(())

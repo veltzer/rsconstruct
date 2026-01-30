@@ -27,7 +27,7 @@ pub fn config_hash(value: &impl Serialize) -> String {
     hex::encode(hash)
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 pub struct Config {
     #[serde(default)]
     pub build: BuildConfig,
@@ -41,7 +41,7 @@ pub struct Config {
     pub graph: GraphConfig,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct BuildConfig {
     /// Number of parallel jobs (1 = sequential, 0 = auto-detect CPU cores)
     #[serde(default = "default_parallel")]
@@ -61,7 +61,7 @@ impl Default for BuildConfig {
 }
 
 /// Method used to restore files from cache
-#[derive(Debug, Deserialize, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, Default, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum RestoreMethod {
     /// Use hard links (fast, no disk space duplication)
@@ -71,7 +71,7 @@ pub enum RestoreMethod {
     Copy,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CacheConfig {
     /// Method to restore files from cache: "hardlink" or "copy"
     #[serde(default)]
@@ -86,13 +86,15 @@ impl Default for CacheConfig {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ProcessorConfig {
-    /// List of enabled processors (e.g., ["template", "pylint"])
+    /// List of enabled processors (e.g., ["template", "ruff"])
     #[serde(default = "default_processors")]
     pub enabled: Vec<String>,
     #[serde(default)]
     pub template: TemplateConfig,
+    #[serde(default)]
+    pub ruff: RuffConfig,
     #[serde(default)]
     pub pylint: PylintConfig,
     #[serde(default)]
@@ -106,7 +108,7 @@ pub struct ProcessorConfig {
 }
 
 fn default_processors() -> Vec<String> {
-    vec!["template".to_string(), "pylint".to_string(), "sleep".to_string(), "cc".to_string(), "cpplint".to_string(), "spellcheck".to_string()]
+    vec!["template".to_string(), "ruff".to_string(), "pylint".to_string(), "sleep".to_string(), "cc".to_string(), "cpplint".to_string(), "spellcheck".to_string()]
 }
 
 impl Default for ProcessorConfig {
@@ -114,6 +116,7 @@ impl Default for ProcessorConfig {
         Self {
             enabled: default_processors(),
             template: TemplateConfig::default(),
+            ruff: RuffConfig::default(),
             pylint: PylintConfig::default(),
             cc: CcConfig::default(),
             cpplint: CpplintConfig::default(),
@@ -167,7 +170,7 @@ impl Default for TemplateConfig {
     }
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CompletionsConfig {
     /// The shells to generate completions for by default
     #[serde(default = "default_shells")]
@@ -187,9 +190,9 @@ impl Default for CompletionsConfig {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct PylintConfig {
-    /// The Python linter to use (ruff, pylint, flake8, etc.)
-    #[serde(default = "default_pylinter")]
+pub struct RuffConfig {
+    /// The Python linter to use (default: ruff)
+    #[serde(default = "default_ruff_linter")]
     pub linter: String,
 
     /// Additional arguments to pass to the linter
@@ -201,14 +204,34 @@ pub struct PylintConfig {
     pub extra_inputs: Vec<String>,
 }
 
-fn default_pylinter() -> String {
+fn default_ruff_linter() -> String {
     "ruff".to_string()
+}
+
+impl Default for RuffConfig {
+    fn default() -> Self {
+        Self {
+            linter: default_ruff_linter(),
+            args: Vec::new(),
+            extra_inputs: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct PylintConfig {
+    /// Additional arguments to pass to pylint
+    #[serde(default)]
+    pub args: Vec<String>,
+
+    /// Additional input files that trigger rebuilds when changed
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
 }
 
 impl Default for PylintConfig {
     fn default() -> Self {
         Self {
-            linter: default_pylinter(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
         }
@@ -384,7 +407,7 @@ impl Default for SleepConfig {
     }
 }
 
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct GraphConfig {
     /// Command to open graph files (default: platform-specific)
     #[serde(default)]

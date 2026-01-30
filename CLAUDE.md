@@ -8,7 +8,7 @@ A fast, incremental build tool written in Rust with template support, Python lin
 - **Dependency graph** with topological sort for correct build order
 - **Parallel execution** - run independent products concurrently with `-j` flag
 - **Template processing** via the Tera templating engine
-- **Python linting** with ruff (configurable)
+- **Python linting** with ruff and pylint processors
 - **Python configuration** - load config from `.py` files using `load_python()` function
 - **CLI** built with clap with shell completion support
 
@@ -32,6 +32,7 @@ A fast, incremental build tool written in Rust with template support, Python lin
 - `rsb cache size` - Show cache size
 - `rsb cache trim` - Remove unreferenced objects from cache
 - `rsb cache list` - List all cache entries and their status
+- `rsb config show` - Show the active configuration (merged defaults + rsb.toml)
 - `rsb processor list` - List available processors and their status
 - `rsb complete [shell]` - Generate shell completions
 - `rsb version` - Print version information
@@ -43,7 +44,7 @@ A fast, incremental build tool written in Rust with template support, Python lin
 parallel = 1  # Number of parallel jobs (1 = sequential, 0 = auto-detect CPU cores)
 
 [processor]
-enabled = ["template", "pylint", "sleep", "cc", "cpplint", "spellcheck"]
+enabled = ["template", "ruff", "pylint", "sleep", "cc", "cpplint", "spellcheck"]
 
 [cache]
 restore_method = "hardlink"  # or "copy" (hardlink is faster, copy works across filesystems)
@@ -69,7 +70,8 @@ project/
 ├── sleep/                # .sleep files (for parallel testing)
 ├── out/
 │   ├── cc/               # Compiled executables
-│   ├── pylint/           # Python lint stub files
+│   ├── ruff/             # Ruff lint stub files
+│   ├── pylint/           # Pylint lint stub files
 │   ├── cpplint/          # C/C++ lint stub files
 │   ├── spellcheck/       # Spellcheck stub files
 │   └── sleep/            # Sleep stub files
@@ -80,7 +82,7 @@ project/
 
 ## Architecture
 
-- **Processors** implement `ProductDiscovery` trait (template, pylint, sleep, cc, cpplint, spellcheck)
+- **Processors** implement `ProductDiscovery` trait (template, ruff, pylint, sleep, cc, cpplint, spellcheck)
 - **Products** have inputs (source files) and outputs (generated files)
 - **BuildGraph** manages dependencies between products
 - **Executor** runs products in dependency order, with optional parallelism

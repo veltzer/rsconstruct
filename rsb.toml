@@ -1,18 +1,6 @@
-[build]
-# Number of parallel jobs (1 = sequential, 0 = auto-detect CPU cores)
-parallel = 1
-
-[completions]
-shells = ["bash"]
-
-[cache]
-restore_method = "hardlink"  # or "copy"
-
 [processor]
-enabled = ["template", "pylint"]
+enabled = ["pylint", "ruff"]
 
-[processor.template]
-
-[processor.pylint]
+[processor.ruff]
 linter = "ruff"
 args = []

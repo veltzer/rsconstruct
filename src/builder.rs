@@ -10,7 +10,7 @@ use crate::executor::Executor;
 use crate::graph::BuildGraph;
 use crate::ignore::IgnoreRules;
 use crate::object_store::ObjectStore;
-use crate::processors::{CcProcessor, Cpplinter, Pylinter, ProductDiscovery, SleepProcessor, SpellcheckProcessor, TemplateProcessor};
+use crate::processors::{CcProcessor, Cpplinter, PylintProcessor, RuffProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, TemplateProcessor};
 
 pub struct Builder {
     project_root: PathBuf,
@@ -173,6 +173,14 @@ impl Builder {
         let executor = Executor::new(&processors, 1, 0, Arc::new(std::sync::atomic::AtomicBool::new(false)));
         executor.clean(&graph)?;
 
+        // Also clean the ruff stub directory if it exists
+        let ruff_stub_dir = self.project_root.join("out/ruff");
+        if ruff_stub_dir.exists() {
+            fs::remove_dir_all(&ruff_stub_dir)
+                .context("Failed to remove ruff stub directory")?;
+            println!("Removed ruff stub directory: {}", ruff_stub_dir.display());
+        }
+
         // Also clean the pylint stub directory if it exists
         let pylint_stub_dir = self.project_root.join("out/pylint");
         if pylint_stub_dir.exists() {
@@ -250,9 +258,13 @@ impl Builder {
             processors.insert("template".to_string(), Box::new(template_proc));
         }
 
-        // Python lint processor
-        let pylinter = Pylinter::new(self.project_root.clone(), self.config.processor.pylint.clone(), Arc::clone(&self.ignore_rules));
-        processors.insert("pylint".to_string(), Box::new(pylinter));
+        // Ruff processor
+        let ruff_proc = RuffProcessor::new(self.project_root.clone(), self.config.processor.ruff.clone(), Arc::clone(&self.ignore_rules));
+        processors.insert("ruff".to_string(), Box::new(ruff_proc));
+
+        // Pylint processor
+        let pylint_proc = PylintProcessor::new(self.project_root.clone(), self.config.processor.pylint.clone(), Arc::clone(&self.ignore_rules));
+        processors.insert("pylint".to_string(), Box::new(pylint_proc));
 
         // Sleep processor (for testing parallelism)
         let sleep_proc = SleepProcessor::new(self.project_root.clone(), self.config.processor.sleep.clone(), Arc::clone(&self.ignore_rules));

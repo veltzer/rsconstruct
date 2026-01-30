@@ -118,6 +118,9 @@ When any file listed in `extra_inputs` changes, all products from that processor
 [processor.template]
 extra_inputs = ["config/settings.py", "config/database.py"]
 
+[processor.ruff]
+extra_inputs = ["pyproject.toml"]
+
 [processor.pylint]
 extra_inputs = ["pyproject.toml"]
 
@@ -135,7 +138,7 @@ Paths are relative to the project root. Missing files cause a build error, so al
 
 The `extra_inputs` paths are included in the processor's config hash, so adding or removing entries triggers a rebuild even if the files themselves haven't changed. The file contents are also checksummed as part of the product's input set, so any content change is detected by the incremental build system.
 
-All six processors support `extra_inputs`: template, pylint, cpplint, cc, spellcheck, and sleep.
+All processors support `extra_inputs`.
 
 ## Graceful interrupt
 
