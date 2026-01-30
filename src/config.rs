@@ -419,6 +419,18 @@ pub struct GraphConfig {
 }
 
 impl Config {
+    /// Check that rsb.toml exists in the given directory
+    pub fn require_config(project_root: &Path) -> Result<()> {
+        let config_path = project_root.join(CONFIG_FILE);
+        if !config_path.exists() {
+            anyhow::bail!(
+                "No rsb.toml found in {}. Run 'rsb init' to create one.",
+                project_root.display()
+            );
+        }
+        Ok(())
+    }
+
     /// Load configuration from rsb.toml in the given directory
     pub fn load(project_root: &Path) -> Result<Self> {
         let config_path = project_root.join(CONFIG_FILE);

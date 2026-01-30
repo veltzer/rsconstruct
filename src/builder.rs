@@ -22,6 +22,7 @@ pub struct Builder {
 impl Builder {
     pub fn new() -> Result<Self> {
         let project_root = std::env::current_dir()?;
+        Config::require_config(&project_root)?;
         let config = Config::load(&project_root)?;
         let object_store = ObjectStore::new(project_root.clone(), config.cache.restore_method)?;
         let ignore_rules = Arc::new(IgnoreRules::load(&project_root)?);
@@ -35,7 +36,7 @@ impl Builder {
     }
 
     /// Execute an incremental build using the dependency graph
-    pub fn build(&mut self, force: bool, verbose: bool, jobs: Option<usize>, timings: bool, keep_going: bool, processor_verbose: u8, interrupted: Arc<std::sync::atomic::AtomicBool>) -> Result<()> {
+    pub fn build(&mut self, force: bool, verbose: bool, jobs: Option<usize>, timings: bool, keep_going: bool, processor_verbose: u8, interrupted: Arc<std::sync::atomic::AtomicBool>, summary: bool) -> Result<()> {
         // Create processors
         let processors = self.create_processors(processor_verbose)?;
 
@@ -59,8 +60,8 @@ impl Builder {
 
         let stats = result?;
 
-        // Print summary (in verbose mode or when timings requested)
-        stats.print_summary(verbose, timings);
+        // Print summary
+        stats.print_summary(summary, timings);
 
         // Return error if there were failures in keep-going mode
         if stats.failed_count > 0 {

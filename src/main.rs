@@ -34,13 +34,13 @@ fn main() -> Result<()> {
     }
 
     match cli.command {
-        Commands::Build { force, jobs, timings, keep_going, dry_run, processor_verbose } => {
+        Commands::Build { force, jobs, timings, keep_going, dry_run, processor_verbose, no_summary } => {
             if dry_run {
                 let builder = Builder::new()?;
                 builder.dry_run(force)?;
             } else {
                 let mut builder = Builder::new()?;
-                builder.build(force, cli.verbose, jobs, timings, keep_going, processor_verbose, Arc::clone(&interrupted))?;
+                builder.build(force, cli.verbose, jobs, timings, keep_going, processor_verbose, Arc::clone(&interrupted), !no_summary)?;
             }
         }
         Commands::Clean => {
@@ -60,6 +60,7 @@ fn main() -> Result<()> {
         }
         Commands::Cache { action } => {
             let project_root = env::current_dir()?;
+            Config::require_config(&project_root)?;
             let config = Config::load(&project_root)?;
             let mut store = ObjectStore::new(project_root, config.cache.restore_method)?;
 
@@ -101,6 +102,7 @@ fn main() -> Result<()> {
         }
         Commands::Processor { action } => {
             let project_root = env::current_dir()?;
+            Config::require_config(&project_root)?;
             let config = Config::load(&project_root)?;
 
             let all_processors: [(&str, &str, bool); 7] = [
@@ -180,17 +182,24 @@ fn main() -> Result<()> {
                 print_completions(shell);
             }
         }
-        Commands::Watch { jobs, timings, keep_going } => {
-            watcher::watch(cli.verbose, jobs, timings, keep_going, Arc::clone(&interrupted))?;
+        Commands::Watch { jobs, timings, keep_going, no_summary } => {
+            watcher::watch(cli.verbose, jobs, timings, keep_going, !no_summary, Arc::clone(&interrupted))?;
         }
         Commands::Version => {
             println!("rsb {}", env!("CARGO_PKG_VERSION"));
         }
         Commands::Config { action } => {
-            let project_root = env::current_dir()?;
-            let config = Config::load(&project_root)?;
             match action {
                 ConfigAction::Show => {
+                    let project_root = env::current_dir()?;
+                    Config::require_config(&project_root)?;
+                    let config = Config::load(&project_root)?;
+                    let output = toml::to_string_pretty(&config)?;
+                    let annotated = annotate_config(&output);
+                    println!("{}", annotated);
+                }
+                ConfigAction::ShowDefault => {
+                    let config = Config::default();
                     let output = toml::to_string_pretty(&config)?;
                     let annotated = annotate_config(&output);
                     println!("{}", annotated);

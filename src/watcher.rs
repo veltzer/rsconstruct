@@ -64,14 +64,14 @@ fn should_ignore(path: &Path) -> bool {
     false
 }
 
-pub fn watch(verbose: bool, jobs: Option<usize>, timings: bool, keep_going: bool, interrupted: Arc<AtomicBool>) -> Result<()> {
+pub fn watch(verbose: bool, jobs: Option<usize>, timings: bool, keep_going: bool, summary: bool, interrupted: Arc<AtomicBool>) -> Result<()> {
     let project_root = std::env::current_dir()?;
 
     // Initial build
     println!("{}", color::bold("Running initial build..."));
     {
         let mut builder = Builder::new()?;
-        if let Err(e) = builder.build(false, verbose, jobs, timings, keep_going, 0, Arc::clone(&interrupted)) {
+        if let Err(e) = builder.build(false, verbose, jobs, timings, keep_going, 0, Arc::clone(&interrupted), summary) {
             println!("{}", color::red(&format!("Initial build error: {}", e)));
         }
     }
@@ -138,7 +138,7 @@ pub fn watch(verbose: bool, jobs: Option<usize>, timings: bool, keep_going: bool
         println!("{}", color::bold("Change detected, rebuilding..."));
         {
             let mut builder = Builder::new()?;
-            if let Err(e) = builder.build(false, verbose, jobs, timings, keep_going, 0, Arc::clone(&interrupted)) {
+            if let Err(e) = builder.build(false, verbose, jobs, timings, keep_going, 0, Arc::clone(&interrupted), summary) {
                 println!("{}", color::red(&format!("Build error: {}", e)));
             }
         }

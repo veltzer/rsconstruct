@@ -125,7 +125,8 @@ impl<'a> Executor<'a> {
                 let stats = stats_by_processor
                     .entry(product.processor.clone())
                     .or_insert_with(|| ProcessStats::new(&product.processor));
-                stats.skipped += 1;
+                stats.restored += 1;
+                stats.files_restored += product.outputs.len();
                 continue;
             }
 
@@ -147,6 +148,7 @@ impl<'a> Executor<'a> {
                             .entry(product.processor.clone())
                             .or_insert_with(|| ProcessStats::new(&product.processor));
                         stats.processed += 1;
+                        stats.files_created += product.outputs.len();
                         stats.duration += duration;
                         if timings {
                             stats.product_timings.push(ProductTiming {
@@ -157,6 +159,10 @@ impl<'a> Executor<'a> {
                         }
                     }
                     Err(e) => {
+                        let stats = stats_by_processor
+                            .entry(product.processor.clone())
+                            .or_insert_with(|| ProcessStats::new(&product.processor));
+                        stats.failed += 1;
                         if keep_going {
                             let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
                             println!("{}", color::red(&format!("Error: {}", msg)));
@@ -330,7 +336,8 @@ impl<'a> Executor<'a> {
                                         let proc_stats = stats
                                             .entry(product.processor.clone())
                                             .or_insert_with(|| ProcessStats::new(&product.processor));
-                                        proc_stats.skipped += 1;
+                                        proc_stats.restored += 1;
+                                        proc_stats.files_restored += product.outputs.len();
                                         continue;
                                     }
                                     Err(e) => {
@@ -381,6 +388,7 @@ impl<'a> Executor<'a> {
                                             .entry(product.processor.clone())
                                             .or_insert_with(|| ProcessStats::new(&product.processor));
                                         proc_stats.processed += 1;
+                                        proc_stats.files_created += product.outputs.len();
                                         proc_stats.duration += duration;
                                         if timings {
                                             proc_stats.product_timings.push(ProductTiming {
@@ -391,6 +399,13 @@ impl<'a> Executor<'a> {
                                         }
                                     }
                                     Err(e) => {
+                                        {
+                                            let mut stats = stats_ref.lock().unwrap();
+                                            let proc_stats = stats
+                                                .entry(product.processor.clone())
+                                                .or_insert_with(|| ProcessStats::new(&product.processor));
+                                            proc_stats.failed += 1;
+                                        }
                                         if keep_going {
                                             let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
                                             println!("{}", color::red(&format!("Error: {}", msg)));

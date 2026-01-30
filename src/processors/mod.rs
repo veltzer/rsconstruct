@@ -124,26 +124,32 @@ pub struct ProductTiming {
 /// Statistics from processing a category of items
 #[derive(Debug)]
 pub struct ProcessStats {
-    pub name: String,
     pub processed: usize,
+    pub failed: usize,
     pub skipped: usize,
+    pub restored: usize,
+    pub files_created: usize,
+    pub files_restored: usize,
     pub duration: Duration,
     pub product_timings: Vec<ProductTiming>,
 }
 
 impl ProcessStats {
-    pub fn new(name: &str) -> Self {
+    pub fn new(_name: &str) -> Self {
         Self {
-            name: name.to_string(),
             processed: 0,
+            failed: 0,
             skipped: 0,
+            restored: 0,
+            files_created: 0,
+            files_restored: 0,
             duration: Duration::ZERO,
             product_timings: Vec::new(),
         }
     }
 
     pub fn total(&self) -> usize {
-        self.processed + self.skipped
+        self.processed + self.failed + self.skipped + self.restored
     }
 }
 
@@ -171,32 +177,69 @@ impl BuildStats {
         self.categories.iter().map(|s| s.skipped).sum()
     }
 
-    pub fn print_summary(&self, verbose: bool, timings: bool) {
-        if !verbose && !timings {
+    pub fn total_restored(&self) -> usize {
+        self.categories.iter().map(|s| s.restored).sum()
+    }
+
+    pub fn total_files_created(&self) -> usize {
+        self.categories.iter().map(|s| s.files_created).sum()
+    }
+
+    pub fn total_files_restored(&self) -> usize {
+        self.categories.iter().map(|s| s.files_restored).sum()
+    }
+
+    pub fn print_summary(&self, summary: bool, timings: bool) {
+        if !summary && !timings {
             return;
         }
 
         if self.categories.is_empty() && self.failed_count == 0 {
-            println!("{}", color::dim("Nothing to build."));
+            if summary {
+                println!("{}", color::dim("Nothing to build."));
+            }
             return;
         }
 
-        let total_processed = self.total_processed();
-        let total_skipped = self.total_skipped();
+        if summary {
+            let total_processed = self.total_processed();
+            let total_restored = self.total_restored();
+            let total_failed = self.failed_count;
+            let total_skipped = self.total_skipped();
+            let total_files_created = self.total_files_created();
+            let total_files_restored = self.total_files_restored();
 
-        if total_processed == 0 && total_skipped > 0 && self.failed_count == 0 {
-            println!("{}", color::green(
-                &format!("Build complete: everything up to date ({} files unchanged)", total_skipped)
-            ));
-        } else {
             let mut parts = Vec::new();
-            for cat in &self.categories {
-                if cat.processed > 0 {
-                    parts.push(format!("{} {}", cat.processed, cat.name));
+            if total_processed > 0 {
+                if total_files_created > 0 {
+                    parts.push(format!("{} processed ({} files created)", total_processed, total_files_created));
+                } else {
+                    parts.push(format!("{} processed", total_processed));
                 }
             }
-            if !parts.is_empty() {
-                println!("{}", color::green(&format!("Build complete: {} processed", parts.join(", "))));
+            if total_restored > 0 {
+                if total_files_restored > 0 {
+                    parts.push(format!("{} restored ({} files)", total_restored, total_files_restored));
+                } else {
+                    parts.push(format!("{} restored", total_restored));
+                }
+            }
+            if total_failed > 0 {
+                parts.push(format!("{} failed", total_failed));
+            }
+            if total_skipped > 0 {
+                parts.push(format!("{} unchanged", total_skipped));
+            }
+
+            if parts.is_empty() {
+                println!("{}", color::dim("Nothing to build."));
+            } else {
+                let line = format!("Build summary: {}", parts.join(", "));
+                if total_failed > 0 {
+                    println!("{}", color::red(&line));
+                } else {
+                    println!("{}", color::green(&line));
+                }
             }
         }
 

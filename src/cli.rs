@@ -69,6 +69,10 @@ pub enum Commands {
         /// 2=add source path, 3=add all inputs including headers)
         #[arg(long, default_value = "0")]
         processor_verbose: u8,
+
+        /// Suppress the build summary
+        #[arg(long)]
+        no_summary: bool,
     },
     /// Clean all build artifacts
     Clean,
@@ -102,6 +106,10 @@ pub enum Commands {
         /// Continue building after errors, skipping dependents of failed products
         #[arg(short = 'k', long)]
         keep_going: bool,
+
+        /// Suppress the build summary
+        #[arg(long)]
+        no_summary: bool,
     },
     /// Manage processors
     Processor {
@@ -141,8 +149,10 @@ pub enum CacheAction {
 
 #[derive(Subcommand)]
 pub enum ConfigAction {
-    /// Show the active configuration
+    /// Show the active configuration (defaults merged with rsb.toml overrides)
     Show,
+    /// Show the default configuration (without rsb.toml overrides)
+    ShowDefault,
 }
 
 #[derive(Subcommand)]
