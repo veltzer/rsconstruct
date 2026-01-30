@@ -6,82 +6,16 @@ Enable processors in `rsb.toml`:
 
 ```toml
 [processor]
-enabled = ["template", "pylint", "cc", "cpplint"]
+enabled = ["template", "pylint", "cc", "cpplint", "spellcheck"]
 ```
 
 Use `rsb processor list` to see available processors and their status.
 
-## Template processor
+## Available Processors
 
-The template processor renders [Tera](https://keats.github.io/tera/) templates into output files.
-
-**Convention:** `templates/{X}.tera` produces `{X}` in the project root.
-
-### Configuration
-
-```toml
-[processor.template]
-strict = true           # Fail on undefined variables (default: true)
-extensions = [".tera"]  # File extensions to process
-trim_blocks = false     # Remove newline after block tags
-extra_inputs = ["config/settings.py"]  # Additional files that trigger rebuilds when changed
-```
-
-### Loading Python config
-
-Templates can load variables from Python files using the built-in `load_python()` function:
-
-```jinja2
-{% set config = load_python(path="config/settings.py") %}
-[app]
-name = "{{ config.project_name }}"
-version = "{{ config.version }}"
-```
-
-## Pylint processor
-
-The pylint processor runs a Python linter on Python source files and produces stub output files to track which files have been linted.
-
-**Convention:** Python files are linted and stubs are written to `out/pylint/`.
-
-### Configuration
-
-```toml
-[processor.pylint]
-linter = "ruff"   # Python linter command (default: ruff)
-args = []          # Extra arguments passed to the linter
-extra_inputs = ["pyproject.toml"]  # Additional files that trigger rebuilds when changed
-```
-
-## Cpplint processor
-
-The cpplint processor runs a C/C++ static analysis tool on source files.
-
-**Convention:** C/C++ source files are analyzed and stubs are written to `out/cpplint/`.
-
-### Configuration
-
-```toml
-[processor.cpplint]
-checker = "cppcheck"  # Static analysis tool (default: cppcheck)
-args = ["--error-exitcode=1", "--enable=warning,style,performance,portability"]
-extra_inputs = [".cppcheck-suppressions"]  # Additional files that trigger rebuilds when changed
-```
-
-To use a suppressions file, add to args:
-
-```toml
-args = [
-    "--error-exitcode=1",
-    "--enable=warning,style,performance,portability",
-    "--suppressions-list=.cppcheck-suppressions"
-]
-```
-
-## C/C++ compiler processor
-
-The cc processor compiles C and C++ source files into executables. Due to its complexity (per-file flags, header tracking, command ordering), it has its own dedicated page: [C/C++ Processor Details](cc-details.md).
-
-## Sleep processor
-
-The sleep processor is used for testing parallel execution. It reads `.sleep` files containing a duration and waits for that amount of time, producing stubs in `out/sleep/`.
+- [Template](processors/template.md) — renders Tera templates into output files
+- [Pylint](processors/pylint.md) — lints Python source files
+- [CC](processors/cc.md) — compiles C/C++ source files into executables
+- [Cpplint](processors/cpplint.md) — runs static analysis on C/C++ source files
+- [Spellcheck](processors/spellcheck.md) — checks documentation files for spelling errors
+- [Sleep](processors/sleep.md) — sleeps for a duration (for testing)

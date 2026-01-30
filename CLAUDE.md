@@ -55,7 +55,7 @@ viewer = "google-chrome"  # Command to open graph files (default: platform-speci
 shells = ["bash"]
 ```
 
-Per-processor configuration is documented in `docs/processors/`.
+Per-processor configuration is documented in `docs/src/processors/`.
 
 ## Project Structure
 

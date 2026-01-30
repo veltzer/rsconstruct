@@ -15,9 +15,18 @@ templates/app.config.tera  →  app.config
 templates/sub/readme.txt.tera  →  sub/readme.txt
 ```
 
-Templates use the Tera templating engine and can call `load_python(path="...")` to
-load variables from Python `.py` files. The Python files are parsed for simple
-assignments (strings, numbers, booleans, lists).
+Templates use the [Tera](https://keats.github.io/tera/) templating engine and can call
+`load_python(path="...")` to load variables from Python `.py` files. The Python files are
+parsed for simple assignments (strings, numbers, booleans, lists).
+
+### Loading Python config
+
+```jinja2
+{% set config = load_python(path="config/settings.py") %}
+[app]
+name = "{{ config.project_name }}"
+version = "{{ config.version }}"
+```
 
 ## Source Files
 
