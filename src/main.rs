@@ -11,7 +11,7 @@ mod watcher;
 
 use anyhow::{bail, Result};
 use clap::Parser;
-use cli::{CacheAction, Cli, Commands, ConfigAction, ProcessorAction, parse_shell, print_completions};
+use cli::{CacheAction, Cli, Commands, ConfigAction, ProcessorAction, ToolsAction, parse_shell, print_completions};
 use config::Config;
 use builder::Builder;
 use object_store::ObjectStore;
@@ -189,6 +189,50 @@ fn main() -> Result<()> {
                             .map(|p| p.strip_prefix(&project_root).unwrap_or(p).display().to_string())
                             .collect();
                         println!("{} \u{2192} {}", inputs.join(", "), outputs.join(", "));
+                    }
+                }
+            }
+        }
+        Commands::Tools { action } => {
+            let builder = Builder::new()?;
+            let processors = builder.create_processors(0)?;
+            let config = Config::load(&env::current_dir()?)?;
+
+            let show_all = matches!(&action, ToolsAction::List { all: true } | ToolsAction::Check { all: true });
+
+            // Collect (tool_name, processor_name) pairs
+            let mut tool_pairs: Vec<(String, String)> = Vec::new();
+            let mut names: Vec<&String> = processors.keys().collect();
+            names.sort();
+            for name in names {
+                if !show_all && !config.processor.is_enabled(name) {
+                    continue;
+                }
+                for tool in processors[name].required_tools() {
+                    tool_pairs.push((tool, name.clone()));
+                }
+            }
+            tool_pairs.sort();
+            tool_pairs.dedup();
+
+            match action {
+                ToolsAction::List { .. } => {
+                    for (tool, processor) in &tool_pairs {
+                        println!("{} ({})", tool, processor);
+                    }
+                }
+                ToolsAction::Check { .. } => {
+                    let mut any_missing = false;
+                    for (tool, processor) in &tool_pairs {
+                        if which::which(tool).is_ok() {
+                            println!("{} ({}) {}", tool, processor, color::green("found"));
+                        } else {
+                            println!("{} ({}) {}", tool, processor, color::red("missing"));
+                            any_missing = true;
+                        }
+                    }
+                    if any_missing {
+                        bail!("Some required tools are missing");
                     }
                 }
             }

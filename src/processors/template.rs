@@ -124,6 +124,10 @@ impl ProductDiscovery for TemplateProcessor {
         self.find_templates().map_or(false, |t| !t.is_empty())
     }
 
+    fn required_tools(&self) -> Vec<String> {
+        vec!["python3".to_string()]
+    }
+
     fn discover(&self, graph: &mut BuildGraph) -> Result<()> {
         let items = self.find_templates()?;
         let extra = resolve_extra_inputs(&self.project_root, &self.config.extra_inputs)?;

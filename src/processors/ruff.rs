@@ -65,6 +65,10 @@ impl ProductDiscovery for RuffProcessor {
         !scan_files(&self.project_root, &self.ruff_config.scan, &self.ignore_rules, true).is_empty()
     }
 
+    fn required_tools(&self) -> Vec<String> {
+        vec![self.ruff_config.linter.clone()]
+    }
+
     fn discover(&self, graph: &mut BuildGraph) -> Result<()> {
         discover_stub_products(
             graph,

@@ -123,6 +123,11 @@ pub enum Commands {
         #[command(subcommand)]
         action: ConfigAction,
     },
+    /// Manage external tool dependencies
+    Tools {
+        #[command(subcommand)]
+        action: ToolsAction,
+    },
     /// Display the build dependency graph
     Graph {
         /// Output format (ignored if --view is used)
@@ -172,6 +177,22 @@ pub enum ProcessorAction {
         /// Processor name (omit to show all enabled processors)
         name: Option<String>,
         /// Include disabled and hidden processors
+        #[arg(short, long)]
+        all: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ToolsAction {
+    /// List all required external tools
+    List {
+        /// Include tools from disabled processors too
+        #[arg(short, long)]
+        all: bool,
+    },
+    /// Check if required external tools are available on PATH
+    Check {
+        /// Check tools from all processors (including disabled)
         #[arg(short, long)]
         all: bool,
     },

@@ -67,6 +67,10 @@ impl ProductDiscovery for Cpplinter {
         self.should_lint() && !scan_files(&self.project_root, &self.cpplint_config.scan, &self.ignore_rules, true).is_empty()
     }
 
+    fn required_tools(&self) -> Vec<String> {
+        vec![self.cpplint_config.checker.clone()]
+    }
+
     fn discover(&self, graph: &mut BuildGraph) -> Result<()> {
         if !self.should_lint() {
             return Ok(());

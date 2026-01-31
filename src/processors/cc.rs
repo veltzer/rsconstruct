@@ -487,6 +487,10 @@ impl ProductDiscovery for CcProcessor {
         self.should_process() && !self.find_source_files().is_empty()
     }
 
+    fn required_tools(&self) -> Vec<String> {
+        vec![self.config.cc.clone(), self.config.cxx.clone()]
+    }
+
     fn discover(&self, graph: &mut BuildGraph) -> Result<()> {
         if !self.should_process() {
             return Ok(());

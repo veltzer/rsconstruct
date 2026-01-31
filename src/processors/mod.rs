@@ -202,6 +202,11 @@ pub trait ProductDiscovery: Sync + Send {
 
     /// Auto-detect whether this processor is relevant for the current project
     fn auto_detect(&self) -> bool;
+
+    /// Return the names of external tools required by this processor
+    fn required_tools(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 /// Timing for a single product execution

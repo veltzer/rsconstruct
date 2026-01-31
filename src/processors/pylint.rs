@@ -62,6 +62,10 @@ impl ProductDiscovery for PylintProcessor {
         !scan_files(&self.project_root, &self.pylint_config.scan, &self.ignore_rules, true).is_empty()
     }
 
+    fn required_tools(&self) -> Vec<String> {
+        vec!["pylint".to_string()]
+    }
+
     fn discover(&self, graph: &mut BuildGraph) -> Result<()> {
         discover_stub_products(
             graph,
