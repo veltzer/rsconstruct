@@ -2,12 +2,11 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Arc;
 
 use crate::config::{CcConfig, config_hash, resolve_extra_inputs};
+use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::ignore::IgnoreRules;
-use super::{ProductDiscovery, scan_files, scan_root, clean_outputs, format_command, log_command};
+use super::{ProductDiscovery, scan_root, clean_outputs, format_command, log_command};
 
 /// Per-file compile/link flags extracted from source comments.
 #[derive(Default)]
@@ -221,12 +220,11 @@ pub struct CcProcessor {
     config: CcConfig,
     output_dir: PathBuf,
     deps_dir: PathBuf,
-    ignore_rules: Arc<IgnoreRules>,
     verbose: u8,
 }
 
 impl CcProcessor {
-    pub fn new(project_root: PathBuf, config: CcConfig, ignore_rules: Arc<IgnoreRules>, verbose: u8) -> Self {
+    pub fn new(project_root: PathBuf, config: CcConfig, verbose: u8) -> Self {
         let output_dir = project_root.join("out/cc_single_file");
         let deps_dir = project_root.join(".rsb/deps");
         Self {
@@ -234,7 +232,6 @@ impl CcProcessor {
             config,
             output_dir,
             deps_dir,
-            ignore_rules,
             verbose,
         }
     }
@@ -250,8 +247,8 @@ impl CcProcessor {
     }
 
     /// Find all C/C++ source files. Returns (path, is_cpp) pairs.
-    fn find_source_files(&self) -> Vec<(PathBuf, bool)> {
-        scan_files(&self.project_root, &self.config.scan, &self.ignore_rules, true)
+    fn find_source_files(&self, file_index: &FileIndex) -> Vec<(PathBuf, bool)> {
+        file_index.scan(&self.project_root, &self.config.scan, true)
             .into_iter()
             .map(|p| {
                 let is_cpp = p.extension().and_then(|s| s.to_str()) == Some("cc");
@@ -476,20 +473,20 @@ impl CcProcessor {
 }
 
 impl ProductDiscovery for CcProcessor {
-    fn auto_detect(&self) -> bool {
-        self.should_process() && !self.find_source_files().is_empty()
+    fn auto_detect(&self, file_index: &FileIndex) -> bool {
+        self.should_process() && !self.find_source_files(file_index).is_empty()
     }
 
     fn required_tools(&self) -> Vec<String> {
         vec![self.config.cc.clone(), self.config.cxx.clone()]
     }
 
-    fn discover(&self, graph: &mut BuildGraph) -> Result<()> {
+    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
         if !self.should_process() {
             return Ok(());
         }
 
-        let source_files = self.find_source_files();
+        let source_files = self.find_source_files(file_index);
         if source_files.is_empty() {
             return Ok(());
         }

@@ -1,12 +1,11 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Arc;
 
 use crate::config::CpplintConfig;
+use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::ignore::IgnoreRules;
-use super::{ProductDiscovery, discover_stub_products, scan_files, scan_root, validate_stub_product, ensure_stub_dir, write_stub, clean_outputs, log_command};
+use super::{ProductDiscovery, discover_stub_products, scan_root, validate_stub_product, ensure_stub_dir, write_stub, clean_outputs, log_command};
 
 const CPPLINT_STUB_DIR: &str = "out/cpplint";
 
@@ -14,17 +13,15 @@ pub struct Cpplinter {
     project_root: PathBuf,
     cpplint_config: CpplintConfig,
     stub_dir: PathBuf,
-    ignore_rules: Arc<IgnoreRules>,
 }
 
 impl Cpplinter {
-    pub fn new(project_root: PathBuf, cpplint_config: CpplintConfig, ignore_rules: Arc<IgnoreRules>) -> Self {
+    pub fn new(project_root: PathBuf, cpplint_config: CpplintConfig) -> Self {
         let stub_dir = project_root.join(CPPLINT_STUB_DIR);
         Self {
             project_root,
             cpplint_config,
             stub_dir,
-            ignore_rules,
         }
     }
 
@@ -64,15 +61,15 @@ impl Cpplinter {
 }
 
 impl ProductDiscovery for Cpplinter {
-    fn auto_detect(&self) -> bool {
-        self.should_lint() && !scan_files(&self.project_root, &self.cpplint_config.scan, &self.ignore_rules, true).is_empty()
+    fn auto_detect(&self, file_index: &FileIndex) -> bool {
+        self.should_lint() && !file_index.scan(&self.project_root, &self.cpplint_config.scan, true).is_empty()
     }
 
     fn required_tools(&self) -> Vec<String> {
         vec![self.cpplint_config.checker.clone()]
     }
 
-    fn discover(&self, graph: &mut BuildGraph) -> Result<()> {
+    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
         if !self.should_lint() {
             return Ok(());
         }
@@ -81,7 +78,7 @@ impl ProductDiscovery for Cpplinter {
             &self.project_root,
             &self.stub_dir,
             &self.cpplint_config.scan,
-            &self.ignore_rules,
+            file_index,
             &self.cpplint_config.extra_inputs,
             &self.cpplint_config,
             "cpplint",

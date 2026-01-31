@@ -2,12 +2,12 @@ use anyhow::{Context, Result};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 
 use crate::config::SpellcheckConfig;
+use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::ignore::IgnoreRules;
-use super::{ProductDiscovery, discover_stub_products, scan_files, ensure_stub_dir, write_stub, clean_outputs};
+use super::{ProductDiscovery, discover_stub_products, ensure_stub_dir, write_stub, clean_outputs};
 
 const SPELLCHECK_STUB_DIR: &str = "out/spellcheck";
 const DICT_DIR: &str = "/usr/share/hunspell";
@@ -16,7 +16,6 @@ pub struct SpellcheckProcessor {
     project_root: PathBuf,
     spellcheck_config: SpellcheckConfig,
     stub_dir: PathBuf,
-    ignore_rules: Arc<IgnoreRules>,
     /// Cached dictionary, built once on first use and reused across all execute() calls
     cached_dict: OnceLock<Result<zspell::Dictionary, String>>,
     /// Custom words, loaded once at initialization
@@ -24,7 +23,7 @@ pub struct SpellcheckProcessor {
 }
 
 impl SpellcheckProcessor {
-    pub fn new(project_root: PathBuf, spellcheck_config: SpellcheckConfig, ignore_rules: Arc<IgnoreRules>) -> Result<Self> {
+    pub fn new(project_root: PathBuf, spellcheck_config: SpellcheckConfig) -> Result<Self> {
         let stub_dir = project_root.join(SPELLCHECK_STUB_DIR);
         let custom_words = if spellcheck_config.use_words_file {
             let words_path = project_root.join(&spellcheck_config.words_file);
@@ -37,7 +36,6 @@ impl SpellcheckProcessor {
             project_root,
             spellcheck_config,
             stub_dir,
-            ignore_rules,
             cached_dict: OnceLock::new(),
             custom_words,
         })
@@ -214,17 +212,17 @@ impl SpellcheckProcessor {
 }
 
 impl ProductDiscovery for SpellcheckProcessor {
-    fn auto_detect(&self) -> bool {
-        !scan_files(&self.project_root, &self.spellcheck_config.scan, &self.ignore_rules, true).is_empty()
+    fn auto_detect(&self, file_index: &FileIndex) -> bool {
+        !file_index.scan(&self.project_root, &self.spellcheck_config.scan, true).is_empty()
     }
 
-    fn discover(&self, graph: &mut BuildGraph) -> Result<()> {
+    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
         discover_stub_products(
             graph,
             &self.project_root,
             &self.stub_dir,
             &self.spellcheck_config.scan,
-            &self.ignore_rules,
+            file_index,
             &self.spellcheck_config.extra_inputs,
             &self.spellcheck_config,
             "spellcheck",

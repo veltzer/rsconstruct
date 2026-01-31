@@ -7,8 +7,8 @@ use crate::cli::{GraphFormat, GraphViewer};
 use crate::color;
 use crate::config::Config;
 use crate::executor::Executor;
+use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
-use crate::ignore::IgnoreRules;
 use crate::object_store::ObjectStore;
 use crate::processors::{CcProcessor, Cpplinter, MakeProcessor, PylintProcessor, RuffProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, TemplateProcessor, log_command};
 
@@ -16,7 +16,7 @@ pub struct Builder {
     project_root: PathBuf,
     object_store: ObjectStore,
     config: Config,
-    ignore_rules: Arc<IgnoreRules>,
+    file_index: FileIndex,
 }
 
 impl Builder {
@@ -25,14 +25,19 @@ impl Builder {
         Config::require_config(&project_root)?;
         let config = Config::load(&project_root)?;
         let object_store = ObjectStore::new(project_root.clone(), config.cache.restore_method)?;
-        let ignore_rules = Arc::new(IgnoreRules::load(&project_root)?);
+        let file_index = FileIndex::build(&project_root)?;
 
         Ok(Self {
             project_root,
             object_store,
             config,
-            ignore_rules,
+            file_index,
         })
+    }
+
+    /// Get a reference to the file index
+    pub fn file_index(&self) -> &FileIndex {
+        &self.file_index
     }
 
     /// Execute an incremental build using the dependency graph
@@ -215,32 +220,32 @@ impl Builder {
         let mut processors: HashMap<String, Box<dyn ProductDiscovery>> = HashMap::new();
 
         // Template processor
-        if let Ok(template_proc) = TemplateProcessor::new(self.project_root.clone(), self.config.processor.template.clone(), Arc::clone(&self.ignore_rules)) {
+        if let Ok(template_proc) = TemplateProcessor::new(self.project_root.clone(), self.config.processor.template.clone()) {
             processors.insert("template".to_string(), Box::new(template_proc));
         }
 
         // Ruff processor
-        let ruff_proc = RuffProcessor::new(self.project_root.clone(), self.config.processor.ruff.clone(), Arc::clone(&self.ignore_rules));
+        let ruff_proc = RuffProcessor::new(self.project_root.clone(), self.config.processor.ruff.clone());
         processors.insert("ruff".to_string(), Box::new(ruff_proc));
 
         // Pylint processor
-        let pylint_proc = PylintProcessor::new(self.project_root.clone(), self.config.processor.pylint.clone(), Arc::clone(&self.ignore_rules));
+        let pylint_proc = PylintProcessor::new(self.project_root.clone(), self.config.processor.pylint.clone());
         processors.insert("pylint".to_string(), Box::new(pylint_proc));
 
         // Sleep processor (for testing parallelism)
-        let sleep_proc = SleepProcessor::new(self.project_root.clone(), self.config.processor.sleep.clone(), Arc::clone(&self.ignore_rules));
+        let sleep_proc = SleepProcessor::new(self.project_root.clone(), self.config.processor.sleep.clone());
         processors.insert("sleep".to_string(), Box::new(sleep_proc));
 
         // C/C++ compiler processor (single-file compilation)
-        let cc_proc = CcProcessor::new(self.project_root.clone(), self.config.processor.cc_single_file.clone(), Arc::clone(&self.ignore_rules), verbose);
+        let cc_proc = CcProcessor::new(self.project_root.clone(), self.config.processor.cc_single_file.clone(), verbose);
         processors.insert("cc_single_file".to_string(), Box::new(cc_proc));
 
         // C/C++ lint processor
-        let cpplinter = Cpplinter::new(self.project_root.clone(), self.config.processor.cpplint.clone(), Arc::clone(&self.ignore_rules));
+        let cpplinter = Cpplinter::new(self.project_root.clone(), self.config.processor.cpplint.clone());
         processors.insert("cpplint".to_string(), Box::new(cpplinter));
 
         // Spellcheck processor
-        match SpellcheckProcessor::new(self.project_root.clone(), self.config.processor.spellcheck.clone(), Arc::clone(&self.ignore_rules)) {
+        match SpellcheckProcessor::new(self.project_root.clone(), self.config.processor.spellcheck.clone()) {
             Ok(spellcheck_proc) => {
                 processors.insert("spellcheck".to_string(), Box::new(spellcheck_proc));
             }
@@ -252,7 +257,7 @@ impl Builder {
         }
 
         // Make processor
-        let make_proc = MakeProcessor::new(self.project_root.clone(), self.config.processor.make.clone(), Arc::clone(&self.ignore_rules));
+        let make_proc = MakeProcessor::new(self.project_root.clone(), self.config.processor.make.clone());
         processors.insert("make".to_string(), Box::new(make_proc));
 
         Ok(processors)
@@ -346,9 +351,9 @@ impl Builder {
             if !in_enabled_list {
                 continue;
             }
-            let should_run = !self.config.processor.auto_detect || processors[name].auto_detect();
+            let should_run = !self.config.processor.auto_detect || processors[name].auto_detect(&self.file_index);
             if should_run {
-                processors[name].discover(&mut graph)?;
+                processors[name].discover(&mut graph, &self.file_index)?;
             }
         }
 
@@ -379,12 +384,12 @@ impl Builder {
                 if !in_enabled_list {
                     continue;
                 }
-                let should_run = !self.config.processor.auto_detect || processors[name].auto_detect();
+                let should_run = !self.config.processor.auto_detect || processors[name].auto_detect(&self.file_index);
                 if !should_run {
                     continue;
                 }
             }
-            processors[name].discover(&mut graph)?;
+            processors[name].discover(&mut graph, &self.file_index)?;
         }
 
         graph.resolve_dependencies();

@@ -3,8 +3,8 @@ mod cli;
 mod color;
 mod config;
 mod executor;
+mod file_index;
 mod graph;
-mod ignore;
 mod object_store;
 mod processors;
 mod watcher;
@@ -137,7 +137,7 @@ fn main() -> Result<()> {
                     let processors = builder.create_processors(0)?;
                     for (name, _desc, _hidden) in &all_processors {
                         let detected = processors.get(*name)
-                            .map_or(false, |p| p.auto_detect());
+                            .map_or(false, |p| p.auto_detect(builder.file_index()));
                         let enabled = config.processor.is_enabled(name);
                         let status = match (detected, enabled) {
                             (true, true) => color::green("detected, enabled"),

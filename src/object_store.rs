@@ -4,9 +4,24 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
-use walkdir::WalkDir;
 
 use crate::config::RestoreMethod;
+
+/// Recursively collect all files under a directory.
+fn walk_files(dir: &Path) -> Vec<PathBuf> {
+    let mut result = Vec::new();
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                result.extend(walk_files(&path));
+            } else if path.is_file() {
+                result.push(path);
+            }
+        }
+    }
+    result
+}
 
 const RSB_DIR: &str = ".rsb";
 const OBJECTS_DIR: &str = "objects";
@@ -338,12 +353,8 @@ impl ObjectStore {
             return Ok((0, 0));
         }
 
-        for entry in WalkDir::new(&self.objects_dir)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.file_type().is_file())
-        {
-            if let Ok(metadata) = entry.metadata() {
+        for path in walk_files(&self.objects_dir) {
+            if let Ok(metadata) = fs::metadata(&path) {
                 total_bytes += metadata.len();
                 object_count += 1;
             }
@@ -371,24 +382,19 @@ impl ObjectStore {
 
         // Find and remove unreferenced objects
         let mut to_remove = Vec::new();
-        for entry in WalkDir::new(&self.objects_dir)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.file_type().is_file())
-        {
+        for path in walk_files(&self.objects_dir) {
             // Reconstruct checksum from path
-            let path = entry.path();
             if let (Some(prefix), Some(rest)) = (
                 path.parent().and_then(|p| p.file_name()).and_then(|n| n.to_str()),
                 path.file_name().and_then(|n| n.to_str())
             ) {
                 let checksum = format!("{}{}", prefix, rest);
                 if !referenced.contains(&checksum) {
-                    if let Ok(metadata) = entry.metadata() {
+                    if let Ok(metadata) = fs::metadata(&path) {
                         removed_bytes += metadata.len();
                         removed_count += 1;
                     }
-                    to_remove.push(path.to_path_buf());
+                    to_remove.push(path);
                 }
             }
         }

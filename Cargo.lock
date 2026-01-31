@@ -1017,9 +1017,9 @@ dependencies = [
  "clap_complete",
  "ctrlc",
  "dirs",
- "globset",
  "hex",
  "humansize",
+ "ignore",
  "notify",
  "serde",
  "serde_json",
@@ -1027,7 +1027,6 @@ dependencies = [
  "tempfile",
  "tera",
  "toml",
- "walkdir",
  "which",
  "zspell",
 ]

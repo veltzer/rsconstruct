@@ -4,13 +4,12 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Arc;
 use tera::{Context as TeraContext, Function, Tera, Value as TeraValue, to_value};
 
 use crate::config::{TemplateConfig, config_hash, resolve_extra_inputs};
+use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::ignore::IgnoreRules;
-use super::{ProductDiscovery, scan_files, log_command};
+use super::{ProductDiscovery, log_command};
 
 /// Represents a single template file to be processed
 struct TemplateItem {
@@ -83,21 +82,19 @@ fn trim_block_newlines(content: &str) -> String {
 pub struct TemplateProcessor {
     project_root: PathBuf,
     config: TemplateConfig,
-    ignore_rules: Arc<IgnoreRules>,
 }
 
 impl TemplateProcessor {
-    pub fn new(project_root: PathBuf, config: TemplateConfig, ignore_rules: Arc<IgnoreRules>) -> Result<Self> {
+    pub fn new(project_root: PathBuf, config: TemplateConfig) -> Result<Self> {
         Ok(Self {
             project_root,
             config,
-            ignore_rules,
         })
     }
 
     /// Find all template files matching configured extensions
-    fn find_templates(&self) -> Result<Vec<TemplateItem>> {
-        let paths = scan_files(&self.project_root, &self.config.scan, &self.ignore_rules, false);
+    fn find_templates(&self, file_index: &FileIndex) -> Result<Vec<TemplateItem>> {
+        let paths = file_index.scan(&self.project_root, &self.config.scan, false);
         let extensions = self.config.scan.extensions();
 
         let mut items = Vec::new();
@@ -120,16 +117,16 @@ impl TemplateProcessor {
 }
 
 impl ProductDiscovery for TemplateProcessor {
-    fn auto_detect(&self) -> bool {
-        self.find_templates().map_or(false, |t| !t.is_empty())
+    fn auto_detect(&self, file_index: &FileIndex) -> bool {
+        self.find_templates(file_index).map_or(false, |t| !t.is_empty())
     }
 
     fn required_tools(&self) -> Vec<String> {
         vec!["python3".to_string()]
     }
 
-    fn discover(&self, graph: &mut BuildGraph) -> Result<()> {
-        let items = self.find_templates()?;
+    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
+        let items = self.find_templates(file_index)?;
         let extra = resolve_extra_inputs(&self.project_root, &self.config.extra_inputs)?;
 
         for item in items {

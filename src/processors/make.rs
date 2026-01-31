@@ -1,12 +1,11 @@
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::Arc;
 
 use crate::config::{MakeConfig, config_hash, resolve_extra_inputs};
+use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::ignore::IgnoreRules;
-use super::{ProductDiscovery, scan_files, scan_root, validate_stub_product, ensure_stub_dir, write_stub, clean_outputs, log_command};
+use super::{ProductDiscovery, scan_root, validate_stub_product, ensure_stub_dir, write_stub, clean_outputs, log_command};
 
 const MAKE_STUB_DIR: &str = "out/make";
 
@@ -14,17 +13,15 @@ pub struct MakeProcessor {
     project_root: PathBuf,
     config: MakeConfig,
     stub_dir: PathBuf,
-    ignore_rules: Arc<IgnoreRules>,
 }
 
 impl MakeProcessor {
-    pub fn new(project_root: PathBuf, config: MakeConfig, ignore_rules: Arc<IgnoreRules>) -> Self {
+    pub fn new(project_root: PathBuf, config: MakeConfig) -> Self {
         let stub_dir = project_root.join(MAKE_STUB_DIR);
         Self {
             project_root,
             config,
             stub_dir,
-            ignore_rules,
         }
     }
 
@@ -81,20 +78,20 @@ impl MakeProcessor {
 }
 
 impl ProductDiscovery for MakeProcessor {
-    fn auto_detect(&self) -> bool {
-        self.should_process() && !scan_files(&self.project_root, &self.config.scan, &self.ignore_rules, true).is_empty()
+    fn auto_detect(&self, file_index: &FileIndex) -> bool {
+        self.should_process() && !file_index.scan(&self.project_root, &self.config.scan, true).is_empty()
     }
 
     fn required_tools(&self) -> Vec<String> {
         vec![self.config.make.clone()]
     }
 
-    fn discover(&self, graph: &mut BuildGraph) -> Result<()> {
+    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
         if !self.should_process() {
             return Ok(());
         }
 
-        let makefiles = scan_files(&self.project_root, &self.config.scan, &self.ignore_rules, true);
+        let makefiles = file_index.scan(&self.project_root, &self.config.scan, true);
         if makefiles.is_empty() {
             return Ok(());
         }

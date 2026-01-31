@@ -11,14 +11,12 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use walkdir::WalkDir;
 
 use crate::color;
-use crate::config::{ScanConfig, config_hash, resolve_extra_inputs};
-use crate::ignore::IgnoreRules;
+use crate::config::{config_hash, resolve_extra_inputs};
+use crate::file_index::FileIndex;
 
 /// Global flag: when true, print each external command before execution.
 static PROCESS_DEBUG: AtomicBool = AtomicBool::new(false);
@@ -57,88 +55,15 @@ pub fn log_command(cmd: &Command) {
 
 pub use crate::graph::{BuildGraph, Product};
 
-/// Find files matching given extensions in a directory.
-///
-/// - `root`: directory to walk
-/// - `extensions`: file extensions to match (e.g., &[".py", ".pyi"])
-/// - `exclude_dirs`: directory path segments to skip (e.g., &["/.git/", "/out/"])
-/// - `ignore_rules`: project ignore rules
-/// - `recursive`: if false, only scan the top-level directory
-///
-/// Returns sorted list of matching paths.
-pub fn find_files(
-    root: &Path,
-    extensions: &[&str],
-    exclude_dirs: &[&str],
-    ignore_rules: &Arc<IgnoreRules>,
-    recursive: bool,
-) -> Vec<PathBuf> {
-    if !root.exists() {
-        return Vec::new();
-    }
-
-    let walker = if recursive {
-        WalkDir::new(root)
-    } else {
-        WalkDir::new(root).max_depth(1)
-    };
-
-    let mut files: Vec<PathBuf> = walker
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| {
-            let path = e.path();
-            if !path.is_file() {
-                return false;
-            }
-
-            // Check exclude dirs
-            if !exclude_dirs.is_empty() {
-                let path_str = path.to_string_lossy();
-                if exclude_dirs.iter().any(|dir| path_str.contains(dir)) {
-                    return false;
-                }
-            }
-
-            // Check extension match
-            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            if !extensions.iter().any(|ext| name.ends_with(ext)) {
-                return false;
-            }
-
-            // Check ignore rules
-            !ignore_rules.is_ignored(path)
-        })
-        .map(|e| e.path().to_path_buf())
-        .collect();
-
-    files.sort();
-    files
-}
-
 /// Compute the scan root directory from a ScanConfig.
 /// Returns project_root if scan_dir is empty, otherwise project_root/scan_dir.
-pub fn scan_root(project_root: &Path, scan: &ScanConfig) -> PathBuf {
+pub fn scan_root(project_root: &Path, scan: &crate::config::ScanConfig) -> PathBuf {
     let dir = scan.scan_dir();
     if dir.is_empty() {
         project_root.to_path_buf()
     } else {
         project_root.join(dir)
     }
-}
-
-/// Find files using a resolved ScanConfig.
-/// Combines scan_root + find_files with the config's extensions and exclude_dirs.
-pub fn scan_files(
-    project_root: &Path,
-    scan: &ScanConfig,
-    ignore_rules: &Arc<IgnoreRules>,
-    recursive: bool,
-) -> Vec<PathBuf> {
-    let root = scan_root(project_root, scan);
-    let ext_refs: Vec<&str> = scan.extensions().iter().map(|s| s.as_str()).collect();
-    let exclude_refs: Vec<&str> = scan.exclude_dirs().iter().map(|s| s.as_str()).collect();
-    find_files(&root, &ext_refs, &exclude_refs, ignore_rules, recursive)
 }
 
 /// Compute a stub path for a source file.
@@ -170,15 +95,15 @@ pub fn discover_stub_products(
     graph: &mut BuildGraph,
     project_root: &Path,
     stub_dir: &Path,
-    scan: &ScanConfig,
-    ignore_rules: &Arc<IgnoreRules>,
+    scan: &crate::config::ScanConfig,
+    file_index: &FileIndex,
     extra_inputs: &[String],
     cfg_hash: &impl serde::Serialize,
     processor_name: &str,
     stub_suffix: &str,
     recursive: bool,
 ) -> Result<()> {
-    let files = scan_files(project_root, scan, ignore_rules, recursive);
+    let files = file_index.scan(project_root, scan, recursive);
     if files.is_empty() {
         return Ok(());
     }
@@ -231,7 +156,7 @@ pub use template::TemplateProcessor;
 /// Must be Sync + Send for parallel execution support
 pub trait ProductDiscovery: Sync + Send {
     /// Discover all products this processor can produce
-    fn discover(&self, graph: &mut BuildGraph) -> Result<()>;
+    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()>;
 
     /// Execute a single product
     fn execute(&self, product: &Product) -> Result<()>;
@@ -240,7 +165,7 @@ pub trait ProductDiscovery: Sync + Send {
     fn clean(&self, product: &Product) -> Result<()>;
 
     /// Auto-detect whether this processor is relevant for the current project
-    fn auto_detect(&self) -> bool;
+    fn auto_detect(&self, file_index: &FileIndex) -> bool;
 
     /// Return the names of external tools required by this processor
     fn required_tools(&self) -> Vec<String> {

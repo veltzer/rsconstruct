@@ -1,14 +1,13 @@
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
 use crate::config::{SleepConfig, config_hash, resolve_extra_inputs};
+use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::ignore::IgnoreRules;
-use super::{ProductDiscovery, scan_files, scan_root, validate_stub_product, ensure_stub_dir, write_stub, clean_outputs};
+use super::{ProductDiscovery, scan_root, validate_stub_product, ensure_stub_dir, write_stub, clean_outputs};
 
 const SLEEP_STUB_DIR: &str = "out/sleep";
 
@@ -16,17 +15,15 @@ pub struct SleepProcessor {
     project_root: PathBuf,
     stub_dir: PathBuf,
     config: SleepConfig,
-    ignore_rules: Arc<IgnoreRules>,
 }
 
 impl SleepProcessor {
-    pub fn new(project_root: PathBuf, config: SleepConfig, ignore_rules: Arc<IgnoreRules>) -> Self {
+    pub fn new(project_root: PathBuf, config: SleepConfig) -> Self {
         let stub_dir = project_root.join(SLEEP_STUB_DIR);
         Self {
             project_root,
             stub_dir,
             config,
-            ignore_rules,
         }
     }
 
@@ -62,16 +59,16 @@ impl SleepProcessor {
 }
 
 impl ProductDiscovery for SleepProcessor {
-    fn auto_detect(&self) -> bool {
-        self.should_process()
+    fn auto_detect(&self, file_index: &FileIndex) -> bool {
+        self.should_process() && !file_index.scan(&self.project_root, &self.config.scan, true).is_empty()
     }
 
-    fn discover(&self, graph: &mut BuildGraph) -> Result<()> {
+    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
         if !self.should_process() {
             return Ok(());
         }
 
-        let sleep_files = scan_files(&self.project_root, &self.config.scan, &self.ignore_rules, true);
+        let sleep_files = file_index.scan(&self.project_root, &self.config.scan, true);
         if sleep_files.is_empty() {
             return Ok(());
         }
