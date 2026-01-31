@@ -802,24 +802,39 @@ impl<'a> Executor<'a> {
         }
 
         // Restore the store
-        *object_store = Arc::try_unwrap(store).unwrap().into_inner().unwrap();
+        *object_store = Arc::try_unwrap(store)
+            .map_err(|_| anyhow::anyhow!("internal error: outstanding Arc reference to object store"))?
+            .into_inner()
+            .map_err(|e| anyhow::anyhow!("internal error: poisoned mutex in object store: {e}"))?;
 
         // Build aggregated stats
-        let final_stats = Arc::try_unwrap(stats_by_processor).unwrap().into_inner().unwrap();
+        let final_stats = Arc::try_unwrap(stats_by_processor)
+            .map_err(|_| anyhow::anyhow!("internal error: outstanding Arc reference to stats"))?
+            .into_inner()
+            .map_err(|e| anyhow::anyhow!("internal error: poisoned mutex in stats: {e}"))?;
         let mut stats = BuildStats::default();
         for (_, proc_stats) in final_stats {
             stats.add(proc_stats);
         }
 
-        let final_failed = Arc::try_unwrap(failed_products).unwrap().into_inner().unwrap();
-        let final_msgs = Arc::try_unwrap(failed_messages).unwrap().into_inner().unwrap();
+        let final_failed = Arc::try_unwrap(failed_products)
+            .map_err(|_| anyhow::anyhow!("internal error: outstanding Arc reference to failed products"))?
+            .into_inner()
+            .map_err(|e| anyhow::anyhow!("internal error: poisoned mutex in failed products: {e}"))?;
+        let final_msgs = Arc::try_unwrap(failed_messages)
+            .map_err(|_| anyhow::anyhow!("internal error: outstanding Arc reference to failed messages"))?
+            .into_inner()
+            .map_err(|e| anyhow::anyhow!("internal error: poisoned mutex in failed messages: {e}"))?;
         stats.failed_count = final_failed.len();
         stats.failed_messages = final_msgs;
 
         // In non-keep-going mode, return the first error after giving
         // independent products a chance to execute and be cached
         if !keep_going && !self.interrupted.load(Ordering::SeqCst) {
-            let errs = Arc::try_unwrap(errors).unwrap().into_inner().unwrap();
+            let errs = Arc::try_unwrap(errors)
+                .map_err(|_| anyhow::anyhow!("internal error: outstanding Arc reference to errors"))?
+                .into_inner()
+                .map_err(|e| anyhow::anyhow!("internal error: poisoned mutex in errors: {e}"))?;
             if let Some(first_err) = errs.into_iter().next() {
                 return Err(first_err);
             }
