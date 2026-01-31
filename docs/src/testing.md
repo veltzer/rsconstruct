@@ -18,10 +18,15 @@ tests/
 │   └── mod.rs                  # Shared helpers (not a test binary)
 ├── build.rs                    # Build command tests
 ├── cache.rs                    # Cache operation tests
+├── complete.rs                 # Shell completion tests
+├── config.rs                   # Config show/show-default tests
 ├── dry_run.rs                  # Dry-run flag tests
+├── graph.rs                    # Dependency graph tests
 ├── init.rs                     # Project initialization tests
+├── processor_cmd.rs            # Processor list/auto/files tests
 ├── rsbignore.rs                # .rsbignore / .gitignore exclusion tests
 ├── status.rs                   # Status command tests
+├── tools.rs                    # Tools list/check tests
 ├── watch.rs                    # File watcher tests
 ├── processors.rs               # Module root for processor tests
 └── processors/
@@ -166,9 +171,14 @@ mod processors {
 |---|---|---|
 | Build command | `build.rs` | Force rebuild, incremental skip, clean, deterministic order, keep-going, timings, parallelism |
 | Cache | `cache.rs` | Clear, size, trim, list operations |
+| Complete | `complete.rs` | Bash/zsh/fish generation, config-driven completion |
+| Config | `config.rs` | Show merged config, show defaults, annotation comments |
 | Dry run | `dry_run.rs` | Preview output, force flag, short flag |
+| Graph | `graph.rs` | DOT, mermaid, JSON, text formats, empty project |
 | Init | `init.rs` | Project creation, duplicate detection, existing directory preservation |
+| Processor command | `processor_cmd.rs` | List, all, auto-detect, files, unknown processor error |
 | Status | `status.rs` | UP-TO-DATE / STALE / RESTORABLE reporting |
+| Tools | `tools.rs` | List tools, list all, check availability |
 | Watch | `watch.rs` | Initial build, rebuild on change |
 | Ignore | `rsbignore.rs` | Exact match, globs, leading slash, trailing slash, comments, cross-processor |
 | Template | `processors/template.rs` | Rendering, incremental, extra_inputs |
