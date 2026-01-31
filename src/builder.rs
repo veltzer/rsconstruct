@@ -13,6 +13,13 @@ use crate::graph::BuildGraph;
 use crate::object_store::ObjectStore;
 use crate::processors::{CcProcessor, CpplintProcessor, MakeProcessor, PylintProcessor, RuffProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, TemplateProcessor, log_command};
 
+/// Labels for the three product states used by dry_run and status.
+struct ProductStatusLabels {
+    current: (String, &'static str),
+    restorable: (String, &'static str),
+    stale: (String, &'static str),
+}
+
 pub struct Builder {
     project_root: PathBuf,
     object_store: ObjectStore,
@@ -88,38 +95,17 @@ impl Builder {
             return Ok(());
         }
 
-        let mut skip_count = 0usize;
-        let mut restore_count = 0usize;
-        let mut build_count = 0usize;
+        let products: Vec<_> = order.iter()
+            .map(|&id| graph.get_product(id).unwrap())
+            .collect();
 
-        for &id in &order {
-            let product = graph.get_product(id).unwrap();
-            let cache_key = product.cache_key();
-            let input_checksum = match ObjectStore::combined_input_checksum(&product.inputs) {
-                Ok(cs) => cs,
-                Err(_) => {
-                    println!("{} [{}] {}", color::yellow("BUILD"), product.processor, product.display(0));
-                    build_count += 1;
-                    continue;
-                }
-            };
+        let labels = ProductStatusLabels {
+            current: (color::dim("SKIP"), "skip"),
+            restorable: (color::cyan("RESTORE"), "restore"),
+            stale: (color::yellow("BUILD"), "build"),
+        };
 
-            if !force && !self.object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs) {
-                println!("{} [{}] {}", color::dim("SKIP"), product.processor, product.display(0));
-                skip_count += 1;
-            } else if !force && self.object_store.can_restore(&cache_key, &input_checksum, &product.outputs) {
-                println!("{} [{}] {}", color::cyan("RESTORE"), product.processor, product.display(0));
-                restore_count += 1;
-            } else {
-                println!("{} [{}] {}", color::yellow("BUILD"), product.processor, product.display(0));
-                build_count += 1;
-            }
-        }
-
-        println!();
-        println!("{}: {} skip, {} restore, {} build",
-            color::bold("Summary"), skip_count, restore_count, build_count);
-
+        self.print_product_status(&products, force, &labels);
         Ok(())
     }
 
@@ -128,44 +114,60 @@ impl Builder {
         let processors = self.create_processors(0)?;
         let graph = self.build_graph_with_processors(&processors)?;
 
-        let products = graph.products();
+        let products: Vec<&_> = graph.products().iter().collect();
         if products.is_empty() {
             println!("No products discovered.");
             return Ok(());
         }
 
-        let mut up_to_date = 0usize;
-        let mut stale = 0usize;
-        let mut restorable = 0usize;
+        let labels = ProductStatusLabels {
+            current: (color::green("UP-TO-DATE"), "up-to-date"),
+            restorable: (color::cyan("RESTORABLE"), "restorable"),
+            stale: (color::yellow("STALE"), "stale"),
+        };
+
+        self.print_product_status(&products, false, &labels);
+        Ok(())
+    }
+
+    /// Classify and print the status of each product, with a summary line.
+    fn print_product_status(
+        &self,
+        products: &[&crate::graph::Product],
+        force: bool,
+        labels: &ProductStatusLabels,
+    ) {
+        let mut counts = [0usize; 3]; // [current, restorable, stale]
 
         for product in products {
             let cache_key = product.cache_key();
             let input_checksum = match ObjectStore::combined_input_checksum(&product.inputs) {
                 Ok(cs) => cs,
                 Err(_) => {
-                    println!("{} [{}] {}", color::yellow("STALE"), product.processor, product.display(0));
-                    stale += 1;
+                    println!("{} [{}] {}", labels.stale.0, product.processor, product.display(0));
+                    counts[2] += 1;
                     continue;
                 }
             };
 
-            if !self.object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs) {
-                println!("{} [{}] {}", color::green("UP-TO-DATE"), product.processor, product.display(0));
-                up_to_date += 1;
-            } else if self.object_store.can_restore(&cache_key, &input_checksum, &product.outputs) {
-                println!("{} [{}] {}", color::cyan("RESTORABLE"), product.processor, product.display(0));
-                restorable += 1;
+            if !force && !self.object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs) {
+                println!("{} [{}] {}", labels.current.0, product.processor, product.display(0));
+                counts[0] += 1;
+            } else if !force && self.object_store.can_restore(&cache_key, &input_checksum, &product.outputs) {
+                println!("{} [{}] {}", labels.restorable.0, product.processor, product.display(0));
+                counts[1] += 1;
             } else {
-                println!("{} [{}] {}", color::yellow("STALE"), product.processor, product.display(0));
-                stale += 1;
+                println!("{} [{}] {}", labels.stale.0, product.processor, product.display(0));
+                counts[2] += 1;
             }
         }
 
         println!();
-        println!("{}: {} up-to-date, {} stale, {} restorable",
-            color::bold("Summary"), up_to_date, stale, restorable);
-
-        Ok(())
+        println!("{}: {} {}, {} {}, {} {}",
+            color::bold("Summary"),
+            counts[0], labels.current.1,
+            counts[1], labels.restorable.1,
+            counts[2], labels.stale.1);
     }
 
     /// Clean all build artifacts using the dependency graph
