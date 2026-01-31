@@ -5,8 +5,9 @@ RSB is a Rust build tool with incremental builds using SHA-256 checksums.
 ## Core Commands
 
 - `rsb build` — incremental build (only rebuilds changed files)
-- `rsb clean` — remove build artifacts (preserves cache)
-- `rsb distclean` — remove all build and cache directories (.rsb/ and out/)
+- `rsb clean` — remove build artifacts (default: outputs only, preserves cache)
+- `rsb clean all` — remove all build and cache directories (.rsb/ and out/)
+- `rsb clean git` — hard clean using git clean (requires git repository)
 - `rsb status` — show product status (up-to-date, stale, or restorable)
 - `rsb init` — initialize a new rsb project
 - `rsb watch` — watch source files and auto-rebuild on changes

@@ -93,9 +93,9 @@ pub struct BuildGraph {
     /// Map from output path to product id
     output_to_product: HashMap<PathBuf, usize>,
     /// Adjacency list: product id -> list of product ids that depend on it
-    dependents: HashMap<usize, Vec<usize>>,
+    dependents: Vec<Vec<usize>>,
     /// Reverse: product id -> list of product ids it depends on
-    dependencies: HashMap<usize, Vec<usize>>,
+    dependencies: Vec<Vec<usize>>,
 }
 
 impl BuildGraph {
@@ -103,8 +103,8 @@ impl BuildGraph {
         Self {
             products: Vec::new(),
             output_to_product: HashMap::new(),
-            dependents: HashMap::new(),
-            dependencies: HashMap::new(),
+            dependents: Vec::new(),
+            dependencies: Vec::new(),
         }
     }
 
@@ -134,42 +134,44 @@ impl BuildGraph {
         }
 
         self.products.push(product);
-        self.dependents.insert(id, Vec::new());
-        self.dependencies.insert(id, Vec::new());
+        self.dependents.push(Vec::new());
+        self.dependencies.push(Vec::new());
 
         Ok(id)
     }
 
     /// Resolve dependencies between products
     pub fn resolve_dependencies(&mut self) {
-        // For each product, check if any of its inputs are outputs of other products
-        for product in &self.products {
-            for input in &product.inputs {
-                if let Some(&producer_id) = self.output_to_product.get(input) {
-                    if producer_id != product.id {
-                        // producer_id produces something that product.id needs
-                        self.dependents.get_mut(&producer_id).unwrap().push(product.id);
-                        self.dependencies.get_mut(&product.id).unwrap().push(producer_id);
-                    }
-                }
-            }
+        // Collect edges first to avoid borrow conflict with self.products
+        let edges: Vec<(usize, usize)> = self.products.iter()
+            .flat_map(|product| {
+                product.inputs.iter().filter_map(|input| {
+                    self.output_to_product.get(input)
+                        .copied()
+                        .filter(|&producer_id| producer_id != product.id)
+                        .map(|producer_id| (producer_id, product.id))
+                })
+            })
+            .collect();
+
+        for (producer_id, consumer_id) in edges {
+            self.dependents[producer_id].push(consumer_id);
+            self.dependencies[consumer_id].push(producer_id);
         }
     }
 
     /// Topological sort - returns product ids in execution order
     /// Returns error if there's a cycle
     pub fn topological_sort(&self) -> Result<Vec<usize>> {
-        let mut in_degree: HashMap<usize, usize> = HashMap::new();
-
-        // Initialize in-degrees
-        for product in &self.products {
-            in_degree.insert(product.id, self.dependencies.get(&product.id).map_or(0, |d| d.len()));
-        }
+        let mut in_degree: Vec<usize> = self.dependencies.iter()
+            .map(|deps| deps.len())
+            .collect();
 
         // Start with products that have no dependencies
         let mut queue: Vec<usize> = in_degree.iter()
+            .enumerate()
             .filter(|&(_, deg)| *deg == 0)
-            .map(|(&id, _)| id)
+            .map(|(id, _)| id)
             .collect();
         queue.sort_by(|a, b| b.cmp(a));
 
@@ -184,20 +186,16 @@ impl BuildGraph {
             result.push(id);
 
             // Reduce in-degree of dependents
-            if let Some(deps) = self.dependents.get(&id) {
-                let mut newly_ready = Vec::new();
-                for &dep_id in deps {
-                    if let Some(deg) = in_degree.get_mut(&dep_id) {
-                        *deg = deg.saturating_sub(1);
-                        if *deg == 0 && !visited.contains(&dep_id) {
-                            newly_ready.push(dep_id);
-                        }
-                    }
+            let mut newly_ready = Vec::new();
+            for &dep_id in &self.dependents[id] {
+                in_degree[dep_id] = in_degree[dep_id].saturating_sub(1);
+                if in_degree[dep_id] == 0 && !visited.contains(&dep_id) {
+                    newly_ready.push(dep_id);
                 }
-                if !newly_ready.is_empty() {
-                    queue.extend(newly_ready);
-                    queue.sort_by(|a, b| b.cmp(a));
-                }
+            }
+            if !newly_ready.is_empty() {
+                queue.extend(newly_ready);
+                queue.sort_by(|a, b| b.cmp(a));
             }
         }
 
@@ -220,7 +218,7 @@ impl BuildGraph {
 
     /// Get dependencies of a product (products that must be built before this one)
     pub fn get_dependencies(&self, id: usize) -> &[usize] {
-        self.dependencies.get(&id).map_or(&[], |v| v.as_slice())
+        &self.dependencies[id]
     }
 }
 
@@ -442,7 +440,7 @@ impl BuildGraph {
                 product.processor,
                 inputs,
                 outputs,
-                self.dependencies.get(&product.id).unwrap_or(&Vec::new())
+                &self.dependencies[product.id]
             ));
         }
 
@@ -482,7 +480,8 @@ impl BuildGraph {
                 outputs.join(", ")));
 
             // Show dependencies
-            if let Some(deps) = self.dependencies.get(&product.id) {
+            {
+                let deps = &self.dependencies[product.id];
                 if !deps.is_empty() {
                     let dep_names: Vec<_> = deps.iter()
                         .map(|&d| {

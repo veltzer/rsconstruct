@@ -47,4 +47,4 @@ Python files are linted and stub outputs are written to `out/ruff/` (ruff proces
 
 ### Build artifacts
 
-All build outputs go into `out/`. The cache lives in `.rsb/`. Use `rsb clean` to remove `out/` (preserving cache) or `rsb distclean` to remove both.
+All build outputs go into `out/`. The cache lives in `.rsb/`. Use `rsb clean` to remove `out/` (preserving cache) or `rsb clean all` to remove both.
