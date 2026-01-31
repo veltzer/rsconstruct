@@ -10,7 +10,7 @@ use tera::{Context as TeraContext, Function, Tera, Value as TeraValue, to_value}
 use crate::config::{TemplateConfig, config_hash, resolve_extra_inputs};
 use crate::graph::{BuildGraph, Product};
 use crate::ignore::IgnoreRules;
-use super::{ProductDiscovery, find_files};
+use super::{ProductDiscovery, scan_files};
 
 /// Represents a single template file to be processed
 struct TemplateItem {
@@ -97,23 +97,13 @@ impl TemplateProcessor {
 
     /// Find all template files matching configured extensions
     fn find_templates(&self) -> Result<Vec<TemplateItem>> {
-        let scan = &self.config.scan;
-        let scan_dir = scan.scan_dir_or("templates");
-        let templates_dir = if scan_dir.is_empty() {
-            self.project_root.clone()
-        } else {
-            self.project_root.join(&scan_dir)
-        };
-        let extensions = scan.extensions_or(&[".tera"]);
-        let exclude_dirs = scan.exclude_dirs_or(&[]);
-        let ext_refs: Vec<&str> = extensions.iter().map(|s| s.as_str()).collect();
-        let exclude_refs: Vec<&str> = exclude_dirs.iter().map(|s| s.as_str()).collect();
-        let paths = find_files(&templates_dir, &ext_refs, &exclude_refs, &self.ignore_rules, false);
+        let paths = scan_files(&self.project_root, &self.config.scan, &self.ignore_rules, false);
+        let extensions = self.config.scan.extensions();
 
         let mut items = Vec::new();
         for path in paths {
             let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            for ext in &extensions {
+            for ext in extensions {
                 if filename.ends_with(ext.as_str()) {
                     let output_name = &filename[..filename.len() - ext.len()];
                     if !output_name.is_empty() {

@@ -1,13 +1,12 @@
 use anyhow::{Context, Result};
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 
-use crate::config::{PylintConfig, config_hash, resolve_extra_inputs};
+use crate::config::PylintConfig;
 use crate::graph::{BuildGraph, Product};
 use crate::ignore::IgnoreRules;
-use super::{ProductDiscovery, find_files};
+use super::{ProductDiscovery, discover_stub_products, scan_files, validate_stub_product, ensure_stub_dir, write_stub, clean_outputs};
 
 const PYLINT_STUB_DIR: &str = "out/pylint";
 
@@ -29,42 +28,10 @@ impl PylintProcessor {
         }
     }
 
-    /// Find all Python files that should be linted
-    fn find_python_files(&self) -> Vec<PathBuf> {
-        let scan = &self.pylint_config.scan;
-        let scan_dir = scan.scan_dir_or("");
-        let root = if scan_dir.is_empty() {
-            self.project_root.clone()
-        } else {
-            self.project_root.join(&scan_dir)
-        };
-        let extensions = scan.extensions_or(&[".py"]);
-        let exclude_dirs = scan.exclude_dirs_or(&[
-            "/.venv/", "/__pycache__/", "/.git/", "/out/",
-            "/node_modules/", "/.tox/", "/build/", "/dist/", "/.eggs/",
-        ]);
-        let ext_refs: Vec<&str> = extensions.iter().map(|s| s.as_str()).collect();
-        let exclude_refs: Vec<&str> = exclude_dirs.iter().map(|s| s.as_str()).collect();
-        find_files(&root, &ext_refs, &exclude_refs, &self.ignore_rules, true)
-    }
-
-    /// Get stub path for a Python file
-    fn get_stub_path(&self, py_file: &Path) -> PathBuf {
-        let relative_path = py_file
-            .strip_prefix(&self.project_root)
-            .unwrap_or(py_file);
-        let stub_name = format!(
-            "{}.pylint",
-            relative_path.display().to_string().replace(['/', '\\'], "_")
-        );
-        self.stub_dir.join(stub_name)
-    }
-
     /// Run pylint on a single file and create stub
     fn lint_file(&self, py_file: &Path, stub_path: &Path) -> Result<()> {
         let mut cmd = Command::new("pylint");
 
-        // Add any configured arguments
         for arg in &self.pylint_config.args {
             cmd.arg(arg);
         }
@@ -86,65 +53,37 @@ impl PylintProcessor {
             ));
         }
 
-        // Create stub file on success
-        if let Some(parent) = stub_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::write(stub_path, "linted").context("Failed to create pylint stub file")?;
-
-        Ok(())
+        write_stub(stub_path, "linted")
     }
 }
 
 impl ProductDiscovery for PylintProcessor {
     fn auto_detect(&self) -> bool {
-        !self.find_python_files().is_empty()
+        !scan_files(&self.project_root, &self.pylint_config.scan, &self.ignore_rules, true).is_empty()
     }
 
     fn discover(&self, graph: &mut BuildGraph) -> Result<()> {
-        let py_files = self.find_python_files();
-        if py_files.is_empty() {
-            return Ok(());
-        }
-        let config_hash = Some(config_hash(&self.pylint_config));
-        let extra = resolve_extra_inputs(&self.project_root, &self.pylint_config.extra_inputs)?;
-
-        for py_file in py_files {
-            let stub_path = self.get_stub_path(&py_file);
-            let mut inputs = vec![py_file];
-            inputs.extend(extra.clone());
-            graph.add_product(
-                inputs,
-                vec![stub_path],
-                "pylint",
-                config_hash.clone(),
-            );
-        }
-
-        Ok(())
+        discover_stub_products(
+            graph,
+            &self.project_root,
+            &self.stub_dir,
+            &self.pylint_config.scan,
+            &self.ignore_rules,
+            &self.pylint_config.extra_inputs,
+            &self.pylint_config,
+            "pylint",
+            "pylint",
+            true,
+        )
     }
 
     fn execute(&self, product: &Product) -> Result<()> {
-        if product.inputs.is_empty() || product.outputs.len() != 1 {
-            anyhow::bail!("Pylint product must have at least one input and exactly one output");
-        }
-
-        // Ensure stub directory exists
-        if !self.stub_dir.exists() {
-            fs::create_dir_all(&self.stub_dir)
-                .context("Failed to create pylint stub directory")?;
-        }
-
+        validate_stub_product(product, "Pylint")?;
+        ensure_stub_dir(&self.stub_dir, "pylint")?;
         self.lint_file(&product.inputs[0], &product.outputs[0])
     }
 
     fn clean(&self, product: &Product) -> Result<()> {
-        for output in &product.outputs {
-            if output.exists() {
-                fs::remove_file(output)?;
-                println!("Removed pylint stub: {}", output.display());
-            }
-        }
-        Ok(())
+        clean_outputs(product, "pylint")
     }
 }

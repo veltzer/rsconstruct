@@ -6,13 +6,15 @@ mod sleep;
 mod spellcheck;
 mod template;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use walkdir::WalkDir;
 
 use crate::color;
+use crate::config::{ScanConfig, config_hash, resolve_extra_inputs};
 use crate::ignore::IgnoreRules;
 
 pub use crate::graph::{BuildGraph, Product};
@@ -74,6 +76,109 @@ pub fn find_files(
 
     files.sort();
     files
+}
+
+/// Compute the scan root directory from a ScanConfig.
+/// Returns project_root if scan_dir is empty, otherwise project_root/scan_dir.
+pub fn scan_root(project_root: &Path, scan: &ScanConfig) -> PathBuf {
+    let dir = scan.scan_dir();
+    if dir.is_empty() {
+        project_root.to_path_buf()
+    } else {
+        project_root.join(dir)
+    }
+}
+
+/// Find files using a resolved ScanConfig.
+/// Combines scan_root + find_files with the config's extensions and exclude_dirs.
+pub fn scan_files(
+    project_root: &Path,
+    scan: &ScanConfig,
+    ignore_rules: &Arc<IgnoreRules>,
+    recursive: bool,
+) -> Vec<PathBuf> {
+    let root = scan_root(project_root, scan);
+    let ext_refs: Vec<&str> = scan.extensions().iter().map(|s| s.as_str()).collect();
+    let exclude_refs: Vec<&str> = scan.exclude_dirs().iter().map(|s| s.as_str()).collect();
+    find_files(&root, &ext_refs, &exclude_refs, ignore_rules, recursive)
+}
+
+/// Compute a stub path for a source file.
+/// Maps `project_root/a/b/file.ext` -> `stub_dir/a_b_file.ext.suffix`.
+pub fn stub_path(project_root: &Path, stub_dir: &Path, source: &Path, suffix: &str) -> PathBuf {
+    let relative = source.strip_prefix(project_root).unwrap_or(source);
+    let stub_name = format!(
+        "{}.{}",
+        relative.display().to_string().replace(['/', '\\'], "_"),
+        suffix,
+    );
+    stub_dir.join(stub_name)
+}
+
+/// Clean outputs for a product: remove each output file and print a message.
+pub fn clean_outputs(product: &Product, label: &str) -> Result<()> {
+    for output in &product.outputs {
+        if output.exists() {
+            fs::remove_file(output)?;
+            println!("Removed {} stub: {}", label, output.display());
+        }
+    }
+    Ok(())
+}
+
+/// Discover stub-based products: one stub output per source file.
+/// Used by processors that produce a single stub file per input (ruff, pylint, cpplint, spellcheck, sleep).
+pub fn discover_stub_products(
+    graph: &mut BuildGraph,
+    project_root: &Path,
+    stub_dir: &Path,
+    scan: &ScanConfig,
+    ignore_rules: &Arc<IgnoreRules>,
+    extra_inputs: &[String],
+    cfg_hash: &impl serde::Serialize,
+    processor_name: &str,
+    stub_suffix: &str,
+    recursive: bool,
+) -> Result<()> {
+    let files = scan_files(project_root, scan, ignore_rules, recursive);
+    if files.is_empty() {
+        return Ok(());
+    }
+    let hash = Some(config_hash(cfg_hash));
+    let extra = resolve_extra_inputs(project_root, extra_inputs)?;
+    for file in files {
+        let stub = stub_path(project_root, stub_dir, &file, stub_suffix);
+        let mut inputs = vec![file];
+        inputs.extend(extra.clone());
+        graph.add_product(inputs, vec![stub], processor_name, hash.clone());
+    }
+    Ok(())
+}
+
+/// Validate that a stub product has at least one input and exactly one output.
+pub fn validate_stub_product(product: &Product, processor_name: &str) -> Result<()> {
+    if product.inputs.is_empty() || product.outputs.len() != 1 {
+        anyhow::bail!("{} product must have at least one input and exactly one output", processor_name);
+    }
+    Ok(())
+}
+
+/// Ensure a stub directory exists, creating it if necessary.
+pub fn ensure_stub_dir(stub_dir: &Path, processor_name: &str) -> Result<()> {
+    if !stub_dir.exists() {
+        fs::create_dir_all(stub_dir)
+            .context(format!("Failed to create {} stub directory", processor_name))?;
+    }
+    Ok(())
+}
+
+/// Create a stub file with the given content after a successful processor run.
+pub fn write_stub(stub_path: &Path, content: &str) -> Result<()> {
+    if let Some(parent) = stub_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(stub_path, content).context("Failed to create stub file")?;
+    Ok(())
 }
 pub use cc::CcProcessor;
 pub use cpplint::Cpplinter;

@@ -174,52 +174,14 @@ impl Builder {
         let executor = Executor::new(&processors, 1, 0, Arc::new(std::sync::atomic::AtomicBool::new(false)));
         executor.clean(&graph)?;
 
-        // Also clean the ruff stub directory if it exists
-        let ruff_stub_dir = self.project_root.join("out/ruff");
-        if ruff_stub_dir.exists() {
-            fs::remove_dir_all(&ruff_stub_dir)
-                .context("Failed to remove ruff stub directory")?;
-            println!("Removed ruff stub directory: {}", ruff_stub_dir.display());
-        }
-
-        // Also clean the pylint stub directory if it exists
-        let pylint_stub_dir = self.project_root.join("out/pylint");
-        if pylint_stub_dir.exists() {
-            fs::remove_dir_all(&pylint_stub_dir)
-                .context("Failed to remove pylint stub directory")?;
-            println!("Removed pylint stub directory: {}", pylint_stub_dir.display());
-        }
-
-        // Also clean the cpplint stub directory if it exists
-        let cpplint_stub_dir = self.project_root.join("out/cpplint");
-        if cpplint_stub_dir.exists() {
-            fs::remove_dir_all(&cpplint_stub_dir)
-                .context("Failed to remove cpplint stub directory")?;
-            println!("Removed cpplint stub directory: {}", cpplint_stub_dir.display());
-        }
-
-        // Also clean the sleep stub directory if it exists
-        let sleep_stub_dir = self.project_root.join("out/sleep");
-        if sleep_stub_dir.exists() {
-            fs::remove_dir_all(&sleep_stub_dir)
-                .context("Failed to remove sleep stub directory")?;
-            println!("Removed sleep stub directory: {}", sleep_stub_dir.display());
-        }
-
-        // Also clean the cc_single_file output directory if it exists
-        let cc_output_dir = self.project_root.join("out/cc_single_file");
-        if cc_output_dir.exists() {
-            fs::remove_dir_all(&cc_output_dir)
-                .context("Failed to remove cc_single_file output directory")?;
-            println!("Removed cc_single_file output directory: {}", cc_output_dir.display());
-        }
-
-        // Also clean the spellcheck stub directory if it exists
-        let spellcheck_stub_dir = self.project_root.join("out/spellcheck");
-        if spellcheck_stub_dir.exists() {
-            fs::remove_dir_all(&spellcheck_stub_dir)
-                .context("Failed to remove spellcheck stub directory")?;
-            println!("Removed spellcheck stub directory: {}", spellcheck_stub_dir.display());
+        // Clean all output subdirectories
+        for subdir in &["ruff", "pylint", "cpplint", "sleep", "cc_single_file", "spellcheck"] {
+            let dir = self.project_root.join("out").join(subdir);
+            if dir.exists() {
+                fs::remove_dir_all(&dir)
+                    .context(format!("Failed to remove {} directory", dir.display()))?;
+                println!("Removed output directory: {}", dir.display());
+            }
         }
 
         println!("{}", color::green("Clean completed!"));

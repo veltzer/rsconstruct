@@ -4,10 +4,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
-use crate::config::{SpellcheckConfig, config_hash, resolve_extra_inputs};
+use crate::config::SpellcheckConfig;
 use crate::graph::{BuildGraph, Product};
 use crate::ignore::IgnoreRules;
-use super::{ProductDiscovery, find_files};
+use super::{ProductDiscovery, discover_stub_products, scan_files, ensure_stub_dir, write_stub, clean_outputs};
 
 const SPELLCHECK_STUB_DIR: &str = "out/spellcheck";
 const DICT_DIR: &str = "/usr/share/hunspell";
@@ -41,41 +41,6 @@ impl SpellcheckProcessor {
             cached_dict: OnceLock::new(),
             custom_words,
         })
-    }
-
-    /// Check if any matching doc files exist
-    fn should_check(&self) -> bool {
-        !self.find_doc_files().is_empty()
-    }
-
-    /// Find all document files matching configured extensions
-    fn find_doc_files(&self) -> Vec<PathBuf> {
-        let scan = &self.spellcheck_config.scan;
-        let scan_dir = scan.scan_dir_or("");
-        let root = if scan_dir.is_empty() {
-            self.project_root.clone()
-        } else {
-            self.project_root.join(&scan_dir)
-        };
-        let extensions = scan.extensions_or(&[".md"]);
-        let exclude_dirs = scan.exclude_dirs_or(&[
-            "/.git/", "/out/", "/.rsb/", "/node_modules/", "/build/", "/dist/", "/target/",
-        ]);
-        let ext_refs: Vec<&str> = extensions.iter().map(|s| s.as_str()).collect();
-        let exclude_refs: Vec<&str> = exclude_dirs.iter().map(|s| s.as_str()).collect();
-        find_files(&root, &ext_refs, &exclude_refs, &self.ignore_rules, true)
-    }
-
-    /// Get stub path for a document file
-    fn get_stub_path(&self, doc_file: &Path) -> PathBuf {
-        let relative_path = doc_file
-            .strip_prefix(&self.project_root)
-            .unwrap_or(doc_file);
-        let stub_name = format!(
-            "{}.spellcheck",
-            relative_path.display().to_string().replace(['/', '\\'], "_")
-        );
-        self.stub_dir.join(stub_name)
     }
 
     /// Load custom words from the words file
@@ -120,11 +85,6 @@ impl SpellcheckProcessor {
             Ok(dict) => Ok(dict),
             Err(msg) => anyhow::bail!("{}", msg),
         }
-    }
-
-    /// Get the custom words loaded at initialization
-    fn get_custom_words(&self) -> &HashSet<String> {
-        &self.custom_words
     }
 
     /// Extract words from markdown text, stripping code blocks, inline code, URLs, and HTML tags
@@ -249,43 +209,28 @@ impl SpellcheckProcessor {
             ));
         }
 
-        // Create stub file on success
-        if let Some(parent) = stub_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::write(stub_path, "spellchecked").context("Failed to create spellcheck stub file")?;
-
-        Ok(())
+        write_stub(stub_path, "spellchecked")
     }
 }
 
 impl ProductDiscovery for SpellcheckProcessor {
     fn auto_detect(&self) -> bool {
-        self.should_check()
+        !scan_files(&self.project_root, &self.spellcheck_config.scan, &self.ignore_rules, true).is_empty()
     }
 
     fn discover(&self, graph: &mut BuildGraph) -> Result<()> {
-        if !self.should_check() {
-            return Ok(());
-        }
-
-        let doc_files = self.find_doc_files();
-        let config_hash = Some(config_hash(&self.spellcheck_config));
-        let extra = resolve_extra_inputs(&self.project_root, &self.spellcheck_config.extra_inputs)?;
-
-        for doc_file in doc_files {
-            let stub_path = self.get_stub_path(&doc_file);
-            let mut inputs = vec![doc_file];
-            inputs.extend(extra.clone());
-            graph.add_product(
-                inputs,
-                vec![stub_path],
-                "spellcheck",
-                config_hash.clone(),
-            );
-        }
-
-        Ok(())
+        discover_stub_products(
+            graph,
+            &self.project_root,
+            &self.stub_dir,
+            &self.spellcheck_config.scan,
+            &self.ignore_rules,
+            &self.spellcheck_config.extra_inputs,
+            &self.spellcheck_config,
+            "spellcheck",
+            "spellcheck",
+            true,
+        )
     }
 
     fn execute(&self, product: &Product) -> Result<()> {
@@ -293,26 +238,15 @@ impl ProductDiscovery for SpellcheckProcessor {
             anyhow::bail!("Spellcheck product must have exactly one output");
         }
 
-        // Ensure stub directory exists
-        if !self.stub_dir.exists() {
-            fs::create_dir_all(&self.stub_dir)
-                .context("Failed to create spellcheck stub directory")?;
-        }
+        ensure_stub_dir(&self.stub_dir, "spellcheck")?;
 
         let dict = self.get_dictionary()?;
-        let custom_words = self.get_custom_words();
+        let custom_words = &self.custom_words;
 
-        // First input is always the doc file
         self.check_file(&product.inputs[0], &product.outputs[0], dict, custom_words)
     }
 
     fn clean(&self, product: &Product) -> Result<()> {
-        for output in &product.outputs {
-            if output.exists() {
-                fs::remove_file(output)?;
-                println!("Removed spellcheck stub: {}", output.display());
-            }
-        }
-        Ok(())
+        clean_outputs(product, "spellcheck")
     }
 }

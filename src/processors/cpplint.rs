@@ -1,13 +1,12 @@
 use anyhow::{Context, Result};
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 
-use crate::config::{CpplintConfig, config_hash, resolve_extra_inputs};
+use crate::config::CpplintConfig;
 use crate::graph::{BuildGraph, Product};
 use crate::ignore::IgnoreRules;
-use super::{ProductDiscovery, find_files};
+use super::{ProductDiscovery, discover_stub_products, scan_files, scan_root, validate_stub_product, ensure_stub_dir, write_stub, clean_outputs};
 
 const CPPLINT_STUB_DIR: &str = "out/cpplint";
 
@@ -29,41 +28,9 @@ impl Cpplinter {
         }
     }
 
-    /// Get the source directory from scan config
-    fn source_dir(&self) -> PathBuf {
-        let scan_dir = self.cpplint_config.scan.scan_dir_or("src");
-        if scan_dir.is_empty() {
-            self.project_root.clone()
-        } else {
-            self.project_root.join(&scan_dir)
-        }
-    }
-
     /// Check if C/C++ linting should be enabled
     fn should_lint(&self) -> bool {
-        self.source_dir().exists()
-    }
-
-    /// Find all C/C++ source files that should be checked
-    fn find_source_files(&self) -> Vec<PathBuf> {
-        let scan = &self.cpplint_config.scan;
-        let extensions = scan.extensions_or(&[".c", ".cc"]);
-        let exclude_dirs = scan.exclude_dirs_or(&["/.git/", "/out/", "/build/", "/dist/"]);
-        let ext_refs: Vec<&str> = extensions.iter().map(|s| s.as_str()).collect();
-        let exclude_refs: Vec<&str> = exclude_dirs.iter().map(|s| s.as_str()).collect();
-        find_files(&self.source_dir(), &ext_refs, &exclude_refs, &self.ignore_rules, true)
-    }
-
-    /// Get stub path for a C/C++ source file
-    fn get_stub_path(&self, source_file: &Path) -> PathBuf {
-        let relative_path = source_file
-            .strip_prefix(&self.project_root)
-            .unwrap_or(source_file);
-        let stub_name = format!(
-            "{}.cpplint",
-            relative_path.display().to_string().replace(['/', '\\'], "_")
-        );
-        self.stub_dir.join(stub_name)
+        scan_root(&self.project_root, &self.cpplint_config.scan).exists()
     }
 
     /// Run checker on a single file and create stub
@@ -91,66 +58,40 @@ impl Cpplinter {
             ));
         }
 
-        // Create stub file on success
-        if let Some(parent) = stub_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::write(stub_path, "checked").context("Failed to create cpplint stub file")?;
-
-        Ok(())
+        write_stub(stub_path, "checked")
     }
 }
 
 impl ProductDiscovery for Cpplinter {
     fn auto_detect(&self) -> bool {
-        self.should_lint() && !self.find_source_files().is_empty()
+        self.should_lint() && !scan_files(&self.project_root, &self.cpplint_config.scan, &self.ignore_rules, true).is_empty()
     }
 
     fn discover(&self, graph: &mut BuildGraph) -> Result<()> {
         if !self.should_lint() {
             return Ok(());
         }
-
-        let source_files = self.find_source_files();
-        let config_hash = Some(config_hash(&self.cpplint_config));
-        let extra = resolve_extra_inputs(&self.project_root, &self.cpplint_config.extra_inputs)?;
-
-        for source_file in source_files {
-            let stub_path = self.get_stub_path(&source_file);
-            let mut inputs = vec![source_file];
-            inputs.extend(extra.clone());
-            graph.add_product(
-                inputs,
-                vec![stub_path],
-                "cpplint",
-                config_hash.clone(),
-            );
-        }
-
-        Ok(())
+        discover_stub_products(
+            graph,
+            &self.project_root,
+            &self.stub_dir,
+            &self.cpplint_config.scan,
+            &self.ignore_rules,
+            &self.cpplint_config.extra_inputs,
+            &self.cpplint_config,
+            "cpplint",
+            "cpplint",
+            true,
+        )
     }
 
     fn execute(&self, product: &Product) -> Result<()> {
-        if product.inputs.is_empty() || product.outputs.len() != 1 {
-            anyhow::bail!("Cpplint product must have at least one input and exactly one output");
-        }
-
-        // Ensure stub directory exists
-        if !self.stub_dir.exists() {
-            fs::create_dir_all(&self.stub_dir)
-                .context("Failed to create cpplint stub directory")?;
-        }
-
+        validate_stub_product(product, "Cpplint")?;
+        ensure_stub_dir(&self.stub_dir, "cpplint")?;
         self.check_file(&product.inputs[0], &product.outputs[0])
     }
 
     fn clean(&self, product: &Product) -> Result<()> {
-        for output in &product.outputs {
-            if output.exists() {
-                fs::remove_file(output)?;
-                println!("Removed cpplint stub: {}", output.display());
-            }
-        }
-        Ok(())
+        clean_outputs(product, "cpplint")
     }
 }

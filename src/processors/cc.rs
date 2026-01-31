@@ -7,7 +7,7 @@ use std::sync::Arc;
 use crate::config::{CcConfig, config_hash, resolve_extra_inputs};
 use crate::graph::{BuildGraph, Product};
 use crate::ignore::IgnoreRules;
-use super::{ProductDiscovery, find_files};
+use super::{ProductDiscovery, scan_files, scan_root, clean_outputs};
 
 /// Per-file compile/link flags extracted from source comments.
 #[derive(Default)]
@@ -250,12 +250,7 @@ impl CcProcessor {
 
     /// Get the source directory from scan config
     fn source_dir(&self) -> PathBuf {
-        let scan_dir = self.config.scan.scan_dir_or("src");
-        if scan_dir.is_empty() {
-            self.project_root.clone()
-        } else {
-            self.project_root.join(&scan_dir)
-        }
+        scan_root(&self.project_root, &self.config.scan)
     }
 
     /// Check if cc processing should be enabled
@@ -265,12 +260,7 @@ impl CcProcessor {
 
     /// Find all C/C++ source files. Returns (path, is_cpp) pairs.
     fn find_source_files(&self) -> Vec<(PathBuf, bool)> {
-        let scan = &self.config.scan;
-        let extensions = scan.extensions_or(&[".c", ".cc"]);
-        let exclude_dirs = scan.exclude_dirs_or(&[]);
-        let ext_refs: Vec<&str> = extensions.iter().map(|s| s.as_str()).collect();
-        let exclude_refs: Vec<&str> = exclude_dirs.iter().map(|s| s.as_str()).collect();
-        find_files(&self.source_dir(), &ext_refs, &exclude_refs, &self.ignore_rules, true)
+        scan_files(&self.project_root, &self.config.scan, &self.ignore_rules, true)
             .into_iter()
             .map(|p| {
                 let is_cpp = p.extension().and_then(|s| s.to_str()) == Some("cc");
@@ -545,12 +535,6 @@ impl ProductDiscovery for CcProcessor {
     }
 
     fn clean(&self, product: &Product) -> Result<()> {
-        for output in &product.outputs {
-            if output.exists() {
-                fs::remove_file(output)?;
-                println!("Removed: {}", output.display());
-            }
-        }
-        Ok(())
+        clean_outputs(product, "cc_single_file")
     }
 }
