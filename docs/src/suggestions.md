@@ -10,9 +10,8 @@ Ideas for future improvements, organized by category.
 
 ## Missing Test Coverage
 
-### Limited parallel execution tests
-- Only one integration test exercises parallel builds (`independent_products_cached_after_failure_parallel`).
-- Add tests for: correct build order with `-j4`, parallel with dependencies, keep-going in parallel, interrupt handling in parallel.
+### ~~Limited parallel execution tests~~ *(Done)*
+- Five tests now exercise parallel builds: `-j` flag, keep-going in parallel, all-products parallel, parallel timings, and parallel caching after failure.
 
 ### No ruff/pylint processor tests
 - `tests/processors/` has tests for cc, sleep, spellcheck, and template, but not for ruff or pylint.

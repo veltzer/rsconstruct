@@ -5,7 +5,7 @@ all:
 
 .PHONY: test
 test:
-	@cargo test
+	@./test.sh
 
 .PHONY: clean
 clean:

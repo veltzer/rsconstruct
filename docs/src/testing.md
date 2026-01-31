@@ -169,7 +169,7 @@ mod processors {
 
 | Area | File | Tests |
 |---|---|---|
-| Build command | `build.rs` | Force rebuild, incremental skip, clean, deterministic order, keep-going, timings, parallelism |
+| Build command | `build.rs` | Force rebuild, incremental skip, clean, deterministic order, keep-going, timings, parallel -j flag, parallel keep-going, parallel all-products, parallel timings, parallel caching |
 | Cache | `cache.rs` | Clear, size, trim, list operations |
 | Complete | `complete.rs` | Bash/zsh/fish generation, config-driven completion |
 | Config | `config.rs` | Show merged config, show defaults, annotation comments |

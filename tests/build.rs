@@ -269,6 +269,154 @@ fn independent_products_cached_after_failure_parallel() {
 }
 
 #[test]
+fn parallel_build_with_j_flag() {
+    // Verify -j flag enables parallel execution and all products are built
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    fs::create_dir_all(project_path.join("sleep")).unwrap();
+    for name in &["alpha", "beta", "gamma", "delta"] {
+        fs::write(
+            project_path.join(format!("sleep/{}.sleep", name)),
+            "0.01"
+        ).unwrap();
+    }
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"sleep\"]\n"
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build", "-j2"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "Parallel build with -j2 should succeed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    // All 4 products should be built
+    for name in &["alpha", "beta", "gamma", "delta"] {
+        assert!(project_path.join(format!("out/sleep/{}.done", name)).exists(),
+            "Sleep stub for {} should exist after parallel build", name);
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let processing_count = stdout.lines()
+        .filter(|l| l.contains("[sleep] Processing:"))
+        .count();
+    assert_eq!(processing_count, 4, "Should process all 4 sleep files: {}", stdout);
+}
+
+#[test]
+fn parallel_keep_going_continues_after_failure() {
+    // Verify --keep-going processes all independent products even when one fails
+    // under parallel execution
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    fs::create_dir_all(project_path.join("sleep")).unwrap();
+    fs::write(project_path.join("sleep/aaa_bad.sleep"), "not_a_number").unwrap();
+    fs::write(project_path.join("sleep/good1.sleep"), "0.01").unwrap();
+    fs::write(project_path.join("sleep/good2.sleep"), "0.01").unwrap();
+    fs::write(project_path.join("sleep/good3.sleep"), "0.01").unwrap();
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"sleep\"]\n\n[build]\nparallel = 2\n"
+    ).unwrap();
+
+    let output = run_rsb_with_env(
+        project_path, &["build", "--keep-going"], &[("NO_COLOR", "1")]
+    );
+
+    // Should fail overall
+    assert!(!output.status.success(),
+        "Build should fail with bad sleep file even with --keep-going");
+
+    // All good files should still be processed
+    for name in &["good1", "good2", "good3"] {
+        assert!(project_path.join(format!("out/sleep/{}.done", name)).exists(),
+            "Good sleep file {} should be processed with --keep-going in parallel", name);
+    }
+}
+
+#[test]
+fn parallel_builds_all_independent_products() {
+    // Verify parallel config in rsb.toml works and all products complete
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    fs::create_dir_all(project_path.join("sleep")).unwrap();
+    for i in 0..8 {
+        fs::write(
+            project_path.join(format!("sleep/task_{:02}.sleep", i)),
+            "0.01"
+        ).unwrap();
+    }
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"sleep\"]\n\n[build]\nparallel = 4\n"
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "Parallel build with 8 products and 4 jobs should succeed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    // All 8 stubs should exist
+    for i in 0..8 {
+        assert!(project_path.join(format!("out/sleep/task_{:02}.done", i)).exists(),
+            "Sleep stub task_{:02} should exist after parallel build", i);
+    }
+
+    // Incremental: second build should skip everything
+    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(output2.status.success());
+    let stdout2 = String::from_utf8_lossy(&output2.stdout);
+    let skip_count = stdout2.lines()
+        .filter(|l| l.contains("Skipping (unchanged):"))
+        .count();
+    assert_eq!(skip_count, 8,
+        "All 8 products should be skipped on second build: {}", stdout2);
+}
+
+#[test]
+fn parallel_timings_flag() {
+    // Verify --timings output works with parallel builds
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    fs::create_dir_all(project_path.join("sleep")).unwrap();
+    for name in &["one", "two", "three"] {
+        fs::write(
+            project_path.join(format!("sleep/{}.sleep", name)),
+            "0.01"
+        ).unwrap();
+    }
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"sleep\"]\n\n[build]\nparallel = 2\n"
+    ).unwrap();
+
+    let output = run_rsb_with_env(
+        project_path, &["build", "--timings"], &[("NO_COLOR", "1")]
+    );
+    assert!(output.status.success(),
+        "Parallel build with --timings should succeed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Timing:"), "Should contain 'Timing:' header in parallel mode");
+    assert!(stdout.contains("Total:"), "Should contain 'Total:' line in parallel mode");
+
+    // Should have timing entries for all 3 products
+    let timing_lines = stdout.lines()
+        .filter(|l| l.contains("(0.") && (l.contains("one") || l.contains("two") || l.contains("three")))
+        .count();
+    assert_eq!(timing_lines, 3,
+        "Should have timing entries for all 3 products: {}", stdout);
+}
+
+#[test]
 fn deterministic_build_order() {
     // Run two separate builds with multiple sleep files and verify
     // that the processing order is identical both times.
