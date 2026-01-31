@@ -13,10 +13,8 @@ fn init_creates_project() {
     assert!(output.status.success(), "rsb init failed: {}", String::from_utf8_lossy(&output.stderr));
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    // Check files/dirs were created
+    // Check files were created
     assert!(project_path.join("rsb.toml").exists(), "rsb.toml should be created");
-    assert!(project_path.join("templates").exists(), "templates/ should be created");
-    assert!(project_path.join("config").exists(), "config/ should be created");
 
     // Verify rsb.toml has content
     let toml_content = fs::read_to_string(project_path.join("rsb.toml")).unwrap();
@@ -41,7 +39,7 @@ fn init_fails_if_exists() {
 }
 
 #[test]
-fn init_preserves_existing_dirs() {
+fn init_ignores_existing_dirs() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -57,7 +55,4 @@ fn init_preserves_existing_dirs() {
         "Existing files in templates/ should be preserved");
     let content = fs::read_to_string(project_path.join("templates/existing.txt")).unwrap();
     assert_eq!(content, "do not delete");
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("already exists"), "Should mention that directory already exists");
 }

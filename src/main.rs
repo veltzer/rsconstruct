@@ -17,7 +17,6 @@ use builder::Builder;
 use object_store::ObjectStore;
 use std::env;
 use std::fs;
-use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -389,28 +388,7 @@ fn init_project() -> Result<()> {
     fs::write(&config_path, config_content)?;
     println!("Created {}", config_path.display());
 
-    // Create directories (preserve existing)
-    let templates_dir = cwd.join("templates");
-    let config_dir = cwd.join("config");
-
-    if !templates_dir.exists() {
-        create_dir_and_print(&templates_dir)?;
-    } else {
-        println!("Directory already exists: {}", templates_dir.display());
-    }
-
-    if !config_dir.exists() {
-        create_dir_and_print(&config_dir)?;
-    } else {
-        println!("Directory already exists: {}", config_dir.display());
-    }
-
-    println!("{}", color::green("Project initialized successfully!"));
+println!("{}", color::green("Project initialized successfully!"));
     Ok(())
 }
 
-fn create_dir_and_print(path: &Path) -> Result<()> {
-    fs::create_dir_all(path)?;
-    println!("Created {}", path.display());
-    Ok(())
-}
