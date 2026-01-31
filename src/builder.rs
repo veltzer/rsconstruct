@@ -253,9 +253,7 @@ impl Builder {
         let mut processors: HashMap<String, Box<dyn ProductDiscovery>> = HashMap::new();
 
         // Template processor
-        let templates_dir = self.project_root.join("templates");
-        let output_dir = self.project_root.clone();
-        if let Ok(template_proc) = TemplateProcessor::new(templates_dir, output_dir, self.config.processor.template.clone(), Arc::clone(&self.ignore_rules)) {
+        if let Ok(template_proc) = TemplateProcessor::new(self.project_root.clone(), self.config.processor.template.clone(), Arc::clone(&self.ignore_rules)) {
             processors.insert("template".to_string(), Box::new(template_proc));
         }
 
@@ -276,7 +274,7 @@ impl Builder {
         processors.insert("cc_single_file".to_string(), Box::new(cc_proc));
 
         // C/C++ lint processor
-        let cpplinter = Cpplinter::new(self.project_root.clone(), self.config.processor.cpplint.clone(), self.config.processor.cc_single_file.clone(), Arc::clone(&self.ignore_rules));
+        let cpplinter = Cpplinter::new(self.project_root.clone(), self.config.processor.cpplint.clone(), Arc::clone(&self.ignore_rules));
         processors.insert("cpplint".to_string(), Box::new(cpplinter));
 
         // Spellcheck processor

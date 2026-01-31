@@ -4,43 +4,54 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 
-use crate::config::{CcConfig, CpplintConfig, config_hash, resolve_extra_inputs};
+use crate::config::{CpplintConfig, config_hash, resolve_extra_inputs};
 use crate::graph::{BuildGraph, Product};
 use crate::ignore::IgnoreRules;
-use super::{ProductDiscovery, find_files, CC_EXCLUDE_DIRS};
+use super::{ProductDiscovery, find_files};
 
 const CPPLINT_STUB_DIR: &str = "out/cpplint";
 
 pub struct Cpplinter {
     project_root: PathBuf,
     cpplint_config: CpplintConfig,
-    cc_config: CcConfig,
     stub_dir: PathBuf,
     ignore_rules: Arc<IgnoreRules>,
 }
 
 impl Cpplinter {
-    pub fn new(project_root: PathBuf, cpplint_config: CpplintConfig, cc_config: CcConfig, ignore_rules: Arc<IgnoreRules>) -> Self {
+    pub fn new(project_root: PathBuf, cpplint_config: CpplintConfig, ignore_rules: Arc<IgnoreRules>) -> Self {
         let stub_dir = project_root.join(CPPLINT_STUB_DIR);
         Self {
             project_root,
             cpplint_config,
-            cc_config,
             stub_dir,
             ignore_rules,
         }
     }
 
+    /// Get the source directory from scan config
+    fn source_dir(&self) -> PathBuf {
+        let scan_dir = self.cpplint_config.scan.scan_dir_or("src");
+        if scan_dir.is_empty() {
+            self.project_root.clone()
+        } else {
+            self.project_root.join(&scan_dir)
+        }
+    }
+
     /// Check if C/C++ linting should be enabled
     fn should_lint(&self) -> bool {
-        let source_dir = self.project_root.join(&self.cc_config.source_dir);
-        source_dir.exists()
+        self.source_dir().exists()
     }
 
     /// Find all C/C++ source files that should be checked
     fn find_source_files(&self) -> Vec<PathBuf> {
-        let source_dir = self.project_root.join(&self.cc_config.source_dir);
-        find_files(&source_dir, &[".c", ".cc"], CC_EXCLUDE_DIRS, &self.ignore_rules, true)
+        let scan = &self.cpplint_config.scan;
+        let extensions = scan.extensions_or(&[".c", ".cc"]);
+        let exclude_dirs = scan.exclude_dirs_or(&["/.git/", "/out/", "/build/", "/dist/"]);
+        let ext_refs: Vec<&str> = extensions.iter().map(|s| s.as_str()).collect();
+        let exclude_refs: Vec<&str> = exclude_dirs.iter().map(|s| s.as_str()).collect();
+        find_files(&self.source_dir(), &ext_refs, &exclude_refs, &self.ignore_rules, true)
     }
 
     /// Get stub path for a C/C++ source file

@@ -7,7 +7,7 @@ use std::sync::{Arc, OnceLock};
 use crate::config::{SpellcheckConfig, config_hash, resolve_extra_inputs};
 use crate::graph::{BuildGraph, Product};
 use crate::ignore::IgnoreRules;
-use super::{ProductDiscovery, find_files, SPELLCHECK_EXCLUDE_DIRS};
+use super::{ProductDiscovery, find_files};
 
 const SPELLCHECK_STUB_DIR: &str = "out/spellcheck";
 const DICT_DIR: &str = "/usr/share/hunspell";
@@ -50,8 +50,20 @@ impl SpellcheckProcessor {
 
     /// Find all document files matching configured extensions
     fn find_doc_files(&self) -> Vec<PathBuf> {
-        let ext_refs: Vec<&str> = self.spellcheck_config.extensions.iter().map(|s| s.as_str()).collect();
-        find_files(&self.project_root, &ext_refs, SPELLCHECK_EXCLUDE_DIRS, &self.ignore_rules, true)
+        let scan = &self.spellcheck_config.scan;
+        let scan_dir = scan.scan_dir_or("");
+        let root = if scan_dir.is_empty() {
+            self.project_root.clone()
+        } else {
+            self.project_root.join(&scan_dir)
+        };
+        let extensions = scan.extensions_or(&[".md"]);
+        let exclude_dirs = scan.exclude_dirs_or(&[
+            "/.git/", "/out/", "/.rsb/", "/node_modules/", "/build/", "/dist/", "/target/",
+        ]);
+        let ext_refs: Vec<&str> = extensions.iter().map(|s| s.as_str()).collect();
+        let exclude_refs: Vec<&str> = exclude_dirs.iter().map(|s| s.as_str()).collect();
+        find_files(&root, &ext_refs, &exclude_refs, &self.ignore_rules, true)
     }
 
     /// Get stub path for a document file

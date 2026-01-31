@@ -69,11 +69,19 @@ struct OutputEntry {
 }
 
 /// Information about a cache entry for display
+#[derive(Serialize)]
 pub struct CacheListEntry {
     pub cache_key: String,
     pub input_checksum: String,
     /// Output paths and whether the object exists in the store
-    pub outputs: Vec<(String, bool)>,
+    pub outputs: Vec<CacheListOutput>,
+}
+
+/// Information about a single output in a cache list entry
+#[derive(Serialize)]
+pub struct CacheListOutput {
+    pub path: String,
+    pub exists: bool,
 }
 
 impl ObjectStore {
@@ -401,16 +409,14 @@ impl ObjectStore {
     pub fn list(&self) -> Vec<CacheListEntry> {
         let mut entries: Vec<CacheListEntry> = self.index.entries.iter().map(|(key, entry)| {
             let outputs = entry.outputs.iter().map(|o| {
-                let exists = self.has_object(&o.checksum);
-                (o.path.clone(), exists)
+                CacheListOutput {
+                    path: o.path.clone(),
+                    exists: self.has_object(&o.checksum),
+                }
             }).collect();
             CacheListEntry {
                 cache_key: key.clone(),
-                input_checksum: if entry.input_checksum.len() > 12 {
-                    entry.input_checksum[..12].to_string()
-                } else {
-                    entry.input_checksum.clone()
-                },
+                input_checksum: entry.input_checksum.clone(),
                 outputs,
             }
         }).collect();

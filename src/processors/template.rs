@@ -81,17 +81,15 @@ fn trim_block_newlines(content: &str) -> String {
 }
 
 pub struct TemplateProcessor {
-    templates_dir: PathBuf,
-    output_dir: PathBuf,
+    project_root: PathBuf,
     config: TemplateConfig,
     ignore_rules: Arc<IgnoreRules>,
 }
 
 impl TemplateProcessor {
-    pub fn new(templates_dir: PathBuf, output_dir: PathBuf, config: TemplateConfig, ignore_rules: Arc<IgnoreRules>) -> Result<Self> {
+    pub fn new(project_root: PathBuf, config: TemplateConfig, ignore_rules: Arc<IgnoreRules>) -> Result<Self> {
         Ok(Self {
-            templates_dir,
-            output_dir,
+            project_root,
             config,
             ignore_rules,
         })
@@ -99,17 +97,27 @@ impl TemplateProcessor {
 
     /// Find all template files matching configured extensions
     fn find_templates(&self) -> Result<Vec<TemplateItem>> {
-        let ext_refs: Vec<&str> = self.config.extensions.iter().map(|s| s.as_str()).collect();
-        let paths = find_files(&self.templates_dir, &ext_refs, &[], &self.ignore_rules, false);
+        let scan = &self.config.scan;
+        let scan_dir = scan.scan_dir_or("templates");
+        let templates_dir = if scan_dir.is_empty() {
+            self.project_root.clone()
+        } else {
+            self.project_root.join(&scan_dir)
+        };
+        let extensions = scan.extensions_or(&[".tera"]);
+        let exclude_dirs = scan.exclude_dirs_or(&[]);
+        let ext_refs: Vec<&str> = extensions.iter().map(|s| s.as_str()).collect();
+        let exclude_refs: Vec<&str> = exclude_dirs.iter().map(|s| s.as_str()).collect();
+        let paths = find_files(&templates_dir, &ext_refs, &exclude_refs, &self.ignore_rules, false);
 
         let mut items = Vec::new();
         for path in paths {
             let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            for ext in &self.config.extensions {
+            for ext in &extensions {
                 if filename.ends_with(ext.as_str()) {
                     let output_name = &filename[..filename.len() - ext.len()];
                     if !output_name.is_empty() {
-                        let output_path = self.output_dir.join(output_name);
+                        let output_path = self.project_root.join(output_name);
                         items.push(TemplateItem::new(path.clone(), output_path));
                         break;
                     }
@@ -128,7 +136,7 @@ impl ProductDiscovery for TemplateProcessor {
 
     fn discover(&self, graph: &mut BuildGraph) -> Result<()> {
         let items = self.find_templates()?;
-        let extra = resolve_extra_inputs(&self.output_dir, &self.config.extra_inputs)?;
+        let extra = resolve_extra_inputs(&self.project_root, &self.config.extra_inputs)?;
 
         for item in items {
             let mut inputs = vec![item.source_path.clone()];

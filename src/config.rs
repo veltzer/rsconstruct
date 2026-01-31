@@ -27,6 +27,56 @@ pub fn config_hash(value: &impl Serialize) -> String {
     hex::encode(hash)
 }
 
+/// Common scan configuration shared by all processors.
+/// Each processor embeds this via `#[serde(flatten)]` and provides its own defaults.
+///
+/// Fields use `Option` so that serde can distinguish "not specified" (None) from
+/// "explicitly set" (Some). Each processor resolves None to its own defaults.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ScanConfig {
+    /// Directory to scan for source files ("" means project root)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scan_dir: Option<String>,
+
+    /// File extensions to match
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extensions: Option<Vec<String>>,
+
+    /// Directory path segments to exclude from scanning
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exclude_dirs: Option<Vec<String>>,
+}
+
+impl ScanConfig {
+    /// Resolve scan_dir, falling back to the provided default
+    pub fn scan_dir_or(&self, default: &str) -> String {
+        self.scan_dir.clone().unwrap_or_else(|| default.to_string())
+    }
+
+    /// Resolve extensions, falling back to the provided defaults
+    pub fn extensions_or(&self, defaults: &[&str]) -> Vec<String> {
+        self.extensions.clone().unwrap_or_else(|| defaults.iter().map(|s| s.to_string()).collect())
+    }
+
+    /// Resolve exclude_dirs, falling back to the provided defaults
+    pub fn exclude_dirs_or(&self, defaults: &[&str]) -> Vec<String> {
+        self.exclude_dirs.clone().unwrap_or_else(|| defaults.iter().map(|s| s.to_string()).collect())
+    }
+
+    /// Fill in None fields with the given defaults (mutates in place)
+    fn resolve(&mut self, scan_dir: &str, extensions: &[&str], exclude_dirs: &[&str]) {
+        if self.scan_dir.is_none() {
+            self.scan_dir = Some(scan_dir.to_string());
+        }
+        if self.extensions.is_none() {
+            self.extensions = Some(extensions.iter().map(|s| s.to_string()).collect());
+        }
+        if self.exclude_dirs.is_none() {
+            self.exclude_dirs = Some(exclude_dirs.iter().map(|s| s.to_string()).collect());
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -135,6 +185,28 @@ impl ProcessorConfig {
     pub fn is_enabled(&self, name: &str) -> bool {
         self.enabled.iter().any(|p| p == name)
     }
+
+    /// Fill in None scan fields with per-processor defaults.
+    /// Called after loading from TOML so that `config show` displays resolved values.
+    pub fn resolve_scan_defaults(&mut self) {
+        self.template.scan.resolve("templates", &[".tera"], &[]);
+        self.ruff.scan.resolve("", &[".py"], &[
+            "/.venv/", "/__pycache__/", "/.git/", "/out/",
+            "/node_modules/", "/.tox/", "/build/", "/dist/", "/.eggs/",
+        ]);
+        self.pylint.scan.resolve("", &[".py"], &[
+            "/.venv/", "/__pycache__/", "/.git/", "/out/",
+            "/node_modules/", "/.tox/", "/build/", "/dist/", "/.eggs/",
+        ]);
+        self.cc_single_file.scan.resolve("src", &[".c", ".cc"], &[]);
+        self.cpplint.scan.resolve("src", &[".c", ".cc"], &[
+            "/.git/", "/out/", "/build/", "/dist/",
+        ]);
+        self.spellcheck.scan.resolve("", &[".md"], &[
+            "/.git/", "/out/", "/.rsb/", "/node_modules/", "/build/", "/dist/", "/target/",
+        ]);
+        self.sleep.scan.resolve("sleep", &[".sleep"], &[]);
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -143,10 +215,6 @@ pub struct TemplateConfig {
     #[serde(default = "default_true")]
     pub strict: bool,
 
-    /// File extensions to process (default: [".tera"])
-    #[serde(default = "default_template_extensions")]
-    pub extensions: Vec<String>,
-
     /// Remove first newline after block tags (default: false)
     #[serde(default)]
     pub trim_blocks: bool,
@@ -154,10 +222,17 @@ pub struct TemplateConfig {
     /// Additional input files that trigger rebuilds when changed
     #[serde(default)]
     pub extra_inputs: Vec<String>,
+
+    #[serde(flatten)]
+    pub scan: ScanConfig,
 }
 
 fn default_true() -> bool {
     true
+}
+
+fn default_template_scan_dir() -> String {
+    "templates".to_string()
 }
 
 fn default_template_extensions() -> Vec<String> {
@@ -168,9 +243,13 @@ impl Default for TemplateConfig {
     fn default() -> Self {
         Self {
             strict: default_true(),
-            extensions: default_template_extensions(),
             trim_blocks: false,
             extra_inputs: Vec::new(),
+            scan: ScanConfig {
+                scan_dir: Some(default_template_scan_dir()),
+                extensions: Some(default_template_extensions()),
+                exclude_dirs: None,
+            },
         }
     }
 }
@@ -194,6 +273,17 @@ impl Default for CompletionsConfig {
     }
 }
 
+fn default_python_exclude_dirs() -> Vec<String> {
+    vec![
+        "/.venv/".to_string(), "/__pycache__/".to_string(), "/.git/".to_string(), "/out/".to_string(),
+        "/node_modules/".to_string(), "/.tox/".to_string(), "/build/".to_string(), "/dist/".to_string(), "/.eggs/".to_string(),
+    ]
+}
+
+fn default_python_extensions() -> Vec<String> {
+    vec![".py".to_string()]
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct RuffConfig {
     /// The Python linter to use (default: ruff)
@@ -207,6 +297,9 @@ pub struct RuffConfig {
     /// Additional input files that trigger rebuilds when changed
     #[serde(default)]
     pub extra_inputs: Vec<String>,
+
+    #[serde(flatten)]
+    pub scan: ScanConfig,
 }
 
 fn default_ruff_linter() -> String {
@@ -219,6 +312,11 @@ impl Default for RuffConfig {
             linter: default_ruff_linter(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
+            scan: ScanConfig {
+                scan_dir: None,
+                extensions: Some(default_python_extensions()),
+                exclude_dirs: Some(default_python_exclude_dirs()),
+            },
         }
     }
 }
@@ -232,6 +330,9 @@ pub struct PylintConfig {
     /// Additional input files that trigger rebuilds when changed
     #[serde(default)]
     pub extra_inputs: Vec<String>,
+
+    #[serde(flatten)]
+    pub scan: ScanConfig,
 }
 
 impl Default for PylintConfig {
@@ -239,8 +340,27 @@ impl Default for PylintConfig {
         Self {
             args: Vec::new(),
             extra_inputs: Vec::new(),
+            scan: ScanConfig {
+                scan_dir: None,
+                extensions: Some(default_python_extensions()),
+                exclude_dirs: Some(default_python_exclude_dirs()),
+            },
         }
     }
+}
+
+fn default_cc_exclude_dirs() -> Vec<String> {
+    vec![
+        "/.git/".to_string(), "/out/".to_string(), "/build/".to_string(), "/dist/".to_string(),
+    ]
+}
+
+fn default_cc_extensions() -> Vec<String> {
+    vec![".c".to_string(), ".cc".to_string()]
+}
+
+fn default_cc_scan_dir() -> String {
+    "src".to_string()
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -256,6 +376,9 @@ pub struct CpplintConfig {
     /// Additional input files that trigger rebuilds when changed
     #[serde(default)]
     pub extra_inputs: Vec<String>,
+
+    #[serde(flatten)]
+    pub scan: ScanConfig,
 }
 
 fn default_cpplint_checker() -> String {
@@ -275,6 +398,11 @@ impl Default for CpplintConfig {
             checker: default_cpplint_checker(),
             args: default_cpplint_args(),
             extra_inputs: Vec::new(),
+            scan: ScanConfig {
+                scan_dir: Some(default_cc_scan_dir()),
+                extensions: Some(default_cc_extensions()),
+                exclude_dirs: Some(default_cc_exclude_dirs()),
+            },
         }
     }
 }
@@ -305,10 +433,6 @@ pub struct CcConfig {
     #[serde(default)]
     pub include_paths: Vec<String>,
 
-    /// Source directory (default: src)
-    #[serde(default = "default_source_dir")]
-    pub source_dir: String,
-
     /// Suffix for output executables (default: .elf)
     #[serde(default = "default_output_suffix")]
     pub output_suffix: String,
@@ -316,6 +440,9 @@ pub struct CcConfig {
     /// Additional input files that trigger rebuilds when changed
     #[serde(default)]
     pub extra_inputs: Vec<String>,
+
+    #[serde(flatten)]
+    pub scan: ScanConfig,
 }
 
 fn default_cc() -> String {
@@ -324,10 +451,6 @@ fn default_cc() -> String {
 
 fn default_cxx() -> String {
     "g++".to_string()
-}
-
-fn default_source_dir() -> String {
-    "src".to_string()
 }
 
 fn default_output_suffix() -> String {
@@ -343,19 +466,30 @@ impl Default for CcConfig {
             cxxflags: Vec::new(),
             ldflags: Vec::new(),
             include_paths: Vec::new(),
-            source_dir: default_source_dir(),
             output_suffix: default_output_suffix(),
             extra_inputs: Vec::new(),
+            scan: ScanConfig {
+                scan_dir: Some(default_cc_scan_dir()),
+                extensions: Some(default_cc_extensions()),
+                exclude_dirs: None,
+            },
         }
     }
 }
 
+fn default_spellcheck_exclude_dirs() -> Vec<String> {
+    vec![
+        "/.git/".to_string(), "/out/".to_string(), "/.rsb/".to_string(),
+        "/node_modules/".to_string(), "/build/".to_string(), "/dist/".to_string(), "/target/".to_string(),
+    ]
+}
+
+fn default_spellcheck_extensions() -> Vec<String> {
+    vec![".md".to_string()]
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SpellcheckConfig {
-    /// File extensions to check (default: [".md"])
-    #[serde(default = "default_spellcheck_extensions")]
-    pub extensions: Vec<String>,
-
     /// Hunspell dictionary language (default: "en_US")
     #[serde(default = "default_spellcheck_language")]
     pub language: String,
@@ -371,10 +505,9 @@ pub struct SpellcheckConfig {
     /// Additional input files that trigger rebuilds when changed
     #[serde(default)]
     pub extra_inputs: Vec<String>,
-}
 
-fn default_spellcheck_extensions() -> Vec<String> {
-    vec![".md".to_string()]
+    #[serde(flatten)]
+    pub scan: ScanConfig,
 }
 
 fn default_spellcheck_language() -> String {
@@ -388,13 +521,25 @@ fn default_spellcheck_words_file() -> String {
 impl Default for SpellcheckConfig {
     fn default() -> Self {
         Self {
-            extensions: default_spellcheck_extensions(),
             language: default_spellcheck_language(),
             words_file: default_spellcheck_words_file(),
             use_words_file: false,
             extra_inputs: Vec::new(),
+            scan: ScanConfig {
+                scan_dir: None,
+                extensions: Some(default_spellcheck_extensions()),
+                exclude_dirs: Some(default_spellcheck_exclude_dirs()),
+            },
         }
     }
+}
+
+fn default_sleep_scan_dir() -> String {
+    "sleep".to_string()
+}
+
+fn default_sleep_extensions() -> Vec<String> {
+    vec![".sleep".to_string()]
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -402,12 +547,20 @@ pub struct SleepConfig {
     /// Additional input files that trigger rebuilds when changed
     #[serde(default)]
     pub extra_inputs: Vec<String>,
+
+    #[serde(flatten)]
+    pub scan: ScanConfig,
 }
 
 impl Default for SleepConfig {
     fn default() -> Self {
         Self {
             extra_inputs: Vec::new(),
+            scan: ScanConfig {
+                scan_dir: Some(default_sleep_scan_dir()),
+                extensions: Some(default_sleep_extensions()),
+                exclude_dirs: None,
+            },
         }
     }
 }
@@ -436,15 +589,16 @@ impl Config {
     pub fn load(project_root: &Path) -> Result<Self> {
         let config_path = project_root.join(CONFIG_FILE);
 
-        if config_path.exists() {
+        let mut config = if config_path.exists() {
             let content = fs::read_to_string(&config_path)
                 .context(format!("Failed to read config file: {}", config_path.display()))?;
-            let config: Config = toml::from_str(&content)
-                .context(format!("Failed to parse config file: {}", config_path.display()))?;
-            Ok(config)
+            toml::from_str(&content)
+                .context(format!("Failed to parse config file: {}", config_path.display()))?
         } else {
             // Return default config if no config file exists
-            Ok(Config::default())
-        }
+            Config::default()
+        };
+        config.processor.resolve_scan_defaults();
+        Ok(config)
     }
 }

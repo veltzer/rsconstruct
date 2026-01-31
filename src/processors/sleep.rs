@@ -10,12 +10,10 @@ use crate::graph::{BuildGraph, Product};
 use crate::ignore::IgnoreRules;
 use super::{ProductDiscovery, find_files};
 
-const SLEEP_DIR: &str = "sleep";
 const SLEEP_STUB_DIR: &str = "out/sleep";
 
 pub struct SleepProcessor {
     project_root: PathBuf,
-    sleep_dir: PathBuf,
     stub_dir: PathBuf,
     config: SleepConfig,
     ignore_rules: Arc<IgnoreRules>,
@@ -23,25 +21,38 @@ pub struct SleepProcessor {
 
 impl SleepProcessor {
     pub fn new(project_root: PathBuf, config: SleepConfig, ignore_rules: Arc<IgnoreRules>) -> Self {
-        let sleep_dir = project_root.join(SLEEP_DIR);
         let stub_dir = project_root.join(SLEEP_STUB_DIR);
         Self {
             project_root,
-            sleep_dir,
             stub_dir,
             config,
             ignore_rules,
         }
     }
 
+    /// Get the sleep directory from scan config
+    fn sleep_dir(&self) -> PathBuf {
+        let scan_dir = self.config.scan.scan_dir_or("sleep");
+        if scan_dir.is_empty() {
+            self.project_root.clone()
+        } else {
+            self.project_root.join(&scan_dir)
+        }
+    }
+
     /// Check if sleep processing should be enabled
     fn should_process(&self) -> bool {
-        self.sleep_dir.exists()
+        self.sleep_dir().exists()
     }
 
     /// Find all .sleep files
     fn find_sleep_files(&self) -> Vec<PathBuf> {
-        find_files(&self.sleep_dir, &[".sleep"], &[], &self.ignore_rules, true)
+        let scan = &self.config.scan;
+        let extensions = scan.extensions_or(&[".sleep"]);
+        let exclude_dirs = scan.exclude_dirs_or(&[]);
+        let ext_refs: Vec<&str> = extensions.iter().map(|s| s.as_str()).collect();
+        let exclude_refs: Vec<&str> = exclude_dirs.iter().map(|s| s.as_str()).collect();
+        find_files(&self.sleep_dir(), &ext_refs, &exclude_refs, &self.ignore_rules, true)
     }
 
     /// Get stub path for a sleep file

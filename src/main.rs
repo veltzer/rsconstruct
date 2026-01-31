@@ -80,23 +80,7 @@ fn main() -> Result<()> {
                 }
                 CacheAction::List => {
                     let entries = store.list();
-                    if entries.is_empty() {
-                        println!("No cache entries.");
-                    } else {
-                        for entry in &entries {
-                            println!("{} [{}]", color::bold(&entry.cache_key), entry.input_checksum);
-                            for (path, exists) in &entry.outputs {
-                                let status = if *exists {
-                                    color::green("ok")
-                                } else {
-                                    color::red("missing")
-                                };
-                                println!("  {} {}", status, path);
-                            }
-                        }
-                        println!();
-                        println!("{} cache entries.", entries.len());
-                    }
+                    println!("{}", serde_json::to_string_pretty(&entries)?);
                 }
             }
         }
@@ -261,15 +245,20 @@ fn init_project() -> Result<()> {
 
 [processor.template]
 # strict = true
+# scan_dir = "templates"
 # extensions = [".tera"]
 # trim_blocks = false
 
 [processor.ruff]
 # linter = "ruff"
 # args = []
+# scan_dir = ""
+# extensions = [".py"]
 
 [processor.pylint]
 # args = []
+# scan_dir = ""
+# extensions = [".py"]
 
 [processor.cc_single_file]
 # cc = "gcc"
@@ -278,12 +267,15 @@ fn init_project() -> Result<()> {
 # cxxflags = []
 # ldflags = []
 # include_paths = []
-# source_dir = "src"
+# scan_dir = "src"
+# extensions = [".c", ".cc"]
 # output_suffix = ".elf"
 
 [processor.cpplint]
 # checker = "cppcheck"
 # args = ["--error-exitcode=1", "--enable=warning,style,performance,portability"]
+# scan_dir = "src"
+# extensions = [".c", ".cc"]
 
 [graph]
 # viewer = "google-chrome"

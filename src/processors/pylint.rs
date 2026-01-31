@@ -7,7 +7,7 @@ use std::sync::Arc;
 use crate::config::{PylintConfig, config_hash, resolve_extra_inputs};
 use crate::graph::{BuildGraph, Product};
 use crate::ignore::IgnoreRules;
-use super::{ProductDiscovery, find_files, PYTHON_EXCLUDE_DIRS};
+use super::{ProductDiscovery, find_files};
 
 const PYLINT_STUB_DIR: &str = "out/pylint";
 
@@ -31,7 +31,21 @@ impl PylintProcessor {
 
     /// Find all Python files that should be linted
     fn find_python_files(&self) -> Vec<PathBuf> {
-        find_files(&self.project_root, &[".py"], PYTHON_EXCLUDE_DIRS, &self.ignore_rules, true)
+        let scan = &self.pylint_config.scan;
+        let scan_dir = scan.scan_dir_or("");
+        let root = if scan_dir.is_empty() {
+            self.project_root.clone()
+        } else {
+            self.project_root.join(&scan_dir)
+        };
+        let extensions = scan.extensions_or(&[".py"]);
+        let exclude_dirs = scan.exclude_dirs_or(&[
+            "/.venv/", "/__pycache__/", "/.git/", "/out/",
+            "/node_modules/", "/.tox/", "/build/", "/dist/", "/.eggs/",
+        ]);
+        let ext_refs: Vec<&str> = extensions.iter().map(|s| s.as_str()).collect();
+        let exclude_refs: Vec<&str> = exclude_dirs.iter().map(|s| s.as_str()).collect();
+        find_files(&root, &ext_refs, &exclude_refs, &self.ignore_rules, true)
     }
 
     /// Get stub path for a Python file

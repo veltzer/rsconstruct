@@ -228,7 +228,6 @@ fn format_command(cmd: &Command) -> String {
 pub struct CcProcessor {
     project_root: PathBuf,
     config: CcConfig,
-    source_dir: PathBuf,
     output_dir: PathBuf,
     deps_dir: PathBuf,
     ignore_rules: Arc<IgnoreRules>,
@@ -237,13 +236,11 @@ pub struct CcProcessor {
 
 impl CcProcessor {
     pub fn new(project_root: PathBuf, config: CcConfig, ignore_rules: Arc<IgnoreRules>, verbose: u8) -> Self {
-        let source_dir = project_root.join(&config.source_dir);
         let output_dir = project_root.join("out/cc_single_file");
         let deps_dir = project_root.join(".rsb/deps");
         Self {
             project_root,
             config,
-            source_dir,
             output_dir,
             deps_dir,
             ignore_rules,
@@ -251,14 +248,29 @@ impl CcProcessor {
         }
     }
 
+    /// Get the source directory from scan config
+    fn source_dir(&self) -> PathBuf {
+        let scan_dir = self.config.scan.scan_dir_or("src");
+        if scan_dir.is_empty() {
+            self.project_root.clone()
+        } else {
+            self.project_root.join(&scan_dir)
+        }
+    }
+
     /// Check if cc processing should be enabled
     fn should_process(&self) -> bool {
-        self.source_dir.exists()
+        self.source_dir().exists()
     }
 
     /// Find all C/C++ source files. Returns (path, is_cpp) pairs.
     fn find_source_files(&self) -> Vec<(PathBuf, bool)> {
-        find_files(&self.source_dir, &[".c", ".cc"], &[], &self.ignore_rules, true)
+        let scan = &self.config.scan;
+        let extensions = scan.extensions_or(&[".c", ".cc"]);
+        let exclude_dirs = scan.exclude_dirs_or(&[]);
+        let ext_refs: Vec<&str> = extensions.iter().map(|s| s.as_str()).collect();
+        let exclude_refs: Vec<&str> = exclude_dirs.iter().map(|s| s.as_str()).collect();
+        find_files(&self.source_dir(), &ext_refs, &exclude_refs, &self.ignore_rules, true)
             .into_iter()
             .map(|p| {
                 let is_cpp = p.extension().and_then(|s| s.to_str()) == Some("cc");
@@ -271,7 +283,7 @@ impl CcProcessor {
     /// Mirrors directory structure: src/a/b.c -> out/cc/a/b.elf (suffix is configurable)
     fn get_executable_path(&self, source: &Path) -> PathBuf {
         let relative = source
-            .strip_prefix(&self.source_dir)
+            .strip_prefix(&self.source_dir())
             .unwrap_or(source);
         let stem = relative.with_extension("");
         let name = format!("{}{}", stem.display(), self.config.output_suffix);
@@ -282,7 +294,7 @@ impl CcProcessor {
     /// src/a/b.c -> .rsb/deps/a/b.c.d
     fn get_deps_path(&self, source: &Path) -> PathBuf {
         let relative = source
-            .strip_prefix(&self.source_dir)
+            .strip_prefix(&self.source_dir())
             .unwrap_or(source);
         let deps_name = format!(
             "{}.d",

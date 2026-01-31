@@ -17,20 +17,6 @@ use crate::ignore::IgnoreRules;
 
 pub use crate::graph::{BuildGraph, Product};
 
-/// Directories to exclude when scanning Python projects
-pub const PYTHON_EXCLUDE_DIRS: &[&str] = &[
-    "/.venv/", "/__pycache__/", "/.git/", "/out/",
-    "/node_modules/", "/.tox/", "/build/", "/dist/", "/.eggs/",
-];
-
-/// Directories to exclude when scanning C/C++ projects
-pub const CC_EXCLUDE_DIRS: &[&str] = &["/.git/", "/out/", "/build/", "/dist/"];
-
-/// Directories to exclude when scanning for spellcheck
-pub const SPELLCHECK_EXCLUDE_DIRS: &[&str] = &[
-    "/.git/", "/out/", "/.rsb/", "/node_modules/", "/build/", "/dist/", "/target/",
-];
-
 /// Find files matching given extensions in a directory.
 ///
 /// - `root`: directory to walk

@@ -84,13 +84,19 @@ fn cache_list_shows_entries() {
     let build = run_rsb(project_path, &["build"]);
     assert!(build.status.success());
 
-    // List cache
+    // List cache — output is JSON
     let output = run_rsb_with_env(project_path, &["cache", "list"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("sleep"), "Cache list should contain processor name: {}", stdout);
-    assert!(stdout.contains("ok"), "Cache list should show 'ok' for existing objects: {}", stdout);
-    assert!(stdout.contains("cache entries"), "Cache list should show entry count: {}", stdout);
+    let entries: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("Cache list should be valid JSON: {}\nOutput: {}", e, stdout));
+    let arr = entries.as_array().expect("Cache list should be a JSON array");
+    assert!(!arr.is_empty(), "Cache list should have entries after build");
+    let first = &arr[0];
+    assert!(first["cache_key"].as_str().unwrap().contains("sleep"),
+        "Cache entry should contain processor name: {}", first);
+    assert_eq!(first["outputs"][0]["exists"], true,
+        "Cached object should exist: {}", first);
 }
 
 #[test]
@@ -103,8 +109,12 @@ fn cache_list_empty() {
         "[processor]\nenabled = []\n"
     ).unwrap();
 
+    // Empty cache should produce an empty JSON array
     let output = run_rsb_with_env(project_path, &["cache", "list"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("No cache entries"), "Empty cache should show 'No cache entries': {}", stdout);
+    let entries: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("Cache list should be valid JSON: {}\nOutput: {}", e, stdout));
+    let arr = entries.as_array().expect("Cache list should be a JSON array");
+    assert!(arr.is_empty(), "Empty cache should produce an empty JSON array: {}", stdout);
 }
