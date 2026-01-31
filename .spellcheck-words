@@ -61,3 +61,6 @@ Makefile
 Mtime
 incrementality
 stderr
+linters
+subprocesses
+subcommand
