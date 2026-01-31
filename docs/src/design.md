@@ -12,7 +12,9 @@ RSB is a Rust build tool with incremental builds using SHA-256 checksums.
 - `rsb watch` — watch source files and auto-rebuild on changes
 - `rsb graph` — display the build dependency graph
 - `rsb cache` — manage the build cache (clear, size, trim, list)
-- `rsb processor` — manage processors (list)
+- `rsb config` — show active or default configuration
+- `rsb processor` — manage processors (list, all, auto, files)
+- `rsb tools` — list or check required external tools
 - `rsb complete` — generate shell completions
 - `rsb version` — print version information
 
@@ -34,11 +36,25 @@ Processors implement the `ProductDiscovery` trait. Each processor discovers prod
 (input/output pairs), and the executor builds them in dependency order.
 
 Available processors:
-- **template** — Tera template processing (`templates/{X}.tera` → `{X}`)
+- **template** — Tera template processing (`templates/{X}.tera` -> `{X}`)
+- **ruff** — Python linting with ruff (configurable linter binary)
+- **pylint** — Python linting with pylint
 - **cc_single_file** — C/C++ single-file compilation with automatic header dependency tracking
-- **pylint** — Python linting with ruff (configurable)
 - **cpplint** — C/C++ static analysis with cppcheck (configurable)
+- **spellcheck** — documentation spell checking using hunspell dictionaries
 - **sleep** — sleep for testing parallel execution
+- **make** — run make in directories containing Makefiles
+
+## File Indexing
+
+All file discovery is done through a single `FileIndex` built once per invocation.
+The index uses the `ignore` crate (`ignore::WalkBuilder`) which natively handles:
+
+- `.gitignore` — standard git ignore rules, including nested `.gitignore` files
+- `.rsbignore` — project-specific ignore patterns (same glob syntax as `.gitignore`)
+
+Processors query the pre-built index with their scan configuration (extensions,
+exclude directories, exclude files) instead of walking the filesystem individually.
 
 ## Caching
 

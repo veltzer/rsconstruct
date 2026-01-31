@@ -17,7 +17,7 @@ A fast, incremental build tool written in Rust with template support, Python lin
 - `rsb build` - Incremental build (only rebuilds changed files)
 - `rsb build --force` - Force full rebuild
 - `rsb build -j4` - Build with 4 parallel jobs
-- `rsb build --processor-verbose 2` - Show source paths in build output
+- `rsb build -v 2` - Show source paths in build output
 - `rsb build --dry-run` - Show what would be built without executing
 - `rsb build --keep-going` - Continue after errors
 - `rsb build --timings` - Show per-product and total timing info
@@ -33,8 +33,12 @@ A fast, incremental build tool written in Rust with template support, Python lin
 - `rsb cache trim` - Remove unreferenced objects from cache
 - `rsb cache list` - List all cache entries and their status
 - `rsb config show` - Show the active configuration (merged defaults + rsb.toml)
+- `rsb config show-default` - Show the default configuration
 - `rsb processor list` - List available processors and their status
 - `rsb processor auto` - Auto-detect which processors are relevant for this project
+- `rsb processor files` - Show source and target files for each processor
+- `rsb tools list` - List required external tools
+- `rsb tools check` - Check if required tools are available on PATH
 - `rsb complete [shell]` - Generate shell completions
 - `rsb version` - Print version information
 
@@ -45,7 +49,7 @@ A fast, incremental build tool written in Rust with template support, Python lin
 parallel = 1  # Number of parallel jobs (1 = sequential, 0 = auto-detect CPU cores)
 
 [processor]
-enabled = ["template", "ruff", "pylint", "sleep", "cc_single_file", "cpplint", "spellcheck"]
+enabled = ["template", "ruff", "pylint", "sleep", "cc_single_file", "cpplint", "spellcheck", "make"]
 
 [cache]
 restore_method = "hardlink"  # or "copy" (hardlink is faster, copy works across filesystems)
@@ -75,7 +79,8 @@ project/
 │   ├── pylint/           # Pylint lint stub files
 │   ├── cpplint/          # C/C++ lint stub files
 │   ├── spellcheck/       # Spellcheck stub files
-│   └── sleep/            # Sleep stub files
+│   ├── sleep/            # Sleep stub files
+│   └── make/             # Make stub files
 ├── docs/
 │   └── processors/       # Per-processor documentation
 └── .rsb/                 # Cache (index.json, objects/, deps/)
@@ -83,7 +88,8 @@ project/
 
 ## Architecture
 
-- **Processors** implement `ProductDiscovery` trait (template, ruff, pylint, sleep, cc_single_file, cpplint, spellcheck)
+- **Processors** implement `ProductDiscovery` trait (template, ruff, pylint, sleep, cc_single_file, cpplint, spellcheck, make)
+- **FileIndex** walks the project once using the `ignore` crate, respecting `.gitignore` and `.rsbignore`
 - **Products** have inputs (source files) and outputs (generated files)
 - **BuildGraph** manages dependencies between products
 - **Executor** runs products in dependency order, with optional parallelism

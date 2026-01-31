@@ -16,7 +16,9 @@ project/
 │   ├── ruff/         # Ruff lint stub files
 │   ├── pylint/       # Pylint lint stub files
 │   ├── cpplint/      # C/C++ lint stub files
-│   └── sleep/        # Sleep stub files
+│   ├── spellcheck/   # Spellcheck stub files
+│   ├── sleep/        # Sleep stub files
+│   └── make/         # Make stub files
 └── .rsb/             # Cache directory
     ├── index.json    # Cache index
     ├── objects/       # Cached build artifacts

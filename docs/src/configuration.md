@@ -9,7 +9,8 @@ RSB is configured via an `rsb.toml` file in the project root.
 parallel = 1  # Number of parallel jobs (1 = sequential, 0 = auto-detect CPU cores)
 
 [processor]
-enabled = ["template", "ruff", "pylint", "cc_single_file", "cpplint", "spellcheck"]
+auto_detect = true
+enabled = ["template", "ruff", "pylint", "cc_single_file", "cpplint", "spellcheck", "sleep", "make"]
 
 [cache]
 restore_method = "hardlink"  # or "copy" (hardlink is faster, copy works across filesystems)
@@ -35,7 +36,8 @@ Per-processor configuration is documented on each processor's page under [Proces
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `enabled` | array of strings | all | List of processors to enable. Available: `template`, `ruff`, `pylint`, `cc_single_file`, `cpplint`, `spellcheck`, `sleep`. |
+| `auto_detect` | boolean | `true` | When `true`, only run enabled processors that auto-detect relevant files. When `false`, run all enabled processors unconditionally. |
+| `enabled` | array of strings | all | List of processors to enable. Available: `template`, `ruff`, `pylint`, `cc_single_file`, `cpplint`, `spellcheck`, `sleep`, `make`. |
 
 ### `[cache]`
 

@@ -8,7 +8,7 @@ Incremental build — only rebuilds products whose inputs have changed.
 rsb build                         # Incremental build
 rsb build --force                 # Force full rebuild
 rsb build -j4                     # Build with 4 parallel jobs
-rsb build --processor-verbose 2   # Show source paths in output
+rsb build -v 2                    # Show source paths in output
 rsb build --dry-run               # Show what would be built without executing
 rsb build --keep-going            # Continue after errors
 rsb build --timings               # Show per-product and total timing info
@@ -79,18 +79,32 @@ rsb cache list     # List all cache entries and their status
 
 ## `rsb config`
 
-Show or inspect the active configuration (merged defaults + rsb.toml).
+Show or inspect the configuration.
 
 ```bash
-rsb config show    # Show the active configuration as TOML
+rsb config show           # Show the active configuration (defaults merged with rsb.toml)
+rsb config show-default   # Show the default configuration (without rsb.toml overrides)
 ```
 
 ## `rsb processor`
 
 ```bash
-rsb processor list   # List available processors and their status
-rsb processor all    # Show all processors with descriptions
-rsb processor auto   # Auto-detect which processors are relevant for this project
+rsb processor list          # List available processors and their status
+rsb processor all           # Show all processors with descriptions
+rsb processor auto          # Auto-detect which processors are relevant for this project
+rsb processor files         # Show source and target files for each enabled processor
+rsb processor files ruff    # Show files for a specific processor
+```
+
+## `rsb tools`
+
+List or check external tools required by enabled processors.
+
+```bash
+rsb tools list     # List required tools and which processor needs them
+rsb tools check    # Check if required tools are available on PATH
+rsb tools list -a  # Include tools from disabled processors
+rsb tools check -a # Check tools from all processors
 ```
 
 ## `rsb complete`

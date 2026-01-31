@@ -49,16 +49,20 @@ viewer = "google-chrome"
 
 ## Ignoring files
 
-Create a `.rsbignore` file in the project root with glob patterns (one per line) to exclude files from processing:
+RSB respects `.gitignore` files automatically. Any file ignored by git is also ignored by all processors. Nested `.gitignore` files and negation patterns are supported.
+
+For project-specific exclusions that should not go in `.gitignore`, create a `.rsbignore` file in the project root with glob patterns (one per line):
 
 ```
 /src/experiments/**
 *.bak
 ```
 
+The syntax is the same as `.gitignore`: `#` for comments, `/` prefix to anchor to the project root, `/` suffix for directories, and `*`/`**` for globs.
+
 ## Processor verbosity levels
 
-Control the detail level of build output with `--processor-verbose N`:
+Control the detail level of build output with `-v N`:
 
 | Level | Output |
 |---|---|
