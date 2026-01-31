@@ -96,13 +96,19 @@ impl ProductDiscovery for PylintProcessor {
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
+        let mut extra_inputs = self.pylint_config.extra_inputs.clone();
+        // pylint implicitly reads .pylintrc from the project root if present
+        let pylintrc = self.project_root.join(".pylintrc");
+        if pylintrc.exists() {
+            extra_inputs.push(".pylintrc".to_string());
+        }
         discover_stub_products(
             graph,
             &self.project_root,
             &self.stub_dir,
             &self.pylint_config.scan,
             file_index,
-            &self.pylint_config.extra_inputs,
+            &extra_inputs,
             &self.pylint_config,
             "pylint",
             "pylint",
