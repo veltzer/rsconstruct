@@ -224,8 +224,8 @@ fn main() -> Result<()> {
                 ToolsAction::Check { .. } => {
                     let mut any_missing = false;
                     for (tool, processor) in &tool_pairs {
-                        if which::which(tool).is_ok() {
-                            println!("{} ({}) {}", tool, processor, color::green("found"));
+                        if let Ok(path) = which::which(tool) {
+                            println!("{} ({}) {} {}", tool, processor, color::green("found"), color::dim(&path.display().to_string()));
                         } else {
                             println!("{} ({}) {}", tool, processor, color::red("missing"));
                             any_missing = true;
