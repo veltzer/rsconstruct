@@ -61,7 +61,8 @@ impl<'a> Executor<'a> {
         }
     }
 
-    /// Execute products sequentially
+    /// Execute products sequentially, batching consecutive products from the
+    /// same processor when the processor supports batch execution.
     fn execute_sequential(
         &self,
         graph: &BuildGraph,
@@ -77,9 +78,186 @@ impl<'a> Executor<'a> {
         let mut first_error: Option<anyhow::Error> = None;
         let mut silenced_processors: HashSet<String> = HashSet::new();
 
+        // Pending batch of products awaiting execution
+        struct PendingWork {
+            product_id: usize,
+            cache_key: String,
+            input_checksum: String,
+        }
+        let mut pending_batch: Vec<PendingWork> = Vec::new();
+        let mut pending_processor: Option<String> = None;
+
+        // Flush the pending batch: execute all accumulated products
+        let flush = |
+            pending_batch: &mut Vec<PendingWork>,
+            pending_processor: &mut Option<String>,
+            graph: &BuildGraph,
+            processors: &HashMap<String, Box<dyn ProductDiscovery>>,
+            object_store: &mut ObjectStore,
+            stats_by_processor: &mut HashMap<String, ProcessStats>,
+            failed_products: &mut HashSet<usize>,
+            failed_messages: &mut Vec<String>,
+            first_error: &mut Option<anyhow::Error>,
+            silenced_processors: &mut HashSet<String>,
+            timings: bool,
+            keep_going: bool,
+            verbose: u8,
+        | -> Result<()> {
+            if pending_batch.is_empty() {
+                *pending_processor = None;
+                return Ok(());
+            }
+
+            let proc_name = pending_processor.as_ref().unwrap().clone();
+            let processor = match processors.get(&proc_name) {
+                Some(p) => p,
+                None => {
+                    pending_batch.clear();
+                    *pending_processor = None;
+                    return Ok(());
+                }
+            };
+
+            let silenced = !keep_going && silenced_processors.contains(&proc_name);
+            let use_batch = processor.supports_batch() && pending_batch.len() > 1;
+
+            if use_batch {
+                // Print batch processing message
+                if !silenced {
+                    let displays: Vec<String> = pending_batch.iter().map(|pw| {
+                        let product = graph.get_product(pw.product_id).unwrap();
+                        product.display(verbose)
+                    }).collect();
+                    println!("[{}] {} {} files: {}",
+                        proc_name,
+                        color::green("Processing batch:"),
+                        pending_batch.len(),
+                        displays.join(", "));
+                }
+
+                let products: Vec<&crate::graph::Product> = pending_batch.iter()
+                    .map(|pw| graph.get_product(pw.product_id).unwrap())
+                    .collect();
+                let product_refs: Vec<&&crate::graph::Product> = products.iter().collect();
+
+                let batch_start = Instant::now();
+                let results = processor.execute_batch(
+                    &product_refs.iter().map(|p| **p).collect::<Vec<_>>()
+                );
+                let batch_duration = batch_start.elapsed();
+
+                // Process per-product results
+                for (pw, result) in pending_batch.drain(..).zip(results) {
+                    let product = graph.get_product(pw.product_id).unwrap();
+                    match result {
+                        Ok(()) => {
+                            object_store.cache_outputs(&pw.cache_key, &pw.input_checksum, &product.outputs)?;
+                            let stats = stats_by_processor
+                                .entry(proc_name.clone())
+                                .or_insert_with(|| ProcessStats::new(&proc_name));
+                            stats.processed += 1;
+                            stats.files_created += product.outputs.len();
+                        }
+                        Err(e) => {
+                            let stats = stats_by_processor
+                                .entry(proc_name.clone())
+                                .or_insert_with(|| ProcessStats::new(&proc_name));
+                            stats.failed += 1;
+                            if keep_going {
+                                let msg = format!("[{}] {}: {}", proc_name, product.display(verbose), e);
+                                println!("{}", color::red(&format!("Error: {}", msg)));
+                                failed_products.insert(pw.product_id);
+                                failed_messages.push(msg);
+                            } else {
+                                if first_error.is_none() {
+                                    first_error.replace(e);
+                                }
+                                failed_products.insert(pw.product_id);
+                                silenced_processors.insert(proc_name.clone());
+                            }
+                        }
+                    }
+                }
+
+                // Record one timing entry for the whole batch
+                if timings && !silenced {
+                    let stats = stats_by_processor
+                        .entry(proc_name.clone())
+                        .or_insert_with(|| ProcessStats::new(&proc_name));
+                    stats.duration += batch_duration;
+                    stats.product_timings.push(ProductTiming {
+                        display: format!("batch ({} files)", products.len()),
+                        processor: proc_name.clone(),
+                        duration: batch_duration,
+                    });
+                }
+            } else {
+                // Execute one by one (non-batch processor or single item)
+                for pw in pending_batch.drain(..) {
+                    let product = graph.get_product(pw.product_id).unwrap();
+                    let silenced = !keep_going && silenced_processors.contains(&proc_name);
+
+                    if !silenced {
+                        println!("[{}] {} {}", proc_name,
+                            color::green("Processing:"),
+                            product.display(verbose));
+                    }
+
+                    let product_start = Instant::now();
+                    match processor.execute(product) {
+                        Ok(()) => {
+                            let duration = product_start.elapsed();
+                            object_store.cache_outputs(&pw.cache_key, &pw.input_checksum, &product.outputs)?;
+                            let stats = stats_by_processor
+                                .entry(proc_name.clone())
+                                .or_insert_with(|| ProcessStats::new(&proc_name));
+                            stats.processed += 1;
+                            stats.files_created += product.outputs.len();
+                            stats.duration += duration;
+                            if timings && !silenced {
+                                stats.product_timings.push(ProductTiming {
+                                    display: product.display(verbose),
+                                    processor: proc_name.clone(),
+                                    duration,
+                                });
+                            }
+                        }
+                        Err(e) => {
+                            let stats = stats_by_processor
+                                .entry(proc_name.clone())
+                                .or_insert_with(|| ProcessStats::new(&proc_name));
+                            stats.failed += 1;
+                            if keep_going {
+                                let msg = format!("[{}] {}: {}", proc_name, product.display(verbose), e);
+                                println!("{}", color::red(&format!("Error: {}", msg)));
+                                failed_products.insert(pw.product_id);
+                                failed_messages.push(msg);
+                            } else {
+                                if first_error.is_none() {
+                                    first_error.replace(e);
+                                }
+                                failed_products.insert(pw.product_id);
+                                silenced_processors.insert(proc_name.clone());
+                            }
+                        }
+                    }
+                }
+            }
+
+            *pending_processor = None;
+            Ok(())
+        };
+
         for &id in order {
             // Check for Ctrl+C before starting next product
             if self.interrupted.load(Ordering::SeqCst) {
+                // Flush any pending work before breaking
+                flush(
+                    &mut pending_batch, &mut pending_processor, graph, self.processors,
+                    object_store, &mut stats_by_processor, &mut failed_products,
+                    &mut failed_messages, &mut first_error, &mut silenced_processors,
+                    timings, keep_going, self.verbose,
+                )?;
                 println!("{}", color::yellow("Interrupted, saving progress..."));
                 break;
             }
@@ -129,65 +307,32 @@ impl<'a> Executor<'a> {
                 continue;
             }
 
-            // Find the processor and execute
-            if let Some(processor) = self.processors.get(&product.processor) {
-                // In non-keep-going mode, once a processor has failed, silently
-                // continue executing its remaining products (for caching) but
-                // suppress output to avoid confusing the user
-                let silenced = !keep_going && silenced_processors.contains(&product.processor);
-
-                if !silenced {
-                    println!("[{}] {} {}", product.processor,
-                        color::green("Processing:"),
-                        self.product_display(product));
-                }
-
-                let product_start = Instant::now();
-                match processor.execute(product) {
-                    Ok(()) => {
-                        let duration = product_start.elapsed();
-
-                        // Cache outputs
-                        object_store.cache_outputs(&cache_key, &input_checksum, &product.outputs)?;
-
-                        let stats = stats_by_processor
-                            .entry(product.processor.clone())
-                            .or_insert_with(|| ProcessStats::new(&product.processor));
-                        stats.processed += 1;
-                        stats.files_created += product.outputs.len();
-                        stats.duration += duration;
-                        if timings && !silenced {
-                            stats.product_timings.push(ProductTiming {
-                                display: self.product_display(product),
-                                processor: product.processor.clone(),
-                                duration,
-                            });
-                        }
-                    }
-                    Err(e) => {
-                        let stats = stats_by_processor
-                            .entry(product.processor.clone())
-                            .or_insert_with(|| ProcessStats::new(&product.processor));
-                        stats.failed += 1;
-                        if keep_going {
-                            let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
-                            println!("{}", color::red(&format!("Error: {}", msg)));
-                            failed_products.insert(id);
-                            failed_messages.push(msg);
-                        } else {
-                            // Record first error and silence remaining products
-                            // from this processor — they still execute (for caching)
-                            // but don't print output
-                            if first_error.is_none() {
-                                first_error = Some(e);
-                            }
-                            failed_products.insert(id);
-                            silenced_processors.insert(product.processor.clone());
-                        }
-                    }
-                }
+            // If processor name changed, flush the pending batch
+            if pending_processor.as_ref() != Some(&product.processor) {
+                flush(
+                    &mut pending_batch, &mut pending_processor, graph, self.processors,
+                    object_store, &mut stats_by_processor, &mut failed_products,
+                    &mut failed_messages, &mut first_error, &mut silenced_processors,
+                    timings, keep_going, self.verbose,
+                )?;
             }
+
+            // Accumulate this product into the pending batch
+            pending_processor = Some(product.processor.clone());
+            pending_batch.push(PendingWork {
+                product_id: id,
+                cache_key,
+                input_checksum,
+            });
         }
+
+        // Flush any remaining pending work
+        flush(
+            &mut pending_batch, &mut pending_processor, graph, self.processors,
+            object_store, &mut stats_by_processor, &mut failed_products,
+            &mut failed_messages, &mut first_error, &mut silenced_processors,
+            timings, keep_going, self.verbose,
+        )?;
 
         // In non-keep-going mode, return the first error after giving
         // independent products a chance to execute and be cached
@@ -206,7 +351,9 @@ impl<'a> Executor<'a> {
         Ok(stats)
     }
 
-    /// Execute products in parallel where dependencies allow
+    /// Execute products in parallel where dependencies allow.
+    /// Within each level, batch-supporting processors with multiple items
+    /// are grouped and executed via execute_batch() in a single thread.
     fn execute_parallel(
         &self,
         graph: &BuildGraph,
@@ -234,6 +381,7 @@ impl<'a> Executor<'a> {
             }
 
             // Determine which products in this level need work
+            // Each work item: (product_id, input_checksum, needs_rebuild)
             let mut work_items: Vec<(usize, String, bool)> = Vec::new();
 
             // First pass: identify products with failed dependencies
@@ -298,27 +446,65 @@ impl<'a> Executor<'a> {
                 }
             }
 
+            // Separate work items into batch groups and non-batch items.
+            // Batch groups: processor supports batch AND has >1 item that needs rebuild.
+            let mut batch_groups: HashMap<String, Vec<(usize, String, bool)>> = HashMap::new();
+            let mut non_batch_items: Vec<(usize, String, bool)> = Vec::new();
+
+            // First, group all items by processor name
+            let mut by_processor: HashMap<String, Vec<(usize, String, bool)>> = HashMap::new();
+            for item in work_items {
+                let product = graph.get_product(item.0).unwrap();
+                by_processor.entry(product.processor.clone()).or_default().push(item);
+            }
+
+            // Then separate into batch vs non-batch
+            for (proc_name, items) in by_processor {
+                let processor = self.processors.get(&proc_name);
+                let supports_batch = processor.map_or(false, |p| p.supports_batch());
+                // Count items that actually need rebuild (not just cache-skip)
+                let rebuild_count = items.iter().filter(|(_, _, needs)| *needs).count();
+
+                if supports_batch && rebuild_count > 1 {
+                    batch_groups.insert(proc_name, items);
+                } else {
+                    non_batch_items.extend(items);
+                }
+            }
+
             // Process this level in parallel using thread pool
-            let chunk_size = (work_items.len() + self.parallel - 1) / self.parallel;
-            let chunks: Vec<_> = work_items.chunks(chunk_size.max(1)).collect();
-
             thread::scope(|s| {
-                for chunk in chunks {
-                    let stats_ref = Arc::clone(&stats_by_processor);
-                    let store_ref = Arc::clone(&store);
-                    let errors_ref = Arc::clone(&errors);
-                    let failed_ref = Arc::clone(&failed_products);
-                    let failed_msgs_ref = Arc::clone(&failed_messages);
-                    let failed_procs_ref = Arc::clone(&failed_processors);
+                let stats_ref = &stats_by_processor;
+                let store_ref = &store;
+                let errors_ref = &errors;
+                let failed_ref = &failed_products;
+                let failed_msgs_ref = &failed_messages;
+                let failed_procs_ref = &failed_processors;
+                let interrupted_ref = &self.interrupted;
 
-                    let interrupted_ref = &self.interrupted;
+                // Spawn one thread per batch group
+                for (proc_name, items) in &batch_groups {
+                    let stats_ref = Arc::clone(stats_ref);
+                    let store_ref = Arc::clone(store_ref);
+                    let errors_ref = Arc::clone(errors_ref);
+                    let failed_ref = Arc::clone(failed_ref);
+                    let failed_msgs_ref = Arc::clone(failed_msgs_ref);
+                    let failed_procs_ref = Arc::clone(failed_procs_ref);
+
                     s.spawn(move || {
-                        for (id, input_checksum, needs_rebuild) in chunk {
-                            // Check for Ctrl+C before starting next product
-                            if interrupted_ref.load(Ordering::SeqCst) {
-                                break;
-                            }
+                        if interrupted_ref.load(Ordering::SeqCst) {
+                            return;
+                        }
 
+                        let processor = match self.processors.get(proc_name) {
+                            Some(p) => p,
+                            None => return,
+                        };
+
+                        // Handle skip/restore for items that don't need rebuild
+                        let mut to_execute: Vec<&(usize, String, bool)> = Vec::new();
+                        for item in items {
+                            let (id, input_checksum, needs_rebuild) = item;
                             let product = graph.get_product(*id).unwrap();
                             let cache_key = product.cache_key();
 
@@ -373,72 +559,238 @@ impl<'a> Executor<'a> {
                                 }
                             }
 
-                            if let Some(processor) = self.processors.get(&product.processor) {
-                                println!("[{}] {} {}", product.processor,
-                                    color::green("Processing:"),
-                                    self.product_display(product));
+                            to_execute.push(item);
+                        }
 
-                                let product_start = Instant::now();
-                                match processor.execute(product) {
-                                    Ok(()) => {
-                                        let duration = product_start.elapsed();
+                        if to_execute.is_empty() || interrupted_ref.load(Ordering::SeqCst) {
+                            return;
+                        }
 
-                                        // Cache outputs
-                                        {
-                                            let mut store_guard = store_ref.lock().unwrap();
-                                            if let Err(e) = store_guard.cache_outputs(&cache_key, input_checksum, &product.outputs) {
-                                                if keep_going {
-                                                    let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
-                                                    println!("{}", color::red(&format!("Error: {}", msg)));
-                                                    failed_ref.lock().unwrap().insert(*id);
-                                                    failed_msgs_ref.lock().unwrap().push(msg);
-                                                } else {
-                                                    failed_ref.lock().unwrap().insert(*id);
-                                                    errors_ref.lock().unwrap().push(e);
-                                                }
-                                                continue;
+                        // Execute batch
+                        let product_refs: Vec<&crate::graph::Product> = to_execute.iter()
+                            .map(|(id, _, _)| graph.get_product(*id).unwrap())
+                            .collect();
+
+                        let displays: Vec<String> = product_refs.iter()
+                            .map(|p| self.product_display(p))
+                            .collect();
+                        println!("[{}] {} {} files: {}",
+                            proc_name,
+                            color::green("Processing batch:"),
+                            product_refs.len(),
+                            displays.join(", "));
+
+                        let batch_start = Instant::now();
+                        let results = processor.execute_batch(&product_refs);
+                        let batch_duration = batch_start.elapsed();
+
+                        // Process per-product results
+                        for (item, result) in to_execute.iter().zip(results) {
+                            let (id, input_checksum, _) = item;
+                            let product = graph.get_product(*id).unwrap();
+                            let cache_key = product.cache_key();
+
+                            match result {
+                                Ok(()) => {
+                                    {
+                                        let mut store_guard = store_ref.lock().unwrap();
+                                        if let Err(e) = store_guard.cache_outputs(&cache_key, input_checksum, &product.outputs) {
+                                            if keep_going {
+                                                let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
+                                                println!("{}", color::red(&format!("Error: {}", msg)));
+                                                failed_ref.lock().unwrap().insert(*id);
+                                                failed_msgs_ref.lock().unwrap().push(msg);
+                                            } else {
+                                                failed_ref.lock().unwrap().insert(*id);
+                                                errors_ref.lock().unwrap().push(e);
                                             }
-                                        }
-
-                                        let mut stats = stats_ref.lock().unwrap();
-                                        let proc_stats = stats
-                                            .entry(product.processor.clone())
-                                            .or_insert_with(|| ProcessStats::new(&product.processor));
-                                        proc_stats.processed += 1;
-                                        proc_stats.files_created += product.outputs.len();
-                                        proc_stats.duration += duration;
-                                        if timings {
-                                            proc_stats.product_timings.push(ProductTiming {
-                                                display: self.product_display(product),
-                                                processor: product.processor.clone(),
-                                                duration,
-                                            });
+                                            continue;
                                         }
                                     }
-                                    Err(e) => {
-                                        {
-                                            let mut stats = stats_ref.lock().unwrap();
-                                            let proc_stats = stats
-                                                .entry(product.processor.clone())
-                                                .or_insert_with(|| ProcessStats::new(&product.processor));
-                                            proc_stats.failed += 1;
-                                        }
-                                        if keep_going {
-                                            let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
-                                            println!("{}", color::red(&format!("Error: {}", msg)));
-                                            failed_ref.lock().unwrap().insert(*id);
-                                            failed_msgs_ref.lock().unwrap().push(msg);
-                                        } else {
-                                            failed_ref.lock().unwrap().insert(*id);
-                                            failed_procs_ref.lock().unwrap().insert(product.processor.clone());
-                                            errors_ref.lock().unwrap().push(e);
-                                        }
-                                        continue;
+                                    let mut stats = stats_ref.lock().unwrap();
+                                    let proc_stats = stats
+                                        .entry(proc_name.clone())
+                                        .or_insert_with(|| ProcessStats::new(proc_name));
+                                    proc_stats.processed += 1;
+                                    proc_stats.files_created += product.outputs.len();
+                                }
+                                Err(e) => {
+                                    {
+                                        let mut stats = stats_ref.lock().unwrap();
+                                        let proc_stats = stats
+                                            .entry(proc_name.clone())
+                                            .or_insert_with(|| ProcessStats::new(proc_name));
+                                        proc_stats.failed += 1;
+                                    }
+                                    if keep_going {
+                                        let msg = format!("[{}] {}: {}", proc_name, self.product_display(product), e);
+                                        println!("{}", color::red(&format!("Error: {}", msg)));
+                                        failed_ref.lock().unwrap().insert(*id);
+                                        failed_msgs_ref.lock().unwrap().push(msg);
+                                    } else {
+                                        failed_ref.lock().unwrap().insert(*id);
+                                        failed_procs_ref.lock().unwrap().insert(proc_name.clone());
+                                        errors_ref.lock().unwrap().push(e);
                                     }
                                 }
                             }
                         }
+
+                        // Record batch timing
+                        if timings {
+                            let mut stats = stats_ref.lock().unwrap();
+                            let proc_stats = stats
+                                .entry(proc_name.clone())
+                                .or_insert_with(|| ProcessStats::new(proc_name));
+                            proc_stats.duration += batch_duration;
+                            proc_stats.product_timings.push(ProductTiming {
+                                display: format!("batch ({} files)", product_refs.len()),
+                                processor: proc_name.clone(),
+                                duration: batch_duration,
+                            });
+                        }
                     });
+                }
+
+                // Spawn threads for non-batch items (chunked as before)
+                if !non_batch_items.is_empty() {
+                    let chunk_size = (non_batch_items.len() + self.parallel - 1) / self.parallel;
+                    let chunks: Vec<_> = non_batch_items.chunks(chunk_size.max(1)).collect();
+
+                    for chunk in chunks {
+                        let stats_ref = Arc::clone(stats_ref);
+                        let store_ref = Arc::clone(store_ref);
+                        let errors_ref = Arc::clone(errors_ref);
+                        let failed_ref = Arc::clone(failed_ref);
+                        let failed_msgs_ref = Arc::clone(failed_msgs_ref);
+                        let failed_procs_ref = Arc::clone(failed_procs_ref);
+
+                        s.spawn(move || {
+                            for (id, input_checksum, needs_rebuild) in chunk {
+                                if interrupted_ref.load(Ordering::SeqCst) {
+                                    break;
+                                }
+
+                                let product = graph.get_product(*id).unwrap();
+                                let cache_key = product.cache_key();
+
+                                if !needs_rebuild {
+                                    if self.verbose >= 1 {
+                                        println!("[{}] {} {}", product.processor,
+                                            color::dim("Skipping (unchanged):"),
+                                            self.product_display(product));
+                                    }
+                                    let mut stats = stats_ref.lock().unwrap();
+                                    let proc_stats = stats
+                                        .entry(product.processor.clone())
+                                        .or_insert_with(|| ProcessStats::new(&product.processor));
+                                    proc_stats.skipped += 1;
+                                    continue;
+                                }
+
+                                // Try to restore from cache
+                                if !force {
+                                    let restore_result = {
+                                        let store_guard = store_ref.lock().unwrap();
+                                        store_guard.restore_from_cache(&cache_key, input_checksum, &product.outputs)
+                                    };
+                                    match restore_result {
+                                        Ok(true) => {
+                                            if self.verbose >= 1 {
+                                                println!("[{}] {} {}", product.processor,
+                                                    color::cyan("Restored from cache:"),
+                                                    self.product_display(product));
+                                            }
+                                            let mut stats = stats_ref.lock().unwrap();
+                                            let proc_stats = stats
+                                                .entry(product.processor.clone())
+                                                .or_insert_with(|| ProcessStats::new(&product.processor));
+                                            proc_stats.restored += 1;
+                                            proc_stats.files_restored += product.outputs.len();
+                                            continue;
+                                        }
+                                        Err(e) => {
+                                            if keep_going {
+                                                let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
+                                                println!("{}", color::red(&format!("Error: {}", msg)));
+                                                failed_ref.lock().unwrap().insert(*id);
+                                                failed_msgs_ref.lock().unwrap().push(msg);
+                                            } else {
+                                                failed_ref.lock().unwrap().insert(*id);
+                                                errors_ref.lock().unwrap().push(e);
+                                            }
+                                            continue;
+                                        }
+                                        Ok(false) => {}
+                                    }
+                                }
+
+                                if let Some(processor) = self.processors.get(&product.processor) {
+                                    println!("[{}] {} {}", product.processor,
+                                        color::green("Processing:"),
+                                        self.product_display(product));
+
+                                    let product_start = Instant::now();
+                                    match processor.execute(product) {
+                                        Ok(()) => {
+                                            let duration = product_start.elapsed();
+
+                                            {
+                                                let mut store_guard = store_ref.lock().unwrap();
+                                                if let Err(e) = store_guard.cache_outputs(&cache_key, input_checksum, &product.outputs) {
+                                                    if keep_going {
+                                                        let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
+                                                        println!("{}", color::red(&format!("Error: {}", msg)));
+                                                        failed_ref.lock().unwrap().insert(*id);
+                                                        failed_msgs_ref.lock().unwrap().push(msg);
+                                                    } else {
+                                                        failed_ref.lock().unwrap().insert(*id);
+                                                        errors_ref.lock().unwrap().push(e);
+                                                    }
+                                                    continue;
+                                                }
+                                            }
+
+                                            let mut stats = stats_ref.lock().unwrap();
+                                            let proc_stats = stats
+                                                .entry(product.processor.clone())
+                                                .or_insert_with(|| ProcessStats::new(&product.processor));
+                                            proc_stats.processed += 1;
+                                            proc_stats.files_created += product.outputs.len();
+                                            proc_stats.duration += duration;
+                                            if timings {
+                                                proc_stats.product_timings.push(ProductTiming {
+                                                    display: self.product_display(product),
+                                                    processor: product.processor.clone(),
+                                                    duration,
+                                                });
+                                            }
+                                        }
+                                        Err(e) => {
+                                            {
+                                                let mut stats = stats_ref.lock().unwrap();
+                                                let proc_stats = stats
+                                                    .entry(product.processor.clone())
+                                                    .or_insert_with(|| ProcessStats::new(&product.processor));
+                                                proc_stats.failed += 1;
+                                            }
+                                            if keep_going {
+                                                let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
+                                                println!("{}", color::red(&format!("Error: {}", msg)));
+                                                failed_ref.lock().unwrap().insert(*id);
+                                                failed_msgs_ref.lock().unwrap().push(msg);
+                                            } else {
+                                                failed_ref.lock().unwrap().insert(*id);
+                                                failed_procs_ref.lock().unwrap().insert(product.processor.clone());
+                                                errors_ref.lock().unwrap().push(e);
+                                            }
+                                            continue;
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
                 }
             });
 

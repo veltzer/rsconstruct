@@ -143,6 +143,75 @@ pub fn write_stub(stub_path: &Path, content: &str) -> Result<()> {
     fs::write(stub_path, content).context("Failed to create stub file")?;
     Ok(())
 }
+/// Shared helper for lint processors that support batch execution.
+///
+/// Runs `batch_fn` with all input paths at once. On success, writes stubs for all products.
+/// On batch failure, falls back to calling `single_fn` per product to isolate errors.
+pub fn execute_lint_batch<F, G>(
+    products: &[&Product],
+    processor_name: &str,
+    stub_dir: &Path,
+    batch_fn: F,
+    single_fn: G,
+) -> Vec<Result<()>>
+where
+    F: Fn(&[&Path]) -> Result<()>,
+    G: Fn(&Path, &Path) -> Result<()>,
+{
+    // Validate all products up front and collect input/stub pairs
+    let mut validated: Vec<(&Path, &Path)> = Vec::with_capacity(products.len());
+    let mut results: Vec<Option<Result<()>>> = (0..products.len()).map(|_| None).collect();
+
+    for (i, product) in products.iter().enumerate() {
+        if let Err(e) = validate_stub_product(product, processor_name) {
+            results[i] = Some(Err(e));
+        } else {
+            validated.push((&product.inputs[0], &product.outputs[0]));
+        }
+    }
+
+    // Ensure stub directory exists
+    if let Err(e) = ensure_stub_dir(stub_dir, processor_name) {
+        // If we can't create the stub dir, all products fail
+        return products.iter().enumerate().map(|(i, _)| {
+            results[i].take().unwrap_or_else(|| Err(anyhow::anyhow!("{}", e)))
+        }).collect();
+    }
+
+    // Collect only the input paths for validated products
+    let input_paths: Vec<&Path> = validated.iter().map(|(input, _)| *input).collect();
+
+    if input_paths.is_empty() {
+        // All products failed validation
+        return results.into_iter().map(|r| r.unwrap()).collect();
+    }
+
+    // Try batch execution
+    if batch_fn(&input_paths).is_ok() {
+        // Batch succeeded — write stubs for all validated products
+        let mut validated_iter = validated.iter();
+        for (i, _product) in products.iter().enumerate() {
+            if results[i].is_some() {
+                continue; // Already failed validation
+            }
+            let (_input, stub) = validated_iter.next().unwrap();
+            results[i] = Some(write_stub(stub, "linted"));
+        }
+    } else {
+        // Batch failed — fall back to per-file execution to isolate errors
+        let mut validated_iter = validated.iter();
+        for (i, _product) in products.iter().enumerate() {
+            if results[i].is_some() {
+                continue; // Already failed validation
+            }
+            let (input, stub) = validated_iter.next().unwrap();
+            results[i] = Some(single_fn(input, stub));
+        }
+    }
+
+    results.into_iter().map(|r| r.unwrap()).collect()
+}
+
 pub use cc::CcProcessor;
 pub use cpplint::Cpplinter;
 pub use make::MakeProcessor;
@@ -170,6 +239,18 @@ pub trait ProductDiscovery: Sync + Send {
     /// Return the names of external tools required by this processor
     fn required_tools(&self) -> Vec<String> {
         Vec::new()
+    }
+
+    /// Whether this processor supports batch execution of multiple products at once.
+    fn supports_batch(&self) -> bool {
+        false
+    }
+
+    /// Execute multiple products in one invocation.
+    /// Returns one Result per product, in the same order as the input.
+    /// Default: falls back to per-product execute().
+    fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
+        products.iter().map(|p| self.execute(p)).collect()
     }
 }
 

@@ -5,7 +5,7 @@ use std::process::Command;
 use crate::config::PylintConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use super::{ProductDiscovery, discover_stub_products, validate_stub_product, ensure_stub_dir, write_stub, clean_outputs, log_command};
+use super::{ProductDiscovery, discover_stub_products, validate_stub_product, ensure_stub_dir, write_stub, clean_outputs, log_command, execute_lint_batch};
 
 const PYLINT_STUB_DIR: &str = "out/pylint";
 
@@ -53,6 +53,37 @@ impl PylintProcessor {
 
         write_stub(stub_path, "linted")
     }
+
+    /// Run pylint on multiple files in a single invocation
+    fn lint_files_batch(&self, py_files: &[&Path]) -> Result<()> {
+        let mut cmd = Command::new("pylint");
+
+        for arg in &self.pylint_config.args {
+            cmd.arg(arg);
+        }
+
+        for file in py_files {
+            cmd.arg(file);
+        }
+        cmd.current_dir(&self.project_root);
+        log_command(&cmd);
+
+        let output = cmd
+            .output()
+            .context("Failed to run pylint")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            return Err(anyhow::anyhow!(
+                "Pylint batch failed:\n{}{}",
+                stdout,
+                stderr
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 impl ProductDiscovery for PylintProcessor {
@@ -87,5 +118,19 @@ impl ProductDiscovery for PylintProcessor {
 
     fn clean(&self, product: &Product) -> Result<()> {
         clean_outputs(product, "pylint")
+    }
+
+    fn supports_batch(&self) -> bool {
+        true
+    }
+
+    fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
+        execute_lint_batch(
+            products,
+            "Pylint",
+            &self.stub_dir,
+            |files| self.lint_files_batch(files),
+            |input, stub| self.lint_file(input, stub),
+        )
     }
 }
