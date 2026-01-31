@@ -93,6 +93,10 @@ impl RuffProcessor {
 }
 
 impl ProductDiscovery for RuffProcessor {
+    fn description(&self) -> &str {
+        "Lint Python files with ruff"
+    }
+
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         !file_index.scan(&self.project_root, &self.ruff_config.scan, true).is_empty()
     }

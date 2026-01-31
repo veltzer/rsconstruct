@@ -87,6 +87,10 @@ impl PylintProcessor {
 }
 
 impl ProductDiscovery for PylintProcessor {
+    fn description(&self) -> &str {
+        "Lint Python files with pylint"
+    }
+
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         !file_index.scan(&self.project_root, &self.pylint_config.scan, true).is_empty()
     }

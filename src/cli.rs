@@ -78,6 +78,8 @@ pub enum Commands {
     Clean,
     /// Remove all build outputs and cache directories (.rsb/ and out/)
     Distclean,
+    /// Hard clean using git clean (requires git repository)
+    Hardclean,
     /// Show the status of each product (up-to-date, stale, or restorable)
     Status,
     /// Initialize a new rsb project in the current directory

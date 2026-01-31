@@ -224,6 +224,14 @@ pub use template::TemplateProcessor;
 /// Trait for processors that can discover products for the build graph
 /// Must be Sync + Send for parallel execution support
 pub trait ProductDiscovery: Sync + Send {
+    /// Human-readable description of what this processor does
+    fn description(&self) -> &str;
+
+    /// Whether this processor should be hidden from default listings (e.g. testing-only processors)
+    fn hidden(&self) -> bool {
+        false
+    }
+
     /// Discover all products this processor can produce
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()>;
 

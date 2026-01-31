@@ -53,6 +53,10 @@ fn main() -> Result<()> {
             let builder = Builder::new()?;
             builder.distclean()?;
         }
+        Commands::Hardclean => {
+            let builder = Builder::new()?;
+            builder.hardclean()?;
+        }
         Commands::Status => {
             let builder = Builder::new()?;
             builder.status()?;
@@ -91,21 +95,18 @@ fn main() -> Result<()> {
             Config::require_config(&project_root)?;
             let config = Config::load(&project_root)?;
 
-            let all_processors: [(&str, &str, bool); 8] = [
-                ("template", "Render Tera templates into output files", false),
-                ("ruff", "Lint Python files with ruff", false),
-                ("pylint", "Lint Python files with pylint", false),
-                ("sleep", "Sleep for a duration (testing)", true),
-                ("cc_single_file", "Compile C/C++ source files into executables (single-file)", false),
-                ("cpplint", "Run static analysis on C/C++ source files", false),
-                ("spellcheck", "Check documentation files for spelling errors", false),
-                ("make", "Run make in directories containing Makefiles", false),
-            ];
+            let builder = Builder::new()?;
+            let processors = builder.create_processors(0)?;
+
+            // Build sorted processor list from the registry
+            let mut proc_names: Vec<&String> = processors.keys().collect();
+            proc_names.sort();
 
             match action {
                 ProcessorAction::List { all } => {
-                    for (name, _desc, hidden) in &all_processors {
-                        if *hidden && !all {
+                    for name in &proc_names {
+                        let proc = &processors[name.as_str()];
+                        if proc.hidden() && !all {
                             continue;
                         }
                         let status = if config.processor.is_enabled(name) {
@@ -117,26 +118,25 @@ fn main() -> Result<()> {
                     }
                 }
                 ProcessorAction::All => {
-                    for (name, desc, hidden) in &all_processors {
+                    for name in &proc_names {
+                        let proc = &processors[name.as_str()];
                         let enabled_status = if config.processor.is_enabled(name) {
                             color::green("enabled")
                         } else {
                             color::dim("disabled")
                         };
-                        let hidden_status = if *hidden {
+                        let hidden_status = if proc.hidden() {
                             format!(" {}", color::dim("(hidden)"))
                         } else {
                             String::new()
                         };
-                        println!("{} {}{} — {}", name, enabled_status, hidden_status, color::dim(desc));
+                        println!("{} {}{} — {}", name, enabled_status, hidden_status, color::dim(proc.description()));
                     }
                 }
                 ProcessorAction::Auto => {
-                    let builder = Builder::new()?;
-                    let processors = builder.create_processors(0)?;
-                    for (name, _desc, _hidden) in &all_processors {
-                        let detected = processors.get(*name)
-                            .map_or(false, |p| p.auto_detect(builder.file_index()));
+                    for name in &proc_names {
+                        let proc = &processors[name.as_str()];
+                        let detected = proc.auto_detect(builder.file_index());
                         let enabled = config.processor.is_enabled(name);
                         let status = match (detected, enabled) {
                             (true, true) => color::green("detected, enabled"),
@@ -150,7 +150,7 @@ fn main() -> Result<()> {
                 ProcessorAction::Files { name, all } => {
                     // Validate processor name if given
                     if let Some(ref n) = name {
-                        if !all_processors.iter().any(|(pname, _, _)| *pname == n.as_str()) {
+                        if !processors.contains_key(n.as_str()) {
                             bail!("Unknown processor: '{}'. Run 'rsb processor list' to see available processors.", n);
                         }
                     }

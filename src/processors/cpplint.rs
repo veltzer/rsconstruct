@@ -61,6 +61,10 @@ impl CpplintProcessor {
 }
 
 impl ProductDiscovery for CpplintProcessor {
+    fn description(&self) -> &str {
+        "Run static analysis on C/C++ source files"
+    }
+
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         self.should_lint() && !file_index.scan(&self.project_root, &self.cpplint_config.scan, true).is_empty()
     }

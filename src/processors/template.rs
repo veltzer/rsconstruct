@@ -117,6 +117,10 @@ impl TemplateProcessor {
 }
 
 impl ProductDiscovery for TemplateProcessor {
+    fn description(&self) -> &str {
+        "Render Tera templates into output files"
+    }
+
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         self.find_templates(file_index).map_or(false, |t| !t.is_empty())
     }

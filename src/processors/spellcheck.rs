@@ -212,6 +212,10 @@ impl SpellcheckProcessor {
 }
 
 impl ProductDiscovery for SpellcheckProcessor {
+    fn description(&self) -> &str {
+        "Check documentation files for spelling errors"
+    }
+
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         !file_index.scan(&self.project_root, &self.spellcheck_config.scan, true).is_empty()
     }

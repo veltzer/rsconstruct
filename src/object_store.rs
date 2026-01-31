@@ -177,12 +177,8 @@ impl ObjectStore {
 
         match self.restore_method {
             RestoreMethod::Hardlink => {
-                // Try hard link first, fall back to copy if it fails
-                if fs::hard_link(&object_path, output_path).is_err() {
-                    // Hard link failed (e.g., cross-filesystem), fall back to copy
-                    fs::copy(&object_path, output_path)
-                        .with_context(|| format!("Failed to copy from cache: {}", checksum))?;
-                }
+                fs::hard_link(&object_path, output_path)
+                    .with_context(|| format!("Failed to hard link from cache: {}. If on a cross-filesystem setup, set restore_method = \"copy\" in rsb.toml.", checksum))?;
             }
             RestoreMethod::Copy => {
                 fs::copy(&object_path, output_path)

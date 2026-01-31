@@ -1,7 +1,8 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 use std::sync::Arc;
 use crate::cli::{GraphFormat, GraphViewer};
 use crate::color;
@@ -179,13 +180,17 @@ impl Builder {
         let executor = Executor::new(&processors, 1, 0, Arc::new(std::sync::atomic::AtomicBool::new(false)));
         executor.clean(&graph)?;
 
-        // Clean all output subdirectories
-        for subdir in &["ruff", "pylint", "cpplint", "sleep", "cc_single_file", "spellcheck", "make"] {
-            let dir = self.project_root.join("out").join(subdir);
-            if dir.exists() {
-                fs::remove_dir_all(&dir)
-                    .context(format!("Failed to remove {} directory", dir.display()))?;
-                println!("Removed output directory: {}", dir.display());
+        // Remove empty subdirectories under out/
+        let out_dir = self.project_root.join("out");
+        if out_dir.is_dir() {
+            for entry in fs::read_dir(&out_dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_dir() && fs::read_dir(&path)?.next().is_none() {
+                    fs::remove_dir(&path)
+                        .context(format!("Failed to remove directory {}", path.display()))?;
+                    println!("Removed empty directory: {}", path.display());
+                }
             }
         }
 
@@ -212,6 +217,30 @@ impl Builder {
         }
 
         println!("{}", color::green("Distclean completed!"));
+        Ok(())
+    }
+
+    /// Hard clean using `git clean -qffxd`. Requires a git repository.
+    pub fn hardclean(&self) -> Result<()> {
+        let git_dir = self.project_root.join(".git");
+        if !git_dir.exists() {
+            bail!("Not a git repository. Hardclean requires a git repository.");
+        }
+
+        println!("{}", color::bold("Running git clean -qffxd..."));
+
+        let output = Command::new("git")
+            .args(["clean", "-qffxd"])
+            .current_dir(&self.project_root)
+            .output()
+            .context("Failed to run git clean")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("git clean failed:\n{}", stderr);
+        }
+
+        println!("{}", color::green("Hardclean completed!"));
         Ok(())
     }
 

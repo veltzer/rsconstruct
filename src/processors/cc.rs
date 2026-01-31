@@ -473,6 +473,10 @@ impl CcProcessor {
 }
 
 impl ProductDiscovery for CcProcessor {
+    fn description(&self) -> &str {
+        "Compile C/C++ source files into executables (single-file)"
+    }
+
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         self.should_process() && !self.find_source_files(file_index).is_empty()
     }

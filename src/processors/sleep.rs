@@ -59,6 +59,14 @@ impl SleepProcessor {
 }
 
 impl ProductDiscovery for SleepProcessor {
+    fn description(&self) -> &str {
+        "Sleep for a duration (testing)"
+    }
+
+    fn hidden(&self) -> bool {
+        true
+    }
+
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         self.should_process() && !file_index.scan(&self.project_root, &self.config.scan, true).is_empty()
     }

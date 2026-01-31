@@ -8,12 +8,6 @@ Ideas for future improvements, organized by category.
 - `src/executor.rs` has many `.lock().unwrap()` calls on mutexes. If a thread panics while holding a lock, this causes cascading panics.
 - Consider using `parking_lot::Mutex` (no poisoning) or handling `PoisonError`.
 
-## Potential Bugs
-
-### Hard link fallback is silent
-- `src/object_store.rs` — `restore_file()` silently falls back from hard link to copy when hard linking fails. The user has no way to know this happened.
-- Log the fallback at debug level.
-
 ## Missing Test Coverage
 
 ### Limited parallel execution tests
@@ -33,10 +27,6 @@ Ideas for future improvements, organized by category.
 ### Hard-coded processor list in main.rs
 - `src/main.rs` — The `all_processors` array is hard-coded. Adding a new processor requires updating this list manually.
 - Generate from the processor registry or use a macro.
-
-### Hard-coded stub directory cleanup in builder.rs
-- `src/builder.rs` — The `clean()` method manually lists each processor's output directory. Adding a new processor requires updating this list.
-- Have each processor declare its output directory, or iterate over all `out/` subdirectories.
 
 ## Security
 
