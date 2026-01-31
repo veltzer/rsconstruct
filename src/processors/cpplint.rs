@@ -9,13 +9,13 @@ use super::{ProductDiscovery, discover_stub_products, scan_root, validate_stub_p
 
 const CPPLINT_STUB_DIR: &str = "out/cpplint";
 
-pub struct Cpplinter {
+pub struct CpplintProcessor {
     project_root: PathBuf,
     cpplint_config: CpplintConfig,
     stub_dir: PathBuf,
 }
 
-impl Cpplinter {
+impl CpplintProcessor {
     pub fn new(project_root: PathBuf, cpplint_config: CpplintConfig) -> Self {
         let stub_dir = project_root.join(CPPLINT_STUB_DIR);
         Self {
@@ -60,7 +60,7 @@ impl Cpplinter {
     }
 }
 
-impl ProductDiscovery for Cpplinter {
+impl ProductDiscovery for CpplintProcessor {
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         self.should_lint() && !file_index.scan(&self.project_root, &self.cpplint_config.scan, true).is_empty()
     }

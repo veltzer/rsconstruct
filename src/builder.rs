@@ -10,7 +10,7 @@ use crate::executor::Executor;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
 use crate::object_store::ObjectStore;
-use crate::processors::{CcProcessor, Cpplinter, MakeProcessor, PylintProcessor, RuffProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, TemplateProcessor, log_command};
+use crate::processors::{CcProcessor, CpplintProcessor, MakeProcessor, PylintProcessor, RuffProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, TemplateProcessor, log_command};
 
 pub struct Builder {
     project_root: PathBuf,
@@ -241,7 +241,7 @@ impl Builder {
         processors.insert("cc_single_file".to_string(), Box::new(cc_proc));
 
         // C/C++ lint processor
-        let cpplinter = Cpplinter::new(self.project_root.clone(), self.config.processor.cpplint.clone());
+        let cpplinter = CpplintProcessor::new(self.project_root.clone(), self.config.processor.cpplint.clone());
         processors.insert("cpplint".to_string(), Box::new(cpplinter));
 
         // Spellcheck processor

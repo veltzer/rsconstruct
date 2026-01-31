@@ -2,12 +2,6 @@
 
 Ideas for future improvements, organized by category.
 
-## Naming Inconsistencies
-
-### Processor struct names
-- Most processors are named `{Name}Processor` (`RuffProcessor`, `PylintProcessor`, `CcProcessor`, `SpellcheckProcessor`, `SleepProcessor`, `TemplateProcessor`, `MakeProcessor`).
-- `Cpplinter` breaks this convention. Rename to `CpplintProcessor`.
-
 ## Error Handling
 
 ### Mutex unwraps in executor.rs

@@ -213,7 +213,7 @@ where
 }
 
 pub use cc::CcProcessor;
-pub use cpplint::Cpplinter;
+pub use cpplint::CpplintProcessor;
 pub use make::MakeProcessor;
 pub use pylint::PylintProcessor;
 pub use ruff::RuffProcessor;
