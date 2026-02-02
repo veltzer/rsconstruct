@@ -319,6 +319,16 @@ pub trait ProductDiscovery: Sync + Send {
         Vec::new()
     }
 
+    /// Return tool version commands: Vec of (tool_name, args_to_get_version).
+    /// Default: each required tool with `["--version"]`.
+    /// Override for tools that use different flags (e.g. `-V`, `-version`, `version`).
+    fn tool_version_commands(&self) -> Vec<(String, Vec<String>)> {
+        self.required_tools()
+            .into_iter()
+            .map(|tool| (tool, vec!["--version".to_string()]))
+            .collect()
+    }
+
     /// Whether this processor supports batch execution of multiple products at once.
     fn supports_batch(&self) -> bool {
         false

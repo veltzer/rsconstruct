@@ -73,6 +73,10 @@ pub enum Commands {
         /// Suppress the build summary
         #[arg(long)]
         no_summary: bool,
+
+        /// Skip tool version verification against .tools.versions
+        #[arg(long)]
+        ignore_tool_versions: bool,
     },
     /// Clean build artifacts
     Clean {
@@ -206,6 +210,12 @@ pub enum ToolsAction {
         /// Check tools from all processors (including disabled)
         #[arg(short, long)]
         all: bool,
+    },
+    /// Lock tool versions to .tools.versions (creates or updates the lock file)
+    Lock {
+        /// Only verify the lock file without writing (exit with error if mismatched)
+        #[arg(long)]
+        check: bool,
     },
 }
 

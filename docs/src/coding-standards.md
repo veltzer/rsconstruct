@@ -31,3 +31,11 @@ Documentation and code must never state the number of processors, commands,
 or any other set that changes as the project evolves. Use phrasing like
 "all processors" instead of "all seven processors". Enumerating the members
 of a set is acceptable; stating the cardinality is not.
+
+## Use well-established crates
+
+Prefer well-established crates over hand-rolled implementations for common
+functionality (date/time, parsing, hashing, etc.). The Rust ecosystem has
+mature, well-tested libraries for most tasks. Writing custom implementations
+introduces unnecessary bugs and maintenance burden. If a crate exists for it,
+use it.

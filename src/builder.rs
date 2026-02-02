@@ -12,6 +12,7 @@ use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
 use crate::object_store::ObjectStore;
 use crate::processors::{CcProcessor, CpplintProcessor, MakeProcessor, PylintProcessor, RuffProcessor, ShellcheckProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, TemplateProcessor, log_command};
+use crate::tool_lock;
 
 /// Labels for the three product states used by dry_run and status.
 struct ProductStatusLabels {
@@ -532,6 +533,21 @@ impl Builder {
         Ok(())
     }
 
+    /// Verify tool versions against .tools.versions lock file.
+    /// Called at the start of build unless --ignore-tool-versions is passed.
+    pub fn verify_tool_versions(&self) -> Result<()> {
+        let processors = self.create_processors(0)?;
+        let config = &self.config;
+        let tool_commands = tool_lock::collect_tool_commands(
+            &processors,
+            &|name| config.processor.is_enabled(name),
+        );
+        if tool_commands.is_empty() {
+            return Ok(());
+        }
+        tool_lock::verify_lock_file(&self.project_root, &tool_commands)
+    }
+
     /// Handle `rsb tools` subcommands
     pub fn tools(&self, action: ToolsAction) -> Result<()> {
         let processors = self.create_processors(0)?;
@@ -570,6 +586,26 @@ impl Builder {
                 }
                 if any_missing {
                     bail!("Some required tools are missing");
+                }
+            }
+            ToolsAction::Lock { check } => {
+                let config = &self.config;
+                let tool_commands = tool_lock::collect_tool_commands(
+                    &processors,
+                    &|name| config.processor.is_enabled(name),
+                );
+
+                if check {
+                    tool_lock::verify_lock_file(&self.project_root, &tool_commands)?;
+                    println!("{}", color::green("Tool versions match lock file."));
+                } else {
+                    let lock = tool_lock::create_lock(&tool_commands)?;
+                    for (name, info) in &lock.tools {
+                        let first_line = info.version_output.lines().next().unwrap_or("");
+                        println!("{} {} {}", name, color::green("locked"), color::dim(first_line));
+                    }
+                    tool_lock::write_lock_file(&self.project_root, &lock)?;
+                    println!("Wrote {}", color::bold(".tools.versions"));
                 }
             }
         }

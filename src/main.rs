@@ -7,6 +7,7 @@ mod file_index;
 mod graph;
 mod object_store;
 mod processors;
+mod tool_lock;
 mod watcher;
 
 use anyhow::{bail, Result};
@@ -37,12 +38,15 @@ fn main() -> Result<()> {
     }
 
     match cli.command {
-        Commands::Build { force, jobs, timings, keep_going, dry_run, no_summary } => {
+        Commands::Build { force, jobs, timings, keep_going, dry_run, no_summary, ignore_tool_versions } => {
             if dry_run {
                 let builder = Builder::new()?;
                 builder.dry_run(force)?;
             } else {
                 let mut builder = Builder::new()?;
+                if !ignore_tool_versions {
+                    builder.verify_tool_versions()?;
+                }
                 builder.build(force, cli.verbose, jobs, timings, keep_going, Arc::clone(&interrupted), !no_summary)?;
             }
         }
