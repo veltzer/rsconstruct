@@ -672,3 +672,88 @@ fn cc_single_file_indirect_header_change_triggers_rebuild() {
     assert!(!run_output2.status.success(),
         "Executable should exit nonzero after indirect header change (MIDDLE_VAL=101, returns 101-6=95)");
 }
+
+#[test]
+fn cc_single_file_new_include_triggers_dependency_recomputation() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    setup_cc_project(project_path);
+
+    // Step 1: Create source file without any includes
+    fs::write(
+        project_path.join("src/main.c"),
+        "int main() { return 0; }\n"
+    ).unwrap();
+
+    // First build
+    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output1.status.success(),
+        "First build failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output1.stdout),
+        String::from_utf8_lossy(&output1.stderr));
+    let stdout1 = String::from_utf8_lossy(&output1.stdout);
+    assert!(stdout1.contains("[cc_single_file] Processing:"), "First build should process: {}", stdout1);
+
+    // Step 2: Second build — should skip (nothing changed)
+    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(output2.status.success());
+    let stdout2 = String::from_utf8_lossy(&output2.stdout);
+    assert!(stdout2.contains("[cc_single_file] Skipping (unchanged):"),
+        "Second build should skip: {}", stdout2);
+
+    // Step 3: Create a new header and modify source to include it
+    fs::write(
+        project_path.join("src/newheader.h"),
+        "#define NEW_VAL 55\n"
+    ).unwrap();
+
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    fs::write(
+        project_path.join("src/main.c"),
+        "#include \"newheader.h\"\nint main() { return NEW_VAL - 55; }\n"
+    ).unwrap();
+
+    // Step 4: Build — should recompile (source changed, deps re-scanned picking up newheader.h)
+    let output3 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(output3.status.success(),
+        "Build after adding include failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output3.stdout),
+        String::from_utf8_lossy(&output3.stderr));
+    let stdout3 = String::from_utf8_lossy(&output3.stdout);
+    assert!(stdout3.contains("[cc_single_file] Processing:"),
+        "Should recompile after source changed to add include: {}", stdout3);
+
+    // Step 5: Build again — should skip (nothing changed)
+    let output4 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(output4.status.success());
+    let stdout4 = String::from_utf8_lossy(&output4.stdout);
+    assert!(stdout4.contains("[cc_single_file] Skipping (unchanged):"),
+        "Build should skip after no changes: {}", stdout4);
+
+    // Step 6: Modify the newly-included header
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    fs::write(
+        project_path.join("src/newheader.h"),
+        "#define NEW_VAL 99\n"
+    ).unwrap();
+
+    // Step 7: Build — should recompile (newly-tracked header changed)
+    let output5 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(output5.status.success(),
+        "Build after modifying new header failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output5.stdout),
+        String::from_utf8_lossy(&output5.stderr));
+    let stdout5 = String::from_utf8_lossy(&output5.stdout);
+    assert!(stdout5.contains("[cc_single_file] Processing:"),
+        "Should recompile after newly-tracked header changed: {}", stdout5);
+
+    // Verify the new value was compiled in (NEW_VAL=99, 99-55=44, nonzero exit)
+    let run_output = Command::new(project_path.join("out/cc_single_file/main.elf"))
+        .output()
+        .expect("Failed to run main");
+    assert!(!run_output.status.success(),
+        "Executable should exit nonzero after header change (NEW_VAL=99, returns 99-55=44)");
+}

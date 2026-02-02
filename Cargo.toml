@@ -24,6 +24,7 @@ parking_lot = "0.12.5"
 chrono = "0.4.43"
 sled = "0.34"
 libc = "0.2"
+indicatif = "0.17"
 
 [dev-dependencies]
 tempfile = "3.8"

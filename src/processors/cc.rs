@@ -473,7 +473,20 @@ impl ProductDiscovery for CcProcessor {
         let config_hash = Some(config_hash(&self.config));
         let extra = resolve_extra_inputs(&self.project_root, &self.config.extra_inputs)?;
 
+        // Show progress bar for dependency scanning
+        let pb = indicatif::ProgressBar::new(source_files.len() as u64);
+        pb.set_style(
+            indicatif::ProgressStyle::default_bar()
+                .template("[cc_single_file] Scanning dependencies {bar:40} {pos}/{len} {msg}")
+                .unwrap()
+                .progress_chars("##-")
+        );
+
         for (source, is_cpp) in &source_files {
+            let relative = source.strip_prefix(&self.project_root)
+                .unwrap_or(source);
+            pb.set_message(relative.display().to_string());
+
             let executable = self.get_executable_path(source);
 
             // Resolve header dependencies
@@ -494,7 +507,9 @@ impl ProductDiscovery for CcProcessor {
                 "cc_single_file",
                 config_hash.clone(),
             )?;
+            pb.inc(1);
         }
+        pb.finish_and_clear();
 
         Ok(())
     }
