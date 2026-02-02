@@ -14,6 +14,7 @@
     - [Spellcheck](processors/spellcheck.md)
     - [Sleep](processors/sleep.md)
     - [Make](processors/make.md)
+- [Lua Plugins](plugins.md)
 - [Advanced Usage](advanced.md)
 - [Testing](testing.md)
 - [Design Notes](design.md)

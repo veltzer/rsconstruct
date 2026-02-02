@@ -11,6 +11,7 @@ project/
 ├── config/           # Python config files (loaded by templates)
 ├── templates/        # .tera template files
 ├── src/              # C/C++ source files
+├── plugins/          # Lua processor plugins (.lua files)
 ├── out/
 │   ├── cc_single_file/ # Compiled executables
 │   ├── ruff/         # Ruff lint stub files

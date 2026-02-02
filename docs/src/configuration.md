@@ -18,11 +18,15 @@ restore_method = "hardlink"  # or "copy" (hardlink is faster, copy works across 
 [graph]
 viewer = "google-chrome"  # Command to open graph files (default: platform-specific)
 
+[plugins]
+dir = "plugins"  # Directory containing .lua processor plugins
+
 [completions]
 shells = ["bash"]
 ```
 
 Per-processor configuration is documented on each processor's page under [Processors](processors.md).
+Lua plugin configuration is documented under [Lua Plugins](plugins.md).
 
 ## Section details
 
@@ -37,7 +41,7 @@ Per-processor configuration is documented on each processor's page under [Proces
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `auto_detect` | boolean | `true` | When `true`, only run enabled processors that auto-detect relevant files. When `false`, run all enabled processors unconditionally. |
-| `enabled` | array of strings | all | List of processors to enable. Available: `template`, `ruff`, `pylint`, `cc_single_file`, `cpplint`, `spellcheck`, `sleep`, `make`. |
+| `enabled` | array of strings | all | List of processors to enable. Built-in: `template`, `ruff`, `pylint`, `cc_single_file`, `cpplint`, `spellcheck`, `sleep`, `make`. [Lua plugin](plugins.md) names can also be listed here. |
 
 ### `[cache]`
 
@@ -50,6 +54,12 @@ Per-processor configuration is documented on each processor's page under [Proces
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `viewer` | string | platform-specific | Command to open graph files |
+
+### `[plugins]`
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `dir` | string | `"plugins"` | Directory containing `.lua` processor plugins |
 
 ### `[completions]`
 

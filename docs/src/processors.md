@@ -24,3 +24,7 @@ Use `rsb processor files` to see which files each processor discovers.
 - [Spellcheck](processors/spellcheck.md) — checks documentation files for spelling errors
 - [Sleep](processors/sleep.md) — sleeps for a duration (for testing)
 - [Make](processors/make.md) — runs make in directories containing Makefiles
+
+## Custom Processors
+
+You can define custom processors in Lua. See [Lua Plugins](plugins.md) for details.
