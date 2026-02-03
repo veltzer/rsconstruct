@@ -2,6 +2,7 @@
 
 - [Introduction](introduction.md)
 - [Installation](installation.md)
+- [Binary Releases](binary-releases.md)
 - [Commands](commands.md)
 - [Configuration](configuration.md)
 - [Project Structure](project-structure.md)
