@@ -216,8 +216,8 @@ pub struct CcProcessor {
 
 impl CcProcessor {
     pub fn new(project_root: PathBuf, config: CcConfig, verbose: bool) -> Self {
-        let output_dir = project_root.join("out/cc_single_file");
-        let deps_dir = project_root.join(".rsb/deps");
+        let output_dir = PathBuf::from("out/cc_single_file");
+        let deps_dir = PathBuf::from(".rsb/deps");
         Self {
             project_root,
             config,
@@ -227,19 +227,20 @@ impl CcProcessor {
         }
     }
 
-    /// Get the source directory from scan config
+    /// Get the source directory from scan config (relative path)
     fn source_dir(&self) -> PathBuf {
-        scan_root(&self.project_root, &self.config.scan)
+        scan_root(&self.config.scan)
     }
 
     /// Check if cc processing should be enabled
     fn should_process(&self) -> bool {
-        self.source_dir().exists()
+        let src = self.source_dir();
+        src.as_os_str().is_empty() || src.exists()
     }
 
     /// Find all C/C++ source files. Returns (path, is_cpp) pairs.
     fn find_source_files(&self, file_index: &FileIndex) -> Vec<(PathBuf, bool)> {
-        file_index.scan(&self.project_root, &self.config.scan, true)
+        file_index.scan(&self.config.scan, true)
             .into_iter()
             .map(|p| {
                 let is_cpp = p.extension().and_then(|s| s.to_str()) == Some("cc");
@@ -251,9 +252,12 @@ impl CcProcessor {
     /// Get executable path for a source file.
     /// Mirrors directory structure: src/a/b.c -> out/cc/a/b.elf (suffix is configurable)
     fn get_executable_path(&self, source: &Path) -> PathBuf {
-        let relative = source
-            .strip_prefix(&self.source_dir())
-            .unwrap_or(source);
+        let source_dir = self.source_dir();
+        let relative = if source_dir.as_os_str().is_empty() {
+            source.to_path_buf()
+        } else {
+            source.strip_prefix(&source_dir).unwrap_or(source).to_path_buf()
+        };
         let stem = relative.with_extension("");
         let name = format!("{}{}", stem.display(), self.config.output_suffix);
         self.output_dir.join(name)
@@ -262,9 +266,12 @@ impl CcProcessor {
     /// Get deps file path for a source file.
     /// src/a/b.c -> .rsb/deps/a/b.c.d
     fn get_deps_path(&self, source: &Path) -> PathBuf {
-        let relative = source
-            .strip_prefix(&self.source_dir())
-            .unwrap_or(source);
+        let source_dir = self.source_dir();
+        let relative = if source_dir.as_os_str().is_empty() {
+            source.to_path_buf()
+        } else {
+            source.strip_prefix(&source_dir).unwrap_or(source).to_path_buf()
+        };
         let deps_name = format!(
             "{}.d",
             relative.display()
@@ -363,6 +370,7 @@ impl CcProcessor {
     /// Format: target.o: source.c header1.h header2.h \
     ///           header3.h
     /// Returns the list of header files (excludes the source file itself and system headers).
+    /// All returned paths are relative to project root.
     fn parse_dep_file(&self, content: &str) -> Vec<PathBuf> {
         // Join continuation lines (backslash-newline)
         let joined = content.replace("\\\n", " ");
@@ -384,18 +392,17 @@ impl CcProcessor {
             .iter()
             .filter_map(|token| {
                 let path = Path::new(token);
-                // Filter out system headers
+                // Filter out system headers (absolute paths starting with /usr/ or /lib/)
                 let path_str = path.to_string_lossy();
                 if path_str.starts_with("/usr/") || path_str.starts_with("/lib/") {
                     return None;
                 }
-                // Convert to absolute path relative to project root
-                let abs_path = if path.is_absolute() {
-                    path.to_path_buf()
-                } else {
-                    self.project_root.join(path)
-                };
-                Some(abs_path)
+                // Skip other absolute paths (system headers)
+                if path.is_absolute() {
+                    return None;
+                }
+                // Keep relative paths as-is
+                Some(path.to_path_buf())
             })
             .collect()
     }
@@ -475,7 +482,7 @@ impl ProductDiscovery for CcProcessor {
         }
 
         let config_hash = Some(config_hash(&self.config));
-        let extra = resolve_extra_inputs(&self.project_root, &self.config.extra_inputs)?;
+        let extra = resolve_extra_inputs(&self.config.extra_inputs)?;
 
         // Show progress bar for dependency scanning
         let pb = indicatif::ProgressBar::new(source_files.len() as u64);
@@ -487,9 +494,7 @@ impl ProductDiscovery for CcProcessor {
         );
 
         for (source, is_cpp) in &source_files {
-            let relative = source.strip_prefix(&self.project_root)
-                .unwrap_or(source);
-            pb.set_message(relative.display().to_string());
+            pb.set_message(source.display().to_string());
 
             let executable = self.get_executable_path(source);
 

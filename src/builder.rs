@@ -42,7 +42,6 @@ impl Builder {
         };
 
         let object_store = ObjectStore::new(
-            project_root.clone(),
             config.cache.restore_method,
             remote_backend,
             config.cache.remote_push,
@@ -585,14 +584,14 @@ impl Builder {
                         println!("[{}] ({} {})", current_processor, n, if n == 1 { "product" } else { "products" });
                     }
                     let inputs: Vec<String> = product.inputs.iter()
-                        .map(|p| p.strip_prefix(&self.project_root).unwrap_or(p).display().to_string())
+                        .map(|p| p.display().to_string())
                         .collect();
                     // For checkers (empty outputs), display "(checker)" instead of output paths
                     if product.outputs.is_empty() {
                         println!("{} \u{2192} {}", inputs.join(", "), color::dim("(checker)"));
                     } else {
                         let outputs: Vec<String> = product.outputs.iter()
-                            .map(|p| p.strip_prefix(&self.project_root).unwrap_or(p).display().to_string())
+                            .map(|p| p.display().to_string())
                             .collect();
                         println!("{} \u{2192} {}", inputs.join(", "), outputs.join(", "));
                     }

@@ -7,11 +7,12 @@ use std::path::{Path, PathBuf};
 
 const CONFIG_FILE: &str = "rsb.toml";
 
-/// Resolve extra_inputs paths relative to project root, failing if any file does not exist.
-pub fn resolve_extra_inputs(project_root: &Path, extra_inputs: &[String]) -> Result<Vec<PathBuf>> {
+/// Validate extra_inputs paths exist and return them as PathBufs.
+/// Paths are relative to project root (which is cwd).
+pub fn resolve_extra_inputs(extra_inputs: &[String]) -> Result<Vec<PathBuf>> {
     let mut resolved = Vec::new();
     for p in extra_inputs {
-        let path = project_root.join(p);
+        let path = PathBuf::from(p);
         if !path.exists() {
             anyhow::bail!("extra_inputs file not found: {}", p);
         }

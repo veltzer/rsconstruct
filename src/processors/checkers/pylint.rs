@@ -59,7 +59,7 @@ impl ProductDiscovery for PylintProcessor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        !file_index.scan(&self.project_root, &self.pylint_config.scan, true).is_empty()
+        !file_index.scan(&self.pylint_config.scan, true).is_empty()
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -69,13 +69,12 @@ impl ProductDiscovery for PylintProcessor {
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
         let mut extra_inputs = self.pylint_config.extra_inputs.clone();
         // pylint implicitly reads .pylintrc from the project root if present
-        let pylintrc = self.project_root.join(".pylintrc");
+        let pylintrc = Path::new(".pylintrc");
         if pylintrc.exists() {
             extra_inputs.push(".pylintrc".to_string());
         }
         discover_checker_products(
             graph,
-            &self.project_root,
             &self.pylint_config.scan,
             file_index,
             &extra_inputs,

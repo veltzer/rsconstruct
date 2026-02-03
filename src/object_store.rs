@@ -31,8 +31,6 @@ const DB_DIR: &str = "db";
 /// Uses git-like object storage: .rsb/objects/[2 chars]/[rest of hash]
 /// Index is stored in a sled embedded key/value database at .rsb/db/
 pub struct ObjectStore {
-    /// Root directory of the project
-    project_root: PathBuf,
     /// Path to .rsb directory
     rsb_dir: PathBuf,
     /// Path to objects directory
@@ -85,13 +83,12 @@ pub struct CacheListOutput {
 
 impl ObjectStore {
     pub fn new(
-        project_root: PathBuf,
         restore_method: RestoreMethod,
         remote: Option<Box<dyn RemoteCache>>,
         remote_push: bool,
         remote_pull: bool,
     ) -> Result<Self> {
-        let rsb_dir = project_root.join(RSB_DIR);
+        let rsb_dir = PathBuf::from(RSB_DIR);
         let objects_dir = rsb_dir.join(OBJECTS_DIR);
         let db_path = rsb_dir.join(DB_DIR);
 
@@ -104,7 +101,6 @@ impl ObjectStore {
             .context("Failed to open cache database")?;
 
         Ok(Self {
-            project_root,
             rsb_dir,
             objects_dir,
             db,
@@ -219,7 +215,7 @@ impl ObjectStore {
         for output_path in output_paths {
             if !output_path.exists() {
                 // Output missing - check if we can restore from cache
-                let rel_path = self.relative_path(output_path);
+                let rel_path = Self::path_string(output_path);
                 let cached_output = entry.outputs.iter()
                     .find(|o| o.path == rel_path);
 
@@ -256,7 +252,7 @@ impl ObjectStore {
                 continue;
             }
 
-            let rel_path = self.relative_path(output_path);
+            let rel_path = Self::path_string(output_path);
             let cached_output = entry.outputs.iter()
                 .find(|o| o.path == rel_path);
 
@@ -318,7 +314,7 @@ impl ObjectStore {
                 continue;
             }
 
-            let rel_path = self.relative_path(output_path);
+            let rel_path = Self::path_string(output_path);
             let cached_output = entry.outputs.iter()
                 .find(|o| o.path == rel_path);
 
@@ -410,7 +406,7 @@ impl ObjectStore {
 
             let content = fs::read(output_path)?;
             let checksum = self.store_object(&content)?;
-            let rel_path = self.relative_path(output_path);
+            let rel_path = Self::path_string(output_path);
 
             // Push object to remote cache if enabled
             if self.remote_push {
@@ -491,12 +487,9 @@ impl ObjectStore {
         Ok(())
     }
 
-    /// Get relative path from project root
-    fn relative_path(&self, path: &Path) -> String {
-        path.strip_prefix(&self.project_root)
-            .unwrap_or(path)
-            .display()
-            .to_string()
+    /// Convert path to string for storage. Paths are already relative.
+    fn path_string(path: &Path) -> String {
+        path.display().to_string()
     }
 
     /// Clear the entire cache

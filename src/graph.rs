@@ -1,21 +1,14 @@
 use anyhow::{bail, Result};
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-/// Display a path relative to the current working directory.
-fn relative_to_cwd(path: &Path) -> String {
-    std::env::current_dir()
-        .ok()
-        .and_then(|cwd| path.strip_prefix(&cwd).ok().map(|p| p.display().to_string()))
-        .unwrap_or_else(|| path.display().to_string())
-}
-
-/// A single build product with concrete inputs and outputs
+/// A single build product with concrete inputs and outputs.
+/// All paths are relative to project root.
 #[derive(Debug, Clone)]
 pub struct Product {
-    /// Input files (real paths)
+    /// Input files (relative paths)
     pub inputs: Vec<PathBuf>,
-    /// Output files (real paths)
+    /// Output files (relative paths)
     pub outputs: Vec<PathBuf>,
     /// Which processor handles this product
     pub processor: String,
@@ -38,9 +31,10 @@ impl Product {
 
     /// Display name for logging at the given verbosity level:
     ///   0 — basename of output only (for checkers: basename of first input)
-    ///   1 — path of output (relative to cwd) (for checkers: path of first input)
+    ///   1 — path of output (for checkers: path of first input)
     ///   2 — path of output + path of source (first input)
     ///   3 — path of output + all inputs (source + headers)
+    /// All paths are already relative to project root.
     pub fn display(&self, level: u8) -> String {
         // For checkers (empty outputs), display the input file instead
         if self.outputs.is_empty() {
@@ -54,7 +48,7 @@ impl Product {
                 }
                 _ => {
                     self.inputs.first()
-                        .map(|p| relative_to_cwd(p))
+                        .map(|p| p.display().to_string())
                         .unwrap_or_else(|| "?".to_string())
                 }
             };
@@ -72,7 +66,7 @@ impl Product {
             }
             _ => {
                 let paths: Vec<_> = self.outputs.iter()
-                    .map(|p| relative_to_cwd(p))
+                    .map(|p| p.display().to_string())
                     .collect();
                 paths.join(", ")
             }
@@ -82,12 +76,12 @@ impl Product {
             output_part
         } else if level == 2 {
             let source = self.inputs.first()
-                .map(|p| relative_to_cwd(p))
+                .map(|p| p.display().to_string())
                 .unwrap_or_else(|| "?".to_string());
             format!("{} <- {}", output_part, source)
         } else {
             let inputs: Vec<_> = self.inputs.iter()
-                .map(|p| relative_to_cwd(p))
+                .map(|p| p.display().to_string())
                 .collect();
             format!("{} <- {}", output_part, inputs.join(", "))
         }

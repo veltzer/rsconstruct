@@ -11,6 +11,7 @@ impl FileIndex {
     /// Build a file index by walking the project root once.
     /// Uses `ignore::WalkBuilder` which natively handles `.gitignore` and
     /// `.rsbignore` (via `add_custom_ignore_filename`).
+    /// All paths are stored relative to project_root.
     pub fn build(project_root: &Path) -> Result<Self> {
         let walker = ignore::WalkBuilder::new(project_root)
             .add_custom_ignore_filename(".rsbignore")
@@ -21,7 +22,12 @@ impl FileIndex {
         for entry in walker {
             let entry = entry.context("Failed to read directory entry during file indexing")?;
             if entry.file_type().map_or(false, |ft| ft.is_file()) {
-                files.push(entry.into_path());
+                let path = entry.into_path();
+                // Store relative paths
+                let relative = path.strip_prefix(project_root)
+                    .unwrap_or(&path)
+                    .to_path_buf();
+                files.push(relative);
             }
         }
         files.sort();
@@ -30,13 +36,13 @@ impl FileIndex {
     }
 
     /// Query the index for files matching the given criteria.
+    /// All paths in the index are relative to project root.
     ///
-    /// - `root`: only include files under this directory
+    /// - `root`: only include files under this directory (relative path, e.g., "src" or "")
     /// - `extensions`: file extensions to match (e.g., `[".py", ".pyi"]`)
     /// - `exclude_dirs`: directory path segments to skip (e.g., `["/.git/", "/out/"]`)
     /// - `exclude_files`: file names to skip (e.g., `["setup.py"]`)
     /// - `exclude_paths`: paths relative to project root to skip (e.g., `["Makefile"]`)
-    /// - `project_root`: the project root, used to compute relative paths for `exclude_paths`
     pub fn query(
         &self,
         root: &Path,
@@ -44,14 +50,17 @@ impl FileIndex {
         exclude_dirs: &[&str],
         exclude_files: &[&str],
         exclude_paths: &[&str],
-        project_root: &Path,
     ) -> Vec<PathBuf> {
         self.files
             .iter()
             .filter(|path| {
-                // Must be under root
-                if !path.starts_with(root) {
-                    return false;
+                // Must be under root (root is relative, e.g., "src" or "")
+                // Empty root or "." means match all
+                let root_str = root.to_string_lossy();
+                if !root_str.is_empty() && root_str != "." {
+                    if !path.starts_with(root) {
+                        return false;
+                    }
                 }
 
                 // Check exclude dirs
@@ -73,13 +82,11 @@ impl FileIndex {
                     return false;
                 }
 
-                // Check exclude paths (relative to project root)
+                // Check exclude paths (paths are already relative)
                 if !exclude_paths.is_empty() {
-                    if let Ok(rel) = path.strip_prefix(project_root) {
-                        let rel_str = rel.to_string_lossy();
-                        if exclude_paths.iter().any(|p| *p == rel_str) {
-                            return false;
-                        }
+                    let path_str = path.to_string_lossy();
+                    if exclude_paths.iter().any(|p| *p == path_str) {
+                        return false;
                     }
                 }
 
@@ -90,35 +97,32 @@ impl FileIndex {
     }
 
     /// Convenience wrapper using `ScanConfig` fields.
+    /// Returns relative paths.
     ///
-    /// - `project_root`: the project root directory
     /// - `scan`: processor scan configuration
     /// - `recursive`: if false, only include files at depth 1 from the scan root
     pub fn scan(
         &self,
-        project_root: &Path,
         scan: &ScanConfig,
         recursive: bool,
     ) -> Vec<PathBuf> {
         let dir = scan.scan_dir();
-        let root = if dir.is_empty() {
-            project_root.to_path_buf()
-        } else {
-            project_root.join(dir)
-        };
+        let root = PathBuf::from(dir);
         let ext_refs: Vec<&str> = scan.extensions().iter().map(|s| s.as_str()).collect();
         let exclude_dir_refs: Vec<&str> = scan.exclude_dirs().iter().map(|s| s.as_str()).collect();
         let exclude_file_refs: Vec<&str> = scan.exclude_files().iter().map(|s| s.as_str()).collect();
         let exclude_path_refs: Vec<&str> = scan.exclude_paths().iter().map(|s| s.as_str()).collect();
-        let mut results = self.query(&root, &ext_refs, &exclude_dir_refs, &exclude_file_refs, &exclude_path_refs, project_root);
+        let mut results = self.query(&root, &ext_refs, &exclude_dir_refs, &exclude_file_refs, &exclude_path_refs);
 
         if !recursive {
             // Filter to max_depth=1 from scan root: only files directly in root
+            let root_for_check = if dir.is_empty() { None } else { Some(root.as_path()) };
             results.retain(|path| {
-                path.parent() == Some(root.as_path())
+                path.parent() == root_for_check
             });
         }
 
         results
     }
 }
+

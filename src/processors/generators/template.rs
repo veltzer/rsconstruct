@@ -80,21 +80,19 @@ fn trim_block_newlines(content: &str) -> String {
 }
 
 pub struct TemplateProcessor {
-    project_root: PathBuf,
     config: TemplateConfig,
 }
 
 impl TemplateProcessor {
-    pub fn new(project_root: PathBuf, config: TemplateConfig) -> Result<Self> {
+    pub fn new(_project_root: PathBuf, config: TemplateConfig) -> Result<Self> {
         Ok(Self {
-            project_root,
             config,
         })
     }
 
     /// Find all template files matching configured extensions
     fn find_templates(&self, file_index: &FileIndex) -> Result<Vec<TemplateItem>> {
-        let paths = file_index.scan(&self.project_root, &self.config.scan, false);
+        let paths = file_index.scan(&self.config.scan, false);
         let extensions = self.config.scan.extensions();
 
         let mut items = Vec::new();
@@ -104,7 +102,8 @@ impl TemplateProcessor {
                 if filename.ends_with(ext.as_str()) {
                     let output_name = &filename[..filename.len() - ext.len()];
                     if !output_name.is_empty() {
-                        let output_path = self.project_root.join(output_name);
+                        // Output is at project root with the .tera extension stripped
+                        let output_path = PathBuf::from(output_name);
                         items.push(TemplateItem::new(path.clone(), output_path));
                         break;
                     }
@@ -135,7 +134,7 @@ impl ProductDiscovery for TemplateProcessor {
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
         let items = self.find_templates(file_index)?;
-        let extra = resolve_extra_inputs(&self.project_root, &self.config.extra_inputs)?;
+        let extra = resolve_extra_inputs(&self.config.extra_inputs)?;
 
         for item in items {
             let mut inputs = vec![item.source_path.clone()];

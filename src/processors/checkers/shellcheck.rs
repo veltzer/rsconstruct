@@ -22,7 +22,7 @@ impl ShellcheckProcessor {
 
     /// Check if shell linting should be enabled
     fn should_lint(&self) -> bool {
-        scan_root(&self.project_root, &self.config.scan).exists()
+        scan_root(&self.config.scan).as_os_str().is_empty() || scan_root(&self.config.scan).exists()
     }
 
     /// Run shellcheck on a single file
@@ -64,7 +64,7 @@ impl ProductDiscovery for ShellcheckProcessor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        self.should_lint() && !file_index.scan(&self.project_root, &self.config.scan, true).is_empty()
+        self.should_lint() && !file_index.scan(&self.config.scan, true).is_empty()
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -77,7 +77,6 @@ impl ProductDiscovery for ShellcheckProcessor {
         }
         discover_checker_products(
             graph,
-            &self.project_root,
             &self.config.scan,
             file_index,
             &self.config.extra_inputs,

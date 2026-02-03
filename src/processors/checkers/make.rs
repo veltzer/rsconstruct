@@ -8,21 +8,19 @@ use crate::graph::{BuildGraph, Product};
 use crate::processors::{ProductDiscovery, scan_root, run_command, check_command_output};
 
 pub struct MakeProcessor {
-    project_root: PathBuf,
     config: MakeConfig,
 }
 
 impl MakeProcessor {
-    pub fn new(project_root: PathBuf, config: MakeConfig) -> Self {
+    pub fn new(_project_root: PathBuf, config: MakeConfig) -> Self {
         Self {
-            project_root,
             config,
         }
     }
 
     /// Check if make processing should be enabled
     fn should_process(&self) -> bool {
-        scan_root(&self.project_root, &self.config.scan).exists()
+        scan_root(&self.config.scan).as_os_str().is_empty() || scan_root(&self.config.scan).exists()
     }
 
     /// Run make in the Makefile's directory
@@ -53,7 +51,7 @@ impl ProductDiscovery for MakeProcessor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        self.should_process() && !file_index.scan(&self.project_root, &self.config.scan, true).is_empty()
+        self.should_process() && !file_index.scan(&self.config.scan, true).is_empty()
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -65,26 +63,25 @@ impl ProductDiscovery for MakeProcessor {
             return Ok(());
         }
 
-        let makefiles = file_index.scan(&self.project_root, &self.config.scan, true);
+        let makefiles = file_index.scan(&self.config.scan, true);
         if makefiles.is_empty() {
             return Ok(());
         }
 
         let cfg_hash = Some(config_hash(&self.config));
-        let extra = resolve_extra_inputs(&self.project_root, &self.config.extra_inputs)?;
+        let extra = resolve_extra_inputs(&self.config.extra_inputs)?;
 
         for makefile in makefiles {
-            let makefile_dir = makefile.parent().unwrap_or(&self.project_root);
+            let makefile_dir = makefile.parent().map(|p| p.to_path_buf()).unwrap_or_default();
 
             // Collect all files under the Makefile's directory as inputs so that
             // changes to any sibling source file trigger a rebuild.
             let sibling_files = file_index.query(
-                makefile_dir,
+                &makefile_dir,
                 &[""],       // match all extensions
                 &["/.git/", "/out/", "/.rsb/"],
                 &[],
                 &[],
-                &self.project_root,
             );
 
             let mut inputs: Vec<PathBuf> = Vec::new();

@@ -22,7 +22,7 @@ impl CpplintProcessor {
 
     /// Check if C/C++ linting should be enabled
     fn should_lint(&self) -> bool {
-        scan_root(&self.project_root, &self.cpplint_config.scan).exists()
+        scan_root(&self.cpplint_config.scan).as_os_str().is_empty() || scan_root(&self.cpplint_config.scan).exists()
     }
 
     /// Run checker on a single file
@@ -64,7 +64,7 @@ impl ProductDiscovery for CpplintProcessor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        self.should_lint() && !file_index.scan(&self.project_root, &self.cpplint_config.scan, true).is_empty()
+        self.should_lint() && !file_index.scan(&self.cpplint_config.scan, true).is_empty()
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -77,7 +77,6 @@ impl ProductDiscovery for CpplintProcessor {
         }
         discover_checker_products(
             graph,
-            &self.project_root,
             &self.cpplint_config.scan,
             file_index,
             &self.cpplint_config.extra_inputs,

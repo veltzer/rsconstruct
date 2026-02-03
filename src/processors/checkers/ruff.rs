@@ -63,7 +63,7 @@ impl ProductDiscovery for RuffProcessor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        !file_index.scan(&self.project_root, &self.ruff_config.scan, true).is_empty()
+        !file_index.scan(&self.ruff_config.scan, true).is_empty()
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -73,7 +73,6 @@ impl ProductDiscovery for RuffProcessor {
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
         discover_checker_products(
             graph,
-            &self.project_root,
             &self.ruff_config.scan,
             file_index,
             &self.ruff_config.extra_inputs,

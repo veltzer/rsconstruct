@@ -10,21 +10,19 @@ use crate::graph::{BuildGraph, Product};
 use crate::processors::{ProductDiscovery, scan_root, discover_checker_products, is_interrupted};
 
 pub struct SleepProcessor {
-    project_root: PathBuf,
     config: SleepConfig,
 }
 
 impl SleepProcessor {
-    pub fn new(project_root: PathBuf, config: SleepConfig) -> Self {
+    pub fn new(_project_root: PathBuf, config: SleepConfig) -> Self {
         Self {
-            project_root,
             config,
         }
     }
 
     /// Check if sleep processing should be enabled
     fn should_process(&self) -> bool {
-        scan_root(&self.project_root, &self.config.scan).exists()
+        scan_root(&self.config.scan).as_os_str().is_empty() || scan_root(&self.config.scan).exists()
     }
 
     /// Read duration from sleep file and sleep
@@ -64,7 +62,7 @@ impl ProductDiscovery for SleepProcessor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        self.should_process() && !file_index.scan(&self.project_root, &self.config.scan, true).is_empty()
+        self.should_process() && !file_index.scan(&self.config.scan, true).is_empty()
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
@@ -73,7 +71,6 @@ impl ProductDiscovery for SleepProcessor {
         }
         discover_checker_products(
             graph,
-            &self.project_root,
             &self.config.scan,
             file_index,
             &self.config.extra_inputs,

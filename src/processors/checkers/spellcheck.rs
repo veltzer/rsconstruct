@@ -12,7 +12,6 @@ use crate::processors::{ProductDiscovery, discover_checker_products};
 const DICT_DIR: &str = "/usr/share/hunspell";
 
 pub struct SpellcheckProcessor {
-    project_root: PathBuf,
     spellcheck_config: SpellcheckConfig,
     /// Cached dictionary, built once on first use and reused across all execute() calls
     cached_dict: OnceLock<Result<zspell::Dictionary, String>>,
@@ -21,16 +20,15 @@ pub struct SpellcheckProcessor {
 }
 
 impl SpellcheckProcessor {
-    pub fn new(project_root: PathBuf, spellcheck_config: SpellcheckConfig) -> Result<Self> {
+    pub fn new(_project_root: PathBuf, spellcheck_config: SpellcheckConfig) -> Result<Self> {
         let custom_words = if spellcheck_config.use_words_file {
-            let words_path = project_root.join(&spellcheck_config.words_file);
-            Self::load_custom_words(&words_path)
+            let words_path = Path::new(&spellcheck_config.words_file);
+            Self::load_custom_words(words_path)
                 .with_context(|| format!("Custom words file not found: {}", words_path.display()))?
         } else {
             HashSet::new()
         };
         Ok(Self {
-            project_root,
             spellcheck_config,
             cached_dict: OnceLock::new(),
             custom_words,
@@ -216,7 +214,7 @@ impl ProductDiscovery for SpellcheckProcessor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        !file_index.scan(&self.project_root, &self.spellcheck_config.scan, true).is_empty()
+        !file_index.scan(&self.spellcheck_config.scan, true).is_empty()
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
@@ -224,14 +222,13 @@ impl ProductDiscovery for SpellcheckProcessor {
         // If custom words are enabled, add the words file as an input so
         // changes to it invalidate all spellcheck products.
         if self.spellcheck_config.use_words_file {
-            let words_path = self.project_root.join(&self.spellcheck_config.words_file);
+            let words_path = Path::new(&self.spellcheck_config.words_file);
             if words_path.exists() {
                 extra_inputs.push(self.spellcheck_config.words_file.clone());
             }
         }
         discover_checker_products(
             graph,
-            &self.project_root,
             &self.spellcheck_config.scan,
             file_index,
             &extra_inputs,

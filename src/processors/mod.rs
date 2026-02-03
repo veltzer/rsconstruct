@@ -119,23 +119,18 @@ pub fn check_command_output(output: &Output, context: impl std::fmt::Display) ->
 }
 
 /// Compute the scan root directory from a ScanConfig.
-/// Returns project_root if scan_dir is empty, otherwise project_root/scan_dir.
-pub fn scan_root(project_root: &Path, scan: &crate::config::ScanConfig) -> PathBuf {
-    let dir = scan.scan_dir();
-    if dir.is_empty() {
-        project_root.to_path_buf()
-    } else {
-        project_root.join(dir)
-    }
+/// Returns empty path if scan_dir is empty, otherwise the scan_dir as a relative path.
+pub fn scan_root(scan: &crate::config::ScanConfig) -> PathBuf {
+    PathBuf::from(scan.scan_dir())
 }
 
 /// Compute a stub path for a source file.
-/// Maps `project_root/a/b/file.ext` -> `stub_dir/a_b_file.ext.suffix`.
-pub fn stub_path(project_root: &Path, stub_dir: &Path, source: &Path, suffix: &str) -> PathBuf {
-    let relative = source.strip_prefix(project_root).unwrap_or(source);
+/// Maps `a/b/file.ext` -> `stub_dir/a_b_file.ext.suffix`.
+/// Source path is already relative to project root.
+pub fn stub_path(stub_dir: &Path, source: &Path, suffix: &str) -> PathBuf {
     let stub_name = format!(
         "{}.{}",
-        relative.display().to_string().replace(['/', '\\'], "_"),
+        source.display().to_string().replace(['/', '\\'], "_"),
         suffix,
     );
     stub_dir.join(stub_name)
@@ -155,10 +150,10 @@ pub fn clean_outputs(product: &Product, label: &str) -> Result<()> {
 /// Discover stub-based products: one stub output per source file.
 /// Used by Lua plugins that produce a single stub file per input.
 /// Built-in checkers should use discover_checker_products() instead.
+/// All paths are relative to project root.
 #[allow(dead_code)]
 pub fn discover_stub_products(
     graph: &mut BuildGraph,
-    project_root: &Path,
     stub_dir: &Path,
     scan: &crate::config::ScanConfig,
     file_index: &FileIndex,
@@ -168,14 +163,14 @@ pub fn discover_stub_products(
     stub_suffix: &str,
     recursive: bool,
 ) -> Result<()> {
-    let files = file_index.scan(project_root, scan, recursive);
+    let files = file_index.scan(scan, recursive);
     if files.is_empty() {
         return Ok(());
     }
     let hash = Some(config_hash(cfg_hash));
-    let extra = resolve_extra_inputs(project_root, extra_inputs)?;
+    let extra = resolve_extra_inputs(extra_inputs)?;
     for file in files {
-        let stub = stub_path(project_root, stub_dir, &file, stub_suffix);
+        let stub = stub_path(stub_dir, &file, stub_suffix);
         let mut inputs = vec![file];
         inputs.extend(extra.clone());
         graph.add_product(inputs, vec![stub], processor_name, hash.clone())?;
@@ -191,21 +186,21 @@ pub fn discover_stub_products(
 ///
 /// This is the standard way to implement checker discovery. See [`ProcessorType::Checker`]
 /// for details on the caching behavior.
+/// All paths are relative to project root.
 pub fn discover_checker_products(
     graph: &mut BuildGraph,
-    project_root: &Path,
     scan: &crate::config::ScanConfig,
     file_index: &FileIndex,
     extra_inputs: &[String],
     cfg_hash: &impl serde::Serialize,
     processor_name: &str,
 ) -> Result<()> {
-    let files = file_index.scan(project_root, scan, true);
+    let files = file_index.scan(scan, true);
     if files.is_empty() {
         return Ok(());
     }
     let hash = Some(config_hash(cfg_hash));
-    let extra = resolve_extra_inputs(project_root, extra_inputs)?;
+    let extra = resolve_extra_inputs(extra_inputs)?;
     for file in files {
         let mut inputs = vec![file];
         inputs.extend(extra.clone());

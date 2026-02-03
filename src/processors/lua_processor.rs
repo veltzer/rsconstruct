@@ -130,13 +130,12 @@ impl LuaProcessor {
     fn register_api(lua: &Lua, proc_name: &str) -> Result<()> {
         let rsb = lua_context(lua.create_table(), "Failed to create rsb table")?;
 
-        // rsb.stub_path(project_root, source, suffix)
+        // rsb.stub_path(source, suffix) - paths are relative to project root
         let stub_path_fn = lua_context(
-            lua.create_function(|_, (proj_root, source, suffix): (String, String, String)| {
-                let proj = PathBuf::from(&proj_root);
+            lua.create_function(|_, (source, suffix): (String, String)| {
                 let src = PathBuf::from(&source);
-                let stub_dir = proj.join("out").join(&suffix);
-                let stub = super::stub_path(&proj, &stub_dir, &src, &suffix);
+                let stub_dir = PathBuf::from("out").join(&suffix);
+                let stub = super::stub_path(&stub_dir, &src, &suffix);
                 Ok(stub.to_string_lossy().to_string())
             }),
             "Failed to create stub_path function",
@@ -375,7 +374,7 @@ impl ProductDiscovery for LuaProcessor {
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
-        let files = file_index.scan(&self.project_root, &self.scan_config, true);
+        let files = file_index.scan(&self.scan_config, true);
         if files.is_empty() {
             return Ok(());
         }
@@ -475,7 +474,7 @@ impl ProductDiscovery for LuaProcessor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        let files = file_index.scan(&self.project_root, &self.scan_config, true);
+        let files = file_index.scan(&self.scan_config, true);
         if self.has_function("auto_detect") {
             let Ok(files_table) = self.lua.create_table() else {
                 return !files.is_empty();
