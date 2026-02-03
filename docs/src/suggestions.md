@@ -9,6 +9,7 @@ Features that have been implemented and are documented elsewhere:
 - **Remote caching** — See [Remote Caching](remote-caching.md). Share build artifacts across machines via S3, HTTP, or filesystem.
 - **Lua plugin system** — See [Lua Plugins](plugins.md). Define custom processors in Lua without forking rsb.
 - **Tool version locking** — See `rsb tools lock`. Lock and verify external tool versions for reproducibility.
+- **JSON output mode** — Use `--json` flag for machine-readable JSON Lines output.
 
 ## Missing Test Coverage
 
@@ -302,24 +303,24 @@ Features that have been implemented and are documented elsewhere:
 
 ## Developer Experience
 
-### JSON output mode
+### ~~JSON output mode~~ *(Done)*
 - Machine-readable output for CI integration and tooling.
-- Enable with `--output=json` or `--json` flag:
+- Enable with the `--json` global flag:
   ```bash
   rsb build --json
-  rsb status --json
-  rsb processor files --json
   ```
-- Output format (JSON Lines, one object per event):
+- Output format (JSON Lines, one object per line):
   ```json
-  {"event":"start","product":"template:config.py","processor":"template","inputs":["templates/config.py.tera"]}
-  {"event":"complete","product":"template:config.py","status":"success","duration_ms":42}
-  {"event":"complete","product":"ruff:main.py","status":"failed","error":"E501 line too long"}
-  {"event":"summary","total":10,"success":9,"failed":1,"skipped":0,"duration_ms":1234}
+  {"event":"build_start","total_products":5}
+  {"event":"product_start","product":"test.txt","processor":"template","inputs":["templates/test.txt.tera"],"outputs":["test.txt"]}
+  {"event":"product_complete","product":"test.txt","processor":"template","status":"success","duration_ms":42}
+  {"event":"product_complete","product":"main.py","processor":"ruff","status":"skipped"}
+  {"event":"product_complete","product":"lib.py","processor":"ruff","status":"restored"}
+  {"event":"product_complete","product":"bad.py","processor":"ruff","status":"failed","error":"E501 line too long"}
+  {"event":"build_summary","total":5,"success":1,"failed":1,"skipped":1,"restored":1,"duration_ms":1234,"errors":["..."]}
   ```
-- Events include: `start`, `complete`, `skip`, `restore`, `summary`.
-- Enables: CI dashboards, build time tracking, custom error formatting, IDE integration.
-- Structured build logs (JSON lines) make it easy to build dashboards or feed into observability systems.
+- Status values: `success`, `failed`, `skipped` (unchanged), `restored` (from cache).
+- When `--json` is enabled, human-readable output is suppressed.
 
 ### Build profiling / tracing
 - Beyond `--timings`, generate a Chrome trace format or flamegraph SVG showing exactly what ran when, including parallel lanes.

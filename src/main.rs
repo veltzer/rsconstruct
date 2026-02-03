@@ -5,6 +5,7 @@ mod config;
 mod executor;
 mod file_index;
 mod graph;
+mod json_output;
 mod object_store;
 mod processors;
 mod remote_cache;
@@ -31,6 +32,9 @@ fn main() -> Result<()> {
 
     // Enable process debug logging if --process flag is set
     processors::set_process_debug(cli.process);
+
+    // Enable JSON output mode if --json flag is set
+    json_output::set_json_mode(cli.json);
 
     // Set up Ctrl+C handler: sets a flag so the executor can stop gracefully
     let interrupted = Arc::new(AtomicBool::new(false));

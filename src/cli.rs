@@ -19,6 +19,10 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub process: bool,
 
+    /// Output in JSON Lines format (machine-readable)
+    #[arg(long, global = true)]
+    pub json: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }

@@ -8,6 +8,7 @@ use std::time::Instant;
 
 use crate::color;
 use crate::graph::BuildGraph;
+use crate::json_output;
 use crate::object_store::ObjectStore;
 use crate::processors::{BuildStats, ProcessStats, ProductDiscovery, ProductTiming};
 
@@ -49,6 +50,9 @@ impl<'a> Executor<'a> {
         let build_start = Instant::now();
         let order = graph.topological_sort()?;
 
+        // Emit JSON build start event
+        json_output::emit_build_start(order.len());
+
         let result = if self.parallel <= 1 {
             self.execute_sequential(graph, &order, object_store, force, timings, keep_going)
         } else {
@@ -58,6 +62,18 @@ impl<'a> Executor<'a> {
         match result {
             Ok(mut stats) => {
                 stats.total_duration = build_start.elapsed();
+
+                // Emit JSON build summary
+                json_output::emit_build_summary(
+                    stats.total_processed() + stats.total_skipped() + stats.total_restored() + stats.failed_count,
+                    stats.total_processed(),
+                    stats.failed_count,
+                    stats.total_skipped(),
+                    stats.total_restored(),
+                    stats.total_duration,
+                    &stats.failed_messages,
+                );
+
                 Ok(stats)
             }
             Err(e) => Err(e),
@@ -126,7 +142,7 @@ impl<'a> Executor<'a> {
 
             if use_batch {
                 // Print batch processing message
-                if !silenced {
+                if !silenced && !crate::json_output::is_json_mode() {
                     let displays: Vec<String> = pending_batch.iter().map(|pw| {
                         let product = graph.get_product(pw.product_id).unwrap();
                         product.display(file_names)
@@ -150,11 +166,22 @@ impl<'a> Executor<'a> {
                 let batch_duration = batch_start.elapsed();
 
                 // Process per-product results
+                let per_product_duration = batch_duration / (pending_batch.len() as u32);
                 for (pw, result) in pending_batch.drain(..).zip(results) {
                     let product = graph.get_product(pw.product_id).unwrap();
                     match result {
                         Ok(()) => {
                             object_store.cache_outputs(&pw.cache_key, &pw.input_checksum, &product.outputs)?;
+
+                            // Emit JSON complete event for batch item
+                            crate::json_output::emit_product_complete(
+                                &product.display(file_names),
+                                &proc_name,
+                                "success",
+                                Some(per_product_duration),
+                                None,
+                            );
+
                             let stats = stats_by_processor
                                 .entry(proc_name.clone())
                                 .or_insert_with(|| ProcessStats::new());
@@ -162,6 +189,15 @@ impl<'a> Executor<'a> {
                             stats.files_created += product.outputs.len();
                         }
                         Err(e) => {
+                            // Emit JSON failed event for batch item
+                            crate::json_output::emit_product_complete(
+                                &product.display(file_names),
+                                &proc_name,
+                                "failed",
+                                Some(per_product_duration),
+                                Some(&e.to_string()),
+                            );
+
                             let stats = stats_by_processor
                                 .entry(proc_name.clone())
                                 .or_insert_with(|| ProcessStats::new());
@@ -200,17 +236,35 @@ impl<'a> Executor<'a> {
                     let product = graph.get_product(pw.product_id).unwrap();
                     let silenced = !keep_going && silenced_processors.contains(&proc_name);
 
-                    if !silenced {
+                    if !silenced && !crate::json_output::is_json_mode() {
                         println!("[{}] {} {}", proc_name,
                             color::green("Processing:"),
                             product.display(file_names));
                     }
+
+                    // Emit JSON start event
+                    crate::json_output::emit_product_start(
+                        &product.display(file_names),
+                        &proc_name,
+                        &product.inputs,
+                        &product.outputs,
+                    );
 
                     let product_start = Instant::now();
                     match processor.execute(product) {
                         Ok(()) => {
                             let duration = product_start.elapsed();
                             object_store.cache_outputs(&pw.cache_key, &pw.input_checksum, &product.outputs)?;
+
+                            // Emit JSON complete event
+                            crate::json_output::emit_product_complete(
+                                &product.display(file_names),
+                                &proc_name,
+                                "success",
+                                Some(duration),
+                                None,
+                            );
+
                             let stats = stats_by_processor
                                 .entry(proc_name.clone())
                                 .or_insert_with(|| ProcessStats::new());
@@ -226,13 +280,26 @@ impl<'a> Executor<'a> {
                             }
                         }
                         Err(e) => {
+                            let duration = product_start.elapsed();
+
+                            // Emit JSON failed event
+                            crate::json_output::emit_product_complete(
+                                &product.display(file_names),
+                                &proc_name,
+                                "failed",
+                                Some(duration),
+                                Some(&e.to_string()),
+                            );
+
                             let stats = stats_by_processor
                                 .entry(proc_name.clone())
                                 .or_insert_with(|| ProcessStats::new());
                             stats.failed += 1;
                             if keep_going {
                                 let msg = format!("[{}] {}: {}", proc_name, product.display(file_names), e);
-                                println!("{}", color::red(&format!("Error: {}", msg)));
+                                if !crate::json_output::is_json_mode() {
+                                    println!("{}", color::red(&format!("Error: {}", msg)));
+                                }
                                 failed_products.insert(pw.product_id);
                                 failed_messages.push(msg);
                             } else {
@@ -288,6 +355,13 @@ impl<'a> Executor<'a> {
                         color::dim("Skipping (unchanged):"),
                         self.product_display(product));
                 }
+                json_output::emit_product_complete(
+                    &self.product_display(product),
+                    &product.processor,
+                    "skipped",
+                    None,
+                    None,
+                );
                 let stats = stats_by_processor
                     .entry(product.processor.clone())
                     .or_insert_with(|| ProcessStats::new());
@@ -302,6 +376,13 @@ impl<'a> Executor<'a> {
                         color::cyan("Restored from cache:"),
                         self.product_display(product));
                 }
+                json_output::emit_product_complete(
+                    &self.product_display(product),
+                    &product.processor,
+                    "restored",
+                    None,
+                    None,
+                );
                 let stats = stats_by_processor
                     .entry(product.processor.clone())
                     .or_insert_with(|| ProcessStats::new());

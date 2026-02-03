@@ -421,6 +421,11 @@ impl BuildStats {
     }
 
     pub fn print_summary(&self, summary: bool, timings: bool) {
+        // Don't print human-readable summary in JSON mode
+        if crate::json_output::is_json_mode() {
+            return;
+        }
+
         if !summary && !timings {
             return;
         }
