@@ -20,10 +20,17 @@ Full documentation: <https://veltzer.github.io/rsb/>
 
 ## Installation
 
-### Download pre-built binary (x86_64 Linux)
+### Download pre-built binary (Linux)
+
+Pre-built binaries are available for x86_64 and aarch64 (arm64).
 
 ```bash
-gh release download latest --repo veltzer/rsb --pattern 'rsb' --output rsb --clobber
+# x86_64
+gh release download latest --repo veltzer/rsb --pattern 'rsb-x86_64-unknown-linux-gnu' --output rsb --clobber
+
+# aarch64 / arm64
+gh release download latest --repo veltzer/rsb --pattern 'rsb-aarch64-unknown-linux-gnu' --output rsb --clobber
+
 chmod +x rsb
 sudo mv rsb /usr/local/bin/
 ```
@@ -31,7 +38,12 @@ sudo mv rsb /usr/local/bin/
 Or without the GitHub CLI:
 
 ```bash
-curl -Lo rsb https://github.com/veltzer/rsb/releases/download/latest/rsb
+# x86_64
+curl -Lo rsb https://github.com/veltzer/rsb/releases/download/latest/rsb-x86_64-unknown-linux-gnu
+
+# aarch64 / arm64
+curl -Lo rsb https://github.com/veltzer/rsb/releases/download/latest/rsb-aarch64-unknown-linux-gnu
+
 chmod +x rsb
 sudo mv rsb /usr/local/bin/
 ```
