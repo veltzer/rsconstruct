@@ -68,6 +68,10 @@ impl ProductDiscovery for MakeProcessor {
         "Run make in directories containing Makefiles"
     }
 
+    fn processor_type(&self) -> super::ProcessorType {
+        super::ProcessorType::Generator
+    }
+
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         self.should_process() && !file_index.scan(&self.project_root, &self.config.scan, true).is_empty()
     }

@@ -160,7 +160,8 @@ pub fn clean_outputs(product: &Product, label: &str) -> Result<()> {
 }
 
 /// Discover stub-based products: one stub output per source file.
-/// Used by processors that produce a single stub file per input (ruff, pylint, cpplint, spellcheck, sleep).
+/// Used by Lua plugins that produce a single stub file per input.
+/// Built-in checkers should use discover_checker_products() instead.
 pub fn discover_stub_products(
     graph: &mut BuildGraph,
     project_root: &Path,
@@ -184,6 +185,32 @@ pub fn discover_stub_products(
         let mut inputs = vec![file];
         inputs.extend(extra.clone());
         graph.add_product(inputs, vec![stub], processor_name, hash.clone())?;
+    }
+    Ok(())
+}
+
+/// Discover checker products: no output files, cache entry serves as success marker.
+/// Used by built-in checker processors (ruff, pylint, cpplint, shellcheck, spellcheck, sleep).
+pub fn discover_checker_products(
+    graph: &mut BuildGraph,
+    project_root: &Path,
+    scan: &crate::config::ScanConfig,
+    file_index: &FileIndex,
+    extra_inputs: &[String],
+    cfg_hash: &impl serde::Serialize,
+    processor_name: &str,
+) -> Result<()> {
+    let files = file_index.scan(project_root, scan, true);
+    if files.is_empty() {
+        return Ok(());
+    }
+    let hash = Some(config_hash(cfg_hash));
+    let extra = resolve_extra_inputs(project_root, extra_inputs)?;
+    for file in files {
+        let mut inputs = vec![file];
+        inputs.extend(extra.clone());
+        // Empty outputs: cache entry = success record
+        graph.add_product(inputs, vec![], processor_name, hash.clone())?;
     }
     Ok(())
 }
@@ -213,7 +240,7 @@ pub fn write_stub(stub_path: &Path, content: &str) -> Result<()> {
     fs::write(stub_path, content).context("Failed to create stub file")?;
     Ok(())
 }
-/// Shared helper for lint processors that support batch execution.
+/// Shared helper for lint processors that support batch execution (legacy, for Lua plugins).
 ///
 /// Runs `batch_fn` with all input paths at once. On success, writes stubs for all products.
 /// On batch failure, falls back to calling `single_fn` per product to isolate errors.
@@ -282,6 +309,63 @@ where
     results.into_iter().map(|r| r.unwrap()).collect()
 }
 
+/// Shared helper for checker processors that support batch execution (no stub files).
+///
+/// Runs `batch_fn` with all input paths at once. On success, returns Ok for all products.
+/// On batch failure, falls back to calling `single_fn` per product to isolate errors.
+pub fn execute_checker_batch<F, G>(
+    products: &[&Product],
+    batch_fn: F,
+    single_fn: G,
+) -> Vec<Result<()>>
+where
+    F: Fn(&[&Path]) -> Result<()>,
+    G: Fn(&Path) -> Result<()>,
+{
+    // Validate all products and collect input paths
+    let mut validated: Vec<&Path> = Vec::with_capacity(products.len());
+    let mut results: Vec<Option<Result<()>>> = (0..products.len()).map(|_| None).collect();
+
+    for (i, product) in products.iter().enumerate() {
+        if product.inputs.is_empty() {
+            results[i] = Some(Err(anyhow::anyhow!("Checker product must have at least one input")));
+        } else {
+            validated.push(&product.inputs[0]);
+        }
+    }
+
+    if validated.is_empty() {
+        // All products failed validation
+        return results.into_iter().map(|r| r.unwrap()).collect();
+    }
+
+    // Try batch execution
+    if batch_fn(&validated).is_ok() {
+        // Batch succeeded — mark all validated products as successful
+        let mut validated_idx = 0;
+        for i in 0..products.len() {
+            if results[i].is_some() {
+                continue; // Already failed validation
+            }
+            validated_idx += 1;
+            let _ = validated_idx; // suppress unused warning
+            results[i] = Some(Ok(()));
+        }
+    } else {
+        // Batch failed — fall back to per-file execution to isolate errors
+        let mut validated_iter = validated.iter();
+        for i in 0..products.len() {
+            if results[i].is_some() {
+                continue; // Already failed validation
+            }
+            let input = validated_iter.next().unwrap();
+            results[i] = Some(single_fn(input));
+        }
+    }
+
+    results.into_iter().map(|r| r.unwrap()).collect()
+}
+
 pub use cc::CcProcessor;
 pub use cpplint::CpplintProcessor;
 pub use lua_processor::LuaProcessor;
@@ -293,11 +377,33 @@ pub use sleep::SleepProcessor;
 pub use spellcheck::SpellcheckProcessor;
 pub use template::TemplateProcessor;
 
+/// The type of processor - whether it generates new files or checks existing files
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProcessorType {
+    /// Generates new output files from input files (e.g., template, cc_single_file, pandoc)
+    Generator,
+    /// Checks/validates input files, produces stub files as cache markers (e.g., ruff, pylint, spellcheck)
+    Checker,
+}
+
+impl ProcessorType {
+    /// Returns the string representation
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ProcessorType::Generator => "generator",
+            ProcessorType::Checker => "checker",
+        }
+    }
+}
+
 /// Trait for processors that can discover products for the build graph
 /// Must be Sync + Send for parallel execution support
 pub trait ProductDiscovery: Sync + Send {
     /// Human-readable description of what this processor does
     fn description(&self) -> &str;
+
+    /// The type of this processor (generator or checker)
+    fn processor_type(&self) -> ProcessorType;
 
     /// Whether this processor should be hidden from default listings (e.g. testing-only processors)
     fn hidden(&self) -> bool {

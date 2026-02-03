@@ -121,6 +121,10 @@ impl ProductDiscovery for TemplateProcessor {
         "Render Tera templates into output files"
     }
 
+    fn processor_type(&self) -> super::ProcessorType {
+        super::ProcessorType::Generator
+    }
+
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         self.find_templates(file_index).map_or(false, |t| !t.is_empty())
     }

@@ -452,6 +452,10 @@ impl ProductDiscovery for CcProcessor {
         "Compile C/C++ source files into executables (single-file)"
     }
 
+    fn processor_type(&self) -> super::ProcessorType {
+        super::ProcessorType::Generator
+    }
+
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         self.should_process() && !self.find_source_files(file_index).is_empty()
     }

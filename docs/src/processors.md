@@ -2,6 +2,31 @@
 
 RSB uses **processors** to discover and build products. Each processor scans for source files matching its conventions and produces output files.
 
+## Processor Types
+
+Processors are classified into two types:
+
+- **Generators** — produce real output files from input files (e.g., compiling code, rendering templates, transforming file formats)
+- **Checkers** — validate input files without producing output files (e.g., linters, spell checkers, static analyzers). Success is recorded in the cache database.
+
+The processor type is displayed in `rsb processor list` output:
+
+```
+cc_single_file [generator] enabled
+ruff [checker] enabled
+template [generator] enabled
+```
+
+For checkers, `rsb processor files` shows "(checker)" instead of output paths since no files are produced:
+
+```
+[ruff] (3 products)
+src/foo.py → (checker)
+src/bar.py → (checker)
+```
+
+## Configuration
+
 Enable processors in `rsb.toml`:
 
 ```toml

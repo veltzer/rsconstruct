@@ -24,21 +24,14 @@ fn status_command() {
     let build = run_rsb(project_path, &["build"]);
     assert!(build.status.success());
 
-    // After building, should be UP-TO-DATE
+    // After building, should be UP-TO-DATE (checkers have no output files, cache entry = success)
     let status2 = run_rsb_with_env(project_path, &["status"], &[("NO_COLOR", "1")]);
     assert!(status2.status.success());
     let stdout2 = String::from_utf8_lossy(&status2.stdout);
     assert!(stdout2.contains("UP-TO-DATE"), "After build, product should be UP-TO-DATE: {}", stdout2);
 
-    // Delete output, should be RESTORABLE (cache still exists)
-    fs::remove_file(project_path.join("out/sleep/status_test.done")).unwrap();
-    let status3 = run_rsb_with_env(project_path, &["status"], &[("NO_COLOR", "1")]);
-    assert!(status3.status.success());
-    let stdout3 = String::from_utf8_lossy(&status3.stdout);
-    assert!(stdout3.contains("RESTORABLE"), "After deleting output, product should be RESTORABLE: {}", stdout3);
-
     // Check summary line
-    assert!(stdout3.contains("Summary"), "Status output should contain Summary line");
+    assert!(stdout2.contains("Summary"), "Status output should contain Summary line");
 }
 
 #[test]

@@ -37,11 +37,29 @@ impl Product {
     }
 
     /// Display name for logging at the given verbosity level:
-    ///   0 — basename of output only
-    ///   1 — path of output (relative to cwd)
+    ///   0 — basename of output only (for checkers: basename of first input)
+    ///   1 — path of output (relative to cwd) (for checkers: path of first input)
     ///   2 — path of output + path of source (first input)
     ///   3 — path of output + all inputs (source + headers)
     pub fn display(&self, level: u8) -> String {
+        // For checkers (empty outputs), display the input file instead
+        if self.outputs.is_empty() {
+            return match level {
+                0 => {
+                    self.inputs.first()
+                        .and_then(|p| p.file_name())
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("?")
+                        .to_string()
+                }
+                _ => {
+                    self.inputs.first()
+                        .map(|p| relative_to_cwd(p))
+                        .unwrap_or_else(|| "?".to_string())
+                }
+            };
+        }
+
         let output_part = match level {
             0 => {
                 let names: Vec<_> = self.outputs.iter()

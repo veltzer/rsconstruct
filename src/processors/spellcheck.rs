@@ -7,15 +7,13 @@ use std::sync::OnceLock;
 use crate::config::SpellcheckConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use super::{ProductDiscovery, discover_stub_products, ensure_stub_dir, write_stub, clean_outputs};
+use super::{ProductDiscovery, discover_checker_products};
 
-const SPELLCHECK_STUB_DIR: &str = "out/spellcheck";
 const DICT_DIR: &str = "/usr/share/hunspell";
 
 pub struct SpellcheckProcessor {
     project_root: PathBuf,
     spellcheck_config: SpellcheckConfig,
-    stub_dir: PathBuf,
     /// Cached dictionary, built once on first use and reused across all execute() calls
     cached_dict: OnceLock<Result<zspell::Dictionary, String>>,
     /// Custom words, loaded once at initialization
@@ -24,7 +22,6 @@ pub struct SpellcheckProcessor {
 
 impl SpellcheckProcessor {
     pub fn new(project_root: PathBuf, spellcheck_config: SpellcheckConfig) -> Result<Self> {
-        let stub_dir = project_root.join(SPELLCHECK_STUB_DIR);
         let custom_words = if spellcheck_config.use_words_file {
             let words_path = project_root.join(&spellcheck_config.words_file);
             Self::load_custom_words(&words_path)
@@ -35,7 +32,6 @@ impl SpellcheckProcessor {
         Ok(Self {
             project_root,
             spellcheck_config,
-            stub_dir,
             cached_dict: OnceLock::new(),
             custom_words,
         })
@@ -172,7 +168,10 @@ impl SpellcheckProcessor {
     }
 
     /// Check a single file for spelling errors
-    fn check_file(&self, doc_file: &Path, stub_path: &Path, dict: &zspell::Dictionary, custom_words: &HashSet<String>) -> Result<()> {
+    fn check_file(&self, doc_file: &Path) -> Result<()> {
+        let dict = self.get_dictionary()?;
+        let custom_words = &self.custom_words;
+
         let content = fs::read_to_string(doc_file)
             .context(format!("Failed to read document file: {}", doc_file.display()))?;
 
@@ -207,13 +206,17 @@ impl SpellcheckProcessor {
             ));
         }
 
-        write_stub(stub_path, "spellchecked")
+        Ok(())
     }
 }
 
 impl ProductDiscovery for SpellcheckProcessor {
     fn description(&self) -> &str {
         "Check documentation files for spelling errors"
+    }
+
+    fn processor_type(&self) -> super::ProcessorType {
+        super::ProcessorType::Checker
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
@@ -230,34 +233,26 @@ impl ProductDiscovery for SpellcheckProcessor {
                 extra_inputs.push(self.spellcheck_config.words_file.clone());
             }
         }
-        discover_stub_products(
+        discover_checker_products(
             graph,
             &self.project_root,
-            &self.stub_dir,
             &self.spellcheck_config.scan,
             file_index,
             &extra_inputs,
             &self.spellcheck_config,
             "spellcheck",
-            "spellcheck",
-            true,
         )
     }
 
     fn execute(&self, product: &Product) -> Result<()> {
-        if product.outputs.len() != 1 {
-            anyhow::bail!("Spellcheck product must have exactly one output");
+        if product.inputs.is_empty() {
+            anyhow::bail!("Spellcheck product must have at least one input");
         }
-
-        ensure_stub_dir(&self.stub_dir, "spellcheck")?;
-
-        let dict = self.get_dictionary()?;
-        let custom_words = &self.custom_words;
-
-        self.check_file(&product.inputs[0], &product.outputs[0], dict, custom_words)
+        self.check_file(&product.inputs[0])
     }
 
-    fn clean(&self, product: &Product) -> Result<()> {
-        clean_outputs(product, "spellcheck")
+    fn clean(&self, _product: &Product) -> Result<()> {
+        // No output files to clean for checkers
+        Ok(())
     }
 }

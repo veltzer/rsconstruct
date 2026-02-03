@@ -1,28 +1,23 @@
 use anyhow::{Context, Result};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 
-use crate::config::{SleepConfig, config_hash, resolve_extra_inputs};
+use crate::config::SleepConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use super::{ProductDiscovery, scan_root, validate_stub_product, ensure_stub_dir, write_stub, clean_outputs, is_interrupted};
-
-const SLEEP_STUB_DIR: &str = "out/sleep";
+use super::{ProductDiscovery, scan_root, discover_checker_products, is_interrupted};
 
 pub struct SleepProcessor {
     project_root: PathBuf,
-    stub_dir: PathBuf,
     config: SleepConfig,
 }
 
 impl SleepProcessor {
     pub fn new(project_root: PathBuf, config: SleepConfig) -> Self {
-        let stub_dir = project_root.join(SLEEP_STUB_DIR);
         Self {
             project_root,
-            stub_dir,
             config,
         }
     }
@@ -32,17 +27,8 @@ impl SleepProcessor {
         scan_root(&self.project_root, &self.config.scan).exists()
     }
 
-    /// Get stub path for a sleep file (uses file stem, not full relative path)
-    fn get_stub_path(&self, sleep_file: &PathBuf) -> PathBuf {
-        let file_stem = sleep_file
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("unknown");
-        self.stub_dir.join(format!("{}.done", file_stem))
-    }
-
     /// Read duration from sleep file and sleep
-    fn execute_sleep(&self, sleep_file: &PathBuf, stub_path: &PathBuf) -> Result<()> {
+    fn execute_sleep(&self, sleep_file: &Path) -> Result<()> {
         let content = fs::read_to_string(sleep_file)
             .context(format!("Failed to read sleep file: {}", sleep_file.display()))?;
 
@@ -64,13 +50,17 @@ impl SleepProcessor {
             elapsed += sleep_time;
         }
 
-        write_stub(stub_path, &format!("slept for {} seconds", duration_secs))
+        Ok(())
     }
 }
 
 impl ProductDiscovery for SleepProcessor {
     fn description(&self) -> &str {
         "Sleep for a duration (testing)"
+    }
+
+    fn processor_type(&self) -> super::ProcessorType {
+        super::ProcessorType::Checker
     }
 
     fn hidden(&self) -> bool {
@@ -85,32 +75,26 @@ impl ProductDiscovery for SleepProcessor {
         if !self.should_process() {
             return Ok(());
         }
-
-        let sleep_files = file_index.scan(&self.project_root, &self.config.scan, true);
-        if sleep_files.is_empty() {
-            return Ok(());
-        }
-
-        let cfg_hash = Some(config_hash(&self.config));
-        let extra = resolve_extra_inputs(&self.project_root, &self.config.extra_inputs)?;
-
-        for sleep_file in sleep_files {
-            let stub_path = self.get_stub_path(&sleep_file);
-            let mut inputs = vec![sleep_file];
-            inputs.extend(extra.clone());
-            graph.add_product(inputs, vec![stub_path], "sleep", cfg_hash.clone())?;
-        }
-
-        Ok(())
+        discover_checker_products(
+            graph,
+            &self.project_root,
+            &self.config.scan,
+            file_index,
+            &self.config.extra_inputs,
+            &self.config,
+            "sleep",
+        )
     }
 
     fn execute(&self, product: &Product) -> Result<()> {
-        validate_stub_product(product, "Sleep")?;
-        ensure_stub_dir(&self.stub_dir, "sleep")?;
-        self.execute_sleep(&product.inputs[0], &product.outputs[0])
+        if product.inputs.is_empty() {
+            anyhow::bail!("Sleep product must have at least one input");
+        }
+        self.execute_sleep(&product.inputs[0])
     }
 
-    fn clean(&self, product: &Product) -> Result<()> {
-        clean_outputs(product, "sleep")
+    fn clean(&self, _product: &Product) -> Result<()> {
+        // No output files to clean for checkers
+        Ok(())
     }
 }

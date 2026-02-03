@@ -23,10 +23,7 @@ fn spellcheck_correct_spelling() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    // Verify stub file was created
-    let stub_dir = project_path.join("out/spellcheck");
-    assert!(stub_dir.exists(), "Spellcheck stub directory should exist");
-
+    // Checkers no longer create stub files - success is recorded in cache database
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("[spellcheck] Processing:"),
         "Should process spellcheck: {}", stdout);
@@ -136,14 +133,11 @@ fn spellcheck_clean() {
     // Build
     let build_output = run_rsb(project_path, &["build"]);
     assert!(build_output.status.success());
-    assert!(project_path.join("out/spellcheck").exists(),
-        "Spellcheck stub directory should exist after build");
+    // Checkers no longer create stub files - nothing in out/ for spellcheck
 
-    // Clean
+    // Clean is a no-op for checkers (nothing to clean)
     let clean_output = run_rsb(project_path, &["clean", "outputs"]);
     assert!(clean_output.status.success());
-    assert!(!project_path.join("out/spellcheck").exists(),
-        "Spellcheck stub directory should be removed after clean");
 }
 
 #[test]

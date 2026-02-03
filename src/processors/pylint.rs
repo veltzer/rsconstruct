@@ -5,28 +5,23 @@ use std::process::Command;
 use crate::config::PylintConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use super::{ProductDiscovery, discover_stub_products, validate_stub_product, ensure_stub_dir, write_stub, clean_outputs, run_command, check_command_output, execute_lint_batch};
-
-const PYLINT_STUB_DIR: &str = "out/pylint";
+use super::{ProductDiscovery, discover_checker_products, run_command, check_command_output, execute_checker_batch};
 
 pub struct PylintProcessor {
     project_root: PathBuf,
     pylint_config: PylintConfig,
-    stub_dir: PathBuf,
 }
 
 impl PylintProcessor {
     pub fn new(project_root: PathBuf, pylint_config: PylintConfig) -> Self {
-        let stub_dir = project_root.join(PYLINT_STUB_DIR);
         Self {
             project_root,
             pylint_config,
-            stub_dir,
         }
     }
 
-    /// Run pylint on a single file and create stub
-    fn lint_file(&self, py_file: &Path, stub_path: &Path) -> Result<()> {
+    /// Run pylint on a single file
+    fn lint_file(&self, py_file: &Path) -> Result<()> {
         let mut cmd = Command::new("pylint");
 
         for arg in &self.pylint_config.args {
@@ -37,8 +32,7 @@ impl PylintProcessor {
         cmd.current_dir(&self.project_root);
 
         let output = run_command(&mut cmd)?;
-        check_command_output(&output, "Pylint")?;
-        write_stub(stub_path, "linted")
+        check_command_output(&output, "Pylint")
     }
 
     /// Run pylint on multiple files in a single invocation
@@ -55,14 +49,17 @@ impl PylintProcessor {
         cmd.current_dir(&self.project_root);
 
         let output = run_command(&mut cmd)?;
-        check_command_output(&output, "Pylint batch")?;
-        Ok(())
+        check_command_output(&output, "Pylint batch")
     }
 }
 
 impl ProductDiscovery for PylintProcessor {
     fn description(&self) -> &str {
         "Lint Python files with pylint"
+    }
+
+    fn processor_type(&self) -> super::ProcessorType {
+        super::ProcessorType::Checker
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
@@ -80,28 +77,27 @@ impl ProductDiscovery for PylintProcessor {
         if pylintrc.exists() {
             extra_inputs.push(".pylintrc".to_string());
         }
-        discover_stub_products(
+        discover_checker_products(
             graph,
             &self.project_root,
-            &self.stub_dir,
             &self.pylint_config.scan,
             file_index,
             &extra_inputs,
             &self.pylint_config,
             "pylint",
-            "pylint",
-            true,
         )
     }
 
     fn execute(&self, product: &Product) -> Result<()> {
-        validate_stub_product(product, "Pylint")?;
-        ensure_stub_dir(&self.stub_dir, "pylint")?;
-        self.lint_file(&product.inputs[0], &product.outputs[0])
+        if product.inputs.is_empty() {
+            anyhow::bail!("Pylint product must have at least one input");
+        }
+        self.lint_file(&product.inputs[0])
     }
 
-    fn clean(&self, product: &Product) -> Result<()> {
-        clean_outputs(product, "pylint")
+    fn clean(&self, _product: &Product) -> Result<()> {
+        // No output files to clean for checkers
+        Ok(())
     }
 
     fn supports_batch(&self) -> bool {
@@ -109,12 +105,10 @@ impl ProductDiscovery for PylintProcessor {
     }
 
     fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
-        execute_lint_batch(
+        execute_checker_batch(
             products,
-            "Pylint",
-            &self.stub_dir,
             |files| self.lint_files_batch(files),
-            |input, stub| self.lint_file(input, stub),
+            |input| self.lint_file(input),
         )
     }
 }

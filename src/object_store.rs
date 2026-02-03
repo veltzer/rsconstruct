@@ -210,6 +210,11 @@ impl ObjectStore {
             return true;
         }
 
+        // For checkers (empty outputs), cache entry with matching checksum = up-to-date
+        if output_paths.is_empty() {
+            return false;
+        }
+
         // Check if all outputs exist at their original paths
         for output_path in output_paths {
             if !output_path.exists() {
@@ -234,6 +239,13 @@ impl ObjectStore {
     /// Check if outputs can be restored from cache (read-only, does not restore)
     /// Returns true if all missing outputs are available in cache
     pub fn can_restore(&self, cache_key: &str, input_checksum: &str, output_paths: &[PathBuf]) -> bool {
+        // For checkers (empty outputs), cache entry with matching checksum = restorable
+        if output_paths.is_empty() {
+            return self.get_entry(cache_key)
+                .map(|e| e.input_checksum == input_checksum)
+                .unwrap_or(false);
+        }
+
         let entry = match self.get_entry(cache_key) {
             Some(e) if e.input_checksum == input_checksum => e,
             _ => return false,
@@ -260,6 +272,13 @@ impl ObjectStore {
     /// Try to restore outputs from cache (local first, then remote)
     /// Returns true if all outputs were restored
     pub fn restore_from_cache(&self, cache_key: &str, input_checksum: &str, output_paths: &[PathBuf]) -> Result<bool> {
+        // For checkers (empty outputs), just verify cache entry exists with matching checksum
+        if output_paths.is_empty() {
+            return Ok(self.get_entry(cache_key)
+                .map(|e| e.input_checksum == input_checksum)
+                .unwrap_or(false));
+        }
+
         // Check if we have a cache entry with matching input checksum
         let entry = match self.get_entry(cache_key) {
             Some(e) if e.input_checksum == input_checksum => Some(e),

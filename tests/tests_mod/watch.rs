@@ -32,10 +32,7 @@ fn watch_does_initial_build() {
     child.kill().expect("Failed to kill watcher");
     let output = child.wait_with_output().expect("Failed to wait on child");
 
-    // Verify the output file was created by the initial build
-    assert!(project_path.join("out/sleep/watch_init.done").exists(),
-        "Watch should perform initial build");
-
+    // Checkers no longer create output files - verify via stdout that the build processed the file
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("initial build") || stdout.contains("Processing"),
         "Watch output should mention initial build: {}", stdout);

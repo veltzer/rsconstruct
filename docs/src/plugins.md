@@ -151,6 +151,26 @@ function hidden()
 end
 ```
 
+#### `processor_type()`
+
+Returns the type of processor: `"generator"` or `"checker"`. Generators create real output files (e.g., compilers, transpilers). Checkers validate input files; for checkers, you can choose whether to produce stub files or not. Default: `"checker"`.
+
+**Option 1: Checker with stub files (for Lua plugins)**
+```lua
+function processor_type()
+    return "checker"
+end
+```
+When using stub files, return `outputs = {stub}` from `discover()` and call `rsb.write_stub()` in `execute()`.
+
+**Option 2: Checker without stub files**
+```lua
+function processor_type()
+    return "checker"
+end
+```
+Return `outputs = {}` from `discover()` and don't write stubs in `execute()`. The cache database entry itself serves as the success record.
+
 ## The `rsb` Global Table
 
 Lua plugins have access to an `rsb` global table with helper functions.
@@ -240,13 +260,63 @@ For correct incrementality, make sure `discover()` declares all files that affec
 
 ## Examples
 
-### Stub-Based Linter
+### Linter Without Stub Files (Recommended)
 
-A typical linter plugin: run a tool on each file, create a stub on success.
+A checker that validates files without producing stub files. Success is recorded in the cache database.
 
 ```lua
 function description()
     return "Lint YAML files with yamllint"
+end
+
+function processor_type()
+    return "checker"
+end
+
+function required_tools()
+    return {"yamllint"}
+end
+
+function discover(project_root, config, files)
+    local products = {}
+    for _, file in ipairs(files) do
+        table.insert(products, {
+            inputs = {file},
+            outputs = {},  -- No output files
+        })
+    end
+    return products
+end
+
+function execute(product)
+    rsb.run_command("yamllint", {"-s", product.inputs[1]})
+    -- No stub to write; cache entry = success
+end
+
+function clean(product)
+    -- Nothing to clean
+end
+```
+
+```toml
+[processor]
+enabled = ["yamllint"]
+
+[processor.yamllint]
+extensions = [".yml", ".yaml"]
+```
+
+### Stub-Based Linter (Legacy)
+
+A linter that creates stub files. Use this if you need the stub file for some reason.
+
+```lua
+function description()
+    return "Lint YAML files with yamllint"
+end
+
+function processor_type()
+    return "checker"
 end
 
 function required_tools()
@@ -278,13 +348,17 @@ enabled = ["yamllint"]
 extensions = [".yml", ".yaml"]
 ```
 
-### File Transformer
+### File Transformer (Generator)
 
-A plugin that transforms input files into output files (not stubs).
+A plugin that transforms input files into output files (not stubs). This is a "generator" processor.
 
 ```lua
 function description()
     return "Compile Sass to CSS"
+end
+
+function processor_type()
+    return "generator"
 end
 
 function required_tools()

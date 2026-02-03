@@ -5,23 +5,18 @@ use std::process::Command;
 use crate::config::CpplintConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use super::{ProductDiscovery, discover_stub_products, scan_root, validate_stub_product, ensure_stub_dir, write_stub, clean_outputs, run_command, check_command_output};
-
-const CPPLINT_STUB_DIR: &str = "out/cpplint";
+use super::{ProductDiscovery, discover_checker_products, scan_root, run_command, check_command_output};
 
 pub struct CpplintProcessor {
     project_root: PathBuf,
     cpplint_config: CpplintConfig,
-    stub_dir: PathBuf,
 }
 
 impl CpplintProcessor {
     pub fn new(project_root: PathBuf, cpplint_config: CpplintConfig) -> Self {
-        let stub_dir = project_root.join(CPPLINT_STUB_DIR);
         Self {
             project_root,
             cpplint_config,
-            stub_dir,
         }
     }
 
@@ -30,8 +25,8 @@ impl CpplintProcessor {
         scan_root(&self.project_root, &self.cpplint_config.scan).exists()
     }
 
-    /// Run checker on a single file and create stub
-    fn check_file(&self, source_file: &Path, stub_path: &Path) -> Result<()> {
+    /// Run checker on a single file
+    fn check_file(&self, source_file: &Path) -> Result<()> {
         let mut cmd = Command::new(&self.cpplint_config.checker);
 
         for arg in &self.cpplint_config.args {
@@ -42,14 +37,17 @@ impl CpplintProcessor {
         cmd.current_dir(&self.project_root);
 
         let output = run_command(&mut cmd)?;
-        check_command_output(&output, "C/C++ checking")?;
-        write_stub(stub_path, "checked")
+        check_command_output(&output, "C/C++ checking")
     }
 }
 
 impl ProductDiscovery for CpplintProcessor {
     fn description(&self) -> &str {
         "Run static analysis on C/C++ source files"
+    }
+
+    fn processor_type(&self) -> super::ProcessorType {
+        super::ProcessorType::Checker
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
@@ -64,27 +62,26 @@ impl ProductDiscovery for CpplintProcessor {
         if !self.should_lint() {
             return Ok(());
         }
-        discover_stub_products(
+        discover_checker_products(
             graph,
             &self.project_root,
-            &self.stub_dir,
             &self.cpplint_config.scan,
             file_index,
             &self.cpplint_config.extra_inputs,
             &self.cpplint_config,
             "cpplint",
-            "cpplint",
-            true,
         )
     }
 
     fn execute(&self, product: &Product) -> Result<()> {
-        validate_stub_product(product, "Cpplint")?;
-        ensure_stub_dir(&self.stub_dir, "cpplint")?;
-        self.check_file(&product.inputs[0], &product.outputs[0])
+        if product.inputs.is_empty() {
+            anyhow::bail!("Cpplint product must have at least one input");
+        }
+        self.check_file(&product.inputs[0])
     }
 
-    fn clean(&self, product: &Product) -> Result<()> {
-        clean_outputs(product, "cpplint")
+    fn clean(&self, _product: &Product) -> Result<()> {
+        // No output files to clean for checkers
+        Ok(())
     }
 }

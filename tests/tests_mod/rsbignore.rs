@@ -27,13 +27,10 @@ fn rsbignore_excludes_sleep_files() {
     let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "rsb build failed: {}", String::from_utf8_lossy(&output.stderr));
 
-    // The included file should be processed
-    assert!(project_path.join("out/sleep/included.done").exists(),
-        "Included sleep file should be processed");
-
-    // The excluded file should NOT be processed
-    assert!(!project_path.join("out/sleep/excluded.done").exists(),
-        "Excluded sleep file should not be processed");
+    // Verify via output - only included file should be processed
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("included.sleep"), "Included sleep file should be processed");
+    assert!(!stdout.contains("excluded.sleep"), "Excluded sleep file should not be processed");
 }
 
 #[test]
@@ -62,15 +59,11 @@ fn rsbignore_glob_pattern() {
     let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "rsb build failed: {}", String::from_utf8_lossy(&output.stderr));
 
-    // keep.sleep should be processed
-    assert!(project_path.join("out/sleep/keep.done").exists(),
-        "keep.sleep should be processed");
-
-    // subdir files should be excluded
-    assert!(!project_path.join("out/sleep/skip1.done").exists(),
-        "subdir/skip1.sleep should be excluded");
-    assert!(!project_path.join("out/sleep/skip2.done").exists(),
-        "subdir/skip2.sleep should be excluded");
+    // Verify via output - keep.sleep should be processed, subdir files should not
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("keep.sleep"), "keep.sleep should be processed");
+    assert!(!stdout.contains("skip1.sleep"), "subdir/skip1.sleep should be excluded");
+    assert!(!stdout.contains("skip2.sleep"), "subdir/skip2.sleep should be excluded");
 }
 
 #[test]
@@ -92,8 +85,10 @@ fn rsbignore_no_file() {
     assert!(output.status.success(), "rsb build failed without .rsbignore: {}",
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/sleep/normal.done").exists(),
-        "Sleep file should be processed when no .rsbignore exists");
+    // Verify via output that the file was processed
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("normal.sleep"),
+        "Sleep file should be processed when no .rsbignore exists: {}", stdout);
 }
 
 #[test]
@@ -119,8 +114,10 @@ fn rsbignore_comments_and_blank_lines() {
     let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
 
-    assert!(project_path.join("out/sleep/a.done").exists(), "a.sleep should be processed");
-    assert!(!project_path.join("out/sleep/b.done").exists(), "b.sleep should be ignored");
+    // Verify via output
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("a.sleep"), "a.sleep should be processed");
+    assert!(!stdout.contains("b.sleep"), "b.sleep should be ignored");
 }
 
 #[test]

@@ -93,8 +93,9 @@ fn cache_list_shows_entries() {
     let first = &arr[0];
     assert!(first["cache_key"].as_str().unwrap().contains("sleep"),
         "Cache entry should contain processor name: {}", first);
-    assert_eq!(first["outputs"][0]["exists"], true,
-        "Cached object should exist: {}", first);
+    // Checkers have empty outputs - the cache entry itself is the success record
+    let outputs = first["outputs"].as_array().expect("outputs should be an array");
+    assert!(outputs.is_empty(), "Checker cache entry should have empty outputs: {}", first);
 }
 
 #[test]

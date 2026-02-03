@@ -505,7 +505,8 @@ impl Builder {
                     } else {
                         color::dim("disabled")
                     };
-                    println!("{} {}", name, status);
+                    let proc_type = color::dim(&format!("[{}]", proc.processor_type().as_str()));
+                    println!("{} {} {}", name, proc_type, status);
                 }
             }
             ProcessorAction::All => {
@@ -521,7 +522,8 @@ impl Builder {
                     } else {
                         String::new()
                     };
-                    println!("{} {}{} \u{2014} {}", name, enabled_status, hidden_status, color::dim(proc.description()));
+                    let proc_type = color::dim(&format!("[{}]", proc.processor_type().as_str()));
+                    println!("{} {} {}{} \u{2014} {}", name, proc_type, enabled_status, hidden_status, color::dim(proc.description()));
                 }
             }
             ProcessorAction::Auto => {
@@ -575,10 +577,15 @@ impl Builder {
                     let inputs: Vec<String> = product.inputs.iter()
                         .map(|p| p.strip_prefix(&self.project_root).unwrap_or(p).display().to_string())
                         .collect();
-                    let outputs: Vec<String> = product.outputs.iter()
-                        .map(|p| p.strip_prefix(&self.project_root).unwrap_or(p).display().to_string())
-                        .collect();
-                    println!("{} \u{2192} {}", inputs.join(", "), outputs.join(", "));
+                    // For checkers (empty outputs), display "(checker)" instead of output paths
+                    if product.outputs.is_empty() {
+                        println!("{} \u{2192} {}", inputs.join(", "), color::dim("(checker)"));
+                    } else {
+                        let outputs: Vec<String> = product.outputs.iter()
+                            .map(|p| p.strip_prefix(&self.project_root).unwrap_or(p).display().to_string())
+                            .collect();
+                        println!("{} \u{2192} {}", inputs.join(", "), outputs.join(", "));
+                    }
                 }
             }
         }

@@ -5,23 +5,18 @@ use std::process::Command;
 use crate::config::ShellcheckConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use super::{ProductDiscovery, discover_stub_products, scan_root, validate_stub_product, ensure_stub_dir, write_stub, clean_outputs, run_command, check_command_output};
-
-const SHELLCHECK_STUB_DIR: &str = "out/shellcheck";
+use super::{ProductDiscovery, discover_checker_products, scan_root, run_command, check_command_output};
 
 pub struct ShellcheckProcessor {
     project_root: PathBuf,
     config: ShellcheckConfig,
-    stub_dir: PathBuf,
 }
 
 impl ShellcheckProcessor {
     pub fn new(project_root: PathBuf, config: ShellcheckConfig) -> Self {
-        let stub_dir = project_root.join(SHELLCHECK_STUB_DIR);
         Self {
             project_root,
             config,
-            stub_dir,
         }
     }
 
@@ -30,8 +25,8 @@ impl ShellcheckProcessor {
         scan_root(&self.project_root, &self.config.scan).exists()
     }
 
-    /// Run shellcheck on a single file and create stub
-    fn check_file(&self, source_file: &Path, stub_path: &Path) -> Result<()> {
+    /// Run shellcheck on a single file
+    fn check_file(&self, source_file: &Path) -> Result<()> {
         let mut cmd = Command::new(&self.config.checker);
 
         for arg in &self.config.args {
@@ -42,14 +37,17 @@ impl ShellcheckProcessor {
         cmd.current_dir(&self.project_root);
 
         let output = run_command(&mut cmd)?;
-        check_command_output(&output, "shellcheck")?;
-        write_stub(stub_path, "checked")
+        check_command_output(&output, "shellcheck")
     }
 }
 
 impl ProductDiscovery for ShellcheckProcessor {
     fn description(&self) -> &str {
         "Lint shell scripts using shellcheck"
+    }
+
+    fn processor_type(&self) -> super::ProcessorType {
+        super::ProcessorType::Checker
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
@@ -64,27 +62,26 @@ impl ProductDiscovery for ShellcheckProcessor {
         if !self.should_lint() {
             return Ok(());
         }
-        discover_stub_products(
+        discover_checker_products(
             graph,
             &self.project_root,
-            &self.stub_dir,
             &self.config.scan,
             file_index,
             &self.config.extra_inputs,
             &self.config,
             "shellcheck",
-            "shellcheck",
-            true,
         )
     }
 
     fn execute(&self, product: &Product) -> Result<()> {
-        validate_stub_product(product, "Shellcheck")?;
-        ensure_stub_dir(&self.stub_dir, "shellcheck")?;
-        self.check_file(&product.inputs[0], &product.outputs[0])
+        if product.inputs.is_empty() {
+            anyhow::bail!("Shellcheck product must have at least one input");
+        }
+        self.check_file(&product.inputs[0])
     }
 
-    fn clean(&self, product: &Product) -> Result<()> {
-        clean_outputs(product, "shellcheck")
+    fn clean(&self, _product: &Product) -> Result<()> {
+        // No output files to clean for checkers
+        Ok(())
     }
 }

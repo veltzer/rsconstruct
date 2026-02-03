@@ -21,29 +21,19 @@ fn dry_run_shows_build_actions() {
     assert!(stdout.contains("BUILD"), "Dry run should show BUILD for unbuilt product: {}", stdout);
     assert!(stdout.contains("Summary"), "Dry run should show Summary");
 
-    // Verify nothing was actually built
-    assert!(!project_path.join("out/sleep/dry.done").exists(), "Dry run should not create output files");
+    // Checkers no longer create output files - verify no out/sleep directory
+    assert!(!project_path.join("out/sleep").exists(), "Dry run should not create output directories");
 
     // Now do a real build
     let build = run_rsb(project_path, &["build"]);
     assert!(build.status.success());
-    assert!(project_path.join("out/sleep/dry.done").exists());
+    // Checkers don't create stub files anymore
 
-    // Dry run after build — should show SKIP
+    // Dry run after build — should show SKIP (cache entry exists)
     let output2 = run_rsb_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("SKIP"), "Dry run after build should show SKIP: {}", stdout2);
-
-    // Delete output, dry run should show RESTORE
-    fs::remove_file(project_path.join("out/sleep/dry.done")).unwrap();
-    let output3 = run_rsb_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
-    assert!(output3.status.success());
-    let stdout3 = String::from_utf8_lossy(&output3.stdout);
-    assert!(stdout3.contains("RESTORE"), "Dry run with deleted output should show RESTORE: {}", stdout3);
-
-    // Verify it still didn't actually restore
-    assert!(!project_path.join("out/sleep/dry.done").exists(), "Dry run should not restore files");
 }
 
 #[test]

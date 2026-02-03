@@ -347,6 +347,22 @@ impl ProductDiscovery for LuaProcessor {
         &self.description
     }
 
+    fn processor_type(&self) -> super::ProcessorType {
+        if self.has_function("processor_type") {
+            let type_str = self.lua.globals()
+                .get::<LuaFunction>("processor_type")
+                .and_then(|f| f.call::<String>(()))
+                .unwrap_or_else(|_| "checker".to_string());
+            match type_str.to_lowercase().as_str() {
+                "generator" => super::ProcessorType::Generator,
+                _ => super::ProcessorType::Checker,
+            }
+        } else {
+            // Default to Checker since most lint plugins are checkers
+            super::ProcessorType::Checker
+        }
+    }
+
     fn hidden(&self) -> bool {
         if self.has_function("hidden") {
             self.lua.globals()
