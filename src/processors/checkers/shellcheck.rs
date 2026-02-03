@@ -5,7 +5,7 @@ use std::process::Command;
 use crate::config::ShellcheckConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProductDiscovery, discover_checker_products, scan_root, run_command, check_command_output};
+use crate::processors::{ProductDiscovery, discover_checker_products, scan_root, run_command, check_command_output, execute_checker_batch};
 
 pub struct ShellcheckProcessor {
     project_root: PathBuf,
@@ -39,6 +39,23 @@ impl ShellcheckProcessor {
         let output = run_command(&mut cmd)?;
         check_command_output(&output, "shellcheck")
     }
+
+    /// Run shellcheck on multiple files in a single invocation
+    fn check_files_batch(&self, files: &[&Path]) -> Result<()> {
+        let mut cmd = Command::new(&self.config.checker);
+
+        for arg in &self.config.args {
+            cmd.arg(arg);
+        }
+
+        for file in files {
+            cmd.arg(file);
+        }
+        cmd.current_dir(&self.project_root);
+
+        let output = run_command(&mut cmd)?;
+        check_command_output(&output, "shellcheck batch")
+    }
 }
 
 impl ProductDiscovery for ShellcheckProcessor {
@@ -71,5 +88,17 @@ impl ProductDiscovery for ShellcheckProcessor {
 
     fn execute(&self, product: &Product) -> Result<()> {
         self.check_file(&product.inputs[0])
+    }
+
+    fn supports_batch(&self) -> bool {
+        true
+    }
+
+    fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
+        execute_checker_batch(
+            products,
+            |files| self.check_files_batch(files),
+            |input| self.check_file(input),
+        )
     }
 }
