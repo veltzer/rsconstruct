@@ -7,7 +7,7 @@ use std::sync::OnceLock;
 use crate::config::SpellcheckConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use super::{ProductDiscovery, discover_checker_products};
+use crate::processors::{ProductDiscovery, discover_checker_products};
 
 const DICT_DIR: &str = "/usr/share/hunspell";
 
@@ -215,8 +215,8 @@ impl ProductDiscovery for SpellcheckProcessor {
         "Check documentation files for spelling errors"
     }
 
-    fn processor_type(&self) -> super::ProcessorType {
-        super::ProcessorType::Checker
+    fn processor_type(&self) -> crate::processors::ProcessorType {
+        crate::processors::ProcessorType::Checker
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {

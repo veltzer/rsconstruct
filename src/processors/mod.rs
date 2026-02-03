@@ -1,13 +1,6 @@
-mod cc;
-mod cpplint;
+mod checkers;
+mod generators;
 pub mod lua_processor;
-mod make;
-mod pylint;
-mod ruff;
-mod shellcheck;
-mod sleep;
-mod spellcheck;
-mod template;
 
 use anyhow::{Context, Result};
 use std::fs;
@@ -162,6 +155,7 @@ pub fn clean_outputs(product: &Product, label: &str) -> Result<()> {
 /// Discover stub-based products: one stub output per source file.
 /// Used by Lua plugins that produce a single stub file per input.
 /// Built-in checkers should use discover_checker_products() instead.
+#[allow(dead_code)]
 pub fn discover_stub_products(
     graph: &mut BuildGraph,
     project_root: &Path,
@@ -244,6 +238,7 @@ pub fn write_stub(stub_path: &Path, content: &str) -> Result<()> {
 ///
 /// Runs `batch_fn` with all input paths at once. On success, writes stubs for all products.
 /// On batch failure, falls back to calling `single_fn` per product to isolate errors.
+#[allow(dead_code)]
 pub fn execute_lint_batch<F, G>(
     products: &[&Product],
     processor_name: &str,
@@ -366,16 +361,13 @@ where
     results.into_iter().map(|r| r.unwrap()).collect()
 }
 
-pub use cc::CcProcessor;
-pub use cpplint::CpplintProcessor;
+// Re-export from subdirectories
+pub use checkers::{
+    CpplintProcessor, PylintProcessor, RuffProcessor,
+    ShellcheckProcessor, SleepProcessor, SpellcheckProcessor,
+};
+pub use generators::{CcProcessor, MakeProcessor, TemplateProcessor};
 pub use lua_processor::LuaProcessor;
-pub use make::MakeProcessor;
-pub use pylint::PylintProcessor;
-pub use ruff::RuffProcessor;
-pub use shellcheck::ShellcheckProcessor;
-pub use sleep::SleepProcessor;
-pub use spellcheck::SpellcheckProcessor;
-pub use template::TemplateProcessor;
 
 /// The type of processor - whether it generates new files or checks existing files
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

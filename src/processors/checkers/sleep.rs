@@ -7,7 +7,7 @@ use std::time::Duration;
 use crate::config::SleepConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use super::{ProductDiscovery, scan_root, discover_checker_products, is_interrupted};
+use crate::processors::{ProductDiscovery, scan_root, discover_checker_products, is_interrupted};
 
 pub struct SleepProcessor {
     project_root: PathBuf,
@@ -59,8 +59,8 @@ impl ProductDiscovery for SleepProcessor {
         "Sleep for a duration (testing)"
     }
 
-    fn processor_type(&self) -> super::ProcessorType {
-        super::ProcessorType::Checker
+    fn processor_type(&self) -> crate::processors::ProcessorType {
+        crate::processors::ProcessorType::Checker
     }
 
     fn hidden(&self) -> bool {

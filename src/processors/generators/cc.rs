@@ -6,7 +6,7 @@ use std::process::Command;
 use crate::config::{CcConfig, config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use super::{ProductDiscovery, scan_root, clean_outputs, format_command, run_command};
+use crate::processors::{ProductDiscovery, scan_root, clean_outputs, format_command, run_command};
 
 /// Per-file compile/link flags extracted from source comments.
 #[derive(Default)]
@@ -452,8 +452,8 @@ impl ProductDiscovery for CcProcessor {
         "Compile C/C++ source files into executables (single-file)"
     }
 
-    fn processor_type(&self) -> super::ProcessorType {
-        super::ProcessorType::Generator
+    fn processor_type(&self) -> crate::processors::ProcessorType {
+        crate::processors::ProcessorType::Generator
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {

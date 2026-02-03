@@ -5,7 +5,7 @@ use std::process::Command;
 use crate::config::{MakeConfig, config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use super::{ProductDiscovery, scan_root, validate_stub_product, ensure_stub_dir, write_stub, clean_outputs, run_command, check_command_output};
+use crate::processors::{ProductDiscovery, scan_root, validate_stub_product, ensure_stub_dir, write_stub, clean_outputs, run_command, check_command_output};
 
 const MAKE_STUB_DIR: &str = "out/make";
 
@@ -68,8 +68,8 @@ impl ProductDiscovery for MakeProcessor {
         "Run make in directories containing Makefiles"
     }
 
-    fn processor_type(&self) -> super::ProcessorType {
-        super::ProcessorType::Generator
+    fn processor_type(&self) -> crate::processors::ProcessorType {
+        crate::processors::ProcessorType::Generator
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {

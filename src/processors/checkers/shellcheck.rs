@@ -5,7 +5,7 @@ use std::process::Command;
 use crate::config::ShellcheckConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use super::{ProductDiscovery, discover_checker_products, scan_root, run_command, check_command_output};
+use crate::processors::{ProductDiscovery, discover_checker_products, scan_root, run_command, check_command_output};
 
 pub struct ShellcheckProcessor {
     project_root: PathBuf,
@@ -46,8 +46,8 @@ impl ProductDiscovery for ShellcheckProcessor {
         "Lint shell scripts using shellcheck"
     }
 
-    fn processor_type(&self) -> super::ProcessorType {
-        super::ProcessorType::Checker
+    fn processor_type(&self) -> crate::processors::ProcessorType {
+        crate::processors::ProcessorType::Checker
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {

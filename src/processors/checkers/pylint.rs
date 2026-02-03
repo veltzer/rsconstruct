@@ -5,7 +5,7 @@ use std::process::Command;
 use crate::config::PylintConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use super::{ProductDiscovery, discover_checker_products, run_command, check_command_output, execute_checker_batch};
+use crate::processors::{ProductDiscovery, discover_checker_products, run_command, check_command_output, execute_checker_batch};
 
 pub struct PylintProcessor {
     project_root: PathBuf,
@@ -58,8 +58,8 @@ impl ProductDiscovery for PylintProcessor {
         "Lint Python files with pylint"
     }
 
-    fn processor_type(&self) -> super::ProcessorType {
-        super::ProcessorType::Checker
+    fn processor_type(&self) -> crate::processors::ProcessorType {
+        crate::processors::ProcessorType::Checker
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {

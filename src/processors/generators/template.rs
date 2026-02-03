@@ -9,7 +9,7 @@ use tera::{Context as TeraContext, Function, Tera, Value as TeraValue, to_value}
 use crate::config::{TemplateConfig, config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use super::{ProductDiscovery, run_command};
+use crate::processors::{ProductDiscovery, run_command};
 
 /// Represents a single template file to be processed
 struct TemplateItem {
@@ -121,8 +121,8 @@ impl ProductDiscovery for TemplateProcessor {
         "Render Tera templates into output files"
     }
 
-    fn processor_type(&self) -> super::ProcessorType {
-        super::ProcessorType::Generator
+    fn processor_type(&self) -> crate::processors::ProcessorType {
+        crate::processors::ProcessorType::Generator
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
