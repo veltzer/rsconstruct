@@ -1,7 +1,5 @@
-mod common;
-
 use std::fs;
-use common::{setup_test_project, run_rsb, run_rsb_with_env};
+use crate::common::{setup_test_project, run_rsb, run_rsb_with_env};
 
 #[test]
 fn status_command() {

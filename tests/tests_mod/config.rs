@@ -1,6 +1,4 @@
-mod common;
-
-use common::{setup_test_project, run_rsb_with_env};
+use crate::common::{setup_test_project, run_rsb_with_env};
 
 #[test]
 fn config_show_outputs_toml() {

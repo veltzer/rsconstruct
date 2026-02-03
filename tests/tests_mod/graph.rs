@@ -1,7 +1,5 @@
-mod common;
-
 use std::fs;
-use common::{setup_test_project, run_rsb_with_env};
+use crate::common::{setup_test_project, run_rsb_with_env};
 
 fn setup_project_with_template() -> tempfile::TempDir {
     let temp_dir = setup_test_project();

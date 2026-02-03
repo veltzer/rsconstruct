@@ -1,9 +1,7 @@
-mod common;
-
 use std::fs;
 use std::process::Command;
 use std::time::Duration;
-use common::setup_test_project;
+use crate::common::setup_test_project;
 
 #[test]
 fn watch_does_initial_build() {

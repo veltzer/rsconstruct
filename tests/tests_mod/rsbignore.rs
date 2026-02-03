@@ -1,8 +1,6 @@
-mod common;
-
 use std::fs;
 use tempfile::TempDir;
-use common::{setup_test_project, setup_cc_project, run_rsb_with_env};
+use crate::common::{setup_test_project, setup_cc_project, run_rsb_with_env};
 
 #[test]
 fn rsbignore_excludes_sleep_files() {

@@ -1,8 +1,6 @@
-mod common;
-
 use std::fs;
 use tempfile::TempDir;
-use common::run_rsb;
+use crate::common::run_rsb;
 
 #[test]
 fn init_creates_project() {
