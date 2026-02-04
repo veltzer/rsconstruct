@@ -891,6 +891,27 @@ impl Builder {
         use crate::deps_cache::DepsCache;
 
         match action {
+            DepsAction::List => {
+                // List all available dependency analyzers
+                let analyzers = self.create_analyzers(false);
+                let mut names: Vec<&String> = analyzers.keys().collect();
+                names.sort();
+
+                for name in names {
+                    let analyzer = &analyzers[name];
+                    let enabled = self.config.analyzer.is_enabled(name);
+                    let detected = analyzer.auto_detect(&self.file_index);
+
+                    let status = match (enabled, detected) {
+                        (true, true) => color::green("enabled, detected"),
+                        (true, false) => color::yellow("enabled, not detected"),
+                        (false, true) => color::yellow("disabled, detected"),
+                        (false, false) => color::dim("disabled"),
+                    };
+
+                    println!("{:<10} {} — {}", name, status, color::dim(analyzer.description()));
+                }
+            }
             DepsAction::Clean { analyzer } => {
                 if let Some(analyzer_name) = analyzer {
                     // Clear only entries from specific analyzer

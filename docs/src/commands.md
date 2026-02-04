@@ -106,6 +106,7 @@ rsb cache list     # List all cache entries and their status
 Show or manage source file dependencies from the dependency cache. The cache is populated during builds when dependency analyzers scan source files (e.g., C/C++ headers, Python imports).
 
 ```bash
+rsb deps list                   # List all available dependency analyzers
 rsb deps all                    # Show all cached dependencies
 rsb deps for src/main.c         # Show dependencies for a specific file
 rsb deps for src/a.c src/b.c    # Show dependencies for multiple files

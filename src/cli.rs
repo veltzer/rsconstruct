@@ -267,6 +267,8 @@ pub enum ToolsAction {
 
 #[derive(Subcommand)]
 pub enum DepsAction {
+    /// List all available dependency analyzers
+    List,
     /// Show dependencies for all source files
     All,
     /// Show dependencies for specific files
