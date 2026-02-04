@@ -439,6 +439,13 @@ pub trait ProductDiscovery: Sync + Send {
     /// Discover all products this processor can produce
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()>;
 
+    /// Discover products for clean operation (outputs only, skip expensive dependency scanning).
+    /// Default implementation calls `discover()`. Override this for processors where
+    /// dependency scanning is expensive (e.g., cc_single_file header scanning).
+    fn discover_for_clean(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
+        self.discover(graph, file_index)
+    }
+
     /// Execute a single product
     fn execute(&self, product: &Product) -> Result<()>;
 

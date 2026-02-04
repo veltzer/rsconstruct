@@ -85,13 +85,9 @@ pub enum Commands {
         #[arg(long)]
         ignore_tool_versions: bool,
 
-        /// Batch size for batch-capable processors (0 = no limit, omit to use config)
-        #[arg(long)]
-        batch_size: Option<usize>,
-
-        /// Disable batching entirely
-        #[arg(long)]
-        no_batch: bool,
+        /// Batch size for batch-capable processors (0 = no limit, -1 = disable, omit to use config)
+        #[arg(long, allow_negative_numbers = true)]
+        batch_size: Option<i32>,
     },
     /// Clean build artifacts
     Clean {
@@ -131,13 +127,9 @@ pub enum Commands {
         #[arg(long)]
         no_summary: bool,
 
-        /// Batch size for batch-capable processors (0 = no limit, omit to use config)
-        #[arg(long)]
-        batch_size: Option<usize>,
-
-        /// Disable batching entirely
-        #[arg(long)]
-        no_batch: bool,
+        /// Batch size for batch-capable processors (0 = no limit, -1 = disable, omit to use config)
+        #[arg(long, allow_negative_numbers = true)]
+        batch_size: Option<i32>,
     },
     /// Manage processors
     Processor {

@@ -243,19 +243,16 @@ pub struct CcProcessor {
     project_root: PathBuf,
     config: CcConfig,
     output_dir: PathBuf,
-    deps_dir: PathBuf,
     verbose: bool,
 }
 
 impl CcProcessor {
     pub fn new(project_root: PathBuf, config: CcConfig, verbose: bool) -> Self {
         let output_dir = PathBuf::from("out/cc_single_file");
-        let deps_dir = PathBuf::from(".rsb/deps");
         Self {
             project_root,
             config,
             output_dir,
-            deps_dir,
             verbose,
         }
     }
@@ -296,55 +293,126 @@ impl CcProcessor {
         self.output_dir.join(name)
     }
 
-    /// Get deps file path for a source file.
-    /// src/a/b.c -> .rsb/deps/a/b.c.d
-    fn get_deps_path(&self, source: &Path) -> PathBuf {
-        let source_dir = self.source_dir();
-        let relative = if source_dir.as_os_str().is_empty() {
-            source.to_path_buf()
-        } else {
-            source.strip_prefix(&source_dir).unwrap_or(source).to_path_buf()
-        };
-        let deps_name = format!(
-            "{}.d",
-            relative.display()
-        );
-        self.deps_dir.join(deps_name)
+    /// Native regex-based include scanner.
+    /// Scans source files for #include directives and recursively follows them.
+    /// Returns all header files that the source depends on.
+    fn scan_dependencies_native(&self, source: &Path) -> Result<Vec<PathBuf>> {
+        let mut visited: HashSet<PathBuf> = HashSet::new();
+        let mut headers: Vec<PathBuf> = Vec::new();
+
+        // Build include search paths: source directory + configured include_paths
+        let source_dir = source.parent().unwrap_or(Path::new("."));
+        let mut search_paths = vec![source_dir.to_path_buf()];
+        for inc in &self.config.include_paths {
+            search_paths.push(PathBuf::from(inc));
+        }
+        // Also search from project root for project-relative includes
+        search_paths.push(PathBuf::new());
+
+        self.scan_includes_recursive(source, &search_paths, &mut visited, &mut headers)?;
+
+        Ok(headers)
     }
 
-    /// Try to read cached dependency info from a .d file.
-    /// Returns None if the cache is stale or missing.
-    fn read_cached_deps(&self, source: &Path) -> Option<Vec<PathBuf>> {
-        let deps_path = self.get_deps_path(source);
-        if !deps_path.exists() {
-            return None;
+    /// Recursively scan a file for #include directives
+    fn scan_includes_recursive(
+        &self,
+        file: &Path,
+        search_paths: &[PathBuf],
+        visited: &mut HashSet<PathBuf>,
+        headers: &mut Vec<PathBuf>,
+    ) -> Result<()> {
+        // Normalize path to avoid visiting same file twice
+        let canonical = if file.is_absolute() {
+            file.to_path_buf()
+        } else {
+            file.to_path_buf()
+        };
+
+        if visited.contains(&canonical) {
+            return Ok(());
         }
+        visited.insert(canonical.clone());
 
-        let deps_mtime = fs::metadata(&deps_path).ok()?.modified().ok()?;
-        let source_mtime = fs::metadata(source).ok()?.modified().ok()?;
+        let content = match fs::read_to_string(file) {
+            Ok(c) => c,
+            Err(_) => return Ok(()), // File doesn't exist or can't be read
+        };
 
-        // If source is newer than deps file, cache is stale
-        if source_mtime > deps_mtime {
-            return None;
-        }
+        // Regex to match #include "file" and #include <file>
+        // We capture both quoted and angle-bracket includes
+        let include_re = Regex::new(r#"^\s*#\s*include\s*[<"]([^>"]+)[>"]"#).unwrap();
 
-        let content = fs::read_to_string(&deps_path).ok()?;
-        let headers = self.parse_dep_file(&content);
+        for line in content.lines() {
+            if let Some(caps) = include_re.captures(line) {
+                let include_path = &caps[1];
 
-        // Check each header still exists and isn't newer than the deps file
-        for header in &headers {
-            let meta = fs::metadata(header).ok()?;
-            let header_mtime = meta.modified().ok()?;
-            if header_mtime > deps_mtime {
-                return None;
+                // Skip system headers (absolute paths or common system dirs)
+                if include_path.starts_with('/') {
+                    continue;
+                }
+
+                // Try to find the included file in search paths
+                let found = self.find_include(include_path, file.parent(), search_paths);
+
+                if let Some(header_path) = found {
+                    // Skip system headers
+                    let path_str = header_path.to_string_lossy();
+                    if path_str.starts_with("/usr/") || path_str.starts_with("/lib/") {
+                        continue;
+                    }
+
+                    // Only include if it's a relative path (project-local)
+                    if !header_path.is_absolute() || header_path.starts_with(&self.project_root) {
+                        let relative = if header_path.is_absolute() {
+                            header_path.strip_prefix(&self.project_root)
+                                .unwrap_or(&header_path)
+                                .to_path_buf()
+                        } else {
+                            header_path.clone()
+                        };
+
+                        if !headers.contains(&relative) {
+                            headers.push(relative.clone());
+                        }
+
+                        // Recursively scan this header
+                        self.scan_includes_recursive(&header_path, search_paths, visited, headers)?;
+                    }
+                }
             }
         }
 
-        Some(headers)
+        Ok(())
+    }
+
+    /// Find an include file in the search paths
+    fn find_include(&self, include: &str, current_dir: Option<&Path>, search_paths: &[PathBuf]) -> Option<PathBuf> {
+        // First, try relative to current file's directory (for #include "file")
+        if let Some(dir) = current_dir {
+            let candidate = dir.join(include);
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+
+        // Then try each search path
+        for search in search_paths {
+            let candidate = if search.as_os_str().is_empty() {
+                PathBuf::from(include)
+            } else {
+                search.join(include)
+            };
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+
+        None
     }
 
     /// Add include paths and compile flags (before, base, after) to a command.
-    /// Shared between `scan_dependencies()` and `compile_source()`.
+    /// Shared between `scan_dependencies_compiler()` and `compile_source()`.
     fn add_compile_flags(&self, cmd: &mut Command, is_cpp: bool, source_flags: &SourceFlags) {
         let flags = if is_cpp { &self.config.cxxflags } else { &self.config.cflags };
         for inc in &self.config.include_paths {
@@ -361,9 +429,16 @@ impl CcProcessor {
         }
     }
 
-    /// Run gcc/g++ -MM to scan dependencies for a source file.
-    /// Also writes the result to the deps cache.
+    /// Scan dependencies using the configured method (native or compiler).
     fn scan_dependencies(&self, source: &Path, is_cpp: bool) -> Result<Vec<PathBuf>> {
+        match self.config.include_scanner {
+            IncludeScanner::Native => self.scan_dependencies_native(source),
+            IncludeScanner::Compiler => self.scan_dependencies_compiler(source, is_cpp),
+        }
+    }
+
+    /// Run gcc/g++ -MM to scan dependencies for a source file.
+    fn scan_dependencies_compiler(&self, source: &Path, is_cpp: bool) -> Result<Vec<PathBuf>> {
         let compiler = if is_cpp { &self.config.cxx } else { &self.config.cc };
         let source_flags = parse_source_flags(source)?;
 
@@ -385,18 +460,7 @@ impl CcProcessor {
         }
 
         let content = String::from_utf8_lossy(&output.stdout).to_string();
-        let headers = self.parse_dep_file(&content);
-
-        // Cache the deps file
-        let deps_path = self.get_deps_path(source);
-        if let Some(parent) = deps_path.parent() {
-            fs::create_dir_all(parent)
-                .context("Failed to create deps cache directory")?;
-        }
-        fs::write(&deps_path, &content)
-            .context(format!("Failed to write deps file: {}", deps_path.display()))?;
-
-        Ok(headers)
+        Ok(self.parse_dep_file(&content))
     }
 
     /// Parse a Makefile-style dependency file (.d) produced by gcc -MM.
@@ -441,7 +505,7 @@ impl CcProcessor {
     }
 
     /// Compile a single source file directly to an executable.
-    fn compile_source(&self, source: &Path, executable: &Path, deps_file: &Path, is_cpp: bool) -> Result<()> {
+    fn compile_source(&self, source: &Path, executable: &Path, is_cpp: bool) -> Result<()> {
         let compiler = if is_cpp { &self.config.cxx } else { &self.config.cc };
         let source_flags = parse_source_flags(source)?;
 
@@ -451,14 +515,7 @@ impl CcProcessor {
                 .context("Failed to create output directory")?;
         }
 
-        // Ensure deps directory exists
-        if let Some(parent) = deps_file.parent() {
-            fs::create_dir_all(parent)
-                .context("Failed to create deps directory")?;
-        }
-
         let mut cmd = Command::new(compiler);
-        cmd.arg("-MMD").arg("-MF").arg(deps_file);
         self.add_compile_flags(&mut cmd, is_cpp, &source_flags);
         cmd.arg("-o").arg(executable).arg(source);
         for arg in &source_flags.link_args_before {
@@ -532,11 +589,7 @@ impl ProductDiscovery for CcProcessor {
             let executable = self.get_executable_path(source);
 
             // Resolve header dependencies
-            let headers = match self.read_cached_deps(source) {
-                Some(h) => h,
-                None => self.scan_dependencies(source, *is_cpp)
-                    .unwrap_or_default(),
-            };
+            let headers = self.scan_dependencies(source, *is_cpp).unwrap_or_default();
 
             // Build inputs: source file + all headers + extra inputs
             let mut inputs = vec![source.clone()];
@@ -556,12 +609,37 @@ impl ProductDiscovery for CcProcessor {
         Ok(())
     }
 
+    /// Fast discovery for clean: only find outputs, skip header scanning
+    fn discover_for_clean(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
+        if !self.should_process() {
+            return Ok(());
+        }
+
+        let source_files = self.find_source_files(file_index);
+        if source_files.is_empty() {
+            return Ok(());
+        }
+
+        // For clean, we only need source -> output mapping, no header dependencies
+        for (source, _is_cpp) in &source_files {
+            let executable = self.get_executable_path(source);
+
+            graph.add_product(
+                vec![source.clone()],
+                vec![executable],
+                "cc_single_file",
+                None,
+            )?;
+        }
+
+        Ok(())
+    }
+
     fn execute(&self, product: &Product) -> Result<()> {
         let source = &product.inputs[0];
         let executable = &product.outputs[0];
         let is_cpp = source.extension().and_then(|s| s.to_str()) == Some("cc");
-        let deps_file = self.get_deps_path(source);
-        self.compile_source(source, executable, &deps_file, is_cpp)
+        self.compile_source(source, executable, is_cpp)
     }
 
     fn clean(&self, product: &Product) -> Result<()> {

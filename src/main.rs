@@ -47,7 +47,7 @@ fn main() -> Result<()> {
     }
 
     match cli.command {
-        Commands::Build { force, jobs, timings, keep_going, dry_run, no_summary, ignore_tool_versions, batch_size, no_batch } => {
+        Commands::Build { force, jobs, timings, keep_going, dry_run, no_summary, ignore_tool_versions, batch_size } => {
             if dry_run {
                 let builder = Builder::new()?;
                 builder.dry_run(force)?;
@@ -56,8 +56,8 @@ fn main() -> Result<()> {
                 if !ignore_tool_versions {
                     builder.verify_tool_versions()?;
                 }
-                // CLI overrides: --no-batch disables batching, --batch-size sets limit
-                let batch_size_override = if no_batch { Some(None) } else { batch_size.map(Some) };
+                // CLI override: -1 = disable batching, 0 = no limit, >0 = max batch size
+                let batch_size_override = batch_size.map(|n| if n < 0 { None } else { Some(n as usize) });
                 builder.build(force, cli.verbose, cli.file_names, jobs, timings, keep_going, Arc::clone(&interrupted), !no_summary, batch_size_override)?;
             }
         }
@@ -173,8 +173,8 @@ fn main() -> Result<()> {
                 print_completions(shell);
             }
         }
-        Commands::Watch { jobs, timings, keep_going, no_summary, batch_size, no_batch } => {
-            let batch_size_override = if no_batch { Some(None) } else { batch_size.map(Some) };
+        Commands::Watch { jobs, timings, keep_going, no_summary, batch_size } => {
+            let batch_size_override = batch_size.map(|n| if n < 0 { None } else { Some(n as usize) });
             watcher::watch(cli.verbose, cli.file_names, jobs, timings, keep_going, !no_summary, Arc::clone(&interrupted), batch_size_override)?;
         }
         Commands::Version => {

@@ -186,9 +186,9 @@ impl Builder {
     pub fn clean(&self) -> Result<()> {
         println!("{}", color::bold("Cleaning build artifacts..."));
 
-        // Create processors and build graph
+        // Create processors and build graph (fast path: skip dependency scanning)
         let processors = self.create_processors(false)?;
-        let graph = self.build_graph_with_processors(&processors)?;
+        let graph = self.build_graph_for_clean_with_processors(&processors)?;
 
         // Use executor to clean (batch_size doesn't matter for clean)
         let executor = Executor::new(&processors, 1, false, 0, Arc::new(std::sync::atomic::AtomicBool::new(false)), None);
@@ -402,6 +402,16 @@ impl Builder {
 
     /// Build the dependency graph using provided processors
     fn build_graph_with_processors(&self, processors: &HashMap<String, Box<dyn ProductDiscovery>>) -> Result<BuildGraph> {
+        self.build_graph_with_processors_impl(processors, false)
+    }
+
+    /// Build the dependency graph for clean (skip expensive dependency scanning)
+    fn build_graph_for_clean_with_processors(&self, processors: &HashMap<String, Box<dyn ProductDiscovery>>) -> Result<BuildGraph> {
+        self.build_graph_with_processors_impl(processors, true)
+    }
+
+    /// Build the dependency graph using provided processors
+    fn build_graph_with_processors_impl(&self, processors: &HashMap<String, Box<dyn ProductDiscovery>>, for_clean: bool) -> Result<BuildGraph> {
         let mut graph = BuildGraph::new();
 
         let mut names: Vec<&String> = processors.keys().collect();
@@ -413,7 +423,11 @@ impl Builder {
             }
             let should_run = !self.config.processor.auto_detect || processors[name].auto_detect(&self.file_index);
             if should_run {
-                processors[name].discover(&mut graph, &self.file_index)?;
+                if for_clean {
+                    processors[name].discover_for_clean(&mut graph, &self.file_index)?;
+                } else {
+                    processors[name].discover(&mut graph, &self.file_index)?;
+                }
             }
         }
 

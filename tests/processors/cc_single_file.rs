@@ -143,9 +143,9 @@ fn cc_single_file_clean() {
     let clean_output = run_rsb(project_path, &["clean", "outputs"]);
     assert!(clean_output.status.success());
 
-    // Verify outputs are removed but cache is preserved
+    // Verify outputs are removed but .rsb cache is preserved
     assert!(!project_path.join("out/cc_single_file").exists(), "out/cc_single_file/ should be removed after clean");
-    assert!(project_path.join(".rsb/deps").exists(), "deps cache should be preserved after clean");
+    assert!(project_path.join(".rsb").exists(), ".rsb cache should be preserved after clean");
 }
 
 #[test]

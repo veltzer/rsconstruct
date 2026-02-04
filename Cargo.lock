@@ -1236,6 +1236,7 @@ dependencies = [
  "mlua",
  "notify",
  "parking_lot 0.12.5",
+ "regex",
  "serde",
  "serde_json",
  "sha2",

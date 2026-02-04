@@ -144,6 +144,7 @@ include_paths = []        # Additional -I paths (relative to project root)
 source_dir = "src"        # Source directory (default: "src")
 output_suffix = ".elf"    # Suffix for output executables (default: ".elf")
 extra_inputs = []         # Additional files that trigger rebuilds when changed
+include_scanner = "native" # Method for scanning header dependencies (default: "native")
 ```
 
 | Key | Type | Default | Description |
@@ -157,3 +158,30 @@ extra_inputs = []         # Additional files that trigger rebuilds when changed
 | `source_dir` | string | `"src"` | Directory to scan for source files |
 | `output_suffix` | string | `".elf"` | Suffix appended to output executables |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `include_scanner` | string | `"native"` | Method for scanning header dependencies |
+
+## Include Scanner
+
+The `include_scanner` option controls how header dependencies are discovered:
+
+| Value | Description |
+|-------|-------------|
+| `native` | Fast regex-based scanner (default). Parses `#include` directives directly without spawning external processes. Handles `#include "file"` and `#include <file>` forms. |
+| `compiler` | Uses `gcc -MM` / `g++ -MM` to scan dependencies. More accurate for complex cases (computed includes, conditional compilation) but slower as it spawns a compiler process per source file. |
+
+### Native scanner behavior
+
+The native scanner:
+- Recursively follows `#include` directives
+- Searches include paths in order: source file directory, configured `include_paths`, project root
+- Skips system headers (`/usr/...`, `/lib/...`)
+- Only tracks project-local headers (relative paths)
+
+### When to use compiler scanner
+
+Use `include_scanner = "compiler"` if you have:
+- Computed includes: `#include MACRO_THAT_EXPANDS_TO_FILENAME`
+- Complex conditional compilation affecting which headers are included
+- Headers outside the standard search paths that the native scanner misses
+
+The native scanner may occasionally report extra dependencies (false positives), which is safe—it just means some files might rebuild unnecessarily. It will not miss dependencies (false negatives) for standard `#include` patterns.
