@@ -24,6 +24,9 @@ struct DepsEntry {
     source_checksum: String,
     /// List of dependency paths (relative to project root)
     dependencies: Vec<String>,
+    /// Name of the analyzer that created this entry (e.g., "cpp", "python")
+    #[serde(default)]
+    analyzer: String,
 }
 
 /// Statistics about dependency cache usage
@@ -108,8 +111,8 @@ impl DepsCache {
         Some(deps)
     }
 
-    /// Store dependencies for a source file
-    pub fn set(&self, source: &Path, dependencies: &[PathBuf]) -> Result<()> {
+    /// Store dependencies for a source file with analyzer tag
+    pub fn set(&self, source: &Path, dependencies: &[PathBuf], analyzer: &str) -> Result<()> {
         let key = path_to_key(source);
         let source_checksum = file_checksum(source)?;
 
@@ -118,6 +121,7 @@ impl DepsCache {
             dependencies: dependencies.iter()
                 .map(|p| p.display().to_string())
                 .collect(),
+            analyzer: analyzer.to_string(),
         };
 
         let data = serde_json::to_vec(&entry)
@@ -151,25 +155,71 @@ impl DepsCache {
 
     /// Get raw cached dependencies for a source file without validation.
     /// Returns None if the file isn't in the cache.
-    pub fn get_raw(&self, source: &Path) -> Option<Vec<PathBuf>> {
+    /// Returns (dependencies, analyzer_name).
+    pub fn get_raw(&self, source: &Path) -> Option<(Vec<PathBuf>, String)> {
         let key = path_to_key(source);
         let data = self.db.get(&key).ok()??;
         let entry: DepsEntry = serde_json::from_slice(&data).ok()?;
-        Some(entry.dependencies.iter().map(PathBuf::from).collect())
+        Some((
+            entry.dependencies.iter().map(PathBuf::from).collect(),
+            entry.analyzer,
+        ))
     }
 
     /// List all cached source files and their dependencies.
-    /// Returns pairs of (source_path, dependencies).
-    pub fn list_all(&self) -> Vec<(PathBuf, Vec<PathBuf>)> {
+    /// Returns tuples of (source_path, dependencies, analyzer_name).
+    pub fn list_all(&self) -> Vec<(PathBuf, Vec<PathBuf>, String)> {
         self.db.iter()
             .filter_map(|item| {
                 let (key, value) = item.ok()?;
                 let source = PathBuf::from(String::from_utf8(key.to_vec()).ok()?);
                 let entry: DepsEntry = serde_json::from_slice(&value).ok()?;
                 let deps: Vec<PathBuf> = entry.dependencies.iter().map(PathBuf::from).collect();
-                Some((source, deps))
+                Some((source, deps, entry.analyzer))
             })
             .collect()
+    }
+
+    /// Get statistics about cached dependencies by analyzer.
+    /// Returns a map of analyzer_name -> (file_count, total_dep_count).
+    pub fn stats_by_analyzer(&self) -> std::collections::HashMap<String, (usize, usize)> {
+        let mut stats: std::collections::HashMap<String, (usize, usize)> = std::collections::HashMap::new();
+        for item in self.db.iter() {
+            if let Ok((_, value)) = item {
+                if let Ok(entry) = serde_json::from_slice::<DepsEntry>(&value) {
+                    let analyzer = if entry.analyzer.is_empty() { "unknown".to_string() } else { entry.analyzer };
+                    let (files, deps) = stats.entry(analyzer).or_insert((0, 0));
+                    *files += 1;
+                    *deps += entry.dependencies.len();
+                }
+            }
+        }
+        stats
+    }
+
+    /// Remove all cached entries created by a specific analyzer.
+    /// Returns the number of entries removed.
+    pub fn remove_by_analyzer(&self, analyzer: &str) -> Result<usize> {
+        let mut removed = 0;
+        let mut keys_to_remove = Vec::new();
+
+        for item in self.db.iter() {
+            if let Ok((key, value)) = item {
+                if let Ok(entry) = serde_json::from_slice::<DepsEntry>(&value) {
+                    if entry.analyzer == analyzer {
+                        keys_to_remove.push(key);
+                    }
+                }
+            }
+        }
+
+        for key in keys_to_remove {
+            if self.db.remove(&key).is_ok() {
+                removed += 1;
+            }
+        }
+
+        Ok(removed)
     }
 }
 

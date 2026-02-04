@@ -164,8 +164,8 @@ impl DepAnalyzer for PythonDepAnalyzer {
                 cached
             } else {
                 let scanned = self.scan_imports(source, file_index).unwrap_or_default();
-                // Cache the result (ignore errors)
-                let _ = deps_cache.set(source, &scanned);
+                // Cache the result with analyzer tag (ignore errors)
+                let _ = deps_cache.set(source, &scanned, "python");
                 scanned
             };
 

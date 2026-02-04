@@ -304,8 +304,8 @@ impl DepAnalyzer for CppDepAnalyzer {
                 cached
             } else {
                 let scanned = self.scan_dependencies(source, *is_cpp).unwrap_or_default();
-                // Cache the result (ignore errors)
-                let _ = deps_cache.set(source, &scanned);
+                // Cache the result with analyzer tag (ignore errors)
+                let _ = deps_cache.set(source, &scanned, "cpp");
                 scanned
             };
 

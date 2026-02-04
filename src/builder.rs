@@ -891,16 +891,51 @@ impl Builder {
         use crate::deps_cache::DepsCache;
 
         match action {
-            DepsAction::Clean => {
-                // Clear the dependency cache
-                let deps_dir = self.project_root.join(".rsb").join("deps");
-                if deps_dir.exists() {
-                    fs::remove_dir_all(&deps_dir)
-                        .context("Failed to remove dependency cache")?;
-                    println!("Dependency cache cleared.");
+            DepsAction::Clean { analyzer } => {
+                if let Some(analyzer_name) = analyzer {
+                    // Clear only entries from specific analyzer
+                    let deps_cache = DepsCache::open()?;
+                    let removed = deps_cache.remove_by_analyzer(&analyzer_name)?;
+                    deps_cache.flush()?;
+                    if removed > 0 {
+                        println!("Removed {} entries from '{}' analyzer.", removed, analyzer_name);
+                    } else {
+                        println!("No entries found for '{}' analyzer.", analyzer_name);
+                    }
                 } else {
-                    println!("Dependency cache is already empty.");
+                    // Clear the entire dependency cache
+                    let deps_dir = self.project_root.join(".rsb").join("deps");
+                    if deps_dir.exists() {
+                        fs::remove_dir_all(&deps_dir)
+                            .context("Failed to remove dependency cache")?;
+                        println!("Dependency cache cleared.");
+                    } else {
+                        println!("Dependency cache is already empty.");
+                    }
                 }
+            }
+            DepsAction::Stats => {
+                // Show statistics by analyzer
+                let deps_cache = DepsCache::open()?;
+                let stats = deps_cache.stats_by_analyzer();
+                if stats.is_empty() {
+                    println!("Dependency cache is empty. Run a build first.");
+                    return Ok(());
+                }
+                let mut total_files = 0;
+                let mut total_deps = 0;
+                let mut names: Vec<_> = stats.keys().collect();
+                names.sort();
+                for name in names {
+                    let (files, deps) = stats[name];
+                    total_files += files;
+                    total_deps += deps;
+                    println!("{}: {} files, {} dependencies",
+                        color::bold(name), files, deps);
+                }
+                println!();
+                println!("{}: {} files, {} dependencies",
+                    color::bold("Total"), total_files, total_deps);
             }
             DepsAction::All => {
                 // Open the dependency cache and list all entries
@@ -912,8 +947,8 @@ impl Builder {
                 }
                 // Sort by source path for consistent output
                 entries.sort_by(|a, b| a.0.cmp(&b.0));
-                for (source, deps) in entries {
-                    Self::print_deps(&source, &deps);
+                for (source, deps, analyzer) in entries {
+                    Self::print_deps(&source, &deps, &analyzer);
                 }
             }
             DepsAction::For { files } => {
@@ -922,9 +957,9 @@ impl Builder {
                 let mut found_any = false;
                 for file_arg in &files {
                     let file_path = PathBuf::from(file_arg);
-                    if let Some(deps) = deps_cache.get_raw(&file_path) {
+                    if let Some((deps, analyzer)) = deps_cache.get_raw(&file_path) {
                         found_any = true;
-                        Self::print_deps(&file_path, &deps);
+                        Self::print_deps(&file_path, &deps, &analyzer);
                     } else {
                         eprintln!("{}: '{}' not in dependency cache", color::yellow("Warning"), file_arg);
                     }
@@ -939,11 +974,16 @@ impl Builder {
     }
 
     /// Print dependencies for a source file
-    fn print_deps(source: &std::path::Path, deps: &[PathBuf]) {
-        if deps.is_empty() {
-            println!("{}: {}", source.display(), color::dim("(no dependencies)"));
+    fn print_deps(source: &std::path::Path, deps: &[PathBuf], analyzer: &str) {
+        let analyzer_tag = if analyzer.is_empty() {
+            String::new()
         } else {
-            println!("{}:", source.display());
+            format!(" {}", color::dim(&format!("[{}]", analyzer)))
+        };
+        if deps.is_empty() {
+            println!("{}:{} {}", source.display(), analyzer_tag, color::dim("(no dependencies)"));
+        } else {
+            println!("{}:{}", source.display(), analyzer_tag);
             for dep in deps {
                 println!("  {}", dep.display());
             }

@@ -103,31 +103,46 @@ rsb cache list     # List all cache entries and their status
 
 ## `rsb deps`
 
-Show or manage source file dependencies from the dependency cache. The cache is populated during builds when processors scan source files for dependencies (e.g., C/C++ header files).
+Show or manage source file dependencies from the dependency cache. The cache is populated during builds when dependency analyzers scan source files (e.g., C/C++ headers, Python imports).
 
 ```bash
 rsb deps all                    # Show all cached dependencies
 rsb deps for src/main.c         # Show dependencies for a specific file
 rsb deps for src/a.c src/b.c    # Show dependencies for multiple files
-rsb deps clean                  # Clear the dependency cache
+rsb deps stats                  # Show statistics by analyzer
+rsb deps clean                  # Clear the entire dependency cache
+rsb deps clean --analyzer cpp   # Clear only C/C++ dependencies
+rsb deps clean --analyzer python # Clear only Python dependencies
 ```
 
-Example output:
+Example output for `rsb deps all`:
 
 ```
-src/main.c: (no dependencies)
-src/test.c:
+src/main.c: [cpp] (no dependencies)
+src/test.c: [cpp]
   src/utils.h
   src/config.h
+config/settings.py: [python]
+  config/base.py
+```
+
+Example output for `rsb deps stats`:
+
+```
+cpp: 15 files, 42 dependencies
+python: 8 files, 12 dependencies
+
+Total: 23 files, 54 dependencies
 ```
 
 Note: This command reads directly from the dependency cache (`.rsb/deps/`). If the cache is empty, run a build first to populate it.
 
 This command is useful for:
 - Debugging why a file is being rebuilt
-- Understanding the include structure of your C/C++ project
-- Verifying that the dependency scanner is finding the right headers
-- Clearing the dependency cache to force re-scanning (`rsb deps clean`)
+- Understanding the include/import structure of your project
+- Verifying that dependency analyzers are finding the right files
+- Viewing statistics about cached dependencies by analyzer
+- Clearing dependencies for a specific analyzer without affecting others
 
 ## `rsb config`
 

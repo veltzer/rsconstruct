@@ -275,8 +275,14 @@ pub enum DepsAction {
         #[arg(required = true)]
         files: Vec<String>,
     },
-    /// Clear the dependency cache
-    Clean,
+    /// Show statistics about cached dependencies by analyzer
+    Stats,
+    /// Clear the dependency cache (all analyzers, or specific one)
+    Clean {
+        /// Only clear entries from this analyzer (e.g., "cpp", "python")
+        #[arg(long)]
+        analyzer: Option<String>,
+    },
 }
 
 /// Parse a shell name string into a Shell enum
