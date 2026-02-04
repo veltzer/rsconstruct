@@ -8,6 +8,7 @@
 - [Remote Caching](remote-caching.md)
 - [Dependency Caching](dependency-caching.md)
 - [Project Structure](project-structure.md)
+- [Dependency Analyzers](analyzers.md)
 - [Processors](processors.md)
     - [Template](processors/template.md)
     - [Ruff](processors/ruff.md)

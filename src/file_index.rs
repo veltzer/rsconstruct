@@ -124,5 +124,21 @@ impl FileIndex {
 
         results
     }
+
+    /// Check if the index contains any file with the given extension.
+    /// Extension should include the dot, e.g., ".py", ".c".
+    pub fn has_extension(&self, ext: &str) -> bool {
+        self.files.iter().any(|path| {
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .map(|name| name.ends_with(ext))
+                .unwrap_or(false)
+        })
+    }
+
+    /// Check if a specific path exists in the index.
+    pub fn contains(&self, path: &Path) -> bool {
+        self.files.iter().any(|p| p == path)
+    }
 }
 

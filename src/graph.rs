@@ -253,6 +253,7 @@ impl BuildGraph {
     }
 
     /// Get all products for a specific processor
+    #[allow(dead_code)]
     pub fn products_for_processor(&self, processor: &str) -> Vec<&Product> {
         self.products.iter()
             .filter(|p| p.processor == processor)

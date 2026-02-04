@@ -25,14 +25,23 @@ rsb --phases --process build # Show both phases and commands
 Incremental build — only rebuilds products whose inputs have changed.
 
 ```bash
-rsb build                         # Incremental build
-rsb build --force                 # Force full rebuild
-rsb build -j4                     # Build with 4 parallel jobs
-rsb build -v 2                    # Show source paths in output
-rsb build --dry-run               # Show what would be built without executing
-rsb build --keep-going            # Continue after errors
-rsb build --timings               # Show per-product and total timing info
+rsb build                              # Incremental build
+rsb build --force                      # Force full rebuild
+rsb build -j4                          # Build with 4 parallel jobs
+rsb build -v 2                         # Show source paths in output
+rsb build --dry-run                    # Show what would be built without executing
+rsb build --keep-going                 # Continue after errors
+rsb build --timings                    # Show per-product and total timing info
+rsb build --stop-after discover        # Stop after product discovery
+rsb build --stop-after add-dependencies # Stop after dependency scanning
+rsb build --stop-after resolve         # Stop after graph resolution
 ```
+
+The `--stop-after` flag allows stopping the build at a specific phase:
+- `discover` — stop after discovering products (before dependency scanning)
+- `add-dependencies` — stop after adding dependencies (before resolving graph)
+- `resolve` — stop after resolving the dependency graph (before execution)
+- `build` — run the full build (default)
 
 ## `rsb clean`
 

@@ -5,9 +5,11 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use crate::cli::{ConfigAction, DepsAction, GraphFormat, GraphViewer, ProcessorAction, ToolsAction};
+use crate::analyzers::{CppDepAnalyzer, DepAnalyzer, PythonDepAnalyzer};
+use crate::cli::{BuildPhase, ConfigAction, DepsAction, GraphFormat, GraphViewer, ProcessorAction, ToolsAction};
 use crate::color;
 use crate::config::Config;
+use crate::deps_cache::DepsCache;
 use crate::executor::Executor;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
@@ -73,12 +75,18 @@ impl Builder {
 
     /// Execute an incremental build using the dependency graph
     /// batch_size_override: Some(Some(n)) = use n, Some(None) = disable batching, None = use config
-    pub fn build(&self, force: bool, verbose: bool, file_names: u8, jobs: Option<usize>, timings: bool, keep_going: bool, interrupted: Arc<std::sync::atomic::AtomicBool>, summary: bool, batch_size_override: Option<Option<usize>>) -> Result<()> {
+    pub fn build(&self, force: bool, verbose: bool, file_names: u8, jobs: Option<usize>, timings: bool, keep_going: bool, interrupted: Arc<std::sync::atomic::AtomicBool>, summary: bool, batch_size_override: Option<Option<usize>>, stop_after: BuildPhase) -> Result<()> {
         // Create processors
         let processors = self.create_processors(verbose)?;
 
-        // Build the dependency graph
-        let graph = self.build_graph_with_processors(&processors)?;
+        // Build the dependency graph (may stop early based on stop_after)
+        let graph = self.build_graph_with_processors_and_phase(&processors, stop_after)?;
+
+        // If we stopped early, we're done
+        if stop_after != BuildPhase::Build {
+            println!("Stopped after {:?} phase.", stop_after);
+            return Ok(());
+        }
 
         // Create executor with parallelism from command line or config
         let parallel = jobs.unwrap_or(self.config.build.parallel);
@@ -337,6 +345,25 @@ impl Builder {
         Ok(processors)
     }
 
+    /// Create all available dependency analyzers
+    fn create_analyzers(&self, verbose: bool) -> HashMap<String, Box<dyn DepAnalyzer>> {
+        let mut analyzers: HashMap<String, Box<dyn DepAnalyzer>> = HashMap::new();
+
+        // C/C++ dependency analyzer
+        let cpp_analyzer = CppDepAnalyzer::new(
+            self.config.analyzer.cpp.clone(),
+            self.project_root.clone(),
+            verbose,
+        );
+        analyzers.insert("cpp".to_string(), Box::new(cpp_analyzer));
+
+        // Python dependency analyzer
+        let python_analyzer = PythonDepAnalyzer::new(self.project_root.clone());
+        analyzers.insert("python".to_string(), Box::new(python_analyzer));
+
+        analyzers
+    }
+
     /// Print the dependency graph in the specified format
     pub fn print_graph(&self, format: GraphFormat) -> Result<()> {
         let graph = self.build_graph()?;
@@ -414,18 +441,53 @@ impl Builder {
         Ok(())
     }
 
+    /// Run all enabled dependency analyzers on the graph
+    fn run_analyzers(&self, graph: &mut BuildGraph) -> Result<()> {
+        let analyzers = self.create_analyzers(false);
+        let mut deps_cache = DepsCache::open()?;
+
+        // Collect which analyzers should run
+        let mut names: Vec<&String> = analyzers.keys().collect();
+        names.sort();
+
+        let active_analyzers: Vec<&String> = names.into_iter()
+            .filter(|name| {
+                let in_enabled_list = self.config.analyzer.is_enabled(name);
+                if !in_enabled_list {
+                    return false;
+                }
+                !self.config.analyzer.auto_detect || analyzers[*name].auto_detect(&self.file_index)
+            })
+            .collect();
+
+        // Run each analyzer
+        for name in &active_analyzers {
+            analyzers[*name].analyze(graph, &mut deps_cache, &self.file_index)?;
+        }
+
+        // Flush the cache
+        let _ = deps_cache.flush();
+
+        Ok(())
+    }
+
     /// Build the dependency graph using provided processors
     fn build_graph_with_processors(&self, processors: &HashMap<String, Box<dyn ProductDiscovery>>) -> Result<BuildGraph> {
-        self.build_graph_with_processors_impl(processors, false)
+        self.build_graph_with_processors_impl(processors, false, BuildPhase::Build)
+    }
+
+    /// Build the dependency graph with optional early stopping
+    fn build_graph_with_processors_and_phase(&self, processors: &HashMap<String, Box<dyn ProductDiscovery>>, stop_after: BuildPhase) -> Result<BuildGraph> {
+        self.build_graph_with_processors_impl(processors, false, stop_after)
     }
 
     /// Build the dependency graph for clean (skip expensive dependency scanning)
     fn build_graph_for_clean_with_processors(&self, processors: &HashMap<String, Box<dyn ProductDiscovery>>) -> Result<BuildGraph> {
-        self.build_graph_with_processors_impl(processors, true)
+        self.build_graph_with_processors_impl(processors, true, BuildPhase::Build)
     }
 
     /// Build the dependency graph using provided processors
-    fn build_graph_with_processors_impl(&self, processors: &HashMap<String, Box<dyn ProductDiscovery>>, for_clean: bool) -> Result<BuildGraph> {
+    fn build_graph_with_processors_impl(&self, processors: &HashMap<String, Box<dyn ProductDiscovery>>, for_clean: bool, stop_after: BuildPhase) -> Result<BuildGraph> {
         if phases_debug() {
             eprintln!("{}", color::bold("Phase: Building dependency graph..."));
         }
@@ -456,14 +518,20 @@ impl Builder {
             }
         }
 
-        // Phase 2: Add dependencies (only for regular builds, not clean)
+        if stop_after == BuildPhase::Discover {
+            return Ok(graph);
+        }
+
+        // Phase 2: Run dependency analyzers (only for regular builds, not clean)
         if !for_clean {
             if phases_debug() {
                 eprintln!("{}", color::dim("  Phase: add_dependencies"));
             }
-            for name in &active_processors {
-                processors[*name].add_dependencies(&mut graph)?;
-            }
+            self.run_analyzers(&mut graph)?;
+        }
+
+        if stop_after == BuildPhase::AddDependencies {
+            return Ok(graph);
         }
 
         // Phase 3: Apply tool version hashes
@@ -485,6 +553,8 @@ impl Builder {
             eprintln!("{}", color::dim("  Phase: resolve_dependencies"));
         }
         graph.resolve_dependencies();
+
+        // Note: BuildPhase::Resolve and BuildPhase::Build both complete the graph
         Ok(graph)
     }
 
@@ -528,10 +598,8 @@ impl Builder {
             processors[*name].discover(&mut graph, &self.file_index)?;
         }
 
-        // Phase 2: Add dependencies
-        for name in &active_processors {
-            processors[*name].add_dependencies(&mut graph)?;
-        }
+        // Phase 2: Run dependency analyzers
+        self.run_analyzers(&mut graph)?;
 
         graph.resolve_dependencies();
         Ok(graph)

@@ -145,6 +145,8 @@ pub struct Config {
     #[serde(default)]
     pub processor: ProcessorConfig,
     #[serde(default)]
+    pub analyzer: AnalyzerConfig,
+    #[serde(default)]
     pub completions: CompletionsConfig,
     #[serde(default)]
     pub graph: GraphConfig,
@@ -632,6 +634,74 @@ pub struct CompletionsConfig {
 
 fn default_shells() -> Vec<String> {
     vec!["bash".into()]
+}
+
+fn default_analyzers() -> Vec<String> {
+    vec!["cpp".into(), "python".into()]
+}
+
+/// Configuration for dependency analyzers
+#[derive(Debug, Deserialize, Serialize)]
+pub struct AnalyzerConfig {
+    /// Whether to auto-detect which analyzers are relevant
+    #[serde(default = "default_true")]
+    pub auto_detect: bool,
+    /// List of enabled analyzer names
+    #[serde(default = "default_analyzers")]
+    pub enabled: Vec<String>,
+    /// C/C++ analyzer configuration
+    #[serde(default)]
+    pub cpp: CppAnalyzerConfig,
+    /// Python analyzer configuration
+    #[serde(default)]
+    pub python: PythonAnalyzerConfig,
+}
+
+impl Default for AnalyzerConfig {
+    fn default() -> Self {
+        Self {
+            auto_detect: true,
+            enabled: default_analyzers(),
+            cpp: CppAnalyzerConfig::default(),
+            python: PythonAnalyzerConfig::default(),
+        }
+    }
+}
+
+impl AnalyzerConfig {
+    pub fn is_enabled(&self, name: &str) -> bool {
+        self.enabled.iter().any(|a| a == name)
+    }
+}
+
+/// Configuration for the C/C++ dependency analyzer
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct CppAnalyzerConfig {
+    /// Method for scanning header dependencies (native or compiler)
+    #[serde(default)]
+    pub include_scanner: IncludeScanner,
+    /// Additional include paths for header search
+    #[serde(default)]
+    pub include_paths: Vec<String>,
+    /// C compiler (for -MM scanning with compiler method)
+    #[serde(default = "default_cc_compiler")]
+    pub cc: String,
+    /// C++ compiler (for -MM scanning with compiler method)
+    #[serde(default = "default_cxx_compiler")]
+    pub cxx: String,
+    /// C compiler flags (for -MM scanning)
+    #[serde(default)]
+    pub cflags: Vec<String>,
+    /// C++ compiler flags (for -MM scanning)
+    #[serde(default)]
+    pub cxxflags: Vec<String>,
+}
+
+/// Configuration for the Python dependency analyzer
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct PythonAnalyzerConfig {
+    // Currently no specific configuration needed
+    // Could add: package_paths, ignore_stdlib, etc.
 }
 
 impl Default for CompletionsConfig {

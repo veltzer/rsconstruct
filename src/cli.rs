@@ -57,6 +57,20 @@ pub enum GraphViewer {
     Svg,
 }
 
+/// Build phases that can be stopped after
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
+pub enum BuildPhase {
+    /// Stop after discovering products (before dependency scanning)
+    Discover,
+    /// Stop after adding dependencies (before resolving graph)
+    AddDependencies,
+    /// Stop after resolving the dependency graph (before execution)
+    Resolve,
+    /// Run the full build (default)
+    #[default]
+    Build,
+}
+
 #[derive(Subcommand)]
 pub enum Commands {
     /// Execute an incremental build
@@ -92,6 +106,10 @@ pub enum Commands {
         /// Batch size for batch-capable processors (0 = no limit, -1 = disable, omit to use config)
         #[arg(long, allow_negative_numbers = true)]
         batch_size: Option<i32>,
+
+        /// Stop after a specific build phase
+        #[arg(long, value_enum, default_value = "build")]
+        stop_after: BuildPhase,
     },
     /// Clean build artifacts
     Clean {

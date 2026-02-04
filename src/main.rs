@@ -1,3 +1,4 @@
+mod analyzers;
 mod builder;
 mod cli;
 mod color;
@@ -51,7 +52,7 @@ fn main() -> Result<()> {
     }
 
     match cli.command {
-        Commands::Build { force, jobs, timings, keep_going, dry_run, no_summary, ignore_tool_versions, batch_size } => {
+        Commands::Build { force, jobs, timings, keep_going, dry_run, no_summary, ignore_tool_versions, batch_size, stop_after } => {
             if dry_run {
                 let builder = Builder::new()?;
                 builder.dry_run(force)?;
@@ -62,7 +63,7 @@ fn main() -> Result<()> {
                 }
                 // CLI override: -1 = disable batching, 0 = no limit, >0 = max batch size
                 let batch_size_override = batch_size.map(|n| if n < 0 { None } else { Some(n as usize) });
-                builder.build(force, cli.verbose, cli.file_names, jobs, timings, keep_going, Arc::clone(&interrupted), !no_summary, batch_size_override)?;
+                builder.build(force, cli.verbose, cli.file_names, jobs, timings, keep_going, Arc::clone(&interrupted), !no_summary, batch_size_override, stop_after)?;
             }
         }
         Commands::Clean { action } => {

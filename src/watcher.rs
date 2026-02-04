@@ -7,6 +7,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use crate::builder::Builder;
+use crate::cli::BuildPhase;
 use crate::color;
 
 /// Collect directories to watch based on project conventions
@@ -72,7 +73,7 @@ pub fn watch(verbose: bool, file_names: u8, jobs: Option<usize>, timings: bool, 
     println!("{}", color::bold("Running initial build..."));
     {
         let builder = Builder::new()?;
-        if let Err(e) = builder.build(false, verbose, file_names, jobs, timings, keep_going, Arc::clone(&interrupted), summary, batch_size_override) {
+        if let Err(e) = builder.build(false, verbose, file_names, jobs, timings, keep_going, Arc::clone(&interrupted), summary, batch_size_override, BuildPhase::Build) {
             println!("{}", color::red(&format!("Initial build error: {}", e)));
         }
     }
@@ -139,7 +140,7 @@ pub fn watch(verbose: bool, file_names: u8, jobs: Option<usize>, timings: bool, 
         println!("{}", color::bold("Change detected, rebuilding..."));
         {
             let builder = Builder::new()?;
-            if let Err(e) = builder.build(false, verbose, file_names, jobs, timings, keep_going, Arc::clone(&interrupted), summary, batch_size_override) {
+            if let Err(e) = builder.build(false, verbose, file_names, jobs, timings, keep_going, Arc::clone(&interrupted), summary, batch_size_override, BuildPhase::Build) {
                 println!("{}", color::red(&format!("Build error: {}", e)));
             }
         }
