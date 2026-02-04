@@ -257,6 +257,8 @@ pub enum DepsAction {
         #[arg(required = true)]
         files: Vec<String>,
     },
+    /// Clear the dependency cache
+    Clean,
 }
 
 /// Parse a shell name string into a Shell enum

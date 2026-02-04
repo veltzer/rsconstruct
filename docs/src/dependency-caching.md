@@ -68,12 +68,13 @@ This shows how many source files had their dependencies retrieved from cache (hi
 
 ## Viewing Dependencies
 
-Use the `rsb deps` command to view the dependencies that RSB has discovered:
+Use the `rsb deps` command to view the dependencies stored in the cache:
 
 ```bash
-rsb deps all                    # Show dependencies for all source files
+rsb deps all                    # Show all cached dependencies
 rsb deps for src/main.c         # Show dependencies for a specific file
 rsb deps for src/a.c src/b.c    # Show dependencies for multiple files
+rsb deps clean                  # Clear the dependency cache
 ```
 
 Example output:
@@ -84,6 +85,8 @@ src/test.c:
   src/utils.h
   src/config.h
 ```
+
+The `rsb deps` command reads directly from the dependency cache without building the graph. If the cache is empty (e.g., after `rsb deps clean` or on a fresh checkout), run a build first to populate it.
 
 This is useful for debugging rebuild behavior or understanding the include structure of your project.
 

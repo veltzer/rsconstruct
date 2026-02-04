@@ -1,5 +1,25 @@
 # Command Reference
 
+## Global Flags
+
+These flags can be used with any command:
+
+| Flag | Description |
+|------|-------------|
+| `--verbose`, `-v` | Show skip/restore/cache messages during build |
+| `--file-names <N>` | File name detail level (0=basename, 1=path, 2=+source, 3=+all inputs) |
+| `--process` | Print each external command before execution |
+| `--json` | Output in JSON Lines format (machine-readable) |
+| `--phases` | Show build phase messages (discover, add_dependencies, etc.) |
+
+Example:
+
+```bash
+rsb --phases build           # Show phase messages during build
+rsb --process build          # Show each command being executed
+rsb --phases --process build # Show both phases and commands
+```
+
 ## `rsb build`
 
 Incremental build — only rebuilds products whose inputs have changed.
@@ -74,12 +94,13 @@ rsb cache list     # List all cache entries and their status
 
 ## `rsb deps`
 
-Show source file dependencies (e.g., header files for C/C++ sources).
+Show or manage source file dependencies from the dependency cache. The cache is populated during builds when processors scan source files for dependencies (e.g., C/C++ header files).
 
 ```bash
-rsb deps all                    # Show dependencies for all source files
+rsb deps all                    # Show all cached dependencies
 rsb deps for src/main.c         # Show dependencies for a specific file
 rsb deps for src/a.c src/b.c    # Show dependencies for multiple files
+rsb deps clean                  # Clear the dependency cache
 ```
 
 Example output:
@@ -91,10 +112,13 @@ src/test.c:
   src/config.h
 ```
 
+Note: This command reads directly from the dependency cache (`.rsb/deps/`). If the cache is empty, run a build first to populate it.
+
 This command is useful for:
 - Debugging why a file is being rebuilt
 - Understanding the include structure of your C/C++ project
 - Verifying that the dependency scanner is finding the right headers
+- Clearing the dependency cache to force re-scanning (`rsb deps clean`)
 
 ## `rsb config`
 

@@ -148,6 +148,29 @@ impl DepsCache {
             .context("Failed to clear dependency cache")?;
         Ok(())
     }
+
+    /// Get raw cached dependencies for a source file without validation.
+    /// Returns None if the file isn't in the cache.
+    pub fn get_raw(&self, source: &Path) -> Option<Vec<PathBuf>> {
+        let key = path_to_key(source);
+        let data = self.db.get(&key).ok()??;
+        let entry: DepsEntry = serde_json::from_slice(&data).ok()?;
+        Some(entry.dependencies.iter().map(PathBuf::from).collect())
+    }
+
+    /// List all cached source files and their dependencies.
+    /// Returns pairs of (source_path, dependencies).
+    pub fn list_all(&self) -> Vec<(PathBuf, Vec<PathBuf>)> {
+        self.db.iter()
+            .filter_map(|item| {
+                let (key, value) = item.ok()?;
+                let source = PathBuf::from(String::from_utf8(key.to_vec()).ok()?);
+                let entry: DepsEntry = serde_json::from_slice(&value).ok()?;
+                let deps: Vec<PathBuf> = entry.dependencies.iter().map(PathBuf::from).collect();
+                Some((source, deps))
+            })
+            .collect()
+    }
 }
 
 /// Convert a path to a cache key

@@ -820,42 +820,49 @@ impl Builder {
 
     /// Handle `rsb deps` subcommands
     pub fn deps(&self, action: DepsAction) -> Result<()> {
-        // Build the full graph with dependencies
-        let graph = self.build_graph()?;
+        use crate::deps_cache::DepsCache;
 
         match action {
+            DepsAction::Clean => {
+                // Clear the dependency cache
+                let deps_dir = self.project_root.join(".rsb").join("deps");
+                if deps_dir.exists() {
+                    fs::remove_dir_all(&deps_dir)
+                        .context("Failed to remove dependency cache")?;
+                    println!("Dependency cache cleared.");
+                } else {
+                    println!("Dependency cache is already empty.");
+                }
+            }
             DepsAction::All => {
-                // Show dependencies for all products
-                for product in graph.products() {
-                    self.print_product_deps(product);
+                // Open the dependency cache and list all entries
+                let deps_cache = DepsCache::open()?;
+                let mut entries: Vec<_> = deps_cache.list_all();
+                if entries.is_empty() {
+                    println!("Dependency cache is empty. Run a build first.");
+                    return Ok(());
+                }
+                // Sort by source path for consistent output
+                entries.sort_by(|a, b| a.0.cmp(&b.0));
+                for (source, deps) in entries {
+                    Self::print_deps(&source, &deps);
                 }
             }
             DepsAction::For { files } => {
-                // Show dependencies for specific files
+                // Open the dependency cache and query specific files
+                let deps_cache = DepsCache::open()?;
                 let mut found_any = false;
                 for file_arg in &files {
                     let file_path = PathBuf::from(file_arg);
-                    // Find products where this file is the primary input (first input)
-                    let matching: Vec<_> = graph.products()
-                        .iter()
-                        .filter(|p| {
-                            p.inputs.first()
-                                .map(|first| first == &file_path || first.ends_with(&file_path))
-                                .unwrap_or(false)
-                        })
-                        .collect();
-
-                    if matching.is_empty() {
-                        eprintln!("{}: no product found for '{}'", color::yellow("Warning"), file_arg);
-                    } else {
+                    if let Some(deps) = deps_cache.get_raw(&file_path) {
                         found_any = true;
-                        for product in matching {
-                            self.print_product_deps(product);
-                        }
+                        Self::print_deps(&file_path, &deps);
+                    } else {
+                        eprintln!("{}: '{}' not in dependency cache", color::yellow("Warning"), file_arg);
                     }
                 }
                 if !found_any {
-                    bail!("No matching products found for the specified files");
+                    bail!("No cached dependencies found for the specified files");
                 }
             }
         }
@@ -863,24 +870,14 @@ impl Builder {
         Ok(())
     }
 
-    /// Print dependencies for a single product
-    fn print_product_deps(&self, product: &crate::graph::Product) {
-        let source = product.inputs.first()
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|| "?".to_string());
-
-        // Dependencies are all inputs except the first (primary source)
-        let deps: Vec<_> = product.inputs.iter()
-            .skip(1)
-            .map(|p| p.display().to_string())
-            .collect();
-
+    /// Print dependencies for a source file
+    fn print_deps(source: &std::path::Path, deps: &[PathBuf]) {
         if deps.is_empty() {
-            println!("{}: {}", source, color::dim("(no dependencies)"));
+            println!("{}: {}", source.display(), color::dim("(no dependencies)"));
         } else {
-            println!("{}:", source);
+            println!("{}:", source.display());
             for dep in deps {
-                println!("  {}", dep);
+                println!("  {}", dep.display());
             }
         }
     }
