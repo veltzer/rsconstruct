@@ -433,6 +433,17 @@ fn default_output_suffix() -> String {
     ".elf".into()
 }
 
+/// Method for scanning C/C++ header dependencies
+#[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum IncludeScanner {
+    /// Native regex-based scanner (fast, no external process)
+    #[default]
+    Native,
+    /// Use gcc/g++ -MM (accurate but slower, spawns external process)
+    Compiler,
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CcConfig {
     #[serde(default = "default_cc_compiler")]
@@ -451,6 +462,9 @@ pub struct CcConfig {
     pub output_suffix: String,
     #[serde(default)]
     pub extra_inputs: Vec<String>,
+    /// Method for scanning header dependencies (native or compiler)
+    #[serde(default)]
+    pub include_scanner: IncludeScanner,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -466,6 +480,7 @@ impl Default for CcConfig {
             include_paths: Vec::new(),
             output_suffix: ".elf".into(),
             extra_inputs: Vec::new(),
+            include_scanner: IncludeScanner::default(),
             scan: ScanConfig {
                 scan_dir: Some("src".into()),
                 extensions: Some(vec![".c".into(), ".cc".into()]),

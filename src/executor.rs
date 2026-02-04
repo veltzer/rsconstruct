@@ -108,6 +108,7 @@ impl<'a> Executor<'a> {
         let mut silenced_processors: HashSet<String> = HashSet::new();
 
         // Pending batch of products awaiting execution
+        #[derive(Clone)]
         struct PendingWork {
             product_id: usize,
             cache_key: String,
@@ -153,94 +154,110 @@ impl<'a> Executor<'a> {
             let use_batch = batch_size.is_some() && processor.supports_batch() && pending_batch.len() > 1;
 
             if use_batch {
-                // Print batch processing message
-                if !silenced && !crate::json_output::is_json_mode() {
-                    let displays: Vec<String> = pending_batch.iter().map(|pw| {
-                        let product = graph.get_product(pw.product_id).unwrap();
-                        product.display(file_names)
-                    }).collect();
-                    println!("[{}] {} {} files: {}",
-                        proc_name,
-                        color::green("Processing batch:"),
-                        pending_batch.len(),
-                        displays.join(", "));
-                }
+                // Determine chunk size: 0 means no limit
+                let chunk_size = match batch_size {
+                    Some(0) | None => pending_batch.len(),
+                    Some(n) => n,
+                };
 
-                let products: Vec<&crate::graph::Product> = pending_batch.iter()
-                    .map(|pw| graph.get_product(pw.product_id).unwrap())
+                // Process in chunks
+                let chunks: Vec<Vec<PendingWork>> = pending_batch
+                    .drain(..)
+                    .collect::<Vec<_>>()
+                    .chunks(chunk_size)
+                    .map(|c| c.to_vec())
                     .collect();
-                let product_refs: Vec<&&crate::graph::Product> = products.iter().collect();
 
-                let batch_start = Instant::now();
-                let results = processor.execute_batch(
-                    &product_refs.iter().map(|p| **p).collect::<Vec<_>>()
-                );
-                let batch_duration = batch_start.elapsed();
+                for chunk in chunks {
+                    // Print batch processing message
+                    if !silenced && !crate::json_output::is_json_mode() {
+                        let displays: Vec<String> = chunk.iter().map(|pw| {
+                            let product = graph.get_product(pw.product_id).unwrap();
+                            product.display(file_names)
+                        }).collect();
+                        println!("[{}] {} {} files: {}",
+                            proc_name,
+                            color::green("Processing batch:"),
+                            chunk.len(),
+                            displays.join(", "));
+                    }
 
-                // Process per-product results
-                let per_product_duration = batch_duration / (pending_batch.len() as u32);
-                for (pw, result) in pending_batch.drain(..).zip(results) {
-                    let product = graph.get_product(pw.product_id).unwrap();
-                    match result {
-                        Ok(()) => {
-                            object_store.cache_outputs(&pw.cache_key, &pw.input_checksum, &product.outputs)?;
+                    let products: Vec<&crate::graph::Product> = chunk.iter()
+                        .map(|pw| graph.get_product(pw.product_id).unwrap())
+                        .collect();
+                    let product_refs: Vec<&&crate::graph::Product> = products.iter().collect();
 
-                            // Emit JSON complete event for batch item
-                            crate::json_output::emit_product_complete(
-                                &product.display(file_names),
-                                &proc_name,
-                                "success",
-                                Some(per_product_duration),
-                                None,
-                            );
+                    let batch_start = Instant::now();
+                    let results = processor.execute_batch(
+                        &product_refs.iter().map(|p| **p).collect::<Vec<_>>()
+                    );
+                    let batch_duration = batch_start.elapsed();
 
-                            let stats = stats_by_processor
-                                .entry(proc_name.clone())
-                                .or_insert_with(|| ProcessStats::new());
-                            stats.processed += 1;
-                            stats.files_created += product.outputs.len();
-                        }
-                        Err(e) => {
-                            // Emit JSON failed event for batch item
-                            crate::json_output::emit_product_complete(
-                                &product.display(file_names),
-                                &proc_name,
-                                "failed",
-                                Some(per_product_duration),
-                                Some(&e.to_string()),
-                            );
+                    // Process per-product results
+                    let per_product_duration = batch_duration / (chunk.len() as u32);
+                    for (pw, result) in chunk.into_iter().zip(results) {
+                        let product = graph.get_product(pw.product_id).unwrap();
+                        match result {
+                            Ok(()) => {
+                                object_store.cache_outputs(&pw.cache_key, &pw.input_checksum, &product.outputs)?;
 
-                            let stats = stats_by_processor
-                                .entry(proc_name.clone())
-                                .or_insert_with(|| ProcessStats::new());
-                            stats.failed += 1;
-                            if keep_going {
-                                let msg = format!("[{}] {}: {}", proc_name, product.display(file_names), e);
-                                println!("{}", color::red(&format!("Error: {}", msg)));
-                                failed_products.insert(pw.product_id);
-                                failed_messages.push(msg);
-                            } else {
-                                if first_error.is_none() {
-                                    first_error.replace(e);
+                                // Emit JSON complete event for batch item
+                                crate::json_output::emit_product_complete(
+                                    &product.display(file_names),
+                                    &proc_name,
+                                    "success",
+                                    Some(per_product_duration),
+                                    None,
+                                );
+
+                                let stats = stats_by_processor
+                                    .entry(proc_name.clone())
+                                    .or_insert_with(|| ProcessStats::new());
+                                stats.processed += 1;
+                                stats.files_created += product.outputs.len();
+                            }
+                            Err(e) => {
+                                // Emit JSON failed event for batch item
+                                crate::json_output::emit_product_complete(
+                                    &product.display(file_names),
+                                    &proc_name,
+                                    "failed",
+                                    Some(per_product_duration),
+                                    Some(&e.to_string()),
+                                );
+
+                                let stats = stats_by_processor
+                                    .entry(proc_name.clone())
+                                    .or_insert_with(|| ProcessStats::new());
+                                stats.failed += 1;
+                                if keep_going {
+                                    let msg = format!("[{}] {}: {}", proc_name, product.display(file_names), e);
+                                    println!("{}", color::red(&format!("Error: {}", msg)));
+                                    failed_products.insert(pw.product_id);
+                                    failed_messages.push(msg);
+                                } else {
+                                    if first_error.is_none() {
+                                        first_error.replace(e);
+                                    }
+                                    failed_products.insert(pw.product_id);
+                                    silenced_processors.insert(proc_name.clone());
                                 }
-                                failed_products.insert(pw.product_id);
-                                silenced_processors.insert(proc_name.clone());
                             }
                         }
                     }
-                }
 
-                // Record one timing entry for the whole batch
-                if timings && !silenced {
-                    let stats = stats_by_processor
-                        .entry(proc_name.clone())
-                        .or_insert_with(|| ProcessStats::new());
-                    stats.duration += batch_duration;
-                    stats.product_timings.push(ProductTiming {
-                        display: format!("batch ({} files)", products.len()),
-                        processor: proc_name.clone(),
-                        duration: batch_duration,
-                    });
+                    // Record one timing entry for this chunk
+                    if timings && !silenced {
+                        let stats = stats_by_processor
+                            .entry(proc_name.clone())
+                            .or_insert_with(|| ProcessStats::new());
+                        stats.duration += batch_duration;
+                        stats.product_timings.push(ProductTiming {
+                            display: format!("batch ({} files)", products.len()),
+                            processor: proc_name.clone(),
+                            duration: batch_duration,
+                        });
+                    }
                 }
             } else {
                 // Execute one by one (non-batch processor or single item)
@@ -657,85 +674,98 @@ impl<'a> Executor<'a> {
                             return;
                         }
 
-                        // Execute batch
-                        let product_refs: Vec<&crate::graph::Product> = to_execute.iter()
-                            .map(|(id, _, _)| graph.get_product(*id).unwrap())
-                            .collect();
+                        // Determine chunk size: 0 means no limit
+                        let chunk_size = match self.batch_size {
+                            Some(0) | None => to_execute.len(),
+                            Some(n) => n,
+                        };
 
-                        let displays: Vec<String> = product_refs.iter()
-                            .map(|p| self.product_display(p))
-                            .collect();
-                        println!("[{}] {} {} files: {}",
-                            proc_name,
-                            color::green("Processing batch:"),
-                            product_refs.len(),
-                            displays.join(", "));
+                        // Process in chunks
+                        for chunk in to_execute.chunks(chunk_size) {
+                            if interrupted_ref.load(Ordering::SeqCst) {
+                                break;
+                            }
 
-                        let batch_start = Instant::now();
-                        let results = processor.execute_batch(&product_refs);
-                        let batch_duration = batch_start.elapsed();
+                            // Execute batch chunk
+                            let product_refs: Vec<&crate::graph::Product> = chunk.iter()
+                                .map(|(id, _, _)| graph.get_product(*id).unwrap())
+                                .collect();
 
-                        // Process per-product results
-                        for (item, result) in to_execute.iter().zip(results) {
-                            let (id, input_checksum, _) = item;
-                            let product = graph.get_product(*id).unwrap();
-                            let cache_key = product.cache_key();
+                            let displays: Vec<String> = product_refs.iter()
+                                .map(|p| self.product_display(p))
+                                .collect();
+                            println!("[{}] {} {} files: {}",
+                                proc_name,
+                                color::green("Processing batch:"),
+                                product_refs.len(),
+                                displays.join(", "));
 
-                            match result {
-                                Ok(()) => {
-                                    if let Err(e) = object_store.cache_outputs(&cache_key, input_checksum, &product.outputs) {
+                            let batch_start = Instant::now();
+                            let results = processor.execute_batch(&product_refs);
+                            let batch_duration = batch_start.elapsed();
+
+                            // Process per-product results
+                            for (item, result) in chunk.iter().zip(results) {
+                                let (id, input_checksum, _) = item;
+                                let product = graph.get_product(*id).unwrap();
+                                let cache_key = product.cache_key();
+
+                                match result {
+                                    Ok(()) => {
+                                        if let Err(e) = object_store.cache_outputs(&cache_key, input_checksum, &product.outputs) {
+                                            if keep_going {
+                                                let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
+                                                println!("{}", color::red(&format!("Error: {}", msg)));
+                                                failed_ref.lock().insert(*id);
+                                                failed_msgs_ref.lock().push(msg);
+                                            } else {
+                                                failed_ref.lock().insert(*id);
+                                                errors_ref.lock().push(e);
+                                            }
+                                            continue;
+                                        }
+                                        let mut stats = stats_ref.lock();
+                                        let proc_stats = stats
+                                            .entry(proc_name.clone())
+                                            .or_insert_with(|| ProcessStats::new());
+                                        proc_stats.processed += 1;
+                                        proc_stats.files_created += product.outputs.len();
+                                    }
+                                    Err(e) => {
+                                        {
+                                            let mut stats = stats_ref.lock();
+                                            let proc_stats = stats
+                                                .entry(proc_name.clone())
+                                                .or_insert_with(|| ProcessStats::new());
+                                            proc_stats.failed += 1;
+                                        }
                                         if keep_going {
-                                            let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
+                                            let msg = format!("[{}] {}: {}", proc_name, self.product_display(product), e);
                                             println!("{}", color::red(&format!("Error: {}", msg)));
                                             failed_ref.lock().insert(*id);
                                             failed_msgs_ref.lock().push(msg);
                                         } else {
                                             failed_ref.lock().insert(*id);
+                                            failed_procs_ref.lock().insert(proc_name.clone());
                                             errors_ref.lock().push(e);
                                         }
-                                        continue;
-                                    }
-                                    let mut stats = stats_ref.lock();
-                                    let proc_stats = stats
-                                        .entry(proc_name.clone())
-                                        .or_insert_with(|| ProcessStats::new());
-                                    proc_stats.processed += 1;
-                                    proc_stats.files_created += product.outputs.len();
-                                }
-                                Err(e) => {
-                                    {
-                                        let mut stats = stats_ref.lock();
-                                        let proc_stats = stats
-                                            .entry(proc_name.clone())
-                                            .or_insert_with(|| ProcessStats::new());
-                                        proc_stats.failed += 1;
-                                    }
-                                    if keep_going {
-                                        let msg = format!("[{}] {}: {}", proc_name, self.product_display(product), e);
-                                        println!("{}", color::red(&format!("Error: {}", msg)));
-                                        failed_ref.lock().insert(*id);
-                                        failed_msgs_ref.lock().push(msg);
-                                    } else {
-                                        failed_ref.lock().insert(*id);
-                                        failed_procs_ref.lock().insert(proc_name.clone());
-                                        errors_ref.lock().push(e);
                                     }
                                 }
                             }
-                        }
 
-                        // Record batch timing
-                        if timings {
-                            let mut stats = stats_ref.lock();
-                            let proc_stats = stats
-                                .entry(proc_name.clone())
-                                .or_insert_with(|| ProcessStats::new());
-                            proc_stats.duration += batch_duration;
-                            proc_stats.product_timings.push(ProductTiming {
-                                display: format!("batch ({} files)", product_refs.len()),
-                                processor: proc_name.clone(),
-                                duration: batch_duration,
-                            });
+                            // Record batch timing for this chunk
+                            if timings {
+                                let mut stats = stats_ref.lock();
+                                let proc_stats = stats
+                                    .entry(proc_name.clone())
+                                    .or_insert_with(|| ProcessStats::new());
+                                proc_stats.duration += batch_duration;
+                                proc_stats.product_timings.push(ProductTiming {
+                                    display: format!("batch ({} files)", product_refs.len()),
+                                    processor: proc_name.clone(),
+                                    duration: batch_duration,
+                                });
+                            }
                         }
                     });
                 }

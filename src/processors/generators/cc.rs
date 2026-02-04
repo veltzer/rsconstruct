@@ -1,11 +1,12 @@
 use anyhow::{Context, Result};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
+use regex::Regex;
 
-use crate::config::{CcConfig, config_hash, resolve_extra_inputs};
+use crate::config::{CcConfig, IncludeScanner, config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use crate::processors::{ProductDiscovery, scan_root, clean_outputs, format_command, run_command};

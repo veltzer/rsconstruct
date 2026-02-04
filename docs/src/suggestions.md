@@ -412,6 +412,30 @@ Features that have been implemented and are documented elsewhere:
 
 ## Caching & Performance
 
+### Native C/C++ include scanner
+- Currently `cc_single_file` uses `gcc -MM` to discover header dependencies, which spawns an external process for each source file.
+- A native Rust implementation could be significantly faster, especially for projects with many C/C++ files.
+- Implementation approach:
+  - Parse `#include` directives (both `"..."` and `<...>` forms)
+  - Recursively follow includes, respecting `-I` include paths
+  - Handle conditional compilation (`#ifdef`, `#ifndef`, `#if defined(...)`) where possible
+  - Cache results aggressively since headers rarely change
+- Existing crates to evaluate:
+  - [shader-prepper](https://github.com/h3r2tic/shader-prepper) — Lightweight include scanner for shader files, doesn't implement full preprocessing, only `#include` scanning. Could be adapted for C/C++.
+  - [mini-c-parser](https://crates.io/crates/mini-c-parser) — Full C lexer/parser in Rust, can extract preprocessor directives.
+- Challenges:
+  - Conditional compilation makes accurate dependency detection hard without full preprocessing
+  - Computed includes (`#include MACRO`) require macro expansion
+  - System headers need to be handled (skip or include based on configuration)
+- Pragmatic approach: scan `#include` lines with regex, ignore conditionals, accept occasional false positives (extra rebuilds are safe, missed rebuilds are not)
+- Configuration:
+  ```toml
+  [processor.cc_single_file]
+  native_include_scanner = true  # Use native scanner instead of gcc -MM
+  ```
+- Fallback: if native scanner fails (e.g., computed include), fall back to `gcc -MM` for that file
+- Benefits: faster dependency scanning, no compiler dependency for scanning phase, better parallelization
+
 ### Lazy file hashing (mtime-based)
 - Currently rsb computes SHA-256 checksums for all input files on every build.
 - For large repositories, this can be slow even when nothing has changed.
