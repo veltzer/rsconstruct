@@ -4,7 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
-use crate::cli::{ConfigAction, GraphFormat, GraphViewer, ProcessorAction, ToolsAction};
+use crate::cli::{ConfigAction, DepsAction, GraphFormat, GraphViewer, ProcessorAction, ToolsAction};
 use crate::color;
 use crate::config::Config;
 use crate::executor::Executor;
@@ -415,20 +415,32 @@ impl Builder {
         eprintln!("{}", color::bold("Building dependency graph..."));
         let mut graph = BuildGraph::new();
 
+        // Collect which processors should run
         let mut names: Vec<&String> = processors.keys().collect();
         names.sort();
-        for name in names {
-            let in_enabled_list = self.config.processor.is_enabled(name);
-            if !in_enabled_list {
-                continue;
-            }
-            let should_run = !self.config.processor.auto_detect || processors[name].auto_detect(&self.file_index);
-            if should_run {
-                if for_clean {
-                    processors[name].discover_for_clean(&mut graph, &self.file_index)?;
-                } else {
-                    processors[name].discover(&mut graph, &self.file_index)?;
+        let active_processors: Vec<&String> = names.into_iter()
+            .filter(|name| {
+                let in_enabled_list = self.config.processor.is_enabled(name);
+                if !in_enabled_list {
+                    return false;
                 }
+                !self.config.processor.auto_detect || processors[*name].auto_detect(&self.file_index)
+            })
+            .collect();
+
+        // Phase 1: Discover products
+        for name in &active_processors {
+            if for_clean {
+                processors[*name].discover_for_clean(&mut graph, &self.file_index)?;
+            } else {
+                processors[*name].discover(&mut graph, &self.file_index)?;
+            }
+        }
+
+        // Phase 2: Add dependencies (only for regular builds, not clean)
+        if !for_clean {
+            for name in &active_processors {
+                processors[*name].add_dependencies(&mut graph)?;
             }
         }
 
@@ -459,23 +471,37 @@ impl Builder {
 
         let mut names: Vec<&String> = processors.keys().collect();
         names.sort();
-        for name in names {
-            if let Some(filter) = filter_name {
-                if name.as_str() != filter {
-                    continue;
+
+        // Collect active processors
+        let active_processors: Vec<&String> = names.into_iter()
+            .filter(|name| {
+                if let Some(filter) = filter_name {
+                    if name.as_str() != filter {
+                        return false;
+                    }
                 }
-            }
-            if !include_all {
-                let in_enabled_list = self.config.processor.is_enabled(name);
-                if !in_enabled_list {
-                    continue;
+                if !include_all {
+                    let in_enabled_list = self.config.processor.is_enabled(name);
+                    if !in_enabled_list {
+                        return false;
+                    }
+                    let should_run = !self.config.processor.auto_detect || processors[*name].auto_detect(&self.file_index);
+                    if !should_run {
+                        return false;
+                    }
                 }
-                let should_run = !self.config.processor.auto_detect || processors[name].auto_detect(&self.file_index);
-                if !should_run {
-                    continue;
-                }
-            }
-            processors[name].discover(&mut graph, &self.file_index)?;
+                true
+            })
+            .collect();
+
+        // Phase 1: Discover products
+        for name in &active_processors {
+            processors[*name].discover(&mut graph, &self.file_index)?;
+        }
+
+        // Phase 2: Add dependencies
+        for name in &active_processors {
+            processors[*name].add_dependencies(&mut graph)?;
         }
 
         graph.resolve_dependencies();
@@ -761,5 +787,72 @@ impl Builder {
             .context(format!("Failed to open file with {}", cmd))?;
 
         Ok(())
+    }
+
+    /// Handle `rsb deps` subcommands
+    pub fn deps(&self, action: DepsAction) -> Result<()> {
+        // Build the full graph with dependencies
+        let graph = self.build_graph()?;
+
+        match action {
+            DepsAction::All => {
+                // Show dependencies for all products
+                for product in graph.products() {
+                    self.print_product_deps(product);
+                }
+            }
+            DepsAction::For { files } => {
+                // Show dependencies for specific files
+                let mut found_any = false;
+                for file_arg in &files {
+                    let file_path = PathBuf::from(file_arg);
+                    // Find products where this file is the primary input (first input)
+                    let matching: Vec<_> = graph.products()
+                        .iter()
+                        .filter(|p| {
+                            p.inputs.first()
+                                .map(|first| first == &file_path || first.ends_with(&file_path))
+                                .unwrap_or(false)
+                        })
+                        .collect();
+
+                    if matching.is_empty() {
+                        eprintln!("{}: no product found for '{}'", color::yellow("Warning"), file_arg);
+                    } else {
+                        found_any = true;
+                        for product in matching {
+                            self.print_product_deps(product);
+                        }
+                    }
+                }
+                if !found_any {
+                    bail!("No matching products found for the specified files");
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Print dependencies for a single product
+    fn print_product_deps(&self, product: &crate::graph::Product) {
+        let source = product.inputs.first()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "?".to_string());
+
+        // Dependencies are all inputs except the first (primary source)
+        let deps: Vec<_> = product.inputs.iter()
+            .skip(1)
+            .map(|p| p.display().to_string())
+            .collect();
+
+        if deps.is_empty() {
+            println!("{}: {}", source, color::dim("(no dependencies)"));
+        } else {
+            println!("{}:", source);
+            for dep in deps {
+                println!("  {}", dep);
+            }
+        }
     }
 }

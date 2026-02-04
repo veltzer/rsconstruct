@@ -246,6 +246,18 @@ impl BuildGraph {
     pub fn get_dependencies(&self, id: usize) -> &[usize] {
         &self.dependencies[id]
     }
+
+    /// Get mutable access to a product by id
+    pub fn get_product_mut(&mut self, id: usize) -> Option<&mut Product> {
+        self.products.get_mut(id)
+    }
+
+    /// Get all products for a specific processor
+    pub fn products_for_processor(&self, processor: &str) -> Vec<&Product> {
+        self.products.iter()
+            .filter(|p| p.processor == processor)
+            .collect()
+    }
 }
 
 impl Default for BuildGraph {

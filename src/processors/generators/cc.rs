@@ -582,11 +582,44 @@ impl ProductDiscovery for CcProcessor {
         let config_hash = Some(config_hash(&self.config));
         let extra = resolve_extra_inputs(&self.config.extra_inputs)?;
 
+        // Create products with just source file + extra inputs (no header deps yet)
+        for (source, _is_cpp) in &source_files {
+            let executable = self.get_executable_path(source);
+
+            let mut inputs = vec![source.clone()];
+            inputs.extend(extra.clone());
+
+            graph.add_product(
+                inputs,
+                vec![executable],
+                "cc_single_file",
+                config_hash.clone(),
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn add_dependencies(&self, graph: &mut BuildGraph) -> Result<()> {
+        // Get products for this processor
+        let products: Vec<(usize, PathBuf, bool)> = graph.products_for_processor("cc_single_file")
+            .iter()
+            .map(|p| {
+                let source = p.inputs[0].clone();
+                let is_cpp = source.extension().and_then(|s| s.to_str()) == Some("cc");
+                (p.id, source, is_cpp)
+            })
+            .collect();
+
+        if products.is_empty() {
+            return Ok(());
+        }
+
         // Open dependency cache
         let mut deps_cache = DepsCache::open()?;
 
         // Show progress bar for dependency scanning
-        let pb = indicatif::ProgressBar::new(source_files.len() as u64);
+        let pb = indicatif::ProgressBar::new(products.len() as u64);
         pb.set_style(
             indicatif::ProgressStyle::default_bar()
                 .template("[cc_single_file] Scanning dependencies {bar:40} {pos}/{len} {msg}")
@@ -594,10 +627,8 @@ impl ProductDiscovery for CcProcessor {
                 .progress_chars("##-")
         );
 
-        for (source, is_cpp) in &source_files {
+        for (id, source, is_cpp) in &products {
             pb.set_message(source.display().to_string());
-
-            let executable = self.get_executable_path(source);
 
             // Try to get cached dependencies, otherwise scan
             let headers = if let Some(cached) = deps_cache.get(source) {
@@ -609,17 +640,13 @@ impl ProductDiscovery for CcProcessor {
                 scanned
             };
 
-            // Build inputs: source file + all headers + extra inputs
-            let mut inputs = vec![source.clone()];
-            inputs.extend(headers);
-            inputs.extend(extra.clone());
+            // Add header dependencies to the product
+            if !headers.is_empty() {
+                if let Some(product) = graph.get_product_mut(*id) {
+                    product.inputs.extend(headers);
+                }
+            }
 
-            graph.add_product(
-                inputs,
-                vec![executable],
-                "cc_single_file",
-                config_hash.clone(),
-            )?;
             pb.inc(1);
         }
         pb.finish_and_clear();

@@ -66,6 +66,27 @@ During graph construction, RSB displays cache statistics:
 
 This shows how many source files had their dependencies retrieved from cache (hits) versus re-scanned (recalculated).
 
+## Viewing Dependencies
+
+Use the `rsb deps` command to view the dependencies that RSB has discovered:
+
+```bash
+rsb deps all                    # Show dependencies for all source files
+rsb deps for src/main.c         # Show dependencies for a specific file
+rsb deps for src/a.c src/b.c    # Show dependencies for multiple files
+```
+
+Example output:
+
+```
+src/main.c: (no dependencies)
+src/test.c:
+  src/utils.h
+  src/config.h
+```
+
+This is useful for debugging rebuild behavior or understanding the include structure of your project.
+
 ## Cache Invalidation
 
 The cache automatically invalidates entries when:

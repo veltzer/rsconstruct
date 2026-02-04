@@ -446,6 +446,14 @@ pub trait ProductDiscovery: Sync + Send {
         self.discover(graph, file_index)
     }
 
+    /// Add dependencies to products after initial discovery.
+    /// Called after all processors have run discover(). Use this for expensive dependency
+    /// scanning that should only happen for enabled processors (e.g., C/C++ header scanning).
+    /// Default implementation does nothing.
+    fn add_dependencies(&self, _graph: &mut BuildGraph) -> Result<()> {
+        Ok(())
+    }
+
     /// Execute a single product
     fn execute(&self, product: &Product) -> Result<()>;
 

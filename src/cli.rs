@@ -158,6 +158,11 @@ pub enum Commands {
         #[arg(long, value_enum, num_args = 0..=1, default_missing_value = "svg")]
         view: Option<GraphViewer>,
     },
+    /// Show source file dependencies (e.g., header files for C/C++)
+    Deps {
+        #[command(subcommand)]
+        action: DepsAction,
+    },
 }
 
 #[derive(Subcommand)]
@@ -235,6 +240,18 @@ pub enum ToolsAction {
         /// Only verify the lock file without writing (exit with error if mismatched)
         #[arg(long)]
         check: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum DepsAction {
+    /// Show dependencies for all source files
+    All,
+    /// Show dependencies for specific files
+    For {
+        /// Source files to show dependencies for
+        #[arg(required = true)]
+        files: Vec<String>,
     },
 }
 

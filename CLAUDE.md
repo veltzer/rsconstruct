@@ -48,6 +48,8 @@ A fast, incremental build tool written in Rust with template support, Python lin
 - `rsb tools check` - Check if required tools are available on PATH
 - `rsb tools lock` - Lock tool versions to .tools.versions
 - `rsb tools lock --check` - Verify tool versions match lock file
+- `rsb deps all` - Show dependencies for all source files
+- `rsb deps for <files>` - Show dependencies for specific files
 - `rsb complete [shell]` - Generate shell completions
 - `rsb version` - Print version information
 

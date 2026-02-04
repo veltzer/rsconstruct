@@ -72,6 +72,30 @@ rsb cache trim     # Remove unreferenced objects
 rsb cache list     # List all cache entries and their status
 ```
 
+## `rsb deps`
+
+Show source file dependencies (e.g., header files for C/C++ sources).
+
+```bash
+rsb deps all                    # Show dependencies for all source files
+rsb deps for src/main.c         # Show dependencies for a specific file
+rsb deps for src/a.c src/b.c    # Show dependencies for multiple files
+```
+
+Example output:
+
+```
+src/main.c: (no dependencies)
+src/test.c:
+  src/utils.h
+  src/config.h
+```
+
+This command is useful for:
+- Debugging why a file is being rebuilt
+- Understanding the include structure of your C/C++ project
+- Verifying that the dependency scanner is finding the right headers
+
 ## `rsb config`
 
 Show or inspect the configuration.

@@ -193,6 +193,10 @@ fn main() -> Result<()> {
                 builder.print_graph(format)?;
             }
         }
+        Commands::Deps { action } => {
+            let builder = Builder::new()?;
+            builder.deps(action)?;
+        }
     }
 
     Ok(())
