@@ -517,6 +517,112 @@ Features that have been implemented and are documented elsewhere:
 - If they differ, the build is non-deterministic.
 - Bazel has `--experimental_check_output_files` for similar purposes.
 
+## Quick Wins
+
+These are relatively straightforward improvements that would enhance usability.
+
+### Batch processing for more processors
+- Currently only some processors support batching (running multiple files in a single tool invocation).
+- Adding batch support to `cpplint`, `shellcheck`, and `ruff` could significantly speed up builds with many files.
+- These tools all support multiple file arguments natively.
+- Implementation: extend `ProductDiscovery` trait with optional `batch_capable()` method, group products by processor in executor.
+
+### Progress bar for long builds
+- The `indicatif` crate is already a dependency but unused.
+- Show a progress bar during builds with many products: `[=====>    ] 45/100 products`
+- For parallel builds, show active job count: `[=====>    ] 45/100 (4 running)`
+- Degrade gracefully when stdout is not a TTY (fall back to simple line output).
+
+### `rsb why <file>` — Explain rebuilds
+- Show why a file would be rebuilt: which inputs changed, config changed, cache miss, tool version changed, etc.
+- Useful for debugging unexpected rebuilds:
+  ```bash
+  $ rsb why out/template/config.py
+  out/template/config.py needs rebuild because:
+    - Input templates/config.py.tera changed (checksum mismatch)
+    - Processor config changed (template.strict: false → true)
+  ```
+- Implementation: compare current input hashes against cached hashes, diff processor configs.
+
+### `rsb build <target>` — Build specific targets
+- Build only specific targets/products by name or pattern, instead of building everything:
+  ```bash
+  rsb build src/main.c           # Build products that use this input
+  rsb build out/cc_single_file/  # Build products in this output directory
+  rsb build "*.py"               # Build products matching pattern
+  ```
+- Complements `@alias` syntax for processor-based filtering.
+
+### Parallel dependency analysis
+- The cpp analyzer scans files sequentially, which can be slow for large codebases with many headers.
+- Parallelize header scanning using rayon or tokio.
+- Each source file's includes can be scanned independently; only the final graph merge needs synchronization.
+
+### `--watch` with processor filter
+- Allow filtering which processors run in watch mode:
+  ```bash
+  rsb watch --processor tera      # Only watch and rebuild tera products
+  rsb watch --processor ruff,pylint  # Multiple processors
+  ```
+- Useful for fast feedback loops when iterating on specific file types.
+
+### Build timing history
+- Store timing data to `.rsb/timings.json` after each build.
+- Add `rsb timings` command to show:
+  - Slowest products (average and worst-case)
+  - Trends over time (is the build getting slower?)
+  - Time spent per processor
+  ```bash
+  $ rsb timings
+  Slowest products (last 10 builds):
+    1. cc_single_file:main.elf  avg: 2.3s  max: 4.1s
+    2. pytest:test_api.py       avg: 1.8s  max: 2.5s
+
+  Time by processor:
+    cc_single_file: 45%
+    pytest: 30%
+    ruff: 15%
+    template: 10%
+  ```
+- Helps identify optimization opportunities.
+
+### Remote cache authentication
+- Support for authenticated remote caches:
+  - **S3**: AWS credentials from environment, config file, or IAM role
+  - **HTTP**: Basic auth, bearer tokens, custom headers
+  - **GCS**: Google Cloud credentials
+- Configuration:
+  ```toml
+  [cache]
+  remote = "s3://my-bucket/rsb-cache"
+  remote_auth = "env"  # Use AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+
+  # Or for HTTP:
+  remote = "https://cache.example.com/rsb"
+  remote_headers = { Authorization = "Bearer ${RSB_CACHE_TOKEN}" }
+  ```
+- Variable substitution from environment for secrets.
+
+### `rsb lint` — Run only checkers
+- Convenience command to run only checker processors (ruff, pylint, cpplint, shellcheck, spellcheck) without generators:
+  ```bash
+  rsb lint              # Run all enabled checkers
+  rsb lint --fix        # Run checkers with auto-fix where supported
+  ```
+- Equivalent to `rsb build @lint` if target aliases are implemented.
+- Useful for pre-commit hooks and quick validation.
+
+### Colored diff on config changes
+- When config changes trigger rebuilds, show what changed:
+  ```bash
+  $ rsb build
+  Config changed for cc_single_file:
+    - cflags: ["-O2", "-Wall"] → ["-O3", "-Wall", "-Werror"]
+  Rebuilding 15 products...
+  ```
+- Helps understand why products are rebuilding when source files haven't changed.
+- Use colored diff format (red for removed, green for added).
+
 ## Security
 
 ### Shell command execution from source file comments
