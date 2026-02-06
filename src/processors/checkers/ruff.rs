@@ -96,4 +96,8 @@ impl ProductDiscovery for RuffProcessor {
             |input| self.lint_file(input),
         )
     }
+
+    fn config_json(&self) -> Option<String> {
+        serde_json::to_string(&self.ruff_config).ok()
+    }
 }

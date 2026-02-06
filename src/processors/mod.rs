@@ -553,6 +553,13 @@ pub trait ProductDiscovery: Sync + Send {
     fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
         products.iter().map(|p| self.execute(p)).collect()
     }
+
+    /// Return the processor's configuration as a JSON string for config change detection.
+    /// Returns None if the processor doesn't track config (default).
+    /// Processors that want config change diffs should override this.
+    fn config_json(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Timing for a single product execution

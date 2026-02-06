@@ -79,6 +79,9 @@ impl Builder {
         // Create processors
         let processors = self.create_processors(verbose)?;
 
+        // Check for config changes and display diffs
+        self.detect_config_changes(&processors);
+
         // Build the dependency graph (may stop early based on stop_after)
         let graph = self.build_graph_with_processors_and_phase(&processors, stop_after)?;
 
@@ -343,6 +346,38 @@ impl Builder {
         }
 
         Ok(processors)
+    }
+
+    /// Detect and display config changes for each processor.
+    /// Shows colored diffs when processor configuration has changed since last build.
+    fn detect_config_changes(&self, processors: &HashMap<String, Box<dyn ProductDiscovery>>) {
+        // Don't show config diffs in JSON mode
+        if crate::json_output::is_json_mode() {
+            return;
+        }
+
+        let mut processor_names: Vec<_> = processors.keys().collect();
+        processor_names.sort();
+
+        for name in processor_names {
+            let processor = processors.get(name).unwrap();
+
+            // Skip processors that don't provide config JSON
+            let config_json = match processor.config_json() {
+                Some(json) => json,
+                None => continue,
+            };
+
+            // Store the config and check if it changed
+            if let Ok(Some(old_json)) = self.object_store.store_processor_config(name, &config_json) {
+                // Config changed - show diff
+                if let Some(diff) = ObjectStore::diff_configs(&old_json, &config_json) {
+                    println!("{}",
+                        color::yellow(&format!("Config changed for [{}]:", name)));
+                    println!("{}", diff);
+                }
+            }
+        }
     }
 
     /// Create all available dependency analyzers

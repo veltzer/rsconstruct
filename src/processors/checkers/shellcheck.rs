@@ -100,4 +100,8 @@ impl ProductDiscovery for ShellcheckProcessor {
             |input| self.check_file(input),
         )
     }
+
+    fn config_json(&self) -> Option<String> {
+        serde_json::to_string(&self.config).ok()
+    }
 }

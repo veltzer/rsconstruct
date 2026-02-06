@@ -167,6 +167,10 @@ impl ProductDiscovery for TeraProcessor {
         }
         Ok(())
     }
+
+    fn config_json(&self) -> Option<String> {
+        serde_json::to_string(&self.config).ok()
+    }
 }
 
 /// Custom Tera function to load Python configuration files

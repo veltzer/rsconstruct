@@ -1,9 +1,11 @@
 use anyhow::{Context, Result};
 use sha2::{Sha256, Digest};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
+use crate::color;
 use crate::config::RestoreMethod;
 use crate::remote_cache::RemoteCache;
 
@@ -26,6 +28,7 @@ fn walk_files(dir: &Path) -> Vec<PathBuf> {
 const RSB_DIR: &str = ".rsb";
 const OBJECTS_DIR: &str = "objects";
 const DB_DIR: &str = "db";
+const CONFIGS_TREE: &str = "processor_configs";
 
 /// Object store for caching build outputs
 /// Uses git-like object storage: .rsb/objects/[2 chars]/[rest of hash]
@@ -37,6 +40,8 @@ pub struct ObjectStore {
     objects_dir: PathBuf,
     /// sled database for cache index
     db: sled::Db,
+    /// Separate tree for storing processor configs (for config change detection)
+    configs_tree: sled::Tree,
     /// Method to restore files from cache
     restore_method: RestoreMethod,
     /// Optional remote cache backend
@@ -100,10 +105,15 @@ impl ObjectStore {
         let db = sled::open(&db_path)
             .context("Failed to open cache database")?;
 
+        // Open separate tree for processor configs
+        let configs_tree = db.open_tree(CONFIGS_TREE)
+            .context("Failed to open configs tree")?;
+
         Ok(Self {
             rsb_dir,
             objects_dir,
             db,
+            configs_tree,
             restore_method,
             remote,
             remote_push,
@@ -478,6 +488,108 @@ impl ObjectStore {
         }
 
         Ok(())
+    }
+
+    /// Store a processor's config JSON for later comparison.
+    /// Returns the previous config if it existed and was different.
+    pub fn store_processor_config(&self, processor: &str, config_json: &str) -> Result<Option<String>> {
+        let key = processor.as_bytes();
+        let old_value = self.configs_tree.get(key)
+            .context("Failed to read processor config")?
+            .and_then(|bytes| String::from_utf8(bytes.to_vec()).ok());
+
+        // Only update if changed
+        let changed = old_value.as_ref() != Some(&config_json.to_string());
+        if changed {
+            self.configs_tree.insert(key, config_json.as_bytes())
+                .context("Failed to store processor config")?;
+        }
+
+        // Return old value only if it was different
+        if changed {
+            Ok(old_value)
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Generate a colored diff between old and new config JSON.
+    /// Returns None if configs are identical or if diffing fails.
+    pub fn diff_configs(old_json: &str, new_json: &str) -> Option<String> {
+        // Parse both as generic JSON values
+        let old: serde_json::Value = serde_json::from_str(old_json).ok()?;
+        let new: serde_json::Value = serde_json::from_str(new_json).ok()?;
+
+        if old == new {
+            return None;
+        }
+
+        // Convert to sorted maps for comparison
+        let old_map = Self::flatten_json(&old, "");
+        let new_map = Self::flatten_json(&new, "");
+
+        let mut lines = Vec::new();
+
+        // Find removed and changed keys
+        for (key, old_val) in &old_map {
+            match new_map.get(key) {
+                None => {
+                    lines.push(color::red(&format!("  - {}: {}", key, old_val)));
+                }
+                Some(new_val) if new_val != old_val => {
+                    lines.push(color::red(&format!("  - {}: {}", key, old_val)));
+                    lines.push(color::green(&format!("  + {}: {}", key, new_val)));
+                }
+                _ => {}
+            }
+        }
+
+        // Find added keys
+        for (key, new_val) in &new_map {
+            if !old_map.contains_key(key) {
+                lines.push(color::green(&format!("  + {}: {}", key, new_val)));
+            }
+        }
+
+        if lines.is_empty() {
+            None
+        } else {
+            Some(lines.join("\n"))
+        }
+    }
+
+    /// Flatten a JSON value into a map of dotted keys to string values
+    fn flatten_json(value: &serde_json::Value, prefix: &str) -> BTreeMap<String, String> {
+        let mut map = BTreeMap::new();
+
+        match value {
+            serde_json::Value::Object(obj) => {
+                for (k, v) in obj {
+                    let key = if prefix.is_empty() {
+                        k.clone()
+                    } else {
+                        format!("{}.{}", prefix, k)
+                    };
+                    map.extend(Self::flatten_json(v, &key));
+                }
+            }
+            serde_json::Value::Array(arr) => {
+                for (i, v) in arr.iter().enumerate() {
+                    let key = format!("{}[{}]", prefix, i);
+                    map.extend(Self::flatten_json(v, &key));
+                }
+            }
+            _ => {
+                let val_str = match value {
+                    serde_json::Value::String(s) => format!("\"{}\"", s),
+                    serde_json::Value::Null => "null".to_string(),
+                    v => v.to_string(),
+                };
+                map.insert(prefix.to_string(), val_str);
+            }
+        }
+
+        map
     }
 
     /// Save the index to disk (flush sled)

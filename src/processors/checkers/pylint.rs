@@ -98,4 +98,8 @@ impl ProductDiscovery for PylintProcessor {
             |input| self.lint_file(input),
         )
     }
+
+    fn config_json(&self) -> Option<String> {
+        serde_json::to_string(&self.pylint_config).ok()
+    }
 }

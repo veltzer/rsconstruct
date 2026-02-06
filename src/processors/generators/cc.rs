@@ -603,4 +603,8 @@ impl ProductDiscovery for CcProcessor {
     fn clean(&self, product: &Product) -> Result<()> {
         clean_outputs(product, "cc_single_file")
     }
+
+    fn config_json(&self) -> Option<String> {
+        serde_json::to_string(&self.config).ok()
+    }
 }
