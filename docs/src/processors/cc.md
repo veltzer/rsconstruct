@@ -69,6 +69,43 @@ Flag directives also support backtick substitution for inline command execution:
 
 All command and shell directives (`EXTRA_*_CMD`, `EXTRA_*_SHELL`, and backtick substitutions) are cached in memory during a build. If multiple source files use the same command (e.g., `pkg-config --cflags gtk+-3.0`), it is executed only once. This improves build performance when many files share common dependencies.
 
+### Compiler profile-specific flags
+
+When using multiple compiler profiles, you can specify flags that only apply to a specific compiler by adding `[profile_name]` after the directive name:
+
+```c
+// EXTRA_COMPILE_FLAGS_BEFORE=-g
+// EXTRA_COMPILE_FLAGS_BEFORE[gcc]=-femit-struct-debug-baseonly
+// EXTRA_COMPILE_FLAGS_BEFORE[clang]=-gline-tables-only
+```
+
+In this example:
+- `-g` is applied to all compilers
+- `-femit-struct-debug-baseonly` is only applied when compiling with the "gcc" profile
+- `-gline-tables-only` is only applied when compiling with the "clang" profile
+
+The profile name matches the `name` field in your `[[processor.cc_single_file.compilers]]` configuration:
+
+```toml
+[[processor.cc_single_file.compilers]]
+name = "gcc"      # Matches [gcc] suffix
+cc = "gcc"
+
+[[processor.cc_single_file.compilers]]
+name = "clang"    # Matches [clang] suffix
+cc = "clang"
+```
+
+This works with all directive types:
+- `EXTRA_COMPILE_FLAGS_BEFORE[profile]`
+- `EXTRA_COMPILE_FLAGS_AFTER[profile]`
+- `EXTRA_LINK_FLAGS_BEFORE[profile]`
+- `EXTRA_LINK_FLAGS_AFTER[profile]`
+- `EXTRA_COMPILE_CMD[profile]`
+- `EXTRA_LINK_CMD[profile]`
+- `EXTRA_COMPILE_SHELL[profile]`
+- `EXTRA_LINK_SHELL[profile]`
+
 ### Directive summary
 
 | Directive | Execution | Use case |

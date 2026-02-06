@@ -914,3 +914,83 @@ int main() { return 0; }
     assert!(stderr.contains("Include not found") && stderr.contains("nonexistent.h"),
         "Error should mention missing include: {}", stderr);
 }
+
+#[test]
+fn cc_single_file_profile_specific_flags() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    // Create project with multiple compiler profiles
+    fs::create_dir_all(project_path.join("src")).unwrap();
+    fs::write(
+        project_path.join("rsb.toml"),
+        r#"[processor]
+enabled = ["cc_single_file"]
+
+[processor.cc_single_file]
+scan_dir = "src"
+
+[[processor.cc_single_file.compilers]]
+name = "gcc"
+cc = "gcc"
+cxx = "g++"
+
+[[processor.cc_single_file.compilers]]
+name = "clang"
+cc = "clang"
+cxx = "clang++"
+"#
+    ).unwrap();
+
+    // Create source file with profile-specific flags
+    // GCC gets -DCOMPILER_GCC, Clang gets -DCOMPILER_CLANG
+    // Both get -DCOMMON from the non-profile-specific directive
+    fs::write(
+        project_path.join("src/profile_test.c"),
+        r#"// EXTRA_COMPILE_FLAGS_BEFORE=-DCOMMON
+// EXTRA_COMPILE_FLAGS_BEFORE[gcc]=-DCOMPILER_GCC
+// EXTRA_COMPILE_FLAGS_BEFORE[clang]=-DCOMPILER_CLANG
+#include <stdio.h>
+
+int main() {
+#ifdef COMMON
+    printf("COMMON ");
+#endif
+#ifdef COMPILER_GCC
+    printf("GCC\n");
+#endif
+#ifdef COMPILER_CLANG
+    printf("CLANG\n");
+#endif
+    return 0;
+}
+"#
+    ).unwrap();
+
+    // Build
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "Build with profile-specific flags failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    // Run GCC executable - should print "COMMON GCC"
+    let gcc_exe = project_path.join("out/cc_single_file/gcc/profile_test.elf");
+    assert!(gcc_exe.exists(), "GCC executable should exist");
+    let gcc_output = Command::new(&gcc_exe)
+        .output()
+        .expect("Failed to run GCC executable");
+    let gcc_stdout = String::from_utf8_lossy(&gcc_output.stdout);
+    assert!(gcc_stdout.contains("COMMON") && gcc_stdout.contains("GCC") && !gcc_stdout.contains("CLANG"),
+        "GCC build should have COMMON and GCC defined, got: {}", gcc_stdout);
+
+    // Run Clang executable - should print "COMMON CLANG"
+    let clang_exe = project_path.join("out/cc_single_file/clang/profile_test.elf");
+    assert!(clang_exe.exists(), "Clang executable should exist");
+    let clang_output = Command::new(&clang_exe)
+        .output()
+        .expect("Failed to run Clang executable");
+    let clang_stdout = String::from_utf8_lossy(&clang_output.stdout);
+    assert!(clang_stdout.contains("COMMON") && clang_stdout.contains("CLANG") && !clang_stdout.contains("GCC"),
+        "Clang build should have COMMON and CLANG defined, got: {}", clang_stdout);
+}

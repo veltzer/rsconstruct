@@ -47,10 +47,18 @@ struct SourceFlags {
 ///   // EXTRA_COMPILE_SHELL=echo -DLEVEL2_CACHE_LINESIZE=$(getconf LEVEL2_CACHE_LINESIZE)
 ///   // EXTRA_LINK_SHELL=echo -L$(brew --prefix openssl)/lib
 ///
+/// Compiler profile-specific flags (only applied when compiling with the named profile):
+///   // EXTRA_COMPILE_FLAGS_BEFORE[gcc]=-femit-struct-debug-baseonly
+///   // EXTRA_COMPILE_FLAGS_BEFORE[clang]=-gline-tables-only
+///
 /// `EXTRA_*_FLAGS_*` values are literal flags (with backtick expansion).
 /// `EXTRA_*_CMD` values are executed as a subprocess (no shell) and stdout is used as flags.
 /// `EXTRA_*_SHELL` values are executed via `sh -c` and stdout is used as flags.
-fn parse_source_flags(source: &Path) -> Result<SourceFlags> {
+///
+/// The `profile_name` parameter specifies the current compiler profile name.
+/// Directives without a profile suffix apply to all profiles.
+/// Directives with a profile suffix (e.g., `[gcc]`) only apply when that profile is active.
+fn parse_source_flags(source: &Path, profile_name: &str) -> Result<SourceFlags> {
     let content = fs::read_to_string(source)
         .context(format!("Failed to read source file: {}", source.display()))?;
 
@@ -103,47 +111,53 @@ fn parse_source_flags(source: &Path) -> Result<SourceFlags> {
         };
 
         for var_name in &args_var_names {
-            if let Some(rest) = value_part.strip_prefix(var_name) {
-                if let Some(raw_value) = rest.strip_prefix('=') {
-                    let expanded = expand_backticks(raw_value.trim())?;
-                    let args: Vec<String> = expanded
-                        .split_whitespace()
-                        .map(String::from)
-                        .collect();
-                    match *var_name {
-                        "EXTRA_COMPILE_FLAGS_BEFORE" => flags.compile_args_before.extend(args),
-                        "EXTRA_COMPILE_FLAGS_AFTER" => flags.compile_args_after.extend(args),
-                        "EXTRA_LINK_FLAGS_BEFORE" => flags.link_args_before.extend(args),
-                        "EXTRA_LINK_FLAGS_AFTER" => flags.link_args_after.extend(args),
-                        _ => {}
+            if let Some((rest, applies)) = match_directive_with_profile(value_part, var_name, profile_name) {
+                if applies {
+                    if let Some(raw_value) = rest.strip_prefix('=') {
+                        let expanded = expand_backticks(raw_value.trim())?;
+                        let args: Vec<String> = expanded
+                            .split_whitespace()
+                            .map(String::from)
+                            .collect();
+                        match *var_name {
+                            "EXTRA_COMPILE_FLAGS_BEFORE" => flags.compile_args_before.extend(args),
+                            "EXTRA_COMPILE_FLAGS_AFTER" => flags.compile_args_after.extend(args),
+                            "EXTRA_LINK_FLAGS_BEFORE" => flags.link_args_before.extend(args),
+                            "EXTRA_LINK_FLAGS_AFTER" => flags.link_args_after.extend(args),
+                            _ => {}
+                        }
                     }
                 }
             }
         }
 
         for var_name in &cmd_var_names {
-            if let Some(rest) = value_part.strip_prefix(var_name) {
-                if let Some(raw_value) = rest.strip_prefix('=') {
-                    let cmd = raw_value.trim();
-                    let args = cached_shell_command(cmd, run_command_for_flags)?;
-                    match *var_name {
-                        "EXTRA_COMPILE_CMD" => flags.compile_args_after.extend(args),
-                        "EXTRA_LINK_CMD" => flags.link_args_after.extend(args),
-                        _ => {}
+            if let Some((rest, applies)) = match_directive_with_profile(value_part, var_name, profile_name) {
+                if applies {
+                    if let Some(raw_value) = rest.strip_prefix('=') {
+                        let cmd = raw_value.trim();
+                        let args = cached_shell_command(cmd, run_command_for_flags)?;
+                        match *var_name {
+                            "EXTRA_COMPILE_CMD" => flags.compile_args_after.extend(args),
+                            "EXTRA_LINK_CMD" => flags.link_args_after.extend(args),
+                            _ => {}
+                        }
                     }
                 }
             }
         }
 
         for var_name in &shell_var_names {
-            if let Some(rest) = value_part.strip_prefix(var_name) {
-                if let Some(raw_value) = rest.strip_prefix('=') {
-                    let cmd = raw_value.trim();
-                    let args = cached_shell_command(cmd, run_shell_for_flags)?;
-                    match *var_name {
-                        "EXTRA_COMPILE_SHELL" => flags.compile_args_after.extend(args),
-                        "EXTRA_LINK_SHELL" => flags.link_args_after.extend(args),
-                        _ => {}
+            if let Some((rest, applies)) = match_directive_with_profile(value_part, var_name, profile_name) {
+                if applies {
+                    if let Some(raw_value) = rest.strip_prefix('=') {
+                        let cmd = raw_value.trim();
+                        let args = cached_shell_command(cmd, run_shell_for_flags)?;
+                        match *var_name {
+                            "EXTRA_COMPILE_SHELL" => flags.compile_args_after.extend(args),
+                            "EXTRA_LINK_SHELL" => flags.link_args_after.extend(args),
+                            _ => {}
+                        }
                     }
                 }
             }
@@ -151,6 +165,38 @@ fn parse_source_flags(source: &Path) -> Result<SourceFlags> {
     }
 
     Ok(flags)
+}
+
+/// Match a directive with optional profile suffix.
+/// Returns Some((rest_of_line, applies)) if the directive matches.
+/// - `applies` is true if the directive applies to the current profile
+///   (either no profile suffix, or profile suffix matches current profile)
+/// - `rest_of_line` is everything after the directive name (and optional profile suffix)
+///
+/// Examples:
+///   "EXTRA_COMPILE_FLAGS_BEFORE=-g" with profile "gcc" -> Some(("=-g", true))
+///   "EXTRA_COMPILE_FLAGS_BEFORE[gcc]=-g" with profile "gcc" -> Some(("=-g", true))
+///   "EXTRA_COMPILE_FLAGS_BEFORE[clang]=-g" with profile "gcc" -> Some(("=-g", false))
+fn match_directive_with_profile<'a>(line: &'a str, directive: &str, profile_name: &str) -> Option<(&'a str, bool)> {
+    if let Some(rest) = line.strip_prefix(directive) {
+        // Check for profile suffix [profile_name]
+        if let Some(rest_after_bracket) = rest.strip_prefix('[') {
+            // Find closing bracket
+            if let Some(bracket_end) = rest_after_bracket.find(']') {
+                let specified_profile = &rest_after_bracket[..bracket_end];
+                let rest_after_suffix = &rest_after_bracket[bracket_end + 1..];
+                let applies = specified_profile == profile_name;
+                return Some((rest_after_suffix, applies));
+            }
+            // Malformed (no closing bracket), don't match
+            None
+        } else {
+            // No profile suffix - applies to all profiles
+            Some((rest, true))
+        }
+    } else {
+        None
+    }
 }
 
 /// Run a command as a subprocess and return its stdout split into args.
@@ -326,7 +372,7 @@ impl CcProcessor {
     /// Compile a single source file directly to an executable using a specific profile.
     fn compile_source(&self, source: &Path, executable: &Path, profile: &CompilerProfile, is_cpp: bool) -> Result<()> {
         let compiler = if is_cpp { &profile.cxx } else { &profile.cc };
-        let source_flags = parse_source_flags(source)?;
+        let source_flags = parse_source_flags(source, &profile.name)?;
 
         // Ensure output directory exists
         if let Some(parent) = executable.parent() {
