@@ -55,18 +55,67 @@ fn remove_vars_section(content: &str) -> String {
     result
 }
 
+/// Extract variable names defined in the [vars] section using regex.
+/// This is done before TOML parsing to avoid parse errors on variable references.
+fn extract_var_names(content: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut in_vars_section = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed == "[vars]" {
+            in_vars_section = true;
+            continue;
+        }
+        // Check if we hit another section header
+        if in_vars_section && trimmed.starts_with('[') && trimmed.ends_with(']') {
+            break;
+        }
+        if in_vars_section {
+            // Match key = value pattern
+            if let Some(eq_pos) = trimmed.find('=') {
+                let key = trimmed[..eq_pos].trim();
+                if !key.is_empty() && !key.starts_with('#') {
+                    names.push(key.to_string());
+                }
+            }
+        }
+    }
+    names
+}
+
 /// Substitute variables defined in [vars] section throughout the config.
 /// Variables are referenced using `${var_name}` syntax.
 /// The entire `"${var_name}"` (including quotes) is replaced with the TOML-serialized value.
 /// After substitution, the [vars] section is removed from the output.
 fn substitute_variables(content: &str) -> Result<String> {
-    // Parse just to extract [vars] section
+    // Check for undefined variables first (before any TOML parsing)
+    // This gives a clear error message for undefined vars even without a [vars] section
+    let var_pattern = Regex::new(r#""\$\{([^}]+)\}""#).unwrap();
+
+    // Extract defined variable names before TOML parsing
+    let defined_vars = extract_var_names(content);
+
+    // Check for undefined variable references
+    for captures in var_pattern.captures_iter(content) {
+        let var_name = captures.get(1).unwrap().as_str();
+        if !defined_vars.contains(&var_name.to_string()) {
+            anyhow::bail!("Undefined variable: ${{{}}}", var_name);
+        }
+    }
+
+    // If no vars defined, return content as-is (we already checked for undefined refs above)
+    if defined_vars.is_empty() {
+        return Ok(content.to_string());
+    }
+
+    // Parse just to extract [vars] section values
     let parsed: toml::Value = toml::from_str(content)
         .context("Failed to parse TOML for variable extraction")?;
 
     let vars = match parsed.get("vars").and_then(|v| v.as_table()) {
-        Some(v) if !v.is_empty() => v,
-        _ => return Ok(content.to_string()), // No vars section or empty
+        Some(v) => v,
+        None => return Ok(content.to_string()),
     };
 
     let mut result = content.to_string();
@@ -76,13 +125,6 @@ fn substitute_variables(content: &str) -> Result<String> {
         let pattern = format!("\"${{{}}}\"", name);
         let replacement = value_to_toml_inline(value);
         result = result.replace(&pattern, &replacement);
-    }
-
-    // Check for any remaining undefined variable references
-    let var_pattern = Regex::new(r#""\$\{([^}]+)\}""#).unwrap();
-    if let Some(captures) = var_pattern.captures(&result) {
-        let undefined_var = captures.get(1).unwrap().as_str();
-        anyhow::bail!("Undefined variable: ${{{}}}", undefined_var);
     }
 
     // Remove the [vars] section from the result
