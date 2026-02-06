@@ -7,7 +7,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::OnceLock;
 use std::time::Duration;
+use tokio::runtime::Runtime;
+use tokio::sync::watch;
 
 use crate::color;
 use crate::config::{config_hash, resolve_extra_inputs};
@@ -19,14 +22,42 @@ static PROCESS_DEBUG: AtomicBool = AtomicBool::new(false);
 /// Global flag: set to true on Ctrl+C so subprocesses can be killed promptly.
 static INTERRUPTED: AtomicBool = AtomicBool::new(false);
 
+/// Global tokio runtime for running async subprocess code from sync context.
+static RUNTIME: OnceLock<Runtime> = OnceLock::new();
+
+/// Global channel for broadcasting interrupt signals to all running tasks.
+static INTERRUPT_SENDER: OnceLock<watch::Sender<bool>> = OnceLock::new();
+
+/// Get or initialize the global tokio runtime.
+fn get_runtime() -> &'static Runtime {
+    RUNTIME.get_or_init(|| {
+        Runtime::new().expect("Failed to create tokio runtime")
+    })
+}
+
+/// Get or initialize the interrupt channel sender.
+fn get_interrupt_sender() -> &'static watch::Sender<bool> {
+    INTERRUPT_SENDER.get_or_init(|| {
+        let (tx, _rx) = watch::channel(false);
+        tx
+    })
+}
+
+/// Get a receiver for interrupt signals.
+fn get_interrupt_receiver() -> watch::Receiver<bool> {
+    get_interrupt_sender().subscribe()
+}
+
 /// Enable process debug logging (called once from main).
 pub fn set_process_debug(enabled: bool) {
     PROCESS_DEBUG.store(enabled, Ordering::Relaxed);
 }
 
-/// Mark the global interrupted flag (called from the Ctrl+C handler).
+/// Mark the global interrupted flag and notify all waiting tasks.
 pub fn set_interrupted() {
     INTERRUPTED.store(true, Ordering::SeqCst);
+    // Notify all tasks waiting on the interrupt channel
+    let _ = get_interrupt_sender().send(true);
 }
 
 /// Check whether the global interrupted flag is set.
@@ -61,48 +92,80 @@ pub fn log_command(cmd: &Command) {
     }
 }
 
-/// Run a command interruptibly: spawns the process and polls it while checking
-/// the global interrupted flag. If Ctrl+C is detected, the child process is
-/// killed immediately rather than waiting for it to finish.
+/// Run a command interruptibly using tokio. If Ctrl+C is detected, the child
+/// process is killed immediately via async select.
 pub fn run_command(cmd: &mut Command) -> Result<Output> {
     log_command(cmd);
 
-    let mut child = cmd.stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .with_context(|| format!("Failed to spawn: {}", format_command(cmd)))?;
+    // Check if already interrupted before spawning
+    if INTERRUPTED.load(Ordering::SeqCst) {
+        anyhow::bail!("Interrupted");
+    }
 
-    // Poll the child every 50ms, checking for interrupts
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                // Process finished — collect output
-                let stdout = child.stdout.take().map(|mut s| {
-                    let mut buf = Vec::new();
-                    std::io::Read::read_to_end(&mut s, &mut buf).unwrap_or(0);
-                    buf
-                }).unwrap_or_default();
-                let stderr = child.stderr.take().map(|mut s| {
-                    let mut buf = Vec::new();
-                    std::io::Read::read_to_end(&mut s, &mut buf).unwrap_or(0);
-                    buf
-                }).unwrap_or_default();
-                return Ok(Output { status, stdout, stderr });
+    // Build a tokio command from std::process::Command
+    let program = cmd.get_program().to_os_string();
+    let args: Vec<_> = cmd.get_args().map(|a| a.to_os_string()).collect();
+    let current_dir = cmd.get_current_dir().map(|p| p.to_path_buf());
+
+    let rt = get_runtime();
+    rt.block_on(async {
+        let mut tokio_cmd = tokio::process::Command::new(&program);
+        tokio_cmd.args(&args);
+        if let Some(dir) = &current_dir {
+            tokio_cmd.current_dir(dir);
+        }
+        tokio_cmd.stdout(std::process::Stdio::piped());
+        tokio_cmd.stderr(std::process::Stdio::piped());
+        // Kill child on drop to ensure cleanup
+        tokio_cmd.kill_on_drop(true);
+
+        let mut child = tokio_cmd.spawn()
+            .with_context(|| format!("Failed to spawn: {} {}",
+                program.to_string_lossy(),
+                args.iter().map(|a| a.to_string_lossy()).collect::<Vec<_>>().join(" ")))?;
+
+        // Take stdout/stderr handles before waiting
+        let stdout_handle = child.stdout.take();
+        let stderr_handle = child.stderr.take();
+
+        let mut interrupt_rx = get_interrupt_receiver();
+
+        tokio::select! {
+            biased;
+
+            // Check for interrupt signal first (biased)
+            _ = interrupt_rx.changed() => {
+                // Kill the child process (also killed on drop due to kill_on_drop)
+                let _ = child.kill().await;
+                anyhow::bail!("Interrupted")
             }
-            Ok(None) => {
-                // Still running — check interrupt
-                if INTERRUPTED.load(Ordering::SeqCst) {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    anyhow::bail!("Interrupted");
-                }
-                std::thread::sleep(Duration::from_millis(50));
-            }
-            Err(e) => {
-                return Err(e).context("Failed to wait for child process");
+            // Wait for the child process to complete
+            result = child.wait() => {
+                let status = result.context("Failed to wait for child process")?;
+
+                // Read stdout and stderr
+                let stdout = if let Some(mut handle) = stdout_handle {
+                    use tokio::io::AsyncReadExt;
+                    let mut buf = Vec::new();
+                    let _ = handle.read_to_end(&mut buf).await;
+                    buf
+                } else {
+                    Vec::new()
+                };
+
+                let stderr = if let Some(mut handle) = stderr_handle {
+                    use tokio::io::AsyncReadExt;
+                    let mut buf = Vec::new();
+                    let _ = handle.read_to_end(&mut buf).await;
+                    buf
+                } else {
+                    Vec::new()
+                };
+
+                Ok(Output { status, stdout, stderr })
             }
         }
-    }
+    })
 }
 
 pub use crate::graph::{BuildGraph, Product};

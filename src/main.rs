@@ -45,10 +45,18 @@ fn main() -> Result<()> {
     let interrupted = Arc::new(AtomicBool::new(false));
     {
         let interrupted = Arc::clone(&interrupted);
-        ctrlc::set_handler(move || {
-            interrupted.store(true, std::sync::atomic::Ordering::SeqCst);
-            processors::set_interrupted();
-        })?;
+        // Spawn a background thread to handle Ctrl+C using tokio's signal handling
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("Failed to create signal handler runtime");
+            rt.block_on(async {
+                tokio::signal::ctrl_c().await.expect("Failed to listen for Ctrl+C");
+                interrupted.store(true, std::sync::atomic::Ordering::SeqCst);
+                processors::set_interrupted();
+            });
+        });
     }
 
     match cli.command {
