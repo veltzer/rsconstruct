@@ -12,11 +12,11 @@ pub struct Cli {
     pub verbose: bool,
 
     /// What to show for output files (none, basename, path)
-    #[arg(short = 'O', long, global = true, value_enum, default_value = "basename")]
+    #[arg(short = 'O', long, global = true, value_enum, default_value = "none")]
     pub output_display: OutputDisplay,
 
     /// What to show for input files (none, source, all)
-    #[arg(short = 'I', long, global = true, value_enum, default_value = "none")]
+    #[arg(short = 'I', long, global = true, value_enum, default_value = "source")]
     pub input_display: InputDisplay,
 
     /// Path format for displayed files (basename, path)
@@ -94,9 +94,9 @@ pub enum BuildPhase {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
 pub enum OutputDisplay {
     /// Don't show output files
+    #[default]
     None,
     /// Show only the filename (e.g., "main.elf")
-    #[default]
     Basename,
     /// Show full relative path (e.g., "out/cc_single_file/main.elf")
     Path,
@@ -106,9 +106,9 @@ pub enum OutputDisplay {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
 pub enum InputDisplay {
     /// Don't show input files
-    #[default]
     None,
     /// Show only the primary source file (first input)
+    #[default]
     Source,
     /// Show all input files including headers/dependencies
     All,
@@ -135,19 +135,19 @@ pub struct DisplayOptions {
 impl Default for DisplayOptions {
     fn default() -> Self {
         Self {
-            output: OutputDisplay::Basename,
-            input: InputDisplay::None,
+            output: OutputDisplay::None,
+            input: InputDisplay::Source,
             path_format: PathFormat::Path,
         }
     }
 }
 
 impl DisplayOptions {
-    /// Minimal display: just output basename
+    /// Minimal display: just input source basename
     pub fn minimal() -> Self {
         Self {
-            output: OutputDisplay::Basename,
-            input: InputDisplay::None,
+            output: OutputDisplay::None,
+            input: InputDisplay::Source,
             path_format: PathFormat::Basename,
         }
     }
