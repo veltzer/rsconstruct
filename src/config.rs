@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -6,6 +7,89 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const CONFIG_FILE: &str = "rsb.toml";
+
+/// Convert a toml::Value to its inline TOML string representation.
+/// This is used for variable substitution to insert values into the config.
+fn value_to_toml_inline(value: &toml::Value) -> String {
+    match value {
+        toml::Value::String(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
+        toml::Value::Integer(i) => i.to_string(),
+        toml::Value::Float(f) => f.to_string(),
+        toml::Value::Boolean(b) => b.to_string(),
+        toml::Value::Array(arr) => {
+            let items: Vec<String> = arr.iter().map(value_to_toml_inline).collect();
+            format!("[{}]", items.join(", "))
+        }
+        toml::Value::Table(table) => {
+            let items: Vec<String> = table
+                .iter()
+                .map(|(k, v)| format!("{} = {}", k, value_to_toml_inline(v)))
+                .collect();
+            format!("{{ {} }}", items.join(", "))
+        }
+        toml::Value::Datetime(dt) => dt.to_string(),
+    }
+}
+
+/// Remove the [vars] section from TOML content.
+/// Removes from [vars] header until the next section header or EOF.
+fn remove_vars_section(content: &str) -> String {
+    let mut result = String::new();
+    let mut in_vars_section = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed == "[vars]" {
+            in_vars_section = true;
+            continue;
+        }
+        // Check if we hit another section header
+        if in_vars_section && trimmed.starts_with('[') && trimmed.ends_with(']') {
+            in_vars_section = false;
+        }
+        if !in_vars_section {
+            result.push_str(line);
+            result.push('\n');
+        }
+    }
+    result
+}
+
+/// Substitute variables defined in [vars] section throughout the config.
+/// Variables are referenced using `${var_name}` syntax.
+/// The entire `"${var_name}"` (including quotes) is replaced with the TOML-serialized value.
+/// After substitution, the [vars] section is removed from the output.
+fn substitute_variables(content: &str) -> Result<String> {
+    // Parse just to extract [vars] section
+    let parsed: toml::Value = toml::from_str(content)
+        .context("Failed to parse TOML for variable extraction")?;
+
+    let vars = match parsed.get("vars").and_then(|v| v.as_table()) {
+        Some(v) if !v.is_empty() => v,
+        _ => return Ok(content.to_string()), // No vars section or empty
+    };
+
+    let mut result = content.to_string();
+
+    // Replace "${var_name}" (including quotes) with TOML-serialized value
+    for (name, value) in vars {
+        let pattern = format!("\"${{{}}}\"", name);
+        let replacement = value_to_toml_inline(value);
+        result = result.replace(&pattern, &replacement);
+    }
+
+    // Check for any remaining undefined variable references
+    let var_pattern = Regex::new(r#""\$\{([^}]+)\}""#).unwrap();
+    if let Some(captures) = var_pattern.captures(&result) {
+        let undefined_var = captures.get(1).unwrap().as_str();
+        anyhow::bail!("Undefined variable: ${{{}}}", undefined_var);
+    }
+
+    // Remove the [vars] section from the result
+    let result = remove_vars_section(&result);
+
+    Ok(result)
+}
 
 /// Validate extra_inputs paths exist and return them as PathBufs.
 /// Paths are relative to project root (which is cwd).
@@ -834,7 +918,9 @@ impl Config {
         let mut config = if config_path.exists() {
             let content = fs::read_to_string(&config_path)
                 .context(format!("Failed to read config file: {}", config_path.display()))?;
-            toml::from_str(&content)
+            let substituted = substitute_variables(&content)
+                .context(format!("Failed to substitute variables in: {}", config_path.display()))?;
+            toml::from_str(&substituted)
                 .context(format!("Failed to parse config file: {}", config_path.display()))?
         } else {
             Config::default()
