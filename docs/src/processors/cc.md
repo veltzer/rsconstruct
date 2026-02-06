@@ -106,6 +106,33 @@ This works with all directive types:
 - `EXTRA_COMPILE_SHELL[profile]`
 - `EXTRA_LINK_SHELL[profile]`
 
+### Excluding files from specific profiles
+
+To exclude a source file from being compiled with specific compiler profiles, use `EXCLUDE_PROFILE`:
+
+```c
+// EXCLUDE_PROFILE=clang
+```
+
+This is useful when a file uses compiler-specific features that aren't available in other compilers. For example, a file using GCC-only builtins like `__builtin_va_arg_pack_len()`:
+
+```c
+// EXCLUDE_PROFILE=clang
+// This file uses GCC-specific builtins
+#include <stdarg.h>
+
+void example(int first, ...) {
+    int count = __builtin_va_arg_pack_len();  // GCC-only
+    // ...
+}
+```
+
+You can exclude multiple profiles by listing them space-separated:
+
+```c
+// EXCLUDE_PROFILE=clang icc
+```
+
 ### Directive summary
 
 | Directive | Execution | Use case |

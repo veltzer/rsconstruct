@@ -994,3 +994,79 @@ int main() {
     assert!(clang_stdout.contains("COMMON") && clang_stdout.contains("CLANG") && !clang_stdout.contains("GCC"),
         "Clang build should have COMMON and CLANG defined, got: {}", clang_stdout);
 }
+
+#[test]
+fn cc_single_file_exclude_profile() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    // Create project with multiple compiler profiles
+    fs::create_dir_all(project_path.join("src")).unwrap();
+    fs::write(
+        project_path.join("rsb.toml"),
+        r#"[processor]
+enabled = ["cc_single_file"]
+
+[processor.cc_single_file]
+scan_dir = "src"
+
+[[processor.cc_single_file.compilers]]
+name = "gcc"
+cc = "gcc"
+cxx = "g++"
+
+[[processor.cc_single_file.compilers]]
+name = "clang"
+cc = "clang"
+cxx = "clang++"
+"#
+    ).unwrap();
+
+    // Create a file that should be built by both compilers
+    fs::write(
+        project_path.join("src/both.c"),
+        r#"int main() { return 0; }
+"#
+    ).unwrap();
+
+    // Create a file that should only be built by GCC (excluded from clang)
+    fs::write(
+        project_path.join("src/gcc_only.c"),
+        r#"// EXCLUDE_PROFILE=clang
+int main() { return 0; }
+"#
+    ).unwrap();
+
+    // Create a file that should only be built by Clang (excluded from gcc)
+    fs::write(
+        project_path.join("src/clang_only.c"),
+        r#"// EXCLUDE_PROFILE=gcc
+int main() { return 0; }
+"#
+    ).unwrap();
+
+    // Build
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "Build failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    // Check that both.elf exists for both compilers
+    assert!(project_path.join("out/cc_single_file/gcc/both.elf").exists(),
+        "both.elf should exist for gcc");
+    assert!(project_path.join("out/cc_single_file/clang/both.elf").exists(),
+        "both.elf should exist for clang");
+
+    // Check that gcc_only.elf exists only for gcc
+    assert!(project_path.join("out/cc_single_file/gcc/gcc_only.elf").exists(),
+        "gcc_only.elf should exist for gcc");
+    assert!(!project_path.join("out/cc_single_file/clang/gcc_only.elf").exists(),
+        "gcc_only.elf should NOT exist for clang");
+
+    // Check that clang_only.elf exists only for clang
+    assert!(!project_path.join("out/cc_single_file/gcc/clang_only.elf").exists(),
+        "clang_only.elf should NOT exist for gcc");
+    assert!(project_path.join("out/cc_single_file/clang/clang_only.elf").exists(),
+        "clang_only.elf should exist for clang");
+}

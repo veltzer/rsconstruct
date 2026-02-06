@@ -37,6 +37,64 @@ struct SourceFlags {
     link_args_after: Vec<String>,
 }
 
+/// Check if a source file should be excluded from a specific compiler profile.
+///
+/// Looks for directives like:
+///   // EXCLUDE_PROFILE=clang
+///   // EXCLUDE_PROFILE=gcc clang
+///
+/// Returns true if the file should be excluded for the given profile.
+fn should_exclude_for_profile(source: &Path, profile_name: &str) -> bool {
+    // If profile name is empty (single compiler setup), never exclude
+    if profile_name.is_empty() {
+        return false;
+    }
+
+    let content = match fs::read_to_string(source) {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        // Try // comment style
+        let value_part = if let Some(rest) = trimmed.strip_prefix("//") {
+            Some(rest.trim())
+        }
+        // Try /* ... */ comment style (single-line)
+        else if let Some(rest) = trimmed.strip_prefix("/*") {
+            rest.strip_suffix("*/").map(|s| s.trim())
+        }
+        // Try block comment continuation line: * EXCLUDE_PROFILE...
+        else if let Some(rest) = trimmed.strip_prefix('*') {
+            let rest = rest.trim();
+            if rest.is_empty() || rest == "/" {
+                None
+            } else {
+                Some(rest.strip_suffix("*/").map(|s| s.trim()).unwrap_or(rest))
+            }
+        } else {
+            None
+        };
+
+        let Some(value_part) = value_part else {
+            continue;
+        };
+
+        if let Some(rest) = value_part.strip_prefix("EXCLUDE_PROFILE") {
+            if let Some(profiles_str) = rest.strip_prefix('=') {
+                let excluded_profiles: Vec<&str> = profiles_str.trim().split_whitespace().collect();
+                if excluded_profiles.contains(&profile_name) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
+}
+
 /// Parse per-file flags from C/C++ source comment lines.
 ///
 /// Supported comment formats:
@@ -50,6 +108,10 @@ struct SourceFlags {
 /// Compiler profile-specific flags (only applied when compiling with the named profile):
 ///   // EXTRA_COMPILE_FLAGS_BEFORE[gcc]=-femit-struct-debug-baseonly
 ///   // EXTRA_COMPILE_FLAGS_BEFORE[clang]=-gline-tables-only
+///
+/// Exclude file from specific profiles:
+///   // EXCLUDE_PROFILE=clang
+///   // EXCLUDE_PROFILE=gcc clang
 ///
 /// `EXTRA_*_FLAGS_*` values are literal flags (with backtick expansion).
 /// `EXTRA_*_CMD` values are executed as a subprocess (no shell) and stdout is used as flags.
@@ -467,17 +529,26 @@ impl ProductDiscovery for CcProcessor {
 
         // Create products for each source file × compiler profile combination
         for profile in &self.profiles {
+            // Only set variant if profile has a non-empty name (i.e., multiple compilers configured)
+            let variant = if profile.name.is_empty() { None } else { Some(profile.name.as_str()) };
+
             for (source, _is_cpp) in &source_files {
+                // Check if this file should be excluded for this profile
+                if should_exclude_for_profile(source, &profile.name) {
+                    continue;
+                }
+
                 let executable = self.get_executable_path(source, profile);
 
                 let mut inputs = vec![source.clone()];
                 inputs.extend(extra.clone());
 
-                graph.add_product(
+                graph.add_product_with_variant(
                     inputs,
                     vec![executable],
                     "cc_single_file",
                     cfg_hash.clone(),
+                    variant,
                 )?;
             }
         }
@@ -498,14 +569,22 @@ impl ProductDiscovery for CcProcessor {
 
         // For clean, we only need source -> output mapping, no header dependencies
         for profile in &self.profiles {
+            let variant = if profile.name.is_empty() { None } else { Some(profile.name.as_str()) };
+
             for (source, _is_cpp) in &source_files {
+                // Check if this file should be excluded for this profile
+                if should_exclude_for_profile(source, &profile.name) {
+                    continue;
+                }
+
                 let executable = self.get_executable_path(source, profile);
 
-                graph.add_product(
+                graph.add_product_with_variant(
                     vec![source.clone()],
                     vec![executable],
                     "cc_single_file",
                     None,
+                    variant,
                 )?;
             }
         }

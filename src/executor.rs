@@ -266,7 +266,10 @@ impl<'a> Executor<'a> {
                     let silenced = !keep_going && silenced_processors.contains(&proc_name);
 
                     if !silenced && !crate::json_output::is_json_mode() {
-                        println!("[{}] {} {}", proc_name,
+                        let variant_tag = product.variant.as_ref()
+                            .map(|v| format!(":{}", v))
+                            .unwrap_or_default();
+                        println!("[{}{}] {} {}", proc_name, variant_tag,
                             color::green("Processing:"),
                             product.display(file_names));
                     }
@@ -840,7 +843,10 @@ impl<'a> Executor<'a> {
                                 }
 
                                 if let Some(processor) = self.processors.get(&product.processor) {
-                                    println!("[{}] {} {}", product.processor,
+                                    let variant_tag = product.variant.as_ref()
+                                        .map(|v| format!(":{}", v))
+                                        .unwrap_or_default();
+                                    println!("[{}{}] {} {}", product.processor, variant_tag,
                                         color::green("Processing:"),
                                         self.product_display(product));
 

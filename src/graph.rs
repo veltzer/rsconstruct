@@ -16,6 +16,8 @@ pub struct Product {
     pub id: usize,
     /// Optional hash of processor config (compiler flags, etc.)
     pub config_hash: Option<String>,
+    /// Optional variant/profile name (e.g., compiler profile name)
+    pub variant: Option<String>,
 }
 
 impl Product {
@@ -26,6 +28,19 @@ impl Product {
             processor: processor.to_string(),
             id,
             config_hash,
+            variant: None,
+        }
+    }
+
+    /// Create a new product with a variant/profile name
+    pub fn with_variant(inputs: Vec<PathBuf>, outputs: Vec<PathBuf>, processor: &str, id: usize, config_hash: Option<String>, variant: &str) -> Self {
+        Self {
+            inputs,
+            outputs,
+            processor: processor.to_string(),
+            id,
+            config_hash,
+            variant: Some(variant.to_string()),
         }
     }
 
@@ -123,6 +138,12 @@ impl BuildGraph {
     /// Add a product to the graph.
     /// Returns an error if any output path is already claimed by another product.
     pub fn add_product(&mut self, inputs: Vec<PathBuf>, outputs: Vec<PathBuf>, processor: &str, config_hash: Option<String>) -> Result<usize> {
+        self.add_product_with_variant(inputs, outputs, processor, config_hash, None)
+    }
+
+    /// Add a product to the graph with an optional variant/profile name.
+    /// Returns an error if any output path is already claimed by another product.
+    pub fn add_product_with_variant(&mut self, inputs: Vec<PathBuf>, outputs: Vec<PathBuf>, processor: &str, config_hash: Option<String>, variant: Option<&str>) -> Result<usize> {
         let id = self.products.len();
 
         // Check for output conflicts before mutating anything
@@ -138,7 +159,10 @@ impl BuildGraph {
             }
         }
 
-        let product = Product::new(inputs, outputs.clone(), processor, id, config_hash);
+        let product = match variant {
+            Some(v) => Product::with_variant(inputs, outputs.clone(), processor, id, config_hash, v),
+            None => Product::new(inputs, outputs.clone(), processor, id, config_hash),
+        };
 
         // Register outputs
         for output in &outputs {
