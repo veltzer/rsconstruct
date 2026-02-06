@@ -558,12 +558,14 @@ These are relatively straightforward improvements that would enhance usability.
 - Parallelize header scanning using rayon or tokio.
 - Each source file's includes can be scanned independently; only the final graph merge needs synchronization.
 
-### `--watch` with processor filter
-- Allow filtering which processors run in watch mode:
+### ~~`--processors` flag for build and watch~~ *(Done)*
+- Filter which processors run during build or watch:
   ```bash
-  rsb watch --processor tera      # Only watch and rebuild tera products
-  rsb watch --processor ruff,pylint  # Multiple processors
+  rsb build -p tera               # Only run tera processor
+  rsb build --processors=ruff,pylint  # Multiple processors
+  rsb watch -p tera               # Watch with only tera
   ```
+- Validates processor names and shows available processors on error.
 - Useful for fast feedback loops when iterating on specific file types.
 
 ### Build timing history
