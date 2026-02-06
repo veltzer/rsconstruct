@@ -39,3 +39,14 @@ functionality (date/time, parsing, hashing, etc.). The Rust ecosystem has
 mature, well-tested libraries for most tasks. Writing custom implementations
 introduces unnecessary bugs and maintenance burden. If a crate exists for it,
 use it.
+
+## Reject unknown config fields
+
+All config structs that don't intentionally capture extra fields must use
+`#[serde(deny_unknown_fields)]`. This ensures that typos or unsupported
+options in `rsb.toml` produce a clear error instead of being silently ignored.
+
+Structs that use `#[serde(flatten)]` to embed other structs (like `ScanConfig`)
+cannot use `deny_unknown_fields` due to serde limitations. Structs that
+intentionally capture unknown fields (like `ProcessorConfig.extra` for Lua
+plugins) should not use it.

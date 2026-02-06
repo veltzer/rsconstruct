@@ -120,6 +120,7 @@ const MAKE_EXCLUDE_DIRS: &[&str] = &["/.git/", "/out/", "/.rsb/", "/build/", "/d
 const SHELL_EXCLUDE_DIRS: &[&str] = &["/.git/", "/out/", "/.rsb/", "/node_modules/", "/build/", "/dist/", "/target/"];
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct PluginsConfig {
     #[serde(default = "default_plugins_dir")]
     pub dir: String,
@@ -155,6 +156,7 @@ pub struct Config {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct BuildConfig {
     /// Number of parallel jobs (1 = sequential, 0 = auto-detect CPU cores)
     #[serde(default = "default_parallel")]
@@ -188,6 +190,7 @@ pub enum RestoreMethod {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct CacheConfig {
     #[serde(default)]
     pub restore_method: RestoreMethod,
@@ -448,6 +451,7 @@ pub enum IncludeScanner {
 
 /// Configuration for a single compiler profile
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct CompilerProfile {
     /// Profile name (used in output paths, e.g., "gcc", "clang")
     pub name: String,
@@ -692,6 +696,7 @@ impl Default for ShellcheckConfig {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct CompletionsConfig {
     #[serde(default = "default_shells")]
     pub shells: Vec<String>,
@@ -707,6 +712,7 @@ fn default_analyzers() -> Vec<String> {
 
 /// Configuration for dependency analyzers
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct AnalyzerConfig {
     /// Whether to auto-detect which analyzers are relevant
     #[serde(default = "default_true")]
@@ -741,6 +747,7 @@ impl AnalyzerConfig {
 
 /// Configuration for the C/C++ dependency analyzer
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct CppAnalyzerConfig {
     /// Method for scanning header dependencies (native or compiler)
     #[serde(default)]
@@ -786,6 +793,7 @@ impl Default for CppAnalyzerConfig {
 
 /// Configuration for the Python dependency analyzer
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[serde(deny_unknown_fields)]
 pub struct PythonAnalyzerConfig {
     // Currently no specific configuration needed
     // Could add: package_paths, ignore_stdlib, etc.
@@ -798,6 +806,7 @@ impl Default for CompletionsConfig {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[serde(deny_unknown_fields)]
 pub struct GraphConfig {
     #[serde(default)]
     pub viewer: Option<String>,

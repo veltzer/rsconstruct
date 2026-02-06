@@ -141,3 +141,5 @@ hasn
 stdlib
 Backtick
 builtins
+serde
+structs
