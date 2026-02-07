@@ -373,25 +373,22 @@ where
 /// Shared helper for checker processors that support batch execution (no stub files).
 ///
 /// Runs `batch_fn` with all input paths at once. On success, returns Ok for all products.
-/// On batch failure, falls back to calling `single_fn` per product to isolate errors.
-pub fn execute_checker_batch<F, G>(
+/// On failure, the batch error is returned for all products (the tool's output shows the errors).
+pub fn execute_checker_batch<F>(
     products: &[&Product],
     batch_fn: F,
-    single_fn: G,
 ) -> Vec<Result<()>>
 where
     F: Fn(&[&Path]) -> Result<()>,
-    G: Fn(&Path) -> Result<()>,
 {
     let input_paths: Vec<&Path> = products.iter().map(|p| p.inputs[0].as_path()).collect();
 
-    // Try batch execution
-    if batch_fn(&input_paths).is_ok() {
-        // Batch succeeded — all products pass
-        products.iter().map(|_| Ok(())).collect()
-    } else {
-        // Batch failed — fall back to per-file execution to isolate errors
-        input_paths.iter().map(|input| single_fn(input)).collect()
+    match batch_fn(&input_paths) {
+        Ok(()) => products.iter().map(|_| Ok(())).collect(),
+        Err(e) => {
+            let err_msg = e.to_string();
+            products.iter().map(|_| Err(anyhow::anyhow!("{}", err_msg))).collect()
+        }
     }
 }
 

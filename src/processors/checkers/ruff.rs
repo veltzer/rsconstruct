@@ -93,7 +93,6 @@ impl ProductDiscovery for RuffProcessor {
         execute_checker_batch(
             products,
             |files| self.lint_files_batch(files),
-            |input| self.lint_file(input),
         )
     }
 

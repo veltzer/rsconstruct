@@ -97,7 +97,6 @@ impl ProductDiscovery for ShellcheckProcessor {
         execute_checker_batch(
             products,
             |files| self.check_files_batch(files),
-            |input| self.check_file(input),
         )
     }
 

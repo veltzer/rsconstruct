@@ -175,4 +175,5 @@ This ensures `rsb clean && rsb build` is fast for both types — generators rest
 
 ## Philosophy
 
-Convention over configuration - simple naming conventions, explicit config loading, incremental builds by default.
+- **Simplicity first** — keep the code simple whenever possible. Avoid clever solutions that are hard to understand or maintain. When in doubt, choose the straightforward approach.
+- **Convention over configuration** — simple naming conventions, explicit config loading, incremental builds by default.

@@ -95,7 +95,6 @@ impl ProductDiscovery for PylintProcessor {
         execute_checker_batch(
             products,
             |files| self.lint_files_batch(files),
-            |input| self.lint_file(input),
         )
     }
 
