@@ -740,6 +740,9 @@ pub struct SpellcheckConfig {
     pub words_file: String,
     #[serde(default)]
     pub use_words_file: bool,
+    /// When true, automatically add misspelled words to words_file instead of failing
+    #[serde(default)]
+    pub auto_add_words: bool,
     #[serde(default)]
     pub extra_inputs: Vec<String>,
     #[serde(flatten)]
@@ -752,6 +755,7 @@ impl Default for SpellcheckConfig {
             language: "en_US".into(),
             words_file: ".spellcheck-words".into(),
             use_words_file: false,
+            auto_add_words: false,
             extra_inputs: Vec::new(),
             scan: ScanConfig {
                 scan_dir: None,

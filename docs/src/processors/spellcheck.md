@@ -37,6 +37,7 @@ extensions = [".md"]                  # File extensions to check (default: [".md
 language = "en_US"                    # Hunspell dictionary language (default: "en_US")
 words_file = ".spellcheck-words"      # Path to custom words file (default: ".spellcheck-words")
 use_words_file = false                # Enable custom words file (default: false)
+auto_add_words = false                # Auto-add misspelled words to words_file (default: false)
 extra_inputs = []                     # Additional files that trigger rebuilds when changed
 ```
 
@@ -46,4 +47,5 @@ extra_inputs = []                     # Additional files that trigger rebuilds w
 | `language` | string | `"en_US"` | Hunspell dictionary language (requires system package) |
 | `words_file` | string | `".spellcheck-words"` | Path to custom words file (relative to project root) |
 | `use_words_file` | bool | `false` | Load the custom words file (file must exist when enabled) |
+| `auto_add_words` | bool | `false` | Auto-add misspelled words to words_file instead of failing |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

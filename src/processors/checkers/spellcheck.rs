@@ -1,8 +1,9 @@
 use anyhow::{Context, Result};
 use std::collections::HashSet;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
 use crate::config::SpellcheckConfig;
 use crate::file_index::FileIndex;
@@ -17,6 +18,8 @@ pub struct SpellcheckProcessor {
     cached_dict: OnceLock<Result<zspell::Dictionary, String>>,
     /// Custom words, loaded once at initialization
     custom_words: HashSet<String>,
+    /// Words to add to the words file (collected during auto_add_words mode)
+    words_to_add: Mutex<HashSet<String>>,
 }
 
 impl SpellcheckProcessor {
@@ -32,6 +35,7 @@ impl SpellcheckProcessor {
             spellcheck_config,
             cached_dict: OnceLock::new(),
             custom_words,
+            words_to_add: Mutex::new(HashSet::new()),
         })
     }
 
@@ -196,14 +200,63 @@ impl SpellcheckProcessor {
         }
 
         if !misspelled.is_empty() {
-            misspelled.sort();
-            return Err(anyhow::anyhow!(
-                "Spelling errors in {}: {}",
-                doc_file.display(),
-                misspelled.join(", ")
-            ));
+            if self.spellcheck_config.auto_add_words {
+                // Collect words to add to the words file
+                let mut words_to_add = self.words_to_add.lock().unwrap();
+                for word in &misspelled {
+                    words_to_add.insert(word.to_lowercase());
+                }
+                Ok(())
+            } else {
+                misspelled.sort();
+                Err(anyhow::anyhow!(
+                    "Spelling errors in {}: {}",
+                    doc_file.display(),
+                    misspelled.join(", ")
+                ))
+            }
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Write collected words to the words file
+    fn flush_words_to_file(&self) -> Result<()> {
+        let words_to_add = self.words_to_add.lock().unwrap();
+        if words_to_add.is_empty() {
+            return Ok(());
         }
 
+        let words_path = Path::new(&self.spellcheck_config.words_file);
+
+        // Read existing words if file exists
+        let mut all_words: HashSet<String> = if words_path.exists() {
+            Self::load_custom_words(words_path).unwrap_or_default()
+        } else {
+            HashSet::new()
+        };
+
+        // Add new words
+        let new_count = words_to_add.iter().filter(|w| !all_words.contains(*w)).count();
+        for word in words_to_add.iter() {
+            all_words.insert(word.clone());
+        }
+
+        if new_count == 0 {
+            return Ok(());
+        }
+
+        // Sort and write
+        let mut sorted: Vec<_> = all_words.into_iter().collect();
+        sorted.sort();
+
+        let mut file = fs::File::create(words_path)
+            .context(format!("Failed to create words file: {}", words_path.display()))?;
+        for word in &sorted {
+            writeln!(file, "{}", word)?;
+        }
+
+        println!("Added {} word(s) to {}", new_count, words_path.display());
         Ok(())
     }
 }
@@ -238,6 +291,32 @@ impl ProductDiscovery for SpellcheckProcessor {
     }
 
     fn execute(&self, product: &Product) -> Result<()> {
-        self.check_file(&product.inputs[0])
+        let result = self.check_file(&product.inputs[0]);
+        // In auto_add_words mode, flush after each file when not batching
+        if self.spellcheck_config.auto_add_words {
+            self.flush_words_to_file()?;
+        }
+        result
+    }
+
+    fn supports_batch(&self) -> bool {
+        self.spellcheck_config.auto_add_words
+    }
+
+    fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
+        let results: Vec<Result<()>> = products
+            .iter()
+            .map(|p| self.check_file(&p.inputs[0]))
+            .collect();
+
+        // Flush all collected words at the end of the batch
+        if self.spellcheck_config.auto_add_words {
+            if let Err(e) = self.flush_words_to_file() {
+                // Return the flush error for all products
+                return products.iter().map(|_| Err(anyhow::anyhow!("{}", e))).collect();
+            }
+        }
+
+        results
     }
 }

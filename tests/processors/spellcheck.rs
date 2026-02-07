@@ -200,3 +200,40 @@ fn spellcheck_ignores_code_blocks() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 }
+
+#[test]
+fn spellcheck_auto_add_words() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create a markdown file with "misspelled" words (project-specific terms)
+    fs::write(
+        project_path.join("README.md"),
+        "# Hello World\n\nThis uses rsb and tera for building.\n"
+    ).unwrap();
+
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"spellcheck\"]\n\n[processor.spellcheck]\nauto_add_words = true\n"
+    ).unwrap();
+
+    // Build should succeed and add words to .spellcheck-words
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "Build should succeed with auto_add_words: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    // Check that the words file was created with the misspelled words
+    let words_path = project_path.join(".spellcheck-words");
+    assert!(words_path.exists(), "Words file should be created");
+
+    let words_content = fs::read_to_string(&words_path).unwrap();
+    assert!(words_content.contains("rsb"), "Should contain 'rsb': {}", words_content);
+    assert!(words_content.contains("tera"), "Should contain 'tera': {}", words_content);
+
+    // Verify output mentions adding words
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Added") && stdout.contains("word"),
+        "Should mention adding words: {}", stdout);
+}
