@@ -38,10 +38,14 @@ impl MakeProcessor {
             cmd.arg(&self.config.target);
         }
 
-        cmd.current_dir(makefile_dir);
+        // Only set current_dir if not empty (root-level Makefile)
+        if !makefile_dir.as_os_str().is_empty() {
+            cmd.current_dir(makefile_dir);
+        }
 
         let output = run_command(&mut cmd)?;
-        check_command_output(&output, format_args!("make in {}", makefile_dir.display()))
+        let display_dir = if makefile_dir.as_os_str().is_empty() { "." } else { &makefile_dir.to_string_lossy() };
+        check_command_output(&output, format_args!("make in {}", display_dir))
     }
 }
 

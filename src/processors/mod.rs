@@ -418,8 +418,8 @@ where
 
 // Re-export from subdirectories
 pub use checkers::{
-    ClangTidyProcessor, CppcheckProcessor, MakeProcessor, PylintProcessor, RuffProcessor,
-    ShellcheckProcessor, SleepProcessor, SpellcheckProcessor,
+    CargoProcessor, ClangTidyProcessor, CppcheckProcessor, MakeProcessor, PylintProcessor,
+    RuffProcessor, ShellcheckProcessor, SleepProcessor, SpellcheckProcessor,
 };
 pub use generators::{CcProcessor, TeraProcessor};
 pub use lua_processor::LuaProcessor;

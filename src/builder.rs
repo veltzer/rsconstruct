@@ -14,7 +14,7 @@ use crate::executor::Executor;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
 use crate::object_store::ObjectStore;
-use crate::processors::{CcProcessor, ClangTidyProcessor, CppcheckProcessor, LuaProcessor, MakeProcessor, PylintProcessor, RuffProcessor, ShellcheckProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, TeraProcessor, log_command};
+use crate::processors::{CargoProcessor, CcProcessor, ClangTidyProcessor, CppcheckProcessor, LuaProcessor, MakeProcessor, PylintProcessor, RuffProcessor, ShellcheckProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, TeraProcessor, log_command};
 use crate::remote_cache;
 use crate::tool_lock;
 
@@ -348,6 +348,10 @@ impl Builder {
         // Make processor
         let make_proc = MakeProcessor::new(self.project_root.clone(), self.config.processor.make.clone());
         processors.insert("make".to_string(), Box::new(make_proc));
+
+        // Cargo processor
+        let cargo_proc = CargoProcessor::new(self.project_root.clone(), self.config.processor.cargo.clone());
+        processors.insert("cargo".to_string(), Box::new(cargo_proc));
 
         // Lua plugin processors
         let lua_plugins = LuaProcessor::discover_plugins(

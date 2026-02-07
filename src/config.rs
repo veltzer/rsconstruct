@@ -379,6 +379,8 @@ pub struct ProcessorConfig {
     pub sleep: SleepConfig,
     #[serde(default)]
     pub make: MakeConfig,
+    #[serde(default)]
+    pub cargo: CargoConfig,
     /// Captures unknown [processor.PLUGIN_NAME] sections for Lua plugins
     #[serde(flatten)]
     pub extra: HashMap<String, toml::Value>,
@@ -399,6 +401,7 @@ impl Default for ProcessorConfig {
             spellcheck: SpellcheckConfig::default(),
             sleep: SleepConfig::default(),
             make: MakeConfig::default(),
+            cargo: CargoConfig::default(),
             extra: HashMap::new(),
         }
     }
@@ -423,6 +426,7 @@ impl ProcessorConfig {
         self.spellcheck.scan.resolve("", &[".md"], SPELLCHECK_EXCLUDE_DIRS);
         self.sleep.scan.resolve("sleep", &[".sleep"], &[]);
         self.make.scan.resolve("", &["Makefile"], MAKE_EXCLUDE_DIRS);
+        self.cargo.scan.resolve("", &["Cargo.toml"], CARGO_EXCLUDE_DIRS);
     }
 }
 
@@ -785,6 +789,48 @@ impl Default for SleepConfig {
 
 fn default_make() -> String {
     "make".into()
+}
+
+fn default_cargo() -> String {
+    "cargo".into()
+}
+
+fn default_cargo_command() -> String {
+    "build".into()
+}
+
+const CARGO_EXCLUDE_DIRS: &[&str] = &["/.git/", "/target/", "/.rsb/", "/out/"];
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CargoConfig {
+    #[serde(default = "default_cargo")]
+    pub cargo: String,
+    #[serde(default = "default_cargo_command")]
+    pub command: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for CargoConfig {
+    fn default() -> Self {
+        Self {
+            cargo: "cargo".into(),
+            command: "build".into(),
+            args: Vec::new(),
+            extra_inputs: Vec::new(),
+            scan: ScanConfig {
+                scan_dir: None,
+                extensions: Some(vec!["Cargo.toml".into()]),
+                exclude_dirs: Some(CARGO_EXCLUDE_DIRS.iter().map(|s| s.to_string()).collect()),
+                exclude_files: None,
+                exclude_paths: None,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
