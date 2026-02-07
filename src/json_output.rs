@@ -34,6 +34,7 @@ pub enum BuildEvent {
     },
 
     /// A product is starting execution
+    #[allow(dead_code)]
     ProductStart {
         /// Product identifier (processor:file)
         product: String,
@@ -46,6 +47,7 @@ pub enum BuildEvent {
     },
 
     /// A product completed successfully
+    #[allow(dead_code)]
     ProductComplete {
         /// Product identifier
         product: String,
@@ -146,6 +148,7 @@ pub fn emit_build_start(total_products: usize) {
 }
 
 /// Emit a product start event.
+#[allow(dead_code)]
 pub fn emit_product_start(
     product: &str,
     processor: &str,
@@ -161,6 +164,7 @@ pub fn emit_product_start(
 }
 
 /// Emit a product complete event.
+#[allow(dead_code)]
 pub fn emit_product_complete(
     product: &str,
     processor: &str,
