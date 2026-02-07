@@ -35,6 +35,9 @@ fn main() -> Result<()> {
     // Enable process debug logging if --process flag is set
     processors::set_process_debug(cli.process);
 
+    // Enable showing tool output even on success if --show-output flag is set
+    processors::set_show_output(cli.show_output);
+
     // Enable JSON output mode if --json flag is set
     json_output::set_json_mode(cli.json);
 

@@ -25,6 +25,7 @@ A fast, incremental build tool written in Rust with tera support, Python linting
 - `rsb build --keep-going` - Continue after errors
 - `rsb build --ignore-tool-versions` - Skip tool version verification
 - `rsb build --timings` - Show per-product and total timing info
+- `rsb build --show-output` - Show tool output even on success (default: only on failure)
 - `rsb build -p tera,ruff` - Run only specific processors
 - `rsb clean` - Remove build output files (preserves cache) [default]
 - `rsb clean outputs` - Remove build output files (preserves cache)
@@ -134,9 +135,9 @@ project/
 
 RSB uses two functions to run external commands:
 
-- **`run_command()`** — inherits stdout/stderr, output goes directly to terminal. Use for compilers, linters, and any command where the user should see output immediately. No pipes, no buffer limits.
+- **`run_command()`** — by default captures stdout/stderr and only prints output on failure (quiet mode). Use `--show-output` flag to show all tool output. Use for compilers, linters, and any command where errors should be shown.
 
-- **`run_command_capture()`** — captures stdout/stderr via pipes. Use only when you need to parse the output (dependency analysis, version checks, Python config loading). Returns the output for processing.
+- **`run_command_capture()`** — always captures stdout/stderr via pipes. Use only when you need to parse the output (dependency analysis, version checks, Python config loading). Returns the output for processing.
 
 ## Path Handling
 

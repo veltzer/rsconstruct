@@ -27,6 +27,10 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub process: bool,
 
+    /// Show tool output even on success (default: only show on failure)
+    #[arg(long, global = true)]
+    pub show_output: bool,
+
     /// Output in JSON Lines format (machine-readable)
     #[arg(long, global = true)]
     pub json: bool,

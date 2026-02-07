@@ -19,6 +19,9 @@ use crate::file_index::FileIndex;
 /// Global flag: when true, print each external command before execution.
 static PROCESS_DEBUG: AtomicBool = AtomicBool::new(false);
 
+/// Global flag: when true, show tool output even on success (default: only show on failure).
+static SHOW_OUTPUT: AtomicBool = AtomicBool::new(false);
+
 /// Global flag: set to true on Ctrl+C so subprocesses can be killed promptly.
 static INTERRUPTED: AtomicBool = AtomicBool::new(false);
 
@@ -51,6 +54,11 @@ fn get_interrupt_receiver() -> watch::Receiver<bool> {
 /// Enable process debug logging (called once from main).
 pub fn set_process_debug(enabled: bool) {
     PROCESS_DEBUG.store(enabled, Ordering::Relaxed);
+}
+
+/// Enable showing tool output even on success (called once from main).
+pub fn set_show_output(enabled: bool) {
+    SHOW_OUTPUT.store(enabled, Ordering::Relaxed);
 }
 
 /// Mark the global interrupted flag and notify all waiting tasks.
@@ -94,6 +102,9 @@ pub fn log_command(cmd: &Command) {
 
 /// Run a command interruptibly using tokio. If Ctrl+C is detected, the child
 /// process is killed immediately via async select.
+///
+/// By default, output is captured and only shown on failure. Use `--show-output`
+/// to always show tool output.
 pub fn run_command(cmd: &mut Command) -> Result<Output> {
     log_command(cmd);
 
@@ -106,6 +117,7 @@ pub fn run_command(cmd: &mut Command) -> Result<Output> {
     let program = cmd.get_program().to_os_string();
     let args: Vec<_> = cmd.get_args().map(|a| a.to_os_string()).collect();
     let current_dir = cmd.get_current_dir().map(|p| p.to_path_buf());
+    let show = SHOW_OUTPUT.load(Ordering::Relaxed);
 
     let rt = get_runtime();
     rt.block_on(async {
@@ -114,13 +126,19 @@ pub fn run_command(cmd: &mut Command) -> Result<Output> {
         if let Some(dir) = &current_dir {
             tokio_cmd.current_dir(dir);
         }
-        // Inherit stdout/stderr - output goes directly to terminal
-        tokio_cmd.stdout(std::process::Stdio::inherit());
-        tokio_cmd.stderr(std::process::Stdio::inherit());
+
+        // If --show-output, inherit stdout/stderr; otherwise capture
+        if show {
+            tokio_cmd.stdout(std::process::Stdio::inherit());
+            tokio_cmd.stderr(std::process::Stdio::inherit());
+        } else {
+            tokio_cmd.stdout(std::process::Stdio::piped());
+            tokio_cmd.stderr(std::process::Stdio::piped());
+        }
         // Kill child on drop to ensure cleanup
         tokio_cmd.kill_on_drop(true);
 
-        let mut child = tokio_cmd.spawn()
+        let child = tokio_cmd.spawn()
             .with_context(|| format!("Failed to spawn: {} {}",
                 program.to_string_lossy(),
                 args.iter().map(|a| a.to_string_lossy()).collect::<Vec<_>>().join(" ")))?;
@@ -132,15 +150,25 @@ pub fn run_command(cmd: &mut Command) -> Result<Output> {
 
             // Check for interrupt signal first (biased)
             _ = interrupt_rx.changed() => {
-                // Kill the child process (also killed on drop due to kill_on_drop)
-                let _ = child.kill().await;
                 anyhow::bail!("Interrupted")
             }
             // Wait for the child process to complete
-            result = child.wait() => {
-                let status = result.context("Failed to wait for child process")?;
-                // stdout/stderr go directly to terminal, return empty
-                Ok(Output { status, stdout: Vec::new(), stderr: Vec::new() })
+            result = child.wait_with_output() => {
+                let output = result.context("Failed to wait for child process")?;
+
+                // If not showing output and command failed, print captured output
+                if !show && !output.status.success() {
+                    if !output.stdout.is_empty() {
+                        use std::io::Write;
+                        let _ = std::io::stdout().write_all(&output.stdout);
+                    }
+                    if !output.stderr.is_empty() {
+                        use std::io::Write;
+                        let _ = std::io::stderr().write_all(&output.stderr);
+                    }
+                }
+
+                Ok(output)
             }
         }
     })
@@ -197,7 +225,7 @@ pub fn run_command_capture(cmd: &mut Command) -> Result<Output> {
 pub use crate::graph::{BuildGraph, Product};
 
 /// Check that a command exited successfully.
-/// With inherited stdout/stderr, output is empty - errors already printed to terminal.
+/// Output is printed by `run_command` on failure, so we just return an error here.
 pub fn check_command_output(output: &Output, context: impl std::fmt::Display) -> Result<()> {
     if !output.status.success() {
         anyhow::bail!("{context} failed");

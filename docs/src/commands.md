@@ -9,6 +9,7 @@ These flags can be used with any command:
 | `--verbose`, `-v` | Show skip/restore/cache messages during build |
 | `--file-names <N>` | File name detail level (0=basename, 1=path, 2=+source, 3=+all inputs) |
 | `--process` | Print each external command before execution |
+| `--show-output` | Show tool output even on success (default: only show on failure) |
 | `--json` | Output in JSON Lines format (machine-readable) |
 | `--phases` | Show build phase messages (discover, add_dependencies, etc.) |
 
@@ -17,6 +18,7 @@ Example:
 ```bash
 rsb --phases build           # Show phase messages during build
 rsb --process build          # Show each command being executed
+rsb --show-output build      # Show compiler/linter output even on success
 rsb --phases --process build # Show both phases and commands
 ```
 
@@ -35,7 +37,10 @@ rsb build --timings                    # Show per-product and total timing info
 rsb build --stop-after discover        # Stop after product discovery
 rsb build --stop-after add-dependencies # Stop after dependency scanning
 rsb build --stop-after resolve         # Stop after graph resolution
+rsb build --show-output                # Show compiler/linter output even on success
 ```
+
+By default, tool output (compiler messages, linter output) is only shown when a command fails. Use `--show-output` to see all output.
 
 The `--stop-after` flag allows stopping the build at a specific phase:
 - `discover` — stop after discovering products (before dependency scanning)
