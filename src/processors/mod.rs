@@ -266,7 +266,7 @@ pub fn clean_outputs(product: &Product, label: &str) -> Result<()> {
 /// Used by Lua plugins that produce a single stub file per input.
 /// Built-in checkers should use discover_checker_products() instead.
 /// All paths are relative to project root.
-#[allow(dead_code)]
+#[allow(dead_code, clippy::too_many_arguments)]
 pub fn discover_stub_products(
     graph: &mut BuildGraph,
     stub_dir: &Path,

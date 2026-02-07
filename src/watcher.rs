@@ -66,6 +66,7 @@ fn should_ignore(path: &Path) -> bool {
     false
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn watch(verbose: bool, display_opts: DisplayOptions, jobs: Option<usize>, timings: bool, keep_going: bool, summary: bool, interrupted: Arc<AtomicBool>, batch_size_override: Option<Option<usize>>, processor_filter: Option<&[String]>, auto_add_words: bool) -> Result<()> {
     let project_root = std::env::current_dir()?;
 
@@ -93,11 +94,10 @@ pub fn watch(verbose: bool, display_opts: DisplayOptions, jobs: Option<usize>, t
         } else {
             RecursiveMode::NonRecursive
         };
-        if let Err(e) = watcher.watch(path, mode) {
-            if verbose {
+        if let Err(e) = watcher.watch(path, mode)
+            && verbose {
                 println!("Warning: could not watch {}: {}", path.display(), e);
             }
-        }
     }
 
     println!("{}", color::green("Watching for changes... (Ctrl+C to stop)"));
@@ -157,11 +157,10 @@ pub fn watch(verbose: bool, display_opts: DisplayOptions, jobs: Option<usize>, t
                 } else {
                     RecursiveMode::NonRecursive
                 };
-                if let Err(e) = watcher.watch(path, mode) {
-                    if verbose {
+                if let Err(e) = watcher.watch(path, mode)
+                    && verbose {
                         println!("Warning: could not watch {}: {}", path.display(), e);
                     }
-                }
             }
         }
         watch_paths = new_paths;

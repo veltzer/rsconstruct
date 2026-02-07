@@ -305,10 +305,10 @@ impl Default for BuildGraph {
 
 impl BuildGraph {
     /// Generate a safe node ID from a path
-    fn path_node_id(path: &PathBuf) -> String {
+    fn path_node_id(path: &Path) -> String {
         let s = path.display().to_string();
         // Make safe for DOT/Mermaid: replace special chars
-        format!("f_{}", s.replace('.', "_").replace('-', "_").replace('/', "_").replace(' ', "_"))
+        format!("f_{}", s.replace(['.', '-', '/', ' '], "_"))
     }
 
     /// Generate a node ID for a processor
@@ -317,7 +317,7 @@ impl BuildGraph {
     }
 
     /// Get file label (just the filename)
-    fn file_label(path: &PathBuf) -> String {
+    fn file_label(path: &Path) -> String {
         path.file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("unknown")
@@ -465,15 +465,15 @@ impl BuildGraph {
         lines.push("".to_string());
         let tera_procs: Vec<_> = self.products.iter()
             .filter(|p| p.processor == "tera")
-            .map(|p| Self::processor_node_id(p))
+            .map(Self::processor_node_id)
             .collect();
         let lint_procs: Vec<_> = self.products.iter()
             .filter(|p| p.processor == "lint")
-            .map(|p| Self::processor_node_id(p))
+            .map(Self::processor_node_id)
             .collect();
         let cc_procs: Vec<_> = self.products.iter()
             .filter(|p| p.processor == "cc_single_file")
-            .map(|p| Self::processor_node_id(p))
+            .map(Self::processor_node_id)
             .collect();
 
         if !tera_procs.is_empty() {

@@ -304,7 +304,7 @@ impl LuaProcessor {
                 }
                 Ok(LuaValue::Table(table))
             }
-            toml::Value::Datetime(dt) => Ok(LuaValue::String(lua.create_string(&dt.to_string())?)),
+            toml::Value::Datetime(dt) => Ok(LuaValue::String(lua.create_string(dt.to_string())?)),
         }
     }
 

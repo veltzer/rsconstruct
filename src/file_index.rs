@@ -21,7 +21,7 @@ impl FileIndex {
         let mut files: Vec<PathBuf> = Vec::new();
         for entry in walker {
             let entry = entry.context("Failed to read directory entry during file indexing")?;
-            if entry.file_type().map_or(false, |ft| ft.is_file()) {
+            if entry.file_type().is_some_and(|ft| ft.is_file()) {
                 let path = entry.into_path();
                 // Store relative paths
                 let relative = path.strip_prefix(project_root)
@@ -57,11 +57,10 @@ impl FileIndex {
                 // Must be under root (root is relative, e.g., "src" or "")
                 // Empty root or "." means match all
                 let root_str = root.to_string_lossy();
-                if !root_str.is_empty() && root_str != "." {
-                    if !path.starts_with(root) {
+                if !root_str.is_empty() && root_str != "."
+                    && !path.starts_with(root) {
                         return false;
                     }
-                }
 
                 // Check exclude dirs
                 if !exclude_dirs.is_empty() {
@@ -78,7 +77,7 @@ impl FileIndex {
                 }
 
                 // Check exclude files
-                if !exclude_files.is_empty() && exclude_files.iter().any(|f| *f == name) {
+                if !exclude_files.is_empty() && exclude_files.contains(&name) {
                     return false;
                 }
 

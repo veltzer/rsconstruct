@@ -82,14 +82,13 @@ fn should_exclude_for_profile(source: &Path, profile_name: &str) -> bool {
             continue;
         };
 
-        if let Some(rest) = value_part.strip_prefix("EXCLUDE_PROFILE") {
-            if let Some(profiles_str) = rest.strip_prefix('=') {
-                let excluded_profiles: Vec<&str> = profiles_str.trim().split_whitespace().collect();
+        if let Some(rest) = value_part.strip_prefix("EXCLUDE_PROFILE")
+            && let Some(profiles_str) = rest.strip_prefix('=') {
+                let excluded_profiles: Vec<&str> = profiles_str.split_whitespace().collect();
                 if excluded_profiles.contains(&profile_name) {
                     return true;
                 }
             }
-        }
     }
 
     false
@@ -173,9 +172,9 @@ fn parse_source_flags(source: &Path, profile_name: &str) -> Result<SourceFlags> 
         };
 
         for var_name in &args_var_names {
-            if let Some((rest, applies)) = match_directive_with_profile(value_part, var_name, profile_name) {
-                if applies {
-                    if let Some(raw_value) = rest.strip_prefix('=') {
+            if let Some((rest, applies)) = match_directive_with_profile(value_part, var_name, profile_name)
+                && applies
+                    && let Some(raw_value) = rest.strip_prefix('=') {
                         let expanded = expand_backticks(raw_value.trim())?;
                         let args: Vec<String> = expanded
                             .split_whitespace()
@@ -189,14 +188,12 @@ fn parse_source_flags(source: &Path, profile_name: &str) -> Result<SourceFlags> 
                             _ => {}
                         }
                     }
-                }
-            }
         }
 
         for var_name in &cmd_var_names {
-            if let Some((rest, applies)) = match_directive_with_profile(value_part, var_name, profile_name) {
-                if applies {
-                    if let Some(raw_value) = rest.strip_prefix('=') {
+            if let Some((rest, applies)) = match_directive_with_profile(value_part, var_name, profile_name)
+                && applies
+                    && let Some(raw_value) = rest.strip_prefix('=') {
                         let cmd = raw_value.trim();
                         let args = cached_shell_command(cmd, run_command_for_flags)?;
                         match *var_name {
@@ -205,14 +202,12 @@ fn parse_source_flags(source: &Path, profile_name: &str) -> Result<SourceFlags> 
                             _ => {}
                         }
                     }
-                }
-            }
         }
 
         for var_name in &shell_var_names {
-            if let Some((rest, applies)) = match_directive_with_profile(value_part, var_name, profile_name) {
-                if applies {
-                    if let Some(raw_value) = rest.strip_prefix('=') {
+            if let Some((rest, applies)) = match_directive_with_profile(value_part, var_name, profile_name)
+                && applies
+                    && let Some(raw_value) = rest.strip_prefix('=') {
                         let cmd = raw_value.trim();
                         let args = cached_shell_command(cmd, run_shell_for_flags)?;
                         match *var_name {
@@ -221,8 +216,6 @@ fn parse_source_flags(source: &Path, profile_name: &str) -> Result<SourceFlags> 
                             _ => {}
                         }
                     }
-                }
-            }
         }
     }
 
@@ -471,8 +464,8 @@ impl CcProcessor {
     fn get_profile_from_product(&self, product: &Product) -> &CompilerProfile {
         // Profile name is stored in the output path structure
         // out/cc_single_file/<profile_name>/... or out/cc_single_file/... (legacy)
-        if let Some(output) = product.outputs.first() {
-            if let Ok(relative) = output.strip_prefix(&self.output_dir) {
+        if let Some(output) = product.outputs.first()
+            && let Ok(relative) = output.strip_prefix(&self.output_dir) {
                 // Check if first component is a profile name
                 if let Some(first) = relative.components().next() {
                     let first_str = first.as_os_str().to_string_lossy();
@@ -481,7 +474,6 @@ impl CcProcessor {
                     }
                 }
             }
-        }
         // Fall back to first profile (legacy mode)
         &self.profiles[0]
     }

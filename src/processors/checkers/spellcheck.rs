@@ -310,12 +310,11 @@ impl ProductDiscovery for SpellcheckProcessor {
             .collect();
 
         // Flush all collected words at the end of the batch
-        if self.spellcheck_config.auto_add_words {
-            if let Err(e) = self.flush_words_to_file() {
+        if self.spellcheck_config.auto_add_words
+            && let Err(e) = self.flush_words_to_file() {
                 // Return the flush error for all products
                 return products.iter().map(|_| Err(anyhow::anyhow!("{}", e))).collect();
             }
-        }
 
         results
     }

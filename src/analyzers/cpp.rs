@@ -399,14 +399,13 @@ impl CppDepAnalyzer {
     ) -> Option<PathBuf> {
         // For #include "file", first try relative to current file's directory
         // For #include <file>, skip this step
-        if !is_angle_bracket {
-            if let Some(dir) = current_dir {
+        if !is_angle_bracket
+            && let Some(dir) = current_dir {
                 let candidate = dir.join(include);
                 if candidate.is_file() {
                     return Some(candidate);
                 }
             }
-        }
 
         // Then try each configured search path (for both "" and <> includes)
         for search in search_paths {
@@ -613,8 +612,8 @@ impl DepAnalyzer for CppDepAnalyzer {
             };
 
             // Add header dependencies to the product
-            if !headers.is_empty() {
-                if let Some(product) = graph.get_product_mut(*id) {
+            if !headers.is_empty()
+                && let Some(product) = graph.get_product_mut(*id) {
                     // Avoid duplicates
                     for header in headers {
                         if !product.inputs.contains(&header) {
@@ -622,7 +621,6 @@ impl DepAnalyzer for CppDepAnalyzer {
                         }
                     }
                 }
-            }
 
             pb.inc(1);
         }

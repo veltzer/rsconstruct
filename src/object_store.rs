@@ -686,8 +686,8 @@ impl ObjectStore {
         {
             let read_txn = self.db.begin_read()
                 .context("Failed to begin read transaction for trim")?;
-            if let Ok(table) = read_txn.open_table(CACHE_TABLE) {
-                if let Ok(iter) = table.iter() {
+            if let Ok(table) = read_txn.open_table(CACHE_TABLE)
+                && let Ok(iter) = table.iter() {
                     for result in iter {
                         let (_, value) = result.context("Failed to read cache entry during trim")?;
                         if let Ok(entry) = serde_json::from_slice::<CacheEntry>(value.value()) {
@@ -697,7 +697,6 @@ impl ObjectStore {
                         }
                     }
                 }
-            }
         }
 
         // Find and remove unreferenced objects
@@ -763,8 +762,8 @@ impl ObjectStore {
         };
 
         // Then remove them in a write transaction
-        if !stale_keys.is_empty() {
-            if let Ok(write_txn) = self.db.begin_write() {
+        if !stale_keys.is_empty()
+            && let Ok(write_txn) = self.db.begin_write() {
                 if let Ok(mut table) = write_txn.open_table(CACHE_TABLE) {
                     for key in &stale_keys {
                         if table.remove(key.as_str()).is_ok() {
@@ -774,7 +773,6 @@ impl ObjectStore {
                 }
                 let _ = write_txn.commit();
             }
-        }
 
         count
     }

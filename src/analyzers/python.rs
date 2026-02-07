@@ -51,18 +51,17 @@ impl PythonDepAnalyzer {
                 if let Some(module) = module_path {
                     // Handle multiple imports: import foo, bar, baz
                     for part in module.split(',') {
-                        let module_name = part.trim().split_whitespace().next().unwrap_or("");
+                        let module_name = part.split_whitespace().next().unwrap_or("");
                         if module_name.is_empty() {
                             continue;
                         }
 
                         // Try to resolve the module to a local file
-                        if let Some(path) = self.resolve_module(source, module_name, file_index) {
-                            if !seen.contains(&path) {
+                        if let Some(path) = self.resolve_module(source, module_name, file_index)
+                            && !seen.contains(&path) {
                                 seen.insert(path.clone());
                                 imports.push(path);
                             }
-                        }
                     }
                 }
             }
@@ -170,8 +169,8 @@ impl DepAnalyzer for PythonDepAnalyzer {
             };
 
             // Add import dependencies to the product
-            if !imports.is_empty() {
-                if let Some(product) = graph.get_product_mut(*id) {
+            if !imports.is_empty()
+                && let Some(product) = graph.get_product_mut(*id) {
                     // Avoid duplicates
                     for import in imports {
                         if !product.inputs.contains(&import) {
@@ -179,7 +178,6 @@ impl DepAnalyzer for PythonDepAnalyzer {
                         }
                     }
                 }
-            }
 
             pb.inc(1);
         }

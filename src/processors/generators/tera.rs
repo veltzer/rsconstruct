@@ -125,7 +125,7 @@ impl ProductDiscovery for TeraProcessor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        self.find_templates(file_index).map_or(false, |t| !t.is_empty())
+        self.find_templates(file_index).is_ok_and(|t| !t.is_empty())
     }
 
     fn required_tools(&self) -> Vec<String> {

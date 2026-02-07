@@ -220,7 +220,7 @@ impl<'a> Executor<'a> {
             let batching_enabled = self.batch_size.is_some();
             for (proc_name, items) in by_processor {
                 let processor = self.processors.get(&proc_name);
-                let supports_batch = processor.map_or(false, |p| p.supports_batch());
+                let supports_batch = processor.is_some_and(|p| p.supports_batch());
                 // Count items that actually need rebuild (not just cache-skip)
                 let rebuild_count = items.iter().filter(|(_, _, needs)| *needs).count();
 
@@ -281,7 +281,7 @@ impl<'a> Executor<'a> {
                                 let mut stats = stats_ref.lock();
                                 let proc_stats = stats
                                     .entry(product.processor.clone())
-                                    .or_insert_with(|| ProcessStats::new());
+                                    .or_insert_with(ProcessStats::new);
                                 proc_stats.skipped += 1;
                                 continue;
                             }
@@ -306,7 +306,7 @@ impl<'a> Executor<'a> {
                                         let mut stats = stats_ref.lock();
                                         let proc_stats = stats
                                             .entry(product.processor.clone())
-                                            .or_insert_with(|| ProcessStats::new());
+                                            .or_insert_with(ProcessStats::new);
                                         proc_stats.restored += 1;
                                         proc_stats.files_restored += product.outputs.len();
                                         continue;
@@ -401,7 +401,7 @@ impl<'a> Executor<'a> {
                                         let mut stats = stats_ref.lock();
                                         let proc_stats = stats
                                             .entry(proc_name.clone())
-                                            .or_insert_with(|| ProcessStats::new());
+                                            .or_insert_with(ProcessStats::new);
                                         proc_stats.processed += 1;
                                         proc_stats.files_created += product.outputs.len();
                                     }
@@ -417,7 +417,7 @@ impl<'a> Executor<'a> {
                                             let mut stats = stats_ref.lock();
                                             let proc_stats = stats
                                                 .entry(proc_name.clone())
-                                                .or_insert_with(|| ProcessStats::new());
+                                                .or_insert_with(ProcessStats::new);
                                             proc_stats.failed += 1;
                                         }
                                         if keep_going {
@@ -439,7 +439,7 @@ impl<'a> Executor<'a> {
                                 let mut stats = stats_ref.lock();
                                 let proc_stats = stats
                                     .entry(proc_name.clone())
-                                    .or_insert_with(|| ProcessStats::new());
+                                    .or_insert_with(ProcessStats::new);
                                 proc_stats.duration += batch_duration;
                                 proc_stats.product_timings.push(ProductTiming {
                                     display: format!("batch ({} files)", product_refs.len()),
@@ -453,7 +453,7 @@ impl<'a> Executor<'a> {
 
                 // Spawn threads for non-batch items (chunked as before)
                 if !non_batch_items.is_empty() {
-                    let chunk_size = (non_batch_items.len() + self.parallel - 1) / self.parallel;
+                    let chunk_size = non_batch_items.len().div_ceil(self.parallel);
                     let chunks: Vec<_> = non_batch_items.chunks(chunk_size.max(1)).collect();
                     let total_ref = &total_per_processor;
                     let current_ref = &current_per_processor;
@@ -495,7 +495,7 @@ impl<'a> Executor<'a> {
                                     let mut stats = stats_ref.lock();
                                     let proc_stats = stats
                                         .entry(product.processor.clone())
-                                        .or_insert_with(|| ProcessStats::new());
+                                        .or_insert_with(ProcessStats::new);
                                     proc_stats.skipped += 1;
                                     continue;
                                 }
@@ -520,7 +520,7 @@ impl<'a> Executor<'a> {
                                             let mut stats = stats_ref.lock();
                                             let proc_stats = stats
                                                 .entry(product.processor.clone())
-                                                .or_insert_with(|| ProcessStats::new());
+                                                .or_insert_with(ProcessStats::new);
                                             proc_stats.restored += 1;
                                             proc_stats.files_restored += product.outputs.len();
                                             continue;
@@ -601,7 +601,7 @@ impl<'a> Executor<'a> {
                                             let mut stats = stats_ref.lock();
                                             let proc_stats = stats
                                                 .entry(product.processor.clone())
-                                                .or_insert_with(|| ProcessStats::new());
+                                                .or_insert_with(ProcessStats::new);
                                             proc_stats.processed += 1;
                                             proc_stats.files_created += product.outputs.len();
                                             proc_stats.duration += duration;
@@ -626,7 +626,7 @@ impl<'a> Executor<'a> {
                                                 let mut stats = stats_ref.lock();
                                                 let proc_stats = stats
                                                     .entry(product.processor.clone())
-                                                    .or_insert_with(|| ProcessStats::new());
+                                                    .or_insert_with(ProcessStats::new);
                                                 proc_stats.failed += 1;
                                             }
                                             if keep_going {

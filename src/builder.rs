@@ -76,6 +76,7 @@ impl Builder {
     /// Execute an incremental build using the dependency graph
     /// batch_size_override: Some(Some(n)) = use n, Some(None) = disable batching, None = use config
     /// processor_filter: if Some, only run processors in this list
+    #[allow(clippy::too_many_arguments)]
     pub fn build(&mut self, force: bool, verbose: bool, display_opts: DisplayOptions, jobs: Option<usize>, timings: bool, keep_going: bool, interrupted: Arc<std::sync::atomic::AtomicBool>, summary: bool, batch_size_override: Option<Option<usize>>, stop_after: BuildPhase, processor_filter: Option<&[String]>, auto_add_words: bool) -> Result<()> {
         // CLI override for spellcheck auto_add_words
         if auto_add_words {
@@ -561,11 +562,10 @@ impl Builder {
         let active_processors: Vec<&String> = names.into_iter()
             .filter(|name| {
                 // If filter is specified, only include processors in the filter list
-                if let Some(filter) = processor_filter {
-                    if !filter.iter().any(|f| f == *name) {
+                if let Some(filter) = processor_filter
+                    && !filter.iter().any(|f| f == *name) {
                         return false;
                     }
-                }
                 let in_enabled_list = self.config.processor.is_enabled(name);
                 if !in_enabled_list {
                     return false;
@@ -642,11 +642,10 @@ impl Builder {
         // Collect active processors
         let active_processors: Vec<&String> = names.into_iter()
             .filter(|name| {
-                if let Some(filter) = filter_name {
-                    if name.as_str() != filter {
+                if let Some(filter) = filter_name
+                    && name.as_str() != filter {
                         return false;
                     }
-                }
                 if !include_all {
                     let in_enabled_list = self.config.processor.is_enabled(name);
                     if !in_enabled_list {
@@ -759,11 +758,10 @@ impl Builder {
                 }
             }
             ProcessorAction::Files { name, all } => {
-                if let Some(ref n) = name {
-                    if !processors.contains_key(n.as_str()) {
+                if let Some(ref n) = name
+                    && !processors.contains_key(n.as_str()) {
                         bail!("Unknown processor: '{}'. Run 'rsb processor list' to see available processors.", n);
                     }
-                }
 
                 let graph = self.build_graph_filtered(name.as_deref(), all)?;
 

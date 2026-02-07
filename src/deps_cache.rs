@@ -232,14 +232,13 @@ impl DepsCache {
             Err(_) => return stats,
         };
         for item in iter {
-            if let Ok((_, value)) = item {
-                if let Ok(entry) = serde_json::from_slice::<DepsEntry>(value.value()) {
+            if let Ok((_, value)) = item
+                && let Ok(entry) = serde_json::from_slice::<DepsEntry>(value.value()) {
                     let analyzer = if entry.analyzer.is_empty() { "unknown".to_string() } else { entry.analyzer };
                     let (files, deps) = stats.entry(analyzer).or_insert((0, 0));
                     *files += 1;
                     *deps += entry.dependencies.len();
                 }
-            }
         }
         stats
     }
