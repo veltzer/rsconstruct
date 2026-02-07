@@ -101,9 +101,26 @@ impl ObjectStore {
         fs::create_dir_all(&rsb_dir)
             .context("Failed to create .rsb directory")?;
 
-        // Open sled database
-        let db = sled::open(&db_path)
-            .context("Failed to open cache database")?;
+        // Open sled database, with retry after removing stale lock
+        let db = match sled::open(&db_path) {
+            Ok(db) => db,
+            Err(e) => {
+                // Check if it's a lock error (WouldBlock)
+                let err_str = e.to_string();
+                if err_str.contains("WouldBlock") || err_str.contains("lock") {
+                    // Remove stale lock file and retry
+                    let lock_file = db_path.join("db");
+                    if lock_file.exists() {
+                        eprintln!("Warning: Removing stale database lock file");
+                        let _ = fs::remove_file(&lock_file);
+                    }
+                    sled::open(&db_path)
+                        .context("Failed to open cache database after removing stale lock")?
+                } else {
+                    return Err(e).context("Failed to open cache database");
+                }
+            }
+        };
 
         // Open separate tree for processor configs
         let configs_tree = db.open_tree(CONFIGS_TREE)
