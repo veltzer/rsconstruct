@@ -64,11 +64,7 @@ impl<'a> Executor<'a> {
         // Emit JSON build start event
         json_output::emit_build_start(order.len());
 
-        let result = if self.parallel <= 1 {
-            self.execute_sequential(graph, &order, object_store, force, timings, keep_going)
-        } else {
-            self.execute_parallel(graph, &order, object_store, force, timings, keep_going)
-        };
+        let result = self.execute_parallel(graph, &order, object_store, force, timings, keep_going);
 
         match result {
             Ok(mut stats) => {
@@ -91,407 +87,6 @@ impl<'a> Executor<'a> {
         }
     }
 
-    /// Execute products sequentially, batching consecutive products from the
-    /// same processor when the processor supports batch execution.
-    fn execute_sequential(
-        &self,
-        graph: &BuildGraph,
-        order: &[usize],
-        object_store: &ObjectStore,
-        force: bool,
-        timings: bool,
-        keep_going: bool,
-    ) -> Result<BuildStats> {
-        let mut stats_by_processor: HashMap<String, ProcessStats> = HashMap::new();
-        let mut failed_products: HashSet<usize> = HashSet::new();
-        let mut failed_messages: Vec<String> = Vec::new();
-        let mut first_error: Option<anyhow::Error> = None;
-        let mut silenced_processors: HashSet<String> = HashSet::new();
-
-        // Count total products per processor for progress display
-        let mut total_per_processor: HashMap<String, usize> = HashMap::new();
-        for &product_id in order {
-            let product = graph.get_product(product_id).unwrap();
-            *total_per_processor.entry(product.processor.clone()).or_insert(0) += 1;
-        }
-        let mut current_per_processor: HashMap<String, usize> = HashMap::new();
-
-        // Pending batch of products awaiting execution
-        #[derive(Clone)]
-        struct PendingWork {
-            product_id: usize,
-            cache_key: String,
-            input_checksum: String,
-        }
-        let mut pending_batch: Vec<PendingWork> = Vec::new();
-        let mut pending_processor: Option<String> = None;
-
-        // Flush the pending batch: execute all accumulated products
-        let flush = |
-            pending_batch: &mut Vec<PendingWork>,
-            pending_processor: &mut Option<String>,
-            graph: &BuildGraph,
-            processors: &HashMap<String, Box<dyn ProductDiscovery>>,
-            object_store: &ObjectStore,
-            stats_by_processor: &mut HashMap<String, ProcessStats>,
-            failed_products: &mut HashSet<usize>,
-            failed_messages: &mut Vec<String>,
-            first_error: &mut Option<anyhow::Error>,
-            silenced_processors: &mut HashSet<String>,
-            timings: bool,
-            keep_going: bool,
-            display_opts: DisplayOptions,
-            batch_size: Option<usize>,
-            current_per_processor: &mut HashMap<String, usize>,
-            total_per_processor: &HashMap<String, usize>,
-        | -> Result<()> {
-            if pending_batch.is_empty() {
-                *pending_processor = None;
-                return Ok(());
-            }
-
-            let proc_name = pending_processor.as_ref().unwrap().clone();
-            let processor = match processors.get(&proc_name) {
-                Some(p) => p,
-                None => {
-                    pending_batch.clear();
-                    *pending_processor = None;
-                    return Ok(());
-                }
-            };
-
-            let silenced = !keep_going && silenced_processors.contains(&proc_name);
-            // Batching: None = disabled, Some(0) = no limit, Some(n) = max n items
-            let use_batch = batch_size.is_some() && processor.supports_batch() && pending_batch.len() > 1;
-
-            if use_batch {
-                // Determine chunk size: 0 means no limit
-                let chunk_size = match batch_size {
-                    Some(0) | None => pending_batch.len(),
-                    Some(n) => n,
-                };
-
-                // Process in chunks
-                let chunks: Vec<Vec<PendingWork>> = pending_batch
-                    .drain(..)
-                    .collect::<Vec<_>>()
-                    .chunks(chunk_size)
-                    .map(|c| c.to_vec())
-                    .collect();
-
-                for chunk in chunks {
-                    // Print batch processing message
-                    if !silenced && !crate::json_output::is_json_mode() {
-                        let displays: Vec<String> = chunk.iter().map(|pw| {
-                            let product = graph.get_product(pw.product_id).unwrap();
-                            product.display(display_opts)
-                        }).collect();
-                        println!("[{}] {} {} files: {}",
-                            proc_name,
-                            color::green("Processing batch:"),
-                            chunk.len(),
-                            displays.join(", "));
-                    }
-
-                    let products: Vec<&crate::graph::Product> = chunk.iter()
-                        .map(|pw| graph.get_product(pw.product_id).unwrap())
-                        .collect();
-                    let product_refs: Vec<&&crate::graph::Product> = products.iter().collect();
-
-                    let batch_start = Instant::now();
-                    let results = processor.execute_batch(
-                        &product_refs.iter().map(|p| **p).collect::<Vec<_>>()
-                    );
-                    let batch_duration = batch_start.elapsed();
-
-                    // Process per-product results
-                    let per_product_duration = batch_duration / (chunk.len() as u32);
-                    for (pw, result) in chunk.into_iter().zip(results) {
-                        let product = graph.get_product(pw.product_id).unwrap();
-                        match result {
-                            Ok(()) => {
-                                object_store.cache_outputs(&pw.cache_key, &pw.input_checksum, &product.outputs)?;
-
-                                // Emit JSON complete event for batch item
-                                crate::json_output::emit_product_complete(
-                                    &product.display(display_opts),
-                                    &proc_name,
-                                    "success",
-                                    Some(per_product_duration),
-                                    None,
-                                );
-
-                                let stats = stats_by_processor
-                                    .entry(proc_name.clone())
-                                    .or_insert_with(|| ProcessStats::new());
-                                stats.processed += 1;
-                                stats.files_created += product.outputs.len();
-                            }
-                            Err(e) => {
-                                // Emit JSON failed event for batch item
-                                crate::json_output::emit_product_complete(
-                                    &product.display(display_opts),
-                                    &proc_name,
-                                    "failed",
-                                    Some(per_product_duration),
-                                    Some(&e.to_string()),
-                                );
-
-                                let stats = stats_by_processor
-                                    .entry(proc_name.clone())
-                                    .or_insert_with(|| ProcessStats::new());
-                                stats.failed += 1;
-                                failed_products.insert(pw.product_id);
-                                if keep_going {
-                                    let msg = format!("[{}] {}: {}", proc_name, product.display(display_opts), e);
-                                    println!("{}", color::red(&format!("Error: {}", msg)));
-                                    failed_messages.push(msg);
-                                } else {
-                                    // Print error immediately so it appears right after "Processing:"
-                                    if !crate::json_output::is_json_mode() {
-                                        println!("{}", color::red(&format!("Error: {}", e)));
-                                    }
-                                    if first_error.is_none() {
-                                        first_error.replace(e);
-                                    }
-                                    silenced_processors.insert(proc_name.clone());
-                                }
-                            }
-                        }
-                    }
-
-                    // Record one timing entry for this chunk
-                    if timings && !silenced {
-                        let stats = stats_by_processor
-                            .entry(proc_name.clone())
-                            .or_insert_with(|| ProcessStats::new());
-                        stats.duration += batch_duration;
-                        stats.product_timings.push(ProductTiming {
-                            display: format!("batch ({} files)", products.len()),
-                            processor: proc_name.clone(),
-                            duration: batch_duration,
-                        });
-                    }
-                }
-            } else {
-                // Execute one by one (non-batch processor or single item)
-                for pw in pending_batch.drain(..) {
-                    let product = graph.get_product(pw.product_id).unwrap();
-                    let silenced = !keep_going && silenced_processors.contains(&proc_name);
-
-                    // Update progress counter
-                    let current = current_per_processor.entry(proc_name.clone()).or_insert(0);
-                    *current += 1;
-                    let total = total_per_processor.get(&proc_name).copied().unwrap_or(1);
-
-                    if !silenced && !crate::json_output::is_json_mode() {
-                        let variant_tag = product.variant.as_ref()
-                            .map(|v| format!(":{}", v))
-                            .unwrap_or_default();
-                        println!("[{}{}] ({}/{}) {} {}", proc_name, variant_tag,
-                            current, total,
-                            color::green("Processing:"),
-                            product.display(display_opts));
-                    }
-
-                    // Emit JSON start event (if not silenced)
-                    if !silenced {
-                        crate::json_output::emit_product_start(
-                            &product.display(display_opts),
-                            &proc_name,
-                            &product.inputs,
-                            &product.outputs,
-                        );
-                    }
-
-                    let product_start = Instant::now();
-                    match processor.execute(product) {
-                        Ok(()) => {
-                            let duration = product_start.elapsed();
-                            object_store.cache_outputs(&pw.cache_key, &pw.input_checksum, &product.outputs)?;
-
-                            // Emit JSON complete event
-                            crate::json_output::emit_product_complete(
-                                &product.display(display_opts),
-                                &proc_name,
-                                "success",
-                                Some(duration),
-                                None,
-                            );
-
-                            let stats = stats_by_processor
-                                .entry(proc_name.clone())
-                                .or_insert_with(|| ProcessStats::new());
-                            stats.processed += 1;
-                            stats.files_created += product.outputs.len();
-                            stats.duration += duration;
-                            if timings && !silenced {
-                                stats.product_timings.push(ProductTiming {
-                                    display: product.display(display_opts),
-                                    processor: proc_name.clone(),
-                                    duration,
-                                });
-                            }
-                        }
-                        Err(e) => {
-                            let duration = product_start.elapsed();
-
-                            // Emit JSON failed event
-                            crate::json_output::emit_product_complete(
-                                &product.display(display_opts),
-                                &proc_name,
-                                "failed",
-                                Some(duration),
-                                Some(&e.to_string()),
-                            );
-
-                            let stats = stats_by_processor
-                                .entry(proc_name.clone())
-                                .or_insert_with(|| ProcessStats::new());
-                            stats.failed += 1;
-                            failed_products.insert(pw.product_id);
-                            if keep_going {
-                                let msg = format!("[{}] {}: {}", proc_name, product.display(display_opts), e);
-                                if !crate::json_output::is_json_mode() {
-                                    println!("{}", color::red(&format!("Error: {}", msg)));
-                                }
-                                failed_messages.push(msg);
-                            } else {
-                                // Print error immediately (only if not silenced) so it appears right after "Processing:"
-                                if !silenced && !crate::json_output::is_json_mode() {
-                                    println!("{}", color::red(&format!("Error: {}", e)));
-                                }
-                                if first_error.is_none() {
-                                    first_error.replace(e);
-                                }
-                                silenced_processors.insert(proc_name.clone());
-                            }
-                        }
-                    }
-                }
-            }
-
-            *pending_processor = None;
-            Ok(())
-        };
-
-        for &id in order {
-            // Check for Ctrl+C before starting next product
-            if self.interrupted.load(Ordering::SeqCst) {
-                // Flush any pending work before breaking
-                flush(
-                    &mut pending_batch, &mut pending_processor, graph, self.processors,
-                    object_store, &mut stats_by_processor, &mut failed_products,
-                    &mut failed_messages, &mut first_error, &mut silenced_processors,
-                    timings, keep_going, self.display_opts, self.batch_size,
-                )?;
-                println!("{}", color::yellow("Interrupted, saving progress..."));
-                break;
-            }
-
-            let product = graph.get_product(id).unwrap();
-
-            // Skip products whose dependencies have failed
-            if self.has_failed_dependency(graph, id, &failed_products) {
-                if self.verbose {
-                    println!("[{}] {} {}", product.processor,
-                        color::yellow("Skipping (dependency failed):"),
-                        self.product_display(product));
-                }
-                failed_products.insert(id);
-                continue;
-            }
-
-            let cache_key = product.cache_key();
-            let input_checksum = ObjectStore::combined_input_checksum(&product.inputs)?;
-
-            // Check if this product needs rebuilding
-            if !force && !object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs) {
-                if self.verbose {
-                    println!("[{}] {} {}", product.processor,
-                        color::dim("Skipping (unchanged):"),
-                        self.product_display(product));
-                }
-                json_output::emit_product_complete(
-                    &self.product_display(product),
-                    &product.processor,
-                    "skipped",
-                    None,
-                    None,
-                );
-                let stats = stats_by_processor
-                    .entry(product.processor.clone())
-                    .or_insert_with(|| ProcessStats::new());
-                stats.skipped += 1;
-                continue;
-            }
-
-            // Try to restore from cache if outputs are missing
-            if !force && object_store.restore_from_cache(&cache_key, &input_checksum, &product.outputs)? {
-                if self.verbose {
-                    println!("[{}] {} {}", product.processor,
-                        color::cyan("Restored from cache:"),
-                        self.product_display(product));
-                }
-                json_output::emit_product_complete(
-                    &self.product_display(product),
-                    &product.processor,
-                    "restored",
-                    None,
-                    None,
-                );
-                let stats = stats_by_processor
-                    .entry(product.processor.clone())
-                    .or_insert_with(|| ProcessStats::new());
-                stats.restored += 1;
-                stats.files_restored += product.outputs.len();
-                continue;
-            }
-
-            // If processor name changed, flush the pending batch
-            if pending_processor.as_ref() != Some(&product.processor) {
-                flush(
-                    &mut pending_batch, &mut pending_processor, graph, self.processors,
-                    object_store, &mut stats_by_processor, &mut failed_products,
-                    &mut failed_messages, &mut first_error, &mut silenced_processors,
-                    timings, keep_going, self.display_opts, self.batch_size,
-                )?;
-            }
-
-            // Accumulate this product into the pending batch
-            pending_processor = Some(product.processor.clone());
-            pending_batch.push(PendingWork {
-                product_id: id,
-                cache_key,
-                input_checksum,
-            });
-        }
-
-        // Flush any remaining pending work
-        flush(
-            &mut pending_batch, &mut pending_processor, graph, self.processors,
-            object_store, &mut stats_by_processor, &mut failed_products,
-            &mut failed_messages, &mut first_error, &mut silenced_processors,
-            timings, keep_going, self.display_opts, self.batch_size,
-        )?;
-
-        // In non-keep-going mode, return the first error after giving
-        // independent products a chance to execute and be cached
-        if let Some(e) = first_error {
-            return Err(e);
-        }
-
-        // Build aggregated stats
-        let mut stats = BuildStats::default();
-        for (_, proc_stats) in stats_by_processor {
-            stats.add(proc_stats);
-        }
-        stats.failed_count = failed_products.len();
-        stats.failed_messages = failed_messages;
-
-        Ok(stats)
-    }
-
     /// Execute products in parallel where dependencies allow.
     /// Within each level, batch-supporting processors with multiple items
     /// are grouped and executed via execute_batch() in a single thread.
@@ -506,6 +101,16 @@ impl<'a> Executor<'a> {
     ) -> Result<BuildStats> {
         // Group products into levels that can run in parallel
         let levels = self.compute_parallel_levels(graph, order);
+
+        // Count total products per processor for progress display
+        let mut total_per_processor: HashMap<String, usize> = HashMap::new();
+        for &product_id in order {
+            let product = graph.get_product(product_id).unwrap();
+            *total_per_processor.entry(product.processor.clone()).or_insert(0) += 1;
+        }
+        let total_per_processor = Arc::new(total_per_processor);
+        let current_per_processor: Arc<Mutex<HashMap<String, usize>>> =
+            Arc::new(Mutex::new(HashMap::new()));
 
         let stats_by_processor: Arc<Mutex<HashMap<String, ProcessStats>>> =
             Arc::new(Mutex::new(HashMap::new()));
@@ -802,6 +407,8 @@ impl<'a> Executor<'a> {
                 if !non_batch_items.is_empty() {
                     let chunk_size = (non_batch_items.len() + self.parallel - 1) / self.parallel;
                     let chunks: Vec<_> = non_batch_items.chunks(chunk_size.max(1)).collect();
+                    let total_ref = &total_per_processor;
+                    let current_ref = &current_per_processor;
 
                     for chunk in chunks {
                         let stats_ref = Arc::clone(stats_ref);
@@ -809,6 +416,8 @@ impl<'a> Executor<'a> {
                         let failed_ref = Arc::clone(failed_ref);
                         let failed_msgs_ref = Arc::clone(failed_msgs_ref);
                         let failed_procs_ref = Arc::clone(failed_procs_ref);
+                        let total_ref = Arc::clone(total_ref);
+                        let current_ref = Arc::clone(current_ref);
 
                         s.spawn(move || {
                             for (id, input_checksum, needs_rebuild) in chunk {
@@ -868,10 +477,20 @@ impl<'a> Executor<'a> {
                                 }
 
                                 if let Some(processor) = self.processors.get(&product.processor) {
+                                    // Update progress counter
+                                    let current = {
+                                        let mut current_guard = current_ref.lock();
+                                        let c = current_guard.entry(product.processor.clone()).or_insert(0);
+                                        *c += 1;
+                                        *c
+                                    };
+                                    let total = total_ref.get(&product.processor).copied().unwrap_or(1);
+
                                     let variant_tag = product.variant.as_ref()
                                         .map(|v| format!(":{}", v))
                                         .unwrap_or_default();
-                                    println!("[{}{}] {} {}", product.processor, variant_tag,
+                                    println!("[{}{}] ({}/{}) {} {}", product.processor, variant_tag,
+                                        current, total,
                                         color::green("Processing:"),
                                         self.product_display(product));
 

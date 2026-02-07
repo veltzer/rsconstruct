@@ -41,7 +41,7 @@ fn cc_single_file_incremental_skip() {
     let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
-    assert!(stdout1.contains("[cc_single_file] Processing:"), "First build should process: {}", stdout1);
+    assert!(stdout1.contains("Processing:"), "First build should process: {}", stdout1);
 
     // Second build - should skip
     let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
@@ -91,7 +91,7 @@ fn cc_single_file_header_dependency() {
         String::from_utf8_lossy(&output2.stdout),
         String::from_utf8_lossy(&output2.stderr));
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
-    assert!(stdout2.contains("[cc_single_file] Processing:"),
+    assert!(stdout2.contains("Processing:"),
         "Should recompile after header change: {}", stdout2);
 }
 
@@ -189,7 +189,7 @@ fn cc_single_file_config_change_triggers_rebuild() {
         String::from_utf8_lossy(&output1.stdout),
         String::from_utf8_lossy(&output1.stderr));
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
-    assert!(stdout1.contains("[cc_single_file] Processing:"), "First build should process: {}", stdout1);
+    assert!(stdout1.contains("Processing:"), "First build should process: {}", stdout1);
 
     // Second build — should skip (nothing changed)
     let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
@@ -210,7 +210,7 @@ fn cc_single_file_config_change_triggers_rebuild() {
         String::from_utf8_lossy(&output3.stdout),
         String::from_utf8_lossy(&output3.stderr));
     let stdout3 = String::from_utf8_lossy(&output3.stdout);
-    assert!(stdout3.contains("[cc_single_file] Processing:"),
+    assert!(stdout3.contains("Processing:"),
         "Build after config change should reprocess, not skip: {}", stdout3);
 }
 
@@ -571,7 +571,7 @@ fn cc_single_file_direct_header_change_triggers_rebuild() {
         String::from_utf8_lossy(&output1.stdout),
         String::from_utf8_lossy(&output1.stderr));
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
-    assert!(stdout1.contains("[cc_single_file] Processing:"), "First build should process: {}", stdout1);
+    assert!(stdout1.contains("Processing:"), "First build should process: {}", stdout1);
 
     // Second build — should skip (nothing changed)
     let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
@@ -593,7 +593,7 @@ fn cc_single_file_direct_header_change_triggers_rebuild() {
         String::from_utf8_lossy(&output3.stdout),
         String::from_utf8_lossy(&output3.stderr));
     let stdout3 = String::from_utf8_lossy(&output3.stdout);
-    assert!(stdout3.contains("[cc_single_file] Processing:"),
+    assert!(stdout3.contains("Processing:"),
         "Should recompile after direct header change: {}", stdout3);
 
     // Verify the new value was compiled in (return 20 - 10 = 10, nonzero exit)
@@ -634,7 +634,7 @@ fn cc_single_file_indirect_header_change_triggers_rebuild() {
         String::from_utf8_lossy(&output1.stdout),
         String::from_utf8_lossy(&output1.stderr));
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
-    assert!(stdout1.contains("[cc_single_file] Processing:"), "First build should process: {}", stdout1);
+    assert!(stdout1.contains("Processing:"), "First build should process: {}", stdout1);
 
     // Verify exit code 0 (MIDDLE_VAL=6, 6-6=0)
     let run_output = Command::new(project_path.join("out/cc_single_file/main.elf"))
@@ -662,7 +662,7 @@ fn cc_single_file_indirect_header_change_triggers_rebuild() {
         String::from_utf8_lossy(&output3.stdout),
         String::from_utf8_lossy(&output3.stderr));
     let stdout3 = String::from_utf8_lossy(&output3.stdout);
-    assert!(stdout3.contains("[cc_single_file] Processing:"),
+    assert!(stdout3.contains("Processing:"),
         "Should recompile after indirect header change: {}", stdout3);
 
     // Verify the new value was compiled in (MIDDLE_VAL=101, 101-6=95, nonzero exit)
@@ -693,7 +693,7 @@ fn cc_single_file_new_include_triggers_dependency_recomputation() {
         String::from_utf8_lossy(&output1.stdout),
         String::from_utf8_lossy(&output1.stderr));
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
-    assert!(stdout1.contains("[cc_single_file] Processing:"), "First build should process: {}", stdout1);
+    assert!(stdout1.contains("Processing:"), "First build should process: {}", stdout1);
 
     // Step 2: Second build — should skip (nothing changed)
     let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
@@ -722,7 +722,7 @@ fn cc_single_file_new_include_triggers_dependency_recomputation() {
         String::from_utf8_lossy(&output3.stdout),
         String::from_utf8_lossy(&output3.stderr));
     let stdout3 = String::from_utf8_lossy(&output3.stdout);
-    assert!(stdout3.contains("[cc_single_file] Processing:"),
+    assert!(stdout3.contains("Processing:"),
         "Should recompile after source changed to add include: {}", stdout3);
 
     // Step 5: Build again — should skip (nothing changed)
@@ -747,7 +747,7 @@ fn cc_single_file_new_include_triggers_dependency_recomputation() {
         String::from_utf8_lossy(&output5.stdout),
         String::from_utf8_lossy(&output5.stderr));
     let stdout5 = String::from_utf8_lossy(&output5.stdout);
-    assert!(stdout5.contains("[cc_single_file] Processing:"),
+    assert!(stdout5.contains("Processing:"),
         "Should recompile after newly-tracked header changed: {}", stdout5);
 
     // Verify the new value was compiled in (NEW_VAL=99, 99-55=44, nonzero exit)
@@ -819,7 +819,7 @@ include_paths = ["include"]
         String::from_utf8_lossy(&output3.stdout),
         String::from_utf8_lossy(&output3.stderr));
     let stdout3 = String::from_utf8_lossy(&output3.stdout);
-    assert!(stdout3.contains("[cc_single_file] Processing:"),
+    assert!(stdout3.contains("Processing:"),
         "Should recompile after angle-bracket header change: {}", stdout3);
 }
 

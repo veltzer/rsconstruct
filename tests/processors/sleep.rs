@@ -20,7 +20,7 @@ fn sleep_processor() {
     let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "rsb build failed: {}", String::from_utf8_lossy(&output.stderr));
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("[sleep] Processing:"));
+    assert!(stdout.contains("Processing:"));
 
     // Checkers no longer create stub files - success is recorded in the cache database
     // Verify the cache db exists (proves the build completed and cached)
@@ -63,7 +63,7 @@ fn sleep_extra_inputs_valid() {
 
     // Checkers no longer create stub files - just verify build succeeded
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("[sleep] Processing:"), "Sleep should be processed");
+    assert!(stdout.contains("Processing:"), "Sleep should be processed");
 }
 
 #[test]

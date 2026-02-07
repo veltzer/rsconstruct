@@ -25,7 +25,7 @@ fn spellcheck_correct_spelling() {
 
     // Checkers no longer create stub files - success is recorded in cache database
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("[spellcheck] Processing:"),
+    assert!(stdout.contains("Processing:"),
         "Should process spellcheck: {}", stdout);
 }
 
@@ -104,7 +104,7 @@ fn spellcheck_incremental_skip() {
     let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
-    assert!(stdout1.contains("[spellcheck] Processing:"),
+    assert!(stdout1.contains("Processing:"),
         "First build should process: {}", stdout1);
 
     // Second build should skip

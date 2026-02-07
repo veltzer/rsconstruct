@@ -98,7 +98,7 @@ fn incremental_build() {
     let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
-    assert!(stdout1.contains("[tera] Processing:"));
+    assert!(stdout1.contains("Processing:"));
 
     // Second build (should skip unchanged tera - use verbose to see skip message)
     let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
@@ -183,7 +183,7 @@ fn extra_inputs_triggers_rebuild() {
         String::from_utf8_lossy(&output1.stdout),
         String::from_utf8_lossy(&output1.stderr));
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
-    assert!(stdout1.contains("[tera] Processing:"), "First build should process: {}", stdout1);
+    assert!(stdout1.contains("Processing:"), "First build should process: {}", stdout1);
 
     // Second build — should skip (nothing changed)
     let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
@@ -207,7 +207,7 @@ fn extra_inputs_triggers_rebuild() {
         String::from_utf8_lossy(&output3.stdout),
         String::from_utf8_lossy(&output3.stderr));
     let stdout3 = String::from_utf8_lossy(&output3.stdout);
-    assert!(stdout3.contains("[tera] Processing:"),
+    assert!(stdout3.contains("Processing:"),
         "Build after extra_input change should reprocess, not skip: {}", stdout3);
 
     // Verify the output reflects the new config
