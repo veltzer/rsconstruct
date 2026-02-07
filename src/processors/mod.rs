@@ -394,7 +394,7 @@ where
 
 // Re-export from subdirectories
 pub use checkers::{
-    CppcheckProcessor, MakeProcessor, PylintProcessor, RuffProcessor,
+    ClangTidyProcessor, CppcheckProcessor, MakeProcessor, PylintProcessor, RuffProcessor,
     ShellcheckProcessor, SleepProcessor, SpellcheckProcessor,
 };
 pub use generators::{CcProcessor, TeraProcessor};

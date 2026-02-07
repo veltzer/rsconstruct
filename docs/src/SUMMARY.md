@@ -15,6 +15,7 @@
     - [Pylint](processors/pylint.md)
     - [CC Single File](processors/cc.md)
     - [Cppcheck](processors/cppcheck.md)
+    - [Clang-Tidy](processors/clang_tidy.md)
     - [Spellcheck](processors/spellcheck.md)
     - [Sleep](processors/sleep.md)
     - [Make](processors/make.md)

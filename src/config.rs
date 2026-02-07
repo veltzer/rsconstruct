@@ -370,6 +370,8 @@ pub struct ProcessorConfig {
     #[serde(default)]
     pub cppcheck: CppcheckConfig,
     #[serde(default)]
+    pub clang_tidy: ClangTidyConfig,
+    #[serde(default)]
     pub spellcheck: SpellcheckConfig,
     #[serde(default)]
     pub shellcheck: ShellcheckConfig,
@@ -392,6 +394,7 @@ impl Default for ProcessorConfig {
             pylint: PylintConfig::default(),
             cc_single_file: CcConfig::default(),
             cppcheck: CppcheckConfig::default(),
+            clang_tidy: ClangTidyConfig::default(),
             shellcheck: ShellcheckConfig::default(),
             spellcheck: SpellcheckConfig::default(),
             sleep: SleepConfig::default(),
@@ -415,6 +418,7 @@ impl ProcessorConfig {
         self.pylint.scan.resolve("", &[".py"], PYTHON_EXCLUDE_DIRS);
         self.cc_single_file.scan.resolve("src", &[".c", ".cc"], &[]);
         self.cppcheck.scan.resolve("src", &[".c", ".cc"], CC_EXCLUDE_DIRS);
+        self.clang_tidy.scan.resolve("src", &[".c", ".cc"], CC_EXCLUDE_DIRS);
         self.shellcheck.scan.resolve("", &[".sh", ".bash"], SHELL_EXCLUDE_DIRS);
         self.spellcheck.scan.resolve("", &[".md"], SPELLCHECK_EXCLUDE_DIRS);
         self.sleep.scan.resolve("sleep", &[".sleep"], &[]);
@@ -533,6 +537,35 @@ impl Default for CppcheckConfig {
     fn default() -> Self {
         Self {
             args: default_cppcheck_args(),
+            extra_inputs: Vec::new(),
+            scan: ScanConfig {
+                scan_dir: Some("src".into()),
+                extensions: Some(vec![".c".into(), ".cc".into()]),
+                exclude_dirs: None,
+                exclude_files: None,
+                exclude_paths: None,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ClangTidyConfig {
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub compiler_args: Vec<String>,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for ClangTidyConfig {
+    fn default() -> Self {
+        Self {
+            args: Vec::new(),
+            compiler_args: Vec::new(),
             extra_inputs: Vec::new(),
             scan: ScanConfig {
                 scan_dir: Some("src".into()),

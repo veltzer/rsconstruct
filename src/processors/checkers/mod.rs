@@ -1,3 +1,4 @@
+mod clang_tidy;
 mod cppcheck;
 mod make;
 mod pylint;
@@ -6,6 +7,7 @@ mod shellcheck;
 mod sleep;
 mod spellcheck;
 
+pub use clang_tidy::ClangTidyProcessor;
 pub use cppcheck::CppcheckProcessor;
 pub use make::MakeProcessor;
 pub use pylint::PylintProcessor;
