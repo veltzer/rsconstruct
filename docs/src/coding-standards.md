@@ -25,6 +25,13 @@ Tests for the `sleep` processor must be named `sleep_processor`,
 All `println!` output must start at column 0. Never prefix output with spaces
 or tabs for visual indentation unless when printing some data with structure.
 
+## Suppress tool output on success
+
+External tool output (compilers, linters, etc.) must be captured and only
+shown when a command fails. On success, only rsb's own status messages appear.
+Users who want to always see tool output can use `--show-output`. This keeps
+build output clean while still showing errors when something goes wrong.
+
 ## Never hard-code counts of dynamic sets
 
 Documentation and code must never state the number of processors, commands,
