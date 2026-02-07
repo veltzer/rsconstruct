@@ -198,7 +198,7 @@ impl SpellcheckProcessor {
         if !misspelled.is_empty() {
             misspelled.sort();
             return Err(anyhow::anyhow!(
-                "Spelling errors in {}:\n  {}",
+                "Spelling errors in {}: {}",
                 doc_file.display(),
                 misspelled.join(", ")
             ));

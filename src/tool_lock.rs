@@ -208,10 +208,7 @@ pub fn verify_lock_file(
         let locked = match lock.tools.get(tool_name) {
             Some(l) => l,
             None => {
-                mismatches.push(format!(
-                    "  {} — not in lock file (new tool?)",
-                    tool_name
-                ));
+                mismatches.push(format!("{} — not in lock file (new tool?)", tool_name));
                 continue;
             }
         };
@@ -220,21 +217,21 @@ pub fn verify_lock_file(
         let current = match query_tool_version(tool_name, version_args) {
             Ok(c) => c,
             Err(e) => {
-                mismatches.push(format!("  {} — {}", tool_name, e));
+                mismatches.push(format!("{} — {}", tool_name, e));
                 continue;
             }
         };
 
         if current.version_output != locked.version_output {
             mismatches.push(format!(
-                "  {} — version changed\n    locked:  {}\n    current: {}",
+                "{} — version changed (locked: {}, current: {})",
                 tool_name,
                 locked.version_output.lines().next().unwrap_or(""),
                 current.version_output.lines().next().unwrap_or(""),
             ));
         } else if current.path != locked.path {
             mismatches.push(format!(
-                "  {} — path changed\n    locked:  {}\n    current: {}",
+                "{} — path changed (locked: {}, current: {})",
                 tool_name, locked.path, current.path,
             ));
         }
@@ -243,10 +240,7 @@ pub fn verify_lock_file(
     // Check for tools in lock file that are no longer required
     for tool_name in lock.tools.keys() {
         if !tool_commands.iter().any(|(name, _)| name == tool_name) {
-            mismatches.push(format!(
-                "  {} — in lock file but no longer required",
-                tool_name
-            ));
+            mismatches.push(format!("{} — in lock file but no longer required", tool_name));
         }
     }
 

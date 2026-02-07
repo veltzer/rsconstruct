@@ -551,11 +551,11 @@ impl ObjectStore {
         for (key, old_val) in &old_map {
             match new_map.get(key) {
                 None => {
-                    lines.push(color::red(&format!("  - {}: {}", key, old_val)));
+                    lines.push(color::red(&format!("- {}: {}", key, old_val)));
                 }
                 Some(new_val) if new_val != old_val => {
-                    lines.push(color::red(&format!("  - {}: {}", key, old_val)));
-                    lines.push(color::green(&format!("  + {}: {}", key, new_val)));
+                    lines.push(color::red(&format!("- {}: {}", key, old_val)));
+                    lines.push(color::green(&format!("+ {}: {}", key, new_val)));
                 }
                 _ => {}
             }
@@ -564,7 +564,7 @@ impl ObjectStore {
         // Find added keys
         for (key, new_val) in &new_map {
             if !old_map.contains_key(key) {
-                lines.push(color::green(&format!("  + {}: {}", key, new_val)));
+                lines.push(color::green(&format!("+ {}: {}", key, new_val)));
             }
         }
 
