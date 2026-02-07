@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
+use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 
 use crate::color;
 use crate::config::RestoreMethod;
@@ -27,21 +28,21 @@ fn walk_files(dir: &Path) -> Vec<PathBuf> {
 
 const RSB_DIR: &str = ".rsb";
 const OBJECTS_DIR: &str = "objects";
-const DB_DIR: &str = "db";
-const CONFIGS_TREE: &str = "processor_configs";
+const DB_FILE: &str = "db.redb";
+
+const CACHE_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("cache");
+const CONFIGS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("processor_configs");
 
 /// Object store for caching build outputs
 /// Uses git-like object storage: .rsb/objects/[2 chars]/[rest of hash]
-/// Index is stored in a sled embedded key/value database at .rsb/db/
+/// Index is stored in a redb embedded key/value database at .rsb/db.redb
 pub struct ObjectStore {
     /// Path to .rsb directory
     rsb_dir: PathBuf,
     /// Path to objects directory
     objects_dir: PathBuf,
-    /// sled database for cache index
-    db: sled::Db,
-    /// Separate tree for storing processor configs (for config change detection)
-    configs_tree: sled::Tree,
+    /// redb database for cache index
+    db: Database,
     /// Method to restore files from cache
     restore_method: RestoreMethod,
     /// Optional remote cache backend
@@ -95,42 +96,27 @@ impl ObjectStore {
     ) -> Result<Self> {
         let rsb_dir = PathBuf::from(RSB_DIR);
         let objects_dir = rsb_dir.join(OBJECTS_DIR);
-        let db_path = rsb_dir.join(DB_DIR);
+        let db_path = rsb_dir.join(DB_FILE);
 
         // Ensure .rsb directory exists
         fs::create_dir_all(&rsb_dir)
             .context("Failed to create .rsb directory")?;
 
-        // Open sled database, with retry after removing stale lock
-        let db = match sled::open(&db_path) {
+        // Open redb database, with delete-and-retry on corruption
+        let db = match Database::create(&db_path) {
             Ok(db) => db,
-            Err(e) => {
-                // Check if it's a lock error (WouldBlock)
-                let err_str = e.to_string();
-                if err_str.contains("WouldBlock") || err_str.contains("lock") {
-                    // Remove stale lock file and retry
-                    let lock_file = db_path.join("db");
-                    if lock_file.exists() {
-                        eprintln!("Warning: Removing stale database lock file");
-                        let _ = fs::remove_file(&lock_file);
-                    }
-                    sled::open(&db_path)
-                        .context("Failed to open cache database after removing stale lock")?
-                } else {
-                    return Err(e).context("Failed to open cache database");
-                }
+            Err(_) => {
+                eprintln!("Warning: Cache database corrupted, recreating");
+                let _ = fs::remove_file(&db_path);
+                Database::create(&db_path)
+                    .context("Failed to create cache database")?
             }
         };
-
-        // Open separate tree for processor configs
-        let configs_tree = db.open_tree(CONFIGS_TREE)
-            .context("Failed to open configs tree")?;
 
         Ok(Self {
             rsb_dir,
             objects_dir,
             db,
-            configs_tree,
             restore_method,
             remote,
             remote_push,
@@ -140,17 +126,26 @@ impl ObjectStore {
 
     /// Get a cache entry from the database
     fn get_entry(&self, cache_key: &str) -> Option<CacheEntry> {
-        self.db.get(cache_key.as_bytes()).ok().flatten().and_then(|bytes| {
-            serde_json::from_slice(&bytes).ok()
-        })
+        let read_txn = self.db.begin_read().ok()?;
+        let table = read_txn.open_table(CACHE_TABLE).ok()?;
+        let data = table.get(cache_key).ok()??;
+        serde_json::from_slice(data.value()).ok()
     }
 
     /// Insert a cache entry into the database
     fn insert_entry(&self, cache_key: &str, entry: &CacheEntry) -> Result<()> {
         let value = serde_json::to_vec(entry)
             .context("Failed to serialize cache entry")?;
-        self.db.insert(cache_key.as_bytes(), value)
-            .context("Failed to insert cache entry")?;
+        let write_txn = self.db.begin_write()
+            .context("Failed to begin write transaction")?;
+        {
+            let mut table = write_txn.open_table(CACHE_TABLE)
+                .context("Failed to open cache table")?;
+            table.insert(cache_key, value.as_slice())
+                .context("Failed to insert cache entry")?;
+        }
+        write_txn.commit()
+            .context("Failed to commit cache entry")?;
         Ok(())
     }
 
@@ -510,16 +505,33 @@ impl ObjectStore {
     /// Store a processor's config JSON for later comparison.
     /// Returns the previous config if it existed and was different.
     pub fn store_processor_config(&self, processor: &str, config_json: &str) -> Result<Option<String>> {
-        let key = processor.as_bytes();
-        let old_value = self.configs_tree.get(key)
-            .context("Failed to read processor config")?
-            .and_then(|bytes| String::from_utf8(bytes.to_vec()).ok());
+        // Read old value
+        let old_value = {
+            let read_txn = self.db.begin_read()
+                .context("Failed to begin read transaction")?;
+            match read_txn.open_table(CONFIGS_TABLE) {
+                Ok(table) => {
+                    table.get(processor).ok()
+                        .flatten()
+                        .and_then(|bytes| String::from_utf8(bytes.value().to_vec()).ok())
+                }
+                Err(_) => None,
+            }
+        };
 
         // Only update if changed
         let changed = old_value.as_ref() != Some(&config_json.to_string());
         if changed {
-            self.configs_tree.insert(key, config_json.as_bytes())
-                .context("Failed to store processor config")?;
+            let write_txn = self.db.begin_write()
+                .context("Failed to begin write transaction")?;
+            {
+                let mut table = write_txn.open_table(CONFIGS_TABLE)
+                    .context("Failed to open configs table")?;
+                table.insert(processor, config_json.as_bytes())
+                    .context("Failed to store processor config")?;
+            }
+            write_txn.commit()
+                .context("Failed to commit processor config")?;
         }
 
         // Return old value only if it was different
@@ -609,10 +621,8 @@ impl ObjectStore {
         map
     }
 
-    /// Save the index to disk (flush sled)
+    /// Save the index to disk (no-op for redb — commits are per-transaction)
     pub fn save(&self) -> Result<()> {
-        self.db.flush()
-            .context("Failed to flush cache database")?;
         Ok(())
     }
 
@@ -623,14 +633,22 @@ impl ObjectStore {
 
     /// Clear the entire cache
     pub fn clear(&mut self) -> Result<()> {
-        // Drop the database before removing the directory
-        // We need to reopen after clearing
-        drop(std::mem::replace(&mut self.db, sled::Config::new().temporary(true).open().unwrap()));
+        // Drop the database before removing the directory.
+        // Create a temporary database to replace the current one
+        let temp_dir = std::env::temp_dir().join(format!("rsb_temp_{}", std::process::id()));
+        fs::create_dir_all(&temp_dir)?;
+        let temp_db_path = temp_dir.join("temp.redb");
+        let temp_db = Database::create(&temp_db_path)
+            .context("Failed to create temporary database")?;
+        self.db = temp_db;
 
         if self.rsb_dir.exists() {
             fs::remove_dir_all(&self.rsb_dir)
                 .context("Failed to remove .rsb directory")?;
         }
+
+        // Clean up temp dir
+        let _ = fs::remove_dir_all(&temp_dir);
 
         Ok(())
     }
@@ -665,11 +683,19 @@ impl ObjectStore {
 
         // Collect all referenced checksums
         let mut referenced: std::collections::HashSet<String> = std::collections::HashSet::new();
-        for result in self.db.iter() {
-            let (_, value) = result.context("Failed to read cache entry during trim")?;
-            if let Ok(entry) = serde_json::from_slice::<CacheEntry>(&value) {
-                for output in &entry.outputs {
-                    referenced.insert(output.checksum.clone());
+        {
+            let read_txn = self.db.begin_read()
+                .context("Failed to begin read transaction for trim")?;
+            if let Ok(table) = read_txn.open_table(CACHE_TABLE) {
+                if let Ok(iter) = table.iter() {
+                    for result in iter {
+                        let (_, value) = result.context("Failed to read cache entry during trim")?;
+                        if let Ok(entry) = serde_json::from_slice::<CacheEntry>(value.value()) {
+                            for output in &entry.outputs {
+                                referenced.insert(output.checksum.clone());
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -709,21 +735,44 @@ impl ObjectStore {
     /// Returns the number of entries removed.
     pub fn remove_stale(&self, valid_keys: &std::collections::HashSet<String>) -> usize {
         let mut count = 0;
-        let mut stale_keys: Vec<Vec<u8>> = Vec::new();
 
-        for result in self.db.iter() {
-            if let Ok((key, _)) = result {
-                if let Ok(key_str) = std::str::from_utf8(&key) {
-                    if !valid_keys.contains(key_str) {
-                        stale_keys.push(key.to_vec());
+        // First, collect stale keys
+        let stale_keys: Vec<String> = {
+            let read_txn = match self.db.begin_read() {
+                Ok(t) => t,
+                Err(_) => return 0,
+            };
+            let table = match read_txn.open_table(CACHE_TABLE) {
+                Ok(t) => t,
+                Err(_) => return 0,
+            };
+            let iter = match table.iter() {
+                Ok(i) => i,
+                Err(_) => return 0,
+            };
+            iter.filter_map(|result| {
+                let (key, _) = result.ok()?;
+                let key_str = key.value().to_string();
+                if !valid_keys.contains(&key_str) {
+                    Some(key_str)
+                } else {
+                    None
+                }
+            })
+            .collect()
+        };
+
+        // Then remove them in a write transaction
+        if !stale_keys.is_empty() {
+            if let Ok(write_txn) = self.db.begin_write() {
+                if let Ok(mut table) = write_txn.open_table(CACHE_TABLE) {
+                    for key in &stale_keys {
+                        if table.remove(key.as_str()).is_ok() {
+                            count += 1;
+                        }
                     }
                 }
-            }
-        }
-
-        for key in stale_keys {
-            if self.db.remove(&key).is_ok() {
-                count += 1;
+                let _ = write_txn.commit();
             }
         }
 
@@ -732,11 +781,23 @@ impl ObjectStore {
 
     /// List all cache entries with their status
     pub fn list(&self) -> Vec<CacheListEntry> {
-        let mut entries: Vec<CacheListEntry> = self.db.iter()
+        let read_txn = match self.db.begin_read() {
+            Ok(t) => t,
+            Err(_) => return Vec::new(),
+        };
+        let table = match read_txn.open_table(CACHE_TABLE) {
+            Ok(t) => t,
+            Err(_) => return Vec::new(),
+        };
+        let iter = match table.iter() {
+            Ok(i) => i,
+            Err(_) => return Vec::new(),
+        };
+        let mut entries: Vec<CacheListEntry> = iter
             .filter_map(|result| {
                 let (key, value) = result.ok()?;
-                let key_str = std::str::from_utf8(&key).ok()?.to_string();
-                let entry: CacheEntry = serde_json::from_slice(&value).ok()?;
+                let key_str = key.value().to_string();
+                let entry: CacheEntry = serde_json::from_slice(value.value()).ok()?;
                 let outputs = entry.outputs.iter().map(|o| {
                     CacheListOutput {
                         path: o.path.clone(),

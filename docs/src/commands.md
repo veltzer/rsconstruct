@@ -143,7 +143,7 @@ python: 8 files, 12 dependencies
 Total: 23 files, 54 dependencies
 ```
 
-Note: This command reads directly from the dependency cache (`.rsb/deps/`). If the cache is empty, run a build first to populate it.
+Note: This command reads directly from the dependency cache (`.rsb/deps.redb`). If the cache is empty, run a build first to populate it.
 
 This command is useful for:
 - Debugging why a file is being rebuilt

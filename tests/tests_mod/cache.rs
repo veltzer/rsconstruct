@@ -21,7 +21,7 @@ fn cache_operations() {
     let output = run_rsb(project_path, &["build"]);
     assert!(output.status.success());
     assert!(project_path.join("cached.txt").exists());
-    assert!(project_path.join(".rsb/db").exists());
+    assert!(project_path.join(".rsb/db.redb").exists());
     assert!(project_path.join(".rsb/objects").exists());
 
     // Check cache size reports objects

@@ -115,8 +115,8 @@ Processor configuration (compiler flags, linter arguments, etc.) is hashed into 
 
 The cache lives in `.rsb/` and consists of:
 
-- `db/` — sled database storing the object store index (maps product hashes to cached outputs)
+- `db.redb` — redb database storing the object store index (maps product hashes to cached outputs)
 - `objects/` — stored build artifacts (addressed by content hash)
-- `deps/` — sled database storing source file dependencies (see [Dependency Caching](dependency-caching.md))
+- `deps.redb` — redb database storing source file dependencies (see [Dependency Caching](dependency-caching.md))
 
 Cache restoration can use either hardlinks (fast, same filesystem) or copies (works across filesystems), configured via `restore_method`.

@@ -23,7 +23,7 @@ fn clean_command() {
 
     // Verify files exist
     assert!(project_path.join("cleanme.txt").exists());
-    assert!(project_path.join(".rsb/db").exists());
+    assert!(project_path.join(".rsb/db.redb").exists());
 
     // Clean
     let clean_output = run_rsb(project_path, &["clean", "outputs"]);

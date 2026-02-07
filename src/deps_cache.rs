@@ -1,6 +1,6 @@
 //! Dependency cache for storing source file dependencies.
 //!
-//! Uses a sled key/value store to cache dependency information discovered
+//! Uses a redb key/value store to cache dependency information discovered
 //! from source files. This avoids re-scanning files that haven't changed.
 //!
 //! Cache key: source file path
@@ -9,13 +9,16 @@
 //! The cache is invalidated when the source file's checksum changes.
 
 use anyhow::{Context, Result};
+use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 const RSB_DIR: &str = ".rsb";
-const DEPS_DB_DIR: &str = "deps";
+const DEPS_DB_FILE: &str = "deps.redb";
+
+const DEPS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("deps");
 
 /// Cached dependency entry
 #[derive(Debug, Serialize, Deserialize)]
@@ -34,13 +37,13 @@ struct DepsEntry {
 pub struct DepsCacheStats {
     /// Number of cache hits
     pub hits: usize,
-    /// Number of cache misses (recalculated)
+    /// Number of cache misses
     pub misses: usize,
 }
 
-/// Dependency cache using sled key/value store
+/// Dependency cache using redb key/value store
 pub struct DepsCache {
-    db: sled::Db,
+    db: Database,
     stats: DepsCacheStats,
 }
 
@@ -48,30 +51,20 @@ impl DepsCache {
     /// Open or create the dependency cache
     pub fn open() -> Result<Self> {
         let rsb_dir = PathBuf::from(RSB_DIR);
-        let db_path = rsb_dir.join(DEPS_DB_DIR);
+        let db_path = rsb_dir.join(DEPS_DB_FILE);
 
         // Ensure .rsb directory exists
         fs::create_dir_all(&rsb_dir)
             .context("Failed to create .rsb directory")?;
 
-        // Open sled database, with retry after removing stale lock
-        let db = match sled::open(&db_path) {
+        // Open redb database, with delete-and-retry on corruption
+        let db = match Database::create(&db_path) {
             Ok(db) => db,
-            Err(e) => {
-                // Check if it's a lock error (WouldBlock)
-                let err_str = e.to_string();
-                if err_str.contains("WouldBlock") || err_str.contains("lock") {
-                    // Remove stale lock file and retry
-                    let lock_file = db_path.join("db");
-                    if lock_file.exists() {
-                        eprintln!("Warning: Removing stale database lock file");
-                        let _ = fs::remove_file(&lock_file);
-                    }
-                    sled::open(&db_path)
-                        .context("Failed to open dependency cache database after removing stale lock")?
-                } else {
-                    return Err(e).context("Failed to open dependency cache database");
-                }
+            Err(_) => {
+                eprintln!("Warning: Dependency cache corrupted, recreating");
+                let _ = fs::remove_file(&db_path);
+                Database::create(&db_path)
+                    .context("Failed to create dependency cache database")?
             }
         };
 
@@ -85,14 +78,16 @@ impl DepsCache {
         let key = path_to_key(source);
 
         // Get cached entry
-        let data = match self.db.get(&key).ok()? {
+        let read_txn = self.db.begin_read().ok()?;
+        let table = read_txn.open_table(DEPS_TABLE).ok()?;
+        let data = match table.get(key.as_str()).ok()? {
             Some(d) => d,
             None => {
                 self.stats.misses += 1;
                 return None;
             }
         };
-        let entry: DepsEntry = match serde_json::from_slice(&data) {
+        let entry: DepsEntry = match serde_json::from_slice(data.value()) {
             Ok(e) => e,
             Err(_) => {
                 self.stats.misses += 1;
@@ -145,16 +140,22 @@ impl DepsCache {
         let data = serde_json::to_vec(&entry)
             .context("Failed to serialize dependency entry")?;
 
-        self.db.insert(&key, data)
-            .context("Failed to write to dependency cache")?;
+        let write_txn = self.db.begin_write()
+            .context("Failed to begin write transaction")?;
+        {
+            let mut table = write_txn.open_table(DEPS_TABLE)
+                .context("Failed to open deps table")?;
+            table.insert(key.as_str(), data.as_slice())
+                .context("Failed to write to dependency cache")?;
+        }
+        write_txn.commit()
+            .context("Failed to commit dependency cache write")?;
 
         Ok(())
     }
 
-    /// Flush the cache to disk
+    /// Flush the cache to disk (no-op for redb — commits are per-transaction)
     pub fn flush(&self) -> Result<()> {
-        self.db.flush()
-            .context("Failed to flush dependency cache")?;
         Ok(())
     }
 
@@ -166,8 +167,11 @@ impl DepsCache {
     /// Clear all cached dependencies
     #[allow(dead_code)]
     pub fn clear(&self) -> Result<()> {
-        self.db.clear()
-            .context("Failed to clear dependency cache")?;
+        let write_txn = self.db.begin_write()
+            .context("Failed to begin write transaction")?;
+        let _ = write_txn.delete_table(DEPS_TABLE);
+        write_txn.commit()
+            .context("Failed to commit dependency cache clear")?;
         Ok(())
     }
 
@@ -176,8 +180,10 @@ impl DepsCache {
     /// Returns (dependencies, analyzer_name).
     pub fn get_raw(&self, source: &Path) -> Option<(Vec<PathBuf>, String)> {
         let key = path_to_key(source);
-        let data = self.db.get(&key).ok()??;
-        let entry: DepsEntry = serde_json::from_slice(&data).ok()?;
+        let read_txn = self.db.begin_read().ok()?;
+        let table = read_txn.open_table(DEPS_TABLE).ok()?;
+        let data = table.get(key.as_str()).ok()??;
+        let entry: DepsEntry = serde_json::from_slice(data.value()).ok()?;
         Some((
             entry.dependencies.iter().map(PathBuf::from).collect(),
             entry.analyzer,
@@ -187,24 +193,47 @@ impl DepsCache {
     /// List all cached source files and their dependencies.
     /// Returns tuples of (source_path, dependencies, analyzer_name).
     pub fn list_all(&self) -> Vec<(PathBuf, Vec<PathBuf>, String)> {
-        self.db.iter()
-            .filter_map(|item| {
-                let (key, value) = item.ok()?;
-                let source = PathBuf::from(String::from_utf8(key.to_vec()).ok()?);
-                let entry: DepsEntry = serde_json::from_slice(&value).ok()?;
-                let deps: Vec<PathBuf> = entry.dependencies.iter().map(PathBuf::from).collect();
-                Some((source, deps, entry.analyzer))
-            })
-            .collect()
+        let read_txn = match self.db.begin_read() {
+            Ok(t) => t,
+            Err(_) => return Vec::new(),
+        };
+        let table = match read_txn.open_table(DEPS_TABLE) {
+            Ok(t) => t,
+            Err(_) => return Vec::new(),
+        };
+        let iter = match table.iter() {
+            Ok(i) => i,
+            Err(_) => return Vec::new(),
+        };
+        iter.filter_map(|item| {
+            let (key, value) = item.ok()?;
+            let source = PathBuf::from(key.value().to_string());
+            let entry: DepsEntry = serde_json::from_slice(value.value()).ok()?;
+            let deps: Vec<PathBuf> = entry.dependencies.iter().map(PathBuf::from).collect();
+            Some((source, deps, entry.analyzer))
+        })
+        .collect()
     }
 
     /// Get statistics about cached dependencies by analyzer.
     /// Returns a map of analyzer_name -> (file_count, total_dep_count).
     pub fn stats_by_analyzer(&self) -> std::collections::HashMap<String, (usize, usize)> {
         let mut stats: std::collections::HashMap<String, (usize, usize)> = std::collections::HashMap::new();
-        for item in self.db.iter() {
+        let read_txn = match self.db.begin_read() {
+            Ok(t) => t,
+            Err(_) => return stats,
+        };
+        let table = match read_txn.open_table(DEPS_TABLE) {
+            Ok(t) => t,
+            Err(_) => return stats,
+        };
+        let iter = match table.iter() {
+            Ok(i) => i,
+            Err(_) => return stats,
+        };
+        for item in iter {
             if let Ok((_, value)) = item {
-                if let Ok(entry) = serde_json::from_slice::<DepsEntry>(&value) {
+                if let Ok(entry) = serde_json::from_slice::<DepsEntry>(value.value()) {
                     let analyzer = if entry.analyzer.is_empty() { "unknown".to_string() } else { entry.analyzer };
                     let (files, deps) = stats.entry(analyzer).or_insert((0, 0));
                     *files += 1;
@@ -218,40 +247,71 @@ impl DepsCache {
     /// List cached source files and their dependencies filtered by analyzer names.
     /// Returns tuples of (source_path, dependencies, analyzer_name).
     pub fn list_by_analyzers(&self, analyzers: &[String]) -> Vec<(PathBuf, Vec<PathBuf>, String)> {
-        self.db.iter()
-            .filter_map(|item| {
-                let (key, value) = item.ok()?;
-                let source = PathBuf::from(String::from_utf8(key.to_vec()).ok()?);
-                let entry: DepsEntry = serde_json::from_slice(&value).ok()?;
-                if !analyzers.contains(&entry.analyzer) {
-                    return None;
-                }
-                let deps: Vec<PathBuf> = entry.dependencies.iter().map(PathBuf::from).collect();
-                Some((source, deps, entry.analyzer))
-            })
-            .collect()
+        let read_txn = match self.db.begin_read() {
+            Ok(t) => t,
+            Err(_) => return Vec::new(),
+        };
+        let table = match read_txn.open_table(DEPS_TABLE) {
+            Ok(t) => t,
+            Err(_) => return Vec::new(),
+        };
+        let iter = match table.iter() {
+            Ok(i) => i,
+            Err(_) => return Vec::new(),
+        };
+        iter.filter_map(|item| {
+            let (key, value) = item.ok()?;
+            let source = PathBuf::from(key.value().to_string());
+            let entry: DepsEntry = serde_json::from_slice(value.value()).ok()?;
+            if !analyzers.contains(&entry.analyzer) {
+                return None;
+            }
+            let deps: Vec<PathBuf> = entry.dependencies.iter().map(PathBuf::from).collect();
+            Some((source, deps, entry.analyzer))
+        })
+        .collect()
     }
 
     /// Remove all cached entries created by a specific analyzer.
     /// Returns the number of entries removed.
     pub fn remove_by_analyzer(&self, analyzer: &str) -> Result<usize> {
-        let mut removed = 0;
-        let mut keys_to_remove = Vec::new();
+        // First, collect keys to remove by reading
+        let keys_to_remove: Vec<String> = {
+            let read_txn = self.db.begin_read()
+                .context("Failed to begin read transaction")?;
+            let table = match read_txn.open_table(DEPS_TABLE) {
+                Ok(t) => t,
+                Err(_) => return Ok(0),
+            };
+            let iter = table.iter()
+                .context("Failed to iterate dependency cache")?;
+            iter.filter_map(|item| {
+                let (key, value) = item.ok()?;
+                let entry: DepsEntry = serde_json::from_slice(value.value()).ok()?;
+                if entry.analyzer == analyzer {
+                    Some(key.value().to_string())
+                } else {
+                    None
+                }
+            })
+            .collect()
+        };
 
-        for item in self.db.iter() {
-            if let Ok((key, value)) = item {
-                if let Ok(entry) = serde_json::from_slice::<DepsEntry>(&value) {
-                    if entry.analyzer == analyzer {
-                        keys_to_remove.push(key);
+        let mut removed = 0;
+        if !keys_to_remove.is_empty() {
+            let write_txn = self.db.begin_write()
+                .context("Failed to begin write transaction")?;
+            {
+                let mut table = write_txn.open_table(DEPS_TABLE)
+                    .context("Failed to open deps table")?;
+                for key in &keys_to_remove {
+                    if table.remove(key.as_str()).is_ok() {
+                        removed += 1;
                     }
                 }
             }
-        }
-
-        for key in keys_to_remove {
-            if self.db.remove(&key).is_ok() {
-                removed += 1;
-            }
+            write_txn.commit()
+                .context("Failed to commit dependency cache removal")?;
         }
 
         Ok(removed)
@@ -259,8 +319,8 @@ impl DepsCache {
 }
 
 /// Convert a path to a cache key
-fn path_to_key(path: &Path) -> Vec<u8> {
-    path.display().to_string().into_bytes()
+fn path_to_key(path: &Path) -> String {
+    path.display().to_string()
 }
 
 /// Compute SHA-256 checksum of a file

@@ -24,7 +24,7 @@ fn sleep_processor() {
 
     // Checkers no longer create stub files - success is recorded in the cache database
     // Verify the cache db exists (proves the build completed and cached)
-    assert!(project_path.join(".rsb/db").exists(), "Cache database should exist after build");
+    assert!(project_path.join(".rsb/db.redb").exists(), "Cache database should exist after build");
 
     // Second build should skip (incremental)
     let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);

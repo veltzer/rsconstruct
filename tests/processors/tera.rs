@@ -107,7 +107,7 @@ fn incremental_build() {
     assert!(stdout2.contains("[tera] Skipping (unchanged):"));
 
     // Verify cache directory exists
-    assert!(project_path.join(".rsb/db").exists());
+    assert!(project_path.join(".rsb/db.redb").exists());
 }
 
 #[test]

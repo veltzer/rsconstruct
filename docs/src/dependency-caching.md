@@ -6,7 +6,7 @@ RSB includes a dependency cache that stores source file dependencies (e.g., C/C+
 
 When processors like `cc_single_file` discover products, they need to scan source files to find dependencies (header files). This scanning can be slow for large projects. The dependency cache stores the results so subsequent builds can skip the scanning step.
 
-The cache is stored in `.rsb/deps/` using [sled](https://github.com/spacejam/sled), an embedded key-value database.
+The cache is stored in `.rsb/deps.redb` using [redb](https://github.com/cberner/redb), an embedded key-value database.
 
 ## Cache Structure
 
@@ -97,7 +97,7 @@ The cache automatically invalidates entries when:
 - The source file content changes (checksum mismatch)
 - Any cached dependency file no longer exists
 
-You can manually clear the entire dependency cache by removing the `.rsb/deps/` directory, or by running `rsb clean all` which removes the entire `.rsb/` directory.
+You can manually clear the entire dependency cache by removing the `.rsb/deps.redb` file, or by running `rsb clean all` which removes the entire `.rsb/` directory.
 
 ## Processors Using Dependency Caching
 
@@ -111,7 +111,7 @@ The dependency cache is implemented in `src/deps_cache.rs`:
 
 ```rust
 pub struct DepsCache {
-    db: sled::Db,
+    db: redb::Database,
     stats: DepsCacheStats,
 }
 

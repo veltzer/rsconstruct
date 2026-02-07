@@ -98,7 +98,7 @@ This is similar to how processors work.
 
 ## Caching
 
-Analyzer results are cached in the dependency cache (`.rsb/deps/`). On subsequent builds:
+Analyzer results are cached in the dependency cache (`.rsb/deps.redb`). On subsequent builds:
 - If a source file hasn't changed, its cached dependencies are used
 - If a source file has changed, dependencies are re-scanned
 - The cache is shared across all analyzers
