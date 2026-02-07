@@ -25,23 +25,8 @@ impl ShellcheckProcessor {
         scan_root(&self.config.scan).as_os_str().is_empty() || scan_root(&self.config.scan).exists()
     }
 
-    /// Run shellcheck on a single file
-    fn check_file(&self, source_file: &Path) -> Result<()> {
-        let mut cmd = Command::new(&self.config.checker);
-
-        for arg in &self.config.args {
-            cmd.arg(arg);
-        }
-
-        cmd.arg(source_file);
-        cmd.current_dir(&self.project_root);
-
-        let output = run_command(&mut cmd)?;
-        check_command_output(&output, "shellcheck")
-    }
-
-    /// Run shellcheck on multiple files in a single invocation
-    fn check_files_batch(&self, files: &[&Path]) -> Result<()> {
+    /// Run shellcheck on one or more files
+    fn check_files(&self, files: &[&Path]) -> Result<()> {
         let mut cmd = Command::new(&self.config.checker);
 
         for arg in &self.config.args {
@@ -54,7 +39,7 @@ impl ShellcheckProcessor {
         cmd.current_dir(&self.project_root);
 
         let output = run_command(&mut cmd)?;
-        check_command_output(&output, "shellcheck batch")
+        check_command_output(&output, "shellcheck")
     }
 }
 
@@ -86,7 +71,7 @@ impl ProductDiscovery for ShellcheckProcessor {
     }
 
     fn execute(&self, product: &Product) -> Result<()> {
-        self.check_file(&product.inputs[0])
+        self.check_files(&[product.inputs[0].as_path()])
     }
 
     fn supports_batch(&self) -> bool {
@@ -96,7 +81,7 @@ impl ProductDiscovery for ShellcheckProcessor {
     fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
         execute_checker_batch(
             products,
-            |files| self.check_files_batch(files),
+            |files| self.check_files(files),
         )
     }
 

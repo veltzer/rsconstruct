@@ -20,23 +20,8 @@ impl PylintProcessor {
         }
     }
 
-    /// Run pylint on a single file
-    fn lint_file(&self, py_file: &Path) -> Result<()> {
-        let mut cmd = Command::new("pylint");
-
-        for arg in &self.pylint_config.args {
-            cmd.arg(arg);
-        }
-
-        cmd.arg(py_file);
-        cmd.current_dir(&self.project_root);
-
-        let output = run_command(&mut cmd)?;
-        check_command_output(&output, "Pylint")
-    }
-
-    /// Run pylint on multiple files in a single invocation
-    fn lint_files_batch(&self, py_files: &[&Path]) -> Result<()> {
+    /// Run pylint on one or more files
+    fn lint_files(&self, py_files: &[&Path]) -> Result<()> {
         let mut cmd = Command::new("pylint");
 
         for arg in &self.pylint_config.args {
@@ -49,7 +34,7 @@ impl PylintProcessor {
         cmd.current_dir(&self.project_root);
 
         let output = run_command(&mut cmd)?;
-        check_command_output(&output, "Pylint batch")
+        check_command_output(&output, "pylint")
     }
 }
 
@@ -84,7 +69,7 @@ impl ProductDiscovery for PylintProcessor {
     }
 
     fn execute(&self, product: &Product) -> Result<()> {
-        self.lint_file(&product.inputs[0])
+        self.lint_files(&[product.inputs[0].as_path()])
     }
 
     fn supports_batch(&self) -> bool {
@@ -94,7 +79,7 @@ impl ProductDiscovery for PylintProcessor {
     fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
         execute_checker_batch(
             products,
-            |files| self.lint_files_batch(files),
+            |files| self.lint_files(files),
         )
     }
 

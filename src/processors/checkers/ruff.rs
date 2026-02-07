@@ -20,25 +20,8 @@ impl RuffProcessor {
         }
     }
 
-    /// Run the configured linter on a single file
-    fn lint_file(&self, py_file: &Path) -> Result<()> {
-        let linter = &self.ruff_config.linter;
-        let mut cmd = Command::new(linter);
-        cmd.arg("check");
-
-        for arg in &self.ruff_config.args {
-            cmd.arg(arg);
-        }
-
-        cmd.arg(py_file);
-        cmd.current_dir(&self.project_root);
-
-        let output = run_command(&mut cmd)?;
-        check_command_output(&output, format_args!("{} linting", linter))
-    }
-
-    /// Run the configured linter on multiple files in a single invocation
-    fn lint_files_batch(&self, py_files: &[&Path]) -> Result<()> {
+    /// Run the configured linter on one or more files
+    fn lint_files(&self, py_files: &[&Path]) -> Result<()> {
         let linter = &self.ruff_config.linter;
         let mut cmd = Command::new(linter);
         cmd.arg("check");
@@ -53,7 +36,7 @@ impl RuffProcessor {
         cmd.current_dir(&self.project_root);
 
         let output = run_command(&mut cmd)?;
-        check_command_output(&output, format_args!("{} batch linting", linter))
+        check_command_output(&output, format_args!("{}", linter))
     }
 }
 
@@ -82,7 +65,7 @@ impl ProductDiscovery for RuffProcessor {
     }
 
     fn execute(&self, product: &Product) -> Result<()> {
-        self.lint_file(&product.inputs[0])
+        self.lint_files(&[product.inputs[0].as_path()])
     }
 
     fn supports_batch(&self) -> bool {
@@ -92,7 +75,7 @@ impl ProductDiscovery for RuffProcessor {
     fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
         execute_checker_batch(
             products,
-            |files| self.lint_files_batch(files),
+            |files| self.lint_files(files),
         )
     }
 

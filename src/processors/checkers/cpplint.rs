@@ -25,23 +25,8 @@ impl CpplintProcessor {
         scan_root(&self.cpplint_config.scan).as_os_str().is_empty() || scan_root(&self.cpplint_config.scan).exists()
     }
 
-    /// Run checker on a single file
-    fn check_file(&self, source_file: &Path) -> Result<()> {
-        let mut cmd = Command::new(&self.cpplint_config.checker);
-
-        for arg in &self.cpplint_config.args {
-            cmd.arg(arg);
-        }
-
-        cmd.arg(source_file);
-        cmd.current_dir(&self.project_root);
-
-        let output = run_command(&mut cmd)?;
-        check_command_output(&output, "cpplint")
-    }
-
-    /// Run checker on multiple files in a single invocation
-    fn check_files_batch(&self, files: &[&Path]) -> Result<()> {
+    /// Run checker on one or more files
+    fn check_files(&self, files: &[&Path]) -> Result<()> {
         let mut cmd = Command::new(&self.cpplint_config.checker);
 
         for arg in &self.cpplint_config.args {
@@ -54,7 +39,7 @@ impl CpplintProcessor {
         cmd.current_dir(&self.project_root);
 
         let output = run_command(&mut cmd)?;
-        check_command_output(&output, "cpplint batch")
+        check_command_output(&output, "cpplint")
     }
 }
 
@@ -86,7 +71,7 @@ impl ProductDiscovery for CpplintProcessor {
     }
 
     fn execute(&self, product: &Product) -> Result<()> {
-        self.check_file(&product.inputs[0])
+        self.check_files(&[product.inputs[0].as_path()])
     }
 
     fn supports_batch(&self) -> bool {
@@ -96,7 +81,7 @@ impl ProductDiscovery for CpplintProcessor {
     fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
         execute_checker_batch(
             products,
-            |files| self.check_files_batch(files),
+            |files| self.check_files(files),
         )
     }
 
