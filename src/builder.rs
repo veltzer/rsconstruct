@@ -76,7 +76,12 @@ impl Builder {
     /// Execute an incremental build using the dependency graph
     /// batch_size_override: Some(Some(n)) = use n, Some(None) = disable batching, None = use config
     /// processor_filter: if Some, only run processors in this list
-    pub fn build(&self, force: bool, verbose: bool, display_opts: DisplayOptions, jobs: Option<usize>, timings: bool, keep_going: bool, interrupted: Arc<std::sync::atomic::AtomicBool>, summary: bool, batch_size_override: Option<Option<usize>>, stop_after: BuildPhase, processor_filter: Option<&[String]>) -> Result<()> {
+    pub fn build(&mut self, force: bool, verbose: bool, display_opts: DisplayOptions, jobs: Option<usize>, timings: bool, keep_going: bool, interrupted: Arc<std::sync::atomic::AtomicBool>, summary: bool, batch_size_override: Option<Option<usize>>, stop_after: BuildPhase, processor_filter: Option<&[String]>, auto_add_words: bool) -> Result<()> {
+        // CLI override for spellcheck auto_add_words
+        if auto_add_words {
+            self.config.processor.spellcheck.auto_add_words = true;
+        }
+
         // Validate processor filter against available processors
         if let Some(filter) = processor_filter {
             let processors = self.create_processors(verbose)?;
@@ -988,9 +993,9 @@ impl Builder {
                     }
                 } else {
                     // Clear the entire dependency cache
-                    let deps_dir = self.project_root.join(".rsb").join("deps");
-                    if deps_dir.exists() {
-                        fs::remove_dir_all(&deps_dir)
+                    let deps_file = self.project_root.join(".rsb").join("deps.redb");
+                    if deps_file.exists() {
+                        fs::remove_file(&deps_file)
                             .context("Failed to remove dependency cache")?;
                         println!("Dependency cache cleared.");
                     } else {

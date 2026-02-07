@@ -63,19 +63,19 @@ fn main() -> Result<()> {
     }
 
     match cli.command {
-        Commands::Build { force, jobs, timings, keep_going, dry_run, no_summary, ignore_tool_versions, batch_size, stop_after, ref processors } => {
+        Commands::Build { force, jobs, timings, keep_going, dry_run, no_summary, ignore_tool_versions, batch_size, stop_after, ref processors, auto_add_words } => {
             if dry_run {
                 let builder = Builder::new()?;
                 builder.dry_run(force)?;
             } else {
-                let builder = Builder::new()?;
+                let mut builder = Builder::new()?;
                 if !ignore_tool_versions {
                     builder.verify_tool_versions()?;
                 }
                 // CLI override: -1 = disable batching, 0 = no limit, >0 = max batch size
                 let batch_size_override = batch_size.map(|n| if n < 0 { None } else { Some(n as usize) });
                 let processor_filter = processors.as_deref();
-                builder.build(force, cli.verbose, cli.display_options(), jobs, timings, keep_going, Arc::clone(&interrupted), !no_summary, batch_size_override, stop_after, processor_filter)?;
+                builder.build(force, cli.verbose, cli.display_options(), jobs, timings, keep_going, Arc::clone(&interrupted), !no_summary, batch_size_override, stop_after, processor_filter, auto_add_words)?;
             }
         }
         Commands::Clean { action } => {
@@ -190,9 +190,9 @@ fn main() -> Result<()> {
                 print_completions(shell);
             }
         }
-        Commands::Watch { jobs, timings, keep_going, no_summary, batch_size, ref processors } => {
+        Commands::Watch { jobs, timings, keep_going, no_summary, batch_size, ref processors, auto_add_words } => {
             let batch_size_override = batch_size.map(|n| if n < 0 { None } else { Some(n as usize) });
-            watcher::watch(cli.verbose, cli.display_options(), jobs, timings, keep_going, !no_summary, Arc::clone(&interrupted), batch_size_override, processors.as_deref())?;
+            watcher::watch(cli.verbose, cli.display_options(), jobs, timings, keep_going, !no_summary, Arc::clone(&interrupted), batch_size_override, processors.as_deref(), auto_add_words)?;
         }
         Commands::Version => {
             println!("rsb {}", env!("CARGO_PKG_VERSION"));

@@ -200,6 +200,10 @@ pub enum Commands {
         /// Only run specific processors (comma-separated list)
         #[arg(short, long, value_delimiter = ',')]
         processors: Option<Vec<String>>,
+
+        /// Automatically add misspelled words to .spellcheck-words instead of failing
+        #[arg(long)]
+        auto_add_words: bool,
     },
     /// Clean build artifacts
     Clean {
@@ -246,6 +250,10 @@ pub enum Commands {
         /// Only run specific processors (comma-separated list)
         #[arg(short, long, value_delimiter = ',')]
         processors: Option<Vec<String>>,
+
+        /// Automatically add misspelled words to .spellcheck-words instead of failing
+        #[arg(long)]
+        auto_add_words: bool,
     },
     /// Manage processors
     Processors {
