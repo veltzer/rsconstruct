@@ -421,7 +421,10 @@ impl<'a> Executor<'a> {
 
                         s.spawn(move || {
                             for (id, input_checksum, needs_rebuild) in chunk {
-                                if interrupted_ref.load(Ordering::SeqCst) {
+                                // Stop if interrupted or if there's an error (non-keep-going mode)
+                                if interrupted_ref.load(Ordering::SeqCst)
+                                    || (!keep_going && !errors_ref.lock().is_empty())
+                                {
                                     break;
                                 }
 
@@ -558,6 +561,11 @@ impl<'a> Executor<'a> {
             // If interrupted, stop processing further levels
             if self.interrupted.load(Ordering::SeqCst) {
                 println!("{}", color::yellow("Interrupted, saving progress..."));
+                break;
+            }
+
+            // In non-keep-going mode, stop after level with errors
+            if !keep_going && !errors.lock().is_empty() {
                 break;
             }
         }

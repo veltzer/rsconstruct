@@ -114,8 +114,9 @@ pub fn run_command(cmd: &mut Command) -> Result<Output> {
         if let Some(dir) = &current_dir {
             tokio_cmd.current_dir(dir);
         }
-        tokio_cmd.stdout(std::process::Stdio::piped());
-        tokio_cmd.stderr(std::process::Stdio::piped());
+        // Inherit stdout/stderr - output goes directly to terminal
+        tokio_cmd.stdout(std::process::Stdio::inherit());
+        tokio_cmd.stderr(std::process::Stdio::inherit());
         // Kill child on drop to ensure cleanup
         tokio_cmd.kill_on_drop(true);
 
@@ -123,10 +124,6 @@ pub fn run_command(cmd: &mut Command) -> Result<Output> {
             .with_context(|| format!("Failed to spawn: {} {}",
                 program.to_string_lossy(),
                 args.iter().map(|a| a.to_string_lossy()).collect::<Vec<_>>().join(" ")))?;
-
-        // Take stdout/stderr handles before waiting
-        let stdout_handle = child.stdout.take();
-        let stderr_handle = child.stderr.take();
 
         let mut interrupt_rx = get_interrupt_receiver();
 
@@ -142,27 +139,56 @@ pub fn run_command(cmd: &mut Command) -> Result<Output> {
             // Wait for the child process to complete
             result = child.wait() => {
                 let status = result.context("Failed to wait for child process")?;
+                // stdout/stderr go directly to terminal, return empty
+                Ok(Output { status, stdout: Vec::new(), stderr: Vec::new() })
+            }
+        }
+    })
+}
 
-                // Read stdout and stderr
-                let stdout = if let Some(mut handle) = stdout_handle {
-                    use tokio::io::AsyncReadExt;
-                    let mut buf = Vec::new();
-                    let _ = handle.read_to_end(&mut buf).await;
-                    buf
-                } else {
-                    Vec::new()
-                };
+/// Run a command and capture its stdout/stderr output.
+/// Use this only when you need to parse the output.
+/// For commands where output should go to terminal, use run_command() instead.
+pub fn run_command_capture(cmd: &mut Command) -> Result<Output> {
+    log_command(cmd);
 
-                let stderr = if let Some(mut handle) = stderr_handle {
-                    use tokio::io::AsyncReadExt;
-                    let mut buf = Vec::new();
-                    let _ = handle.read_to_end(&mut buf).await;
-                    buf
-                } else {
-                    Vec::new()
-                };
+    // Check if already interrupted before spawning
+    if INTERRUPTED.load(Ordering::SeqCst) {
+        anyhow::bail!("Interrupted");
+    }
 
-                Ok(Output { status, stdout, stderr })
+    // Build a tokio command from std::process::Command
+    let program = cmd.get_program().to_os_string();
+    let args: Vec<_> = cmd.get_args().map(|a| a.to_os_string()).collect();
+    let current_dir = cmd.get_current_dir().map(|p| p.to_path_buf());
+
+    let rt = get_runtime();
+    rt.block_on(async {
+        let mut tokio_cmd = tokio::process::Command::new(&program);
+        tokio_cmd.args(&args);
+        if let Some(dir) = &current_dir {
+            tokio_cmd.current_dir(dir);
+        }
+        tokio_cmd.stdout(std::process::Stdio::piped());
+        tokio_cmd.stderr(std::process::Stdio::piped());
+        tokio_cmd.kill_on_drop(true);
+
+        let child = tokio_cmd.spawn()
+            .with_context(|| format!("Failed to spawn: {} {}",
+                program.to_string_lossy(),
+                args.iter().map(|a| a.to_string_lossy()).collect::<Vec<_>>().join(" ")))?;
+
+        let mut interrupt_rx = get_interrupt_receiver();
+
+        tokio::select! {
+            biased;
+
+            _ = interrupt_rx.changed() => {
+                anyhow::bail!("Interrupted")
+            }
+            result = child.wait_with_output() => {
+                let output = result.context("Failed to wait for child process")?;
+                Ok(output)
             }
         }
     })
@@ -170,13 +196,11 @@ pub fn run_command(cmd: &mut Command) -> Result<Output> {
 
 pub use crate::graph::{BuildGraph, Product};
 
-/// Check that a command exited successfully, returning an error with
-/// combined stdout+stderr if it did not.
+/// Check that a command exited successfully.
+/// With inherited stdout/stderr, output is empty - errors already printed to terminal.
 pub fn check_command_output(output: &Output, context: impl std::fmt::Display) -> Result<()> {
     if !output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("{context} failed:\n{stdout}{stderr}");
+        anyhow::bail!("{context} failed");
     }
     Ok(())
 }

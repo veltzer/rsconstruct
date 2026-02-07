@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use crate::config::{CcConfig, CompilerProfile, config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProductDiscovery, scan_root, clean_outputs, format_command, run_command};
+use crate::processors::{ProductDiscovery, scan_root, clean_outputs, format_command, run_command, run_command_capture};
 
 /// Global cache for shell command results to avoid running the same command multiple times.
 /// Key is the command string, value is the resulting flags.
@@ -273,7 +273,7 @@ fn run_command_for_flags(cmd_line: &str) -> Result<Vec<String>> {
 
     let mut cmd = Command::new(program);
     cmd.args(args);
-    let output = run_command(&mut cmd)?;
+    let output = run_command_capture(&mut cmd)?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -292,7 +292,7 @@ fn run_shell_for_flags(cmd_line: &str) -> Result<Vec<String>> {
 
     let mut cmd = Command::new("sh");
     cmd.arg("-c").arg(cmd_line);
-    let output = run_command(&mut cmd)?;
+    let output = run_command_capture(&mut cmd)?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -307,7 +307,7 @@ fn run_shell_for_flags(cmd_line: &str) -> Result<Vec<String>> {
 fn run_backtick_command(cmd_str: &str) -> Result<Vec<String>> {
     let mut cmd = Command::new("sh");
     cmd.arg("-c").arg(cmd_str);
-    let output = run_command(&mut cmd)?;
+    let output = run_command_capture(&mut cmd)?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!("Backtick command failed: {} — {}", cmd_str, stderr);

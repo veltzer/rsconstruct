@@ -15,7 +15,7 @@ use crate::config::{CppAnalyzerConfig, IncludeScanner};
 use crate::deps_cache::DepsCache;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
-use crate::processors::{format_command, run_command};
+use crate::processors::{format_command, run_command_capture};
 
 use super::DepAnalyzer;
 
@@ -67,7 +67,7 @@ impl CppDepAnalyzer {
                 eprintln!("[cpp] Querying pkg-config: {}", format_command(&cmd));
             }
 
-            let output = match run_command(&mut cmd) {
+            let output = match run_command_capture(&mut cmd) {
                 Ok(o) => o,
                 Err(e) => {
                     eprintln!("[cpp] Failed to query pkg-config: {}", e);
@@ -124,7 +124,7 @@ impl CppDepAnalyzer {
                     eprintln!("[cpp] Running include path command: sh -c '{}'", cmd_str);
                 }
 
-                let output = match run_command(&mut cmd) {
+                let output = match run_command_capture(&mut cmd) {
                     Ok(o) => o,
                     Err(e) => {
                         eprintln!("[cpp] Failed to run '{}': {}", cmd_str, e);
@@ -188,7 +188,7 @@ impl CppDepAnalyzer {
                 eprintln!("[cpp] Querying {} include paths: {}", compiler, format_command(&cmd));
             }
 
-            let output = match run_command(&mut cmd) {
+            let output = match run_command_capture(&mut cmd) {
                 Ok(o) => o,
                 Err(e) => {
                     if self.verbose {
@@ -468,7 +468,7 @@ impl CppDepAnalyzer {
             eprintln!("[cpp] {}", format_command(&cmd));
         }
 
-        let output = run_command(&mut cmd)?;
+        let output = run_command_capture(&mut cmd)?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);

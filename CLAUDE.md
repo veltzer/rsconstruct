@@ -130,6 +130,14 @@ project/
 - **Config-aware caching** — processor config (compiler flags, linter args, etc.) is hashed into cache keys so config changes trigger rebuilds
 - **Remote caching** — optional S3/HTTP/filesystem remote cache for sharing artifacts across machines
 
+## Subprocess Execution
+
+RSB uses two functions to run external commands:
+
+- **`run_command()`** — inherits stdout/stderr, output goes directly to terminal. Use for compilers, linters, and any command where the user should see output immediately. No pipes, no buffer limits.
+
+- **`run_command_capture()`** — captures stdout/stderr via pipes. Use only when you need to parse the output (dependency analysis, version checks, Python config loading). Returns the output for processing.
+
 ## Path Handling
 
 **All paths are relative to project root.** RSB assumes it is run from the project root directory (where `rsb.toml` lives).

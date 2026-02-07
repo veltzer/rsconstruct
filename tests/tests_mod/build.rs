@@ -183,15 +183,37 @@ fn keep_going_short_flag() {
 }
 
 #[test]
-fn independent_products_cached_after_failure() {
-    // When one product fails (without --keep-going), independent products
-    // should still be processed and cached, so the next build only needs
-    // to re-process the previously-failing product.
+fn build_stops_on_first_error() {
+    // Without --keep-going, build should stop immediately on first error
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
     fs::create_dir_all(project_path.join("sleep")).unwrap();
-    // "bad" sorts before "good" alphabetically, so it will be processed first
+    // "aaa" sorts before "zzz" alphabetically, so it will be processed first
+    fs::write(project_path.join("sleep/aaa.sleep"), "not_a_number").unwrap();
+    fs::write(project_path.join("sleep/zzz.sleep"), "0.01").unwrap();
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"sleep\"]\n"
+    ).unwrap();
+
+    // Build should fail on aaa.sleep and stop
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(!output.status.success(), "Build should fail with bad sleep file");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // zzz.sleep should NOT be processed because we stop on first error
+    assert!(!stdout.contains("zzz.sleep"),
+        "Second file should NOT be processed after first error: {}", stdout);
+}
+
+#[test]
+fn keep_going_continues_after_error() {
+    // With --keep-going, independent products should still be processed
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/bad.sleep"), "not_a_number").unwrap();
     fs::write(project_path.join("sleep/good.sleep"), "0.01").unwrap();
     fs::write(
@@ -199,74 +221,28 @@ fn independent_products_cached_after_failure() {
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
-    // First build — should fail because of bad.sleep
-    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    // First build with --keep-going — should fail but process all files
+    let output1 = run_rsb_with_env(project_path, &["build", "--keep-going"], &[("NO_COLOR", "1")]);
     assert!(!output1.status.success(), "Build should fail with bad sleep file");
 
-    // The good.sleep file should have been processed and cached (checkers cache in db, not stub files)
-    // Verify by checking the output - good.sleep should have been processed
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
-    // Both files should have been attempted since they're independent
-    assert!(stdout1.contains("good.sleep") || stdout1.contains("Processing:"),
-        "Good sleep file should still be processed even without --keep-going: {}", stdout1);
-
-    // Now fix the bad file
-    fs::write(project_path.join("sleep/bad.sleep"), "0.01").unwrap();
-
-    // Second build — good.sleep should be skipped (cached), only bad.sleep processed
-    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
-    assert!(output2.status.success(),
-        "Second build should succeed after fixing bad file: stdout={}, stderr={}",
-        String::from_utf8_lossy(&output2.stdout),
-        String::from_utf8_lossy(&output2.stderr));
-
-    let stdout2 = String::from_utf8_lossy(&output2.stdout);
-    // good.sleep should be skipped (unchanged/cached from first build)
-    assert!(stdout2.contains("Skipping (unchanged):"),
-        "Good sleep file should be skipped on second build: {}", stdout2);
-    // bad.sleep should be re-processed
-    assert!(stdout2.contains("Processing:"),
-        "Fixed bad sleep file should be processed on second build: {}", stdout2);
-}
-
-#[test]
-fn independent_products_cached_after_failure_parallel() {
-    // Same test as above but with parallel execution
-    let temp_dir = setup_test_project();
-    let project_path = temp_dir.path();
-
-    fs::create_dir_all(project_path.join("sleep")).unwrap();
-    fs::write(project_path.join("sleep/bad.sleep"), "not_a_number").unwrap();
-    fs::write(project_path.join("sleep/good.sleep"), "0.01").unwrap();
-    fs::write(
-        project_path.join("rsb.toml"),
-        "[processor]\nenabled = [\"sleep\"]\n\n[build]\nparallel = 2\n"
-    ).unwrap();
-
-    // First build — should fail
-    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(!output1.status.success(), "Build should fail with bad sleep file");
-
-    // Good file should still be processed (checkers cache in db, not stub files)
-    let stdout1 = String::from_utf8_lossy(&output1.stdout);
-    assert!(stdout1.contains("Processing:"),
-        "Sleep files should be processed in parallel mode: {}", stdout1);
+    // Both files should have been processed
+    assert!(stdout1.contains("good.sleep"),
+        "Good sleep file should be processed with --keep-going: {}", stdout1);
 
     // Fix the bad file
     fs::write(project_path.join("sleep/bad.sleep"), "0.01").unwrap();
 
-    // Second build — good.sleep should be skipped
+    // Second build — good.sleep should be skipped (cached)
     let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success(),
-        "Second build should succeed after fixing bad file: stdout={}, stderr={}",
+        "Second build should succeed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output2.stdout),
         String::from_utf8_lossy(&output2.stderr));
 
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("Skipping (unchanged):"),
-        "Good sleep file should be skipped on second build (parallel): {}", stdout2);
-    assert!(stdout2.contains("Processing:"),
-        "Fixed bad sleep file should be processed on second build (parallel): {}", stdout2);
+        "Good sleep file should be skipped on second build: {}", stdout2);
 }
 
 #[test]

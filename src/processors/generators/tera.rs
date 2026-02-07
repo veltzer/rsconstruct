@@ -9,7 +9,7 @@ use tera::{Context as TeraContext, Function, Tera, Value as TeraValue, to_value}
 use crate::config::{TeraConfig, config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProductDiscovery, run_command};
+use crate::processors::{ProductDiscovery, run_command_capture};
 
 /// Represents a single template file to be processed
 struct TemplateItem {
@@ -245,7 +245,7 @@ print(json.dumps(result))
     // Execute Python and capture output
     let mut cmd = Command::new("python3");
     cmd.arg("-c").arg(&python_script);
-    let output = run_command(&mut cmd)?;
+    let output = run_command_capture(&mut cmd)?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
