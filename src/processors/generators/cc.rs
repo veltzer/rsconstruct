@@ -390,16 +390,12 @@ impl CcProcessor {
     }
 
     /// Get executable path for a source file with a specific compiler profile.
-    /// If profile has a name, outputs go to out/cc_single_file/<profile_name>/...
-    /// Otherwise: out/cc_single_file/...
+    /// Preserves the full source path relative to project root.
+    /// E.g., src/a.cc -> out/cc_single_file/src/a.elf
+    /// With profile: src/a.cc -> out/cc_single_file/<profile_name>/src/a.elf
     fn get_executable_path(&self, source: &Path, profile: &CompilerProfile) -> PathBuf {
-        let source_dir = self.source_dir();
-        let relative = if source_dir.as_os_str().is_empty() {
-            source.to_path_buf()
-        } else {
-            source.strip_prefix(&source_dir).unwrap_or(source).to_path_buf()
-        };
-        let stem = relative.with_extension("");
+        // Keep the full source path, just change the extension
+        let stem = source.with_extension("");
         let name = format!("{}{}", stem.display(), profile.output_suffix);
 
         if profile.name.is_empty() {

@@ -151,9 +151,9 @@ fn rsbignore_cc_processor() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/cc_single_file/included.elf").exists(),
+    assert!(project_path.join("out/cc_single_file/src/included.elf").exists(),
         "included.c should be compiled");
-    assert!(!project_path.join("out/cc_single_file/excluded/skip.elf").exists(),
+    assert!(!project_path.join("out/cc_single_file/src/excluded/skip.elf").exists(),
         "excluded/skip.c should not be compiled");
 }
 
@@ -187,9 +187,9 @@ fn rsbignore_leading_slash() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/cc_single_file/keep.elf").exists(),
+    assert!(project_path.join("out/cc_single_file/src/keep.elf").exists(),
         "keep.c should be compiled");
-    assert!(!project_path.join("out/cc_single_file/skip_dir/skip.elf").exists(),
+    assert!(!project_path.join("out/cc_single_file/src/skip_dir/skip.elf").exists(),
         "skip_dir/skip.c should be excluded by /src/skip_dir/** pattern");
 }
 
@@ -223,8 +223,8 @@ fn rsbignore_trailing_slash() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
-    assert!(project_path.join("out/cc_single_file/keep.elf").exists(),
+    assert!(project_path.join("out/cc_single_file/src/keep.elf").exists(),
         "keep.c should be compiled");
-    assert!(!project_path.join("out/cc_single_file/skipme/deep.elf").exists(),
+    assert!(!project_path.join("out/cc_single_file/src/skipme/deep.elf").exists(),
         "skipme/deep.c should be excluded by /src/skipme/ pattern");
 }
