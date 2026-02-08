@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 use crate::config::{CcConfig, CompilerProfile, config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
@@ -16,7 +16,7 @@ static SHELL_COMMAND_CACHE: Mutex<Option<HashMap<String, Vec<String>>>> = Mutex:
 
 /// Get or compute flags from a shell command, caching the result.
 fn cached_shell_command(cmd_line: &str, runner: impl FnOnce(&str) -> Result<Vec<String>>) -> Result<Vec<String>> {
-    let mut cache = SHELL_COMMAND_CACHE.lock().unwrap();
+    let mut cache = SHELL_COMMAND_CACHE.lock();
     let cache = cache.get_or_insert_with(HashMap::new);
 
     if let Some(cached) = cache.get(cmd_line) {

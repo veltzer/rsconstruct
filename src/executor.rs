@@ -10,11 +10,12 @@ use std::time::{Duration, Instant};
 use crate::cli::DisplayOptions;
 use crate::color;
 use crate::graph::BuildGraph;
-use crate::json_output::{self, emit_product_complete};
+use crate::json_output::{self, emit_product_complete, ProductStatus};
 use crate::object_store::{ExplainAction, ObjectStore};
 use crate::processors::{BuildStats, ProcessStats, ProductDiscovery, ProductTiming};
 
 /// Options for configuring an Executor instance.
+#[derive(Debug)]
 pub struct ExecutorOptions {
     pub parallel: usize,
     pub verbose: bool,
@@ -25,6 +26,7 @@ pub struct ExecutorOptions {
 }
 
 /// Shared mutable state passed to product processing helpers.
+#[derive(Debug)]
 struct SharedState {
     stats: Arc<Mutex<HashMap<String, ProcessStats>>>,
     errors: Arc<Mutex<Vec<anyhow::Error>>>,
@@ -75,13 +77,13 @@ impl<'a> Executor<'a> {
 
     /// Print an explain line for a product showing what action will be taken and why.
     fn print_explain(&self, product: &crate::graph::Product, action: &ExplainAction) {
-        let (label, style_fn): (&str, fn(&str) -> String) = match action {
-            ExplainAction::Skip => ("SKIP", color::dim as fn(&str) -> String),
-            ExplainAction::Restore(_) => ("RESTORE", color::cyan as fn(&str) -> String),
-            ExplainAction::Rebuild(_) => ("BUILD", color::yellow as fn(&str) -> String),
+        let styled = match action {
+            ExplainAction::Skip => color::dim("SKIP"),
+            ExplainAction::Restore(_) => color::cyan("RESTORE"),
+            ExplainAction::Rebuild(_) => color::yellow("BUILD"),
         };
         println!("[{}] {} {} ({})", product.processor,
-            style_fn(label),
+            styled,
             self.product_display(product),
             action);
     }
@@ -102,14 +104,14 @@ impl<'a> Executor<'a> {
         emit_product_complete(
             &self.product_display(product),
             &product.processor,
-            "skipped",
+            ProductStatus::Skipped,
             None,
             None,
         );
         let mut stats = shared.stats.lock();
         let proc_stats = stats
             .entry(product.processor.clone())
-            .or_insert_with(ProcessStats::new);
+            .or_default();
         proc_stats.skipped += 1;
         pb_ref.inc(1);
     }
@@ -146,14 +148,14 @@ impl<'a> Executor<'a> {
                 emit_product_complete(
                     &self.product_display(product),
                     &product.processor,
-                    "restored",
+                    ProductStatus::Restored,
                     None,
                     None,
                 );
                 let mut stats = shared.stats.lock();
                 let proc_stats = stats
                     .entry(product.processor.clone())
-                    .or_insert_with(ProcessStats::new);
+                    .or_default();
                 proc_stats.restored += 1;
                 proc_stats.files_restored += product.outputs.len();
                 pb_ref.inc(1);
@@ -164,7 +166,7 @@ impl<'a> Executor<'a> {
                     emit_product_complete(
                         &self.product_display(product),
                         &product.processor,
-                        "failed",
+                        ProductStatus::Failed,
                         None,
                         Some(&e.to_string()),
                     );
@@ -201,7 +203,7 @@ impl<'a> Executor<'a> {
         emit_product_complete(
             &self.product_display(product),
             &product.processor,
-            "failed",
+            ProductStatus::Failed,
             duration,
             Some(&error.to_string()),
         );
@@ -209,7 +211,7 @@ impl<'a> Executor<'a> {
             let mut stats = shared.stats.lock();
             let proc_stats = stats
                 .entry(proc_name.to_string())
-                .or_insert_with(ProcessStats::new);
+                .or_default();
             proc_stats.failed += 1;
         }
         if keep_going {
@@ -251,7 +253,7 @@ impl<'a> Executor<'a> {
                 emit_product_complete(
                     &self.product_display(product),
                     &product.processor,
-                    "failed",
+                    ProductStatus::Failed,
                     duration,
                     Some(&e.to_string()),
                 );
@@ -271,14 +273,14 @@ impl<'a> Executor<'a> {
         emit_product_complete(
             &self.product_display(product),
             &product.processor,
-            "success",
+            ProductStatus::Success,
             duration,
             None,
         );
         let mut stats = shared.stats.lock();
         let proc_stats = stats
             .entry(proc_name.to_string())
-            .or_insert_with(ProcessStats::new);
+            .or_default();
         proc_stats.processed += 1;
         proc_stats.files_created += product.outputs.len();
         true
@@ -617,7 +619,7 @@ impl<'a> Executor<'a> {
                                 let mut stats = shared.stats.lock();
                                 let proc_stats = stats
                                     .entry(proc_name.clone())
-                                    .or_insert_with(ProcessStats::new);
+                                    .or_default();
                                 proc_stats.duration += batch_duration;
                                 proc_stats.product_timings.push(ProductTiming {
                                     display: format!("batch ({} files)", product_refs.len()),
@@ -710,7 +712,7 @@ impl<'a> Executor<'a> {
                                                 let mut stats = shared.stats.lock();
                                                 let proc_stats = stats
                                                     .entry(product.processor.clone())
-                                                    .or_insert_with(ProcessStats::new);
+                                                    .or_default();
                                                 proc_stats.duration += duration;
                                                 if timings {
                                                     proc_stats.product_timings.push(ProductTiming {

@@ -75,12 +75,12 @@ pub fn is_interrupted() -> bool {
 
 /// Format a `Command` as a shell-like string for display.
 pub fn format_command(cmd: &Command) -> String {
-    let program = cmd.get_program().to_string_lossy().to_string();
-    let args: Vec<String> = cmd.get_args()
-        .map(|a| a.to_string_lossy().to_string())
+    let program = cmd.get_program().to_string_lossy();
+    let args: Vec<_> = cmd.get_args()
+        .map(|a| a.to_string_lossy())
         .collect();
     if args.is_empty() {
-        program
+        program.into_owned()
     } else {
         format!("{} {}", program, args.join(" "))
     }
@@ -95,7 +95,8 @@ pub fn log_command(cmd: &Command) {
         if cwd.is_empty() {
             eprintln!("{} {}", color::dim("[exec]"), format_command(cmd));
         } else {
-            eprintln!("{} {} {}", color::dim("[exec]"), format_command(cmd), color::dim(&format!("(in {})", cwd)));
+            let cwd_info = format!("(in {})", cwd);
+            eprintln!("{} {} {}", color::dim("[exec]"), format_command(cmd), color::dim(&cwd_info));
         }
     }
 }
@@ -264,6 +265,7 @@ pub fn discover_stub_products(
 }
 
 /// Options for filtering sibling files in directory-based product discovery.
+#[derive(Debug)]
 pub struct SiblingFilter<'a> {
     pub extensions: &'a [&'a str],
     pub excludes: &'a [&'a str],
@@ -352,16 +354,6 @@ pub fn discover_checker_products(
     Ok(())
 }
 
-/// Validate that a stub product has at least one input and exactly one output.
-/// Note: This is typically not needed since the graph guarantees products have inputs.
-#[allow(dead_code)]
-pub fn validate_stub_product(product: &Product, processor_name: &str) -> Result<()> {
-    if product.inputs.is_empty() || product.outputs.len() != 1 {
-        anyhow::bail!("{} product must have at least one input and exactly one output", processor_name);
-    }
-    Ok(())
-}
-
 /// Ensure a stub directory exists, creating it if necessary.
 pub fn ensure_stub_dir(stub_dir: &Path, processor_name: &str) -> Result<()> {
     if !stub_dir.exists() {
@@ -369,84 +361,6 @@ pub fn ensure_stub_dir(stub_dir: &Path, processor_name: &str) -> Result<()> {
             .context(format!("Failed to create {} stub directory", processor_name))?;
     }
     Ok(())
-}
-
-/// Create a stub file with the given content after a successful processor run.
-pub fn write_stub(stub_path: &Path, content: &str) -> Result<()> {
-    if let Some(parent) = stub_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(stub_path, content).context("Failed to create stub file")?;
-    Ok(())
-}
-/// Shared helper for lint processors that support batch execution (legacy, for Lua plugins).
-///
-/// Runs `batch_fn` with all input paths at once. On success, writes stubs for all products.
-/// On batch failure, falls back to calling `single_fn` per product to isolate errors.
-#[allow(dead_code)]
-pub fn execute_lint_batch<F, G>(
-    products: &[&Product],
-    processor_name: &str,
-    stub_dir: &Path,
-    batch_fn: F,
-    single_fn: G,
-) -> Vec<Result<()>>
-where
-    F: Fn(&[&Path]) -> Result<()>,
-    G: Fn(&Path, &Path) -> Result<()>,
-{
-    // Validate all products up front and collect input/stub pairs
-    let mut validated: Vec<(&Path, &Path)> = Vec::with_capacity(products.len());
-    let mut results: Vec<Option<Result<()>>> = (0..products.len()).map(|_| None).collect();
-
-    for (i, product) in products.iter().enumerate() {
-        if let Err(e) = validate_stub_product(product, processor_name) {
-            results[i] = Some(Err(e));
-        } else {
-            validated.push((&product.inputs[0], &product.outputs[0]));
-        }
-    }
-
-    // Ensure stub directory exists
-    if let Err(e) = ensure_stub_dir(stub_dir, processor_name) {
-        // If we can't create the stub dir, all products fail
-        return products.iter().enumerate().map(|(i, _)| {
-            results[i].take().unwrap_or_else(|| Err(anyhow::anyhow!("{}", e)))
-        }).collect();
-    }
-
-    // Collect only the input paths for validated products
-    let input_paths: Vec<&Path> = validated.iter().map(|(input, _)| *input).collect();
-
-    if input_paths.is_empty() {
-        // All products failed validation
-        return results.into_iter().map(|r| r.expect("internal error: unprocessed product")).collect();
-    }
-
-    // Try batch execution
-    if batch_fn(&input_paths).is_ok() {
-        // Batch succeeded — write stubs for all validated products
-        let mut validated_iter = validated.iter();
-        for (i, _product) in products.iter().enumerate() {
-            if results[i].is_some() {
-                continue; // Already failed validation
-            }
-            let (_input, stub) = validated_iter.next().expect("internal error: validation count mismatch");
-            results[i] = Some(write_stub(stub, "linted"));
-        }
-    } else {
-        // Batch failed — fall back to per-file execution to isolate errors
-        let mut validated_iter = validated.iter();
-        for (i, _product) in products.iter().enumerate() {
-            if results[i].is_some() {
-                continue; // Already failed validation
-            }
-            let (input, stub) = validated_iter.next().expect("internal error: validation count mismatch");
-            results[i] = Some(single_fn(input, stub));
-        }
-    }
-
-    results.into_iter().map(|r| r.expect("internal error: unprocessed product")).collect()
 }
 
 /// Shared helper for checker processors that support batch execution (no stub files).
@@ -649,7 +563,7 @@ pub struct ProductTiming {
 }
 
 /// Statistics from processing a category of items
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ProcessStats {
     pub processed: usize,
     pub failed: usize,
@@ -662,19 +576,6 @@ pub struct ProcessStats {
 }
 
 impl ProcessStats {
-    pub fn new() -> Self {
-        Self {
-            processed: 0,
-            failed: 0,
-            skipped: 0,
-            restored: 0,
-            files_created: 0,
-            files_restored: 0,
-            duration: Duration::ZERO,
-            product_timings: Vec::new(),
-        }
-    }
-
     pub fn total(&self) -> usize {
         self.processed + self.failed + self.skipped + self.restored
     }

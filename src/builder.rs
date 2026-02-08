@@ -1,4 +1,5 @@
 use anyhow::{Context, Result, bail};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -44,10 +45,10 @@ fn phases_debug() -> bool {
 }
 
 /// Labels for the three product states used by dry_run and status.
-struct ProductStatusLabels {
-    current: (String, &'static str),
-    restorable: (String, &'static str),
-    stale: (String, &'static str),
+struct ProductStatusLabels<'a> {
+    current: (Cow<'a, str>, &'static str),
+    restorable: (Cow<'a, str>, &'static str),
+    stale: (Cow<'a, str>, &'static str),
 }
 
 pub struct Builder {
@@ -144,10 +145,7 @@ impl Builder {
         // Execute the build
         let result = executor.execute(&graph, &self.object_store, opts.force, opts.timings, opts.keep_going);
 
-        // Always save object store index, even after errors or interrupt
-        self.object_store.save()?;
-
-        // Exit after saving if interrupted
+        // Exit if interrupted
         if interrupted.load(std::sync::atomic::Ordering::SeqCst) {
             return Err(crate::exit_code::RsbError::new(
                 crate::exit_code::RsbExitCode::Interrupted,
@@ -222,7 +220,7 @@ impl Builder {
         &self,
         products: &[&crate::graph::Product],
         force: bool,
-        labels: &ProductStatusLabels,
+        labels: &ProductStatusLabels<'_>,
         explain: bool,
     ) {
         use crate::object_store::ExplainAction;
@@ -379,7 +377,7 @@ impl Builder {
         processors.insert("pylint".to_string(), Box::new(pylint_proc));
 
         // Sleep processor (for testing parallelism)
-        let sleep_proc = SleepProcessor::new(self.project_root.clone(), self.config.processor.sleep.clone());
+        let sleep_proc = SleepProcessor::new(self.config.processor.sleep.clone());
         processors.insert("sleep".to_string(), Box::new(sleep_proc));
 
         // C/C++ compiler processor (single-file compilation)
@@ -399,7 +397,7 @@ impl Builder {
         processors.insert("shellcheck".to_string(), Box::new(shellcheck_proc));
 
         // Spellcheck processor
-        match SpellcheckProcessor::new(self.project_root.clone(), self.config.processor.spellcheck.clone()) {
+        match SpellcheckProcessor::new(self.config.processor.spellcheck.clone()) {
             Ok(spellcheck_proc) => {
                 processors.insert("spellcheck".to_string(), Box::new(spellcheck_proc));
             }
@@ -411,11 +409,11 @@ impl Builder {
         }
 
         // Make processor
-        let make_proc = MakeProcessor::new(self.project_root.clone(), self.config.processor.make.clone());
+        let make_proc = MakeProcessor::new(self.config.processor.make.clone());
         processors.insert("make".to_string(), Box::new(make_proc));
 
         // Cargo processor
-        let cargo_proc = CargoProcessor::new(self.project_root.clone(), self.config.processor.cargo.clone());
+        let cargo_proc = CargoProcessor::new(self.config.processor.cargo.clone());
         processors.insert("cargo".to_string(), Box::new(cargo_proc));
 
         // Lua plugin processors
@@ -528,7 +526,7 @@ impl Builder {
                 dot_check_cmd.arg("-V");
                 log_command(&dot_check_cmd);
                 let dot_check = dot_check_cmd.output();
-                if dot_check.is_err() || !dot_check.unwrap().status.success() {
+                if dot_check.map_or(true, |o| !o.status.success()) {
                     anyhow::bail!("Graphviz 'dot' command not found. Install Graphviz or use --view=mermaid");
                 }
 
@@ -585,9 +583,6 @@ impl Builder {
         for name in &active_analyzers {
             analyzers[*name].analyze(graph, &mut deps_cache, &self.file_index)?;
         }
-
-        // Flush the cache
-        let _ = deps_cache.flush();
 
         Ok(())
     }
@@ -777,7 +772,8 @@ impl Builder {
                     } else {
                         color::dim("disabled")
                     };
-                    let proc_type = color::dim(&format!("[{}]", proc.processor_type().as_str()));
+                    let type_str = format!("[{}]", proc.processor_type().as_str());
+                    let proc_type = color::dim(&type_str);
                     let batch = if proc.supports_batch() {
                         format!(" {}", color::dim("[batch]"))
                     } else {
@@ -799,7 +795,8 @@ impl Builder {
                     } else {
                         String::new()
                     };
-                    let proc_type = color::dim(&format!("[{}]", proc.processor_type().as_str()));
+                    let type_str = format!("[{}]", proc.processor_type().as_str());
+                    let proc_type = color::dim(&type_str);
                     let batch = if proc.supports_batch() {
                         format!(" {}", color::dim("[batch]"))
                     } else {
@@ -1167,7 +1164,6 @@ impl Builder {
                     // Clear only entries from specific analyzer
                     let deps_cache = DepsCache::open()?;
                     let removed = deps_cache.remove_by_analyzer(&analyzer_name)?;
-                    deps_cache.flush()?;
                     if removed > 0 {
                         println!("Removed {} entries from '{}' analyzer.", removed, analyzer_name);
                     } else {

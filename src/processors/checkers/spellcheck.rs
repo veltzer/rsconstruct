@@ -2,8 +2,9 @@ use anyhow::{Context, Result};
 use std::collections::HashSet;
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
+use std::path::Path;
+use parking_lot::Mutex;
+use std::sync::OnceLock;
 
 use crate::config::SpellcheckConfig;
 use crate::file_index::FileIndex;
@@ -23,7 +24,7 @@ pub struct SpellcheckProcessor {
 }
 
 impl SpellcheckProcessor {
-    pub fn new(_project_root: PathBuf, spellcheck_config: SpellcheckConfig) -> Result<Self> {
+    pub fn new(spellcheck_config: SpellcheckConfig) -> Result<Self> {
         let custom_words = if spellcheck_config.use_words_file {
             let words_path = Path::new(&spellcheck_config.words_file);
             Self::load_custom_words(words_path)
@@ -202,7 +203,7 @@ impl SpellcheckProcessor {
         if !misspelled.is_empty() {
             if self.spellcheck_config.auto_add_words {
                 // Collect words to add to the words file
-                let mut words_to_add = self.words_to_add.lock().unwrap();
+                let mut words_to_add = self.words_to_add.lock();
                 for word in &misspelled {
                     words_to_add.insert(word.to_lowercase());
                 }
@@ -222,7 +223,7 @@ impl SpellcheckProcessor {
 
     /// Write collected words to the words file
     fn flush_words_to_file(&self) -> Result<()> {
-        let words_to_add = self.words_to_add.lock().unwrap();
+        let words_to_add = self.words_to_add.lock();
         if words_to_add.is_empty() {
             return Ok(());
         }

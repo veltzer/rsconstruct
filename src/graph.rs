@@ -289,24 +289,11 @@ impl BuildGraph {
         &self.dependencies[id]
     }
 
-    /// Get dependents of a product (products that depend on this one)
-    #[allow(dead_code)]
-    pub fn get_dependents(&self, id: usize) -> &[usize] {
-        &self.dependents[id]
-    }
-
     /// Get mutable access to a product by id
     pub fn get_product_mut(&mut self, id: usize) -> Option<&mut Product> {
         self.products.get_mut(id)
     }
 
-    /// Get all products for a specific processor
-    #[allow(dead_code)]
-    pub fn products_for_processor(&self, processor: &str) -> Vec<&Product> {
-        self.products.iter()
-            .filter(|p| p.processor == processor)
-            .collect()
-    }
 }
 
 impl Default for BuildGraph {
@@ -381,7 +368,6 @@ impl BuildGraph {
             let node_id = Self::processor_node_id(product);
             let color = match product.processor.as_str() {
                 "tera" => "lightblue",
-                "lint" => "lightyellow",
                 "cc_single_file" => "lightsalmon",
                 _ => "lightgray",
             };
@@ -479,10 +465,6 @@ impl BuildGraph {
             .filter(|p| p.processor == "tera")
             .map(Self::processor_node_id)
             .collect();
-        let lint_procs: Vec<_> = self.products.iter()
-            .filter(|p| p.processor == "lint")
-            .map(Self::processor_node_id)
-            .collect();
         let cc_procs: Vec<_> = self.products.iter()
             .filter(|p| p.processor == "cc_single_file")
             .map(Self::processor_node_id)
@@ -490,9 +472,6 @@ impl BuildGraph {
 
         if !tera_procs.is_empty() {
             lines.push(format!("    style {} fill:#add8e6", tera_procs.join(",")));
-        }
-        if !lint_procs.is_empty() {
-            lines.push(format!("    style {} fill:#ffffe0", lint_procs.join(",")));
         }
         if !cc_procs.is_empty() {
             lines.push(format!("    style {} fill:#ffa07a", cc_procs.join(",")));
@@ -601,7 +580,7 @@ impl BuildGraph {
             .spawn()
             .map_err(|_| anyhow::anyhow!("Graphviz 'dot' command not found. Install Graphviz to use SVG format"))?;
 
-        child.stdin.take().unwrap().write_all(dot_content.as_bytes())?;
+        child.stdin.take().expect("stdin was piped").write_all(dot_content.as_bytes())?;
 
         let output = child.wait_with_output()?;
         if !output.status.success() {

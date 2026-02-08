@@ -8,6 +8,7 @@ use regex::Regex;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use crate::deps_cache::DepsCache;
 use crate::file_index::FileIndex;
@@ -34,7 +35,8 @@ impl PythonDepAnalyzer {
 
         // Match: import foo, import foo.bar, from foo import bar, from foo.bar import baz
         // We capture the module path (before any 'import' keyword in 'from' statements)
-        let import_re = Regex::new(r"^\s*(?:from\s+(\S+)\s+import|import\s+(\S+))").unwrap();
+        static IMPORT_RE: OnceLock<Regex> = OnceLock::new();
+        let import_re = IMPORT_RE.get_or_init(|| Regex::new(r"^\s*(?:from\s+(\S+)\s+import|import\s+(\S+))").unwrap());
 
         for line in content.lines() {
             // Skip comments
@@ -111,10 +113,6 @@ impl PythonDepAnalyzer {
 }
 
 impl DepAnalyzer for PythonDepAnalyzer {
-    fn name(&self) -> &str {
-        "python"
-    }
-
     fn description(&self) -> &str {
         "Scan Python source files for import dependencies"
     }

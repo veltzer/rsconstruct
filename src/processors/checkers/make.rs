@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use crate::config::MakeConfig;
@@ -12,7 +12,7 @@ pub struct MakeProcessor {
 }
 
 impl MakeProcessor {
-    pub fn new(_project_root: PathBuf, config: MakeConfig) -> Self {
+    pub fn new(config: MakeConfig) -> Self {
         Self {
             config,
         }

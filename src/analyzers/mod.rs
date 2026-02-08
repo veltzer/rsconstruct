@@ -23,12 +23,7 @@ use crate::graph::BuildGraph;
 ///
 /// Must be Sync + Send for potential parallel execution.
 pub trait DepAnalyzer: Sync + Send {
-    /// Name of this analyzer (e.g., "cpp", "python")
-    #[allow(dead_code)]
-    fn name(&self) -> &str;
-
-    /// Human-readable description of what this analyzer does
-    #[allow(dead_code)]
+    /// Human-readable description of what this analyzer does.
     fn description(&self) -> &str;
 
     /// Auto-detect if this analyzer is relevant for the project.
@@ -93,8 +88,9 @@ where
             cached
         } else {
             let scanned = scan_deps(source)?;
-            // Cache the result with analyzer tag (ignore errors)
-            let _ = deps_cache.set(source, &scanned, analyzer_name);
+            if let Err(e) = deps_cache.set(source, &scanned, analyzer_name) {
+                eprintln!("Warning: failed to cache dependencies for {}: {}", source.display(), e);
+            }
             scanned
         };
 

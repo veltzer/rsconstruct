@@ -5,6 +5,7 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 const CONFIG_FILE: &str = "rsb.toml";
 
@@ -91,7 +92,8 @@ fn extract_var_names(content: &str) -> Vec<String> {
 fn substitute_variables(content: &str) -> Result<String> {
     // Check for undefined variables first (before any TOML parsing)
     // This gives a clear error message for undefined vars even without a [vars] section
-    let var_pattern = Regex::new(r#""\$\{([^}]+)\}""#).unwrap();
+    static VAR_PATTERN: OnceLock<Regex> = OnceLock::new();
+    let var_pattern = VAR_PATTERN.get_or_init(|| Regex::new(r#""\$\{([^}]+)\}""#).unwrap());
 
     // Extract defined variable names before TOML parsing
     let defined_vars = extract_var_names(content);
@@ -633,23 +635,6 @@ pub struct CompilerProfile {
     pub ldflags: Vec<String>,
     #[serde(default = "default_output_suffix")]
     pub output_suffix: String,
-}
-
-impl CompilerProfile {
-    /// Create a default GCC profile
-    #[allow(dead_code)]
-    pub fn default_gcc() -> Self {
-        Self {
-            name: "gcc".into(),
-            enabled: true,
-            cc: "gcc".into(),
-            cxx: "g++".into(),
-            cflags: Vec::new(),
-            cxxflags: Vec::new(),
-            ldflags: Vec::new(),
-            output_suffix: ".elf".into(),
-        }
-    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

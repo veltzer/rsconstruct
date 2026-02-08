@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use crate::config::CargoConfig;
@@ -12,7 +12,7 @@ pub struct CargoProcessor {
 }
 
 impl CargoProcessor {
-    pub fn new(_project_root: PathBuf, config: CargoConfig) -> Self {
+    pub fn new(config: CargoConfig) -> Self {
         Self { config }
     }
 

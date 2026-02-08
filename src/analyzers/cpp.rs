@@ -544,10 +544,6 @@ impl CppDepAnalyzer {
 }
 
 impl DepAnalyzer for CppDepAnalyzer {
-    fn name(&self) -> &str {
-        "cpp"
-    }
-
     fn description(&self) -> &str {
         "Scan C/C++ source files for #include dependencies"
     }

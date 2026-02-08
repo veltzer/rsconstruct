@@ -2,13 +2,13 @@ use std::fmt;
 
 /// Exit codes for rsb, allowing CI scripts to distinguish error types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum RsbExitCode {
     Success = 0,
     BuildError = 1,
     ConfigError = 2,
     ToolError = 3,
     GraphError = 4,
+    #[allow(dead_code)]
     IoError = 5,
     Interrupted = 130,
 }
@@ -93,5 +93,86 @@ pub fn classify_error(err: &anyhow::Error) -> RsbExitCode {
     } else {
         // Default to BuildError for unclassified errors
         RsbExitCode::BuildError
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn classify_rsb_error_downcast() {
+        let err: anyhow::Error = RsbError::new(RsbExitCode::ConfigError, "bad config").into();
+        assert_eq!(classify_error(&err), RsbExitCode::ConfigError);
+
+        let err: anyhow::Error = RsbError::new(RsbExitCode::GraphError, "cycle").into();
+        assert_eq!(classify_error(&err), RsbExitCode::GraphError);
+    }
+
+    #[test]
+    fn classify_interrupted() {
+        let err = anyhow::anyhow!("Build was interrupted by Ctrl+C");
+        assert_eq!(classify_error(&err), RsbExitCode::Interrupted);
+
+        let err = anyhow::anyhow!("operation interrupted");
+        assert_eq!(classify_error(&err), RsbExitCode::Interrupted);
+    }
+
+    #[test]
+    fn classify_config_errors() {
+        for msg in [
+            "No rsb.toml found in current directory",
+            "rsb.toml already exists",
+            "unknown processor 'foo'",
+            "unknown shell 'fish'",
+            "undefined variable 'x'",
+            "failed to parse config",
+            "failed to substitute variables",
+            "unknown field `blah`",
+        ] {
+            assert_eq!(classify_error(&anyhow::anyhow!("{}", msg)), RsbExitCode::ConfigError,
+                "expected ConfigError for: {}", msg);
+        }
+    }
+
+    #[test]
+    fn classify_tool_errors() {
+        let err = anyhow::anyhow!("tool version mismatch: gcc 12 vs 13");
+        assert_eq!(classify_error(&err), RsbExitCode::ToolError);
+
+        let err = anyhow::anyhow!("Required tools are missing: ruff");
+        assert_eq!(classify_error(&err), RsbExitCode::ToolError);
+    }
+
+    #[test]
+    fn classify_graph_errors() {
+        let err = anyhow::anyhow!("Cycle detected in dependency graph");
+        assert_eq!(classify_error(&err), RsbExitCode::GraphError);
+
+        let err = anyhow::anyhow!("Output conflict: foo.o produced by both [cc] and [cc2]");
+        assert_eq!(classify_error(&err), RsbExitCode::GraphError);
+    }
+
+    #[test]
+    fn classify_build_error() {
+        let err = anyhow::anyhow!("Build completed with 3 error(s)");
+        assert_eq!(classify_error(&err), RsbExitCode::BuildError);
+    }
+
+    #[test]
+    fn classify_unknown_defaults_to_build_error() {
+        let err = anyhow::anyhow!("something totally unexpected");
+        assert_eq!(classify_error(&err), RsbExitCode::BuildError);
+    }
+
+    #[test]
+    fn exit_codes_have_correct_values() {
+        assert_eq!(RsbExitCode::Success.code(), 0);
+        assert_eq!(RsbExitCode::BuildError.code(), 1);
+        assert_eq!(RsbExitCode::ConfigError.code(), 2);
+        assert_eq!(RsbExitCode::ToolError.code(), 3);
+        assert_eq!(RsbExitCode::GraphError.code(), 4);
+        assert_eq!(RsbExitCode::IoError.code(), 5);
+        assert_eq!(RsbExitCode::Interrupted.code(), 130);
     }
 }

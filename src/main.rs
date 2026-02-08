@@ -27,7 +27,9 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 fn main() -> std::process::ExitCode {
-    // Reset SIGPIPE to default so piping to head/more/less exits cleanly
+    // SAFETY: Resetting SIGPIPE to default behavior is safe — this is a standard
+    // pattern for CLI tools to avoid "broken pipe" errors when piping to head/less/etc.
+    // No Rust invariants are affected; we're just restoring the OS default signal handler.
     unsafe {
         libc::signal(libc::SIGPIPE, libc::SIG_DFL);
     }
@@ -137,7 +139,6 @@ fn run() -> Result<()> {
                 CacheAction::Trim => {
                     let builder = Builder::new()?;
                     let (bytes, count) = builder.object_store().trim()?;
-                    builder.object_store().save()?;
                     println!("Removed {} bytes ({} unreferenced objects)", bytes, count);
                 }
                 CacheAction::RemoveStale => {
@@ -145,7 +146,6 @@ fn run() -> Result<()> {
                     let valid_keys = builder.valid_cache_keys()?;
                     let stale_count = builder.object_store().remove_stale(&valid_keys);
                     let (bytes, trim_count) = builder.object_store().trim()?;
-                    builder.object_store().save()?;
                     println!("Removed {} stale index entries", stale_count);
                     if trim_count > 0 {
                         println!("Removed {} bytes ({} orphaned objects)", bytes, trim_count);

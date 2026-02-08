@@ -154,25 +154,9 @@ impl DepsCache {
         Ok(())
     }
 
-    /// Flush the cache to disk (no-op for redb — commits are per-transaction)
-    pub fn flush(&self) -> Result<()> {
-        Ok(())
-    }
-
     /// Get cache statistics (hits and misses)
     pub fn stats(&self) -> &DepsCacheStats {
         &self.stats
-    }
-
-    /// Clear all cached dependencies
-    #[allow(dead_code)]
-    pub fn clear(&self) -> Result<()> {
-        let write_txn = self.db.begin_write()
-            .context("Failed to begin write transaction")?;
-        let _ = write_txn.delete_table(DEPS_TABLE);
-        write_txn.commit()
-            .context("Failed to commit dependency cache clear")?;
-        Ok(())
     }
 
     /// Collect all entries from the database as (key, DepsEntry) pairs.

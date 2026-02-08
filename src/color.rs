@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::env;
 use std::sync::OnceLock;
 
@@ -7,34 +8,34 @@ fn no_color() -> bool {
     *NO_COLOR.get_or_init(|| env::var("NO_COLOR").is_ok())
 }
 
-fn wrap(code: &str, text: &str) -> String {
+fn wrap<'a>(code: &str, text: &'a str) -> Cow<'a, str> {
     if no_color() {
-        text.to_string()
+        Cow::Borrowed(text)
     } else {
-        format!("\x1b[{}m{}\x1b[0m", code, text)
+        Cow::Owned(format!("\x1b[{}m{}\x1b[0m", code, text))
     }
 }
 
-pub fn red(text: &str) -> String {
+pub fn red(text: &str) -> Cow<'_, str> {
     wrap("31", text)
 }
 
-pub fn green(text: &str) -> String {
+pub fn green(text: &str) -> Cow<'_, str> {
     wrap("32", text)
 }
 
-pub fn yellow(text: &str) -> String {
+pub fn yellow(text: &str) -> Cow<'_, str> {
     wrap("33", text)
 }
 
-pub fn cyan(text: &str) -> String {
+pub fn cyan(text: &str) -> Cow<'_, str> {
     wrap("36", text)
 }
 
-pub fn bold(text: &str) -> String {
+pub fn bold(text: &str) -> Cow<'_, str> {
     wrap("1", text)
 }
 
-pub fn dim(text: &str) -> String {
+pub fn dim(text: &str) -> Cow<'_, str> {
     wrap("2", text)
 }

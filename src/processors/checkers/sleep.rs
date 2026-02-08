@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
@@ -14,7 +14,7 @@ pub struct SleepProcessor {
 }
 
 impl SleepProcessor {
-    pub fn new(_project_root: PathBuf, config: SleepConfig) -> Self {
+    pub fn new(config: SleepConfig) -> Self {
         Self {
             config,
         }

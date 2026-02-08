@@ -706,17 +706,20 @@ impl ObjectStore {
         let old_map = Self::flatten_json(&old, "");
         let new_map = Self::flatten_json(&new, "");
 
-        let mut lines = Vec::new();
+        let mut lines: Vec<String> = Vec::new();
 
         // Find removed and changed keys
         for (key, old_val) in &old_map {
             match new_map.get(key) {
                 None => {
-                    lines.push(color::red(&format!("- {}: {}", key, old_val)));
+                    let s = format!("- {}: {}", key, old_val);
+                    lines.push(color::red(&s).into_owned());
                 }
                 Some(new_val) if new_val != old_val => {
-                    lines.push(color::red(&format!("- {}: {}", key, old_val)));
-                    lines.push(color::green(&format!("+ {}: {}", key, new_val)));
+                    let old_s = format!("- {}: {}", key, old_val);
+                    lines.push(color::red(&old_s).into_owned());
+                    let new_s = format!("+ {}: {}", key, new_val);
+                    lines.push(color::green(&new_s).into_owned());
                 }
                 _ => {}
             }
@@ -725,7 +728,8 @@ impl ObjectStore {
         // Find added keys
         for (key, new_val) in &new_map {
             if !old_map.contains_key(key) {
-                lines.push(color::green(&format!("+ {}: {}", key, new_val)));
+                let s = format!("+ {}: {}", key, new_val);
+                lines.push(color::green(&s).into_owned());
             }
         }
 
@@ -768,11 +772,6 @@ impl ObjectStore {
         }
 
         map
-    }
-
-    /// Save the index to disk (no-op for redb — commits are per-transaction)
-    pub fn save(&self) -> Result<()> {
-        Ok(())
     }
 
     /// Convert path to string for storage. Paths are already relative.
@@ -1110,7 +1109,6 @@ impl ObjectStore {
     /// Get the combined input checksum for a list of input files.
     /// Missing files are represented by a sentinel so that different sets of
     /// missing files never collide.
-    #[allow(dead_code)]
     pub fn combined_input_checksum(inputs: &[PathBuf]) -> Result<String> {
         let mut checksums = Vec::new();
         for input in inputs {
