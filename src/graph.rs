@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use crate::cli::{DisplayOptions, InputDisplay, OutputDisplay, PathFormat};
@@ -232,34 +232,24 @@ impl BuildGraph {
             .map(|deps| deps.len())
             .collect();
 
-        // Start with products that have no dependencies
-        let mut queue: Vec<usize> = in_degree.iter()
+        // Start with products that have no dependencies (BTreeSet keeps sorted order)
+        let mut queue: BTreeSet<usize> = in_degree.iter()
             .enumerate()
             .filter(|&(_, deg)| *deg == 0)
             .map(|(id, _)| id)
             .collect();
-        queue.sort_by(|a, b| b.cmp(a));
 
         let mut result = Vec::new();
-        let mut visited = HashSet::new();
 
-        while let Some(id) = queue.pop() {
-            if visited.contains(&id) {
-                continue;
-            }
-            visited.insert(id);
+        while let Some(id) = queue.pop_first() {
             result.push(id);
 
             // Reduce in-degree of dependents
-            let prev_len = queue.len();
             for &dep_id in &self.dependents[id] {
                 in_degree[dep_id] = in_degree[dep_id].saturating_sub(1);
-                if in_degree[dep_id] == 0 && !visited.contains(&dep_id) {
-                    queue.push(dep_id);
+                if in_degree[dep_id] == 0 {
+                    queue.insert(dep_id);
                 }
-            }
-            if queue.len() > prev_len {
-                queue.sort_by(|a, b| b.cmp(a));
             }
         }
 

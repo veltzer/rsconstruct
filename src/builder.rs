@@ -630,6 +630,14 @@ impl Builder {
         self.build_graph_with_processors_impl(processors, GraphBuildMode::ForClean, BuildPhase::Build, None)
     }
 
+    /// Check whether a processor should run based on enabled list and auto-detect.
+    fn is_processor_active(&self, name: &str, processor: &dyn ProductDiscovery) -> bool {
+        if !self.config.processor.is_enabled(name) {
+            return false;
+        }
+        !self.config.processor.auto_detect || processor.auto_detect(&self.file_index)
+    }
+
     /// Build the dependency graph using provided processors
     /// processor_filter: if Some, only run processors in this list (in addition to enabled check)
     fn build_graph_with_processors_impl(&self, processors: &HashMap<String, Box<dyn ProductDiscovery>>, mode: GraphBuildMode, stop_after: BuildPhase, processor_filter: Option<&[String]>) -> Result<BuildGraph> {
@@ -641,16 +649,11 @@ impl Builder {
         // Collect which processors should run
         let active_processors: Vec<&String> = sorted_keys(processors).into_iter()
             .filter(|name| {
-                // If filter is specified, only include processors in the filter list
                 if let Some(filter) = processor_filter
                     && !filter.iter().any(|f| f == *name) {
                         return false;
                     }
-                let in_enabled_list = self.config.processor.is_enabled(name);
-                if !in_enabled_list {
-                    return false;
-                }
-                !self.config.processor.auto_detect || processors[*name].auto_detect(&self.file_index)
+                self.is_processor_active(name, processors[*name].as_ref())
             })
             .collect();
 
@@ -723,17 +726,7 @@ impl Builder {
                     && name.as_str() != filter {
                         return false;
                     }
-                if !include_all {
-                    let in_enabled_list = self.config.processor.is_enabled(name);
-                    if !in_enabled_list {
-                        return false;
-                    }
-                    let should_run = !self.config.processor.auto_detect || processors[*name].auto_detect(&self.file_index);
-                    if !should_run {
-                        return false;
-                    }
-                }
-                true
+                include_all || self.is_processor_active(name, processors[*name].as_ref())
             })
             .collect();
 
