@@ -614,6 +614,44 @@ These are relatively straightforward improvements that would enhance usability.
 - Equivalent to `rsb build @lint` if target aliases are implemented.
 - Useful for pre-commit hooks and quick validation.
 
+### `--quiet` flag
+- Suppress all output except errors.
+- Useful for CI scripts that only care about the exit code, or for wrapping rsb in other tools.
+- Usage:
+  ```bash
+  rsb build --quiet          # Only print errors
+  rsb build -q               # Short form
+  ```
+- When `--quiet` is active:
+  - No "Processing:" lines
+  - No "Skipping:" or "Restored:" lines
+  - No build summary
+  - Error messages still go to stderr
+- Combines with `--json` (suppresses human-readable output, JSON events still emitted).
+- Different from `--no-summary` which only suppresses the final summary line.
+
+### Emit `ProductStart` JSON events
+- The `ProductStart` event struct exists in `json_output.rs` but is marked `#[allow(dead_code)]` and never emitted.
+- Wire it up to emit before each product starts executing.
+- Enables CI dashboards and IDE integrations to show real-time build progress:
+  ```json
+  {"event":"product_start","product":"src/main.c","processor":"cc_single_file","inputs":["src/main.c","src/utils.h"],"outputs":["out/cc_single_file/main.elf"]}
+  ```
+- Pairs with the existing `ProductComplete` event to compute per-product wall-clock time on the consumer side.
+- Useful for progress bars in external tooling that can't use `--progress` (e.g., VS Code extension, web dashboard).
+
+### Watch mode keyboard commands
+- During `rsb watch`, support interactive keyboard commands:
+  - `r` — Force a full rebuild (equivalent to `--force`)
+  - `c` — Clean and rebuild
+  - `q` — Quit watch mode gracefully
+  - `Enter` — Trigger an incremental rebuild immediately
+  - `s` — Show current status summary
+- Implementation: read stdin in a separate thread alongside the file watcher.
+- Only activate when stdin is a TTY (not when piped).
+- Show a hint line after each build: `Press r to rebuild, q to quit`.
+- Similar to: Jest's watch mode, Vite's dev server, webpack-dev-server.
+
 ### ~~Colored diff on config changes~~ *(Done)*
 - When config changes trigger rebuilds, rsb now shows what changed:
   ```bash
