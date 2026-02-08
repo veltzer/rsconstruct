@@ -5,7 +5,7 @@ use std::sync::Arc;
 use indicatif::{ProgressBar, ProgressStyle};
 use parking_lot::Mutex;
 use std::thread;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::cli::DisplayOptions;
 use crate::color;
@@ -22,6 +22,16 @@ pub struct ExecutorOptions {
     pub batch_size: Option<usize>,
     pub progress: bool,
     pub explain: bool,
+}
+
+/// Shared mutable state passed to product processing helpers.
+struct SharedState {
+    stats: Arc<Mutex<HashMap<String, ProcessStats>>>,
+    errors: Arc<Mutex<Vec<anyhow::Error>>>,
+    failed_products: Arc<Mutex<HashSet<usize>>>,
+    failed_messages: Arc<Mutex<Vec<String>>>,
+    failed_processors: Arc<Mutex<HashSet<String>>>,
+    unchanged_products: Arc<Mutex<HashSet<usize>>>,
 }
 
 /// Executor handles running products through their processors
@@ -74,6 +84,204 @@ impl<'a> Executor<'a> {
             style_fn(label),
             self.product_display(product),
             action);
+    }
+
+    /// Handle the "skip (unchanged)" case for a product.
+    /// Logs, emits JSON event, increments stats and progress bar.
+    fn handle_skip(
+        &self,
+        product: &crate::graph::Product,
+        shared: &SharedState,
+        pb_ref: &ProgressBar,
+    ) {
+        if self.verbose {
+            println!("[{}] {} {}", product.processor,
+                color::dim("Skipping (unchanged):"),
+                self.product_display(product));
+        }
+        emit_product_complete(
+            &self.product_display(product),
+            &product.processor,
+            "skipped",
+            None,
+            None,
+        );
+        let mut stats = shared.stats.lock();
+        let proc_stats = stats
+            .entry(product.processor.clone())
+            .or_insert_with(ProcessStats::new);
+        proc_stats.skipped += 1;
+        pb_ref.inc(1);
+    }
+
+    /// Handle cache restore for a product.
+    /// Returns `Some(true)` if restored, `Some(false)` if restore failed (error handled),
+    /// `None` if not restorable (caller should proceed with execution).
+    /// When `emit_fail_event` is true, emits a product_complete "failed" JSON event on error.
+    #[allow(clippy::too_many_arguments)]
+    fn handle_restore(
+        &self,
+        product: &crate::graph::Product,
+        id: usize,
+        object_store: &ObjectStore,
+        cache_key: &str,
+        input_checksum: &str,
+        force: bool,
+        keep_going: bool,
+        emit_fail_event: bool,
+        shared: &SharedState,
+        pb_ref: &ProgressBar,
+    ) -> Option<bool> {
+        if force {
+            return None;
+        }
+        let restore_result = object_store.restore_from_cache(cache_key, input_checksum, &product.outputs);
+        match restore_result {
+            Ok(true) => {
+                if self.verbose {
+                    println!("[{}] {} {}", product.processor,
+                        color::cyan("Restored from cache:"),
+                        self.product_display(product));
+                }
+                emit_product_complete(
+                    &self.product_display(product),
+                    &product.processor,
+                    "restored",
+                    None,
+                    None,
+                );
+                let mut stats = shared.stats.lock();
+                let proc_stats = stats
+                    .entry(product.processor.clone())
+                    .or_insert_with(ProcessStats::new);
+                proc_stats.restored += 1;
+                proc_stats.files_restored += product.outputs.len();
+                pb_ref.inc(1);
+                Some(true)
+            }
+            Err(e) => {
+                if emit_fail_event {
+                    emit_product_complete(
+                        &self.product_display(product),
+                        &product.processor,
+                        "failed",
+                        None,
+                        Some(&e.to_string()),
+                    );
+                }
+                if keep_going {
+                    let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
+                    println!("{}", color::red(&format!("Error: {}", msg)));
+                    shared.failed_products.lock().insert(id);
+                    shared.failed_messages.lock().push(msg);
+                } else {
+                    shared.failed_products.lock().insert(id);
+                    shared.errors.lock().push(e);
+                }
+                pb_ref.inc(1);
+                Some(false)
+            }
+            Ok(false) => None,
+        }
+    }
+
+    /// Handle a product execution error.
+    /// Emits a JSON event, records failure stats, and records keep-going / non-keep-going state.
+    #[allow(clippy::too_many_arguments)]
+    fn handle_error(
+        &self,
+        product: &crate::graph::Product,
+        id: usize,
+        proc_name: &str,
+        error: anyhow::Error,
+        duration: Option<Duration>,
+        keep_going: bool,
+        shared: &SharedState,
+    ) {
+        emit_product_complete(
+            &self.product_display(product),
+            &product.processor,
+            "failed",
+            duration,
+            Some(&error.to_string()),
+        );
+        {
+            let mut stats = shared.stats.lock();
+            let proc_stats = stats
+                .entry(proc_name.to_string())
+                .or_insert_with(ProcessStats::new);
+            proc_stats.failed += 1;
+        }
+        if keep_going {
+            let msg = format!("[{}] {}: {}", proc_name, self.product_display(product), error);
+            println!("{}", color::red(&format!("Error: {}", msg)));
+            shared.failed_products.lock().insert(id);
+            shared.failed_messages.lock().push(msg);
+        } else {
+            shared.failed_products.lock().insert(id);
+            shared.failed_processors.lock().insert(proc_name.to_string());
+            shared.errors.lock().push(error);
+        }
+    }
+
+    /// Handle caching outputs and recording stats after successful execution.
+    /// Returns `true` if caching succeeded, `false` if it failed (error is handled internally).
+    /// On success, emits a product_complete "success" JSON event and increments processed/files_created.
+    #[allow(clippy::too_many_arguments)]
+    fn handle_success(
+        &self,
+        product: &crate::graph::Product,
+        id: usize,
+        object_store: &ObjectStore,
+        cache_key: &str,
+        input_checksum: &str,
+        proc_name: &str,
+        duration: Option<Duration>,
+        keep_going: bool,
+        shared: &SharedState,
+        pb_ref: &ProgressBar,
+    ) -> bool {
+        match object_store.cache_outputs(cache_key, input_checksum, &product.outputs) {
+            Ok(changed) => {
+                if !changed {
+                    shared.unchanged_products.lock().insert(id);
+                }
+            }
+            Err(e) => {
+                emit_product_complete(
+                    &self.product_display(product),
+                    &product.processor,
+                    "failed",
+                    duration,
+                    Some(&e.to_string()),
+                );
+                if keep_going {
+                    let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
+                    println!("{}", color::red(&format!("Error: {}", msg)));
+                    shared.failed_products.lock().insert(id);
+                    shared.failed_messages.lock().push(msg);
+                } else {
+                    shared.failed_products.lock().insert(id);
+                    shared.errors.lock().push(e);
+                }
+                pb_ref.inc(1);
+                return false;
+            }
+        }
+        emit_product_complete(
+            &self.product_display(product),
+            &product.processor,
+            "success",
+            duration,
+            None,
+        );
+        let mut stats = shared.stats.lock();
+        let proc_stats = stats
+            .entry(proc_name.to_string())
+            .or_insert_with(ProcessStats::new);
+        proc_stats.processed += 1;
+        proc_stats.files_created += product.outputs.len();
+        true
     }
 
     /// Execute all products in the graph that need rebuilding
@@ -185,7 +393,7 @@ impl<'a> Executor<'a> {
             let mut work_items: Vec<(usize, String, bool)> = Vec::new();
 
             // First pass: identify products with failed dependencies
-            let mut skipped_ids: Vec<usize> = Vec::new();
+            let mut skipped_ids: HashSet<usize> = HashSet::new();
             {
                 let failed_guard = failed_products.lock();
                 for &id in &level {
@@ -196,7 +404,7 @@ impl<'a> Executor<'a> {
                                 color::yellow("Skipping (dependency failed):"),
                                 self.product_display(product));
                         }
-                        skipped_ids.push(id);
+                        skipped_ids.insert(id);
                     }
                 }
             }
@@ -304,12 +512,14 @@ impl<'a> Executor<'a> {
                 // Spawn one thread per batch group
                 let unchanged_ref = &unchanged_products;
                 for (proc_name, items) in &batch_groups {
-                    let stats_ref = Arc::clone(stats_ref);
-                    let errors_ref = Arc::clone(errors_ref);
-                    let failed_ref = Arc::clone(failed_ref);
-                    let failed_msgs_ref = Arc::clone(failed_msgs_ref);
-                    let failed_procs_ref = Arc::clone(failed_procs_ref);
-                    let unchanged_ref = Arc::clone(unchanged_ref);
+                    let shared = SharedState {
+                        stats: Arc::clone(stats_ref),
+                        errors: Arc::clone(errors_ref),
+                        failed_products: Arc::clone(failed_ref),
+                        failed_messages: Arc::clone(failed_msgs_ref),
+                        failed_processors: Arc::clone(failed_procs_ref),
+                        unchanged_products: Arc::clone(unchanged_ref),
+                    };
 
                     s.spawn(move || {
                         if interrupted_ref.load(Ordering::SeqCst) {
@@ -334,68 +544,15 @@ impl<'a> Executor<'a> {
                             }
 
                             if !needs_rebuild {
-                                if self.verbose {
-                                    println!("[{}] {} {}", product.processor,
-                                        color::dim("Skipping (unchanged):"),
-                                        self.product_display(product));
-                                }
-                                emit_product_complete(
-                                    &self.product_display(product),
-                                    &product.processor,
-                                    "skipped",
-                                    None,
-                                    None,
-                                );
-                                let mut stats = stats_ref.lock();
-                                let proc_stats = stats
-                                    .entry(product.processor.clone())
-                                    .or_insert_with(ProcessStats::new);
-                                proc_stats.skipped += 1;
-                                pb_ref.inc(1);
+                                self.handle_skip(product, &shared, pb_ref);
                                 continue;
                             }
 
-                            // Try to restore from cache
-                            if !force {
-                                let restore_result = object_store.restore_from_cache(&cache_key, input_checksum, &product.outputs);
-                                match restore_result {
-                                    Ok(true) => {
-                                        if self.verbose {
-                                            println!("[{}] {} {}", product.processor,
-                                                color::cyan("Restored from cache:"),
-                                                self.product_display(product));
-                                        }
-                                        emit_product_complete(
-                                            &self.product_display(product),
-                                            &product.processor,
-                                            "restored",
-                                            None,
-                                            None,
-                                        );
-                                        let mut stats = stats_ref.lock();
-                                        let proc_stats = stats
-                                            .entry(product.processor.clone())
-                                            .or_insert_with(ProcessStats::new);
-                                        proc_stats.restored += 1;
-                                        proc_stats.files_restored += product.outputs.len();
-                                        pb_ref.inc(1);
-                                        continue;
-                                    }
-                                    Err(e) => {
-                                        if keep_going {
-                                            let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
-                                            println!("{}", color::red(&format!("Error: {}", msg)));
-                                            failed_ref.lock().insert(*id);
-                                            failed_msgs_ref.lock().push(msg);
-                                        } else {
-                                            failed_ref.lock().insert(*id);
-                                            errors_ref.lock().push(e);
-                                        }
-                                        pb_ref.inc(1);
-                                        continue;
-                                    }
-                                    Ok(false) => {}
-                                }
+                            // Try to restore from cache (batch path: no emit on failure)
+                            match self.handle_restore(product, *id, object_store, &cache_key, input_checksum, force, keep_going, false, &shared, pb_ref) {
+                                Some(true) => continue,  // restored
+                                Some(false) => continue, // failed (error handled)
+                                None => {}               // not restorable, proceed
                             }
 
                             to_execute.push(item);
@@ -443,72 +600,13 @@ impl<'a> Executor<'a> {
 
                                 match result {
                                     Ok(()) => {
-                                        match object_store.cache_outputs(&cache_key, input_checksum, &product.outputs) {
-                                            Ok(changed) => {
-                                                if !changed {
-                                                    unchanged_ref.lock().insert(*id);
-                                                }
-                                            }
-                                            Err(e) => {
-                                                emit_product_complete(
-                                                    &self.product_display(product),
-                                                    &product.processor,
-                                                    "failed",
-                                                    None,
-                                                    Some(&e.to_string()),
-                                                );
-                                                if keep_going {
-                                                    let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
-                                                    println!("{}", color::red(&format!("Error: {}", msg)));
-                                                    failed_ref.lock().insert(*id);
-                                                    failed_msgs_ref.lock().push(msg);
-                                                } else {
-                                                    failed_ref.lock().insert(*id);
-                                                    errors_ref.lock().push(e);
-                                                }
-                                                pb_ref.inc(1);
-                                                continue;
-                                            }
+                                        if !self.handle_success(product, *id, object_store, &cache_key, input_checksum, proc_name, None, keep_going, &shared, pb_ref) {
+                                            // cache_outputs failed and error was handled
+                                            continue;
                                         }
-                                        emit_product_complete(
-                                            &self.product_display(product),
-                                            &product.processor,
-                                            "success",
-                                            None,
-                                            None,
-                                        );
-                                        let mut stats = stats_ref.lock();
-                                        let proc_stats = stats
-                                            .entry(proc_name.clone())
-                                            .or_insert_with(ProcessStats::new);
-                                        proc_stats.processed += 1;
-                                        proc_stats.files_created += product.outputs.len();
                                     }
                                     Err(e) => {
-                                        emit_product_complete(
-                                            &self.product_display(product),
-                                            &product.processor,
-                                            "failed",
-                                            None,
-                                            Some(&e.to_string()),
-                                        );
-                                        {
-                                            let mut stats = stats_ref.lock();
-                                            let proc_stats = stats
-                                                .entry(proc_name.clone())
-                                                .or_insert_with(ProcessStats::new);
-                                            proc_stats.failed += 1;
-                                        }
-                                        if keep_going {
-                                            let msg = format!("[{}] {}: {}", proc_name, self.product_display(product), e);
-                                            println!("{}", color::red(&format!("Error: {}", msg)));
-                                            failed_ref.lock().insert(*id);
-                                            failed_msgs_ref.lock().push(msg);
-                                        } else {
-                                            failed_ref.lock().insert(*id);
-                                            failed_procs_ref.lock().insert(proc_name.clone());
-                                            errors_ref.lock().push(e);
-                                        }
+                                        self.handle_error(product, *id, proc_name, e, None, keep_going, &shared);
                                     }
                                 }
                                 pb_ref.inc(1);
@@ -516,7 +614,7 @@ impl<'a> Executor<'a> {
 
                             // Record batch timing for this chunk
                             if timings {
-                                let mut stats = stats_ref.lock();
+                                let mut stats = shared.stats.lock();
                                 let proc_stats = stats
                                     .entry(proc_name.clone())
                                     .or_insert_with(ProcessStats::new);
@@ -539,20 +637,22 @@ impl<'a> Executor<'a> {
                     let current_ref = &current_per_processor;
 
                     for chunk in chunks {
-                        let stats_ref = Arc::clone(stats_ref);
-                        let errors_ref = Arc::clone(errors_ref);
-                        let failed_ref = Arc::clone(failed_ref);
-                        let failed_msgs_ref = Arc::clone(failed_msgs_ref);
-                        let failed_procs_ref = Arc::clone(failed_procs_ref);
+                        let shared = SharedState {
+                            stats: Arc::clone(stats_ref),
+                            errors: Arc::clone(errors_ref),
+                            failed_products: Arc::clone(failed_ref),
+                            failed_messages: Arc::clone(failed_msgs_ref),
+                            failed_processors: Arc::clone(failed_procs_ref),
+                            unchanged_products: Arc::clone(unchanged_ref),
+                        };
                         let total_ref = Arc::clone(total_ref);
                         let current_ref = Arc::clone(current_ref);
-                        let unchanged_ref = Arc::clone(unchanged_ref);
 
                         s.spawn(move || {
                             for (id, input_checksum, needs_rebuild) in chunk {
                                 // Stop if interrupted or if there's an error (non-keep-going mode)
                                 if interrupted_ref.load(Ordering::SeqCst)
-                                    || (!keep_going && !errors_ref.lock().is_empty())
+                                    || (!keep_going && !shared.errors.lock().is_empty())
                                 {
                                     break;
                                 }
@@ -566,75 +666,15 @@ impl<'a> Executor<'a> {
                                 }
 
                                 if !needs_rebuild {
-                                    if self.verbose {
-                                        println!("[{}] {} {}", product.processor,
-                                            color::dim("Skipping (unchanged):"),
-                                            self.product_display(product));
-                                    }
-                                    emit_product_complete(
-                                        &self.product_display(product),
-                                        &product.processor,
-                                        "skipped",
-                                        None,
-                                        None,
-                                    );
-                                    let mut stats = stats_ref.lock();
-                                    let proc_stats = stats
-                                        .entry(product.processor.clone())
-                                        .or_insert_with(ProcessStats::new);
-                                    proc_stats.skipped += 1;
-                                    pb_ref.inc(1);
+                                    self.handle_skip(product, &shared, pb_ref);
                                     continue;
                                 }
 
-                                // Try to restore from cache
-                                if !force {
-                                    let restore_result = object_store.restore_from_cache(&cache_key, input_checksum, &product.outputs);
-                                    match restore_result {
-                                        Ok(true) => {
-                                            if self.verbose {
-                                                println!("[{}] {} {}", product.processor,
-                                                    color::cyan("Restored from cache:"),
-                                                    self.product_display(product));
-                                            }
-                                            emit_product_complete(
-                                                &self.product_display(product),
-                                                &product.processor,
-                                                "restored",
-                                                None,
-                                                None,
-                                            );
-                                            let mut stats = stats_ref.lock();
-                                            let proc_stats = stats
-                                                .entry(product.processor.clone())
-                                                .or_insert_with(ProcessStats::new);
-                                            proc_stats.restored += 1;
-                                            proc_stats.files_restored += product.outputs.len();
-                                            pb_ref.inc(1);
-                                            continue;
-                                        }
-                                        Err(e) => {
-                                            emit_product_complete(
-                                                &self.product_display(product),
-                                                &product.processor,
-                                                "failed",
-                                                None,
-                                                Some(&e.to_string()),
-                                            );
-                                            if keep_going {
-                                                let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
-                                                println!("{}", color::red(&format!("Error: {}", msg)));
-                                                failed_ref.lock().insert(*id);
-                                                failed_msgs_ref.lock().push(msg);
-                                            } else {
-                                                failed_ref.lock().insert(*id);
-                                                errors_ref.lock().push(e);
-                                            }
-                                            pb_ref.inc(1);
-                                            continue;
-                                        }
-                                        Ok(false) => {}
-                                    }
+                                // Try to restore from cache (non-batch path: emit on failure)
+                                match self.handle_restore(product, *id, object_store, &cache_key, input_checksum, force, keep_going, true, &shared, pb_ref) {
+                                    Some(true) => continue,  // restored
+                                    Some(false) => continue, // failed (error handled)
+                                    None => {}               // not restorable, proceed
                                 }
 
                                 if let Some(processor) = self.processors.get(&product.processor) {
@@ -660,82 +700,30 @@ impl<'a> Executor<'a> {
                                         Ok(()) => {
                                             let duration = product_start.elapsed();
 
-                                            match object_store.cache_outputs(&cache_key, input_checksum, &product.outputs) {
-                                                Ok(changed) => {
-                                                    if !changed {
-                                                        unchanged_ref.lock().insert(*id);
-                                                    }
-                                                }
-                                                Err(e) => {
-                                                    emit_product_complete(
-                                                        &self.product_display(product),
-                                                        &product.processor,
-                                                        "failed",
-                                                        Some(duration),
-                                                        Some(&e.to_string()),
-                                                    );
-                                                    if keep_going {
-                                                        let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
-                                                        println!("{}", color::red(&format!("Error: {}", msg)));
-                                                        failed_ref.lock().insert(*id);
-                                                        failed_msgs_ref.lock().push(msg);
-                                                    } else {
-                                                        failed_ref.lock().insert(*id);
-                                                        errors_ref.lock().push(e);
-                                                    }
-                                                    pb_ref.inc(1);
-                                                    continue;
-                                                }
+                                            if !self.handle_success(product, *id, object_store, &cache_key, input_checksum, &product.processor, Some(duration), keep_going, &shared, pb_ref) {
+                                                // cache_outputs failed and error was handled
+                                                continue;
                                             }
 
-                                            emit_product_complete(
-                                                &self.product_display(product),
-                                                &product.processor,
-                                                "success",
-                                                Some(duration),
-                                                None,
-                                            );
-                                            let mut stats = stats_ref.lock();
-                                            let proc_stats = stats
-                                                .entry(product.processor.clone())
-                                                .or_insert_with(ProcessStats::new);
-                                            proc_stats.processed += 1;
-                                            proc_stats.files_created += product.outputs.len();
-                                            proc_stats.duration += duration;
-                                            if timings {
-                                                proc_stats.product_timings.push(ProductTiming {
-                                                    display: self.product_display(product),
-                                                    processor: product.processor.clone(),
-                                                    duration,
-                                                });
+                                            // Record per-product duration (non-batch only)
+                                            {
+                                                let mut stats = shared.stats.lock();
+                                                let proc_stats = stats
+                                                    .entry(product.processor.clone())
+                                                    .or_insert_with(ProcessStats::new);
+                                                proc_stats.duration += duration;
+                                                if timings {
+                                                    proc_stats.product_timings.push(ProductTiming {
+                                                        display: self.product_display(product),
+                                                        processor: product.processor.clone(),
+                                                        duration,
+                                                    });
+                                                }
                                             }
                                         }
                                         Err(e) => {
                                             let duration = product_start.elapsed();
-                                            emit_product_complete(
-                                                &self.product_display(product),
-                                                &product.processor,
-                                                "failed",
-                                                Some(duration),
-                                                Some(&e.to_string()),
-                                            );
-                                            {
-                                                let mut stats = stats_ref.lock();
-                                                let proc_stats = stats
-                                                    .entry(product.processor.clone())
-                                                    .or_insert_with(ProcessStats::new);
-                                                proc_stats.failed += 1;
-                                            }
-                                            if keep_going {
-                                                let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
-                                                println!("{}", color::red(&format!("Error: {}", msg)));
-                                                failed_ref.lock().insert(*id);
-                                                failed_msgs_ref.lock().push(msg);
-                                            } else {
-                                                failed_ref.lock().insert(*id);
-                                                failed_procs_ref.lock().insert(product.processor.clone());
-                                                errors_ref.lock().push(e);
-                                            }
+                                            self.handle_error(product, *id, &product.processor, e, Some(duration), keep_going, &shared);
                                         }
                                     }
                                     pb_ref.inc(1);

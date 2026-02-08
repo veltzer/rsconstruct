@@ -17,7 +17,7 @@ mod watcher;
 
 use anyhow::{bail, Result};
 use clap::Parser;
-use cli::{BuildOptions, BuildPhase, CacheAction, CleanAction, Cli, Commands, parse_shell, print_completions};
+use cli::{BuildPhase, CacheAction, CleanAction, Cli, Commands, parse_shell, print_completions};
 use config::Config;
 use builder::Builder;
 use exit_code::{RsbExitCode, RsbError, classify_error};
@@ -86,31 +86,16 @@ fn run() -> Result<()> {
     }
 
     match cli.command {
-        Commands::Build { force, jobs, timings, keep_going, dry_run, no_summary, ignore_tool_versions, batch_size, stop_after, ref processors, auto_add_words, progress, explain, no_mtime } => {
+        Commands::Build { force, dry_run, ignore_tool_versions, stop_after, ref shared } => {
             if dry_run {
                 let builder = Builder::new()?;
-                builder.dry_run(force, explain)?;
+                builder.dry_run(force, shared.explain)?;
             } else {
                 let mut builder = Builder::new()?;
                 if !ignore_tool_versions {
                     builder.verify_tool_versions()?;
                 }
-                let opts = BuildOptions {
-                    force,
-                    verbose: cli.verbose,
-                    display_opts: cli.display_options(),
-                    jobs,
-                    timings,
-                    keep_going,
-                    summary: !no_summary,
-                    batch_size: batch_size.map(|n| if n < 0 { None } else { Some(n as usize) }),
-                    stop_after,
-                    processor_filter: processors.clone(),
-                    auto_add_words,
-                    progress,
-                    explain,
-                    no_mtime,
-                };
+                let opts = shared.to_build_options(&cli, force, stop_after);
                 builder.build(&opts, Arc::clone(&interrupted))?;
             }
         }
@@ -157,10 +142,7 @@ fn run() -> Result<()> {
                 }
                 CacheAction::RemoveStale => {
                     let builder = Builder::new()?;
-                    let graph = builder.build_graph_for_cache()?;
-                    let valid_keys: std::collections::HashSet<String> = graph.products().iter()
-                        .map(|p| p.cache_key())
-                        .collect();
+                    let valid_keys = builder.valid_cache_keys()?;
                     let stale_count = builder.object_store().remove_stale(&valid_keys);
                     let (bytes, trim_count) = builder.object_store().trim()?;
                     builder.object_store().save()?;
@@ -206,10 +188,7 @@ fn run() -> Result<()> {
                 }
                 CacheAction::Stale => {
                     let builder = Builder::new()?;
-                    let graph = builder.build_graph_for_cache()?;
-                    let valid_keys: std::collections::HashSet<String> = graph.products().iter()
-                        .map(|p| p.cache_key())
-                        .collect();
+                    let valid_keys = builder.valid_cache_keys()?;
                     let entries = builder.object_store().list();
                     let mut current_count = 0usize;
                     let mut stale_count = 0usize;
@@ -256,23 +235,8 @@ fn run() -> Result<()> {
                 print_completions(shell);
             }
         }
-        Commands::Watch { jobs, timings, keep_going, no_summary, batch_size, ref processors, auto_add_words, progress, explain, no_mtime } => {
-            let opts = BuildOptions {
-                force: false,
-                verbose: cli.verbose,
-                display_opts: cli.display_options(),
-                jobs,
-                timings,
-                keep_going,
-                summary: !no_summary,
-                batch_size: batch_size.map(|n| if n < 0 { None } else { Some(n as usize) }),
-                stop_after: BuildPhase::Build,
-                processor_filter: processors.clone(),
-                auto_add_words,
-                progress,
-                explain,
-                no_mtime,
-            };
+        Commands::Watch { ref shared } => {
+            let opts = shared.to_build_options(&cli, false, BuildPhase::Build);
             watcher::watch(&opts, Arc::clone(&interrupted))?;
         }
         Commands::Version => {

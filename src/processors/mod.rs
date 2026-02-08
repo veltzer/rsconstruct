@@ -100,12 +100,13 @@ pub fn log_command(cmd: &Command) {
     }
 }
 
-/// Run a command interruptibly using tokio. If Ctrl+C is detected, the child
-/// process is killed immediately via async select.
+/// Shared inner function for running commands interruptibly using tokio.
 ///
-/// By default, output is captured and only shown on failure. Use `--show-output`
-/// to always show tool output.
-pub fn run_command(cmd: &mut Command) -> Result<Output> {
+/// - `inherit_stdio`: if true, inherit stdout/stderr (for --show-output mode);
+///   if false, always capture via pipes.
+/// - `print_on_failure`: if true, print captured output on command failure
+///   (only relevant when `inherit_stdio` is false).
+fn run_command_inner(cmd: &mut Command, inherit_stdio: bool, print_on_failure: bool) -> Result<Output> {
     log_command(cmd);
 
     // Check if already interrupted before spawning
@@ -117,7 +118,6 @@ pub fn run_command(cmd: &mut Command) -> Result<Output> {
     let program = cmd.get_program().to_os_string();
     let args: Vec<_> = cmd.get_args().map(|a| a.to_os_string()).collect();
     let current_dir = cmd.get_current_dir().map(|p| p.to_path_buf());
-    let show = SHOW_OUTPUT.load(Ordering::Relaxed);
 
     let rt = get_runtime();
     rt.block_on(async {
@@ -127,15 +127,13 @@ pub fn run_command(cmd: &mut Command) -> Result<Output> {
             tokio_cmd.current_dir(dir);
         }
 
-        // If --show-output, inherit stdout/stderr; otherwise capture
-        if show {
+        if inherit_stdio {
             tokio_cmd.stdout(std::process::Stdio::inherit());
             tokio_cmd.stderr(std::process::Stdio::inherit());
         } else {
             tokio_cmd.stdout(std::process::Stdio::piped());
             tokio_cmd.stderr(std::process::Stdio::piped());
         }
-        // Kill child on drop to ensure cleanup
         tokio_cmd.kill_on_drop(true);
 
         let child = tokio_cmd.spawn()
@@ -148,16 +146,14 @@ pub fn run_command(cmd: &mut Command) -> Result<Output> {
         tokio::select! {
             biased;
 
-            // Check for interrupt signal first (biased)
             _ = interrupt_rx.changed() => {
                 anyhow::bail!("Interrupted")
             }
-            // Wait for the child process to complete
             result = child.wait_with_output() => {
                 let output = result.context("Failed to wait for child process")?;
 
-                // If not showing output and command failed, print captured output
-                if !show && !output.status.success() {
+                // Print captured output on failure if requested
+                if print_on_failure && !output.status.success() {
                     if !output.stdout.is_empty() {
                         use std::io::Write;
                         let _ = std::io::stdout().write_all(&output.stdout);
@@ -174,52 +170,21 @@ pub fn run_command(cmd: &mut Command) -> Result<Output> {
     })
 }
 
+/// Run a command interruptibly using tokio. If Ctrl+C is detected, the child
+/// process is killed immediately via async select.
+///
+/// By default, output is captured and only shown on failure. Use `--show-output`
+/// to always show tool output.
+pub fn run_command(cmd: &mut Command) -> Result<Output> {
+    let show = SHOW_OUTPUT.load(Ordering::Relaxed);
+    run_command_inner(cmd, show, !show)
+}
+
 /// Run a command and capture its stdout/stderr output.
 /// Use this only when you need to parse the output.
 /// For commands where output should go to terminal, use run_command() instead.
 pub fn run_command_capture(cmd: &mut Command) -> Result<Output> {
-    log_command(cmd);
-
-    // Check if already interrupted before spawning
-    if INTERRUPTED.load(Ordering::SeqCst) {
-        anyhow::bail!("Interrupted");
-    }
-
-    // Build a tokio command from std::process::Command
-    let program = cmd.get_program().to_os_string();
-    let args: Vec<_> = cmd.get_args().map(|a| a.to_os_string()).collect();
-    let current_dir = cmd.get_current_dir().map(|p| p.to_path_buf());
-
-    let rt = get_runtime();
-    rt.block_on(async {
-        let mut tokio_cmd = tokio::process::Command::new(&program);
-        tokio_cmd.args(&args);
-        if let Some(dir) = &current_dir {
-            tokio_cmd.current_dir(dir);
-        }
-        tokio_cmd.stdout(std::process::Stdio::piped());
-        tokio_cmd.stderr(std::process::Stdio::piped());
-        tokio_cmd.kill_on_drop(true);
-
-        let child = tokio_cmd.spawn()
-            .with_context(|| format!("Failed to spawn: {} {}",
-                program.to_string_lossy(),
-                args.iter().map(|a| a.to_string_lossy()).collect::<Vec<_>>().join(" ")))?;
-
-        let mut interrupt_rx = get_interrupt_receiver();
-
-        tokio::select! {
-            biased;
-
-            _ = interrupt_rx.changed() => {
-                anyhow::bail!("Interrupted")
-            }
-            result = child.wait_with_output() => {
-                let output = result.context("Failed to wait for child process")?;
-                Ok(output)
-            }
-        }
-    })
+    run_command_inner(cmd, false, false)
 }
 
 pub use crate::graph::{BuildGraph, Product};
@@ -237,6 +202,11 @@ pub fn check_command_output(output: &Output, context: impl std::fmt::Display) ->
 /// Returns empty path if scan_dir is empty, otherwise the scan_dir as a relative path.
 pub fn scan_root(scan: &crate::config::ScanConfig) -> PathBuf {
     PathBuf::from(scan.scan_dir())
+}
+
+/// Check if a scan root is valid (empty means current dir, otherwise must exist).
+pub fn scan_root_valid(scan: &crate::config::ScanConfig) -> bool {
+    scan_root(scan).as_os_str().is_empty() || scan_root(scan).exists()
 }
 
 /// Compute a stub path for a source file.
@@ -290,6 +260,63 @@ pub fn discover_stub_products(
         inputs.extend(extra.clone());
         graph.add_product(inputs, vec![stub], processor_name, hash.clone())?;
     }
+    Ok(())
+}
+
+/// Options for filtering sibling files in directory-based product discovery.
+pub struct SiblingFilter<'a> {
+    pub extensions: &'a [&'a str],
+    pub excludes: &'a [&'a str],
+}
+
+/// Discover directory-based products: each discovered file anchors a product whose inputs
+/// include all sibling files under the same directory (filtered by extensions/excludes).
+///
+/// Used by processors like `make` and `cargo` where a manifest file (Makefile, Cargo.toml)
+/// represents a build unit and all files in its directory are inputs.
+/// All paths are relative to project root.
+pub fn discover_directory_products(
+    graph: &mut BuildGraph,
+    scan: &crate::config::ScanConfig,
+    file_index: &FileIndex,
+    extra_inputs: &[String],
+    cfg_hash: &impl serde::Serialize,
+    siblings: &SiblingFilter,
+    processor_name: &str,
+) -> Result<()> {
+    let files = file_index.scan(scan, true);
+    if files.is_empty() {
+        return Ok(());
+    }
+
+    let hash = Some(config_hash(cfg_hash));
+    let extra = resolve_extra_inputs(extra_inputs)?;
+
+    for anchor in files {
+        let anchor_dir = anchor.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+
+        // Collect all matching sibling files under the anchor's directory as inputs
+        let sibling_files = file_index.query(
+            &anchor_dir,
+            siblings.extensions,
+            siblings.excludes,
+            &[],
+            &[],
+        );
+
+        let mut inputs: Vec<PathBuf> = Vec::new();
+        // Anchor file first so product display shows it
+        inputs.push(anchor.clone());
+        for file in &sibling_files {
+            if *file != anchor {
+                inputs.push(file.clone());
+            }
+        }
+        inputs.extend(extra.clone());
+        // Empty outputs: cache entry = success record
+        graph.add_product(inputs, vec![], processor_name, hash.clone())?;
+    }
+
     Ok(())
 }
 
@@ -433,7 +460,9 @@ pub fn execute_checker_batch<F>(
 where
     F: Fn(&[&Path]) -> Result<()>,
 {
-    let input_paths: Vec<&Path> = products.iter().map(|p| p.inputs[0].as_path()).collect();
+    let input_paths: Vec<&Path> = products.iter()
+        .filter_map(|p| p.inputs.first().map(|i| i.as_path()))
+        .collect();
 
     match batch_fn(&input_paths) {
         Ok(()) => products.iter().map(|_| Ok(())).collect(),

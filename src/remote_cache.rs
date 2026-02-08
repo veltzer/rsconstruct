@@ -24,8 +24,16 @@ pub trait RemoteCache: Send + Sync {
     /// Download raw bytes (for index entries)
     fn download_bytes(&self, key: &str) -> Result<Option<Vec<u8>>>;
 
-    /// Upload raw bytes (for index entries)
-    fn upload_bytes(&self, key: &str, data: &[u8]) -> Result<()>;
+    /// Upload raw bytes (for index entries).
+    /// Default implementation writes to a temp file and delegates to upload().
+    fn upload_bytes(&self, key: &str, data: &[u8]) -> Result<()> {
+        let temp_dir = std::env::temp_dir();
+        let temp_file = temp_dir.join(format!("rsb-upload-{}", uuid_simple()));
+        fs::write(&temp_file, data)?;
+        let result = self.upload(key, &temp_file);
+        let _ = fs::remove_file(&temp_file);
+        result
+    }
 }
 
 /// Parse a remote URL and create the appropriate backend
@@ -144,15 +152,6 @@ impl RemoteCache for S3Backend {
         }
     }
 
-    fn upload_bytes(&self, key: &str, data: &[u8]) -> Result<()> {
-        let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join(format!("rsb-upload-{}", uuid_simple()));
-        fs::write(&temp_file, data)?;
-
-        let result = self.upload(key, &temp_file);
-        let _ = fs::remove_file(&temp_file);
-        result
-    }
 }
 
 /// HTTP backend using curl
@@ -245,15 +244,6 @@ impl RemoteCache for HttpBackend {
         }
     }
 
-    fn upload_bytes(&self, key: &str, data: &[u8]) -> Result<()> {
-        let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join(format!("rsb-upload-{}", uuid_simple()));
-        fs::write(&temp_file, data)?;
-
-        let result = self.upload(key, &temp_file);
-        let _ = fs::remove_file(&temp_file);
-        result
-    }
 }
 
 /// File backend for local/network filesystem
@@ -342,16 +332,21 @@ impl RemoteCache for FileBackend {
     }
 }
 
-/// Generate a simple unique identifier (timestamp + random)
+/// Generate a simple unique identifier (timestamp + pid + counter)
 fn uuid_simple() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
 
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
+    let pid = std::process::id();
+    let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
 
-    format!("{:x}", timestamp)
+    format!("{:x}-{:x}-{:x}", timestamp, pid, seq)
 }
 
 #[cfg(test)]

@@ -175,6 +175,29 @@ impl DepsCache {
         Ok(())
     }
 
+    /// Collect all entries from the database as (key, DepsEntry) pairs.
+    /// Returns an empty Vec on any error (missing table, etc.).
+    fn collect_entries(&self) -> Vec<(String, DepsEntry)> {
+        let read_txn = match self.db.begin_read() {
+            Ok(t) => t,
+            Err(_) => return Vec::new(),
+        };
+        let table = match read_txn.open_table(DEPS_TABLE) {
+            Ok(t) => t,
+            Err(_) => return Vec::new(),
+        };
+        let iter = match table.iter() {
+            Ok(i) => i,
+            Err(_) => return Vec::new(),
+        };
+        iter.filter_map(|item| {
+            let (key, value) = item.ok()?;
+            let entry: DepsEntry = serde_json::from_slice(value.value()).ok()?;
+            Some((key.value().to_string(), entry))
+        })
+        .collect()
+    }
+
     /// Get raw cached dependencies for a source file without validation.
     /// Returns None if the file isn't in the cache.
     /// Returns (dependencies, analyzer_name).
@@ -193,52 +216,25 @@ impl DepsCache {
     /// List all cached source files and their dependencies.
     /// Returns tuples of (source_path, dependencies, analyzer_name).
     pub fn list_all(&self) -> Vec<(PathBuf, Vec<PathBuf>, String)> {
-        let read_txn = match self.db.begin_read() {
-            Ok(t) => t,
-            Err(_) => return Vec::new(),
-        };
-        let table = match read_txn.open_table(DEPS_TABLE) {
-            Ok(t) => t,
-            Err(_) => return Vec::new(),
-        };
-        let iter = match table.iter() {
-            Ok(i) => i,
-            Err(_) => return Vec::new(),
-        };
-        iter.filter_map(|item| {
-            let (key, value) = item.ok()?;
-            let source = PathBuf::from(key.value().to_string());
-            let entry: DepsEntry = serde_json::from_slice(value.value()).ok()?;
-            let deps: Vec<PathBuf> = entry.dependencies.iter().map(PathBuf::from).collect();
-            Some((source, deps, entry.analyzer))
-        })
-        .collect()
+        self.collect_entries()
+            .into_iter()
+            .map(|(key, entry)| {
+                let source = PathBuf::from(key);
+                let deps: Vec<PathBuf> = entry.dependencies.iter().map(PathBuf::from).collect();
+                (source, deps, entry.analyzer)
+            })
+            .collect()
     }
 
     /// Get statistics about cached dependencies by analyzer.
     /// Returns a map of analyzer_name -> (file_count, total_dep_count).
     pub fn stats_by_analyzer(&self) -> std::collections::HashMap<String, (usize, usize)> {
         let mut stats: std::collections::HashMap<String, (usize, usize)> = std::collections::HashMap::new();
-        let read_txn = match self.db.begin_read() {
-            Ok(t) => t,
-            Err(_) => return stats,
-        };
-        let table = match read_txn.open_table(DEPS_TABLE) {
-            Ok(t) => t,
-            Err(_) => return stats,
-        };
-        let iter = match table.iter() {
-            Ok(i) => i,
-            Err(_) => return stats,
-        };
-        for item in iter {
-            if let Ok((_, value)) = item
-                && let Ok(entry) = serde_json::from_slice::<DepsEntry>(value.value()) {
-                    let analyzer = if entry.analyzer.is_empty() { "unknown".to_string() } else { entry.analyzer };
-                    let (files, deps) = stats.entry(analyzer).or_insert((0, 0));
-                    *files += 1;
-                    *deps += entry.dependencies.len();
-                }
+        for (_key, entry) in self.collect_entries() {
+            let analyzer = if entry.analyzer.is_empty() { "unknown".to_string() } else { entry.analyzer };
+            let (files, deps) = stats.entry(analyzer).or_insert((0, 0));
+            *files += 1;
+            *deps += entry.dependencies.len();
         }
         stats
     }
@@ -246,55 +242,33 @@ impl DepsCache {
     /// List cached source files and their dependencies filtered by analyzer names.
     /// Returns tuples of (source_path, dependencies, analyzer_name).
     pub fn list_by_analyzers(&self, analyzers: &[String]) -> Vec<(PathBuf, Vec<PathBuf>, String)> {
-        let read_txn = match self.db.begin_read() {
-            Ok(t) => t,
-            Err(_) => return Vec::new(),
-        };
-        let table = match read_txn.open_table(DEPS_TABLE) {
-            Ok(t) => t,
-            Err(_) => return Vec::new(),
-        };
-        let iter = match table.iter() {
-            Ok(i) => i,
-            Err(_) => return Vec::new(),
-        };
-        iter.filter_map(|item| {
-            let (key, value) = item.ok()?;
-            let source = PathBuf::from(key.value().to_string());
-            let entry: DepsEntry = serde_json::from_slice(value.value()).ok()?;
-            if !analyzers.contains(&entry.analyzer) {
-                return None;
-            }
-            let deps: Vec<PathBuf> = entry.dependencies.iter().map(PathBuf::from).collect();
-            Some((source, deps, entry.analyzer))
-        })
-        .collect()
+        self.collect_entries()
+            .into_iter()
+            .filter_map(|(key, entry)| {
+                if !analyzers.contains(&entry.analyzer) {
+                    return None;
+                }
+                let source = PathBuf::from(key);
+                let deps: Vec<PathBuf> = entry.dependencies.iter().map(PathBuf::from).collect();
+                Some((source, deps, entry.analyzer))
+            })
+            .collect()
     }
 
     /// Remove all cached entries created by a specific analyzer.
     /// Returns the number of entries removed.
     pub fn remove_by_analyzer(&self, analyzer: &str) -> Result<usize> {
         // First, collect keys to remove by reading
-        let keys_to_remove: Vec<String> = {
-            let read_txn = self.db.begin_read()
-                .context("Failed to begin read transaction")?;
-            let table = match read_txn.open_table(DEPS_TABLE) {
-                Ok(t) => t,
-                Err(_) => return Ok(0),
-            };
-            let iter = table.iter()
-                .context("Failed to iterate dependency cache")?;
-            iter.filter_map(|item| {
-                let (key, value) = item.ok()?;
-                let entry: DepsEntry = serde_json::from_slice(value.value()).ok()?;
+        let keys_to_remove: Vec<String> = self.collect_entries()
+            .into_iter()
+            .filter_map(|(key, entry)| {
                 if entry.analyzer == analyzer {
-                    Some(key.value().to_string())
+                    Some(key)
                 } else {
                     None
                 }
             })
-            .collect()
-        };
+            .collect();
 
         let mut removed = 0;
         if !keys_to_remove.is_empty() {

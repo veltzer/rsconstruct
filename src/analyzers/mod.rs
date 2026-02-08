@@ -10,6 +10,7 @@ pub use cpp::CppDepAnalyzer;
 pub use python::PythonDepAnalyzer;
 
 use anyhow::Result;
+use std::path::{Path, PathBuf};
 use crate::deps_cache::DepsCache;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
@@ -42,4 +43,81 @@ pub trait DepAnalyzer: Sync + Send {
     /// 3. Use deps_cache to avoid re-scanning unchanged files
     /// 4. Add discovered dependencies to the product's inputs
     fn analyze(&self, graph: &mut BuildGraph, deps_cache: &mut DepsCache, file_index: &FileIndex) -> Result<()>;
+}
+
+/// Shared helper for analyzer `analyze()` implementations.
+///
+/// Iterates over products in the graph, filters them using `match_product`, checks the
+/// dependency cache, scans dependencies using `scan_deps` on cache miss, caches results,
+/// and adds discovered dependencies to product inputs. Shows a progress bar and cache stats.
+///
+/// - `match_product`: given a product, returns `Some(source_path)` if the product is relevant
+/// - `scan_deps`: given a source path, returns the list of dependency paths
+pub fn analyze_with_scanner<F, G>(
+    graph: &mut BuildGraph,
+    deps_cache: &mut DepsCache,
+    analyzer_name: &str,
+    match_product: F,
+    scan_deps: G,
+) -> Result<()>
+where
+    F: Fn(&crate::graph::Product) -> Option<PathBuf>,
+    G: Fn(&Path) -> Result<Vec<PathBuf>>,
+{
+    // Collect matching products: (product_id, source_path)
+    let products: Vec<(usize, PathBuf)> = graph.products()
+        .iter()
+        .filter_map(|p| {
+            match_product(p).map(|source| (p.id, source))
+        })
+        .collect();
+
+    if products.is_empty() {
+        return Ok(());
+    }
+
+    // Show progress bar for dependency scanning
+    let pb = indicatif::ProgressBar::new(products.len() as u64);
+    pb.set_style(
+        indicatif::ProgressStyle::default_bar()
+            .template(&format!("[{}] Scanning dependencies {{bar:40}} {{pos}}/{{len}} {{msg}}", analyzer_name))
+            .unwrap()
+            .progress_chars("##-")
+    );
+
+    for (id, source) in &products {
+        pb.set_message(source.display().to_string());
+
+        // Try to get cached dependencies, otherwise scan
+        let deps = if let Some(cached) = deps_cache.get(source) {
+            cached
+        } else {
+            let scanned = scan_deps(source)?;
+            // Cache the result with analyzer tag (ignore errors)
+            let _ = deps_cache.set(source, &scanned, analyzer_name);
+            scanned
+        };
+
+        // Add dependencies to the product
+        if !deps.is_empty()
+            && let Some(product) = graph.get_product_mut(*id) {
+                for dep in deps {
+                    if !product.inputs.contains(&dep) {
+                        product.inputs.push(dep);
+                    }
+                }
+            }
+
+        pb.inc(1);
+    }
+    pb.finish_and_clear();
+
+    // Show cache stats
+    let stats = deps_cache.stats();
+    if stats.hits > 0 || stats.misses > 0 {
+        eprintln!("[{}] Dependency cache: {} hits, {} recalculated",
+            analyzer_name, stats.hits, stats.misses);
+    }
+
+    Ok(())
 }

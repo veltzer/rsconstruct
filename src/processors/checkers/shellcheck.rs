@@ -5,7 +5,7 @@ use std::process::Command;
 use crate::config::ShellcheckConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProductDiscovery, discover_checker_products, scan_root, run_command, check_command_output, execute_checker_batch};
+use crate::processors::{ProductDiscovery, discover_checker_products, scan_root_valid, run_command, check_command_output, execute_checker_batch};
 
 pub struct ShellcheckProcessor {
     project_root: PathBuf,
@@ -22,7 +22,7 @@ impl ShellcheckProcessor {
 
     /// Check if shell linting should be enabled
     fn should_lint(&self) -> bool {
-        scan_root(&self.config.scan).as_os_str().is_empty() || scan_root(&self.config.scan).exists()
+        scan_root_valid(&self.config.scan)
     }
 
     /// Run shellcheck on one or more files

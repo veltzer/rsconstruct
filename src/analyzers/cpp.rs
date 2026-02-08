@@ -264,6 +264,7 @@ impl CppDepAnalyzer {
     fn scan_dependencies_native(&self, source: &Path, is_cpp: bool) -> Result<Vec<PathBuf>> {
         let mut visited: HashSet<PathBuf> = HashSet::new();
         let mut headers: Vec<PathBuf> = Vec::new();
+        let mut headers_set: HashSet<PathBuf> = HashSet::new();
 
         // Build include search paths:
         // 1. Source file's directory (for "" includes)
@@ -290,7 +291,7 @@ impl CppDepAnalyzer {
         // Get system include paths from the compiler
         let system_paths = self.get_system_include_paths(is_cpp);
 
-        self.scan_includes_recursive(source, &search_paths, system_paths, &mut visited, &mut headers)?;
+        self.scan_includes_recursive(source, &search_paths, system_paths, &mut visited, &mut headers, &mut headers_set)?;
 
         Ok(headers)
     }
@@ -303,6 +304,7 @@ impl CppDepAnalyzer {
         system_paths: &[PathBuf],
         visited: &mut HashSet<PathBuf>,
         headers: &mut Vec<PathBuf>,
+        headers_set: &mut HashSet<PathBuf>,
     ) -> Result<()> {
         // Normalize path to avoid visiting same file twice
         let canonical = match file.canonicalize() {
@@ -320,7 +322,10 @@ impl CppDepAnalyzer {
 
         // Regex to match #include "file" and #include <file>
         // Captures: 1 = bracket type (< or "), 2 = path
-        let include_re = Regex::new(r#"^\s*#\s*include\s*([<"])([^>"]+)[>"]"#).unwrap();
+        static INCLUDE_RE: OnceLock<Regex> = OnceLock::new();
+        let include_re = INCLUDE_RE.get_or_init(|| {
+            Regex::new(r#"^\s*#\s*include\s*([<"])([^>"]+)[>"]"#).unwrap()
+        });
 
         for line in content.lines() {
             if let Some(caps) = include_re.captures(line) {
@@ -362,12 +367,12 @@ impl CppDepAnalyzer {
                             header_path.clone()
                         };
 
-                        if !headers.contains(&relative) {
-                            headers.push(relative.clone());
+                        if headers_set.insert(relative.clone()) {
+                            headers.push(relative);
                         }
 
                         // Recursively scan this header
-                        self.scan_includes_recursive(&header_path, search_paths, system_paths, visited, headers)?;
+                        self.scan_includes_recursive(&header_path, search_paths, system_paths, visited, headers, headers_set)?;
                     }
                     // If found but not project-local (system header), that's fine - skip it
                 } else {
@@ -559,80 +564,33 @@ impl DepAnalyzer for CppDepAnalyzer {
     }
 
     fn analyze(&self, graph: &mut BuildGraph, deps_cache: &mut DepsCache, _file_index: &FileIndex) -> Result<()> {
-        // Find all products that have C/C++ source files as their primary input
         let cpp_extensions: HashSet<&str> = [".c", ".cc", ".cpp", ".cxx"].iter().copied().collect();
 
-        // Collect products with C/C++ sources, excluding those in exclude_dirs
-        let products: Vec<(usize, PathBuf, bool)> = graph.products()
-            .iter()
-            .filter_map(|p| {
+        super::analyze_with_scanner(
+            graph,
+            deps_cache,
+            "cpp",
+            |p| {
                 if p.inputs.is_empty() {
                     return None;
                 }
                 let source = &p.inputs[0];
-                // Skip files in excluded directories
                 if self.is_excluded(source) {
                     return None;
                 }
                 let ext = source.extension().and_then(|s| s.to_str()).unwrap_or("");
                 let ext_with_dot = format!(".{}", ext);
                 if cpp_extensions.contains(ext_with_dot.as_str()) {
-                    let is_cpp = ext == "cc" || ext == "cpp" || ext == "cxx";
-                    Some((p.id, source.clone(), is_cpp))
+                    Some(source.clone())
                 } else {
                     None
                 }
-            })
-            .collect();
-
-        if products.is_empty() {
-            return Ok(());
-        }
-
-        // Show progress bar for dependency scanning
-        let pb = indicatif::ProgressBar::new(products.len() as u64);
-        pb.set_style(
-            indicatif::ProgressStyle::default_bar()
-                .template("[cpp] Scanning dependencies {bar:40} {pos}/{len} {msg}")
-                .unwrap()
-                .progress_chars("##-")
-        );
-
-        for (id, source, is_cpp) in &products {
-            pb.set_message(source.display().to_string());
-
-            // Try to get cached dependencies, otherwise scan
-            let headers = if let Some(cached) = deps_cache.get(source) {
-                cached
-            } else {
-                let scanned = self.scan_dependencies(source, *is_cpp)?;
-                // Cache the result with analyzer tag (ignore errors)
-                let _ = deps_cache.set(source, &scanned, "cpp");
-                scanned
-            };
-
-            // Add header dependencies to the product
-            if !headers.is_empty()
-                && let Some(product) = graph.get_product_mut(*id) {
-                    // Avoid duplicates
-                    for header in headers {
-                        if !product.inputs.contains(&header) {
-                            product.inputs.push(header);
-                        }
-                    }
-                }
-
-            pb.inc(1);
-        }
-        pb.finish_and_clear();
-
-        // Show cache stats
-        let stats = deps_cache.stats();
-        if stats.hits > 0 || stats.misses > 0 {
-            eprintln!("[cpp] Dependency cache: {} hits, {} recalculated",
-                stats.hits, stats.misses);
-        }
-
-        Ok(())
+            },
+            |source| {
+                let ext = source.extension().and_then(|s| s.to_str()).unwrap_or("");
+                let is_cpp = ext == "cc" || ext == "cpp" || ext == "cxx";
+                self.scan_dependencies(source, is_cpp)
+            },
+        )
     }
 }

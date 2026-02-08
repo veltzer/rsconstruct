@@ -2,10 +2,10 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::config::{CargoConfig, config_hash, resolve_extra_inputs};
+use crate::config::CargoConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProductDiscovery, scan_root, run_command, check_command_output};
+use crate::processors::{ProductDiscovery, SiblingFilter, discover_directory_products, scan_root_valid, run_command, check_command_output};
 
 pub struct CargoProcessor {
     config: CargoConfig,
@@ -18,7 +18,7 @@ impl CargoProcessor {
 
     /// Check if cargo processing should be enabled
     fn should_process(&self) -> bool {
-        scan_root(&self.config.scan).as_os_str().is_empty() || scan_root(&self.config.scan).exists()
+        scan_root_valid(&self.config.scan)
     }
 
     /// Run cargo build in the Cargo.toml's directory
@@ -63,46 +63,18 @@ impl ProductDiscovery for CargoProcessor {
             return Ok(());
         }
 
-        let cargo_tomls = file_index.scan(&self.config.scan, true);
-        if cargo_tomls.is_empty() {
-            return Ok(());
-        }
-
-        let cfg_hash = Some(config_hash(&self.config));
-        let extra = resolve_extra_inputs(&self.config.extra_inputs)?;
-
-        for cargo_toml in cargo_tomls {
-            let project_dir = cargo_toml
-                .parent()
-                .map(|p| p.to_path_buf())
-                .unwrap_or_default();
-
-            // Collect all Rust source files under the project directory as inputs
-            // so that changes to any .rs file trigger a rebuild.
-            let rust_files = file_index.query(
-                &project_dir,
-                &[".rs", ".toml"], // Match Rust sources and Cargo files
-                &["/.git/", "/target/", "/.rsb/"],
-                &[],
-                &[],
-            );
-
-            let mut inputs: Vec<PathBuf> = Vec::new();
-            // Cargo.toml first so product display shows it
-            inputs.push(cargo_toml.clone());
-            for file in &rust_files {
-                if *file != cargo_toml {
-                    inputs.push(file.clone());
-                }
-            }
-            inputs.extend(extra.clone());
-
-            // Empty outputs: cache entry = success record
-            // (Cargo manages its own target/ directory)
-            graph.add_product(inputs, vec![], "cargo", cfg_hash.clone())?;
-        }
-
-        Ok(())
+        discover_directory_products(
+            graph,
+            &self.config.scan,
+            file_index,
+            &self.config.extra_inputs,
+            &self.config,
+            &SiblingFilter {
+                extensions: &[".rs", ".toml"], // Match Rust sources and Cargo files
+                excludes: &["/.git/", "/target/", "/.rsb/"],
+            },
+            "cargo",
+        )
     }
 
     fn execute(&self, product: &Product) -> Result<()> {

@@ -7,7 +7,7 @@ use std::time::Duration;
 use crate::config::SleepConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProductDiscovery, scan_root, discover_checker_products, is_interrupted};
+use crate::processors::{ProductDiscovery, scan_root_valid, discover_checker_products, is_interrupted};
 
 pub struct SleepProcessor {
     config: SleepConfig,
@@ -22,7 +22,7 @@ impl SleepProcessor {
 
     /// Check if sleep processing should be enabled
     fn should_process(&self) -> bool {
-        scan_root(&self.config.scan).as_os_str().is_empty() || scan_root(&self.config.scan).exists()
+        scan_root_valid(&self.config.scan)
     }
 
     /// Read duration from sleep file and sleep

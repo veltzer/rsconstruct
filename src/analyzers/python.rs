@@ -125,71 +125,26 @@ impl DepAnalyzer for PythonDepAnalyzer {
     }
 
     fn analyze(&self, graph: &mut BuildGraph, deps_cache: &mut DepsCache, file_index: &FileIndex) -> Result<()> {
-        // Find all products that have Python source files as their primary input
-        let products: Vec<(usize, PathBuf)> = graph.products()
-            .iter()
-            .filter_map(|p| {
+        super::analyze_with_scanner(
+            graph,
+            deps_cache,
+            "python",
+            |p| {
                 if p.inputs.is_empty() {
                     return None;
                 }
                 let source = &p.inputs[0];
                 let ext = source.extension().and_then(|s| s.to_str()).unwrap_or("");
                 if ext == "py" {
-                    Some((p.id, source.clone()))
+                    Some(source.clone())
                 } else {
                     None
                 }
-            })
-            .collect();
-
-        if products.is_empty() {
-            return Ok(());
-        }
-
-        // Show progress bar for dependency scanning
-        let pb = indicatif::ProgressBar::new(products.len() as u64);
-        pb.set_style(
-            indicatif::ProgressStyle::default_bar()
-                .template("[python] Scanning dependencies {bar:40} {pos}/{len} {msg}")
-                .unwrap()
-                .progress_chars("##-")
-        );
-
-        for (id, source) in &products {
-            pb.set_message(source.display().to_string());
-
-            // Try to get cached dependencies, otherwise scan
-            let imports = if let Some(cached) = deps_cache.get(source) {
-                cached
-            } else {
-                let scanned = self.scan_imports(source, file_index).unwrap_or_default();
-                // Cache the result with analyzer tag (ignore errors)
-                let _ = deps_cache.set(source, &scanned, "python");
-                scanned
-            };
-
-            // Add import dependencies to the product
-            if !imports.is_empty()
-                && let Some(product) = graph.get_product_mut(*id) {
-                    // Avoid duplicates
-                    for import in imports {
-                        if !product.inputs.contains(&import) {
-                            product.inputs.push(import);
-                        }
-                    }
-                }
-
-            pb.inc(1);
-        }
-        pb.finish_and_clear();
-
-        // Show cache stats
-        let stats = deps_cache.stats();
-        if stats.hits > 0 || stats.misses > 0 {
-            eprintln!("[python] Dependency cache: {} hits, {} recalculated",
-                stats.hits, stats.misses);
-        }
-
-        Ok(())
+            },
+            |source| {
+                // Python analyzer swallows scan errors (unwrap_or_default in original)
+                Ok(self.scan_imports(source, file_index).unwrap_or_default())
+            },
+        )
     }
 }

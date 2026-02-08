@@ -1,4 +1,4 @@
-use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
+use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
 use std::io;
 use std::str::FromStr;
@@ -165,57 +165,20 @@ pub enum Commands {
         #[arg(short, long)]
         force: bool,
 
-        /// Number of parallel jobs (overrides config file)
-        #[arg(short, long)]
-        jobs: Option<usize>,
-
-        /// Show per-product and total build timing information
-        #[arg(long)]
-        timings: bool,
-
-        /// Continue building after errors, skipping dependents of failed products
-        #[arg(short = 'k', long)]
-        keep_going: bool,
-
         /// Show what would be built without executing anything
         #[arg(short = 'n', long)]
         dry_run: bool,
-
-        /// Suppress the build summary
-        #[arg(long)]
-        no_summary: bool,
 
         /// Skip tool version verification against .tools.versions
         #[arg(long)]
         ignore_tool_versions: bool,
 
-        /// Batch size for batch-capable processors (0 = no limit, -1 = disable, omit to use config)
-        #[arg(long, allow_negative_numbers = true)]
-        batch_size: Option<i32>,
-
         /// Stop after a specific build phase
         #[arg(long, value_enum, default_value = "build")]
         stop_after: BuildPhase,
 
-        /// Only run specific processors (comma-separated list)
-        #[arg(short, long, value_delimiter = ',')]
-        processors: Option<Vec<String>>,
-
-        /// Automatically add misspelled words to .spellcheck-words instead of failing
-        #[arg(long)]
-        auto_add_words: bool,
-
-        /// Show a progress bar during the build
-        #[arg(long)]
-        progress: bool,
-
-        /// Show why each product is skipped, restored, or rebuilt
-        #[arg(long)]
-        explain: bool,
-
-        /// Disable mtime pre-check (always compute full checksums)
-        #[arg(long)]
-        no_mtime: bool,
+        #[command(flatten)]
+        shared: SharedBuildArgs,
     },
     /// Clean build artifacts
     Clean {
@@ -239,45 +202,8 @@ pub enum Commands {
     },
     /// Watch source files and auto-rebuild on changes
     Watch {
-        /// Number of parallel jobs (overrides config file)
-        #[arg(short, long)]
-        jobs: Option<usize>,
-
-        /// Show per-product and total build timing information
-        #[arg(long)]
-        timings: bool,
-
-        /// Continue building after errors, skipping dependents of failed products
-        #[arg(short = 'k', long)]
-        keep_going: bool,
-
-        /// Suppress the build summary
-        #[arg(long)]
-        no_summary: bool,
-
-        /// Batch size for batch-capable processors (0 = no limit, -1 = disable, omit to use config)
-        #[arg(long, allow_negative_numbers = true)]
-        batch_size: Option<i32>,
-
-        /// Only run specific processors (comma-separated list)
-        #[arg(short, long, value_delimiter = ',')]
-        processors: Option<Vec<String>>,
-
-        /// Automatically add misspelled words to .spellcheck-words instead of failing
-        #[arg(long)]
-        auto_add_words: bool,
-
-        /// Show a progress bar during the build
-        #[arg(long)]
-        progress: bool,
-
-        /// Show why each product is skipped, restored, or rebuilt
-        #[arg(long)]
-        explain: bool,
-
-        /// Disable mtime pre-check (always compute full checksums)
-        #[arg(long)]
-        no_mtime: bool,
+        #[command(flatten)]
+        shared: SharedBuildArgs,
     },
     /// Manage processors
     Processors {
@@ -430,6 +356,72 @@ pub enum DepsShowFilter {
         #[arg(required = true)]
         analyzers: Vec<String>,
     },
+}
+
+/// CLI arguments shared between Build and Watch commands.
+#[derive(Args, Clone)]
+pub struct SharedBuildArgs {
+    /// Number of parallel jobs (overrides config file)
+    #[arg(short, long)]
+    pub jobs: Option<usize>,
+
+    /// Show per-product and total build timing information
+    #[arg(long)]
+    pub timings: bool,
+
+    /// Continue building after errors, skipping dependents of failed products
+    #[arg(short = 'k', long)]
+    pub keep_going: bool,
+
+    /// Suppress the build summary
+    #[arg(long)]
+    pub no_summary: bool,
+
+    /// Batch size for batch-capable processors (0 = no limit, -1 = disable, omit to use config)
+    #[arg(long, allow_negative_numbers = true)]
+    pub batch_size: Option<i32>,
+
+    /// Only run specific processors (comma-separated list)
+    #[arg(short, long, value_delimiter = ',')]
+    pub processors: Option<Vec<String>>,
+
+    /// Automatically add misspelled words to .spellcheck-words instead of failing
+    #[arg(long)]
+    pub auto_add_words: bool,
+
+    /// Show a progress bar during the build
+    #[arg(long)]
+    pub progress: bool,
+
+    /// Show why each product is skipped, restored, or rebuilt
+    #[arg(long)]
+    pub explain: bool,
+
+    /// Disable mtime pre-check (always compute full checksums)
+    #[arg(long)]
+    pub no_mtime: bool,
+}
+
+impl SharedBuildArgs {
+    /// Convert to BuildOptions with the given overrides for build-only fields.
+    pub fn to_build_options(&self, cli: &Cli, force: bool, stop_after: BuildPhase) -> BuildOptions {
+        BuildOptions {
+            force,
+            verbose: cli.verbose,
+            display_opts: cli.display_options(),
+            jobs: self.jobs,
+            timings: self.timings,
+            keep_going: self.keep_going,
+            summary: !self.no_summary,
+            batch_size: self.batch_size.map(|n| if n < 0 { None } else { Some(n as usize) }),
+            stop_after,
+            processor_filter: self.processors.clone(),
+            auto_add_words: self.auto_add_words,
+            progress: self.progress,
+            explain: self.explain,
+            no_mtime: self.no_mtime,
+        }
+    }
 }
 
 /// Options shared by build and watch commands.

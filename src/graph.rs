@@ -503,31 +503,26 @@ impl BuildGraph {
 
     /// Format graph as JSON
     pub fn to_json(&self) -> String {
-        let mut nodes = Vec::new();
-        for product in &self.products {
-            let inputs: Vec<_> = product.inputs.iter()
-                .map(|p| p.display().to_string())
-                .collect();
-            let outputs: Vec<_> = product.outputs.iter()
-                .map(|p| p.display().to_string())
-                .collect();
-            nodes.push(format!(
-                r#"    {{
-      "id": {},
-      "processor": "{}",
-      "inputs": {:?},
-      "outputs": {:?},
-      "depends_on": {:?}
-    }}"#,
-                product.id,
-                product.processor,
-                inputs,
-                outputs,
-                &self.dependencies[product.id]
-            ));
-        }
+        let nodes: Vec<serde_json::Value> = self.products.iter()
+            .map(|product| {
+                let inputs: Vec<String> = product.inputs.iter()
+                    .map(|p| p.display().to_string())
+                    .collect();
+                let outputs: Vec<String> = product.outputs.iter()
+                    .map(|p| p.display().to_string())
+                    .collect();
+                serde_json::json!({
+                    "id": product.id,
+                    "processor": product.processor,
+                    "inputs": inputs,
+                    "outputs": outputs,
+                    "depends_on": &self.dependencies[product.id],
+                })
+            })
+            .collect();
 
-        format!("{{\n  \"products\": [\n{}\n  ]\n}}", nodes.join(",\n"))
+        let root = serde_json::json!({ "products": nodes });
+        serde_json::to_string_pretty(&root).expect("internal error: failed to serialize graph JSON")
     }
 
     /// Format graph as plain text

@@ -205,7 +205,12 @@ fn load_python_config(python_file: &Path) -> Result<Map<String, Value>> {
         anyhow::bail!("Python config file not found: {}", absolute_path.display());
     }
 
-    // Create a Python script that will execute the config file and output variables as JSON
+    // Create a Python script that will execute the config file and output variables as JSON.
+    // Escape backslashes and single quotes for safe embedding in Python string literals.
+    let config_dir = absolute_path.parent().unwrap_or(Path::new(".")).display().to_string()
+        .replace('\\', "\\\\").replace('\'', "\\'");
+    let config_path = absolute_path.display().to_string()
+        .replace('\\', "\\\\").replace('\'', "\\'");
     let python_script = format!(
         r#"
 import sys
@@ -213,7 +218,7 @@ import json
 import os
 
 # Set the working directory to the config file's directory
-config_dir = r'{}'
+config_dir = '{}'
 if config_dir:
     sys.path.insert(0, config_dir)
 
@@ -221,7 +226,7 @@ if config_dir:
 namespace = {{}}
 
 # Execute the config file
-with open(r'{}', 'r') as f:
+with open('{}', 'r') as f:
     exec(f.read(), namespace)
 
 # Filter out built-in variables and convert to JSON-serializable format
@@ -238,8 +243,8 @@ for key, value in namespace.items():
 
 print(json.dumps(result))
 "#,
-        absolute_path.parent().unwrap_or(Path::new(".")).display(),
-        absolute_path.display()
+        config_dir,
+        config_path
     );
 
     // Execute Python and capture output

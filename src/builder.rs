@@ -100,9 +100,11 @@ impl Builder {
 
         let processor_filter = opts.processor_filter.as_deref();
 
+        // Create processors
+        let processors = self.create_processors(opts.verbose)?;
+
         // Validate processor filter against available processors
         if let Some(filter) = processor_filter {
-            let processors = self.create_processors(opts.verbose)?;
             for name in filter {
                 if !processors.contains_key(name) {
                     let available: Vec<_> = processors.keys().collect();
@@ -113,9 +115,6 @@ impl Builder {
                 }
             }
         }
-
-        // Create processors
-        let processors = self.create_processors(opts.verbose)?;
 
         // Check for config changes and display diffs
         self.detect_config_changes(&processors);
@@ -741,6 +740,12 @@ impl Builder {
     /// Build the dependency graph for cache operations (public).
     pub fn build_graph_for_cache(&self) -> Result<BuildGraph> {
         self.build_graph()
+    }
+
+    /// Compute the set of valid cache keys from the current build graph.
+    pub fn valid_cache_keys(&self) -> Result<std::collections::HashSet<String>> {
+        let graph = self.build_graph_for_cache()?;
+        Ok(graph.products().iter().map(|p| p.cache_key()).collect())
     }
 
     /// Get a reference to the object store.

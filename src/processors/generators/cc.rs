@@ -37,6 +37,36 @@ struct SourceFlags {
     link_args_after: Vec<String>,
 }
 
+/// Extract the comment value from a C/C++ source line.
+///
+/// Handles three comment styles:
+///   - `// ...` — returns the text after `//`
+///   - `/* ... */` — returns the text between `/*` and `*/`
+///   - `* ...` — block comment continuation line, returns the text after `*`
+///
+/// Returns None for non-comment lines or empty/closing block comment lines.
+fn extract_comment_value(line: &str) -> Option<&str> {
+    let trimmed = line.trim();
+
+    // Try // comment style
+    if let Some(rest) = trimmed.strip_prefix("//") {
+        return Some(rest.trim());
+    }
+    // Try /* ... */ comment style (single-line)
+    if let Some(rest) = trimmed.strip_prefix("/*") {
+        return rest.strip_suffix("*/").map(|s| s.trim());
+    }
+    // Try block comment continuation line: * ...
+    if let Some(rest) = trimmed.strip_prefix('*') {
+        let rest = rest.trim();
+        if rest.is_empty() || rest == "/" {
+            return None;
+        }
+        return Some(rest.strip_suffix("*/").map(|s| s.trim()).unwrap_or(rest));
+    }
+    None
+}
+
 /// Check if a source file should be excluded from a specific compiler profile.
 ///
 /// Looks for directives like:
@@ -56,29 +86,7 @@ fn should_exclude_for_profile(source: &Path, profile_name: &str) -> bool {
     };
 
     for line in content.lines() {
-        let trimmed = line.trim();
-
-        // Try // comment style
-        let value_part = if let Some(rest) = trimmed.strip_prefix("//") {
-            Some(rest.trim())
-        }
-        // Try /* ... */ comment style (single-line)
-        else if let Some(rest) = trimmed.strip_prefix("/*") {
-            rest.strip_suffix("*/").map(|s| s.trim())
-        }
-        // Try block comment continuation line: * EXCLUDE_PROFILE...
-        else if let Some(rest) = trimmed.strip_prefix('*') {
-            let rest = rest.trim();
-            if rest.is_empty() || rest == "/" {
-                None
-            } else {
-                Some(rest.strip_suffix("*/").map(|s| s.trim()).unwrap_or(rest))
-            }
-        } else {
-            None
-        };
-
-        let Some(value_part) = value_part else {
+        let Some(value_part) = extract_comment_value(line) else {
             continue;
         };
 
@@ -143,31 +151,7 @@ fn parse_source_flags(source: &Path, profile_name: &str) -> Result<SourceFlags> 
     ];
 
     for line in content.lines() {
-        let trimmed = line.trim();
-
-        // Try // comment style
-        let value_part = if let Some(rest) = trimmed.strip_prefix("//") {
-            Some(rest.trim())
-        }
-        // Try /* ... */ comment style (single-line)
-        else if let Some(rest) = trimmed.strip_prefix("/*") {
-            rest.strip_suffix("*/").map(|s| s.trim())
-        }
-        // Try block comment continuation line: * EXTRA_...
-        else if let Some(rest) = trimmed.strip_prefix('*') {
-            let rest = rest.trim();
-            // Skip closing */ lines and empty * lines
-            if rest.is_empty() || rest == "/" {
-                None
-            } else {
-                // Strip optional trailing */
-                Some(rest.strip_suffix("*/").map(|s| s.trim()).unwrap_or(rest))
-            }
-        } else {
-            None
-        };
-
-        let Some(value_part) = value_part else {
+        let Some(value_part) = extract_comment_value(line) else {
             continue;
         };
 
@@ -461,7 +445,7 @@ impl CcProcessor {
     }
 
     /// Extract profile name from product metadata
-    fn get_profile_from_product(&self, product: &Product) -> &CompilerProfile {
+    fn get_profile_from_product(&self, product: &Product) -> Result<&CompilerProfile> {
         // Profile name is stored in the output path structure
         // out/cc_single_file/<profile_name>/... or out/cc_single_file/... (legacy)
         if let Some(output) = product.outputs.first()
@@ -470,12 +454,54 @@ impl CcProcessor {
                 if let Some(first) = relative.components().next() {
                     let first_str = first.as_os_str().to_string_lossy();
                     if let Some(profile) = self.find_profile(&first_str) {
-                        return profile;
+                        return Ok(profile);
                     }
                 }
             }
         // Fall back to first profile (legacy mode)
-        &self.profiles[0]
+        self.profiles.first()
+            .ok_or_else(|| anyhow::anyhow!("no compiler profiles configured"))
+    }
+
+    /// Shared implementation for discover and discover_for_clean.
+    /// When `for_clean` is true, skips config hash and extra inputs (only needs output mapping).
+    fn discover_impl(&self, graph: &mut BuildGraph, file_index: &FileIndex, for_clean: bool) -> Result<()> {
+        if !self.should_process() {
+            return Ok(());
+        }
+
+        let source_files = self.find_source_files(file_index);
+        if source_files.is_empty() {
+            return Ok(());
+        }
+
+        let cfg_hash = if for_clean { None } else { Some(config_hash(&self.config)) };
+        let extra = if for_clean { Vec::new() } else { resolve_extra_inputs(&self.config.extra_inputs)? };
+
+        for profile in &self.profiles {
+            let variant = if profile.name.is_empty() { None } else { Some(profile.name.as_str()) };
+
+            for (source, _is_cpp) in &source_files {
+                if should_exclude_for_profile(source, &profile.name) {
+                    continue;
+                }
+
+                let executable = self.get_executable_path(source, profile);
+
+                let mut inputs = vec![source.clone()];
+                inputs.extend(extra.clone());
+
+                graph.add_product_with_variant(
+                    inputs,
+                    vec![executable],
+                    "cc_single_file",
+                    cfg_hash.clone(),
+                    variant,
+                )?;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -503,88 +529,19 @@ impl ProductDiscovery for CcProcessor {
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
-        if !self.should_process() {
-            return Ok(());
-        }
-
-        let source_files = self.find_source_files(file_index);
-        if source_files.is_empty() {
-            return Ok(());
-        }
-
-        let cfg_hash = Some(config_hash(&self.config));
-        let extra = resolve_extra_inputs(&self.config.extra_inputs)?;
-
-        // Create products for each source file × compiler profile combination
-        for profile in &self.profiles {
-            // Only set variant if profile has a non-empty name (i.e., multiple compilers configured)
-            let variant = if profile.name.is_empty() { None } else { Some(profile.name.as_str()) };
-
-            for (source, _is_cpp) in &source_files {
-                // Check if this file should be excluded for this profile
-                if should_exclude_for_profile(source, &profile.name) {
-                    continue;
-                }
-
-                let executable = self.get_executable_path(source, profile);
-
-                let mut inputs = vec![source.clone()];
-                inputs.extend(extra.clone());
-
-                graph.add_product_with_variant(
-                    inputs,
-                    vec![executable],
-                    "cc_single_file",
-                    cfg_hash.clone(),
-                    variant,
-                )?;
-            }
-        }
-
-        Ok(())
+        self.discover_impl(graph, file_index, false)
     }
 
     /// Fast discovery for clean: only find outputs, skip header scanning
     fn discover_for_clean(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
-        if !self.should_process() {
-            return Ok(());
-        }
-
-        let source_files = self.find_source_files(file_index);
-        if source_files.is_empty() {
-            return Ok(());
-        }
-
-        // For clean, we only need source -> output mapping, no header dependencies
-        for profile in &self.profiles {
-            let variant = if profile.name.is_empty() { None } else { Some(profile.name.as_str()) };
-
-            for (source, _is_cpp) in &source_files {
-                // Check if this file should be excluded for this profile
-                if should_exclude_for_profile(source, &profile.name) {
-                    continue;
-                }
-
-                let executable = self.get_executable_path(source, profile);
-
-                graph.add_product_with_variant(
-                    vec![source.clone()],
-                    vec![executable],
-                    "cc_single_file",
-                    None,
-                    variant,
-                )?;
-            }
-        }
-
-        Ok(())
+        self.discover_impl(graph, file_index, true)
     }
 
     fn execute(&self, product: &Product) -> Result<()> {
         let source = &product.inputs[0];
         let executable = &product.outputs[0];
         let is_cpp = source.extension().and_then(|s| s.to_str()) == Some("cc");
-        let profile = self.get_profile_from_product(product);
+        let profile = self.get_profile_from_product(product)?;
         self.compile_source(source, executable, profile, is_cpp)
     }
 

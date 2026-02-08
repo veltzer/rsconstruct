@@ -2,7 +2,7 @@ use anyhow::Result;
 use notify::{Event, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -99,25 +99,32 @@ pub fn watch(opts: &BuildOptions, interrupted: Arc<AtomicBool>) -> Result<()> {
     println!("{}", color::green("Watching for changes... (Ctrl+C to stop)"));
 
     let debounce_duration = Duration::from_millis(200);
+    let poll_interval = Duration::from_millis(500);
 
     loop {
-        // Wait for first event
-        match rx.recv() {
-            Ok(Ok(event)) => {
-                // Check if this event should be ignored
-                let dominated_by_ignored = event.paths.iter().all(|p| should_ignore(p));
-                if dominated_by_ignored {
+        // Wait for first event, periodically checking the interrupted flag
+        let got_event = loop {
+            if interrupted.load(Ordering::SeqCst) {
+                return Ok(());
+            }
+            match rx.recv_timeout(poll_interval) {
+                Ok(Ok(event)) => {
+                    let dominated_by_ignored = event.paths.iter().all(|p| should_ignore(p));
+                    if dominated_by_ignored {
+                        continue;
+                    }
+                    break true;
+                }
+                Ok(Err(e)) => {
+                    println!("{}", color::red(&format!("Watch error: {}", e)));
                     continue;
                 }
+                Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(mpsc::RecvTimeoutError::Disconnected) => break false,
             }
-            Ok(Err(e)) => {
-                println!("{}", color::red(&format!("Watch error: {}", e)));
-                continue;
-            }
-            Err(_) => {
-                // Channel closed, watcher dropped
-                break;
-            }
+        };
+        if !got_event {
+            break;
         }
 
         // Debounce: drain further events within the debounce window
