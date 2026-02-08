@@ -15,6 +15,7 @@ use tokio::sync::watch;
 use crate::color;
 use crate::config::{config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
+use crate::graph::{BuildGraph, Product};
 
 /// Global flag: when true, print each external command before execution.
 static PROCESS_DEBUG: AtomicBool = AtomicBool::new(false);
@@ -188,7 +189,6 @@ pub fn run_command_capture(cmd: &mut Command) -> Result<Output> {
     run_command_inner(cmd, false, false)
 }
 
-pub use crate::graph::{BuildGraph, Product};
 
 /// Check that a command exited successfully.
 /// Output is printed by `run_command` on failure, so we just return an error here.

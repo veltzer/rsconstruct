@@ -90,6 +90,8 @@ fn extract_var_names(content: &str) -> Vec<String> {
 fn substitute_variables(content: &str) -> Result<String> {
     // Check for undefined variables first (before any TOML parsing)
     // This gives a clear error message for undefined vars even without a [vars] section
+    // Matches quoted variable references like "${var_name}" (including the surrounding double quotes,
+    // since variables in TOML values are written as "value" = "${var}").
     static VAR_PATTERN: OnceLock<Regex> = OnceLock::new();
     let var_pattern = VAR_PATTERN.get_or_init(|| Regex::new(r#""\$\{([^}]+)\}""#).expect("internal error: invalid var pattern regex"));
 
@@ -1258,7 +1260,7 @@ mod tests {
     #[test]
     fn substitute_variables_string() {
         let content = "[vars]\nmy_dir = \"templates\"\n\n[processor]\nscan_dir = \"${my_dir}\"\n";
-        let result = substitute_variables(content).unwrap();
+        let result = substitute_variables(content).expect("variable substitution failed");
         assert!(result.contains("scan_dir = \"templates\""));
         assert!(!result.contains("${my_dir}"));
         assert!(!result.contains("[vars]"));
@@ -1267,7 +1269,7 @@ mod tests {
     #[test]
     fn substitute_variables_array() {
         let content = "[vars]\nexcludes = [\"/a/\", \"/b/\"]\n\n[processor]\nexclude_dirs = \"${excludes}\"\n";
-        let result = substitute_variables(content).unwrap();
+        let result = substitute_variables(content).expect("variable substitution failed");
         assert!(result.contains("exclude_dirs = [\"/a/\", \"/b/\"]"));
         assert!(!result.contains("${excludes}"));
     }
@@ -1275,7 +1277,7 @@ mod tests {
     #[test]
     fn substitute_variables_multiple_uses() {
         let content = "[vars]\nval = \"shared\"\n\n[a]\nx = \"${val}\"\n\n[b]\ny = \"${val}\"\n";
-        let result = substitute_variables(content).unwrap();
+        let result = substitute_variables(content).expect("variable substitution failed");
         assert!(result.contains("x = \"shared\""));
         assert!(result.contains("y = \"shared\""));
     }
@@ -1283,7 +1285,7 @@ mod tests {
     #[test]
     fn substitute_variables_no_vars_section() {
         let content = "[processor]\nscan_dir = \"src\"\n";
-        let result = substitute_variables(content).unwrap();
+        let result = substitute_variables(content).expect("variable substitution failed");
         assert_eq!(result, content);
     }
 
@@ -1309,14 +1311,14 @@ mod tests {
     #[test]
     fn substitute_variables_integer() {
         let content = "[vars]\ncount = 42\n\n[processor]\nvalue = \"${count}\"\n";
-        let result = substitute_variables(content).unwrap();
+        let result = substitute_variables(content).expect("variable substitution failed");
         assert!(result.contains("value = 42"));
     }
 
     #[test]
     fn substitute_variables_boolean() {
         let content = "[vars]\nenabled = true\n\n[processor]\nflag = \"${enabled}\"\n";
-        let result = substitute_variables(content).unwrap();
+        let result = substitute_variables(content).expect("variable substitution failed");
         assert!(result.contains("flag = true"));
     }
 }

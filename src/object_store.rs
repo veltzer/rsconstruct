@@ -11,6 +11,9 @@ use crate::color;
 use crate::config::RestoreMethod;
 use crate::remote_cache::RemoteCache;
 
+/// Number of hex chars used as the subdirectory prefix for object storage (git-style sharding).
+const CHECKSUM_PREFIX_LEN: usize = 2;
+
 /// Recursively collect all files under a directory.
 fn walk_files(dir: &Path) -> Vec<PathBuf> {
     let mut result = Vec::new();
@@ -235,7 +238,7 @@ impl ObjectStore {
 
     /// Get object path for a checksum (e.g., .rsb/objects/ab/cdef123...)
     fn object_path(&self, checksum: &str) -> PathBuf {
-        let (prefix, rest) = checksum.split_at(2.min(checksum.len()));
+        let (prefix, rest) = checksum.split_at(CHECKSUM_PREFIX_LEN.min(checksum.len()));
         self.objects_dir.join(prefix).join(rest)
     }
 

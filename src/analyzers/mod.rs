@@ -76,7 +76,7 @@ where
     pb.set_style(
         indicatif::ProgressStyle::default_bar()
             .template(&format!("[{}] Scanning dependencies {{bar:40}} {{pos}}/{{len}} {{msg}}", analyzer_name))
-            .unwrap()
+            .expect("internal error: invalid progress bar template")
             .progress_chars("##-")
     );
 

@@ -341,7 +341,7 @@ fn uuid_simple() -> String {
 
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .expect("system clock before UNIX epoch")
         .as_nanos();
     let pid = std::process::id();
     let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -356,29 +356,29 @@ mod tests {
 
     #[test]
     fn test_file_backend() {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().expect("failed to create temp dir");
         let url = format!("file://{}", temp_dir.path().display());
-        let backend = FileBackend::new(&url).unwrap();
+        let backend = FileBackend::new(&url).expect("failed to create file backend");
 
         // Test upload and download bytes
         let key = "test/data.txt";
         let data = b"hello world";
 
-        backend.upload_bytes(key, data).unwrap();
-        assert!(backend.exists(key).unwrap());
+        backend.upload_bytes(key, data).expect("upload failed");
+        assert!(backend.exists(key).expect("exists check failed"));
 
-        let downloaded = backend.download_bytes(key).unwrap();
+        let downloaded = backend.download_bytes(key).expect("download failed");
         assert_eq!(downloaded, Some(data.to_vec()));
     }
 
     #[test]
     fn test_s3_url_parsing() {
-        let backend = S3Backend::new("s3://my-bucket/cache/prefix").unwrap();
+        let backend = S3Backend::new("s3://my-bucket/cache/prefix").expect("failed to parse S3 URL");
         assert_eq!(backend.bucket, "my-bucket");
         assert_eq!(backend.prefix, "cache/prefix");
         assert_eq!(backend.s3_key("objects/ab/cdef"), "cache/prefix/objects/ab/cdef");
 
-        let backend2 = S3Backend::new("s3://bucket").unwrap();
+        let backend2 = S3Backend::new("s3://bucket").expect("failed to parse S3 URL");
         assert_eq!(backend2.bucket, "bucket");
         assert_eq!(backend2.prefix, "");
         assert_eq!(backend2.s3_key("objects/ab/cdef"), "objects/ab/cdef");

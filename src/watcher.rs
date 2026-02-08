@@ -102,7 +102,8 @@ pub fn watch(opts: &BuildOptions, interrupted: Arc<AtomicBool>) -> Result<()> {
     let poll_interval = Duration::from_millis(500);
 
     loop {
-        // Wait for first event, periodically checking the interrupted flag
+        // Wait for a relevant file-change event, periodically checking the interrupted flag.
+        // Breaks with `true` on a real event, `false` if the watcher channel disconnects.
         let got_event = loop {
             if interrupted.load(Ordering::SeqCst) {
                 return Ok(());

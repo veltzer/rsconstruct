@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, bail};
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -46,6 +46,13 @@ static PHASES_DEBUG: AtomicBool = AtomicBool::new(false);
 /// Enable phases debug logging (called once from main).
 pub fn set_phases_debug(enabled: bool) {
     PHASES_DEBUG.store(enabled, Ordering::Relaxed);
+}
+
+/// Return the keys of a HashMap sorted alphabetically.
+fn sorted_keys<V>(map: &HashMap<String, V>) -> Vec<&String> {
+    let mut keys: Vec<&String> = map.keys().collect();
+    keys.sort();
+    keys
 }
 
 /// Check if phases debug is enabled.
@@ -224,7 +231,7 @@ impl Builder {
         Ok(())
     }
 
-    /// Classify and print the status of each product, with a summary line.
+    /// Classify and print the status of each product, with per-processor and total summary.
     fn print_product_status(
         &self,
         products: &[&crate::graph::Product],
@@ -236,13 +243,18 @@ impl Builder {
         use crate::object_store::ExplainAction;
 
         let mut counts = [0usize; 3]; // [current, restorable, stale]
+        let mut per_processor: BTreeMap<&str, [usize; 3]> = BTreeMap::new();
+
         for product in products {
             let cache_key = product.cache_key();
+            let status_idx;
             let input_checksum = match self.object_store.combined_input_checksum_fast(&product.inputs) {
                 Ok(cs) => cs,
                 Err(_) => {
                     println!("{} [{}] {}", labels.stale.0, product.processor, product.display(display_opts));
-                    counts[2] += 1;
+                    status_idx = 2;
+                    counts[status_idx] += 1;
+                    per_processor.entry(&product.processor).or_default()[status_idx] += 1;
                     continue;
                 }
             };
@@ -250,29 +262,46 @@ impl Builder {
             if explain {
                 let action = self.object_store.explain_action(&cache_key, &input_checksum, &product.outputs, force);
                 let reason_str = format!(" ({})", action);
-                match action {
+                status_idx = match action {
                     ExplainAction::Skip => {
                         println!("{} [{}] {}{}", labels.current.0, product.processor, product.display(display_opts), reason_str);
-                        counts[0] += 1;
+                        0
                     }
                     ExplainAction::Restore(_) => {
                         println!("{} [{}] {}{}", labels.restorable.0, product.processor, product.display(display_opts), reason_str);
-                        counts[1] += 1;
+                        1
                     }
                     ExplainAction::Rebuild(_) => {
                         println!("{} [{}] {}{}", labels.stale.0, product.processor, product.display(display_opts), reason_str);
-                        counts[2] += 1;
+                        2
                     }
-                }
+                };
             } else if !force && !self.object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs) {
                 println!("{} [{}] {}", labels.current.0, product.processor, product.display(display_opts));
-                counts[0] += 1;
+                status_idx = 0;
             } else if !force && self.object_store.can_restore(&cache_key, &input_checksum, &product.outputs) {
                 println!("{} [{}] {}", labels.restorable.0, product.processor, product.display(display_opts));
-                counts[1] += 1;
+                status_idx = 1;
             } else {
                 println!("{} [{}] {}", labels.stale.0, product.processor, product.display(display_opts));
-                counts[2] += 1;
+                status_idx = 2;
+            }
+
+            counts[status_idx] += 1;
+            per_processor.entry(&product.processor).or_default()[status_idx] += 1;
+        }
+
+        // Per-processor breakdown
+        if per_processor.len() > 1 {
+            println!();
+            let max_name_len = per_processor.keys().map(|n| n.len()).max().unwrap_or(0);
+            for (name, pc) in &per_processor {
+                println!("  {:width$}  {} {}, {} {}, {} {}",
+                    format!("{}:", name),
+                    pc[0], labels.current.1,
+                    pc[1], labels.restorable.1,
+                    pc[2], labels.stale.1,
+                    width = max_name_len + 1);
             }
         }
 
@@ -447,10 +476,7 @@ impl Builder {
             return;
         }
 
-        let mut processor_names: Vec<_> = processors.keys().collect();
-        processor_names.sort();
-
-        for name in processor_names {
+        for name in sorted_keys(processors) {
             let processor = processors.get(name).expect("internal error: processor not in map");
 
             // Skip processors that don't provide config JSON
@@ -573,10 +599,7 @@ impl Builder {
         let mut deps_cache = DepsCache::open()?;
 
         // Collect which analyzers should run
-        let mut names: Vec<&String> = analyzers.keys().collect();
-        names.sort();
-
-        let active_analyzers: Vec<&String> = names.into_iter()
+        let active_analyzers: Vec<&String> = sorted_keys(&analyzers).into_iter()
             .filter(|name| {
                 let in_enabled_list = self.config.analyzer.is_enabled(name);
                 if !in_enabled_list {
@@ -618,9 +641,7 @@ impl Builder {
         let mut graph = BuildGraph::new();
 
         // Collect which processors should run
-        let mut names: Vec<&String> = processors.keys().collect();
-        names.sort();
-        let active_processors: Vec<&String> = names.into_iter()
+        let active_processors: Vec<&String> = sorted_keys(processors).into_iter()
             .filter(|name| {
                 // If filter is specified, only include processors in the filter list
                 if let Some(filter) = processor_filter
@@ -697,11 +718,8 @@ impl Builder {
         let processors = self.create_processors(false)?;
         let mut graph = BuildGraph::new();
 
-        let mut names: Vec<&String> = processors.keys().collect();
-        names.sort();
-
         // Collect active processors
-        let active_processors: Vec<&String> = names.into_iter()
+        let active_processors: Vec<&String> = sorted_keys(&processors).into_iter()
             .filter(|name| {
                 if let Some(filter) = filter_name
                     && name.as_str() != filter {
@@ -764,8 +782,7 @@ impl Builder {
     pub fn processor(&self, action: ProcessorAction) -> Result<()> {
         let processors = self.create_processors(false)?;
 
-        let mut proc_names: Vec<&String> = processors.keys().collect();
-        proc_names.sort();
+        let proc_names = sorted_keys(&processors);
 
         match action {
             ProcessorAction::List { all } => {
@@ -917,9 +934,7 @@ impl Builder {
         let show_all = matches!(&action, ToolsAction::List { all: true } | ToolsAction::Check { all: true });
 
         let mut tool_pairs: Vec<(String, String)> = Vec::new();
-        let mut names: Vec<&String> = processors.keys().collect();
-        names.sort();
-        for name in names {
+        for name in sorted_keys(&processors) {
             if !show_all && !self.config.processor.is_enabled(name) {
                 continue;
             }
@@ -1148,10 +1163,7 @@ impl Builder {
             DepsAction::List => {
                 // List all available dependency analyzers
                 let analyzers = self.create_analyzers(false);
-                let mut names: Vec<&String> = analyzers.keys().collect();
-                names.sort();
-
-                for name in names {
+                for name in sorted_keys(&analyzers) {
                     let analyzer = &analyzers[name];
                     let enabled = self.config.analyzer.is_enabled(name);
                     let detected = analyzer.auto_detect(&self.file_index);
@@ -1198,9 +1210,7 @@ impl Builder {
                 }
                 let mut total_files = 0;
                 let mut total_deps = 0;
-                let mut names: Vec<_> = stats.keys().collect();
-                names.sort();
-                for name in names {
+                for name in sorted_keys(&stats) {
                     let (files, deps) = stats[name];
                     total_files += files;
                     total_deps += deps;

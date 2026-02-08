@@ -251,15 +251,14 @@ impl BuildGraph {
             result.push(id);
 
             // Reduce in-degree of dependents
-            let mut newly_ready = Vec::new();
+            let prev_len = queue.len();
             for &dep_id in &self.dependents[id] {
                 in_degree[dep_id] = in_degree[dep_id].saturating_sub(1);
                 if in_degree[dep_id] == 0 && !visited.contains(&dep_id) {
-                    newly_ready.push(dep_id);
+                    queue.push(dep_id);
                 }
             }
-            if !newly_ready.is_empty() {
-                queue.extend(newly_ready);
+            if queue.len() > prev_len {
                 queue.sort_by(|a, b| b.cmp(a));
             }
         }
