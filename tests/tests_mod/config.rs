@@ -189,3 +189,80 @@ scan_dir = "templates"
     let output = run_rsb_with_env(project_path, &["config", "show"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "config show failed: {}", String::from_utf8_lossy(&output.stderr));
 }
+
+#[test]
+fn config_validate_ok() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create a template file so tera has matching files
+    fs::write(
+        project_path.join("templates/test.txt.tera"),
+        "hello"
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(), "config validate failed: {}", String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Config OK"), "Expected 'Config OK', got: {}", stdout);
+}
+
+#[test]
+fn config_validate_unknown_processor() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"nonexistent_proc\"]\n"
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
+    assert!(!output.status.success(), "Expected config validate to fail for unknown processor");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("nonexistent_proc"), "Expected error about unknown processor, got: {}", stdout);
+    assert!(stdout.contains("ERROR"), "Expected ERROR label, got: {}", stdout);
+}
+
+#[test]
+fn config_validate_no_matching_files_warning() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Enable sleep processor but don't create any .sleep files
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"sleep\"]\n"
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
+    // Should succeed (warnings only, no errors)
+    assert!(output.status.success(), "config validate should succeed with only warnings: {}", String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("WARNING"), "Expected WARNING label, got: {}", stdout);
+    assert!(stdout.contains("no matching files"), "Expected 'no matching files' warning, got: {}", stdout);
+}
+
+#[test]
+fn config_validate_json() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Enable sleep processor but don't create any .sleep files (to get a warning)
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"sleep\"]\n"
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["--json", "config", "validate"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("Config validate JSON should be valid: {}\nOutput: {}", e, stdout));
+    assert!(parsed.is_array(), "Expected JSON array, got: {}", stdout);
+    let arr = parsed.as_array().unwrap();
+    assert!(!arr.is_empty(), "Expected at least one issue, got: {}", stdout);
+    let first = &arr[0];
+    assert!(first.get("severity").is_some(), "Expected severity field");
+    assert!(first.get("message").is_some(), "Expected message field");
+}

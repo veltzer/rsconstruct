@@ -208,6 +208,10 @@ pub enum Commands {
         /// Show a progress bar during the build
         #[arg(long)]
         progress: bool,
+
+        /// Show why each product is skipped, restored, or rebuilt
+        #[arg(long)]
+        explain: bool,
     },
     /// Clean build artifacts
     Clean {
@@ -262,6 +266,10 @@ pub enum Commands {
         /// Show a progress bar during the build
         #[arg(long)]
         progress: bool,
+
+        /// Show why each product is skipped, restored, or rebuilt
+        #[arg(long)]
+        explain: bool,
     },
     /// Manage processors
     Processors {
@@ -321,6 +329,8 @@ pub enum CacheAction {
     List,
     /// Show which cache entries are stale vs current
     Stale,
+    /// Show per-processor cache statistics
+    Stats,
 }
 
 #[derive(Subcommand)]
@@ -329,6 +339,8 @@ pub enum ConfigAction {
     Show,
     /// Show the default configuration (without rsb.toml overrides)
     ShowDefault,
+    /// Validate the configuration for errors and warnings
+    Validate,
 }
 
 #[derive(Subcommand)]

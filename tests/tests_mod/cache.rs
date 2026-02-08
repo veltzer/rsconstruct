@@ -1,5 +1,5 @@
 use std::fs;
-use crate::common::{setup_test_project, run_rsb, run_rsb_with_env};
+use crate::common::{setup_test_project, run_rsb, run_rsb_with_env, run_rsb_json};
 
 #[test]
 fn cache_operations() {
@@ -116,4 +116,73 @@ fn cache_list_empty() {
         .unwrap_or_else(|e| panic!("Cache list should be valid JSON: {}\nOutput: {}", e, stdout));
     let arr = entries.as_array().expect("Cache list should be a JSON array");
     assert!(arr.is_empty(), "Empty cache should produce an empty JSON array: {}", stdout);
+}
+
+#[test]
+fn cache_stats_empty() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = []\n"
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["cache", "stats"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Cache is empty"), "Expected 'Cache is empty' message, got: {}", stdout);
+}
+
+#[test]
+fn cache_stats_after_build() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    fs::create_dir_all(project_path.join("sleep")).unwrap();
+    fs::write(project_path.join("sleep/stats_test.sleep"), "0.01").unwrap();
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"sleep\"]\n"
+    ).unwrap();
+
+    // Build to populate cache
+    let build = run_rsb(project_path, &["build"]);
+    assert!(build.status.success());
+
+    // Check stats
+    let output = run_rsb_with_env(project_path, &["cache", "stats"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("sleep"), "Expected processor name in stats, got: {}", stdout);
+    assert!(stdout.contains("entries"), "Expected 'entries' in stats, got: {}", stdout);
+}
+
+#[test]
+fn cache_stats_json() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    fs::create_dir_all(project_path.join("sleep")).unwrap();
+    fs::write(project_path.join("sleep/json_test.sleep"), "0.01").unwrap();
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"sleep\"]\n"
+    ).unwrap();
+
+    // Build to populate cache
+    let build = run_rsb(project_path, &["build"]);
+    assert!(build.status.success());
+
+    // Check JSON stats
+    let _result = run_rsb_json(project_path, &["cache", "stats"]);
+    // run_rsb_json uses --json, but cache stats outputs its own JSON, not build events.
+    // Just verify it's valid JSON by running with --json directly
+    let output = run_rsb_with_env(project_path, &["--json", "cache", "stats"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("Cache stats JSON should be valid: {}\nOutput: {}", e, stdout));
+    assert!(parsed.is_object(), "Expected JSON object, got: {}", stdout);
+    assert!(parsed.get("sleep").is_some(), "Expected 'sleep' key in stats JSON, got: {}", stdout);
 }

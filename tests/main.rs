@@ -10,6 +10,8 @@ mod complete;
 mod config;
 #[path = "tests_mod/dry_run.rs"]
 mod dry_run;
+#[path = "tests_mod/explain.rs"]
+mod explain;
 #[path = "tests_mod/exit_codes.rs"]
 mod exit_codes;
 #[path = "tests_mod/graph.rs"]

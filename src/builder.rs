@@ -18,6 +18,18 @@ use crate::processors::{CargoProcessor, CcProcessor, ClangTidyProcessor, Cppchec
 use crate::remote_cache;
 use crate::tool_lock;
 
+/// Severity level for validation issues.
+pub enum ValidationSeverity {
+    Error,
+    Warning,
+}
+
+/// A single validation issue found during config validation.
+pub struct ValidationIssue {
+    pub severity: ValidationSeverity,
+    pub message: String,
+}
+
 /// Global flag: when true, print phase messages during graph building.
 static PHASES_DEBUG: AtomicBool = AtomicBool::new(false);
 
@@ -77,7 +89,7 @@ impl Builder {
     /// batch_size_override: Some(Some(n)) = use n, Some(None) = disable batching, None = use config
     /// processor_filter: if Some, only run processors in this list
     #[allow(clippy::too_many_arguments)]
-    pub fn build(&mut self, force: bool, verbose: bool, display_opts: DisplayOptions, jobs: Option<usize>, timings: bool, keep_going: bool, interrupted: Arc<std::sync::atomic::AtomicBool>, summary: bool, batch_size_override: Option<Option<usize>>, stop_after: BuildPhase, processor_filter: Option<&[String]>, auto_add_words: bool, progress: bool) -> Result<()> {
+    pub fn build(&mut self, force: bool, verbose: bool, display_opts: DisplayOptions, jobs: Option<usize>, timings: bool, keep_going: bool, interrupted: Arc<std::sync::atomic::AtomicBool>, summary: bool, batch_size_override: Option<Option<usize>>, stop_after: BuildPhase, processor_filter: Option<&[String]>, auto_add_words: bool, progress: bool, explain: bool) -> Result<()> {
         // CLI override for spellcheck auto_add_words
         if auto_add_words {
             self.config.processor.spellcheck.auto_add_words = true;
@@ -116,7 +128,7 @@ impl Builder {
         let parallel = jobs.unwrap_or(self.config.build.parallel);
         // CLI overrides config for batch_size
         let batch_size = batch_size_override.unwrap_or(self.config.build.batch_size);
-        let executor = Executor::new(&processors, parallel, verbose, display_opts, Arc::clone(&interrupted), batch_size, progress);
+        let executor = Executor::new(&processors, parallel, verbose, display_opts, Arc::clone(&interrupted), batch_size, progress, explain);
 
         // Execute the build
         let result = executor.execute(&graph, &self.object_store, force, timings, keep_going);
@@ -149,7 +161,7 @@ impl Builder {
     }
 
     /// Show what would happen without executing anything
-    pub fn dry_run(&self, force: bool) -> Result<()> {
+    pub fn dry_run(&self, force: bool, explain: bool) -> Result<()> {
         let processors = self.create_processors(false)?;
         let graph = self.build_graph_with_processors(&processors)?;
 
@@ -169,7 +181,7 @@ impl Builder {
             stale: (color::yellow("BUILD"), "build"),
         };
 
-        self.print_product_status(&products, force, &labels);
+        self.print_product_status(&products, force, &labels, explain);
         Ok(())
     }
 
@@ -190,7 +202,7 @@ impl Builder {
             stale: (color::yellow("STALE"), "stale"),
         };
 
-        self.print_product_status(&products, false, &labels);
+        self.print_product_status(&products, false, &labels, false);
         Ok(())
     }
 
@@ -200,7 +212,10 @@ impl Builder {
         products: &[&crate::graph::Product],
         force: bool,
         labels: &ProductStatusLabels,
+        explain: bool,
     ) {
+        use crate::object_store::ExplainAction;
+
         let mut counts = [0usize; 3]; // [current, restorable, stale]
 
         let display_opts = DisplayOptions::minimal();
@@ -215,7 +230,24 @@ impl Builder {
                 }
             };
 
-            if !force && !self.object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs) {
+            if explain {
+                let action = self.object_store.explain_action(&cache_key, &input_checksum, &product.outputs, force);
+                let reason_str = format!(" ({})", action);
+                match action {
+                    ExplainAction::Skip => {
+                        println!("{} [{}] {}{}", labels.current.0, product.processor, product.display(display_opts), reason_str);
+                        counts[0] += 1;
+                    }
+                    ExplainAction::Restore(_) => {
+                        println!("{} [{}] {}{}", labels.restorable.0, product.processor, product.display(display_opts), reason_str);
+                        counts[1] += 1;
+                    }
+                    ExplainAction::Rebuild(_) => {
+                        println!("{} [{}] {}{}", labels.stale.0, product.processor, product.display(display_opts), reason_str);
+                        counts[2] += 1;
+                    }
+                }
+            } else if !force && !self.object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs) {
                 println!("{} [{}] {}", labels.current.0, product.processor, product.display(display_opts));
                 counts[0] += 1;
             } else if !force && self.object_store.can_restore(&cache_key, &input_checksum, &product.outputs) {
@@ -244,7 +276,7 @@ impl Builder {
         let graph = self.build_graph_for_clean_with_processors(&processors)?;
 
         // Use executor to clean (batch_size doesn't matter for clean)
-        let executor = Executor::new(&processors, 1, false, DisplayOptions::minimal(), Arc::new(std::sync::atomic::AtomicBool::new(false)), None, false);
+        let executor = Executor::new(&processors, 1, false, DisplayOptions::minimal(), Arc::new(std::sync::atomic::AtomicBool::new(false)), None, false, false);
         executor.clean(&graph)?;
 
         // Remove empty subdirectories under out/
@@ -932,9 +964,108 @@ impl Builder {
                 let annotated = Self::annotate_config(&output);
                 println!("{}", annotated);
             }
+            ConfigAction::Validate => {
+                let issues = self.validate_config();
+
+                if crate::json_output::is_json_mode() {
+                    let json_issues: Vec<serde_json::Value> = issues.iter()
+                        .map(|issue| {
+                            let severity = match issue.severity {
+                                ValidationSeverity::Error => "error",
+                                ValidationSeverity::Warning => "warning",
+                            };
+                            serde_json::json!({
+                                "severity": severity,
+                                "message": issue.message,
+                            })
+                        })
+                        .collect();
+                    println!("{}", serde_json::to_string_pretty(&json_issues)?);
+                } else if issues.is_empty() {
+                    println!("{}", color::green("Config OK"));
+                } else {
+                    for issue in &issues {
+                        let label = match issue.severity {
+                            ValidationSeverity::Error => color::red("ERROR"),
+                            ValidationSeverity::Warning => color::yellow("WARNING"),
+                        };
+                        println!("{}: {}", label, issue.message);
+                    }
+                    let error_count = issues.iter()
+                        .filter(|i| matches!(i.severity, ValidationSeverity::Error))
+                        .count();
+                    let warning_count = issues.iter()
+                        .filter(|i| matches!(i.severity, ValidationSeverity::Warning))
+                        .count();
+                    println!();
+                    println!("{}: {} error(s), {} warning(s)",
+                        color::bold("Summary"), error_count, warning_count);
+
+                    if error_count > 0 {
+                        return Err(crate::exit_code::RsbError::new(
+                            crate::exit_code::RsbExitCode::ConfigError,
+                            format!("Config validation failed with {} error(s)", error_count),
+                        ).into());
+                    }
+                }
+            }
         }
 
         Ok(())
+    }
+
+    /// Validate the configuration and return all issues found.
+    fn validate_config(&self) -> Vec<ValidationIssue> {
+        let mut issues = Vec::new();
+
+        // Check 1: Enabled processor names are valid
+        let processors = match self.create_processors(false) {
+            Ok(p) => p,
+            Err(e) => {
+                issues.push(ValidationIssue {
+                    severity: ValidationSeverity::Error,
+                    message: format!("Failed to create processors: {}", e),
+                });
+                return issues;
+            }
+        };
+
+        for name in &self.config.processor.enabled {
+            if !processors.contains_key(name) {
+                issues.push(ValidationIssue {
+                    severity: ValidationSeverity::Error,
+                    message: format!("Unknown processor '{}' in enabled list", name),
+                });
+            }
+        }
+
+        // Check 2: Required tools on PATH for enabled processors
+        for name in &self.config.processor.enabled {
+            if let Some(processor) = processors.get(name) {
+                for tool in processor.required_tools() {
+                    if which::which(&tool).is_err() {
+                        issues.push(ValidationIssue {
+                            severity: ValidationSeverity::Warning,
+                            message: format!("Tool '{}' required by processor '{}' not found on PATH", tool, name),
+                        });
+                    }
+                }
+            }
+        }
+
+        // Check 3: Auto-detect mismatch (processor enabled but no matching files)
+        for name in &self.config.processor.enabled {
+            if let Some(processor) = processors.get(name)
+                && !processor.auto_detect(&self.file_index)
+            {
+                issues.push(ValidationIssue {
+                    severity: ValidationSeverity::Warning,
+                    message: format!("Processor '{}' is enabled but no matching files detected", name),
+                });
+            }
+        }
+
+        issues
     }
 
     /// Annotate TOML config output with comments for constrained values

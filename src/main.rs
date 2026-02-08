@@ -86,10 +86,10 @@ fn run() -> Result<()> {
     }
 
     match cli.command {
-        Commands::Build { force, jobs, timings, keep_going, dry_run, no_summary, ignore_tool_versions, batch_size, stop_after, ref processors, auto_add_words, progress } => {
+        Commands::Build { force, jobs, timings, keep_going, dry_run, no_summary, ignore_tool_versions, batch_size, stop_after, ref processors, auto_add_words, progress, explain } => {
             if dry_run {
                 let builder = Builder::new()?;
-                builder.dry_run(force)?;
+                builder.dry_run(force, explain)?;
             } else {
                 let mut builder = Builder::new()?;
                 if !ignore_tool_versions {
@@ -98,7 +98,7 @@ fn run() -> Result<()> {
                 // CLI override: -1 = disable batching, 0 = no limit, >0 = max batch size
                 let batch_size_override = batch_size.map(|n| if n < 0 { None } else { Some(n as usize) });
                 let processor_filter = processors.as_deref();
-                builder.build(force, cli.verbose, cli.display_options(), jobs, timings, keep_going, Arc::clone(&interrupted), !no_summary, batch_size_override, stop_after, processor_filter, auto_add_words, progress)?;
+                builder.build(force, cli.verbose, cli.display_options(), jobs, timings, keep_going, Arc::clone(&interrupted), !no_summary, batch_size_override, stop_after, processor_filter, auto_add_words, progress, explain)?;
             }
         }
         Commands::Clean { action } => {
@@ -161,6 +161,36 @@ fn run() -> Result<()> {
                     let entries = builder.object_store().list();
                     println!("{}", serde_json::to_string_pretty(&entries)?);
                 }
+                CacheAction::Stats => {
+                    let builder = Builder::new()?;
+                    let stats = builder.object_store().stats_by_processor();
+
+                    if stats.is_empty() {
+                        println!("Cache is empty.");
+                    } else if json_output::is_json_mode() {
+                        println!("{}", serde_json::to_string_pretty(&stats)?);
+                    } else {
+                        let mut total_entries = 0usize;
+                        let mut total_outputs = 0usize;
+                        let mut total_bytes = 0u64;
+                        for (processor, proc_stats) in &stats {
+                            total_entries += proc_stats.entry_count;
+                            total_outputs += proc_stats.output_count;
+                            total_bytes += proc_stats.output_bytes;
+                            println!("{}: {} entries, {} outputs, {}",
+                                color::bold(processor),
+                                proc_stats.entry_count,
+                                proc_stats.output_count,
+                                humansize::format_size(proc_stats.output_bytes, humansize::BINARY));
+                        }
+                        println!();
+                        println!("{}: {} entries, {} outputs, {}",
+                            color::bold("Total"),
+                            total_entries,
+                            total_outputs,
+                            humansize::format_size(total_bytes, humansize::BINARY));
+                    }
+                }
                 CacheAction::Stale => {
                     let builder = Builder::new()?;
                     let graph = builder.build_graph_for_cache()?;
@@ -213,9 +243,9 @@ fn run() -> Result<()> {
                 print_completions(shell);
             }
         }
-        Commands::Watch { jobs, timings, keep_going, no_summary, batch_size, ref processors, auto_add_words, progress } => {
+        Commands::Watch { jobs, timings, keep_going, no_summary, batch_size, ref processors, auto_add_words, progress, explain } => {
             let batch_size_override = batch_size.map(|n| if n < 0 { None } else { Some(n as usize) });
-            watcher::watch(cli.verbose, cli.display_options(), jobs, timings, keep_going, !no_summary, Arc::clone(&interrupted), batch_size_override, processors.as_deref(), auto_add_words, progress)?;
+            watcher::watch(cli.verbose, cli.display_options(), jobs, timings, keep_going, !no_summary, Arc::clone(&interrupted), batch_size_override, processors.as_deref(), auto_add_words, progress, explain)?;
         }
         Commands::Version => {
             println!("rsb {}", env!("CARGO_PKG_VERSION"));

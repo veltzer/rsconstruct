@@ -1140,8 +1140,8 @@ mod tests {
 
     #[test]
     fn value_to_toml_inline_float() {
-        let value = toml::Value::Float(3.14);
-        assert_eq!(value_to_toml_inline(&value), "3.14");
+        let value = toml::Value::Float(2.72);
+        assert_eq!(value_to_toml_inline(&value), "2.72");
     }
 
     #[test]

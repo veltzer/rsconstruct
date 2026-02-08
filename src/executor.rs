@@ -11,7 +11,7 @@ use crate::cli::DisplayOptions;
 use crate::color;
 use crate::graph::BuildGraph;
 use crate::json_output::{self, emit_product_complete};
-use crate::object_store::ObjectStore;
+use crate::object_store::{ExplainAction, ObjectStore};
 use crate::processors::{BuildStats, ProcessStats, ProductDiscovery, ProductTiming};
 
 /// Executor handles running products through their processors
@@ -26,9 +26,12 @@ pub struct Executor<'a> {
     batch_size: Option<usize>,
     /// Whether to show a progress bar
     progress: bool,
+    /// Whether to show explain reasons for skip/restore/rebuild decisions
+    explain: bool,
 }
 
 impl<'a> Executor<'a> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         processors: &'a HashMap<String, Box<dyn ProductDiscovery>>,
         parallel: usize,
@@ -37,6 +40,7 @@ impl<'a> Executor<'a> {
         interrupted: Arc<AtomicBool>,
         batch_size: Option<usize>,
         progress: bool,
+        explain: bool,
     ) -> Self {
         Self {
             processors,
@@ -46,12 +50,26 @@ impl<'a> Executor<'a> {
             interrupted,
             batch_size,
             progress,
+            explain,
         }
     }
 
     /// Display a product with the current display options.
     fn product_display(&self, product: &crate::graph::Product) -> String {
         product.display(self.display_opts)
+    }
+
+    /// Print an explain line for a product showing what action will be taken and why.
+    fn print_explain(&self, product: &crate::graph::Product, action: &ExplainAction) {
+        let (label, style_fn): (&str, fn(&str) -> String) = match action {
+            ExplainAction::Skip => ("SKIP", color::dim as fn(&str) -> String),
+            ExplainAction::Restore(_) => ("RESTORE", color::cyan as fn(&str) -> String),
+            ExplainAction::Rebuild(_) => ("BUILD", color::yellow as fn(&str) -> String),
+        };
+        println!("[{}] {} {} ({})", product.processor,
+            style_fn(label),
+            self.product_display(product),
+            action);
     }
 
     /// Execute all products in the graph that need rebuilding
@@ -285,6 +303,11 @@ impl<'a> Executor<'a> {
                             let product = graph.get_product(*id).expect("internal error: invalid product id");
                             let cache_key = product.cache_key();
 
+                            if self.explain {
+                                let action = object_store.explain_action(&cache_key, input_checksum, &product.outputs, force);
+                                self.print_explain(product, &action);
+                            }
+
                             if !needs_rebuild {
                                 if self.verbose {
                                     println!("[{}] {} {}", product.processor,
@@ -503,6 +526,11 @@ impl<'a> Executor<'a> {
 
                                 let product = graph.get_product(*id).expect("internal error: invalid product id");
                                 let cache_key = product.cache_key();
+
+                                if self.explain {
+                                    let action = object_store.explain_action(&cache_key, input_checksum, &product.outputs, force);
+                                    self.print_explain(product, &action);
+                                }
 
                                 if !needs_rebuild {
                                     if self.verbose {

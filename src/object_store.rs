@@ -33,6 +33,51 @@ const DB_FILE: &str = "db.redb";
 const CACHE_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("cache");
 const CONFIGS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("processor_configs");
 
+/// Reason why a product needs to be rebuilt.
+#[derive(Debug)]
+pub enum RebuildReason {
+    /// No cache entry exists for this product
+    NoCacheEntry,
+    /// Input files have changed since last build
+    InputsChanged,
+    /// An output file is missing (and can't be restored from cache)
+    OutputMissing(String),
+    /// Build was forced with --force flag
+    Force,
+}
+
+impl std::fmt::Display for RebuildReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RebuildReason::NoCacheEntry => write!(f, "no cache entry"),
+            RebuildReason::InputsChanged => write!(f, "inputs changed"),
+            RebuildReason::OutputMissing(path) => write!(f, "output missing: {}", path),
+            RebuildReason::Force => write!(f, "forced"),
+        }
+    }
+}
+
+/// The action the executor will take for a product, with an explanation.
+#[derive(Debug)]
+pub enum ExplainAction {
+    /// Product is up-to-date, will be skipped
+    Skip,
+    /// Product will be restored from cache
+    Restore(RebuildReason),
+    /// Product will be rebuilt
+    Rebuild(RebuildReason),
+}
+
+impl std::fmt::Display for ExplainAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExplainAction::Skip => write!(f, "SKIP (inputs unchanged)"),
+            ExplainAction::Restore(reason) => write!(f, "RESTORE ({})", reason),
+            ExplainAction::Rebuild(reason) => write!(f, "BUILD ({})", reason),
+        }
+    }
+}
+
 /// Object store for caching build outputs
 /// Uses git-like object storage: .rsb/objects/[2 chars]/[rest of hash]
 /// Index is stored in a redb embedded key/value database at .rsb/db.redb
@@ -69,6 +114,14 @@ struct OutputEntry {
     path: String,
     /// Checksum of the output content (used as object store key)
     checksum: String,
+}
+
+/// Per-processor cache statistics
+#[derive(Debug, Default, Serialize)]
+pub struct ProcessorCacheStats {
+    pub entry_count: usize,
+    pub output_count: usize,
+    pub output_bytes: u64,
 }
 
 /// Information about a cache entry for display
@@ -285,6 +338,47 @@ impl ObjectStore {
         }
 
         true
+    }
+
+    /// Explain what action will be taken for a product and why.
+    /// Mirrors the logic in needs_rebuild/can_restore but returns structured reasons.
+    pub fn explain_action(&self, cache_key: &str, input_checksum: &str, output_paths: &[PathBuf], force: bool) -> ExplainAction {
+        if force {
+            return ExplainAction::Rebuild(RebuildReason::Force);
+        }
+
+        let entry = match self.get_entry(cache_key) {
+            Some(e) => e,
+            None => return ExplainAction::Rebuild(RebuildReason::NoCacheEntry),
+        };
+
+        if entry.input_checksum != input_checksum {
+            // Inputs changed — check if restorable (shouldn't be, since checksum differs)
+            return ExplainAction::Rebuild(RebuildReason::InputsChanged);
+        }
+
+        // For checkers (empty outputs), matching checksum means up-to-date
+        if output_paths.is_empty() {
+            return ExplainAction::Skip;
+        }
+
+        // Check outputs
+        for output_path in output_paths {
+            if !output_path.exists() {
+                let rel_path = Self::path_string(output_path);
+                let cached_output = entry.outputs.iter().find(|o| o.path == rel_path);
+                match cached_output {
+                    Some(out) if self.has_object(&out.checksum) => {
+                        return ExplainAction::Restore(RebuildReason::OutputMissing(rel_path));
+                    }
+                    _ => {
+                        return ExplainAction::Rebuild(RebuildReason::OutputMissing(rel_path));
+                    }
+                }
+            }
+        }
+
+        ExplainAction::Skip
     }
 
     /// Try to restore outputs from cache (local first, then remote).
@@ -811,6 +905,49 @@ impl ObjectStore {
             .collect();
         entries.sort_by(|a, b| a.cache_key.cmp(&b.cache_key));
         entries
+    }
+
+    /// Get per-processor cache statistics.
+    /// Extracts the processor name from the cache key prefix (before first ":").
+    pub fn stats_by_processor(&self) -> BTreeMap<String, ProcessorCacheStats> {
+        let mut stats: BTreeMap<String, ProcessorCacheStats> = BTreeMap::new();
+
+        let read_txn = match self.db.begin_read() {
+            Ok(t) => t,
+            Err(_) => return stats,
+        };
+        let table = match read_txn.open_table(CACHE_TABLE) {
+            Ok(t) => t,
+            Err(_) => return stats,
+        };
+        let iter = match table.iter() {
+            Ok(i) => i,
+            Err(_) => return stats,
+        };
+
+        for result in iter {
+            let (key, value) = match result {
+                Ok(kv) => kv,
+                Err(_) => continue,
+            };
+            let key_str = key.value().to_string();
+            let processor = key_str.split(':').next().unwrap_or(&key_str).to_string();
+
+            let proc_stats = stats.entry(processor).or_default();
+            proc_stats.entry_count += 1;
+
+            if let Ok(entry) = serde_json::from_slice::<CacheEntry>(value.value()) {
+                proc_stats.output_count += entry.outputs.len();
+                for output in &entry.outputs {
+                    let obj_path = self.object_path(&output.checksum);
+                    if let Ok(metadata) = fs::metadata(&obj_path) {
+                        proc_stats.output_bytes += metadata.len();
+                    }
+                }
+            }
+        }
+
+        stats
     }
 
     /// Get the combined input checksum for a list of input files.
