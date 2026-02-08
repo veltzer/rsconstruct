@@ -14,6 +14,19 @@ use crate::json_output::{self, emit_product_complete, ProductStatus};
 use crate::object_store::{ExplainAction, ObjectStore};
 use crate::processors::{BuildStats, ProcessStats, ProductDiscovery, ProductTiming};
 
+/// Outcome of a cache restore attempt.
+enum RestoreOutcome {
+    /// Product was successfully restored from cache.
+    Restored,
+    /// Restore failed (error already handled/reported).
+    Failed,
+    /// Product is not restorable; caller should proceed with execution.
+    NotRestorable,
+}
+
+/// A work item: (product_id, input_checksum, needs_rebuild).
+type WorkItem = (usize, String, bool);
+
 /// Options for configuring an Executor instance.
 #[derive(Debug)]
 pub struct ExecutorOptions {
@@ -117,8 +130,7 @@ impl<'a> Executor<'a> {
     }
 
     /// Handle cache restore for a product.
-    /// Returns `Some(true)` if restored, `Some(false)` if restore failed (error handled),
-    /// `None` if not restorable (caller should proceed with execution).
+    /// Try to restore a product from cache.
     /// When `emit_fail_event` is true, emits a product_complete "failed" JSON event on error.
     #[allow(clippy::too_many_arguments)]
     fn handle_restore(
@@ -133,9 +145,9 @@ impl<'a> Executor<'a> {
         emit_fail_event: bool,
         shared: &SharedState,
         pb_ref: &ProgressBar,
-    ) -> Option<bool> {
+    ) -> RestoreOutcome {
         if force {
-            return None;
+            return RestoreOutcome::NotRestorable;
         }
         let restore_result = object_store.restore_from_cache(cache_key, input_checksum, &product.outputs);
         match restore_result {
@@ -159,7 +171,7 @@ impl<'a> Executor<'a> {
                 proc_stats.restored += 1;
                 proc_stats.files_restored += product.outputs.len();
                 pb_ref.inc(1);
-                Some(true)
+                RestoreOutcome::Restored
             }
             Err(e) => {
                 if emit_fail_event {
@@ -181,9 +193,9 @@ impl<'a> Executor<'a> {
                     shared.errors.lock().push(e);
                 }
                 pb_ref.inc(1);
-                Some(false)
+                RestoreOutcome::Failed
             }
-            Ok(false) => None,
+            Ok(false) => RestoreOutcome::NotRestorable,
         }
     }
 
@@ -390,116 +402,10 @@ impl<'a> Executor<'a> {
                 break;
             }
 
-            // Determine which products in this level need work
-            // Each work item: (product_id, input_checksum, needs_rebuild)
-            let mut work_items: Vec<(usize, String, bool)> = Vec::new();
-
-            // First pass: identify products with failed dependencies
-            let mut skipped_ids: HashSet<usize> = HashSet::new();
-            {
-                let failed_guard = failed_products.lock();
-                for &id in &level {
-                    if self.has_failed_dependency(graph, id, &failed_guard) {
-                        let product = graph.get_product(id).expect("internal error: invalid product id");
-                        if self.verbose {
-                            println!("[{}] {} {}", product.processor,
-                                color::yellow("Skipping (dependency failed):"),
-                                self.product_display(product));
-                        }
-                        skipped_ids.insert(id);
-                    }
-                }
-            }
-            if !skipped_ids.is_empty() {
-                let mut failed_guard = failed_products.lock();
-                for id in &skipped_ids {
-                    failed_guard.insert(*id);
-                }
-            }
-
-            // Second pass: determine work items for non-skipped products
-            {
-                let fp_guard = failed_processors.lock();
-                for &id in &level {
-                    if skipped_ids.contains(&id) {
-                        continue;
-                    }
-
-                    let product = graph.get_product(id).expect("internal error: invalid product id");
-
-                    // In non-keep-going mode, silently skip products from a
-                    // processor that failed in a previous level
-                    if !keep_going && fp_guard.contains(&product.processor) {
-                        failed_products.lock().insert(id);
-                        continue;
-                    }
-                    let cache_key = product.cache_key();
-
-                    // Early cutoff: if all dependencies produced identical outputs,
-                    // reuse the cached input checksum instead of recomputing
-                    let deps = graph.get_dependencies(id);
-                    let input_checksum = {
-                        let unchanged_guard = unchanged_products.lock();
-                        let all_deps_unchanged = !deps.is_empty()
-                            && deps.iter().all(|d| unchanged_guard.contains(d));
-                        if all_deps_unchanged {
-                            match object_store.get_cached_input_checksum(&cache_key) {
-                                Some(cs) => Ok(cs),
-                                None => object_store.combined_input_checksum_fast(&product.inputs),
-                            }
-                        } else {
-                            object_store.combined_input_checksum_fast(&product.inputs)
-                        }
-                    };
-
-                    let input_checksum = match input_checksum {
-                        Ok(cs) => cs,
-                        Err(e) => {
-                            if keep_going {
-                                let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
-                                println!("{}", color::red(&format!("Error: {}", msg)));
-                                failed_products.lock().insert(id);
-                                failed_messages.lock().push(msg);
-                            } else {
-                                failed_products.lock().insert(id);
-                                errors.lock().push(e);
-                            }
-                            continue;
-                        }
-                    };
-
-                    let needs = force || object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs);
-                    work_items.push((id, input_checksum, needs));
-                }
-            }
-
-            // Separate work items into batch groups and non-batch items.
-            // Batch groups: processor supports batch AND has >1 item that needs rebuild.
-            let mut batch_groups: HashMap<String, Vec<(usize, String, bool)>> = HashMap::new();
-            let mut non_batch_items: Vec<(usize, String, bool)> = Vec::new();
-
-            // First, group all items by processor name
-            let mut by_processor: HashMap<String, Vec<(usize, String, bool)>> = HashMap::new();
-            for item in work_items {
-                let product = graph.get_product(item.0).expect("internal error: invalid product id");
-                by_processor.entry(product.processor.clone()).or_default().push(item);
-            }
-
-            // Then separate into batch vs non-batch
-            // batch_size: None = disable batching, Some(0) = no limit, Some(n) = max n items
-            let batching_enabled = self.batch_size.is_some();
-            for (proc_name, items) in by_processor {
-                let processor = self.processors.get(&proc_name);
-                let supports_batch = processor.is_some_and(|p| p.supports_batch());
-                // Count items that actually need rebuild (not just cache-skip)
-                let rebuild_count = items.iter().filter(|(_, _, needs)| *needs).count();
-
-                if batching_enabled && supports_batch && rebuild_count > 1 {
-                    batch_groups.insert(proc_name, items);
-                } else {
-                    non_batch_items.extend(items);
-                }
-            }
+            let (batch_groups, non_batch_items) = self.prepare_level_work(
+                graph, &level, object_store, force, keep_going,
+                &failed_products, &failed_processors, &failed_messages, &errors, &unchanged_products,
+            );
 
             // Process this level in parallel using thread pool
             thread::scope(|s| {
@@ -534,7 +440,7 @@ impl<'a> Executor<'a> {
                         };
 
                         // Handle skip/restore for items that don't need rebuild
-                        let mut to_execute: Vec<&(usize, String, bool)> = Vec::new();
+                        let mut to_execute: Vec<&WorkItem> = Vec::new();
                         for item in items {
                             let (id, input_checksum, needs_rebuild) = item;
                             let product = graph.get_product(*id).expect("internal error: invalid product id");
@@ -552,9 +458,8 @@ impl<'a> Executor<'a> {
 
                             // Try to restore from cache (batch path: no emit on failure)
                             match self.handle_restore(product, *id, object_store, &cache_key, input_checksum, force, keep_going, false, &shared, pb_ref) {
-                                Some(true) => continue,  // restored
-                                Some(false) => continue, // failed (error handled)
-                                None => {}               // not restorable, proceed
+                                RestoreOutcome::Restored | RestoreOutcome::Failed => continue,
+                                RestoreOutcome::NotRestorable => {}
                             }
 
                             to_execute.push(item);
@@ -634,11 +539,10 @@ impl<'a> Executor<'a> {
                 // Spawn threads for non-batch items (chunked as before)
                 if !non_batch_items.is_empty() {
                     let chunk_size = non_batch_items.len().div_ceil(self.parallel);
-                    let chunks: Vec<_> = non_batch_items.chunks(chunk_size.max(1)).collect();
                     let total_ref = &total_per_processor;
                     let current_ref = &current_per_processor;
 
-                    for chunk in chunks {
+                    for chunk in non_batch_items.chunks(chunk_size.max(1)) {
                         let shared = SharedState {
                             stats: Arc::clone(stats_ref),
                             errors: Arc::clone(errors_ref),
@@ -674,9 +578,8 @@ impl<'a> Executor<'a> {
 
                                 // Try to restore from cache (non-batch path: emit on failure)
                                 match self.handle_restore(product, *id, object_store, &cache_key, input_checksum, force, keep_going, true, &shared, pb_ref) {
-                                    Some(true) => continue,  // restored
-                                    Some(false) => continue, // failed (error handled)
-                                    None => {}               // not restorable, proceed
+                                    RestoreOutcome::Restored | RestoreOutcome::Failed => continue,
+                                    RestoreOutcome::NotRestorable => {}
                                 }
 
                                 if let Some(processor) = self.processors.get(&product.processor) {
@@ -826,6 +729,137 @@ impl<'a> Executor<'a> {
         }
 
         levels
+    }
+
+    /// Prepare work items for a single parallel level.
+    ///
+    /// Skips products with failed dependencies, computes checksums,
+    /// and separates items into batch groups vs non-batch items.
+    #[allow(clippy::too_many_arguments)]
+    fn prepare_level_work(
+        &self,
+        graph: &BuildGraph,
+        level: &[usize],
+        object_store: &ObjectStore,
+        force: bool,
+        keep_going: bool,
+        failed_products: &Arc<Mutex<HashSet<usize>>>,
+        failed_processors: &Arc<Mutex<HashSet<String>>>,
+        failed_messages: &Arc<Mutex<Vec<String>>>,
+        errors: &Arc<Mutex<Vec<anyhow::Error>>>,
+        unchanged_products: &Arc<Mutex<HashSet<usize>>>,
+    ) -> (HashMap<String, Vec<WorkItem>>, Vec<WorkItem>) {
+        // Each work item: (product_id, input_checksum, needs_rebuild)
+        let mut work_items: Vec<WorkItem> = Vec::new();
+
+        // First pass: identify products with failed dependencies
+        let mut skipped_ids: HashSet<usize> = HashSet::new();
+        {
+            let failed_guard = failed_products.lock();
+            for &id in level {
+                if self.has_failed_dependency(graph, id, &failed_guard) {
+                    let product = graph.get_product(id).expect("internal error: invalid product id");
+                    if self.verbose {
+                        println!("[{}] {} {}", product.processor,
+                            color::yellow("Skipping (dependency failed):"),
+                            self.product_display(product));
+                    }
+                    skipped_ids.insert(id);
+                }
+            }
+        }
+        if !skipped_ids.is_empty() {
+            let mut failed_guard = failed_products.lock();
+            for id in &skipped_ids {
+                failed_guard.insert(*id);
+            }
+        }
+
+        // Second pass: determine work items for non-skipped products
+        {
+            let fp_guard = failed_processors.lock();
+            for &id in level {
+                if skipped_ids.contains(&id) {
+                    continue;
+                }
+
+                let product = graph.get_product(id).expect("internal error: invalid product id");
+
+                // In non-keep-going mode, silently skip products from a
+                // processor that failed in a previous level
+                if !keep_going && fp_guard.contains(&product.processor) {
+                    failed_products.lock().insert(id);
+                    continue;
+                }
+                let cache_key = product.cache_key();
+
+                // Early cutoff: if all dependencies produced identical outputs,
+                // reuse the cached input checksum instead of recomputing
+                let deps = graph.get_dependencies(id);
+                let input_checksum = {
+                    let unchanged_guard = unchanged_products.lock();
+                    let all_deps_unchanged = !deps.is_empty()
+                        && deps.iter().all(|d| unchanged_guard.contains(d));
+                    if all_deps_unchanged {
+                        match object_store.get_cached_input_checksum(&cache_key) {
+                            Some(cs) => Ok(cs),
+                            None => object_store.combined_input_checksum_fast(&product.inputs),
+                        }
+                    } else {
+                        object_store.combined_input_checksum_fast(&product.inputs)
+                    }
+                };
+
+                let input_checksum = match input_checksum {
+                    Ok(cs) => cs,
+                    Err(e) => {
+                        if keep_going {
+                            let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
+                            println!("{}", color::red(&format!("Error: {}", msg)));
+                            failed_products.lock().insert(id);
+                            failed_messages.lock().push(msg);
+                        } else {
+                            failed_products.lock().insert(id);
+                            errors.lock().push(e);
+                        }
+                        continue;
+                    }
+                };
+
+                let needs = force || object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs);
+                work_items.push((id, input_checksum, needs));
+            }
+        }
+
+        // Separate work items into batch groups and non-batch items.
+        // Batch groups: processor supports batch AND has >1 item that needs rebuild.
+        let mut batch_groups: HashMap<String, Vec<WorkItem>> = HashMap::new();
+        let mut non_batch_items: Vec<WorkItem> = Vec::new();
+
+        // Group all items by processor name
+        let mut by_processor: HashMap<String, Vec<WorkItem>> = HashMap::new();
+        for item in work_items {
+            let product = graph.get_product(item.0).expect("internal error: invalid product id");
+            by_processor.entry(product.processor.clone()).or_default().push(item);
+        }
+
+        // Separate into batch vs non-batch
+        // batch_size: None = disable batching, Some(0) = no limit, Some(n) = max n items
+        let batching_enabled = self.batch_size.is_some();
+        for (proc_name, items) in by_processor {
+            let processor = self.processors.get(&proc_name);
+            let supports_batch = processor.is_some_and(|p| p.supports_batch());
+            // Count items that actually need rebuild (not just cache-skip)
+            let rebuild_count = items.iter().filter(|(_, _, needs)| *needs).count();
+
+            if batching_enabled && supports_batch && rebuild_count > 1 {
+                batch_groups.insert(proc_name, items);
+            } else {
+                non_batch_items.extend(items);
+            }
+        }
+
+        (batch_groups, non_batch_items)
     }
 
     /// Clean all products

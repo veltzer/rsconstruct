@@ -35,24 +35,22 @@ fn value_to_toml_inline(value: &toml::Value) -> String {
 /// Remove the [vars] section from TOML content.
 /// Removes from [vars] header until the next section header or EOF.
 fn remove_vars_section(content: &str) -> String {
-    let mut result = String::new();
     let mut in_vars_section = false;
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed == "[vars]" {
-            in_vars_section = true;
-            continue;
-        }
-        // Check if we hit another section header
-        if in_vars_section && trimmed.starts_with('[') && trimmed.ends_with(']') {
-            in_vars_section = false;
-        }
-        if !in_vars_section {
-            result.push_str(line);
-            result.push('\n');
-        }
-    }
+    let lines: Vec<&str> = content.lines()
+        .filter(|line| {
+            let trimmed = line.trim();
+            if trimmed == "[vars]" {
+                in_vars_section = true;
+                return false;
+            }
+            if in_vars_section && trimmed.starts_with('[') && trimmed.ends_with(']') {
+                in_vars_section = false;
+            }
+            !in_vars_section
+        })
+        .collect();
+    let mut result = lines.join("\n");
+    result.push('\n');
     result
 }
 
@@ -93,7 +91,7 @@ fn substitute_variables(content: &str) -> Result<String> {
     // Check for undefined variables first (before any TOML parsing)
     // This gives a clear error message for undefined vars even without a [vars] section
     static VAR_PATTERN: OnceLock<Regex> = OnceLock::new();
-    let var_pattern = VAR_PATTERN.get_or_init(|| Regex::new(r#""\$\{([^}]+)\}""#).unwrap());
+    let var_pattern = VAR_PATTERN.get_or_init(|| Regex::new(r#""\$\{([^}]+)\}""#).expect("internal error: invalid var pattern regex"));
 
     // Extract defined variable names before TOML parsing
     let defined_vars = extract_var_names(content);

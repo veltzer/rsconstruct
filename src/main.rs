@@ -3,6 +3,7 @@ mod builder;
 mod cli;
 mod color;
 mod config;
+mod db;
 mod deps_cache;
 mod executor;
 mod exit_code;

@@ -8,7 +8,7 @@ pub enum RsbExitCode {
     ConfigError = 2,
     ToolError = 3,
     GraphError = 4,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Reserved for future I/O-specific error classification
     IoError = 5,
     Interrupted = 130,
 }

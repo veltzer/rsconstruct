@@ -174,15 +174,15 @@ impl BuildGraph {
             }
         }
 
-        let product = match variant {
-            Some(v) => Product::with_variant(inputs, outputs.clone(), processor, id, config_hash, v),
-            None => Product::new(inputs, outputs.clone(), processor, id, config_hash),
-        };
-
-        // Register outputs
+        // Register outputs before moving outputs into the product
         for output in &outputs {
             self.output_to_product.insert(output.clone(), id);
         }
+
+        let product = match variant {
+            Some(v) => Product::with_variant(inputs, outputs, processor, id, config_hash, v),
+            None => Product::new(inputs, outputs, processor, id, config_hash),
+        };
 
         self.products.push(product);
         self.dependents.push(Vec::new());

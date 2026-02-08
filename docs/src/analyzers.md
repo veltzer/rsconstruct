@@ -140,7 +140,6 @@ Analyzers implement the `DepAnalyzer` trait:
 
 ```rust
 pub trait DepAnalyzer: Sync + Send {
-    fn name(&self) -> &str;
     fn description(&self) -> &str;
     fn auto_detect(&self, file_index: &FileIndex) -> bool;
     fn analyze(

@@ -36,7 +36,7 @@ impl PythonDepAnalyzer {
         // Match: import foo, import foo.bar, from foo import bar, from foo.bar import baz
         // We capture the module path (before any 'import' keyword in 'from' statements)
         static IMPORT_RE: OnceLock<Regex> = OnceLock::new();
-        let import_re = IMPORT_RE.get_or_init(|| Regex::new(r"^\s*(?:from\s+(\S+)\s+import|import\s+(\S+))").unwrap());
+        let import_re = IMPORT_RE.get_or_init(|| Regex::new(r"^\s*(?:from\s+(\S+)\s+import|import\s+(\S+))").expect("internal error: invalid import regex"));
 
         for line in content.lines() {
             // Skip comments

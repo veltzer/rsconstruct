@@ -57,16 +57,7 @@ impl DepsCache {
         fs::create_dir_all(&rsb_dir)
             .context("Failed to create .rsb directory")?;
 
-        // Open redb database, with delete-and-retry on corruption
-        let db = match Database::create(&db_path) {
-            Ok(db) => db,
-            Err(_) => {
-                eprintln!("Warning: Dependency cache corrupted, recreating");
-                let _ = fs::remove_file(&db_path);
-                Database::create(&db_path)
-                    .context("Failed to create dependency cache database")?
-            }
-        };
+        let db = crate::db::open_or_recreate(&db_path, "Dependency cache")?;
 
         Ok(Self { db, stats: DepsCacheStats::default() })
     }

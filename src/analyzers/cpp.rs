@@ -324,7 +324,7 @@ impl CppDepAnalyzer {
         // Captures: 1 = bracket type (< or "), 2 = path
         static INCLUDE_RE: OnceLock<Regex> = OnceLock::new();
         let include_re = INCLUDE_RE.get_or_init(|| {
-            Regex::new(r#"^\s*#\s*include\s*([<"])([^>"]+)[>"]"#).unwrap()
+            Regex::new(r#"^\s*#\s*include\s*([<"])([^>"]+)[>"]"#).expect("internal error: invalid include regex")
         });
 
         for line in content.lines() {
