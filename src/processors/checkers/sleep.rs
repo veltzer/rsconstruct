@@ -28,12 +28,12 @@ impl SleepProcessor {
     /// Read duration from sleep file and sleep
     fn execute_sleep(&self, sleep_file: &Path) -> Result<()> {
         let content = fs::read_to_string(sleep_file)
-            .context(format!("Failed to read sleep file: {}", sleep_file.display()))?;
+            .with_context(|| format!("Failed to read sleep file: {}", sleep_file.display()))?;
 
         let duration_secs: f64 = content
             .trim()
             .parse()
-            .context(format!("Invalid duration in {}: '{}'", sleep_file.display(), content.trim()))?;
+            .with_context(|| format!("Invalid duration in {}: '{}'", sleep_file.display(), content.trim()))?;
 
         let total = Duration::from_secs_f64(duration_secs);
         let interval = Duration::from_millis(50);

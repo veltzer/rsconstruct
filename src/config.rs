@@ -98,7 +98,7 @@ fn substitute_variables(content: &str) -> Result<String> {
 
     // Check for undefined variable references
     for captures in var_pattern.captures_iter(content) {
-        let var_name = captures.get(1).unwrap().as_str();
+        let var_name = captures.get(1).expect("internal error: capture group 1 missing").as_str();
         if !defined_vars.contains(&var_name.to_string()) {
             return Err(crate::exit_code::RsbError::new(
                 crate::exit_code::RsbExitCode::ConfigError,
@@ -1030,11 +1030,11 @@ impl Config {
 
         let mut config = if config_path.exists() {
             let content = fs::read_to_string(&config_path)
-                .context(format!("Failed to read config file: {}", config_path.display()))?;
+                .with_context(|| format!("Failed to read config file: {}", config_path.display()))?;
             let substituted = substitute_variables(&content)
-                .context(format!("Failed to substitute variables in: {}", config_path.display()))?;
+                .with_context(|| format!("Failed to substitute variables in: {}", config_path.display()))?;
             toml::from_str(&substituted)
-                .context(format!("Failed to parse config file: {}", config_path.display()))?
+                .with_context(|| format!("Failed to parse config file: {}", config_path.display()))?
         } else {
             Config::default()
         };

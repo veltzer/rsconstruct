@@ -358,7 +358,7 @@ pub fn discover_checker_products(
 pub fn ensure_stub_dir(stub_dir: &Path, processor_name: &str) -> Result<()> {
     if !stub_dir.exists() {
         fs::create_dir_all(stub_dir)
-            .context(format!("Failed to create {} stub directory", processor_name))?;
+            .with_context(|| format!("Failed to create {} stub directory", processor_name))?;
     }
     Ok(())
 }
@@ -555,7 +555,7 @@ pub trait ProductDiscovery: Sync + Send {
 }
 
 /// Timing for a single product execution
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ProductTiming {
     pub display: String,
     pub processor: String,
@@ -563,7 +563,7 @@ pub struct ProductTiming {
 }
 
 /// Statistics from processing a category of items
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct ProcessStats {
     pub processed: usize,
     pub failed: usize,

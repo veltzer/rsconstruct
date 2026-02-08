@@ -60,9 +60,9 @@ impl SpellcheckProcessor {
         let dic_path = Path::new(DICT_DIR).join(format!("{}.dic", lang));
 
         let aff_content = fs::read_to_string(&aff_path)
-            .context(format!("Failed to read affix file: {}. Is the hunspell dictionary for '{}' installed?", aff_path.display(), lang))?;
+            .with_context(|| format!("Failed to read affix file: {}. Is the hunspell dictionary for '{}' installed?", aff_path.display(), lang))?;
         let dic_content = fs::read_to_string(&dic_path)
-            .context(format!("Failed to read dictionary file: {}. Is the hunspell dictionary for '{}' installed?", dic_path.display(), lang))?;
+            .with_context(|| format!("Failed to read dictionary file: {}. Is the hunspell dictionary for '{}' installed?", dic_path.display(), lang))?;
 
         let dict = zspell::builder()
             .config_str(&aff_content)
@@ -176,7 +176,7 @@ impl SpellcheckProcessor {
         let custom_words = &self.custom_words;
 
         let content = fs::read_to_string(doc_file)
-            .context(format!("Failed to read document file: {}", doc_file.display()))?;
+            .with_context(|| format!("Failed to read document file: {}", doc_file.display()))?;
 
         let words = Self::extract_words(&content);
         let mut misspelled: Vec<String> = Vec::new();
@@ -252,7 +252,7 @@ impl SpellcheckProcessor {
         sorted.sort();
 
         let mut file = fs::File::create(words_path)
-            .context(format!("Failed to create words file: {}", words_path.display()))?;
+            .with_context(|| format!("Failed to create words file: {}", words_path.display()))?;
         for word in &sorted {
             writeln!(file, "{}", word)?;
         }

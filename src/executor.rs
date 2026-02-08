@@ -486,14 +486,15 @@ impl<'a> Executor<'a> {
                                 .map(|(id, _, _)| graph.get_product(*id).expect("internal error: invalid product id"))
                                 .collect();
 
-                            let displays: Vec<String> = product_refs.iter()
+                            let display = product_refs.iter()
                                 .map(|p| self.product_display(p))
-                                .collect();
+                                .collect::<Vec<_>>()
+                                .join(", ");
                             println!("[{}] {} {} files: {}",
                                 proc_name,
                                 color::green("Processing batch:"),
                                 product_refs.len(),
-                                displays.join(", "));
+                                display);
 
                             let batch_start = Instant::now();
                             let results = processor.execute_batch(&product_refs);
@@ -590,7 +591,8 @@ impl<'a> Executor<'a> {
                                         *c += 1;
                                         *c
                                     };
-                                    let total = total_ref.get(&product.processor).copied().unwrap_or(1);
+                                    let total = total_ref.get(&product.processor).copied()
+                                        .expect("internal error: processor not in total_per_processor map");
 
                                     let variant_tag = product.variant.as_ref()
                                         .map(|v| format!(":{}", v))

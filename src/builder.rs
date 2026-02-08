@@ -31,6 +31,15 @@ pub struct ValidationIssue {
     pub message: String,
 }
 
+/// Controls which graph-building variant to use.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum GraphBuildMode {
+    /// Full build: discover products, run analyzers, resolve dependencies
+    Normal,
+    /// Clean: only discover products to find output files (skip expensive analysis)
+    ForClean,
+}
+
 /// Global flag: when true, print phase messages during graph building.
 static PHASES_DEBUG: AtomicBool = AtomicBool::new(false);
 
@@ -190,7 +199,7 @@ impl Builder {
             stale: (color::yellow("BUILD"), "build"),
         };
 
-        self.print_product_status(&products, force, &labels, explain);
+        self.print_product_status(&products, force, &labels, explain, DisplayOptions::default());
         Ok(())
     }
 
@@ -211,7 +220,7 @@ impl Builder {
             stale: (color::yellow("STALE"), "stale"),
         };
 
-        self.print_product_status(&products, false, &labels, false);
+        self.print_product_status(&products, false, &labels, false, DisplayOptions::default());
         Ok(())
     }
 
@@ -222,12 +231,11 @@ impl Builder {
         force: bool,
         labels: &ProductStatusLabels<'_>,
         explain: bool,
+        display_opts: DisplayOptions,
     ) {
         use crate::object_store::ExplainAction;
 
         let mut counts = [0usize; 3]; // [current, restorable, stale]
-
-        let display_opts = DisplayOptions::minimal();
         for product in products {
             let cache_key = product.cache_key();
             let input_checksum = match self.object_store.combined_input_checksum_fast(&product.inputs) {
@@ -303,7 +311,7 @@ impl Builder {
                 let path = entry.path();
                 if path.is_dir() && fs::read_dir(&path)?.next().is_none() {
                     fs::remove_dir(&path)
-                        .context(format!("Failed to remove directory {}", path.display()))?;
+                        .with_context(|| format!("Failed to remove directory {}", path.display()))?;
                     println!("Removed empty directory: {}", path.display());
                 }
             }
@@ -444,7 +452,7 @@ impl Builder {
         processor_names.sort();
 
         for name in processor_names {
-            let processor = processors.get(name).unwrap();
+            let processor = processors.get(name).expect("internal error: processor not in map");
 
             // Skip processors that don't provide config JSON
             let config_json = match processor.config_json() {
@@ -589,22 +597,22 @@ impl Builder {
 
     /// Build the dependency graph using provided processors
     fn build_graph_with_processors(&self, processors: &HashMap<String, Box<dyn ProductDiscovery>>) -> Result<BuildGraph> {
-        self.build_graph_with_processors_impl(processors, false, BuildPhase::Build, None)
+        self.build_graph_with_processors_impl(processors, GraphBuildMode::Normal, BuildPhase::Build, None)
     }
 
     /// Build the dependency graph with optional early stopping
     fn build_graph_with_processors_and_phase(&self, processors: &HashMap<String, Box<dyn ProductDiscovery>>, stop_after: BuildPhase, processor_filter: Option<&[String]>) -> Result<BuildGraph> {
-        self.build_graph_with_processors_impl(processors, false, stop_after, processor_filter)
+        self.build_graph_with_processors_impl(processors, GraphBuildMode::Normal, stop_after, processor_filter)
     }
 
     /// Build the dependency graph for clean (skip expensive dependency scanning)
     fn build_graph_for_clean_with_processors(&self, processors: &HashMap<String, Box<dyn ProductDiscovery>>) -> Result<BuildGraph> {
-        self.build_graph_with_processors_impl(processors, true, BuildPhase::Build, None)
+        self.build_graph_with_processors_impl(processors, GraphBuildMode::ForClean, BuildPhase::Build, None)
     }
 
     /// Build the dependency graph using provided processors
     /// processor_filter: if Some, only run processors in this list (in addition to enabled check)
-    fn build_graph_with_processors_impl(&self, processors: &HashMap<String, Box<dyn ProductDiscovery>>, for_clean: bool, stop_after: BuildPhase, processor_filter: Option<&[String]>) -> Result<BuildGraph> {
+    fn build_graph_with_processors_impl(&self, processors: &HashMap<String, Box<dyn ProductDiscovery>>, mode: GraphBuildMode, stop_after: BuildPhase, processor_filter: Option<&[String]>) -> Result<BuildGraph> {
         if phases_debug() {
             eprintln!("{}", color::bold("Phase: Building dependency graph..."));
         }
@@ -633,7 +641,7 @@ impl Builder {
             eprintln!("{}", color::dim("  Phase: discover"));
         }
         for name in &active_processors {
-            if for_clean {
+            if mode == GraphBuildMode::ForClean {
                 processors[*name].discover_for_clean(&mut graph, &self.file_index)?;
             } else {
                 processors[*name].discover(&mut graph, &self.file_index)?;
@@ -645,7 +653,7 @@ impl Builder {
         }
 
         // Phase 2: Run dependency analyzers (only for regular builds, not clean)
-        if !for_clean {
+        if mode == GraphBuildMode::Normal {
             if phases_debug() {
                 eprintln!("{}", color::dim("  Phase: add_dependencies"));
             }
@@ -1128,7 +1136,7 @@ impl Builder {
         log_command(&open_cmd);
         open_cmd
             .spawn()
-            .context(format!("Failed to open file with {}", cmd))?;
+            .with_context(|| format!("Failed to open file with {}", cmd))?;
 
         Ok(())
     }

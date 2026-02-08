@@ -274,7 +274,7 @@ fn path_to_key(path: &Path) -> String {
 /// Compute SHA-256 checksum of a file
 fn file_checksum(path: &Path) -> Result<String> {
     let content = fs::read(path)
-        .context(format!("Failed to read file for checksum: {}", path.display()))?;
+        .with_context(|| format!("Failed to read file for checksum: {}", path.display()))?;
     let hash = Sha256::digest(&content);
     Ok(hex::encode(hash))
 }

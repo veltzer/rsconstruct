@@ -12,6 +12,7 @@ use crate::processors::{ProductDiscovery, scan_root, clean_outputs, format_comma
 
 /// Global cache for shell command results to avoid running the same command multiple times.
 /// Key is the command string, value is the resulting flags.
+/// Thread-safe via `parking_lot::Mutex`. Lives for the process lifetime (never cleared).
 static SHELL_COMMAND_CACHE: Mutex<Option<HashMap<String, Vec<String>>>> = Mutex::new(None);
 
 /// Get or compute flags from a shell command, caching the result.
@@ -129,7 +130,7 @@ fn should_exclude_for_profile(source: &Path, profile_name: &str) -> bool {
 /// Directives with a profile suffix (e.g., `[gcc]`) only apply when that profile is active.
 fn parse_source_flags(source: &Path, profile_name: &str) -> Result<SourceFlags> {
     let content = fs::read_to_string(source)
-        .context(format!("Failed to read source file: {}", source.display()))?;
+        .with_context(|| format!("Failed to read source file: {}", source.display()))?;
 
     let mut flags = SourceFlags::default();
 

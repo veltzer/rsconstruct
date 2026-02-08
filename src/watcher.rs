@@ -31,12 +31,12 @@ fn collect_watch_paths(project_root: &Path) -> Vec<PathBuf> {
 
 /// Check if a path should be ignored (editor temp files, build artifacts)
 fn should_ignore(path: &Path) -> bool {
-    let path_str = path.to_string_lossy();
-
-    // Ignore .rsb cache directory
-    if path_str.contains(".rsb") {
+    // Ignore .rsb cache directory (match as a path component, not substring)
+    if path.components().any(|c| c.as_os_str() == ".rsb") {
         return true;
     }
+
+    let path_str = path.to_string_lossy();
 
     // Ignore out/ directory (generated stubs)
     if path_str.contains("/out/") || path_str.starts_with("out/") {
