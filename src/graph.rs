@@ -3,6 +3,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use crate::cli::{DisplayOptions, InputDisplay, OutputDisplay, PathFormat};
+use crate::errors;
 
 /// A single build product with concrete inputs and outputs.
 /// All paths are relative to project root.
@@ -490,7 +491,7 @@ impl BuildGraph {
             .collect();
 
         let root = serde_json::json!({ "products": nodes });
-        serde_json::to_string_pretty(&root).expect("internal error: failed to serialize graph JSON")
+        serde_json::to_string_pretty(&root).expect(errors::JSON_SERIALIZE)
     }
 
     /// Format graph as plain text
@@ -569,7 +570,7 @@ impl BuildGraph {
             .spawn()
             .map_err(|_| anyhow::anyhow!("Graphviz 'dot' command not found. Install Graphviz to use SVG format"))?;
 
-        child.stdin.take().expect("stdin was piped").write_all(dot_content.as_bytes())?;
+        child.stdin.take().expect(errors::STDIN_PIPED).write_all(dot_content.as_bytes())?;
 
         let output = child.wait_with_output()?;
         if !output.status.success() {

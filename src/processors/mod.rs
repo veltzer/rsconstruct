@@ -13,6 +13,7 @@ use tokio::runtime::Runtime;
 use tokio::sync::watch;
 
 use crate::color;
+use crate::errors;
 use crate::config::{config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
@@ -35,7 +36,7 @@ static INTERRUPT_SENDER: OnceLock<watch::Sender<bool>> = OnceLock::new();
 /// Get or initialize the global tokio runtime.
 fn get_runtime() -> &'static Runtime {
     RUNTIME.get_or_init(|| {
-        Runtime::new().expect("Failed to create tokio runtime")
+        Runtime::new().expect(errors::TOKIO_RUNTIME)
     })
 }
 

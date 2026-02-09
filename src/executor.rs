@@ -8,6 +8,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::cli::DisplayOptions;
+use crate::errors;
 use crate::color;
 use crate::graph::BuildGraph;
 use crate::json_output::{self, emit_product_complete, ProductStatus};
@@ -26,6 +27,12 @@ enum RestoreOutcome {
 
 /// A work item: (product_id, input_checksum, needs_rebuild).
 type WorkItem = (usize, String, bool);
+
+/// Prepared work for a single dependency level, split into batch and non-batch items.
+struct LevelWork {
+    batch_groups: HashMap<String, Vec<WorkItem>>,
+    non_batch_items: Vec<WorkItem>,
+}
 
 /// Options for configuring an Executor instance.
 #[derive(Debug)]
@@ -67,7 +74,7 @@ pub fn classify_products(
     let mut will_change: HashSet<usize> = HashSet::new();
 
     for &id in order {
-        let product = graph.get_product(id).expect("internal error: invalid product id");
+        let product = graph.get_product(id).expect(errors::INVALID_PRODUCT_ID);
         let cache_key = product.cache_key();
 
         // If any dependency will change, this product must rebuild
@@ -432,7 +439,7 @@ impl<'a> Executor<'a> {
         // Count total products per processor for progress display
         let mut total_per_processor: HashMap<String, usize> = HashMap::new();
         for &product_id in order {
-            let product = graph.get_product(product_id).expect("internal error: invalid product id");
+            let product = graph.get_product(product_id).expect(errors::INVALID_PRODUCT_ID);
             *total_per_processor.entry(product.processor.clone()).or_insert(0) += 1;
         }
         let total_per_processor = Arc::new(total_per_processor);
@@ -453,7 +460,7 @@ impl<'a> Executor<'a> {
             pb.set_style(
                 ProgressStyle::default_bar()
                     .template("[{elapsed_precise}] {bar:40} {pos}/{len} {msg}")
-                    .expect("internal error: invalid progress bar template")
+                    .expect(errors::INVALID_PROGRESS_TEMPLATE)
                     .progress_chars("=> "),
             );
             pb
@@ -473,7 +480,7 @@ impl<'a> Executor<'a> {
                 break;
             }
 
-            let (batch_groups, non_batch_items) = self.prepare_level_work(
+            let LevelWork { batch_groups, non_batch_items } = self.prepare_level_work(
                 graph, &level, object_store, force, keep_going,
                 &failed_products, &failed_processors, &failed_messages, &errors, &unchanged_products,
             );
@@ -517,7 +524,7 @@ impl<'a> Executor<'a> {
                         let mut to_execute: Vec<&WorkItem> = Vec::new();
                         for item in items {
                             let (id, input_checksum, needs_rebuild) = item;
-                            let product = graph.get_product(*id).expect("internal error: invalid product id");
+                            let product = graph.get_product(*id).expect(errors::INVALID_PRODUCT_ID);
                             let cache_key = product.cache_key();
 
                             if self.explain {
@@ -560,7 +567,7 @@ impl<'a> Executor<'a> {
 
                             // Execute batch chunk
                             let product_refs: Vec<&crate::graph::Product> = chunk.iter()
-                                .map(|(id, _, _)| graph.get_product(*id).expect("internal error: invalid product id"))
+                                .map(|(id, _, _)| graph.get_product(*id).expect(errors::INVALID_PRODUCT_ID))
                                 .collect();
 
                             proc_current += chunk.len();
@@ -588,7 +595,7 @@ impl<'a> Executor<'a> {
                             // Process per-product results
                             for (item, result) in chunk.iter().zip(results) {
                                 let (id, input_checksum, _) = item;
-                                let product = graph.get_product(*id).expect("internal error: invalid product id");
+                                let product = graph.get_product(*id).expect(errors::INVALID_PRODUCT_ID);
                                 let cache_key = product.cache_key();
 
                                 match result {
@@ -651,7 +658,7 @@ impl<'a> Executor<'a> {
                                     break;
                                 }
 
-                                let product = graph.get_product(*id).expect("internal error: invalid product id");
+                                let product = graph.get_product(*id).expect(errors::INVALID_PRODUCT_ID);
                                 let cache_key = product.cache_key();
 
                                 if self.explain {
@@ -679,7 +686,7 @@ impl<'a> Executor<'a> {
                                         *c
                                     };
                                     let total = total_ref.get(&product.processor).copied()
-                                        .expect("internal error: processor not in total_per_processor map");
+                                        .expect(errors::PROCESSOR_NOT_IN_TOTALS);
 
                                     if self.verbose {
                                         let variant_tag = product.variant.as_ref()
@@ -800,7 +807,7 @@ impl<'a> Executor<'a> {
         let mut product_level: HashMap<usize, usize> = HashMap::new();
 
         for &id in order {
-            let product = graph.get_product(id).expect("internal error: invalid product id");
+            let product = graph.get_product(id).expect(errors::INVALID_PRODUCT_ID);
 
             // Find the maximum level of all dependencies
             let max_dep_level = graph.get_dependencies(id)
@@ -846,7 +853,7 @@ impl<'a> Executor<'a> {
         failed_messages: &Arc<Mutex<Vec<String>>>,
         errors: &Arc<Mutex<Vec<anyhow::Error>>>,
         unchanged_products: &Arc<Mutex<HashSet<usize>>>,
-    ) -> (HashMap<String, Vec<WorkItem>>, Vec<WorkItem>) {
+    ) -> LevelWork {
         // Each work item: (product_id, input_checksum, needs_rebuild)
         let mut work_items: Vec<WorkItem> = Vec::new();
 
@@ -856,7 +863,7 @@ impl<'a> Executor<'a> {
             let failed_guard = failed_products.lock();
             for &id in level {
                 if self.has_failed_dependency(graph, id, &failed_guard) {
-                    let product = graph.get_product(id).expect("internal error: invalid product id");
+                    let product = graph.get_product(id).expect(errors::INVALID_PRODUCT_ID);
                     if self.verbose {
                         println!("[{}] {} {}", product.processor,
                             color::yellow("Skipping (dependency failed):"),
@@ -881,7 +888,7 @@ impl<'a> Executor<'a> {
                     continue;
                 }
 
-                let product = graph.get_product(id).expect("internal error: invalid product id");
+                let product = graph.get_product(id).expect(errors::INVALID_PRODUCT_ID);
 
                 // In non-keep-going mode, silently skip products from a
                 // processor that failed in a previous level
@@ -937,7 +944,7 @@ impl<'a> Executor<'a> {
         // Group all items by processor name
         let mut by_processor: HashMap<String, Vec<WorkItem>> = HashMap::new();
         for item in work_items {
-            let product = graph.get_product(item.0).expect("internal error: invalid product id");
+            let product = graph.get_product(item.0).expect(errors::INVALID_PRODUCT_ID);
             by_processor.entry(product.processor.clone()).or_default().push(item);
         }
 
@@ -957,7 +964,7 @@ impl<'a> Executor<'a> {
             }
         }
 
-        (batch_groups, non_batch_items)
+        LevelWork { batch_groups, non_batch_items }
     }
 
     /// Clean all products

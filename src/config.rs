@@ -7,6 +7,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+use crate::errors;
+
 const CONFIG_FILE: &str = "rsb.toml";
 
 /// Convert a toml::Value to its inline TOML string representation.
@@ -93,14 +95,14 @@ fn substitute_variables(content: &str) -> Result<String> {
     // Matches quoted variable references like "${var_name}" (including the surrounding double quotes,
     // since variables in TOML values are written as "value" = "${var}").
     static VAR_PATTERN: OnceLock<Regex> = OnceLock::new();
-    let var_pattern = VAR_PATTERN.get_or_init(|| Regex::new(r#""\$\{([^}]+)\}""#).expect("internal error: invalid var pattern regex"));
+    let var_pattern = VAR_PATTERN.get_or_init(|| Regex::new(r#""\$\{([^}]+)\}""#).expect(errors::INVALID_REGEX));
 
     // Extract defined variable names before TOML parsing
     let defined_vars = extract_var_names(content);
 
     // Check for undefined variable references
     for captures in var_pattern.captures_iter(content) {
-        let var_name = captures.get(1).expect("internal error: capture group 1 missing").as_str();
+        let var_name = captures.get(1).expect(errors::CAPTURE_GROUP_MISSING).as_str();
         if !defined_vars.iter().any(|v| v == var_name) {
             return Err(crate::exit_code::RsbError::new(
                 crate::exit_code::RsbExitCode::ConfigError,
@@ -155,7 +157,7 @@ pub fn resolve_extra_inputs(extra_inputs: &[String]) -> Result<Vec<PathBuf>> {
 /// Compute a SHA-256 hash of any serializable config value.
 /// Uses JSON serialization (deterministic for structs) to produce the hash input.
 pub fn config_hash(value: &impl Serialize) -> String {
-    let json = serde_json::to_string(value).expect("config serialization failed");
+    let json = serde_json::to_string(value).expect(errors::CONFIG_SERIALIZE);
     let hash = Sha256::digest(json.as_bytes());
     hex::encode(hash)
 }
@@ -211,27 +213,27 @@ impl ScanConfig {
 
     /// Get the resolved scan directory. Panics if called before resolve().
     pub fn scan_dir(&self) -> &str {
-        self.scan_dir.as_deref().expect("ScanConfig not resolved")
+        self.scan_dir.as_deref().expect(errors::SCAN_CONFIG_NOT_RESOLVED)
     }
 
     /// Get the resolved extensions. Panics if called before resolve().
     pub fn extensions(&self) -> &[String] {
-        self.extensions.as_deref().expect("ScanConfig not resolved")
+        self.extensions.as_deref().expect(errors::SCAN_CONFIG_NOT_RESOLVED)
     }
 
     /// Get the resolved exclude dirs. Panics if called before resolve().
     pub fn exclude_dirs(&self) -> &[String] {
-        self.exclude_dirs.as_deref().expect("ScanConfig not resolved")
+        self.exclude_dirs.as_deref().expect(errors::SCAN_CONFIG_NOT_RESOLVED)
     }
 
     /// Get the resolved exclude files. Panics if called before resolve().
     pub fn exclude_files(&self) -> &[String] {
-        self.exclude_files.as_deref().expect("ScanConfig not resolved")
+        self.exclude_files.as_deref().expect(errors::SCAN_CONFIG_NOT_RESOLVED)
     }
 
     /// Get the resolved exclude paths. Panics if called before resolve().
     pub fn exclude_paths(&self) -> &[String] {
-        self.exclude_paths.as_deref().expect("ScanConfig not resolved")
+        self.exclude_paths.as_deref().expect(errors::SCAN_CONFIG_NOT_RESOLVED)
     }
 }
 

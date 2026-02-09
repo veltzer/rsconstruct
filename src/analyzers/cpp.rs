@@ -12,6 +12,7 @@ use std::process::Command;
 use std::sync::OnceLock;
 
 use crate::config::{CppAnalyzerConfig, IncludeScanner};
+use crate::errors;
 use crate::deps_cache::DepsCache;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
@@ -324,7 +325,7 @@ impl CppDepAnalyzer {
         // Captures: 1 = bracket type (< or "), 2 = path
         static INCLUDE_RE: OnceLock<Regex> = OnceLock::new();
         let include_re = INCLUDE_RE.get_or_init(|| {
-            Regex::new(r#"^\s*#\s*include\s*([<"])([^>"]+)[>"]"#).expect("internal error: invalid include regex")
+            Regex::new(r#"^\s*#\s*include\s*([<"])([^>"]+)[>"]"#).expect(errors::INVALID_REGEX)
         });
 
         for line in content.lines() {

@@ -10,6 +10,7 @@ use crate::analyzers::{CppDepAnalyzer, DepAnalyzer, PythonDepAnalyzer};
 use crate::cli::{BuildOptions, BuildPhase, ConfigAction, DepsAction, DisplayOptions, GraphFormat, GraphViewer, ProcessorAction, ToolsAction};
 use crate::color;
 use crate::config::Config;
+use crate::errors;
 use crate::deps_cache::DepsCache;
 use crate::executor::{Executor, ExecutorOptions};
 use crate::file_index::FileIndex;
@@ -210,7 +211,7 @@ impl Builder {
         }
 
         let products: Vec<_> = order.iter()
-            .map(|&id| graph.get_product(id).expect("internal error: invalid product id"))
+            .map(|&id| graph.get_product(id).expect(errors::INVALID_PRODUCT_ID))
             .collect();
 
         let labels = ProductStatusLabels {
@@ -487,7 +488,7 @@ impl Builder {
         }
 
         for name in sorted_keys(processors) {
-            let processor = processors.get(name).expect("internal error: processor not in map");
+            let processor = processors.get(name).expect(errors::PROCESSOR_NOT_IN_MAP);
 
             // Skip processors that don't provide config JSON
             let config_json = match processor.config_json() {

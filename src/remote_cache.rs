@@ -10,6 +10,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::errors;
+
 /// Remote cache backend trait
 pub trait RemoteCache: Send + Sync {
     /// Check if an object exists in the remote cache
@@ -341,7 +343,7 @@ fn uuid_simple() -> String {
 
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .expect("system clock before UNIX epoch")
+        .expect(errors::SYSTEM_CLOCK)
         .as_nanos();
     let pid = std::process::id();
     let seq = COUNTER.fetch_add(1, Ordering::Relaxed);

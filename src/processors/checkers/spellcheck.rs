@@ -8,6 +8,7 @@ use parking_lot::Mutex;
 use std::sync::OnceLock;
 
 use crate::config::SpellcheckConfig;
+use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use crate::processors::{ProductDiscovery, discover_checker_products};
@@ -128,7 +129,7 @@ impl SpellcheckProcessor {
             r"|\[([^\]]*)\]\([^)]*\)",            // [text](url) — capture group 1 = link text
             r#"|https?://[^\s)>""]+"#,            // bare URLs
             r"|<[^>]*>",                          // HTML tags
-        )).expect("internal error: invalid markdown strip regex"));
+        )).expect(errors::INVALID_REGEX));
 
         re.replace_all(line, |caps: &regex::Captures| {
             // For markdown links, keep the link text; for everything else, replace with space

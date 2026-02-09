@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use crate::deps_cache::DepsCache;
+use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
 
@@ -36,7 +37,7 @@ impl PythonDepAnalyzer {
         // Match: import foo, import foo.bar, from foo import bar, from foo.bar import baz
         // We capture the module path (before any 'import' keyword in 'from' statements)
         static IMPORT_RE: OnceLock<Regex> = OnceLock::new();
-        let import_re = IMPORT_RE.get_or_init(|| Regex::new(r"^\s*(?:from\s+(\S+)\s+import|import\s+(\S+))").expect("internal error: invalid import regex"));
+        let import_re = IMPORT_RE.get_or_init(|| Regex::new(r"^\s*(?:from\s+(\S+)\s+import|import\s+(\S+))").expect(errors::INVALID_REGEX));
 
         for line in content.lines() {
             // Skip comments

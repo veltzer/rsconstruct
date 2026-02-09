@@ -5,6 +5,8 @@
 //! and IDE integration.
 
 use serde::Serialize;
+
+use crate::errors;
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -94,7 +96,7 @@ pub fn emit(event: &BuildEvent) {
         return;
     }
 
-    let json = serde_json::to_string(event).expect("Failed to serialize JSON event");
+    let json = serde_json::to_string(event).expect(errors::JSON_SERIALIZE);
     let mut stdout = io::stdout().lock();
     let _ = writeln!(stdout, "{}", json);
 }

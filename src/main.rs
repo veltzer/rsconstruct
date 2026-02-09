@@ -5,6 +5,7 @@ mod color;
 mod config;
 mod db;
 mod deps_cache;
+mod errors;
 mod executor;
 mod exit_code;
 mod file_index;
@@ -79,9 +80,9 @@ fn run() -> Result<()> {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
-                .expect("Failed to create signal handler runtime");
+                .expect(errors::SIGNAL_HANDLER_RUNTIME);
             rt.block_on(async {
-                tokio::signal::ctrl_c().await.expect("Failed to listen for Ctrl+C");
+                tokio::signal::ctrl_c().await.expect(errors::SIGNAL_LISTEN);
                 interrupted.store(true, std::sync::atomic::Ordering::SeqCst);
                 processors::set_interrupted();
             });

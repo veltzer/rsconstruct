@@ -12,6 +12,7 @@ pub use python::PythonDepAnalyzer;
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 use crate::deps_cache::DepsCache;
+use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
 
@@ -80,7 +81,7 @@ where
         pb.set_style(
             indicatif::ProgressStyle::default_bar()
                 .template("[{elapsed_precise}] {bar:40} {pos}/{len} {msg}")
-                .expect("internal error: invalid progress bar template")
+                .expect(errors::INVALID_PROGRESS_TEMPLATE)
                 .progress_chars("=> "),
         );
         pb
