@@ -52,6 +52,8 @@ struct SharedState {
 
 /// Pre-build classification: count how many products will be skipped, restored, or built.
 /// This is a fast read-only pass (checksums + cache lookups, no mutations).
+/// Products are processed in topological order so that dependency changes propagate:
+/// if a product will be rebuilt or restored, its dependents are also marked for rebuild.
 pub fn classify_products(
     graph: &BuildGraph,
     order: &[usize],
@@ -61,25 +63,33 @@ pub fn classify_products(
     let mut skip_count = 0;
     let mut restore_count = 0;
     let mut build_count = 0;
+    // Track which products will be rebuilt or restored (their dependents can't be skipped)
+    let mut will_change: HashSet<usize> = HashSet::new();
 
     for &id in order {
         let product = graph.get_product(id).expect("internal error: invalid product id");
         let cache_key = product.cache_key();
 
+        // If any dependency will change, this product must rebuild
+        let dep_changed = graph.get_dependencies(id).iter().any(|d| will_change.contains(d));
+
         let input_checksum = match object_store.combined_input_checksum_fast(&product.inputs) {
             Ok(cs) => cs,
             Err(_) => {
                 build_count += 1;
+                will_change.insert(id);
                 continue;
             }
         };
 
-        if !force && !object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs) {
+        if !force && !dep_changed && !object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs) {
             skip_count += 1;
         } else if !force && object_store.can_restore(&cache_key, &input_checksum, &product.outputs) {
             restore_count += 1;
+            will_change.insert(id);
         } else {
             build_count += 1;
+            will_change.insert(id);
         }
     }
 

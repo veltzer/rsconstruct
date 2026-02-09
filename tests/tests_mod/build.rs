@@ -397,3 +397,74 @@ fn deterministic_build_order() {
         "Build order must be deterministic across runs.\nFirst:  {:?}\nSecond: {:?}",
         outputs[0], outputs[1]);
 }
+
+/// Test that classify_products propagates dependency changes transitively.
+/// Setup: tera generates step1.txt, sleep depends on step1.txt via extra_inputs.
+/// When the tera template changes, both products should be classified as needing
+/// rebuild — not just the tera product.
+#[test]
+fn classify_propagates_through_dependencies() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create sleep directory
+    fs::create_dir_all(project_path.join("sleep")).unwrap();
+
+    // Phase 1: build with tera only to create the output file
+    fs::write(
+        project_path.join("config/gen.py"),
+        "val = 1"
+    ).unwrap();
+    fs::write(
+        project_path.join("templates/step1.txt.tera"),
+        "{% set c = load_python(path='config/gen.py') %}step1={{ c.val }}"
+    ).unwrap();
+
+    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output1.status.success(),
+        "Phase 1 build failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output1.stdout),
+        String::from_utf8_lossy(&output1.stderr));
+    assert!(project_path.join("step1.txt").exists(), "Tera should generate step1.txt");
+
+    // Phase 2: enable sleep with extra_inputs pointing to the tera output
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"tera\", \"sleep\"]\n\n[processor.sleep]\nextra_inputs = [\"step1.txt\"]\n"
+    ).unwrap();
+    fs::write(project_path.join("sleep/test.sleep"), "0.01").unwrap();
+
+    // Build both processors
+    let output2 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output2.status.success(),
+        "Phase 2 build failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output2.stdout),
+        String::from_utf8_lossy(&output2.stderr));
+
+    // Verify everything is up-to-date
+    let output3 = run_rsb_with_env(
+        project_path, &["build", "--stop-after", "classify"], &[("NO_COLOR", "1")]
+    );
+    assert!(output3.status.success());
+    let stdout3 = String::from_utf8_lossy(&output3.stdout);
+    assert!(stdout3.contains("2 up-to-date, 0 to restore, 0 to build"),
+        "Both products should be up-to-date: {}", stdout3);
+
+    // Wait so mtime differs
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // Modify the tera template
+    fs::write(
+        project_path.join("templates/step1.txt.tera"),
+        "{% set c = load_python(path='config/gen.py') %}modified={{ c.val }}"
+    ).unwrap();
+
+    // Classify: both products should need work (tera rebuild + sleep rebuild/restore)
+    let output4 = run_rsb_with_env(
+        project_path, &["build", "--stop-after", "classify"], &[("NO_COLOR", "1")]
+    );
+    assert!(output4.status.success());
+    let stdout4 = String::from_utf8_lossy(&output4.stdout);
+    assert!(stdout4.contains("0 up-to-date"),
+        "No products should be up-to-date when root dependency changed: {}", stdout4);
+}
