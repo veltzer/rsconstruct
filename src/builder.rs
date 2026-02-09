@@ -154,7 +154,6 @@ impl Builder {
             verbose: opts.verbose,
             display_opts: opts.display_opts,
             batch_size,
-            progress: opts.progress,
             explain: opts.explain,
         }, Arc::clone(&interrupted));
 
@@ -324,7 +323,6 @@ impl Builder {
             verbose: false,
             display_opts: DisplayOptions::minimal(),
             batch_size: None,
-            progress: false,
             explain: false,
         }, Arc::new(std::sync::atomic::AtomicBool::new(false)));
         executor.clean(&graph)?;

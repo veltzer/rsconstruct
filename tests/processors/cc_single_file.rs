@@ -38,7 +38,7 @@ fn cc_single_file_incremental_skip() {
     ).unwrap();
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(stdout1.contains("Processing:"), "First build should process: {}", stdout1);
@@ -183,7 +183,7 @@ fn cc_single_file_config_change_triggers_rebuild() {
     ).unwrap();
 
     // First build — should process
-    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success(),
         "First build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output1.stdout),
@@ -204,7 +204,7 @@ fn cc_single_file_config_change_triggers_rebuild() {
     ).unwrap();
 
     // Third build — should rebuild because config changed
-    let output3 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output3 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output3.status.success(),
         "Third build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output3.stdout),
@@ -565,7 +565,7 @@ fn cc_single_file_direct_header_change_triggers_rebuild() {
     ).unwrap();
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success(),
         "First build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output1.stdout),
@@ -628,7 +628,7 @@ fn cc_single_file_indirect_header_change_triggers_rebuild() {
     ).unwrap();
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success(),
         "First build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output1.stdout),
@@ -687,7 +687,7 @@ fn cc_single_file_new_include_triggers_dependency_recomputation() {
     ).unwrap();
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success(),
         "First build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output1.stdout),

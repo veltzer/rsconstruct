@@ -95,7 +95,7 @@ fn incremental_build() {
     ).expect("Failed to write tera");
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(stdout1.contains("Processing:"));
@@ -177,7 +177,7 @@ fn extra_inputs_triggers_rebuild() {
     ).unwrap();
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success(),
         "First build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output1.stdout),
@@ -201,7 +201,7 @@ fn extra_inputs_triggers_rebuild() {
     ).unwrap();
 
     // Third build — should rebuild because extra input changed
-    let output3 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output3 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output3.status.success(),
         "Third build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output3.stdout),

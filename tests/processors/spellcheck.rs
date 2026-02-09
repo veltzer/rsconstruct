@@ -17,7 +17,7 @@ fn spellcheck_correct_spelling() {
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build should succeed with correct spelling: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -101,7 +101,7 @@ fn spellcheck_incremental_skip() {
     ).unwrap();
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(stdout1.contains("Processing:"),

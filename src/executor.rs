@@ -34,7 +34,6 @@ pub struct ExecutorOptions {
     pub verbose: bool,
     pub display_opts: DisplayOptions,
     pub batch_size: Option<usize>,
-    pub progress: bool,
     pub explain: bool,
 }
 
@@ -61,8 +60,6 @@ pub struct Executor<'a> {
     interrupted: Arc<AtomicBool>,
     /// Batch size setting: None = disable batching, Some(0) = no limit, Some(n) = max n files per batch
     batch_size: Option<usize>,
-    /// Whether to show a progress bar
-    progress: bool,
     /// Whether to show explain reasons for skip/restore/rebuild decisions
     explain: bool,
 }
@@ -80,7 +77,6 @@ impl<'a> Executor<'a> {
             display_opts: opts.display_opts,
             interrupted,
             batch_size: opts.batch_size,
-            progress: opts.progress,
             explain: opts.explain,
         }
     }
@@ -384,8 +380,8 @@ impl<'a> Executor<'a> {
         let global_total = order.len();
         let global_current = Arc::new(AtomicUsize::new(0));
 
-        // Create progress bar (only shown when --progress is passed, hidden in JSON mode)
-        let pb = if !self.progress || json_output::is_json_mode() {
+        // Create progress bar (shown by default, hidden in verbose or JSON mode)
+        let pb = if self.verbose || json_output::is_json_mode() {
             ProgressBar::hidden()
         } else {
             let pb = ProgressBar::new(order.len() as u64);
@@ -502,19 +498,23 @@ impl<'a> Executor<'a> {
                                 .map(|(id, _, _)| graph.get_product(*id).expect("internal error: invalid product id"))
                                 .collect();
 
-                            let display = product_refs.iter()
-                                .map(|p| self.product_display(p))
-                                .collect::<Vec<_>>()
-                                .join(", ");
-                            let gc = shared.global_current.load(Ordering::SeqCst);
                             proc_current += chunk.len();
-                            println!("[{}] ({}/{}) ({}/{}) {} {} files: {}",
-                                proc_name,
-                                gc + 1, shared.global_total,
-                                proc_current, proc_total,
-                                color::green("Processing batch:"),
-                                product_refs.len(),
-                                display);
+                            if self.verbose {
+                                let display = product_refs.iter()
+                                    .map(|p| self.product_display(p))
+                                    .collect::<Vec<_>>()
+                                    .join(", ");
+                                let gc = shared.global_current.load(Ordering::SeqCst);
+                                println!("[{}] ({}/{}) ({}/{}) {} {} files: {}",
+                                    proc_name,
+                                    gc + 1, shared.global_total,
+                                    proc_current, proc_total,
+                                    color::green("Processing batch:"),
+                                    product_refs.len(),
+                                    display);
+                            } else {
+                                pb_ref.set_message(format!("[{}] batch {} files", proc_name, product_refs.len()));
+                            }
 
                             let batch_start = Instant::now();
                             let results = processor.execute_batch(&product_refs);
@@ -616,15 +616,22 @@ impl<'a> Executor<'a> {
                                     let total = total_ref.get(&product.processor).copied()
                                         .expect("internal error: processor not in total_per_processor map");
 
-                                    let variant_tag = product.variant.as_ref()
-                                        .map(|v| format!(":{}", v))
-                                        .unwrap_or_default();
-                                    let gc = shared.global_current.load(Ordering::SeqCst) + 1;
-                                    println!("[{}{}] ({}/{}) ({}/{}) {} {}", product.processor, variant_tag,
-                                        gc, shared.global_total,
-                                        current, total,
-                                        color::green("Processing:"),
-                                        self.product_display(product));
+                                    if self.verbose {
+                                        let variant_tag = product.variant.as_ref()
+                                            .map(|v| format!(":{}", v))
+                                            .unwrap_or_default();
+                                        let gc = shared.global_current.load(Ordering::SeqCst) + 1;
+                                        println!("[{}{}] ({}/{}) ({}/{}) {} {}", product.processor, variant_tag,
+                                            gc, shared.global_total,
+                                            current, total,
+                                            color::green("Processing:"),
+                                            self.product_display(product));
+                                    } else {
+                                        let variant_tag = product.variant.as_ref()
+                                            .map(|v| format!(":{}", v))
+                                            .unwrap_or_default();
+                                        pb_ref.set_message(format!("[{}{}] {}", product.processor, variant_tag, self.product_display(product)));
+                                    }
 
                                     let product_start = Instant::now();
                                     match processor.execute(product) {

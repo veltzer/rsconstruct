@@ -389,10 +389,6 @@ pub struct SharedBuildArgs {
     #[arg(long)]
     pub auto_add_words: bool,
 
-    /// Show a progress bar during the build
-    #[arg(long)]
-    pub progress: bool,
-
     /// Show why each product is skipped, restored, or rebuilt
     #[arg(long)]
     pub explain: bool,
@@ -417,7 +413,6 @@ impl SharedBuildArgs {
             stop_after,
             processor_filter: self.processors.clone(),
             auto_add_words: self.auto_add_words,
-            progress: self.progress,
             explain: self.explain,
             no_mtime: self.no_mtime,
         }
@@ -438,7 +433,6 @@ pub struct BuildOptions {
     pub stop_after: BuildPhase,
     pub processor_filter: Option<Vec<String>>,
     pub auto_add_words: bool,
-    pub progress: bool,
     pub explain: bool,
     pub no_mtime: bool,
 }

@@ -143,7 +143,7 @@ fn keep_going_continues_after_failure() {
     ).unwrap();
 
     // Run with --keep-going
-    let output = run_rsb_with_env(project_path, &["build", "--keep-going"], &[("NO_COLOR", "1")]);
+    let output = run_rsb_with_env(project_path, &["build", "-v", "--keep-going"], &[("NO_COLOR", "1")]);
 
     // Should exit non-zero because of the failure
     assert!(!output.status.success(), "Build should fail with bad sleep file");
@@ -375,7 +375,7 @@ fn deterministic_build_order() {
             "[processor]\nenabled = [\"sleep\"]\n"
         ).unwrap();
 
-        let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+        let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
         assert!(output.status.success(),
             "Build failed: {}",
             String::from_utf8_lossy(&output.stderr));

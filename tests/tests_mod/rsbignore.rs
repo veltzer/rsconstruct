@@ -24,7 +24,7 @@ fn rsbignore_excludes_sleep_files() {
     ).unwrap();
 
     // Build
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "rsb build failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Verify via output - only included file should be processed
@@ -56,7 +56,7 @@ fn rsbignore_glob_pattern() {
     ).unwrap();
 
     // Build
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "rsb build failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Verify via output - keep.sleep should be processed, subdir files should not
@@ -81,7 +81,7 @@ fn rsbignore_no_file() {
     ).unwrap();
 
     // Build should work fine without .rsbignore
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "rsb build failed without .rsbignore: {}",
         String::from_utf8_lossy(&output.stderr));
 
@@ -111,7 +111,7 @@ fn rsbignore_comments_and_blank_lines() {
         "# This is a comment\n\n   \n# Another comment\nsleep/b.sleep\n\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
 
     // Verify via output

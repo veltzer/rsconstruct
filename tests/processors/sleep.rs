@@ -17,7 +17,7 @@ fn sleep_processor() {
     ).unwrap();
 
     // Build
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "rsb build failed: {}", String::from_utf8_lossy(&output.stderr));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Processing:"));
@@ -55,7 +55,7 @@ fn sleep_extra_inputs_valid() {
         "[processor]\nenabled = [\"sleep\"]\n\n[processor.sleep]\nextra_inputs = [\"extra.txt\"]\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build should succeed with valid sleep extra_inputs: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
