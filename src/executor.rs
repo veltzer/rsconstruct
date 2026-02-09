@@ -50,6 +50,42 @@ struct SharedState {
     global_total: usize,
 }
 
+/// Pre-build classification: count how many products will be skipped, restored, or built.
+/// This is a fast read-only pass (checksums + cache lookups, no mutations).
+pub fn classify_products(
+    graph: &BuildGraph,
+    order: &[usize],
+    object_store: &ObjectStore,
+    force: bool,
+) -> (usize, usize, usize) {
+    let mut skip_count = 0;
+    let mut restore_count = 0;
+    let mut build_count = 0;
+
+    for &id in order {
+        let product = graph.get_product(id).expect("internal error: invalid product id");
+        let cache_key = product.cache_key();
+
+        let input_checksum = match object_store.combined_input_checksum_fast(&product.inputs) {
+            Ok(cs) => cs,
+            Err(_) => {
+                build_count += 1;
+                continue;
+            }
+        };
+
+        if !force && !object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs) {
+            skip_count += 1;
+        } else if !force && object_store.can_restore(&cache_key, &input_checksum, &product.outputs) {
+            restore_count += 1;
+        } else {
+            build_count += 1;
+        }
+    }
+
+    (skip_count, restore_count, build_count)
+}
+
 /// Executor handles running products through their processors
 /// It respects dependency order and can parallelize independent products
 pub struct Executor<'a> {
@@ -97,41 +133,14 @@ impl<'a> Executor<'a> {
         pb.inc(1);
     }
 
-    /// Pre-build classification: count how many products will be skipped, restored, or built.
-    /// This is a fast read-only pass (checksums + cache lookups, no mutations).
+    /// Pre-build classification (delegates to the free function).
     fn classify_products(
-        &self,
         graph: &BuildGraph,
         order: &[usize],
         object_store: &ObjectStore,
         force: bool,
     ) -> (usize, usize, usize) {
-        let mut skip_count = 0;
-        let mut restore_count = 0;
-        let mut build_count = 0;
-
-        for &id in order {
-            let product = graph.get_product(id).expect("internal error: invalid product id");
-            let cache_key = product.cache_key();
-
-            let input_checksum = match object_store.combined_input_checksum_fast(&product.inputs) {
-                Ok(cs) => cs,
-                Err(_) => {
-                    build_count += 1;
-                    continue;
-                }
-            };
-
-            if !force && !object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs) {
-                skip_count += 1;
-            } else if !force && object_store.can_restore(&cache_key, &input_checksum, &product.outputs) {
-                restore_count += 1;
-            } else {
-                build_count += 1;
-            }
-        }
-
-        (skip_count, restore_count, build_count)
+        classify_products(graph, order, object_store, force)
     }
 
     /// Print an explain line for a product showing what action will be taken and why.
@@ -423,14 +432,8 @@ impl<'a> Executor<'a> {
         let global_current = Arc::new(AtomicUsize::new(0));
 
         // Pre-build classification: count skip/restore/build for progress bar sizing
-        let (skip_count, restore_count, build_count) = self.classify_products(graph, order, object_store, force);
+        let (_skip_count, restore_count, build_count) = Self::classify_products(graph, order, object_store, force);
         let work_count = restore_count + build_count;
-
-        // Print summary line (unless JSON mode)
-        if !json_output::is_json_mode() {
-            println!("{} products ({} up-to-date, {} to restore, {} to build)",
-                order.len(), skip_count, restore_count, build_count);
-        }
 
         // Create progress bar sized to actual work (excludes instant skips)
         let pb = if self.verbose || json_output::is_json_mode() {

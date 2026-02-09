@@ -139,9 +139,23 @@ impl Builder {
         // Build the dependency graph (may stop early based on stop_after)
         let graph = self.build_graph_with_processors_and_phase(&processors, opts.stop_after, processor_filter, opts.verbose)?;
 
-        // If we stopped early, we're done
-        if opts.stop_after != BuildPhase::Build {
+        // If we stopped early (before classify), we're done
+        if opts.stop_after != BuildPhase::Build && opts.stop_after != BuildPhase::Classify {
             println!("Stopped after {:?} phase.", opts.stop_after);
+            return Ok(());
+        }
+
+        // Phase: Classify products (skip/restore/build)
+        if phases_debug() {
+            eprintln!("{}", color::dim("  Phase: classify"));
+        }
+        let order = graph.topological_sort()?;
+        let (skip_count, restore_count, build_count) =
+            crate::executor::classify_products(&graph, &order, &self.object_store, opts.force);
+        println!("{} products ({} up-to-date, {} to restore, {} to build)",
+            order.len(), skip_count, restore_count, build_count);
+
+        if opts.stop_after == BuildPhase::Classify {
             return Ok(());
         }
 

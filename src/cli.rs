@@ -89,6 +89,8 @@ pub enum BuildPhase {
     AddDependencies,
     /// Stop after resolving the dependency graph (before execution)
     Resolve,
+    /// Stop after classifying products (show skip/restore/build counts)
+    Classify,
     /// Run the full build (default)
     #[default]
     Build,
