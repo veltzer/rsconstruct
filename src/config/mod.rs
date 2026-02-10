@@ -132,6 +132,10 @@ const MAKE_EXCLUDE_DIRS: &[&str] = &["/.git/", "/out/", "/.rsb/", "/build/", "/d
 
 const SHELL_EXCLUDE_DIRS: &[&str] = &["/.git/", "/out/", "/.rsb/", "/node_modules/", "/build/", "/dist/", "/target/"];
 
+const MARKDOWN_EXCLUDE_DIRS: &[&str] = &[
+    "/.git/", "/out/", "/.rsb/", "/node_modules/", "/build/", "/dist/", "/target/",
+];
+
 const DEFAULT_PLUGINS_DIR: &str = "plugins";
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -286,6 +290,8 @@ pub struct ProcessorConfig {
     pub make: MakeConfig,
     #[serde(default)]
     pub cargo: CargoConfig,
+    #[serde(default)]
+    pub rumdl: RumdlConfig,
     /// Captures unknown [processor.PLUGIN_NAME] sections for Lua plugins
     #[serde(flatten)]
     pub extra: HashMap<String, toml::Value>,
@@ -307,6 +313,7 @@ impl Default for ProcessorConfig {
             sleep: SleepConfig::default(),
             make: MakeConfig::default(),
             cargo: CargoConfig::default(),
+            rumdl: RumdlConfig::default(),
             extra: HashMap::new(),
         }
     }
@@ -332,6 +339,7 @@ impl ProcessorConfig {
         self.sleep.scan.resolve("sleep", &[".sleep"], &[]);
         self.make.scan.resolve("", &["Makefile"], MAKE_EXCLUDE_DIRS);
         self.cargo.scan.resolve("", &["Cargo.toml"], processor_configs::CARGO_EXCLUDE_DIRS);
+        self.rumdl.scan.resolve("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
     }
 }
 
