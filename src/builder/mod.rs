@@ -20,7 +20,7 @@ use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
 use crate::object_store::{ObjectStore, ObjectStoreOptions};
-use crate::processors::{CargoProcessor, CcProcessor, ClangTidyProcessor, CppcheckProcessor, LuaProcessor, MakeProcessor, PylintProcessor, RuffProcessor, RumdlProcessor, ShellcheckProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, TeraProcessor};
+use crate::processors::{CargoProcessor, CcProcessor, ClangTidyProcessor, CppcheckProcessor, LuaProcessor, MakeProcessor, MypyProcessor, PylintProcessor, RuffProcessor, RumdlProcessor, ShellcheckProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, TeraProcessor};
 use crate::remote_cache;
 use crate::tool_lock;
 
@@ -164,6 +164,10 @@ impl Builder {
         // Cargo processor
         let cargo_proc = CargoProcessor::new(self.config.processor.cargo.clone());
         processors.insert("cargo".to_string(), Box::new(cargo_proc));
+
+        // Mypy type checker processor
+        let mypy_proc = MypyProcessor::new(self.project_root.clone(), self.config.processor.mypy.clone());
+        processors.insert("mypy".to_string(), Box::new(mypy_proc));
 
         // Rumdl markdown linter processor
         let rumdl_proc = RumdlProcessor::new(self.project_root.clone(), self.config.processor.rumdl.clone());

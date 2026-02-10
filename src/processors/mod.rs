@@ -359,8 +359,9 @@ where
 
 // Re-export from subdirectories
 pub use checkers::{
-    CargoProcessor, ClangTidyProcessor, CppcheckProcessor, MakeProcessor, PylintProcessor,
-    RuffProcessor, RumdlProcessor, ShellcheckProcessor, SleepProcessor, SpellcheckProcessor,
+    CargoProcessor, ClangTidyProcessor, CppcheckProcessor, MakeProcessor, MypyProcessor,
+    PylintProcessor, RuffProcessor, RumdlProcessor, ShellcheckProcessor, SleepProcessor,
+    SpellcheckProcessor,
 };
 pub use generators::{CcProcessor, TeraProcessor};
 pub use lua_processor::LuaProcessor;

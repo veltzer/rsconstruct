@@ -292,6 +292,8 @@ pub struct ProcessorConfig {
     pub cargo: CargoConfig,
     #[serde(default)]
     pub rumdl: RumdlConfig,
+    #[serde(default)]
+    pub mypy: MypyConfig,
     /// Captures unknown [processor.PLUGIN_NAME] sections for Lua plugins
     #[serde(flatten)]
     pub extra: HashMap<String, toml::Value>,
@@ -314,6 +316,7 @@ impl Default for ProcessorConfig {
             make: MakeConfig::default(),
             cargo: CargoConfig::default(),
             rumdl: RumdlConfig::default(),
+            mypy: MypyConfig::default(),
             extra: HashMap::new(),
         }
     }
@@ -340,6 +343,7 @@ impl ProcessorConfig {
         self.make.scan.resolve("", &["Makefile"], MAKE_EXCLUDE_DIRS);
         self.cargo.scan.resolve("", &["Cargo.toml"], processor_configs::CARGO_EXCLUDE_DIRS);
         self.rumdl.scan.resolve("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
+        self.mypy.scan.resolve("", &[".py"], PYTHON_EXCLUDE_DIRS);
     }
 }
 

@@ -410,6 +410,39 @@ impl Default for MakeConfig {
     }
 }
 
+fn default_mypy_checker() -> String {
+    "mypy".into()
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct MypyConfig {
+    #[serde(default = "default_mypy_checker")]
+    pub checker: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for MypyConfig {
+    fn default() -> Self {
+        Self {
+            checker: "mypy".into(),
+            args: Vec::new(),
+            extra_inputs: Vec::new(),
+            scan: ScanConfig {
+                scan_dir: None,
+                extensions: Some(vec![".py".into()]),
+                exclude_dirs: None,
+                exclude_files: None,
+                exclude_paths: None,
+            },
+        }
+    }
+}
+
 fn default_rumdl_linter() -> String {
     "rumdl".into()
 }
