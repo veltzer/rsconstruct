@@ -1,3 +1,291 @@
+/// Macro to generate `ProductDiscovery` trait implementations for checker processors.
+///
+/// Eliminates boilerplate for `description()`, `auto_detect()`, `required_tools()`,
+/// `discover()`, `execute()`, `config_json()`, `hidden()`, and batch support.
+///
+/// # Required parameters
+/// - `$processor:ty` — the processor struct type
+/// - `config: $config_field:ident` — name of the config field on the struct
+/// - `description: $desc:expr` — human-readable description string
+/// - `name: $name:expr` — processor name passed to `discover_checker_products()`
+/// - `execute: $execute:ident` — method on self for single-product execution
+///
+/// # Optional parameters (in any order after required ones)
+/// - `guard: $guard_method:ident` — method on self returning bool; gates `auto_detect()` and `discover()`
+/// - `tools: [$($tool:expr),+]` — string literal expressions for `required_tools()`
+/// - `tool_field: $field:ident` — config sub-field to clone as a tool name
+/// - `config_json: true` — emit `config_json()` using `serde_json::to_string`
+/// - `hidden: true` — `hidden()` returns true
+/// - `batch: $batch_method:ident` — method on self for batch execution
+macro_rules! impl_checker {
+    // --- @build: generate the impl block ---
+    (@build $processor:ty, $config_field:ident, $desc:expr, $name:expr,
+     guard: [$($guard:ident)?],
+     tools_kind: $tools_kind:tt,
+     config_json: $cj:tt,
+     hidden: $hid:tt,
+     batch: [$($batch:ident)?],
+     execute: $execute:ident,
+    ) => {
+        impl $crate::processors::ProductDiscovery for $processor {
+            fn description(&self) -> &str {
+                $desc
+            }
+
+            impl_checker!(@hidden $hid);
+
+            fn auto_detect(&self, file_index: &$crate::file_index::FileIndex) -> bool {
+                impl_checker!(@auto_detect self, file_index, $config_field, [$($guard)?])
+            }
+
+            fn required_tools(&self) -> Vec<String> {
+                impl_checker!(@tools self, $config_field, $tools_kind)
+            }
+
+            fn discover(
+                &self,
+                graph: &mut $crate::graph::BuildGraph,
+                file_index: &$crate::file_index::FileIndex,
+            ) -> anyhow::Result<()> {
+                impl_checker!(@discover self, graph, file_index, $config_field, $name, [$($guard)?])
+            }
+
+            fn execute(&self, product: &$crate::graph::Product) -> anyhow::Result<()> {
+                self.$execute(product)
+            }
+
+            impl_checker!(@config_json self, $config_field, $cj);
+
+            impl_checker!(@batch self, [$($batch)?]);
+        }
+    };
+
+    // --- hidden ---
+    (@hidden true) => {
+        fn hidden(&self) -> bool { true }
+    };
+    (@hidden false) => {};
+
+    // --- auto_detect ---
+    (@auto_detect $self:ident, $fi:ident, $cfg:ident, [$guard:ident]) => {
+        $self.$guard() && !$fi.scan(&$self.$cfg.scan, true).is_empty()
+    };
+    (@auto_detect $self:ident, $fi:ident, $cfg:ident, []) => {
+        !$fi.scan(&$self.$cfg.scan, true).is_empty()
+    };
+
+    // --- tools ---
+    // No tools
+    (@tools $self:ident, $cfg:ident, [none]) => {
+        Vec::new()
+    };
+    // Static tool names (string literals)
+    (@tools $self:ident, $cfg:ident, [literal: $($tool:expr),+]) => {
+        vec![$($tool),+]
+    };
+    // Dynamic tool name from a config field
+    (@tools $self:ident, $cfg:ident, [field: $tool_field:ident]) => {
+        vec![$self.$cfg.$tool_field.clone()]
+    };
+
+    // --- discover ---
+    (@discover $self:ident, $graph:ident, $fi:ident, $cfg:ident, $name:expr, [$guard:ident]) => {{
+        if !$self.$guard() {
+            return Ok(());
+        }
+        $crate::processors::discover_checker_products(
+            $graph,
+            &$self.$cfg.scan,
+            $fi,
+            &$self.$cfg.extra_inputs,
+            &$self.$cfg,
+            $name,
+        )
+    }};
+    (@discover $self:ident, $graph:ident, $fi:ident, $cfg:ident, $name:expr, []) => {
+        $crate::processors::discover_checker_products(
+            $graph,
+            &$self.$cfg.scan,
+            $fi,
+            &$self.$cfg.extra_inputs,
+            &$self.$cfg,
+            $name,
+        )
+    };
+
+    // --- config_json ---
+    (@config_json $self:ident, $cfg:ident, true) => {
+        fn config_json(&self) -> Option<String> {
+            serde_json::to_string(&self.$cfg).ok()
+        }
+    };
+    (@config_json $self:ident, $cfg:ident, false) => {};
+
+    // --- batch ---
+    (@batch $self:ident, [$batch:ident]) => {
+        fn supports_batch(&self) -> bool { true }
+
+        fn execute_batch(&self, products: &[&$crate::graph::Product]) -> Vec<anyhow::Result<()>> {
+            $crate::processors::execute_checker_batch(
+                products,
+                |files| self.$batch(files),
+            )
+        }
+    };
+    (@batch $self:ident, []) => {};
+
+    // --- Entry point: parse options using TT muncher ---
+    ($processor:ty,
+     config: $config_field:ident,
+     description: $desc:expr,
+     name: $name:expr,
+     execute: $execute:ident
+     $(, $($rest:tt)*)?
+    ) => {
+        impl_checker!(@parse $processor, $config_field, $desc, $name, $execute,
+            guard: [],
+            tools_kind: [none],
+            config_json: false,
+            hidden: false,
+            batch: [],
+            ; $($($rest)*)?
+        );
+    };
+
+    // Parse guard
+    (@parse $processor:ty, $config_field:ident, $desc:expr, $name:expr, $execute:ident,
+     guard: [],
+     tools_kind: $tk:tt,
+     config_json: $cj:tt,
+     hidden: $hid:tt,
+     batch: [$($batch:ident)?],
+     ; guard: $guard:ident $(, $($rest:tt)*)?
+    ) => {
+        impl_checker!(@parse $processor, $config_field, $desc, $name, $execute,
+            guard: [$guard],
+            tools_kind: $tk,
+            config_json: $cj,
+            hidden: $hid,
+            batch: [$($batch)?],
+            ; $($($rest)*)?
+        );
+    };
+
+    // Parse tools (literal expressions like "cppcheck".to_string())
+    (@parse $processor:ty, $config_field:ident, $desc:expr, $name:expr, $execute:ident,
+     guard: [$($guard:ident)?],
+     tools_kind: [none],
+     config_json: $cj:tt,
+     hidden: $hid:tt,
+     batch: [$($batch:ident)?],
+     ; tools: [$($tool:expr),+] $(, $($rest:tt)*)?
+    ) => {
+        impl_checker!(@parse $processor, $config_field, $desc, $name, $execute,
+            guard: [$($guard)?],
+            tools_kind: [literal: $($tool),+],
+            config_json: $cj,
+            hidden: $hid,
+            batch: [$($batch)?],
+            ; $($($rest)*)?
+        );
+    };
+
+    // Parse tool_field (field name on config struct, e.g. `linter` → self.config.linter.clone())
+    (@parse $processor:ty, $config_field:ident, $desc:expr, $name:expr, $execute:ident,
+     guard: [$($guard:ident)?],
+     tools_kind: [none],
+     config_json: $cj:tt,
+     hidden: $hid:tt,
+     batch: [$($batch:ident)?],
+     ; tool_field: $tool_field:ident $(, $($rest:tt)*)?
+    ) => {
+        impl_checker!(@parse $processor, $config_field, $desc, $name, $execute,
+            guard: [$($guard)?],
+            tools_kind: [field: $tool_field],
+            config_json: $cj,
+            hidden: $hid,
+            batch: [$($batch)?],
+            ; $($($rest)*)?
+        );
+    };
+
+    // Parse config_json
+    (@parse $processor:ty, $config_field:ident, $desc:expr, $name:expr, $execute:ident,
+     guard: [$($guard:ident)?],
+     tools_kind: $tk:tt,
+     config_json: false,
+     hidden: $hid:tt,
+     batch: [$($batch:ident)?],
+     ; config_json: true $(, $($rest:tt)*)?
+    ) => {
+        impl_checker!(@parse $processor, $config_field, $desc, $name, $execute,
+            guard: [$($guard)?],
+            tools_kind: $tk,
+            config_json: true,
+            hidden: $hid,
+            batch: [$($batch)?],
+            ; $($($rest)*)?
+        );
+    };
+
+    // Parse hidden
+    (@parse $processor:ty, $config_field:ident, $desc:expr, $name:expr, $execute:ident,
+     guard: [$($guard:ident)?],
+     tools_kind: $tk:tt,
+     config_json: $cj:tt,
+     hidden: false,
+     batch: [$($batch:ident)?],
+     ; hidden: true $(, $($rest:tt)*)?
+    ) => {
+        impl_checker!(@parse $processor, $config_field, $desc, $name, $execute,
+            guard: [$($guard)?],
+            tools_kind: $tk,
+            config_json: $cj,
+            hidden: true,
+            batch: [$($batch)?],
+            ; $($($rest)*)?
+        );
+    };
+
+    // Parse batch
+    (@parse $processor:ty, $config_field:ident, $desc:expr, $name:expr, $execute:ident,
+     guard: [$($guard:ident)?],
+     tools_kind: $tk:tt,
+     config_json: $cj:tt,
+     hidden: $hid:tt,
+     batch: [],
+     ; batch: $batch_method:ident $(, $($rest:tt)*)?
+    ) => {
+        impl_checker!(@parse $processor, $config_field, $desc, $name, $execute,
+            guard: [$($guard)?],
+            tools_kind: $tk,
+            config_json: $cj,
+            hidden: $hid,
+            batch: [$batch_method],
+            ; $($($rest)*)?
+        );
+    };
+
+    // Terminal: no more tokens to parse
+    (@parse $processor:ty, $config_field:ident, $desc:expr, $name:expr, $execute:ident,
+     guard: [$($guard:ident)?],
+     tools_kind: $tk:tt,
+     config_json: $cj:tt,
+     hidden: $hid:tt,
+     batch: [$($batch:ident)?],
+     ;
+    ) => {
+        impl_checker!(@build $processor, $config_field, $desc, $name,
+            guard: [$($guard)?],
+            tools_kind: $tk,
+            config_json: $cj,
+            hidden: $hid,
+            batch: [$($batch)?],
+            execute: $execute,
+        );
+    };
+}
+
 mod cargo;
 mod clang_tidy;
 mod cppcheck;

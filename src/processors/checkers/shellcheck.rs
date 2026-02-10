@@ -3,9 +3,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::config::ShellcheckConfig;
-use crate::file_index::FileIndex;
-use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProductDiscovery, discover_checker_products, scan_root_valid, run_command, check_command_output, execute_checker_batch};
+use crate::graph::Product;
+use crate::processors::{scan_root_valid, run_command, check_command_output};
 
 pub struct ShellcheckProcessor {
     project_root: PathBuf,
@@ -23,6 +22,10 @@ impl ShellcheckProcessor {
     /// Check if shell linting should be enabled
     fn should_lint(&self) -> bool {
         scan_root_valid(&self.config.scan)
+    }
+
+    fn execute_product(&self, product: &Product) -> Result<()> {
+        self.check_files(&[product.inputs[0].as_path()])
     }
 
     /// Run shellcheck on one or more files
@@ -43,49 +46,13 @@ impl ShellcheckProcessor {
     }
 }
 
-impl ProductDiscovery for ShellcheckProcessor {
-    fn description(&self) -> &str {
-        "Lint shell scripts using shellcheck"
-    }
-
-    fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        self.should_lint() && !file_index.scan(&self.config.scan, true).is_empty()
-    }
-
-    fn required_tools(&self) -> Vec<String> {
-        vec![self.config.checker.clone()]
-    }
-
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
-        if !self.should_lint() {
-            return Ok(());
-        }
-        discover_checker_products(
-            graph,
-            &self.config.scan,
-            file_index,
-            &self.config.extra_inputs,
-            &self.config,
-            "shellcheck",
-        )
-    }
-
-    fn execute(&self, product: &Product) -> Result<()> {
-        self.check_files(&[product.inputs[0].as_path()])
-    }
-
-    fn supports_batch(&self) -> bool {
-        true
-    }
-
-    fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
-        execute_checker_batch(
-            products,
-            |files| self.check_files(files),
-        )
-    }
-
-    fn config_json(&self) -> Option<String> {
-        serde_json::to_string(&self.config).ok()
-    }
-}
+impl_checker!(ShellcheckProcessor,
+    config: config,
+    description: "Lint shell scripts using shellcheck",
+    name: "shellcheck",
+    execute: execute_product,
+    guard: should_lint,
+    tool_field: checker,
+    config_json: true,
+    batch: check_files,
+);

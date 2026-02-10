@@ -5,9 +5,8 @@ use std::thread;
 use std::time::Duration;
 
 use crate::config::SleepConfig;
-use crate::file_index::FileIndex;
-use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProductDiscovery, scan_root_valid, discover_checker_products, is_interrupted};
+use crate::graph::Product;
+use crate::processors::{scan_root_valid, is_interrupted};
 
 pub struct SleepProcessor {
     config: SleepConfig,
@@ -23,6 +22,10 @@ impl SleepProcessor {
     /// Check if sleep processing should be enabled
     fn should_process(&self) -> bool {
         scan_root_valid(&self.config.scan)
+    }
+
+    fn execute_product(&self, product: &Product) -> Result<()> {
+        self.execute_sleep(&product.inputs[0])
     }
 
     /// Read duration from sleep file and sleep
@@ -52,34 +55,11 @@ impl SleepProcessor {
     }
 }
 
-impl ProductDiscovery for SleepProcessor {
-    fn description(&self) -> &str {
-        "Sleep for a duration (testing)"
-    }
-
-    fn hidden(&self) -> bool {
-        true
-    }
-
-    fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        self.should_process() && !file_index.scan(&self.config.scan, true).is_empty()
-    }
-
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
-        if !self.should_process() {
-            return Ok(());
-        }
-        discover_checker_products(
-            graph,
-            &self.config.scan,
-            file_index,
-            &self.config.extra_inputs,
-            &self.config,
-            "sleep",
-        )
-    }
-
-    fn execute(&self, product: &Product) -> Result<()> {
-        self.execute_sleep(&product.inputs[0])
-    }
-}
+impl_checker!(SleepProcessor,
+    config: config,
+    description: "Sleep for a duration (testing)",
+    name: "sleep",
+    execute: execute_product,
+    guard: should_process,
+    hidden: true,
+);

@@ -3,9 +3,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::config::RuffConfig;
-use crate::file_index::FileIndex;
-use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProductDiscovery, discover_checker_products, run_command, check_command_output, execute_checker_batch};
+use crate::graph::Product;
+use crate::processors::{run_command, check_command_output};
 
 pub struct RuffProcessor {
     project_root: PathBuf,
@@ -18,6 +17,10 @@ impl RuffProcessor {
             project_root,
             ruff_config,
         }
+    }
+
+    fn execute_product(&self, product: &Product) -> Result<()> {
+        self.lint_files(&[product.inputs[0].as_path()])
     }
 
     /// Run the configured linter on one or more files
@@ -40,46 +43,12 @@ impl RuffProcessor {
     }
 }
 
-impl ProductDiscovery for RuffProcessor {
-    fn description(&self) -> &str {
-        "Lint Python files with ruff"
-    }
-
-    fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        !file_index.scan(&self.ruff_config.scan, true).is_empty()
-    }
-
-    fn required_tools(&self) -> Vec<String> {
-        vec![self.ruff_config.linter.clone()]
-    }
-
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
-        discover_checker_products(
-            graph,
-            &self.ruff_config.scan,
-            file_index,
-            &self.ruff_config.extra_inputs,
-            &self.ruff_config,
-            "ruff",
-        )
-    }
-
-    fn execute(&self, product: &Product) -> Result<()> {
-        self.lint_files(&[product.inputs[0].as_path()])
-    }
-
-    fn supports_batch(&self) -> bool {
-        true
-    }
-
-    fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
-        execute_checker_batch(
-            products,
-            |files| self.lint_files(files),
-        )
-    }
-
-    fn config_json(&self) -> Option<String> {
-        serde_json::to_string(&self.ruff_config).ok()
-    }
-}
+impl_checker!(RuffProcessor,
+    config: ruff_config,
+    description: "Lint Python files with ruff",
+    name: "ruff",
+    execute: execute_product,
+    tool_field: linter,
+    config_json: true,
+    batch: lint_files,
+);
