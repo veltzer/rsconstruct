@@ -119,6 +119,25 @@ Grades:
 - `rsb watch` becomes a client that triggers rebuilds on file events.
 - **Urgency**: low | **Complexity**: high
 
+### Persistent workers
+- Keep long-running tool processes alive to avoid startup overhead.
+- Instead of spawning `ruff` or `pylint` per invocation, keep one process alive and feed it files.
+- Bazel gets 2-4x speedup for Java this way. Could benefit pylint/mypy which have heavy startup.
+- Multiplex variant: multiple requests to a single worker process via threads.
+- **Urgency**: medium | **Complexity**: high
+
+### Dynamic execution (race local vs remote)
+- Start both local and remote execution of the same product; use whichever finishes first and cancel the other.
+- Useful when remote cache is slow or flaky.
+- Configurable per-processor via execution strategy.
+- **Urgency**: low | **Complexity**: high
+
+### Execution strategies per processor
+- Map each processor to an execution strategy: local, remote, sandboxed, or dynamic.
+- Different processors may benefit from different execution models.
+- Config: `[processor.ruff] execution = "remote"`, `[processor.cc_single_file] execution = "sandboxed"`.
+- **Urgency**: low | **Complexity**: medium
+
 ### Build profiles
 - Named configuration sets for different build scenarios (ci, dev, release).
 - Profiles inherit from base configuration and override specific values.
@@ -149,6 +168,12 @@ Grades:
 - Useful for large projects where a full build is expensive.
 - **Urgency**: medium | **Complexity**: medium
 
+### Critical path analysis
+- Identify the longest sequential chain of actions in a build.
+- Helps users optimize their slowest builds by showing what's actually on the critical path.
+- Display with `rsb build --critical-path` or include in `--timings` output.
+- **Urgency**: medium | **Complexity**: medium
+
 ## Extensibility
 
 ### Plugin registry
@@ -168,12 +193,46 @@ Grades:
 - Attach cross-cutting behavior to all targets of a certain type (e.g., "add coverage analysis to every C++ compile").
 - **Urgency**: low | **Complexity**: high
 
+### Output groups / subtargets
+- Named subsets of a target's outputs that can be requested selectively.
+- E.g., `rsb build --output-group=debug` or per-product subtarget selection.
+- Useful for targets that produce multiple output types (headers, binaries, docs).
+- **Urgency**: low | **Complexity**: medium
+
+### Visibility / access control
+- Restrict which processors can consume which files or directories.
+- Prevents accidental cross-boundary dependencies in large repos.
+- Config: per-processor `visibility` rules or directory-level `.rsb-visibility` files.
+- **Urgency**: low | **Complexity**: medium
+
 ## Developer Experience
 
 ### Build profiling / tracing
 - Generate Chrome trace format or flamegraph SVG showing what ran when, including parallel lanes.
+- Include critical path highlighting, CPU usage, and idle time analysis.
 - Usage: `rsb build --trace=build.json`
+- Viewable in `chrome://tracing` or Perfetto UI.
 - **Urgency**: medium | **Complexity**: medium
+
+### Stamping / workspace status
+- Embed build metadata (git hash, build timestamp, branch name) into outputs.
+- Distinguish volatile keys (don't trigger rebuilds) from stable keys (do trigger rebuilds).
+- Usage: `rsb build --stamp`, with a `workspace_status_command` config option.
+- Useful for embedding version info in compiled binaries or generated files.
+- **Urgency**: medium | **Complexity**: medium
+
+### Build Event Protocol / structured event stream
+- rsb has `--json` on stdout, but a proper Build Event Protocol (file or gRPC stream) enables external dashboards, CI integrations, and build analytics services.
+- Write events to a file (`--build-event-log=events.pb`) or stream to a remote service.
+- Richer event types than current JSON Lines: action graph, configuration, progress, test results.
+- **Urgency**: medium | **Complexity**: medium
+
+### Flaky product detection / retry
+- Automatically retry failed products N times to detect flakiness.
+- Report `FLAKY` (passed on retry) vs `FAILED` (consistently fails) status.
+- Config: `retry_on_failure = 3`, `--flaky-retries=N` flag.
+- Useful for flaky linters, network-dependent checks, and test processors.
+- **Urgency**: medium | **Complexity**: low
 
 ### Build notifications
 - Desktop notifications when builds complete, especially for long builds.
@@ -232,6 +291,26 @@ Grades:
 - Only activate when stdin is a TTY.
 - **Urgency**: low | **Complexity**: medium
 
+### Layered config files
+- Support config file layering: system (`/etc/rsb/config.toml`), user (`~/.config/rsb/config.toml`), project (`rsb.toml`).
+- Lower layers provide defaults, higher layers override.
+- Per-command overrides via `[build]`, `[watch]` sections.
+- Similar to Bazel's `.bazelrc` layering.
+- **Urgency**: low | **Complexity**: low
+
+### Test sharding
+- Split large test targets across multiple parallel shards.
+- Set `TEST_TOTAL_SHARDS` and `TEST_SHARD_INDEX` environment variables for test runners.
+- Config: `shard_count = 4` per processor or product.
+- Useful for pytest/doctest processors when added.
+- **Urgency**: low | **Complexity**: medium
+
+### Runfiles / runtime dependency trees
+- Track runtime dependencies (shared libs, config files, data files) separately from build dependencies.
+- Generate a runfiles directory per executable with symlinks to all transitive runtime deps.
+- Useful for deployment, packaging, and containerization.
+- **Urgency**: low | **Complexity**: high
+
 ## Caching & Performance
 
 ### Lazy file hashing (mtime-based)
@@ -261,6 +340,12 @@ Grades:
 - Surface in `rsb status` when products are restorable from another branch.
 - Already works implicitly via input hash matching.
 - **Urgency**: low | **Complexity**: low
+
+### Merkle tree input hashing
+- Hash inputs as a Merkle tree rather than flat concatenation.
+- More efficient for large input sets — changing one file only rehashes its branch, not all inputs.
+- Also enables efficient transfer of input trees to remote execution workers.
+- **Urgency**: low | **Complexity**: medium
 
 ## Reproducibility
 
