@@ -12,7 +12,7 @@ use crate::errors;
 use crate::graph::BuildGraph;
 use crate::json_output;
 use crate::object_store::ObjectStore;
-use crate::processors::{BuildStats, ProcessStats, ProductTiming};
+use crate::processors::{BuildStats, ProductTiming};
 
 use super::{Executor, LevelWork, RestoreOutcome, SharedState, WorkItem};
 
@@ -93,7 +93,6 @@ impl<'a> Executor<'a> {
         let current_per_processor: Arc<Mutex<HashMap<String, usize>>> =
             Arc::new(Mutex::new(HashMap::new()));
         let global_total = order.len();
-        let global_current = Arc::new(AtomicUsize::new(0));
 
         // Pre-build classification: count skip/restore/build for progress bar sizing
         let (_skip_count, restore_count, build_count) = Self::classify_products(graph, order, object_store, force);
@@ -113,13 +112,16 @@ impl<'a> Executor<'a> {
             pb
         };
 
-        let stats_by_processor: Arc<Mutex<HashMap<String, ProcessStats>>> =
-            Arc::new(Mutex::new(HashMap::new()));
-        let errors: Arc<Mutex<Vec<anyhow::Error>>> = Arc::new(Mutex::new(Vec::new()));
-        let failed_products: Arc<Mutex<HashSet<usize>>> = Arc::new(Mutex::new(HashSet::new()));
-        let failed_messages: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
-        let failed_processors: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
-        let unchanged_products: Arc<Mutex<HashSet<usize>>> = Arc::new(Mutex::new(HashSet::new()));
+        let shared = SharedState {
+            stats: Arc::new(Mutex::new(HashMap::new())),
+            errors: Arc::new(Mutex::new(Vec::new())),
+            failed_products: Arc::new(Mutex::new(HashSet::new())),
+            failed_messages: Arc::new(Mutex::new(Vec::new())),
+            failed_processors: Arc::new(Mutex::new(HashSet::new())),
+            unchanged_products: Arc::new(Mutex::new(HashSet::new())),
+            global_current: Arc::new(AtomicUsize::new(0)),
+            global_total,
+        };
 
         for level in levels {
             // Check for Ctrl+C before starting next level
@@ -128,34 +130,17 @@ impl<'a> Executor<'a> {
             }
 
             let LevelWork { batch_groups, non_batch_items } = self.prepare_level_work(
-                graph, &level, object_store, force, keep_going,
-                &failed_products, &failed_processors, &failed_messages, &errors, &unchanged_products,
+                graph, &level, object_store, force, keep_going, &shared,
             );
 
             // Process this level in parallel using thread pool
             thread::scope(|s| {
-                let stats_ref = &stats_by_processor;
-                let errors_ref = &errors;
-                let failed_ref = &failed_products;
-                let failed_msgs_ref = &failed_messages;
-                let failed_procs_ref = &failed_processors;
-                let global_current_ref = &global_current;
                 let interrupted_ref = &self.interrupted;
                 let pb_ref = &pb;
+                let shared_ref = &shared;
 
                 // Spawn one thread per batch group
-                let unchanged_ref = &unchanged_products;
                 for (proc_name, items) in &batch_groups {
-                    let shared = SharedState {
-                        stats: Arc::clone(stats_ref),
-                        errors: Arc::clone(errors_ref),
-                        failed_products: Arc::clone(failed_ref),
-                        failed_messages: Arc::clone(failed_msgs_ref),
-                        failed_processors: Arc::clone(failed_procs_ref),
-                        unchanged_products: Arc::clone(unchanged_ref),
-                        global_current: Arc::clone(global_current_ref),
-                        global_total,
-                    };
 
                     s.spawn(move || {
                         if interrupted_ref.load(Ordering::SeqCst) {
@@ -180,12 +165,12 @@ impl<'a> Executor<'a> {
                             }
 
                             if !needs_rebuild {
-                                self.handle_skip(product, &shared);
+                                self.handle_skip(product, shared_ref);
                                 continue;
                             }
 
                             // Try to restore from cache (batch path: no emit on failure)
-                            match self.handle_restore(product, *id, object_store, &cache_key, input_checksum, force, keep_going, false, &shared, pb_ref) {
+                            match self.handle_restore(product, *id, object_store, &cache_key, input_checksum, force, keep_going, false, shared_ref, pb_ref) {
                                 RestoreOutcome::Restored | RestoreOutcome::Failed => continue,
                                 RestoreOutcome::NotRestorable => {}
                             }
@@ -223,10 +208,10 @@ impl<'a> Executor<'a> {
                                     .map(|p| self.product_display(p))
                                     .collect::<Vec<_>>()
                                     .join(", ");
-                                let gc = shared.global_current.load(Ordering::SeqCst);
+                                let gc = shared_ref.global_current.load(Ordering::SeqCst);
                                 println!("[{}] ({}/{}) ({}/{}) {} {} files: {}",
                                     proc_name,
-                                    gc + 1, shared.global_total,
+                                    gc + 1, shared_ref.global_total,
                                     proc_current, proc_total,
                                     color::green("Processing batch:"),
                                     product_refs.len(),
@@ -247,21 +232,21 @@ impl<'a> Executor<'a> {
 
                                 match result {
                                     Ok(()) => {
-                                        if !self.handle_success(product, *id, object_store, &cache_key, input_checksum, proc_name, None, keep_going, &shared, pb_ref) {
+                                        if !self.handle_success(product, *id, object_store, &cache_key, input_checksum, proc_name, None, keep_going, shared_ref, pb_ref) {
                                             // cache_outputs failed and error was handled
                                             continue;
                                         }
                                     }
                                     Err(e) => {
-                                        self.handle_error(product, *id, proc_name, e, None, keep_going, &shared);
+                                        self.handle_error(product, *id, proc_name, e, None, keep_going, shared_ref);
                                     }
                                 }
-                                Self::inc_progress(pb_ref, &shared);
+                                Self::inc_progress(pb_ref, shared_ref);
                             }
 
                             // Record batch timing for this chunk
                             if timings {
-                                let mut stats = shared.stats.lock();
+                                let mut stats = shared_ref.stats.lock();
                                 let proc_stats = stats
                                     .entry(proc_name.clone())
                                     .or_default();
@@ -283,16 +268,6 @@ impl<'a> Executor<'a> {
                     let current_ref = &current_per_processor;
 
                     for chunk in non_batch_items.chunks(chunk_size.max(1)) {
-                        let shared = SharedState {
-                            stats: Arc::clone(stats_ref),
-                            errors: Arc::clone(errors_ref),
-                            failed_products: Arc::clone(failed_ref),
-                            failed_messages: Arc::clone(failed_msgs_ref),
-                            failed_processors: Arc::clone(failed_procs_ref),
-                            unchanged_products: Arc::clone(unchanged_ref),
-                            global_current: Arc::clone(global_current_ref),
-                            global_total,
-                        };
                         let total_ref = Arc::clone(total_ref);
                         let current_ref = Arc::clone(current_ref);
 
@@ -300,7 +275,7 @@ impl<'a> Executor<'a> {
                             for (id, input_checksum, needs_rebuild) in chunk {
                                 // Stop if interrupted or if there's an error (non-keep-going mode)
                                 if interrupted_ref.load(Ordering::SeqCst)
-                                    || (!keep_going && !shared.errors.lock().is_empty())
+                                    || (!keep_going && !shared_ref.errors.lock().is_empty())
                                 {
                                     break;
                                 }
@@ -314,12 +289,12 @@ impl<'a> Executor<'a> {
                                 }
 
                                 if !needs_rebuild {
-                                    self.handle_skip(product, &shared);
+                                    self.handle_skip(product, shared_ref);
                                     continue;
                                 }
 
                                 // Try to restore from cache (non-batch path: emit on failure)
-                                match self.handle_restore(product, *id, object_store, &cache_key, input_checksum, force, keep_going, true, &shared, pb_ref) {
+                                match self.handle_restore(product, *id, object_store, &cache_key, input_checksum, force, keep_going, true, shared_ref, pb_ref) {
                                     RestoreOutcome::Restored | RestoreOutcome::Failed => continue,
                                     RestoreOutcome::NotRestorable => {}
                                 }
@@ -339,9 +314,9 @@ impl<'a> Executor<'a> {
                                         let variant_tag = product.variant.as_ref()
                                             .map(|v| format!(":{}", v))
                                             .unwrap_or_default();
-                                        let gc = shared.global_current.load(Ordering::SeqCst) + 1;
+                                        let gc = shared_ref.global_current.load(Ordering::SeqCst) + 1;
                                         println!("[{}{}] ({}/{}) ({}/{}) {} {}", product.processor, variant_tag,
-                                            gc, shared.global_total,
+                                            gc, shared_ref.global_total,
                                             current, total,
                                             color::green("Processing:"),
                                             self.product_display(product));
@@ -357,14 +332,14 @@ impl<'a> Executor<'a> {
                                         Ok(()) => {
                                             let duration = product_start.elapsed();
 
-                                            if !self.handle_success(product, *id, object_store, &cache_key, input_checksum, &product.processor, Some(duration), keep_going, &shared, pb_ref) {
+                                            if !self.handle_success(product, *id, object_store, &cache_key, input_checksum, &product.processor, Some(duration), keep_going, shared_ref, pb_ref) {
                                                 // cache_outputs failed and error was handled
                                                 continue;
                                             }
 
                                             // Record per-product duration (non-batch only)
                                             {
-                                                let mut stats = shared.stats.lock();
+                                                let mut stats = shared_ref.stats.lock();
                                                 let proc_stats = stats
                                                     .entry(product.processor.clone())
                                                     .or_default();
@@ -380,10 +355,10 @@ impl<'a> Executor<'a> {
                                         }
                                         Err(e) => {
                                             let duration = product_start.elapsed();
-                                            self.handle_error(product, *id, &product.processor, e, Some(duration), keep_going, &shared);
+                                            self.handle_error(product, *id, &product.processor, e, Some(duration), keep_going, shared_ref);
                                         }
                                     }
-                                    Self::inc_progress(pb_ref, &shared);
+                                    Self::inc_progress(pb_ref, shared_ref);
                                 }
                             }
                         });
@@ -398,7 +373,7 @@ impl<'a> Executor<'a> {
             }
 
             // In non-keep-going mode, stop after level with errors
-            if !keep_going && !errors.lock().is_empty() {
+            if !keep_going && !shared.errors.lock().is_empty() {
                 break;
             }
         }
@@ -406,7 +381,7 @@ impl<'a> Executor<'a> {
         pb.finish_and_clear();
 
         // Build aggregated stats
-        let final_stats = Arc::try_unwrap(stats_by_processor)
+        let final_stats = Arc::try_unwrap(shared.stats)
             .map_err(|_| anyhow::anyhow!("internal error: outstanding Arc reference to stats"))?
             .into_inner();
         let mut stats = BuildStats::default();
@@ -414,10 +389,10 @@ impl<'a> Executor<'a> {
             stats.add(proc_stats);
         }
 
-        let final_failed = Arc::try_unwrap(failed_products)
+        let final_failed = Arc::try_unwrap(shared.failed_products)
             .map_err(|_| anyhow::anyhow!("internal error: outstanding Arc reference to failed products"))?
             .into_inner();
-        let final_msgs = Arc::try_unwrap(failed_messages)
+        let final_msgs = Arc::try_unwrap(shared.failed_messages)
             .map_err(|_| anyhow::anyhow!("internal error: outstanding Arc reference to failed messages"))?
             .into_inner();
         stats.failed_count = final_failed.len();
@@ -426,7 +401,7 @@ impl<'a> Executor<'a> {
         // In non-keep-going mode, return the first error after giving
         // independent products a chance to execute and be cached
         if !keep_going && !self.interrupted.load(Ordering::SeqCst) {
-            let errs = Arc::try_unwrap(errors)
+            let errs = Arc::try_unwrap(shared.errors)
                 .map_err(|_| anyhow::anyhow!("internal error: outstanding Arc reference to errors"))?
                 .into_inner();
             if let Some(first_err) = errs.into_iter().next() {
@@ -441,7 +416,6 @@ impl<'a> Executor<'a> {
     ///
     /// Skips products with failed dependencies, computes checksums,
     /// and separates items into batch groups vs non-batch items.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn prepare_level_work(
         &self,
         graph: &BuildGraph,
@@ -449,11 +423,7 @@ impl<'a> Executor<'a> {
         object_store: &ObjectStore,
         force: bool,
         keep_going: bool,
-        failed_products: &Arc<Mutex<HashSet<usize>>>,
-        failed_processors: &Arc<Mutex<HashSet<String>>>,
-        failed_messages: &Arc<Mutex<Vec<String>>>,
-        errors: &Arc<Mutex<Vec<anyhow::Error>>>,
-        unchanged_products: &Arc<Mutex<HashSet<usize>>>,
+        shared: &SharedState,
     ) -> LevelWork {
         // Each work item: (product_id, input_checksum, needs_rebuild)
         let mut work_items: Vec<WorkItem> = Vec::new();
@@ -461,7 +431,7 @@ impl<'a> Executor<'a> {
         // First pass: identify products with failed dependencies
         let mut skipped_ids: HashSet<usize> = HashSet::new();
         {
-            let failed_guard = failed_products.lock();
+            let failed_guard = shared.failed_products.lock();
             for &id in level {
                 if self.has_failed_dependency(graph, id, &failed_guard) {
                     let product = graph.get_product(id).expect(errors::INVALID_PRODUCT_ID);
@@ -475,7 +445,7 @@ impl<'a> Executor<'a> {
             }
         }
         if !skipped_ids.is_empty() {
-            let mut failed_guard = failed_products.lock();
+            let mut failed_guard = shared.failed_products.lock();
             for id in &skipped_ids {
                 failed_guard.insert(*id);
             }
@@ -483,7 +453,7 @@ impl<'a> Executor<'a> {
 
         // Second pass: determine work items for non-skipped products
         {
-            let fp_guard = failed_processors.lock();
+            let fp_guard = shared.failed_processors.lock();
             for &id in level {
                 if skipped_ids.contains(&id) {
                     continue;
@@ -494,7 +464,7 @@ impl<'a> Executor<'a> {
                 // In non-keep-going mode, silently skip products from a
                 // processor that failed in a previous level
                 if !keep_going && fp_guard.contains(&product.processor) {
-                    failed_products.lock().insert(id);
+                    shared.failed_products.lock().insert(id);
                     continue;
                 }
                 let cache_key = product.cache_key();
@@ -503,7 +473,7 @@ impl<'a> Executor<'a> {
                 // reuse the cached input checksum instead of recomputing
                 let deps = graph.get_dependencies(id);
                 let input_checksum = {
-                    let unchanged_guard = unchanged_products.lock();
+                    let unchanged_guard = shared.unchanged_products.lock();
                     let all_deps_unchanged = !deps.is_empty()
                         && deps.iter().all(|d| unchanged_guard.contains(d));
                     if all_deps_unchanged {
@@ -522,11 +492,11 @@ impl<'a> Executor<'a> {
                         if keep_going {
                             let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
                             println!("{}", color::red(&format!("Error: {}", msg)));
-                            failed_products.lock().insert(id);
-                            failed_messages.lock().push(msg);
+                            shared.failed_products.lock().insert(id);
+                            shared.failed_messages.lock().push(msg);
                         } else {
-                            failed_products.lock().insert(id);
-                            errors.lock().push(e);
+                            shared.failed_products.lock().insert(id);
+                            shared.errors.lock().push(e);
                         }
                         continue;
                     }

@@ -117,23 +117,34 @@ impl ScanConfig {
     }
 }
 
+/// Base exclude dirs shared by all processors.
+const COMMON_EXCLUDE_DIRS: &[&str] = &["/.git/", "/out/", "/build/", "/dist/"];
+
 const PYTHON_EXCLUDE_DIRS: &[&str] = &[
-    "/.venv/", "/__pycache__/", "/.git/", "/out/",
-    "/node_modules/", "/.tox/", "/build/", "/dist/", "/.eggs/",
+    "/.git/", "/out/", "/build/", "/dist/",
+    "/.venv/", "/__pycache__/", "/node_modules/", "/.tox/", "/.eggs/",
 ];
 
-const CC_EXCLUDE_DIRS: &[&str] = &["/.git/", "/out/", "/build/", "/dist/"];
+const CC_EXCLUDE_DIRS: &[&str] = COMMON_EXCLUDE_DIRS;
 
 const SPELLCHECK_EXCLUDE_DIRS: &[&str] = &[
-    "/.git/", "/out/", "/.rsb/", "/node_modules/", "/build/", "/dist/", "/target/",
+    "/.git/", "/out/", "/build/", "/dist/",
+    "/.rsb/", "/node_modules/", "/target/",
 ];
 
-const MAKE_EXCLUDE_DIRS: &[&str] = &["/.git/", "/out/", "/.rsb/", "/build/", "/dist/", "/target/"];
+const MAKE_EXCLUDE_DIRS: &[&str] = &[
+    "/.git/", "/out/", "/build/", "/dist/",
+    "/.rsb/", "/target/",
+];
 
-const SHELL_EXCLUDE_DIRS: &[&str] = &["/.git/", "/out/", "/.rsb/", "/node_modules/", "/build/", "/dist/", "/target/"];
+const SHELL_EXCLUDE_DIRS: &[&str] = &[
+    "/.git/", "/out/", "/build/", "/dist/",
+    "/.rsb/", "/node_modules/", "/target/",
+];
 
 const MARKDOWN_EXCLUDE_DIRS: &[&str] = &[
-    "/.git/", "/out/", "/.rsb/", "/node_modules/", "/build/", "/dist/", "/target/",
+    "/.git/", "/out/", "/build/", "/dist/",
+    "/.rsb/", "/node_modules/", "/target/",
 ];
 
 const DEFAULT_PLUGINS_DIR: &str = "plugins";

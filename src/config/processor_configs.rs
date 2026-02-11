@@ -344,7 +344,10 @@ fn default_cargo_command() -> String {
     "build".into()
 }
 
-pub(super) const CARGO_EXCLUDE_DIRS: &[&str] = &["/.git/", "/target/", "/.rsb/", "/out/"];
+pub(super) const CARGO_EXCLUDE_DIRS: &[&str] = &[
+    "/.git/", "/out/", "/build/", "/dist/",
+    "/target/", "/.rsb/",
+];
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CargoConfig {

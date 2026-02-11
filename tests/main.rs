@@ -35,8 +35,10 @@ mod processors {
     pub mod clang_tidy;
     pub mod cppcheck;
     pub mod make;
+    pub mod mypy;
     pub mod pylint;
     pub mod ruff;
+    pub mod rumdl;
     pub mod shellcheck;
     pub mod sleep;
     pub mod spellcheck;
