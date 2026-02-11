@@ -18,12 +18,6 @@ use crate::config::{config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 
-/// Global flag: when true, print each external command before execution.
-static PROCESS_DEBUG: AtomicBool = AtomicBool::new(false);
-
-/// Global flag: when true, show tool output even on success (default: only show on failure).
-static SHOW_OUTPUT: AtomicBool = AtomicBool::new(false);
-
 /// Global flag: set to true on Ctrl+C so subprocesses can be killed promptly.
 static INTERRUPTED: AtomicBool = AtomicBool::new(false);
 
@@ -53,16 +47,6 @@ fn get_interrupt_receiver() -> watch::Receiver<bool> {
     get_interrupt_sender().subscribe()
 }
 
-/// Enable process debug logging (called once from main).
-pub fn set_process_debug(enabled: bool) {
-    PROCESS_DEBUG.store(enabled, Ordering::Relaxed);
-}
-
-/// Enable showing tool output even on success (called once from main).
-pub fn set_show_output(enabled: bool) {
-    SHOW_OUTPUT.store(enabled, Ordering::Relaxed);
-}
-
 /// Mark the global interrupted flag and notify all waiting tasks.
 pub fn set_interrupted() {
     INTERRUPTED.store(true, Ordering::SeqCst);
@@ -90,7 +74,7 @@ pub fn format_command(cmd: &Command) -> String {
 
 /// If --process is enabled, print the command that is about to be executed.
 pub fn log_command(cmd: &Command) {
-    if PROCESS_DEBUG.load(Ordering::Relaxed) {
+    if crate::runtime_flags::process_debug() {
         let cwd = cmd.get_current_dir()
             .map(|p| p.display().to_string())
             .unwrap_or_default();
@@ -179,7 +163,7 @@ fn run_command_inner(cmd: &mut Command, inherit_stdio: bool, print_on_failure: b
 /// By default, output is captured and only shown on failure. Use `--show-output`
 /// to always show tool output.
 pub fn run_command(cmd: &mut Command) -> Result<Output> {
-    let show = SHOW_OUTPUT.load(Ordering::Relaxed);
+    let show = crate::runtime_flags::show_output();
     run_command_inner(cmd, show, !show)
 }
 
@@ -208,7 +192,8 @@ pub fn scan_root(scan: &crate::config::ScanConfig) -> PathBuf {
 
 /// Check if a scan root is valid (empty means current dir, otherwise must exist).
 pub fn scan_root_valid(scan: &crate::config::ScanConfig) -> bool {
-    scan_root(scan).as_os_str().is_empty() || scan_root(scan).exists()
+    let root = scan_root(scan);
+    root.as_os_str().is_empty() || root.exists()
 }
 
 /// Compute a stub path for a source file.

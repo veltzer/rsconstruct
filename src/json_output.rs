@@ -8,20 +8,11 @@ use serde::Serialize;
 
 use crate::errors;
 use std::io::{self, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-
-/// Global flag: when true, output JSON instead of human-readable text.
-static JSON_MODE: AtomicBool = AtomicBool::new(false);
-
-/// Enable JSON output mode (called once from main).
-pub fn set_json_mode(enabled: bool) {
-    JSON_MODE.store(enabled, Ordering::Relaxed);
-}
 
 /// Check if JSON output mode is enabled.
 pub fn is_json_mode() -> bool {
-    JSON_MODE.load(Ordering::Relaxed)
+    crate::runtime_flags::json_mode()
 }
 
 /// Status of a completed product in a build.

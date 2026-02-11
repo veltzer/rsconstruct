@@ -602,3 +602,124 @@ impl BuildGraph {
 "#)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn add_product_assigns_incrementing_ids() {
+        let mut g = BuildGraph::new();
+        let id0 = g.add_product(vec!["a.c".into()], vec!["a.o".into()], "cc", None).unwrap();
+        let id1 = g.add_product(vec!["b.c".into()], vec!["b.o".into()], "cc", None).unwrap();
+        assert_eq!(id0, 0);
+        assert_eq!(id1, 1);
+        assert_eq!(g.products().len(), 2);
+    }
+
+    #[test]
+    fn output_conflict_is_detected() {
+        let mut g = BuildGraph::new();
+        g.add_product(vec!["a.c".into()], vec!["out.o".into()], "cc", None).unwrap();
+        let result = g.add_product(vec!["b.c".into()], vec!["out.o".into()], "cc", None);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Output conflict"));
+    }
+
+    #[test]
+    fn topological_sort_no_dependencies() {
+        let mut g = BuildGraph::new();
+        g.add_product(vec!["c.c".into()], vec![], "check", None).unwrap();
+        g.add_product(vec!["b.c".into()], vec![], "check", None).unwrap();
+        g.add_product(vec!["a.c".into()], vec![], "check", None).unwrap();
+        g.resolve_dependencies();
+        let order = g.topological_sort().unwrap();
+        // All products have no dependencies, order should contain all ids
+        assert_eq!(order.len(), 3);
+        let mut sorted = order.clone();
+        sorted.sort();
+        assert_eq!(sorted, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn topological_sort_respects_dependencies() {
+        let mut g = BuildGraph::new();
+        // Product 0: generates lib.o
+        g.add_product(vec!["lib.c".into()], vec!["lib.o".into()], "cc", None).unwrap();
+        // Product 1: consumes lib.o (depends on product 0)
+        g.add_product(vec!["main.c".into(), "lib.o".into()], vec!["main".into()], "cc", None).unwrap();
+        g.resolve_dependencies();
+        let order = g.topological_sort().unwrap();
+        assert_eq!(order.len(), 2);
+        // lib.o producer (0) must come before consumer (1)
+        let pos0 = order.iter().position(|&id| id == 0).unwrap();
+        let pos1 = order.iter().position(|&id| id == 1).unwrap();
+        assert!(pos0 < pos1);
+    }
+
+    #[test]
+    fn topological_sort_chain() {
+        let mut g = BuildGraph::new();
+        // A -> B -> C chain
+        g.add_product(vec!["a.c".into()], vec!["a.o".into()], "cc", None).unwrap();
+        g.add_product(vec!["a.o".into()], vec!["b.o".into()], "link", None).unwrap();
+        g.add_product(vec!["b.o".into()], vec!["c.out".into()], "link", None).unwrap();
+        g.resolve_dependencies();
+        let order = g.topological_sort().unwrap();
+        assert_eq!(order, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn cycle_detection() {
+        let mut g = BuildGraph::new();
+        // Create a cycle: 0 produces a.o, 1 produces b.o, but each consumes the other
+        g.add_product(vec!["b.o".into()], vec!["a.o".into()], "cc", None).unwrap();
+        g.add_product(vec!["a.o".into()], vec!["b.o".into()], "cc", None).unwrap();
+        g.resolve_dependencies();
+        let result = g.topological_sort();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Cycle"));
+    }
+
+    #[test]
+    fn resolve_dependencies_links_products() {
+        let mut g = BuildGraph::new();
+        g.add_product(vec!["src.c".into()], vec!["obj.o".into()], "cc", None).unwrap();
+        g.add_product(vec!["obj.o".into()], vec!["app".into()], "link", None).unwrap();
+        g.resolve_dependencies();
+        // Product 1 depends on product 0
+        assert_eq!(g.get_dependencies(1), &[0]);
+        // Product 0 has no dependencies
+        assert!(g.get_dependencies(0).is_empty());
+    }
+
+    #[test]
+    fn cache_key_includes_config_hash() {
+        let p1 = Product::new(vec!["a.c".into()], vec![], "cc", 0, None);
+        let p2 = Product::new(vec!["a.c".into()], vec![], "cc", 0, Some("abc123".into()));
+        assert!(!p1.cache_key().contains("abc123"));
+        assert!(p2.cache_key().contains("abc123"));
+    }
+
+    #[test]
+    fn apply_tool_version_hashes() {
+        let mut g = BuildGraph::new();
+        g.add_product(vec!["a.c".into()], vec![], "cc", Some("cfg1".into())).unwrap();
+        g.add_product(vec!["b.py".into()], vec![], "ruff", None).unwrap();
+        let mut hashes = HashMap::new();
+        hashes.insert("cc".into(), "toolv1".into());
+        g.apply_tool_version_hashes(&hashes);
+        // cc product gets tool hash appended
+        assert!(g.get_product(0).unwrap().config_hash.as_ref().unwrap().contains("toolv1"));
+        assert!(g.get_product(0).unwrap().config_hash.as_ref().unwrap().contains("cfg1"));
+        // ruff product (no tool hash mapping) stays None
+        assert!(g.get_product(1).unwrap().config_hash.is_none());
+    }
+
+    #[test]
+    fn empty_graph_sorts_ok() {
+        let g = BuildGraph::new();
+        let order = g.topological_sort().unwrap();
+        assert!(order.is_empty());
+    }
+}

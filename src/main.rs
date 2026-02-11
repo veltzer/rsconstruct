@@ -1,5 +1,6 @@
 mod analyzers;
 mod builder;
+mod checksum;
 mod cli;
 mod color;
 mod config;
@@ -14,6 +15,7 @@ mod json_output;
 mod object_store;
 mod processors;
 mod progress;
+mod runtime_flags;
 mod remote_cache;
 mod tool_lock;
 mod watcher;
@@ -60,17 +62,13 @@ fn main() -> std::process::ExitCode {
 fn run() -> Result<()> {
     let cli = Cli::parse();
 
-    // Enable process debug logging if --process flag is set
-    processors::set_process_debug(cli.process);
-
-    // Enable showing tool output even on success if --show-output flag is set
-    processors::set_show_output(cli.show_output);
-
-    // Enable JSON output mode if --json flag is set
-    json_output::set_json_mode(cli.json);
-
-    // Enable phases debug logging if --phases flag is set
-    builder::set_phases_debug(cli.phases);
+    // Initialize runtime flags from CLI arguments (once, before any reads)
+    runtime_flags::init(runtime_flags::RuntimeFlags {
+        process_debug: cli.process,
+        show_output: cli.show_output,
+        phases_debug: cli.phases,
+        json_mode: cli.json,
+    });
 
     // Set up Ctrl+C handler: sets a flag so the executor can stop gracefully
     let interrupted = Arc::new(AtomicBool::new(false));

@@ -5,12 +5,12 @@ mod operations;
 mod validity;
 
 use anyhow::{Context, Result};
-use sha2::{Sha256, Digest};
 use std::fs;
 use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use redb::{Database, ReadableDatabase, TableDefinition};
 
+use crate::checksum;
 use crate::config::RestoreMethod;
 use crate::remote_cache::RemoteCache;
 
@@ -226,20 +226,12 @@ impl ObjectStore {
 
     /// Calculate SHA-256 checksum of a file
     pub fn calculate_checksum(file_path: &Path) -> Result<String> {
-        let contents = fs::read(file_path)
-            .with_context(|| format!("Failed to read file for checksum: {}", file_path.display()))?;
-        let mut hasher = Sha256::new();
-        hasher.update(&contents);
-        let result = hasher.finalize();
-        Ok(hex::encode(result))
+        checksum::file_checksum(file_path)
     }
 
     /// Calculate SHA-256 checksum of bytes
     pub fn calculate_checksum_bytes(data: &[u8]) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(data);
-        let result = hasher.finalize();
-        hex::encode(result)
+        checksum::bytes_checksum(data)
     }
 
     /// Get object path for a checksum (e.g., .rsb/objects/ab/cdef123...)

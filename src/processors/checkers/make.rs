@@ -81,6 +81,10 @@ impl ProductDiscovery for MakeProcessor {
         )
     }
 
+    fn config_json(&self) -> Option<String> {
+        serde_json::to_string(&self.config).ok()
+    }
+
     fn execute(&self, product: &Product) -> Result<()> {
         self.execute_make(&product.inputs[0])
     }

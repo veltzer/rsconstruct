@@ -7,6 +7,15 @@ pub struct FileIndex {
     files: Vec<PathBuf>,
 }
 
+#[cfg(test)]
+impl FileIndex {
+    /// Create a FileIndex from an explicit list of paths (for testing).
+    fn from_paths(mut files: Vec<PathBuf>) -> Self {
+        files.sort();
+        Self { files }
+    }
+}
+
 impl FileIndex {
     /// Build a file index by walking the project root once.
     /// Uses `ignore::WalkBuilder` which natively handles `.gitignore` and
@@ -136,8 +145,102 @@ impl FileIndex {
     }
 
     /// Check if a specific path exists in the index.
+    /// Uses binary search since the file list is sorted.
     pub fn contains(&self, path: &Path) -> bool {
-        self.files.iter().any(|p| p == path)
+        self.files.binary_search_by(|p| p.as_path().cmp(path)).is_ok()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_index() -> FileIndex {
+        FileIndex::from_paths(vec![
+            "src/main.c".into(),
+            "src/lib.c".into(),
+            "src/util/helper.c".into(),
+            "tests/test_main.py".into(),
+            "tests/test_lib.py".into(),
+            "README.md".into(),
+            "Makefile".into(),
+            "out/build/app.o".into(),
+        ])
+    }
+
+    #[test]
+    fn contains_finds_existing_path() {
+        let idx = sample_index();
+        assert!(idx.contains(Path::new("src/main.c")));
+        assert!(idx.contains(Path::new("README.md")));
+    }
+
+    #[test]
+    fn contains_rejects_missing_path() {
+        let idx = sample_index();
+        assert!(!idx.contains(Path::new("nonexistent.c")));
+        assert!(!idx.contains(Path::new("src/missing.c")));
+    }
+
+    #[test]
+    fn has_extension_finds_existing() {
+        let idx = sample_index();
+        assert!(idx.has_extension(".c"));
+        assert!(idx.has_extension(".py"));
+        assert!(idx.has_extension(".md"));
+    }
+
+    #[test]
+    fn has_extension_rejects_missing() {
+        let idx = sample_index();
+        assert!(!idx.has_extension(".rs"));
+        assert!(!idx.has_extension(".java"));
+    }
+
+    #[test]
+    fn query_filters_by_extension() {
+        let idx = sample_index();
+        let results = idx.query(Path::new(""), &[".c"], &[], &[], &[]);
+        assert_eq!(results.len(), 3); // main.c, lib.c, helper.c
+        assert!(results.iter().all(|p| p.to_string_lossy().ends_with(".c")));
+    }
+
+    #[test]
+    fn query_filters_by_root() {
+        let idx = sample_index();
+        let results = idx.query(Path::new("tests"), &[".py"], &[], &[], &[]);
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().all(|p| p.starts_with("tests")));
+    }
+
+    #[test]
+    fn query_excludes_dirs() {
+        let idx = sample_index();
+        let results = idx.query(Path::new(""), &[".c", ".o"], &["/util/"], &[], &[]);
+        assert!(!results.iter().any(|p| p.to_string_lossy().contains("/util/")));
+    }
+
+    #[test]
+    fn query_excludes_files() {
+        let idx = sample_index();
+        let results = idx.query(Path::new(""), &[".c"], &[], &["lib.c"], &[]);
+        assert!(!results.iter().any(|p| p.file_name().unwrap() == "lib.c"));
+        assert!(results.iter().any(|p| p.file_name().unwrap() == "main.c"));
+    }
+
+    #[test]
+    fn query_excludes_paths() {
+        let idx = sample_index();
+        let results = idx.query(Path::new(""), &[".c"], &[], &[], &["src/main.c"]);
+        assert!(!results.contains(&PathBuf::from("src/main.c")));
+        assert!(results.contains(&PathBuf::from("src/lib.c")));
+    }
+
+    #[test]
+    fn query_empty_root_matches_all() {
+        let idx = sample_index();
+        let results = idx.query(Path::new(""), &[".md"], &[], &[], &[]);
+        assert_eq!(results, vec![PathBuf::from("README.md")]);
     }
 }
 

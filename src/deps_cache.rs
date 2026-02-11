@@ -11,7 +11,6 @@
 use anyhow::{Context, Result};
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -271,10 +270,4 @@ fn path_to_key(path: &Path) -> String {
     path.display().to_string()
 }
 
-/// Compute SHA-256 checksum of a file
-fn file_checksum(path: &Path) -> Result<String> {
-    let content = fs::read(path)
-        .with_context(|| format!("Failed to read file for checksum: {}", path.display()))?;
-    let hash = Sha256::digest(&content);
-    Ok(hex::encode(hash))
-}
+use crate::checksum::file_checksum;

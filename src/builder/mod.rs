@@ -9,7 +9,6 @@ mod tools;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use anyhow::Result;
 use crate::analyzers::{CppDepAnalyzer, DepAnalyzer, PythonDepAnalyzer};
 use crate::cli::BuildPhase;
@@ -45,14 +44,6 @@ enum GraphBuildMode {
     ForClean,
 }
 
-/// Global flag: when true, print phase messages during graph building.
-static PHASES_DEBUG: AtomicBool = AtomicBool::new(false);
-
-/// Enable phases debug logging (called once from main).
-pub fn set_phases_debug(enabled: bool) {
-    PHASES_DEBUG.store(enabled, Ordering::Relaxed);
-}
-
 /// Return the keys of a HashMap sorted alphabetically.
 fn sorted_keys<V>(map: &HashMap<String, V>) -> Vec<&String> {
     let mut keys: Vec<&String> = map.keys().collect();
@@ -62,7 +53,7 @@ fn sorted_keys<V>(map: &HashMap<String, V>) -> Vec<&String> {
 
 /// Check if phases debug is enabled.
 fn phases_debug() -> bool {
-    PHASES_DEBUG.load(Ordering::Relaxed)
+    crate::runtime_flags::phases_debug()
 }
 
 /// Labels for the three product states used by dry_run and status.

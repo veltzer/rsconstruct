@@ -4,6 +4,32 @@ use crate::json_output::{emit_product_complete, ProductStatus};
 use super::{Executor, HandlerContext, RestoreOutcome, SharedState};
 
 impl<'a> Executor<'a> {
+    /// Record a product failure into shared state.
+    ///
+    /// In keep-going mode: prints the error, records the message for the summary.
+    /// In fail-fast mode: stores the error for later propagation.
+    /// If `mark_processor_failed` is true, also records the processor name
+    /// so its products are skipped in subsequent levels.
+    fn record_failure(
+        &self,
+        ctx: &HandlerContext,
+        error: anyhow::Error,
+        mark_processor_failed: bool,
+    ) {
+        if ctx.keep_going {
+            let msg = format!("[{}] {}: {}", ctx.proc_name, self.product_display(ctx.product), error);
+            println!("{}", color::red(&format!("Error: {}", msg)));
+            ctx.shared.failed_products.lock().insert(ctx.id);
+            ctx.shared.failed_messages.lock().push(msg);
+        } else {
+            ctx.shared.failed_products.lock().insert(ctx.id);
+            if mark_processor_failed {
+                ctx.shared.failed_processors.lock().insert(ctx.proc_name.to_string());
+            }
+            ctx.shared.errors.lock().push(error);
+        }
+    }
+
     /// Handle the "skip (unchanged)" case for a product.
     /// Logs, emits JSON event, increments stats. Does NOT advance the progress bar
     /// since skips are instant and the bar total excludes them.
@@ -79,15 +105,7 @@ impl<'a> Executor<'a> {
                         Some(&e.to_string()),
                     );
                 }
-                if ctx.keep_going {
-                    let msg = format!("[{}] {}: {}", ctx.product.processor, self.product_display(ctx.product), e);
-                    println!("{}", color::red(&format!("Error: {}", msg)));
-                    ctx.shared.failed_products.lock().insert(ctx.id);
-                    ctx.shared.failed_messages.lock().push(msg);
-                } else {
-                    ctx.shared.failed_products.lock().insert(ctx.id);
-                    ctx.shared.errors.lock().push(e);
-                }
+                self.record_failure(ctx, e, false);
                 Self::inc_progress(ctx.pb, ctx.shared);
                 RestoreOutcome::Failed
             }
@@ -117,16 +135,7 @@ impl<'a> Executor<'a> {
                 .or_default();
             proc_stats.failed += 1;
         }
-        if ctx.keep_going {
-            let msg = format!("[{}] {}: {}", ctx.proc_name, self.product_display(ctx.product), error);
-            println!("{}", color::red(&format!("Error: {}", msg)));
-            ctx.shared.failed_products.lock().insert(ctx.id);
-            ctx.shared.failed_messages.lock().push(msg);
-        } else {
-            ctx.shared.failed_products.lock().insert(ctx.id);
-            ctx.shared.failed_processors.lock().insert(ctx.proc_name.to_string());
-            ctx.shared.errors.lock().push(error);
-        }
+        self.record_failure(ctx, error, true);
     }
 
     /// Handle caching outputs and recording stats after successful execution.
@@ -152,15 +161,7 @@ impl<'a> Executor<'a> {
                     duration,
                     Some(&e.to_string()),
                 );
-                if ctx.keep_going {
-                    let msg = format!("[{}] {}: {}", ctx.product.processor, self.product_display(ctx.product), e);
-                    println!("{}", color::red(&format!("Error: {}", msg)));
-                    ctx.shared.failed_products.lock().insert(ctx.id);
-                    ctx.shared.failed_messages.lock().push(msg);
-                } else {
-                    ctx.shared.failed_products.lock().insert(ctx.id);
-                    ctx.shared.errors.lock().push(e);
-                }
+                self.record_failure(ctx, e, false);
                 Self::inc_progress(ctx.pb, ctx.shared);
                 return false;
             }
