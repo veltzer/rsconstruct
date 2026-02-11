@@ -17,11 +17,10 @@ pub struct CcProcessor {
     config: CcConfig,
     profiles: Vec<CompilerProfile>,
     output_dir: PathBuf,
-    verbose: bool,
 }
 
 impl CcProcessor {
-    pub fn new(project_root: PathBuf, config: CcConfig, verbose: bool) -> Self {
+    pub fn new(project_root: PathBuf, config: CcConfig) -> Self {
         let profiles = config.get_compiler_profiles();
         let output_dir = PathBuf::from("out/cc_single_file");
         Self {
@@ -29,7 +28,6 @@ impl CcProcessor {
             config,
             profiles,
             output_dir,
-            verbose,
         }
     }
 
@@ -118,7 +116,7 @@ impl CcProcessor {
         }
         cmd.current_dir(&self.project_root);
 
-        if self.verbose {
+        if crate::runtime_flags::show_child_processes() {
             let profile_tag = if profile.name.is_empty() { String::new() } else { format!(":{}", profile.name) };
             println!("[cc_single_file{}] {}", profile_tag, format_command(&cmd));
         }

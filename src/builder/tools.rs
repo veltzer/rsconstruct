@@ -8,7 +8,7 @@ impl Builder {
     /// Verify tool versions against .tools.versions lock file.
     /// Called at the start of build unless --ignore-tool-versions is passed.
     pub fn verify_tool_versions(&self) -> Result<()> {
-        let processors = self.create_processors(false)?;
+        let processors = self.create_processors()?;
         let config = &self.config;
         let tool_commands = tool_lock::collect_tool_commands(
             &processors,
@@ -22,7 +22,7 @@ impl Builder {
 
     /// Handle `rsb tools` subcommands
     pub fn tools(&self, action: ToolsAction) -> Result<()> {
-        let processors = self.create_processors(false)?;
+        let processors = self.create_processors()?;
 
         let show_all = matches!(&action, ToolsAction::List { all: true } | ToolsAction::Check { all: true });
 

@@ -1,11 +1,11 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::path::Path;
 use std::process::Command;
 
 use crate::config::MakeConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProductDiscovery, SiblingFilter, discover_directory_products, scan_root_valid, run_command, check_command_output};
+use crate::processors::{ProductDiscovery, SiblingFilter, discover_directory_products, scan_root_valid, run_in_anchor_dir, anchor_display_dir, check_command_output};
 
 pub struct MakeProcessor {
     config: MakeConfig,
@@ -25,27 +25,15 @@ impl MakeProcessor {
 
     /// Run make in the Makefile's directory
     fn execute_make(&self, makefile: &Path) -> Result<()> {
-        let makefile_dir = makefile.parent()
-            .context("Makefile has no parent directory")?;
-
         let mut cmd = Command::new(&self.config.make);
-
         for arg in &self.config.args {
             cmd.arg(arg);
         }
-
         if !self.config.target.is_empty() {
             cmd.arg(&self.config.target);
         }
-
-        // Only set current_dir if not empty (root-level Makefile)
-        if !makefile_dir.as_os_str().is_empty() {
-            cmd.current_dir(makefile_dir);
-        }
-
-        let output = run_command(&mut cmd)?;
-        let display_dir = if makefile_dir.as_os_str().is_empty() { "." } else { &makefile_dir.to_string_lossy() };
-        check_command_output(&output, format_args!("make in {}", display_dir))
+        let output = run_in_anchor_dir(&mut cmd, makefile)?;
+        check_command_output(&output, format_args!("make in {}", anchor_display_dir(makefile)))
     }
 }
 

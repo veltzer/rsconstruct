@@ -19,8 +19,7 @@ impl ClangTidyProcessor {
         }
     }
 
-    /// Check if clang-tidy analysis should be enabled
-    fn should_check(&self) -> bool {
+    fn should_process(&self) -> bool {
         scan_root_valid(&self.config.scan)
     }
 
@@ -47,7 +46,7 @@ impl_checker!(ClangTidyProcessor,
     description: "Run clang-tidy static analysis on C/C++ source files",
     name: "clang_tidy",
     execute: execute_product,
-    guard: should_check,
+    guard: should_process,
     tools: ["clang-tidy".to_string()],
     config_json: true,
 );

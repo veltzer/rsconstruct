@@ -2,6 +2,61 @@ use serde::{Deserialize, Serialize};
 
 use super::{default_true, default_cc_compiler, default_cxx_compiler, default_output_suffix, ScanConfig};
 
+/// Generate a simple checker config struct with args, extra_inputs, and scan fields.
+///
+/// Generates the struct with serde `Deserialize`/`Serialize`/`Clone` derives and
+/// a `Default` impl with the specified scan settings.
+///
+/// Variants:
+/// - `checker_config!(Name, extensions: [".py"])` — default scan from project root
+/// - `checker_config!(Name, scan_dir: "src", extensions: [".c"])` — scan in subdirectory
+/// - `checker_config!(Name, default_args: fn_name, extensions: [".py"])` — custom default args
+/// - `checker_config!(Name, default_args: fn_name, scan_dir: "src", extensions: [".c"])` — both
+macro_rules! checker_config {
+    ($name:ident, extensions: [$($ext:expr),+ $(,)?]) => {
+        #[derive(Debug, Deserialize, Serialize, Clone)]
+        pub struct $name {
+            #[serde(default)]
+            pub args: Vec<String>,
+            #[serde(default)]
+            pub extra_inputs: Vec<String>,
+            #[serde(flatten)]
+            pub scan: ScanConfig,
+        }
+
+        impl Default for $name {
+            fn default() -> Self {
+                Self {
+                    args: Vec::new(),
+                    extra_inputs: Vec::new(),
+                    scan: default_scan!(extensions: [$($ext),+]),
+                }
+            }
+        }
+    };
+    ($name:ident, scan_dir: $dir:expr, extensions: [$($ext:expr),+ $(,)?]) => {
+        #[derive(Debug, Deserialize, Serialize, Clone)]
+        pub struct $name {
+            #[serde(default)]
+            pub args: Vec<String>,
+            #[serde(default)]
+            pub extra_inputs: Vec<String>,
+            #[serde(flatten)]
+            pub scan: ScanConfig,
+        }
+
+        impl Default for $name {
+            fn default() -> Self {
+                Self {
+                    args: Vec::new(),
+                    extra_inputs: Vec::new(),
+                    scan: default_scan!(scan_dir: $dir, extensions: [$($ext),+]),
+                }
+            }
+        }
+    };
+}
+
 /// Create a default ScanConfig with optional scan_dir and required extensions.
 /// All exclude fields default to None (filled by resolve_scan_defaults).
 macro_rules! default_scan {
@@ -75,25 +130,7 @@ impl Default for RuffConfig {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct PylintConfig {
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub extra_inputs: Vec<String>,
-    #[serde(flatten)]
-    pub scan: ScanConfig,
-}
-
-impl Default for PylintConfig {
-    fn default() -> Self {
-        Self {
-            args: Vec::new(),
-            extra_inputs: Vec::new(),
-            scan: default_scan!(extensions: [".py"]),
-        }
-    }
-}
+checker_config!(PylintConfig, extensions: [".py"]);
 
 fn default_cppcheck_args() -> Vec<String> {
     vec![

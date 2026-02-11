@@ -7,7 +7,7 @@ use super::{Builder, sorted_keys};
 impl Builder {
     /// Handle `rsb processor` subcommands
     pub fn processor(&self, action: ProcessorAction) -> Result<()> {
-        let processors = self.create_processors(false)?;
+        let processors = self.create_processors()?;
 
         let proc_names = sorted_keys(&processors);
 

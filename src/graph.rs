@@ -307,8 +307,8 @@ impl BuildGraph {
     /// Format graph as DOT (Graphviz)
     pub fn to_dot(&self) -> String {
         let mut buf = String::new();
-        writeln!(buf, "digraph build_graph {{").unwrap();
-        writeln!(buf, "    rankdir=LR;").unwrap();
+        let _ = writeln!(buf, "digraph build_graph {{");
+        let _ = writeln!(buf, "    rankdir=LR;");
 
         // Collect all unique input and output files
         let mut input_files: HashSet<PathBuf> = HashSet::new();
@@ -324,24 +324,24 @@ impl BuildGraph {
         }
 
         // Add file nodes (inputs that are not outputs = source files)
-        writeln!(buf, "\n    // Source files").unwrap();
+        let _ = writeln!(buf, "\n    // Source files");
         for file in &input_files {
             if !output_files.contains(file) {
                 let node_id = Self::path_node_id(file);
                 let label = Self::file_label(file);
-                writeln!(buf, "    {} [label=\"{}\" shape=note style=filled fillcolor=white];", node_id, label).unwrap();
+                let _ = writeln!(buf, "    {} [label=\"{}\" shape=note style=filled fillcolor=white];", node_id, label);
             }
         }
 
-        writeln!(buf, "\n    // Generated files").unwrap();
+        let _ = writeln!(buf, "\n    // Generated files");
         for file in &output_files {
             let node_id = Self::path_node_id(file);
             let label = Self::file_label(file);
             let color = if input_files.contains(file) { "lightgreen" } else { "lightyellow" };
-            writeln!(buf, "    {} [label=\"{}\" shape=note style=filled fillcolor={}];", node_id, label, color).unwrap();
+            let _ = writeln!(buf, "    {} [label=\"{}\" shape=note style=filled fillcolor={}];", node_id, label, color);
         }
 
-        writeln!(buf, "\n    // Processors").unwrap();
+        let _ = writeln!(buf, "\n    // Processors");
         for product in &self.products {
             let node_id = Self::processor_node_id(product);
             let color = match product.processor.as_str() {
@@ -349,28 +349,28 @@ impl BuildGraph {
                 "cc_single_file" => "lightsalmon",
                 _ => "lightgray",
             };
-            writeln!(buf, "    {} [label=\"{}\" shape=box style=filled fillcolor={}];",
-                node_id, product.processor, color).unwrap();
+            let _ = writeln!(buf, "    {} [label=\"{}\" shape=box style=filled fillcolor={}];",
+                node_id, product.processor, color);
         }
 
-        writeln!(buf, "\n    // Edges").unwrap();
+        let _ = writeln!(buf, "\n    // Edges");
         for product in &self.products {
             let proc_id = Self::processor_node_id(product);
 
             // Input files -> processor
             for input in &product.inputs {
                 let input_id = Self::path_node_id(input);
-                writeln!(buf, "    {} -> {};", input_id, proc_id).unwrap();
+                let _ = writeln!(buf, "    {} -> {};", input_id, proc_id);
             }
 
             // Processor -> output files
             for output in &product.outputs {
                 let output_id = Self::path_node_id(output);
-                writeln!(buf, "    {} -> {};", proc_id, output_id).unwrap();
+                let _ = writeln!(buf, "    {} -> {};", proc_id, output_id);
             }
         }
 
-        write!(buf, "}}").unwrap();
+        let _ = write!(buf, "}}");
         buf
     }
 
@@ -379,7 +379,7 @@ impl BuildGraph {
     /// to keep the diagram manageable for large projects.
     pub fn to_mermaid(&self) -> String {
         let mut buf = String::new();
-        writeln!(buf, "graph LR").unwrap();
+        let _ = writeln!(buf, "graph LR");
 
         // Collect primary source files (first input only) and output files
         let mut source_files: HashSet<PathBuf> = HashSet::new();
@@ -394,41 +394,41 @@ impl BuildGraph {
             }
         }
 
-        writeln!(buf, "\n    %% Source files").unwrap();
+        let _ = writeln!(buf, "\n    %% Source files");
         for file in &source_files {
             if !output_files.contains(file) {
                 let node_id = Self::path_node_id(file);
                 let label = Self::file_label(file);
-                writeln!(buf, "    {}[/\"{}\"/]", node_id, label).unwrap();
+                let _ = writeln!(buf, "    {}[/\"{}\"/]", node_id, label);
             }
         }
 
-        writeln!(buf, "\n    %% Generated files").unwrap();
+        let _ = writeln!(buf, "\n    %% Generated files");
         for file in &output_files {
             let node_id = Self::path_node_id(file);
             let label = Self::file_label(file);
-            writeln!(buf, "    {}[/\"{}\"/]", node_id, label).unwrap();
+            let _ = writeln!(buf, "    {}[/\"{}\"/]", node_id, label);
         }
 
-        writeln!(buf, "\n    %% Processors").unwrap();
+        let _ = writeln!(buf, "\n    %% Processors");
         for product in &self.products {
             let node_id = Self::processor_node_id(product);
-            writeln!(buf, "    {}[\"{}\" ]", node_id, product.processor).unwrap();
+            let _ = writeln!(buf, "    {}[\"{}\" ]", node_id, product.processor);
         }
 
-        writeln!(buf, "\n    %% Edges").unwrap();
+        let _ = writeln!(buf, "\n    %% Edges");
         for product in &self.products {
             let proc_id = Self::processor_node_id(product);
 
             // Only connect primary source file (first input), skip headers
             if let Some(first_input) = product.inputs.first() {
                 let input_id = Self::path_node_id(first_input);
-                writeln!(buf, "    {} --> {}", input_id, proc_id).unwrap();
+                let _ = writeln!(buf, "    {} --> {}", input_id, proc_id);
             }
 
             for output in &product.outputs {
                 let output_id = Self::path_node_id(output);
-                writeln!(buf, "    {} --> {}", proc_id, output_id).unwrap();
+                let _ = writeln!(buf, "    {} --> {}", proc_id, output_id);
             }
         }
 
@@ -443,10 +443,10 @@ impl BuildGraph {
             .collect();
 
         if !tera_procs.is_empty() {
-            writeln!(buf, "\n    style {} fill:#add8e6", tera_procs.join(",")).unwrap();
+            let _ = writeln!(buf, "\n    style {} fill:#add8e6", tera_procs.join(","));
         }
         if !cc_procs.is_empty() {
-            writeln!(buf, "\n    style {} fill:#ffa07a", cc_procs.join(",")).unwrap();
+            let _ = writeln!(buf, "\n    style {} fill:#ffa07a", cc_procs.join(","));
         }
 
         buf.truncate(buf.trim_end().len());
@@ -480,14 +480,14 @@ impl BuildGraph {
     /// Format graph as plain text
     pub fn to_text(&self) -> String {
         let mut buf = String::new();
-        writeln!(buf, "Build Dependency Graph").unwrap();
-        writeln!(buf, "======================").unwrap();
+        let _ = writeln!(buf, "Build Dependency Graph");
+        let _ = writeln!(buf, "======================");
 
         // Get topological order
         let order = match self.topological_sort() {
             Ok(o) => o,
             Err(_) => {
-                writeln!(buf, "Error: Cycle detected in graph").unwrap();
+                let _ = writeln!(buf, "Error: Cycle detected in graph");
                 buf.truncate(buf.trim_end().len());
                 return buf;
             }
@@ -504,10 +504,10 @@ impl BuildGraph {
                 .filter_map(|n| n.to_str())
                 .collect();
 
-            writeln!(buf, "[{}] {} -> {}",
+            let _ = writeln!(buf, "[{}] {} -> {}",
                 product.processor,
                 inputs.join(", "),
-                outputs.join(", ")).unwrap();
+                outputs.join(", "));
 
             // Show dependencies
             let deps = &self.dependencies[product.id];
@@ -522,12 +522,12 @@ impl BuildGraph {
                         out.join(", ")
                     })
                     .collect();
-                writeln!(buf, "    depends on: {}", dep_names.join(", ")).unwrap();
+                let _ = writeln!(buf, "    depends on: {}", dep_names.join(", "));
             }
         }
 
         if self.products.is_empty() {
-            writeln!(buf, "(empty graph)").unwrap();
+            let _ = writeln!(buf, "(empty graph)");
         }
 
         buf.truncate(buf.trim_end().len());

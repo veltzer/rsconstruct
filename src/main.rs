@@ -64,7 +64,7 @@ fn run() -> Result<()> {
 
     // Initialize runtime flags from CLI arguments (once, before any reads)
     runtime_flags::init(runtime_flags::RuntimeFlags {
-        process_debug: cli.process,
+        show_child_processes: cli.show_child_processes,
         show_output: cli.show_output,
         phases_debug: cli.phases,
         json_mode: cli.json,

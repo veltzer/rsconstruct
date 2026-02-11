@@ -19,8 +19,7 @@ impl ShellcheckProcessor {
         }
     }
 
-    /// Check if shell linting should be enabled
-    fn should_lint(&self) -> bool {
+    fn should_process(&self) -> bool {
         scan_root_valid(&self.config.scan)
     }
 
@@ -51,7 +50,7 @@ impl_checker!(ShellcheckProcessor,
     description: "Lint shell scripts using shellcheck",
     name: "shellcheck",
     execute: execute_product,
-    guard: should_lint,
+    guard: should_process,
     tool_field: checker,
     config_json: true,
     batch: check_files,

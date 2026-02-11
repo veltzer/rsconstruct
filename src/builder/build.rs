@@ -22,7 +22,7 @@ impl Builder {
         let processor_filter = opts.processor_filter.as_deref();
 
         // Create processors
-        let processors = self.create_processors(opts.verbose)?;
+        let processors = self.create_processors()?;
 
         // Validate processor filter against available processors
         if let Some(filter) = processor_filter {
@@ -104,7 +104,7 @@ impl Builder {
 
     /// Show what would happen without executing anything
     pub fn dry_run(&self, force: bool, explain: bool) -> anyhow::Result<()> {
-        let processors = self.create_processors(false)?;
+        let processors = self.create_processors()?;
         let graph = self.build_graph_with_processors(&processors)?;
 
         let order = graph.topological_sort()?;
@@ -129,7 +129,7 @@ impl Builder {
 
     /// Show the status of each product in the build graph
     pub fn status(&self) -> anyhow::Result<()> {
-        let processors = self.create_processors(false)?;
+        let processors = self.create_processors()?;
         let graph = self.build_graph_with_processors(&processors)?;
 
         let products: Vec<&_> = graph.products().iter().collect();

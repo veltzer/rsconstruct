@@ -105,7 +105,7 @@ impl Builder {
     }
 
     /// Create all available processors
-    pub fn create_processors(&self, verbose: bool) -> Result<HashMap<String, Box<dyn ProductDiscovery>>> {
+    pub fn create_processors(&self) -> Result<HashMap<String, Box<dyn ProductDiscovery>>> {
         let mut processors: HashMap<String, Box<dyn ProductDiscovery>> = HashMap::new();
         let root = &self.project_root;
         let cfg = &self.config.processor;
@@ -118,7 +118,7 @@ impl Builder {
         Self::register(&mut processors, "ruff", RuffProcessor::new(root.clone(), cfg.ruff.clone()));
         Self::register(&mut processors, "pylint", PylintProcessor::new(root.clone(), cfg.pylint.clone()));
         Self::register(&mut processors, "mypy", MypyProcessor::new(root.clone(), cfg.mypy.clone()));
-        Self::register(&mut processors, "cc_single_file", CcProcessor::new(root.clone(), cfg.cc_single_file.clone(), verbose));
+        Self::register(&mut processors, "cc_single_file", CcProcessor::new(root.clone(), cfg.cc_single_file.clone()));
         Self::register(&mut processors, "cppcheck", CppcheckProcessor::new(root.clone(), cfg.cppcheck.clone()));
         Self::register(&mut processors, "clang_tidy", ClangTidyProcessor::new(root.clone(), cfg.clang_tidy.clone()));
         Self::register(&mut processors, "shellcheck", ShellcheckProcessor::new(root.clone(), cfg.shellcheck.clone()));
@@ -323,7 +323,7 @@ impl Builder {
         filter_name: Option<&str>,
         include_all: bool,
     ) -> Result<BuildGraph> {
-        let processors = self.create_processors(false)?;
+        let processors = self.create_processors()?;
         let mut graph = BuildGraph::new();
 
         // Collect active processors
@@ -351,7 +351,7 @@ impl Builder {
 
     /// Build the dependency graph (creates processors internally)
     fn build_graph(&self) -> Result<BuildGraph> {
-        let processors = self.create_processors(false)?;
+        let processors = self.create_processors()?;
         self.build_graph_with_processors(&processors)
     }
 

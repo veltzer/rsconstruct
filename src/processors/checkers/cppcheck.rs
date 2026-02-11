@@ -19,8 +19,7 @@ impl CppcheckProcessor {
         }
     }
 
-    /// Check if C/C++ static analysis should be enabled
-    fn should_check(&self) -> bool {
+    fn should_process(&self) -> bool {
         scan_root_valid(&self.config.scan)
     }
 
@@ -42,7 +41,7 @@ impl_checker!(CppcheckProcessor,
     description: "Run cppcheck static analysis on C/C++ source files",
     name: "cppcheck",
     execute: execute_product,
-    guard: should_check,
+    guard: should_process,
     tools: ["cppcheck".to_string()],
     config_json: true,
 );

@@ -23,9 +23,9 @@ pub struct Cli {
     #[arg(short = 'P', long, global = true, value_enum, default_value = "path")]
     pub path_format: PathFormat,
 
-    /// Print each external command before it is executed
+    /// Print each child process command before it is executed
     #[arg(long, global = true)]
-    pub process: bool,
+    pub show_child_processes: bool,
 
     /// Show tool output even on success (default: only show on failure)
     #[arg(long, global = true)]

@@ -74,7 +74,7 @@ impl Builder {
         let mut issues = Vec::new();
 
         // Check 1: Enabled processor names are valid
-        let processors = match self.create_processors(false) {
+        let processors = match self.create_processors() {
             Ok(p) => p,
             Err(e) => {
                 issues.push(ValidationIssue {

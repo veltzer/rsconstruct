@@ -8,8 +8,8 @@ use std::sync::OnceLock;
 /// Runtime flags set once at startup from CLI arguments.
 #[derive(Debug)]
 pub(crate) struct RuntimeFlags {
-    /// Print each external command before execution (--process)
-    pub process_debug: bool,
+    /// Print each child process command before execution (--show-child-processes)
+    pub show_child_processes: bool,
     /// Show tool output even on success (--show-output)
     pub show_output: bool,
     /// Print phase messages during graph building (--phases)
@@ -30,8 +30,8 @@ fn get() -> &'static RuntimeFlags {
     FLAGS.get().expect("runtime flags not initialized")
 }
 
-pub(crate) fn process_debug() -> bool {
-    get().process_debug
+pub(crate) fn show_child_processes() -> bool {
+    get().show_child_processes
 }
 
 pub(crate) fn show_output() -> bool {

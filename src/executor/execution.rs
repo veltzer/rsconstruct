@@ -204,22 +204,21 @@ impl<'a> Executor<'a> {
         lctx: &LevelContext,
         emit_fail_event: bool,
     ) -> PreCheckResult {
-        let (id, input_checksum, needs_rebuild) = item;
-        let product = lctx.graph.get_product(*id).expect(errors::INVALID_PRODUCT_ID);
+        let product = lctx.graph.get_product(item.product_id).expect(errors::INVALID_PRODUCT_ID);
         let cache_key = product.cache_key();
 
         if self.explain {
-            let action = lctx.object_store.explain_action(&cache_key, input_checksum, &product.outputs, lctx.force);
+            let action = lctx.object_store.explain_action(&cache_key, &item.input_checksum, &product.outputs, lctx.force);
             self.print_explain(product, &action);
         }
 
-        if !needs_rebuild {
+        if !item.needs_rebuild {
             self.handle_skip(product, lctx.shared);
             return PreCheckResult::Handled;
         }
 
         let ctx = HandlerContext {
-            product, id: *id, cache_key, input_checksum,
+            product, id: item.product_id, cache_key, input_checksum: &item.input_checksum,
             proc_name, keep_going: lctx.keep_going, shared: lctx.shared, pb: lctx.pb,
         };
         match self.handle_restore(&ctx, lctx.object_store, lctx.force, emit_fail_event) {
@@ -274,7 +273,7 @@ impl<'a> Executor<'a> {
 
             // Execute batch chunk
             let product_refs: Vec<&crate::graph::Product> = chunk.iter()
-                .map(|(id, _, _)| lctx.graph.get_product(*id).expect(errors::INVALID_PRODUCT_ID))
+                .map(|item| lctx.graph.get_product(item.product_id).expect(errors::INVALID_PRODUCT_ID))
                 .collect();
 
             proc_current += chunk.len();
@@ -304,12 +303,11 @@ impl<'a> Executor<'a> {
 
             // Process per-product results
             for (item, result) in chunk.iter().zip(results) {
-                let (id, input_checksum, _) = item;
-                let product = lctx.graph.get_product(*id).expect(errors::INVALID_PRODUCT_ID);
+                let product = lctx.graph.get_product(item.product_id).expect(errors::INVALID_PRODUCT_ID);
                 let cache_key = product.cache_key();
 
                 let ctx = HandlerContext {
-                    product, id: *id, cache_key, input_checksum,
+                    product, id: item.product_id, cache_key, input_checksum: &item.input_checksum,
                     proc_name, keep_going: lctx.keep_going, shared: lctx.shared, pb: lctx.pb,
                 };
                 match result {
@@ -350,7 +348,7 @@ impl<'a> Executor<'a> {
         total_per_processor: &HashMap<String, usize>,
         current_per_processor: &Mutex<HashMap<String, usize>>,
     ) {
-        for item @ (id, _input_checksum, _needs_rebuild) in chunk {
+        for item in chunk {
             // Stop if interrupted or if there's an error (non-keep-going mode)
             if self.is_interrupted()
                 || (!lctx.keep_going && !lctx.shared.errors.lock().is_empty())
@@ -358,7 +356,7 @@ impl<'a> Executor<'a> {
                 break;
             }
 
-            let product = lctx.graph.get_product(*id).expect(errors::INVALID_PRODUCT_ID);
+            let product = lctx.graph.get_product(item.product_id).expect(errors::INVALID_PRODUCT_ID);
 
             if let PreCheckResult::Handled = self.try_skip_or_restore(item, &product.processor, lctx, true) {
                 continue;
@@ -366,9 +364,8 @@ impl<'a> Executor<'a> {
 
             if let Some(processor) = self.processors.get(&product.processor) {
                 let cache_key = product.cache_key();
-                let input_checksum = &item.1;
                 let ctx = HandlerContext {
-                    product, id: *id, cache_key, input_checksum,
+                    product, id: item.product_id, cache_key, input_checksum: &item.input_checksum,
                     proc_name: &product.processor, keep_going: lctx.keep_going,
                     shared: lctx.shared, pb: lctx.pb,
                 };
@@ -483,7 +480,6 @@ impl<'a> Executor<'a> {
         keep_going: bool,
         shared: &SharedState,
     ) -> LevelWork {
-        // Each work item: (product_id, input_checksum, needs_rebuild)
         let mut work_items: Vec<WorkItem> = Vec::new();
 
         // First pass: identify products with failed dependencies
@@ -560,8 +556,8 @@ impl<'a> Executor<'a> {
                     }
                 };
 
-                let needs = force || object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs);
-                work_items.push((id, input_checksum, needs));
+                let needs_rebuild = force || object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs);
+                work_items.push(WorkItem { product_id: id, input_checksum, needs_rebuild });
             }
         }
 
@@ -573,7 +569,7 @@ impl<'a> Executor<'a> {
         // Group all items by processor name
         let mut by_processor: HashMap<String, Vec<WorkItem>> = HashMap::new();
         for item in work_items {
-            let product = graph.get_product(item.0).expect(errors::INVALID_PRODUCT_ID);
+            let product = graph.get_product(item.product_id).expect(errors::INVALID_PRODUCT_ID);
             by_processor.entry(product.processor.clone()).or_default().push(item);
         }
 
@@ -584,7 +580,7 @@ impl<'a> Executor<'a> {
             let processor = self.processors.get(&proc_name);
             let supports_batch = processor.is_some_and(|p| p.supports_batch());
             // Count items that actually need rebuild (not just cache-skip)
-            let rebuild_count = items.iter().filter(|(_, _, needs)| *needs).count();
+            let rebuild_count = items.iter().filter(|item| item.needs_rebuild).count();
 
             if batching_enabled && supports_batch && rebuild_count > 1 {
                 batch_groups.insert(proc_name, items);

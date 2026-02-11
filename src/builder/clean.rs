@@ -12,7 +12,7 @@ impl Builder {
         println!("{}", color::bold("Cleaning build artifacts..."));
 
         // Create processors and build graph (fast path: skip dependency scanning)
-        let processors = self.create_processors(false)?;
+        let processors = self.create_processors()?;
         let graph = self.build_graph_for_clean_with_processors(&processors)?;
 
         // Use executor to clean (batch_size doesn't matter for clean)

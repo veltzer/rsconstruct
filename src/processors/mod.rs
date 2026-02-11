@@ -72,9 +72,9 @@ pub fn format_command(cmd: &Command) -> String {
     }
 }
 
-/// If --process is enabled, print the command that is about to be executed.
+/// If --show-child-processes is enabled, print the command that is about to be executed.
 pub fn log_command(cmd: &Command) {
-    if crate::runtime_flags::process_debug() {
+    if crate::runtime_flags::show_child_processes() {
         let cwd = cmd.get_current_dir()
             .map(|p| p.display().to_string())
             .unwrap_or_default();
@@ -176,10 +176,19 @@ pub fn run_command_capture(cmd: &mut Command) -> Result<Output> {
 
 
 /// Check that a command exited successfully.
-/// Output is printed by `run_command` on failure, so we just return an error here.
+/// On failure, includes any captured stdout/stderr in the error message for debugging.
 pub fn check_command_output(output: &Output, context: impl std::fmt::Display) -> Result<()> {
     if !output.status.success() {
-        anyhow::bail!("{context} failed");
+        let mut msg = format!("{context} failed");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if !stderr.is_empty() {
+            msg.push_str(&format!("\nstderr:\n{}", stderr.trim_end()));
+        }
+        if !stdout.is_empty() {
+            msg.push_str(&format!("\nstdout:\n{}", stdout.trim_end()));
+        }
+        anyhow::bail!("{msg}");
     }
     Ok(())
 }
@@ -307,6 +316,26 @@ pub fn discover_checker_products(
         graph.add_product(inputs, vec![], processor_name, hash.clone())?;
     }
     Ok(())
+}
+
+/// Run a command in the parent directory of an anchor file (e.g., Makefile, Cargo.toml).
+/// Sets `current_dir` to the parent directory (unless it's the project root).
+/// Returns a display-friendly directory name for error messages.
+pub fn run_in_anchor_dir(cmd: &mut Command, anchor: &Path) -> Result<Output> {
+    let anchor_dir = anchor.parent()
+        .context("Anchor file has no parent directory")?;
+    if !anchor_dir.as_os_str().is_empty() {
+        cmd.current_dir(anchor_dir);
+    }
+    run_command(cmd)
+}
+
+/// Format the parent directory of an anchor file for display.
+/// Returns `"."` for root-level files.
+pub fn anchor_display_dir(anchor: &Path) -> &str {
+    anchor.parent()
+        .and_then(|p| if p.as_os_str().is_empty() { None } else { p.to_str() })
+        .unwrap_or(".")
 }
 
 /// Ensure a stub directory exists, creating it if necessary.

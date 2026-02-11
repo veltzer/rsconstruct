@@ -33,8 +33,12 @@ enum RestoreOutcome {
     NotRestorable,
 }
 
-/// A work item: (product_id, input_checksum, needs_rebuild).
-type WorkItem = (usize, String, bool);
+/// A work item representing a product to be processed in a build level.
+struct WorkItem {
+    product_id: usize,
+    input_checksum: String,
+    needs_rebuild: bool,
+}
 
 /// Context passed to handler methods for a single product operation.
 /// Groups the parameters common across handle_restore, handle_error, handle_success.
