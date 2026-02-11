@@ -120,31 +120,27 @@ impl ScanConfig {
 /// Base exclude dirs shared by all processors.
 const COMMON_EXCLUDE_DIRS: &[&str] = &["/.git/", "/out/", "/build/", "/dist/"];
 
+/// Common + build tool dirs (/.rsb/, /node_modules/, /target/).
+/// Used by processors that scan broadly and need to skip build artifacts.
+const BUILD_TOOL_EXCLUDES: &[&str] = &[
+    "/.git/", "/out/", "/build/", "/dist/",
+    "/.rsb/", "/node_modules/", "/target/",
+];
+
 const PYTHON_EXCLUDE_DIRS: &[&str] = &[
     "/.git/", "/out/", "/build/", "/dist/",
     "/.venv/", "/__pycache__/", "/node_modules/", "/.tox/", "/.eggs/",
 ];
 
 const CC_EXCLUDE_DIRS: &[&str] = COMMON_EXCLUDE_DIRS;
+const SPELLCHECK_EXCLUDE_DIRS: &[&str] = BUILD_TOOL_EXCLUDES;
+const SHELL_EXCLUDE_DIRS: &[&str] = BUILD_TOOL_EXCLUDES;
+const MARKDOWN_EXCLUDE_DIRS: &[&str] = BUILD_TOOL_EXCLUDES;
 
-const SPELLCHECK_EXCLUDE_DIRS: &[&str] = &[
-    "/.git/", "/out/", "/build/", "/dist/",
-    "/.rsb/", "/node_modules/", "/target/",
-];
-
-const MAKE_EXCLUDE_DIRS: &[&str] = &[
+/// MAKE and Cargo exclude node_modules-free build tool dirs.
+const MAKE_CARGO_EXCLUDES: &[&str] = &[
     "/.git/", "/out/", "/build/", "/dist/",
     "/.rsb/", "/target/",
-];
-
-const SHELL_EXCLUDE_DIRS: &[&str] = &[
-    "/.git/", "/out/", "/build/", "/dist/",
-    "/.rsb/", "/node_modules/", "/target/",
-];
-
-const MARKDOWN_EXCLUDE_DIRS: &[&str] = &[
-    "/.git/", "/out/", "/build/", "/dist/",
-    "/.rsb/", "/node_modules/", "/target/",
 ];
 
 const DEFAULT_PLUGINS_DIR: &str = "plugins";
@@ -351,8 +347,8 @@ impl ProcessorConfig {
         self.shellcheck.scan.resolve("", &[".sh", ".bash"], SHELL_EXCLUDE_DIRS);
         self.spellcheck.scan.resolve("", &[".md"], SPELLCHECK_EXCLUDE_DIRS);
         self.sleep.scan.resolve("sleep", &[".sleep"], &[]);
-        self.make.scan.resolve("", &["Makefile"], MAKE_EXCLUDE_DIRS);
-        self.cargo.scan.resolve("", &["Cargo.toml"], processor_configs::CARGO_EXCLUDE_DIRS);
+        self.make.scan.resolve("", &["Makefile"], MAKE_CARGO_EXCLUDES);
+        self.cargo.scan.resolve("", &["Cargo.toml"], MAKE_CARGO_EXCLUDES);
         self.rumdl.scan.resolve("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
         self.mypy.scan.resolve("", &[".py"], PYTHON_EXCLUDE_DIRS);
     }

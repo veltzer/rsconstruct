@@ -14,7 +14,25 @@ use crate::json_output;
 use crate::object_store::ObjectStore;
 use crate::processors::{BuildStats, ProductTiming};
 
-use super::{Executor, LevelWork, RestoreOutcome, SharedState, WorkItem};
+use super::{Executor, HandlerContext, LevelWork, RestoreOutcome, SharedState, WorkItem};
+
+/// Per-processor progress counters shared across non-batch threads.
+struct ProgressCounters {
+    total_per_processor: Arc<HashMap<String, usize>>,
+    current_per_processor: Arc<Mutex<HashMap<String, usize>>>,
+}
+
+/// Common context shared by both batch and non-batch processing threads within a level.
+struct LevelContext<'b> {
+    graph: &'b BuildGraph,
+    object_store: &'b ObjectStore,
+    force: bool,
+    keep_going: bool,
+    timings: bool,
+    interrupted: &'b Arc<std::sync::atomic::AtomicBool>,
+    shared: &'b SharedState,
+    pb: &'b ProgressBar,
+}
 
 impl<'a> Executor<'a> {
     /// Execute all products in the graph that need rebuilding
@@ -89,9 +107,10 @@ impl<'a> Executor<'a> {
             let product = graph.get_product(product_id).expect(errors::INVALID_PRODUCT_ID);
             *total_per_processor.entry(product.processor.clone()).or_insert(0) += 1;
         }
-        let total_per_processor = Arc::new(total_per_processor);
-        let current_per_processor: Arc<Mutex<HashMap<String, usize>>> =
-            Arc::new(Mutex::new(HashMap::new()));
+        let counters = ProgressCounters {
+            total_per_processor: Arc::new(total_per_processor),
+            current_per_processor: Arc::new(Mutex::new(HashMap::new())),
+        };
         let global_total = order.len();
 
         // Pre-build classification: count skip/restore/build for progress bar sizing
@@ -133,234 +152,34 @@ impl<'a> Executor<'a> {
                 graph, &level, object_store, force, keep_going, &shared,
             );
 
+            let lctx = LevelContext {
+                graph, object_store, force, keep_going, timings,
+                interrupted: &self.interrupted, shared: &shared, pb: &pb,
+            };
+
             // Process this level in parallel using thread pool
             thread::scope(|s| {
-                let interrupted_ref = &self.interrupted;
-                let pb_ref = &pb;
-                let shared_ref = &shared;
+                let lctx_ref = &lctx;
 
                 // Spawn one thread per batch group
                 for (proc_name, items) in &batch_groups {
-
                     s.spawn(move || {
-                        if interrupted_ref.load(Ordering::SeqCst) {
-                            return;
-                        }
-
-                        let processor = match self.processors.get(proc_name) {
-                            Some(p) => p,
-                            None => return,
-                        };
-
-                        // Handle skip/restore for items that don't need rebuild
-                        let mut to_execute: Vec<&WorkItem> = Vec::new();
-                        for item in items {
-                            let (id, input_checksum, needs_rebuild) = item;
-                            let product = graph.get_product(*id).expect(errors::INVALID_PRODUCT_ID);
-                            let cache_key = product.cache_key();
-
-                            if self.explain {
-                                let action = object_store.explain_action(&cache_key, input_checksum, &product.outputs, force);
-                                self.print_explain(product, &action);
-                            }
-
-                            if !needs_rebuild {
-                                self.handle_skip(product, shared_ref);
-                                continue;
-                            }
-
-                            // Try to restore from cache (batch path: no emit on failure)
-                            match self.handle_restore(product, *id, object_store, &cache_key, input_checksum, force, keep_going, false, shared_ref, pb_ref) {
-                                RestoreOutcome::Restored | RestoreOutcome::Failed => continue,
-                                RestoreOutcome::NotRestorable => {}
-                            }
-
-                            to_execute.push(item);
-                        }
-
-                        if to_execute.is_empty() || interrupted_ref.load(Ordering::SeqCst) {
-                            return;
-                        }
-
-                        let proc_total = items.len();
-                        let mut proc_current = items.len() - to_execute.len();
-
-                        // Determine chunk size: 0 means no limit
-                        let chunk_size = match self.batch_size {
-                            Some(0) | None => to_execute.len(),
-                            Some(n) => n,
-                        };
-
-                        // Process in chunks
-                        for chunk in to_execute.chunks(chunk_size) {
-                            if interrupted_ref.load(Ordering::SeqCst) {
-                                break;
-                            }
-
-                            // Execute batch chunk
-                            let product_refs: Vec<&crate::graph::Product> = chunk.iter()
-                                .map(|(id, _, _)| graph.get_product(*id).expect(errors::INVALID_PRODUCT_ID))
-                                .collect();
-
-                            proc_current += chunk.len();
-                            if self.verbose {
-                                let display = product_refs.iter()
-                                    .map(|p| self.product_display(p))
-                                    .collect::<Vec<_>>()
-                                    .join(", ");
-                                let gc = shared_ref.global_current.load(Ordering::SeqCst);
-                                println!("[{}] ({}/{}) ({}/{}) {} {} files: {}",
-                                    proc_name,
-                                    gc + 1, shared_ref.global_total,
-                                    proc_current, proc_total,
-                                    color::green("Processing batch:"),
-                                    product_refs.len(),
-                                    display);
-                            } else {
-                                pb_ref.set_message(format!("[{}] batch {} files", proc_name, product_refs.len()));
-                            }
-
-                            let batch_start = Instant::now();
-                            let results = processor.execute_batch(&product_refs);
-                            let batch_duration = batch_start.elapsed();
-
-                            // Process per-product results
-                            for (item, result) in chunk.iter().zip(results) {
-                                let (id, input_checksum, _) = item;
-                                let product = graph.get_product(*id).expect(errors::INVALID_PRODUCT_ID);
-                                let cache_key = product.cache_key();
-
-                                match result {
-                                    Ok(()) => {
-                                        if !self.handle_success(product, *id, object_store, &cache_key, input_checksum, proc_name, None, keep_going, shared_ref, pb_ref) {
-                                            // cache_outputs failed and error was handled
-                                            continue;
-                                        }
-                                    }
-                                    Err(e) => {
-                                        self.handle_error(product, *id, proc_name, e, None, keep_going, shared_ref);
-                                    }
-                                }
-                                Self::inc_progress(pb_ref, shared_ref);
-                            }
-
-                            // Record batch timing for this chunk
-                            if timings {
-                                let mut stats = shared_ref.stats.lock();
-                                let proc_stats = stats
-                                    .entry(proc_name.clone())
-                                    .or_default();
-                                proc_stats.duration += batch_duration;
-                                proc_stats.product_timings.push(ProductTiming {
-                                    display: format!("batch ({} files)", product_refs.len()),
-                                    processor: proc_name.clone(),
-                                    duration: batch_duration,
-                                });
-                            }
-                        }
+                        self.process_batch_group(proc_name, items, lctx_ref);
                     });
                 }
 
-                // Spawn threads for non-batch items (chunked as before)
+                // Spawn threads for non-batch items (chunked across threads)
                 if !non_batch_items.is_empty() {
                     let chunk_size = non_batch_items.len().div_ceil(self.parallel);
-                    let total_ref = &total_per_processor;
-                    let current_ref = &current_per_processor;
 
                     for chunk in non_batch_items.chunks(chunk_size.max(1)) {
-                        let total_ref = Arc::clone(total_ref);
-                        let current_ref = Arc::clone(current_ref);
+                        let total_ref = Arc::clone(&counters.total_per_processor);
+                        let current_ref = Arc::clone(&counters.current_per_processor);
 
                         s.spawn(move || {
-                            for (id, input_checksum, needs_rebuild) in chunk {
-                                // Stop if interrupted or if there's an error (non-keep-going mode)
-                                if interrupted_ref.load(Ordering::SeqCst)
-                                    || (!keep_going && !shared_ref.errors.lock().is_empty())
-                                {
-                                    break;
-                                }
-
-                                let product = graph.get_product(*id).expect(errors::INVALID_PRODUCT_ID);
-                                let cache_key = product.cache_key();
-
-                                if self.explain {
-                                    let action = object_store.explain_action(&cache_key, input_checksum, &product.outputs, force);
-                                    self.print_explain(product, &action);
-                                }
-
-                                if !needs_rebuild {
-                                    self.handle_skip(product, shared_ref);
-                                    continue;
-                                }
-
-                                // Try to restore from cache (non-batch path: emit on failure)
-                                match self.handle_restore(product, *id, object_store, &cache_key, input_checksum, force, keep_going, true, shared_ref, pb_ref) {
-                                    RestoreOutcome::Restored | RestoreOutcome::Failed => continue,
-                                    RestoreOutcome::NotRestorable => {}
-                                }
-
-                                if let Some(processor) = self.processors.get(&product.processor) {
-                                    // Update progress counter
-                                    let current = {
-                                        let mut current_guard = current_ref.lock();
-                                        let c = current_guard.entry(product.processor.clone()).or_insert(0);
-                                        *c += 1;
-                                        *c
-                                    };
-                                    let total = total_ref.get(&product.processor).copied()
-                                        .expect(errors::PROCESSOR_NOT_IN_TOTALS);
-
-                                    if self.verbose {
-                                        let variant_tag = product.variant.as_ref()
-                                            .map(|v| format!(":{}", v))
-                                            .unwrap_or_default();
-                                        let gc = shared_ref.global_current.load(Ordering::SeqCst) + 1;
-                                        println!("[{}{}] ({}/{}) ({}/{}) {} {}", product.processor, variant_tag,
-                                            gc, shared_ref.global_total,
-                                            current, total,
-                                            color::green("Processing:"),
-                                            self.product_display(product));
-                                    } else {
-                                        let variant_tag = product.variant.as_ref()
-                                            .map(|v| format!(":{}", v))
-                                            .unwrap_or_default();
-                                        pb_ref.set_message(format!("[{}{}] {}", product.processor, variant_tag, self.product_display(product)));
-                                    }
-
-                                    let product_start = Instant::now();
-                                    match processor.execute(product) {
-                                        Ok(()) => {
-                                            let duration = product_start.elapsed();
-
-                                            if !self.handle_success(product, *id, object_store, &cache_key, input_checksum, &product.processor, Some(duration), keep_going, shared_ref, pb_ref) {
-                                                // cache_outputs failed and error was handled
-                                                continue;
-                                            }
-
-                                            // Record per-product duration (non-batch only)
-                                            {
-                                                let mut stats = shared_ref.stats.lock();
-                                                let proc_stats = stats
-                                                    .entry(product.processor.clone())
-                                                    .or_default();
-                                                proc_stats.duration += duration;
-                                                if timings {
-                                                    proc_stats.product_timings.push(ProductTiming {
-                                                        display: self.product_display(product),
-                                                        processor: product.processor.clone(),
-                                                        duration,
-                                                    });
-                                                }
-                                            }
-                                        }
-                                        Err(e) => {
-                                            let duration = product_start.elapsed();
-                                            self.handle_error(product, *id, &product.processor, e, Some(duration), keep_going, shared_ref);
-                                        }
-                                    }
-                                    Self::inc_progress(pb_ref, shared_ref);
-                                }
-                            }
+                            self.process_non_batch_chunk(
+                                chunk, lctx_ref, &total_ref, &current_ref,
+                            );
                         });
                     }
                 }
@@ -379,8 +198,248 @@ impl<'a> Executor<'a> {
         }
 
         pb.finish_and_clear();
+        Self::collect_build_stats(shared, keep_going, self.interrupted.load(Ordering::SeqCst))
+    }
 
-        // Build aggregated stats
+    /// Process a single batch group within a thread.
+    fn process_batch_group(
+        &self,
+        proc_name: &str,
+        items: &[WorkItem],
+        lctx: &LevelContext,
+    ) {
+        if lctx.interrupted.load(Ordering::SeqCst) {
+            return;
+        }
+
+        let processor = match self.processors.get(proc_name) {
+            Some(p) => p,
+            None => return,
+        };
+
+        // Handle skip/restore for items that don't need rebuild
+        let mut to_execute: Vec<&WorkItem> = Vec::new();
+        for item in items {
+            let (id, input_checksum, needs_rebuild) = item;
+            let product = lctx.graph.get_product(*id).expect(errors::INVALID_PRODUCT_ID);
+            let cache_key = product.cache_key();
+
+            if self.explain {
+                let action = lctx.object_store.explain_action(&cache_key, input_checksum, &product.outputs, lctx.force);
+                self.print_explain(product, &action);
+            }
+
+            if !needs_rebuild {
+                self.handle_skip(product, lctx.shared);
+                continue;
+            }
+
+            let ctx = HandlerContext {
+                product, id: *id, cache_key, input_checksum,
+                proc_name, keep_going: lctx.keep_going, shared: lctx.shared, pb: lctx.pb,
+            };
+            // Try to restore from cache (batch path: no emit on failure)
+            match self.handle_restore(&ctx, lctx.object_store, lctx.force, false) {
+                RestoreOutcome::Restored | RestoreOutcome::Failed => continue,
+                RestoreOutcome::NotRestorable => {}
+            }
+
+            to_execute.push(item);
+        }
+
+        if to_execute.is_empty() || lctx.interrupted.load(Ordering::SeqCst) {
+            return;
+        }
+
+        let proc_total = items.len();
+        let mut proc_current = items.len() - to_execute.len();
+
+        // Determine chunk size: 0 means no limit
+        let chunk_size = match self.batch_size {
+            Some(0) | None => to_execute.len(),
+            Some(n) => n,
+        };
+
+        // Process in chunks
+        for chunk in to_execute.chunks(chunk_size) {
+            if lctx.interrupted.load(Ordering::SeqCst) {
+                break;
+            }
+
+            // Execute batch chunk
+            let product_refs: Vec<&crate::graph::Product> = chunk.iter()
+                .map(|(id, _, _)| lctx.graph.get_product(*id).expect(errors::INVALID_PRODUCT_ID))
+                .collect();
+
+            proc_current += chunk.len();
+            if self.verbose {
+                let display = product_refs.iter()
+                    .map(|p| self.product_display(p))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let gc = lctx.shared.global_current.load(Ordering::SeqCst);
+                println!("[{}] ({}/{}) ({}/{}) {} {} files: {}",
+                    proc_name,
+                    gc + 1, lctx.shared.global_total,
+                    proc_current, proc_total,
+                    color::green("Processing batch:"),
+                    product_refs.len(),
+                    display);
+            } else {
+                lctx.pb.set_message(format!("[{}] batch {} files", proc_name, product_refs.len()));
+            }
+
+            let batch_start = Instant::now();
+            let results = processor.execute_batch(&product_refs);
+            let batch_duration = batch_start.elapsed();
+
+            // Process per-product results
+            for (item, result) in chunk.iter().zip(results) {
+                let (id, input_checksum, _) = item;
+                let product = lctx.graph.get_product(*id).expect(errors::INVALID_PRODUCT_ID);
+                let cache_key = product.cache_key();
+
+                let ctx = HandlerContext {
+                    product, id: *id, cache_key, input_checksum,
+                    proc_name, keep_going: lctx.keep_going, shared: lctx.shared, pb: lctx.pb,
+                };
+                match result {
+                    Ok(()) => {
+                        if !self.handle_success(&ctx, lctx.object_store, None) {
+                            // cache_outputs failed and error was handled
+                            continue;
+                        }
+                    }
+                    Err(e) => {
+                        self.handle_error(&ctx, e, None);
+                    }
+                }
+                Self::inc_progress(lctx.pb, lctx.shared);
+            }
+
+            // Record batch timing for this chunk
+            if lctx.timings {
+                let mut stats = lctx.shared.stats.lock();
+                let proc_stats = stats
+                    .entry(proc_name.to_string())
+                    .or_default();
+                proc_stats.duration += batch_duration;
+                proc_stats.product_timings.push(ProductTiming {
+                    display: format!("batch ({} files)", product_refs.len()),
+                    processor: proc_name.to_string(),
+                    duration: batch_duration,
+                });
+            }
+        }
+    }
+
+    /// Process a chunk of non-batch work items within a thread.
+    fn process_non_batch_chunk(
+        &self,
+        chunk: &[WorkItem],
+        lctx: &LevelContext,
+        total_per_processor: &HashMap<String, usize>,
+        current_per_processor: &Mutex<HashMap<String, usize>>,
+    ) {
+        for (id, input_checksum, needs_rebuild) in chunk {
+            // Stop if interrupted or if there's an error (non-keep-going mode)
+            if lctx.interrupted.load(Ordering::SeqCst)
+                || (!lctx.keep_going && !lctx.shared.errors.lock().is_empty())
+            {
+                break;
+            }
+
+            let product = lctx.graph.get_product(*id).expect(errors::INVALID_PRODUCT_ID);
+            let cache_key = product.cache_key();
+
+            if self.explain {
+                let action = lctx.object_store.explain_action(&cache_key, input_checksum, &product.outputs, lctx.force);
+                self.print_explain(product, &action);
+            }
+
+            if !needs_rebuild {
+                self.handle_skip(product, lctx.shared);
+                continue;
+            }
+
+            let ctx = HandlerContext {
+                product, id: *id, cache_key, input_checksum,
+                proc_name: &product.processor, keep_going: lctx.keep_going,
+                shared: lctx.shared, pb: lctx.pb,
+            };
+
+            // Try to restore from cache (non-batch path: emit on failure)
+            match self.handle_restore(&ctx, lctx.object_store, lctx.force, true) {
+                RestoreOutcome::Restored | RestoreOutcome::Failed => continue,
+                RestoreOutcome::NotRestorable => {}
+            }
+
+            if let Some(processor) = self.processors.get(&product.processor) {
+                // Update progress counter
+                let current = {
+                    let mut current_guard = current_per_processor.lock();
+                    let c = current_guard.entry(product.processor.clone()).or_insert(0);
+                    *c += 1;
+                    *c
+                };
+                let total = total_per_processor.get(&product.processor).copied()
+                    .expect(errors::PROCESSOR_NOT_IN_TOTALS);
+
+                if self.verbose {
+                    let variant_tag = product.variant.as_ref()
+                        .map(|v| format!(":{}", v))
+                        .unwrap_or_default();
+                    let gc = lctx.shared.global_current.load(Ordering::SeqCst) + 1;
+                    println!("[{}{}] ({}/{}) ({}/{}) {} {}", product.processor, variant_tag,
+                        gc, lctx.shared.global_total,
+                        current, total,
+                        color::green("Processing:"),
+                        self.product_display(product));
+                } else {
+                    let variant_tag = product.variant.as_ref()
+                        .map(|v| format!(":{}", v))
+                        .unwrap_or_default();
+                    lctx.pb.set_message(format!("[{}{}] {}", product.processor, variant_tag, self.product_display(product)));
+                }
+
+                let product_start = Instant::now();
+                match processor.execute(product) {
+                    Ok(()) => {
+                        let duration = product_start.elapsed();
+
+                        if !self.handle_success(&ctx, lctx.object_store, Some(duration)) {
+                            // cache_outputs failed and error was handled
+                            continue;
+                        }
+
+                        // Record per-product duration (non-batch only)
+                        {
+                            let mut stats = lctx.shared.stats.lock();
+                            let proc_stats = stats
+                                .entry(product.processor.clone())
+                                .or_default();
+                            proc_stats.duration += duration;
+                            if lctx.timings {
+                                proc_stats.product_timings.push(ProductTiming {
+                                    display: self.product_display(product),
+                                    processor: product.processor.clone(),
+                                    duration,
+                                });
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let duration = product_start.elapsed();
+                        self.handle_error(&ctx, e, Some(duration));
+                    }
+                }
+                Self::inc_progress(lctx.pb, lctx.shared);
+            }
+        }
+    }
+
+    /// Collect final build stats from shared state after all levels complete.
+    fn collect_build_stats(shared: SharedState, keep_going: bool, interrupted: bool) -> Result<BuildStats> {
         let final_stats = Arc::try_unwrap(shared.stats)
             .map_err(|_| anyhow::anyhow!("internal error: outstanding Arc reference to stats"))?
             .into_inner();
@@ -400,7 +459,7 @@ impl<'a> Executor<'a> {
 
         // In non-keep-going mode, return the first error after giving
         // independent products a chance to execute and be cached
-        if !keep_going && !self.interrupted.load(Ordering::SeqCst) {
+        if !keep_going && !interrupted {
             let errs = Arc::try_unwrap(shared.errors)
                 .map_err(|_| anyhow::anyhow!("internal error: outstanding Arc reference to errors"))?
                 .into_inner();

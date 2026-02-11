@@ -28,6 +28,19 @@ enum RestoreOutcome {
 /// A work item: (product_id, input_checksum, needs_rebuild).
 type WorkItem = (usize, String, bool);
 
+/// Context passed to handler methods for a single product operation.
+/// Groups the parameters common across handle_restore, handle_error, handle_success.
+struct HandlerContext<'b> {
+    product: &'b crate::graph::Product,
+    id: usize,
+    cache_key: String,
+    input_checksum: &'b str,
+    proc_name: &'b str,
+    keep_going: bool,
+    shared: &'b SharedState,
+    pb: &'b ProgressBar,
+}
+
 /// Prepared work for a single dependency level, split into batch and non-batch items.
 struct LevelWork {
     batch_groups: HashMap<String, Vec<WorkItem>>,

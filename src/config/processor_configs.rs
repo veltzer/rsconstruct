@@ -2,6 +2,29 @@ use serde::{Deserialize, Serialize};
 
 use super::{default_true, default_cc_compiler, default_cxx_compiler, default_output_suffix, ScanConfig};
 
+/// Create a default ScanConfig with optional scan_dir and required extensions.
+/// All exclude fields default to None (filled by resolve_scan_defaults).
+macro_rules! default_scan {
+    (extensions: [$($ext:expr),+ $(,)?]) => {
+        ScanConfig {
+            scan_dir: None,
+            extensions: Some(vec![$($ext.into()),+]),
+            exclude_dirs: None,
+            exclude_files: None,
+            exclude_paths: None,
+        }
+    };
+    (scan_dir: $dir:expr, extensions: [$($ext:expr),+ $(,)?]) => {
+        ScanConfig {
+            scan_dir: Some($dir.into()),
+            extensions: Some(vec![$($ext.into()),+]),
+            exclude_dirs: None,
+            exclude_files: None,
+            exclude_paths: None,
+        }
+    };
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TeraConfig {
     #[serde(default = "default_true")]
@@ -20,13 +43,7 @@ impl Default for TeraConfig {
             strict: true,
             trim_blocks: false,
             extra_inputs: Vec::new(),
-            scan: ScanConfig {
-                scan_dir: Some("templates".into()),
-                extensions: Some(vec![".tera".into()]),
-                exclude_dirs: None,
-                exclude_files: None,
-                exclude_paths: None,
-            },
+            scan: default_scan!(scan_dir: "templates", extensions: [".tera"]),
         }
     }
 }
@@ -53,13 +70,7 @@ impl Default for RuffConfig {
             linter: "ruff".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
-            scan: ScanConfig {
-                scan_dir: None,
-                extensions: Some(vec![".py".into()]),
-                exclude_dirs: None,
-                exclude_files: None,
-                exclude_paths: None,
-            },
+            scan: default_scan!(extensions: [".py"]),
         }
     }
 }
@@ -79,13 +90,7 @@ impl Default for PylintConfig {
         Self {
             args: Vec::new(),
             extra_inputs: Vec::new(),
-            scan: ScanConfig {
-                scan_dir: None,
-                extensions: Some(vec![".py".into()]),
-                exclude_dirs: None,
-                exclude_files: None,
-                exclude_paths: None,
-            },
+            scan: default_scan!(extensions: [".py"]),
         }
     }
 }
@@ -112,13 +117,7 @@ impl Default for CppcheckConfig {
         Self {
             args: default_cppcheck_args(),
             extra_inputs: Vec::new(),
-            scan: ScanConfig {
-                scan_dir: Some("src".into()),
-                extensions: Some(vec![".c".into(), ".cc".into()]),
-                exclude_dirs: None,
-                exclude_files: None,
-                exclude_paths: None,
-            },
+            scan: default_scan!(scan_dir: "src", extensions: [".c", ".cc"]),
         }
     }
 }
@@ -141,13 +140,7 @@ impl Default for ClangTidyConfig {
             args: Vec::new(),
             compiler_args: Vec::new(),
             extra_inputs: Vec::new(),
-            scan: ScanConfig {
-                scan_dir: Some("src".into()),
-                extensions: Some(vec![".c".into(), ".cc".into()]),
-                exclude_dirs: None,
-                exclude_files: None,
-                exclude_paths: None,
-            },
+            scan: default_scan!(scan_dir: "src", extensions: [".c", ".cc"]),
         }
     }
 }
@@ -254,13 +247,7 @@ impl Default for CcConfig {
             include_paths: Vec::new(),
             extra_inputs: Vec::new(),
             include_scanner: IncludeScanner::default(),
-            scan: ScanConfig {
-                scan_dir: Some("src".into()),
-                extensions: Some(vec![".c".into(), ".cc".into()]),
-                exclude_dirs: None,
-                exclude_files: None,
-                exclude_paths: None,
-            },
+            scan: default_scan!(scan_dir: "src", extensions: [".c", ".cc"]),
         }
     }
 }
@@ -298,13 +285,7 @@ impl Default for SpellcheckConfig {
             use_words_file: false,
             auto_add_words: false,
             extra_inputs: Vec::new(),
-            scan: ScanConfig {
-                scan_dir: None,
-                extensions: Some(vec![".md".into()]),
-                exclude_dirs: None,
-                exclude_files: None,
-                exclude_paths: None,
-            },
+            scan: default_scan!(extensions: [".md"]),
         }
     }
 }
@@ -321,13 +302,7 @@ impl Default for SleepConfig {
     fn default() -> Self {
         Self {
             extra_inputs: Vec::new(),
-            scan: ScanConfig {
-                scan_dir: Some("sleep".into()),
-                extensions: Some(vec![".sleep".into()]),
-                exclude_dirs: None,
-                exclude_files: None,
-                exclude_paths: None,
-            },
+            scan: default_scan!(scan_dir: "sleep", extensions: [".sleep"]),
         }
     }
 }
@@ -343,11 +318,6 @@ fn default_cargo() -> String {
 fn default_cargo_command() -> String {
     "build".into()
 }
-
-pub(super) const CARGO_EXCLUDE_DIRS: &[&str] = &[
-    "/.git/", "/out/", "/build/", "/dist/",
-    "/target/", "/.rsb/",
-];
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CargoConfig {
@@ -370,13 +340,7 @@ impl Default for CargoConfig {
             command: "build".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
-            scan: ScanConfig {
-                scan_dir: None,
-                extensions: Some(vec!["Cargo.toml".into()]),
-                exclude_dirs: Some(CARGO_EXCLUDE_DIRS.iter().map(|s| s.to_string()).collect()),
-                exclude_files: None,
-                exclude_paths: None,
-            },
+            scan: default_scan!(extensions: ["Cargo.toml"]),
         }
     }
 }
@@ -402,13 +366,7 @@ impl Default for MakeConfig {
             args: Vec::new(),
             target: String::new(),
             extra_inputs: Vec::new(),
-            scan: ScanConfig {
-                scan_dir: None,
-                extensions: Some(vec!["Makefile".into()]),
-                exclude_dirs: None,
-                exclude_files: None,
-                exclude_paths: None,
-            },
+            scan: default_scan!(extensions: ["Makefile"]),
         }
     }
 }
@@ -435,13 +393,7 @@ impl Default for MypyConfig {
             checker: "mypy".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
-            scan: ScanConfig {
-                scan_dir: None,
-                extensions: Some(vec![".py".into()]),
-                exclude_dirs: None,
-                exclude_files: None,
-                exclude_paths: None,
-            },
+            scan: default_scan!(extensions: [".py"]),
         }
     }
 }
@@ -468,13 +420,7 @@ impl Default for RumdlConfig {
             linter: "rumdl".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
-            scan: ScanConfig {
-                scan_dir: None,
-                extensions: Some(vec![".md".into()]),
-                exclude_dirs: None,
-                exclude_files: None,
-                exclude_paths: None,
-            },
+            scan: default_scan!(extensions: [".md"]),
         }
     }
 }
@@ -501,13 +447,7 @@ impl Default for ShellcheckConfig {
             checker: "shellcheck".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
-            scan: ScanConfig {
-                scan_dir: None,
-                extensions: Some(vec![".sh".into(), ".bash".into()]),
-                exclude_dirs: None,
-                exclude_files: None,
-                exclude_paths: None,
-            },
+            scan: default_scan!(extensions: [".sh", ".bash"]),
         }
     }
 }

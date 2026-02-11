@@ -1,9 +1,7 @@
-use indicatif::ProgressBar;
-
 use crate::color;
 use crate::json_output::{emit_product_complete, ProductStatus};
 
-use super::{Executor, RestoreOutcome, SharedState};
+use super::{Executor, HandlerContext, RestoreOutcome, SharedState};
 
 impl<'a> Executor<'a> {
     /// Handle the "skip (unchanged)" case for a product.
@@ -37,67 +35,60 @@ impl<'a> Executor<'a> {
     /// Handle cache restore for a product.
     /// Try to restore a product from cache.
     /// When `emit_fail_event` is true, emits a product_complete "failed" JSON event on error.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn handle_restore(
         &self,
-        product: &crate::graph::Product,
-        id: usize,
+        ctx: &HandlerContext,
         object_store: &crate::object_store::ObjectStore,
-        cache_key: &str,
-        input_checksum: &str,
         force: bool,
-        keep_going: bool,
         emit_fail_event: bool,
-        shared: &SharedState,
-        pb_ref: &ProgressBar,
     ) -> RestoreOutcome {
         if force {
             return RestoreOutcome::NotRestorable;
         }
-        let restore_result = object_store.restore_from_cache(cache_key, input_checksum, &product.outputs);
+        let restore_result = object_store.restore_from_cache(&ctx.cache_key, ctx.input_checksum, &ctx.product.outputs);
         match restore_result {
             Ok(true) => {
                 if self.verbose {
-                    println!("[{}] {} {}", product.processor,
+                    println!("[{}] {} {}", ctx.product.processor,
                         color::cyan("Restored from cache:"),
-                        self.product_display(product));
+                        self.product_display(ctx.product));
                 }
                 emit_product_complete(
-                    &self.product_display(product),
-                    &product.processor,
+                    &self.product_display(ctx.product),
+                    &ctx.product.processor,
                     ProductStatus::Restored,
                     None,
                     None,
                 );
-                let mut stats = shared.stats.lock();
+                let mut stats = ctx.shared.stats.lock();
                 let proc_stats = stats
-                    .entry(product.processor.clone())
+                    .entry(ctx.product.processor.clone())
                     .or_default();
                 proc_stats.restored += 1;
-                proc_stats.files_restored += product.outputs.len();
-                Self::inc_progress(pb_ref, shared);
+                proc_stats.files_restored += ctx.product.outputs.len();
+                Self::inc_progress(ctx.pb, ctx.shared);
                 RestoreOutcome::Restored
             }
             Err(e) => {
                 if emit_fail_event {
                     emit_product_complete(
-                        &self.product_display(product),
-                        &product.processor,
+                        &self.product_display(ctx.product),
+                        &ctx.product.processor,
                         ProductStatus::Failed,
                         None,
                         Some(&e.to_string()),
                     );
                 }
-                if keep_going {
-                    let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
+                if ctx.keep_going {
+                    let msg = format!("[{}] {}: {}", ctx.product.processor, self.product_display(ctx.product), e);
                     println!("{}", color::red(&format!("Error: {}", msg)));
-                    shared.failed_products.lock().insert(id);
-                    shared.failed_messages.lock().push(msg);
+                    ctx.shared.failed_products.lock().insert(ctx.id);
+                    ctx.shared.failed_messages.lock().push(msg);
                 } else {
-                    shared.failed_products.lock().insert(id);
-                    shared.errors.lock().push(e);
+                    ctx.shared.failed_products.lock().insert(ctx.id);
+                    ctx.shared.errors.lock().push(e);
                 }
-                Self::inc_progress(pb_ref, shared);
+                Self::inc_progress(ctx.pb, ctx.shared);
                 RestoreOutcome::Failed
             }
             Ok(false) => RestoreOutcome::NotRestorable,
@@ -106,100 +97,87 @@ impl<'a> Executor<'a> {
 
     /// Handle a product execution error.
     /// Emits a JSON event, records failure stats, and records keep-going / non-keep-going state.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn handle_error(
         &self,
-        product: &crate::graph::Product,
-        id: usize,
-        proc_name: &str,
+        ctx: &HandlerContext,
         error: anyhow::Error,
         duration: Option<std::time::Duration>,
-        keep_going: bool,
-        shared: &SharedState,
     ) {
         emit_product_complete(
-            &self.product_display(product),
-            &product.processor,
+            &self.product_display(ctx.product),
+            &ctx.product.processor,
             ProductStatus::Failed,
             duration,
             Some(&error.to_string()),
         );
         {
-            let mut stats = shared.stats.lock();
+            let mut stats = ctx.shared.stats.lock();
             let proc_stats = stats
-                .entry(proc_name.to_string())
+                .entry(ctx.proc_name.to_string())
                 .or_default();
             proc_stats.failed += 1;
         }
-        if keep_going {
-            let msg = format!("[{}] {}: {}", proc_name, self.product_display(product), error);
+        if ctx.keep_going {
+            let msg = format!("[{}] {}: {}", ctx.proc_name, self.product_display(ctx.product), error);
             println!("{}", color::red(&format!("Error: {}", msg)));
-            shared.failed_products.lock().insert(id);
-            shared.failed_messages.lock().push(msg);
+            ctx.shared.failed_products.lock().insert(ctx.id);
+            ctx.shared.failed_messages.lock().push(msg);
         } else {
-            shared.failed_products.lock().insert(id);
-            shared.failed_processors.lock().insert(proc_name.to_string());
-            shared.errors.lock().push(error);
+            ctx.shared.failed_products.lock().insert(ctx.id);
+            ctx.shared.failed_processors.lock().insert(ctx.proc_name.to_string());
+            ctx.shared.errors.lock().push(error);
         }
     }
 
     /// Handle caching outputs and recording stats after successful execution.
     /// Returns `true` if caching succeeded, `false` if it failed (error is handled internally).
     /// On success, emits a product_complete "success" JSON event and increments processed/files_created.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn handle_success(
         &self,
-        product: &crate::graph::Product,
-        id: usize,
+        ctx: &HandlerContext,
         object_store: &crate::object_store::ObjectStore,
-        cache_key: &str,
-        input_checksum: &str,
-        proc_name: &str,
         duration: Option<std::time::Duration>,
-        keep_going: bool,
-        shared: &SharedState,
-        pb_ref: &ProgressBar,
     ) -> bool {
-        match object_store.cache_outputs(cache_key, input_checksum, &product.outputs) {
+        match object_store.cache_outputs(&ctx.cache_key, ctx.input_checksum, &ctx.product.outputs) {
             Ok(changed) => {
                 if !changed {
-                    shared.unchanged_products.lock().insert(id);
+                    ctx.shared.unchanged_products.lock().insert(ctx.id);
                 }
             }
             Err(e) => {
                 emit_product_complete(
-                    &self.product_display(product),
-                    &product.processor,
+                    &self.product_display(ctx.product),
+                    &ctx.product.processor,
                     ProductStatus::Failed,
                     duration,
                     Some(&e.to_string()),
                 );
-                if keep_going {
-                    let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
+                if ctx.keep_going {
+                    let msg = format!("[{}] {}: {}", ctx.product.processor, self.product_display(ctx.product), e);
                     println!("{}", color::red(&format!("Error: {}", msg)));
-                    shared.failed_products.lock().insert(id);
-                    shared.failed_messages.lock().push(msg);
+                    ctx.shared.failed_products.lock().insert(ctx.id);
+                    ctx.shared.failed_messages.lock().push(msg);
                 } else {
-                    shared.failed_products.lock().insert(id);
-                    shared.errors.lock().push(e);
+                    ctx.shared.failed_products.lock().insert(ctx.id);
+                    ctx.shared.errors.lock().push(e);
                 }
-                Self::inc_progress(pb_ref, shared);
+                Self::inc_progress(ctx.pb, ctx.shared);
                 return false;
             }
         }
         emit_product_complete(
-            &self.product_display(product),
-            &product.processor,
+            &self.product_display(ctx.product),
+            &ctx.product.processor,
             ProductStatus::Success,
             duration,
             None,
         );
-        let mut stats = shared.stats.lock();
+        let mut stats = ctx.shared.stats.lock();
         let proc_stats = stats
-            .entry(proc_name.to_string())
+            .entry(ctx.proc_name.to_string())
             .or_default();
         proc_stats.processed += 1;
-        proc_stats.files_created += product.outputs.len();
+        proc_stats.files_created += ctx.product.outputs.len();
         true
     }
 }
