@@ -44,6 +44,14 @@ pub enum BuildEvent {
         total_products: usize,
     },
 
+    /// A product is about to be processed
+    ProductStart {
+        /// Product identifier
+        product: String,
+        /// Processor name
+        processor: String,
+    },
+
     /// A product completed successfully
     ProductComplete {
         /// Product identifier
@@ -104,6 +112,14 @@ pub fn emit(event: &BuildEvent) {
 /// Emit a build start event.
 pub fn emit_build_start(total_products: usize) {
     emit(&BuildEvent::BuildStart { total_products });
+}
+
+/// Emit a product start event.
+pub fn emit_product_start(product: &str, processor: &str) {
+    emit(&BuildEvent::ProductStart {
+        product: product.to_string(),
+        processor: processor.to_string(),
+    });
 }
 
 /// Emit a product complete event.

@@ -215,7 +215,7 @@ impl CcConfig {
     /// Get the list of enabled compiler profiles to use.
     /// If `compilers` is set, returns enabled profiles from that list.
     /// Otherwise, creates a single profile from the legacy fields.
-    pub fn get_compiler_profiles(&self) -> Vec<CompilerProfile> {
+    pub(crate) fn get_compiler_profiles(&self) -> Vec<CompilerProfile> {
         if !self.compilers.is_empty() {
             self.compilers.iter().filter(|p| p.enabled).cloned().collect()
         } else {

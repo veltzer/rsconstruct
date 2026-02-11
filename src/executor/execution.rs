@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::ProgressBar;
 use parking_lot::Mutex;
 use std::thread;
 use std::time::Instant;
@@ -13,8 +13,9 @@ use crate::graph::BuildGraph;
 use crate::json_output;
 use crate::object_store::ObjectStore;
 use crate::processors::{BuildStats, ProductTiming};
+use crate::progress;
 
-use super::{Executor, HandlerContext, LevelWork, RestoreOutcome, SharedState, WorkItem};
+use super::{Executor, HandlerContext, LevelWork, PreCheckResult, RestoreOutcome, SharedState, WorkItem};
 
 /// Per-processor progress counters shared across non-batch threads.
 struct ProgressCounters {
@@ -117,18 +118,10 @@ impl<'a> Executor<'a> {
         let work_count = restore_count + build_count;
 
         // Create progress bar sized to actual work (excludes instant skips)
-        let pb = if self.verbose || json_output::is_json_mode() {
-            ProgressBar::hidden()
-        } else {
-            let pb = ProgressBar::new(work_count as u64);
-            pb.set_style(
-                ProgressStyle::default_bar()
-                    .template("[{elapsed_precise}] {bar:40} {pos}/{len} {msg}")
-                    .expect(errors::INVALID_PROGRESS_TEMPLATE)
-                    .progress_chars("=> "),
-            );
-            pb
-        };
+        let pb = progress::create_bar(
+            work_count as u64,
+            self.verbose || json_output::is_json_mode(),
+        );
 
         let shared = SharedState {
             stats: Arc::new(Mutex::new(HashMap::new())),
@@ -200,6 +193,41 @@ impl<'a> Executor<'a> {
         Self::collect_build_stats(shared, keep_going, self.is_interrupted())
     }
 
+    /// Pre-check a work item: handle explain, skip-if-unchanged, and cache restore.
+    ///
+    /// Returns `Handled` if the item was fully processed (skip/restore/failed),
+    /// or `NeedsExecution` if the caller should proceed to execute the product.
+    fn try_skip_or_restore(
+        &self,
+        item: &WorkItem,
+        proc_name: &str,
+        lctx: &LevelContext,
+        emit_fail_event: bool,
+    ) -> PreCheckResult {
+        let (id, input_checksum, needs_rebuild) = item;
+        let product = lctx.graph.get_product(*id).expect(errors::INVALID_PRODUCT_ID);
+        let cache_key = product.cache_key();
+
+        if self.explain {
+            let action = lctx.object_store.explain_action(&cache_key, input_checksum, &product.outputs, lctx.force);
+            self.print_explain(product, &action);
+        }
+
+        if !needs_rebuild {
+            self.handle_skip(product, lctx.shared);
+            return PreCheckResult::Handled;
+        }
+
+        let ctx = HandlerContext {
+            product, id: *id, cache_key, input_checksum,
+            proc_name, keep_going: lctx.keep_going, shared: lctx.shared, pb: lctx.pb,
+        };
+        match self.handle_restore(&ctx, lctx.object_store, lctx.force, emit_fail_event) {
+            RestoreOutcome::Restored | RestoreOutcome::Failed => PreCheckResult::Handled,
+            RestoreOutcome::NotRestorable => PreCheckResult::NeedsExecution,
+        }
+    }
+
     /// Process a single batch group within a thread.
     fn process_batch_group(
         &self,
@@ -219,31 +247,10 @@ impl<'a> Executor<'a> {
         // Handle skip/restore for items that don't need rebuild
         let mut to_execute: Vec<&WorkItem> = Vec::new();
         for item in items {
-            let (id, input_checksum, needs_rebuild) = item;
-            let product = lctx.graph.get_product(*id).expect(errors::INVALID_PRODUCT_ID);
-            let cache_key = product.cache_key();
-
-            if self.explain {
-                let action = lctx.object_store.explain_action(&cache_key, input_checksum, &product.outputs, lctx.force);
-                self.print_explain(product, &action);
+            match self.try_skip_or_restore(item, proc_name, lctx, false) {
+                PreCheckResult::Handled => continue,
+                PreCheckResult::NeedsExecution => to_execute.push(item),
             }
-
-            if !needs_rebuild {
-                self.handle_skip(product, lctx.shared);
-                continue;
-            }
-
-            let ctx = HandlerContext {
-                product, id: *id, cache_key, input_checksum,
-                proc_name, keep_going: lctx.keep_going, shared: lctx.shared, pb: lctx.pb,
-            };
-            // Try to restore from cache (batch path: no emit on failure)
-            match self.handle_restore(&ctx, lctx.object_store, lctx.force, false) {
-                RestoreOutcome::Restored | RestoreOutcome::Failed => continue,
-                RestoreOutcome::NotRestorable => {}
-            }
-
-            to_execute.push(item);
         }
 
         if to_execute.is_empty() || self.is_interrupted() {
@@ -288,6 +295,9 @@ impl<'a> Executor<'a> {
                 lctx.pb.set_message(format!("[{}] batch {} files", proc_name, product_refs.len()));
             }
 
+            for p in &product_refs {
+                json_output::emit_product_start(&self.product_display(p), &p.processor);
+            }
             let batch_start = Instant::now();
             let results = processor.execute_batch(&product_refs);
             let batch_duration = batch_start.elapsed();
@@ -340,7 +350,7 @@ impl<'a> Executor<'a> {
         total_per_processor: &HashMap<String, usize>,
         current_per_processor: &Mutex<HashMap<String, usize>>,
     ) {
-        for (id, input_checksum, needs_rebuild) in chunk {
+        for item @ (id, _input_checksum, _needs_rebuild) in chunk {
             // Stop if interrupted or if there's an error (non-keep-going mode)
             if self.is_interrupted()
                 || (!lctx.keep_going && !lctx.shared.errors.lock().is_empty())
@@ -349,31 +359,20 @@ impl<'a> Executor<'a> {
             }
 
             let product = lctx.graph.get_product(*id).expect(errors::INVALID_PRODUCT_ID);
-            let cache_key = product.cache_key();
 
-            if self.explain {
-                let action = lctx.object_store.explain_action(&cache_key, input_checksum, &product.outputs, lctx.force);
-                self.print_explain(product, &action);
-            }
-
-            if !needs_rebuild {
-                self.handle_skip(product, lctx.shared);
+            if let PreCheckResult::Handled = self.try_skip_or_restore(item, &product.processor, lctx, true) {
                 continue;
             }
 
-            let ctx = HandlerContext {
-                product, id: *id, cache_key, input_checksum,
-                proc_name: &product.processor, keep_going: lctx.keep_going,
-                shared: lctx.shared, pb: lctx.pb,
-            };
-
-            // Try to restore from cache (non-batch path: emit on failure)
-            match self.handle_restore(&ctx, lctx.object_store, lctx.force, true) {
-                RestoreOutcome::Restored | RestoreOutcome::Failed => continue,
-                RestoreOutcome::NotRestorable => {}
-            }
-
             if let Some(processor) = self.processors.get(&product.processor) {
+                let cache_key = product.cache_key();
+                let input_checksum = &item.1;
+                let ctx = HandlerContext {
+                    product, id: *id, cache_key, input_checksum,
+                    proc_name: &product.processor, keep_going: lctx.keep_going,
+                    shared: lctx.shared, pb: lctx.pb,
+                };
+
                 // Update progress counter
                 let current = {
                     let mut current_guard = current_per_processor.lock();
@@ -401,6 +400,7 @@ impl<'a> Executor<'a> {
                     lctx.pb.set_message(format!("[{}{}] {}", product.processor, variant_tag, self.product_display(product)));
                 }
 
+                json_output::emit_product_start(&self.product_display(product), &product.processor);
                 let product_start = Instant::now();
                 match processor.execute(product) {
                     Ok(()) => {

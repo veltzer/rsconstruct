@@ -13,6 +13,7 @@ mod graph;
 mod json_output;
 mod object_store;
 mod processors;
+mod progress;
 mod remote_cache;
 mod tool_lock;
 mod watcher;

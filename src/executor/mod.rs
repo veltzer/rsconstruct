@@ -15,6 +15,14 @@ use crate::graph::BuildGraph;
 use crate::object_store::{ExplainAction, ObjectStore};
 use crate::processors::{ProcessStats, ProductDiscovery};
 
+/// Result of the per-item skip/restore pre-check.
+enum PreCheckResult {
+    /// Item was handled (skipped, restored, or failed restore). Caller should move on.
+    Handled,
+    /// Item needs execution. Caller should proceed with running the processor.
+    NeedsExecution,
+}
+
 /// Outcome of a cache restore attempt.
 enum RestoreOutcome {
     /// Product was successfully restored from cache.

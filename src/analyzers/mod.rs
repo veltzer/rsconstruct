@@ -12,9 +12,9 @@ pub use python::PythonDepAnalyzer;
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 use crate::deps_cache::DepsCache;
-use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
+use crate::progress;
 
 /// Trait for dependency analyzers that scan source files and add dependencies to the graph.
 ///
@@ -74,18 +74,10 @@ where
     }
 
     // Show progress bar (hidden in verbose or JSON mode, matching executor style)
-    let pb = if verbose || crate::json_output::is_json_mode() {
-        indicatif::ProgressBar::hidden()
-    } else {
-        let pb = indicatif::ProgressBar::new(products.len() as u64);
-        pb.set_style(
-            indicatif::ProgressStyle::default_bar()
-                .template("[{elapsed_precise}] {bar:40} {pos}/{len} {msg}")
-                .expect(errors::INVALID_PROGRESS_TEMPLATE)
-                .progress_chars("=> "),
-        );
-        pb
-    };
+    let pb = progress::create_bar(
+        products.len() as u64,
+        verbose || crate::json_output::is_json_mode(),
+    );
 
     for (id, source) in &products {
         pb.set_message(format!("[{}] {}", analyzer_name, source.display()));

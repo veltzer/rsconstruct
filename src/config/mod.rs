@@ -4,8 +4,8 @@ mod variables;
 #[cfg(test)]
 mod tests;
 
-pub use analyzer_configs::*;
-pub use processor_configs::*;
+pub(crate) use analyzer_configs::*;
+pub(crate) use processor_configs::*;
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,7 @@ const CONFIG_FILE: &str = "rsb.toml";
 
 /// Validate extra_inputs paths exist and return them as PathBufs.
 /// Paths are relative to project root (which is cwd).
-pub fn resolve_extra_inputs(extra_inputs: &[String]) -> Result<Vec<PathBuf>> {
+pub(crate) fn resolve_extra_inputs(extra_inputs: &[String]) -> Result<Vec<PathBuf>> {
     let mut resolved = Vec::new();
     for p in extra_inputs {
         let path = PathBuf::from(p);
@@ -36,7 +36,7 @@ pub fn resolve_extra_inputs(extra_inputs: &[String]) -> Result<Vec<PathBuf>> {
 
 /// Compute a SHA-256 hash of any serializable config value.
 /// Uses JSON serialization (deterministic for structs) to produce the hash input.
-pub fn config_hash(value: &impl Serialize) -> String {
+pub(crate) fn config_hash(value: &impl Serialize) -> String {
     let json = serde_json::to_string(value).expect(errors::CONFIG_SERIALIZE);
     let hash = Sha256::digest(json.as_bytes());
     hex::encode(hash)
@@ -49,7 +49,7 @@ pub fn config_hash(value: &impl Serialize) -> String {
 /// "explicitly set" (Some). `resolve_scan_defaults()` fills in None values after
 /// loading, so processors can always unwrap safely.
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct ScanConfig {
+pub(crate) struct ScanConfig {
     /// Directory to scan for source files ("" means project root)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scan_dir: Option<String>,
@@ -73,7 +73,7 @@ pub struct ScanConfig {
 
 impl ScanConfig {
     /// Fill in None fields with the given defaults (mutates in place).
-    pub fn resolve(&mut self, scan_dir: &str, extensions: &[&str], exclude_dirs: &[&str]) {
+    pub(crate) fn resolve(&mut self, scan_dir: &str, extensions: &[&str], exclude_dirs: &[&str]) {
         if self.scan_dir.is_none() {
             self.scan_dir = Some(scan_dir.to_string());
         }
@@ -92,27 +92,27 @@ impl ScanConfig {
     }
 
     /// Get the resolved scan directory. Panics if called before resolve().
-    pub fn scan_dir(&self) -> &str {
+    pub(crate) fn scan_dir(&self) -> &str {
         self.scan_dir.as_deref().expect(errors::SCAN_CONFIG_NOT_RESOLVED)
     }
 
     /// Get the resolved extensions. Panics if called before resolve().
-    pub fn extensions(&self) -> &[String] {
+    pub(crate) fn extensions(&self) -> &[String] {
         self.extensions.as_deref().expect(errors::SCAN_CONFIG_NOT_RESOLVED)
     }
 
     /// Get the resolved exclude dirs. Panics if called before resolve().
-    pub fn exclude_dirs(&self) -> &[String] {
+    pub(crate) fn exclude_dirs(&self) -> &[String] {
         self.exclude_dirs.as_deref().expect(errors::SCAN_CONFIG_NOT_RESOLVED)
     }
 
     /// Get the resolved exclude files. Panics if called before resolve().
-    pub fn exclude_files(&self) -> &[String] {
+    pub(crate) fn exclude_files(&self) -> &[String] {
         self.exclude_files.as_deref().expect(errors::SCAN_CONFIG_NOT_RESOLVED)
     }
 
     /// Get the resolved exclude paths. Panics if called before resolve().
-    pub fn exclude_paths(&self) -> &[String] {
+    pub(crate) fn exclude_paths(&self) -> &[String] {
         self.exclude_paths.as_deref().expect(errors::SCAN_CONFIG_NOT_RESOLVED)
     }
 }
@@ -147,7 +147,7 @@ const DEFAULT_PLUGINS_DIR: &str = "plugins";
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct PluginsConfig {
+pub(crate) struct PluginsConfig {
     #[serde(default = "default_plugins_dir")]
     pub dir: String,
 }
@@ -164,7 +164,7 @@ impl Default for PluginsConfig {
 
 #[derive(Debug, Deserialize, Serialize, Default)]
 #[serde(deny_unknown_fields)]
-pub struct Config {
+pub(crate) struct Config {
     #[serde(default)]
     pub build: BuildConfig,
     #[serde(default)]
@@ -183,7 +183,7 @@ pub struct Config {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct BuildConfig {
+pub(crate) struct BuildConfig {
     /// Number of parallel jobs (1 = sequential, 0 = auto-detect CPU cores)
     #[serde(default = "default_parallel")]
     pub parallel: usize,
@@ -209,7 +209,7 @@ impl Default for BuildConfig {
 /// Method used to restore files from cache
 #[derive(Debug, Deserialize, Serialize, Clone, Copy, Default, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-pub enum RestoreMethod {
+pub(crate) enum RestoreMethod {
     #[default]
     Hardlink,
     Copy,
@@ -217,7 +217,7 @@ pub enum RestoreMethod {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct CacheConfig {
+pub(crate) struct CacheConfig {
     #[serde(default)]
     pub restore_method: RestoreMethod,
     /// Remote cache URL (e.g., "s3://bucket/prefix", "http://host:port/path", or local "file:///path")
@@ -270,7 +270,7 @@ pub(crate) fn default_output_suffix() -> String {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct ProcessorConfig {
+pub(crate) struct ProcessorConfig {
     #[serde(default = "default_true")]
     pub auto_detect: bool,
     #[serde(default = "default_processors")]
@@ -330,14 +330,14 @@ impl Default for ProcessorConfig {
 }
 
 impl ProcessorConfig {
-    pub fn is_enabled(&self, name: &str) -> bool {
+    pub(crate) fn is_enabled(&self, name: &str) -> bool {
         self.enabled.iter().any(|p| p == name)
     }
 
     /// Fill in None scan fields with per-processor defaults.
     /// Called after loading from TOML so that `config show` displays resolved values
     /// and processors can access fields without fallbacks.
-    pub fn resolve_scan_defaults(&mut self) {
+    pub(crate) fn resolve_scan_defaults(&mut self) {
         self.tera.scan.resolve("templates", &[".tera"], &[]);
         self.ruff.scan.resolve("", &[".py"], PYTHON_EXCLUDE_DIRS);
         self.pylint.scan.resolve("", &[".py"], PYTHON_EXCLUDE_DIRS);
@@ -356,7 +356,7 @@ impl ProcessorConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct CompletionsConfig {
+pub(crate) struct CompletionsConfig {
     #[serde(default = "default_shells")]
     pub shells: Vec<String>,
 }
@@ -378,7 +378,7 @@ fn default_analyzers() -> Vec<String> {
 /// Configuration for dependency analyzers
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct AnalyzerConfig {
+pub(crate) struct AnalyzerConfig {
     /// Whether to auto-detect which analyzers are relevant
     #[serde(default = "default_true")]
     pub auto_detect: bool,
@@ -405,20 +405,20 @@ impl Default for AnalyzerConfig {
 }
 
 impl AnalyzerConfig {
-    pub fn is_enabled(&self, name: &str) -> bool {
+    pub(crate) fn is_enabled(&self, name: &str) -> bool {
         self.enabled.iter().any(|a| a == name)
     }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 #[serde(deny_unknown_fields)]
-pub struct GraphConfig {
+pub(crate) struct GraphConfig {
     #[serde(default)]
     pub viewer: Option<String>,
 }
 
 impl Config {
-    pub fn require_config(project_root: &Path) -> Result<()> {
+    pub(crate) fn require_config(project_root: &Path) -> Result<()> {
         let config_path = project_root.join(CONFIG_FILE);
         if !config_path.exists() {
             return Err(crate::exit_code::RsbError::new(
@@ -429,7 +429,7 @@ impl Config {
         Ok(())
     }
 
-    pub fn load(project_root: &Path) -> Result<Self> {
+    pub(crate) fn load(project_root: &Path) -> Result<Self> {
         let config_path = project_root.join(CONFIG_FILE);
 
         let mut config = if config_path.exists() {
@@ -449,7 +449,7 @@ impl Config {
 
 /// Extract a `ScanConfig` from a dynamic TOML table (used by Lua plugins).
 /// Falls back to the given defaults for any missing fields.
-pub fn scan_config_from_toml(
+pub(crate) fn scan_config_from_toml(
     value: &toml::Value,
     default_scan_dir: &str,
     default_extensions: &[&str],
