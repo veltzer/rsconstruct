@@ -16,6 +16,8 @@ pub(crate) struct RuntimeFlags {
     pub phases_debug: bool,
     /// Output JSON instead of human-readable text (--json)
     pub json_mode: bool,
+    /// Suppress all output except errors (--quiet)
+    pub quiet: bool,
 }
 
 static FLAGS: OnceLock<RuntimeFlags> = OnceLock::new();
@@ -44,4 +46,8 @@ pub(crate) fn phases_debug() -> bool {
 
 pub(crate) fn json_mode() -> bool {
     get().json_mode
+}
+
+pub(crate) fn quiet() -> bool {
+    get().quiet
 }

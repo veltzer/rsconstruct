@@ -45,7 +45,9 @@ impl Builder {
 
         // If we stopped early (before classify), we're done
         if opts.stop_after != BuildPhase::Build && opts.stop_after != BuildPhase::Classify {
-            println!("Stopped after {:?} phase.", opts.stop_after);
+            if !crate::runtime_flags::quiet() {
+                println!("Stopped after {:?} phase.", opts.stop_after);
+            }
             return Ok(());
         }
 
@@ -56,8 +58,10 @@ impl Builder {
         let order = graph.topological_sort()?;
         let (skip_count, restore_count, build_count) =
             crate::executor::classify_products(&graph, &order, &self.object_store, opts.force);
-        println!("{} products ({} up-to-date, {} to restore, {} to build)",
-            order.len(), skip_count, restore_count, build_count);
+        if !crate::runtime_flags::quiet() {
+            println!("{} products ({} up-to-date, {} to restore, {} to build)",
+                order.len(), skip_count, restore_count, build_count);
+        }
 
         if opts.stop_after == BuildPhase::Classify {
             return Ok(());
@@ -73,6 +77,7 @@ impl Builder {
             display_opts: opts.display_opts,
             batch_size,
             explain: opts.explain,
+            retry: opts.retry,
         }, Arc::clone(&interrupted));
 
         // Execute the build
@@ -123,12 +128,12 @@ impl Builder {
             stale: (color::yellow("BUILD"), "build"),
         };
 
-        self.print_product_status(&products, force, &labels, explain, DisplayOptions::default());
+        self.print_product_status(&products, force, &labels, explain, DisplayOptions::default(), true);
         Ok(())
     }
 
     /// Show the status of each product in the build graph
-    pub fn status(&self) -> anyhow::Result<()> {
+    pub fn status(&self, verbose: bool) -> anyhow::Result<()> {
         let processors = self.create_processors()?;
         let graph = self.build_graph_with_processors(&processors)?;
 
@@ -144,11 +149,12 @@ impl Builder {
             stale: (color::yellow("STALE"), "stale"),
         };
 
-        self.print_product_status(&products, false, &labels, false, DisplayOptions::default());
+        self.print_product_status(&products, false, &labels, false, DisplayOptions::default(), verbose);
         Ok(())
     }
 
     /// Classify and print the status of each product, with per-processor and total summary.
+    /// When `verbose` is false, only the per-processor and total summary lines are printed.
     pub(super) fn print_product_status(
         &self,
         products: &[&crate::graph::Product],
@@ -156,6 +162,7 @@ impl Builder {
         labels: &ProductStatusLabels<'_>,
         explain: bool,
         display_opts: DisplayOptions,
+        verbose: bool,
     ) {
         use crate::object_store::ExplainAction;
 
@@ -168,7 +175,9 @@ impl Builder {
             let input_checksum = match self.object_store.combined_input_checksum_fast(&product.inputs) {
                 Ok(cs) => cs,
                 Err(_) => {
-                    println!("{} [{}] {}", labels.stale.0, product.processor, product.display(display_opts));
+                    if verbose {
+                        println!("{} [{}] {}", labels.stale.0, product.processor, product.display(display_opts));
+                    }
                     status_idx = 2;
                     counts[status_idx] += 1;
                     per_processor.entry(&product.processor).or_default()[status_idx] += 1;
@@ -181,26 +190,38 @@ impl Builder {
                 let reason_str = format!(" ({})", action);
                 status_idx = match action {
                     ExplainAction::Skip => {
-                        println!("{} [{}] {}{}", labels.current.0, product.processor, product.display(display_opts), reason_str);
+                        if verbose {
+                            println!("{} [{}] {}{}", labels.current.0, product.processor, product.display(display_opts), reason_str);
+                        }
                         0
                     }
                     ExplainAction::Restore(_) => {
-                        println!("{} [{}] {}{}", labels.restorable.0, product.processor, product.display(display_opts), reason_str);
+                        if verbose {
+                            println!("{} [{}] {}{}", labels.restorable.0, product.processor, product.display(display_opts), reason_str);
+                        }
                         1
                     }
                     ExplainAction::Rebuild(_) => {
-                        println!("{} [{}] {}{}", labels.stale.0, product.processor, product.display(display_opts), reason_str);
+                        if verbose {
+                            println!("{} [{}] {}{}", labels.stale.0, product.processor, product.display(display_opts), reason_str);
+                        }
                         2
                     }
                 };
             } else if !force && !self.object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs) {
-                println!("{} [{}] {}", labels.current.0, product.processor, product.display(display_opts));
+                if verbose {
+                    println!("{} [{}] {}", labels.current.0, product.processor, product.display(display_opts));
+                }
                 status_idx = 0;
             } else if !force && self.object_store.can_restore(&cache_key, &input_checksum, &product.outputs) {
-                println!("{} [{}] {}", labels.restorable.0, product.processor, product.display(display_opts));
+                if verbose {
+                    println!("{} [{}] {}", labels.restorable.0, product.processor, product.display(display_opts));
+                }
                 status_idx = 1;
             } else {
-                println!("{} [{}] {}", labels.stale.0, product.processor, product.display(display_opts));
+                if verbose {
+                    println!("{} [{}] {}", labels.stale.0, product.processor, product.display(display_opts));
+                }
                 status_idx = 2;
             }
 

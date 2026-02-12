@@ -4,6 +4,37 @@ use crate::color;
 use crate::tool_lock;
 use super::{Builder, sorted_keys};
 
+/// Return an install hint for a missing tool, if known.
+fn install_hint(tool: &str) -> Option<&'static str> {
+    match tool {
+        "ruff" => Some("pip install ruff"),
+        "pylint" => Some("pip install pylint"),
+        "mypy" => Some("pip install mypy"),
+        "black" => Some("pip install black"),
+        "shellcheck" => Some("apt install shellcheck"),
+        "cppcheck" => Some("apt install cppcheck"),
+        "clang-tidy" => Some("apt install clang-tidy"),
+        "gcc" => Some("apt install gcc"),
+        "g++" => Some("apt install g++"),
+        "clang" => Some("apt install clang"),
+        "clang++" => Some("apt install clang"),
+        "make" => Some("apt install make"),
+        "cargo" => Some("curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"),
+        "rustc" => Some("curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"),
+        "aspell" => Some("apt install aspell"),
+        "yamllint" => Some("pip install yamllint"),
+        "jsonlint" => Some("npm install -g jsonlint"),
+        "taplo" => Some("cargo install taplo-cli"),
+        "mdl" => Some("gem install mdl"),
+        "pandoc" => Some("apt install pandoc"),
+        "sass" => Some("npm install -g sass"),
+        "protoc" => Some("apt install protobuf-compiler"),
+        "pytest" => Some("pip install pytest"),
+        "rumdl" => Some("cargo install rumdl"),
+        _ => None,
+    }
+}
+
 impl Builder {
     /// Verify tool versions against .tools.versions lock file.
     /// Called at the start of build unless --ignore-tool-versions is passed.
@@ -50,7 +81,10 @@ impl Builder {
                     if let Ok(path) = which::which(tool) {
                         println!("{} ({}) {} {}", tool, processor, color::green("found"), color::dim(&path.display().to_string()));
                     } else {
-                        println!("{} ({}) {}", tool, processor, color::red("missing"));
+                        let hint = install_hint(tool)
+                            .map(|h| format!(" — install with: {}", color::dim(h)))
+                            .unwrap_or_default();
+                        println!("{} ({}) {}{}", tool, processor, color::red("missing"), hint);
                         any_missing = true;
                     }
                 }

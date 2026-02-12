@@ -68,6 +68,7 @@ fn run() -> Result<()> {
         show_output: cli.show_output,
         phases_debug: cli.phases,
         json_mode: cli.json,
+        quiet: cli.quiet,
     });
 
     // Set up Ctrl+C handler: sets a flag so the executor can stop gracefully
@@ -120,7 +121,7 @@ fn run() -> Result<()> {
         }
         Commands::Status => {
             let builder = Builder::new()?;
-            builder.status()?;
+            builder.status(cli.verbose)?;
         }
         Commands::Init => {
             init_project()?;

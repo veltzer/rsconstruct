@@ -22,6 +22,7 @@ impl Builder {
             display_opts: DisplayOptions::minimal(),
             batch_size: None,
             explain: false,
+            retry: 0,
         }, Arc::new(std::sync::atomic::AtomicBool::new(false)));
         executor.clean(&graph)?;
 

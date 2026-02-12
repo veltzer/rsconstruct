@@ -120,7 +120,7 @@ impl<'a> Executor<'a> {
         // Create progress bar sized to actual work (excludes instant skips)
         let pb = progress::create_bar(
             work_count as u64,
-            self.verbose || json_output::is_json_mode(),
+            self.verbose || json_output::is_json_mode() || crate::runtime_flags::quiet(),
         );
 
         let shared = SharedState {
@@ -179,7 +179,9 @@ impl<'a> Executor<'a> {
 
             // If interrupted, stop processing further levels
             if self.is_interrupted() {
-                println!("{}", color::yellow("Interrupted, saving progress..."));
+                if !crate::runtime_flags::quiet() {
+                    println!("{}", color::yellow("Interrupted, saving progress..."));
+                }
                 break;
             }
 
@@ -399,35 +401,74 @@ impl<'a> Executor<'a> {
 
                 json_output::emit_product_start(&self.product_display(product), &product.processor);
                 let product_start = Instant::now();
-                match processor.execute(product) {
-                    Ok(()) => {
-                        let duration = product_start.elapsed();
+                let mut last_error = None;
+                let max_attempts = 1 + self.retry;
+                for attempt in 1..=max_attempts {
+                    match processor.execute(product) {
+                        Ok(()) => {
+                            let duration = product_start.elapsed();
 
-                        if !self.handle_success(&ctx, lctx.object_store, Some(duration)) {
-                            // cache_outputs failed and error was handled
-                            continue;
+                            if !self.handle_success(&ctx, lctx.object_store, Some(duration)) {
+                                // cache_outputs failed and error was handled
+                                break;
+                            }
+
+                            // Mark as flaky if it passed on a retry
+                            if attempt > 1 {
+                                let mut stats = lctx.shared.stats.lock();
+                                let proc_stats = stats
+                                    .entry(product.processor.clone())
+                                    .or_default();
+                                proc_stats.flaky += 1;
+                                if !crate::runtime_flags::quiet() {
+                                    println!("[{}] {} {} (passed on attempt {})",
+                                        product.processor,
+                                        color::yellow("FLAKY:"),
+                                        self.product_display(product),
+                                        attempt);
+                                }
+                            }
+
+                            // Record per-product duration (non-batch only)
+                            {
+                                let mut stats = lctx.shared.stats.lock();
+                                let proc_stats = stats
+                                    .entry(product.processor.clone())
+                                    .or_default();
+                                proc_stats.duration += duration;
+                                if lctx.timings {
+                                    proc_stats.product_timings.push(ProductTiming {
+                                        display: self.product_display(product),
+                                        processor: product.processor.clone(),
+                                        duration,
+                                    });
+                                }
+                            }
+                            last_error = None;
+                            break;
                         }
-
-                        // Record per-product duration (non-batch only)
-                        {
-                            let mut stats = lctx.shared.stats.lock();
-                            let proc_stats = stats
-                                .entry(product.processor.clone())
-                                .or_default();
-                            proc_stats.duration += duration;
-                            if lctx.timings {
-                                proc_stats.product_timings.push(ProductTiming {
-                                    display: self.product_display(product),
-                                    processor: product.processor.clone(),
-                                    duration,
-                                });
+                        Err(e) => {
+                            if attempt < max_attempts {
+                                if !crate::runtime_flags::quiet() {
+                                    println!("[{}] {} {} (attempt {}/{}, retrying...)",
+                                        product.processor,
+                                        color::yellow("Retry:"),
+                                        self.product_display(product),
+                                        attempt, max_attempts);
+                                }
+                                last_error = Some(e);
+                            } else {
+                                let duration = product_start.elapsed();
+                                self.handle_error(&ctx, e, Some(duration));
+                                last_error = None; // error already handled
                             }
                         }
                     }
-                    Err(e) => {
-                        let duration = product_start.elapsed();
-                        self.handle_error(&ctx, e, Some(duration));
-                    }
+                }
+                // Safety: if we broke out of retry loop with unhandled error, handle it
+                if let Some(e) = last_error {
+                    let duration = product_start.elapsed();
+                    self.handle_error(&ctx, e, Some(duration));
                 }
                 Self::inc_progress(lctx.pb, lctx.shared);
             }

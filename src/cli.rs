@@ -35,6 +35,10 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub json: bool,
 
+    /// Suppress all output except errors (useful for CI)
+    #[arg(short, long, global = true)]
+    pub quiet: bool,
+
     /// Show build phase messages (discover, add_dependencies, etc.)
     #[arg(long, global = true)]
     pub phases: bool,
@@ -395,6 +399,10 @@ pub struct SharedBuildArgs {
     #[arg(long)]
     pub explain: bool,
 
+    /// Retry failed products up to N times to detect flakiness
+    #[arg(long, value_name = "N", default_value = "0")]
+    pub retry: usize,
+
     /// Disable mtime pre-check (always compute full checksums)
     #[arg(long)]
     pub no_mtime: bool,
@@ -417,6 +425,7 @@ impl SharedBuildArgs {
             auto_add_words: self.auto_add_words,
             explain: self.explain,
             no_mtime: self.no_mtime,
+            retry: self.retry,
         }
     }
 }
@@ -437,6 +446,7 @@ pub struct BuildOptions {
     pub auto_add_words: bool,
     pub explain: bool,
     pub no_mtime: bool,
+    pub retry: usize,
 }
 
 /// Parse a shell name string into a Shell enum

@@ -208,22 +208,11 @@ Grades:
 - Richer event types than current JSON Lines: action graph, configuration, progress, test results.
 - **Urgency**: medium | **Complexity**: medium
 
-### Flaky product detection / retry
-- Automatically retry failed products N times to detect flakiness.
-- Report `FLAKY` (passed on retry) vs `FAILED` (consistently fails) status.
-- Config: `retry_on_failure = 3`, `--flaky-retries=N` flag.
-- Useful for flaky linters, network-dependent checks, and test processors.
-- **Urgency**: medium | **Complexity**: low
-
 ### Build notifications
 - Desktop notifications when builds complete, especially for long builds.
 - Platform-specific: `notify-send` (Linux), `osascript` (macOS).
 - Config: `notify = true`, `notify_on_success = false`.
 - **Urgency**: low | **Complexity**: low
-
-### Actionable error messages
-- When a product fails, include suggestions (e.g., "shellcheck not found — install with `apt install shellcheck`").
-- **Urgency**: medium | **Complexity**: low
 
 ### `rsb build <target>` — Build specific targets
 - Build only specific targets by name or pattern:
@@ -261,11 +250,6 @@ Grades:
 - Convenience command to run only checker processors.
 - Equivalent to `rsb build -p ruff,pylint,...` but shorter.
 - **Urgency**: low | **Complexity**: low
-
-### `--quiet` flag
-- Suppress all output except errors.
-- Useful for CI scripts that only care about exit code.
-- **Urgency**: medium | **Complexity**: low
 
 ### Watch mode keyboard commands
 - During `rsb watch`, support `r` (rebuild), `c` (clean), `q` (quit), `Enter` (rebuild now), `s` (status).

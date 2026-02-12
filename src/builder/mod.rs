@@ -153,8 +153,8 @@ impl Builder {
     /// Detect and display config changes for each processor.
     /// Shows colored diffs when processor configuration has changed since last build.
     fn detect_config_changes(&self, processors: &HashMap<String, Box<dyn ProductDiscovery>>) {
-        // Don't show config diffs in JSON mode
-        if crate::json_output::is_json_mode() {
+        // Don't show config diffs in JSON or quiet mode
+        if crate::json_output::is_json_mode() || crate::runtime_flags::quiet() {
             return;
         }
 

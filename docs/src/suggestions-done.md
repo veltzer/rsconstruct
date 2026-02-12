@@ -30,6 +30,12 @@ Items from `suggestions.md` that have been implemented.
 
 - **Lazy file hashing (mtime-based)** — `mtime_check` config (default `true`), `fast_checksum()` with MTIME_TABLE. Stores `(path, mtime, checksum)` tuples. Disable with `--no-mtime`.
 
+## Completed Developer Experience
+
+- **`--quiet` flag** — `-q`/`--quiet` suppresses all output except errors. Useful for CI scripts that only care about exit code.
+- **Flaky product detection / retry** — `--retry=N` retries failed products up to N times. Reports FLAKY (passed on retry) vs FAILED status in build summary.
+- **Actionable error messages** — `rsb tools check` shows install hints for missing tools (e.g., "install with: pip install ruff").
+
 ## Completed Quick Wins
 
 - **Batch processing for more processors** — All checker processors that support multiple file arguments now use batching.

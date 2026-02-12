@@ -14,8 +14,8 @@ fn status_command() {
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
-    // Before building, should be STALE
-    let status1 = run_rsb_with_env(project_path, &["status"], &[("NO_COLOR", "1")]);
+    // Before building, should be STALE (use -v to see per-file status)
+    let status1 = run_rsb_with_env(project_path, &["-v", "status"], &[("NO_COLOR", "1")]);
     assert!(status1.status.success());
     let stdout1 = String::from_utf8_lossy(&status1.stdout);
     assert!(stdout1.contains("STALE"), "Before build, product should be STALE: {}", stdout1);
@@ -25,7 +25,7 @@ fn status_command() {
     assert!(build.status.success());
 
     // After building, should be UP-TO-DATE (checkers have no output files, cache entry = success)
-    let status2 = run_rsb_with_env(project_path, &["status"], &[("NO_COLOR", "1")]);
+    let status2 = run_rsb_with_env(project_path, &["-v", "status"], &[("NO_COLOR", "1")]);
     assert!(status2.status.success());
     let stdout2 = String::from_utf8_lossy(&status2.stdout);
     assert!(stdout2.contains("UP-TO-DATE"), "After build, product should be UP-TO-DATE: {}", stdout2);

@@ -67,6 +67,7 @@ pub struct ExecutorOptions {
     pub display_opts: DisplayOptions,
     pub batch_size: Option<usize>,
     pub explain: bool,
+    pub retry: usize,
 }
 
 /// Shared mutable state passed to product processing helpers.
@@ -140,6 +141,8 @@ pub struct Executor<'a> {
     batch_size: Option<usize>,
     /// Whether to show explain reasons for skip/restore/rebuild decisions
     explain: bool,
+    /// Number of times to retry failed products (0 = no retries)
+    retry: usize,
 }
 
 impl<'a> Executor<'a> {
@@ -156,6 +159,7 @@ impl<'a> Executor<'a> {
             interrupted,
             batch_size: opts.batch_size,
             explain: opts.explain,
+            retry: opts.retry,
         }
     }
 

@@ -552,6 +552,7 @@ pub struct ProductTiming {
 pub struct ProcessStats {
     pub processed: usize,
     pub failed: usize,
+    pub flaky: usize,
     pub skipped: usize,
     pub restored: usize,
     pub files_created: usize,
@@ -602,9 +603,13 @@ impl BuildStats {
         self.categories.iter().map(|s| s.files_restored).sum()
     }
 
+    pub fn total_flaky(&self) -> usize {
+        self.categories.iter().map(|s| s.flaky).sum()
+    }
+
     pub fn print_summary(&self, summary: bool, timings: bool) {
-        // Don't print human-readable summary in JSON mode
-        if crate::json_output::is_json_mode() {
+        // Don't print human-readable summary in JSON or quiet mode
+        if crate::json_output::is_json_mode() || crate::runtime_flags::quiet() {
             return;
         }
 
@@ -641,6 +646,10 @@ impl BuildStats {
                 } else {
                     parts.push(format!("{} restored", total_restored));
                 }
+            }
+            let total_flaky = self.total_flaky();
+            if total_flaky > 0 {
+                parts.push(format!("{} flaky", total_flaky));
             }
             if total_failed > 0 {
                 parts.push(format!("{} failed", total_failed));
