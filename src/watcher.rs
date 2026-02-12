@@ -10,25 +10,6 @@ use crate::builder::Builder;
 use crate::cli::BuildOptions;
 use crate::color;
 
-/// Collect directories to watch based on project conventions
-fn collect_watch_paths(project_root: &Path) -> Vec<PathBuf> {
-    let candidates = [
-        "rsb.toml",
-        "templates",
-        "config",
-        "sleep",
-        "src",
-        "tests",
-        "pyproject.toml",
-        "plugins",
-    ];
-    candidates
-        .iter()
-        .map(|c| project_root.join(c))
-        .filter(|p| p.exists())
-        .collect()
-}
-
 /// Check if a path should be ignored (editor temp files, build artifacts)
 fn should_ignore(path: &Path) -> bool {
     // Ignore .rsb cache directory (match as a path component, not substring)
@@ -66,13 +47,32 @@ fn should_ignore(path: &Path) -> bool {
     false
 }
 
-pub fn watch(opts: &BuildOptions, interrupted: Arc<AtomicBool>) -> Result<()> {
-    let project_root = std::env::current_dir()?;
+/// Register watch paths with the watcher, returning the list of paths being watched.
+fn register_watches(
+    watcher: &mut impl Watcher,
+    paths: &[PathBuf],
+    verbose: bool,
+) {
+    for path in paths {
+        let mode = if path.is_dir() {
+            RecursiveMode::Recursive
+        } else {
+            RecursiveMode::NonRecursive
+        };
+        if let Err(e) = watcher.watch(path, mode)
+            && verbose {
+                println!("Warning: could not watch {}: {}", path.display(), e);
+            }
+    }
+}
 
+pub fn watch(opts: &BuildOptions, interrupted: Arc<AtomicBool>) -> Result<()> {
     // Initial build
     println!("{}", color::bold("Running initial build..."));
+    let mut watch_paths;
     {
         let mut builder = Builder::new()?;
+        watch_paths = builder.watch_paths();
         if let Err(e) = builder.build(opts, Arc::clone(&interrupted)) {
             println!("{}", color::red(&format!("Initial build error: {}", e)));
         }
@@ -82,19 +82,8 @@ pub fn watch(opts: &BuildOptions, interrupted: Arc<AtomicBool>) -> Result<()> {
     let (tx, rx) = mpsc::channel::<notify::Result<Event>>();
     let mut watcher = notify::recommended_watcher(tx)?;
 
-    // Watch project paths
-    let mut watch_paths = collect_watch_paths(&project_root);
-    for path in &watch_paths {
-        let mode = if path.is_dir() {
-            RecursiveMode::Recursive
-        } else {
-            RecursiveMode::NonRecursive
-        };
-        if let Err(e) = watcher.watch(path, mode)
-            && opts.verbose {
-                println!("Warning: could not watch {}: {}", path.display(), e);
-            }
-    }
+    // Watch project paths derived from config
+    register_watches(&mut watcher, &watch_paths, opts.verbose);
 
     println!("{}", color::green("Watching for changes... (Ctrl+C to stop)"));
 
@@ -147,27 +136,19 @@ pub fn watch(opts: &BuildOptions, interrupted: Arc<AtomicBool>) -> Result<()> {
         println!("{}", color::bold("Change detected, rebuilding..."));
         {
             let mut builder = Builder::new()?;
+            let new_paths = builder.watch_paths();
             if let Err(e) = builder.build(opts, Arc::clone(&interrupted)) {
                 println!("{}", color::red(&format!("Build error: {}", e)));
             }
-        }
 
-        // Re-collect watch paths in case new directories appeared
-        let new_paths = collect_watch_paths(&project_root);
-        for path in &new_paths {
-            if !watch_paths.contains(path) {
-                let mode = if path.is_dir() {
-                    RecursiveMode::Recursive
-                } else {
-                    RecursiveMode::NonRecursive
-                };
-                if let Err(e) = watcher.watch(path, mode)
-                    && opts.verbose {
-                        println!("Warning: could not watch {}: {}", path.display(), e);
-                    }
+            // Re-register watches if paths changed (e.g., new scan dirs in config)
+            for path in &new_paths {
+                if !watch_paths.contains(path) {
+                    register_watches(&mut watcher, std::slice::from_ref(path), opts.verbose);
+                }
             }
+            watch_paths = new_paths;
         }
-        watch_paths = new_paths;
 
         println!("{}", color::green("Watching for changes... (Ctrl+C to stop)"));
     }

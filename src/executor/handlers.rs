@@ -1,9 +1,16 @@
 use crate::color;
 use crate::json_output::{emit_product_complete, ProductStatus};
+use crate::processors::ProcessStats;
 
 use super::{Executor, HandlerContext, RestoreOutcome, SharedState};
 
 impl<'a> Executor<'a> {
+    /// Lock shared stats and apply an update function to the processor's stats entry.
+    fn update_stats(shared: &SharedState, proc_name: &str, f: impl FnOnce(&mut ProcessStats)) {
+        let mut stats = shared.stats.lock();
+        f(stats.entry(proc_name.to_string()).or_default());
+    }
+
     /// Record a product failure into shared state.
     ///
     /// In keep-going mode: prints the error, records the message for the summary.
@@ -16,13 +23,14 @@ impl<'a> Executor<'a> {
         error: anyhow::Error,
         mark_processor_failed: bool,
     ) {
+        // Always mark the product as failed
+        ctx.shared.failed_products.lock().insert(ctx.id);
+
         if ctx.keep_going {
             let msg = format!("[{}] {}: {}", ctx.proc_name, self.product_display(ctx.product), error);
             println!("{}", color::red(&format!("Error: {}", msg)));
-            ctx.shared.failed_products.lock().insert(ctx.id);
             ctx.shared.failed_messages.lock().push(msg);
         } else {
-            ctx.shared.failed_products.lock().insert(ctx.id);
             if mark_processor_failed {
                 ctx.shared.failed_processors.lock().insert(ctx.proc_name.to_string());
             }
@@ -50,11 +58,7 @@ impl<'a> Executor<'a> {
             None,
             None,
         );
-        let mut stats = shared.stats.lock();
-        let proc_stats = stats
-            .entry(product.processor.clone())
-            .or_default();
-        proc_stats.skipped += 1;
+        Self::update_stats(shared, &product.processor, |s| s.skipped += 1);
         Self::inc_global(shared);
     }
 
@@ -86,12 +90,11 @@ impl<'a> Executor<'a> {
                     None,
                     None,
                 );
-                let mut stats = ctx.shared.stats.lock();
-                let proc_stats = stats
-                    .entry(ctx.product.processor.clone())
-                    .or_default();
-                proc_stats.restored += 1;
-                proc_stats.files_restored += ctx.product.outputs.len();
+                let output_count = ctx.product.outputs.len();
+                Self::update_stats(ctx.shared, &ctx.product.processor, |s| {
+                    s.restored += 1;
+                    s.files_restored += output_count;
+                });
                 Self::inc_progress(ctx.pb, ctx.shared);
                 RestoreOutcome::Restored
             }
@@ -128,13 +131,7 @@ impl<'a> Executor<'a> {
             duration,
             Some(&error.to_string()),
         );
-        {
-            let mut stats = ctx.shared.stats.lock();
-            let proc_stats = stats
-                .entry(ctx.proc_name.to_string())
-                .or_default();
-            proc_stats.failed += 1;
-        }
+        Self::update_stats(ctx.shared, ctx.proc_name, |s| s.failed += 1);
         self.record_failure(ctx, error, true);
     }
 
@@ -173,12 +170,11 @@ impl<'a> Executor<'a> {
             duration,
             None,
         );
-        let mut stats = ctx.shared.stats.lock();
-        let proc_stats = stats
-            .entry(ctx.proc_name.to_string())
-            .or_default();
-        proc_stats.processed += 1;
-        proc_stats.files_created += ctx.product.outputs.len();
+        let output_count = ctx.product.outputs.len();
+        Self::update_stats(ctx.shared, ctx.proc_name, |s| {
+            s.processed += 1;
+            s.files_created += output_count;
+        });
         true
     }
 }

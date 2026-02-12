@@ -175,8 +175,9 @@ impl CcProcessor {
 
                 let executable = self.get_executable_path(source, profile);
 
-                let mut inputs = vec![source.clone()];
-                inputs.extend(extra.clone());
+                let mut inputs = Vec::with_capacity(1 + extra.len());
+                inputs.push(source.clone());
+                inputs.extend_from_slice(&extra);
 
                 graph.add_product_with_variant(
                     inputs,

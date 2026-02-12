@@ -375,4 +375,43 @@ impl Builder {
     pub fn object_store_mut(&mut self) -> &mut ObjectStore {
         &mut self.object_store
     }
+
+    /// Return directories that should be watched for file changes.
+    /// Derived from processor scan configs plus standard project files.
+    pub fn watch_paths(&self) -> Vec<PathBuf> {
+        let mut paths: Vec<PathBuf> = Vec::new();
+
+        // Always watch rsb.toml
+        let config_path = self.project_root.join("rsb.toml");
+        if config_path.exists() {
+            paths.push(config_path);
+        }
+
+        // Add scan directories from all processor configs
+        for dir in self.config.processor.scan_dirs() {
+            let full = self.project_root.join(&dir);
+            if full.exists() {
+                paths.push(full);
+            }
+        }
+
+        // Processors with empty scan_dir scan the project root — watch common
+        // top-level files/dirs that wouldn't be covered by scan_dirs above.
+        for name in &["pyproject.toml", "config"] {
+            let p = self.project_root.join(name);
+            if p.exists() {
+                paths.push(p);
+            }
+        }
+
+        // Plugins directory
+        let plugins = self.project_root.join(&self.config.plugins.dir);
+        if plugins.exists() {
+            paths.push(plugins);
+        }
+
+        paths.sort();
+        paths.dedup();
+        paths
+    }
 }

@@ -336,6 +336,25 @@ impl ProcessorConfig {
         self.enabled.iter().any(|p| p == name)
     }
 
+    /// Collect unique scan directories from all processor configs.
+    /// Returns non-empty directory names (empty means project root, handled separately).
+    pub(crate) fn scan_dirs(&self) -> Vec<String> {
+        let scans = [
+            &self.tera.scan, &self.ruff.scan, &self.pylint.scan,
+            &self.cc_single_file.scan, &self.cppcheck.scan, &self.clang_tidy.scan,
+            &self.shellcheck.scan, &self.spellcheck.scan, &self.sleep.scan,
+            &self.make.scan, &self.cargo.scan, &self.rumdl.scan, &self.mypy.scan,
+        ];
+        let mut dirs: Vec<String> = scans.iter()
+            .filter_map(|s| s.scan_dir.as_deref())
+            .filter(|d| !d.is_empty())
+            .map(|d| d.to_string())
+            .collect();
+        dirs.sort();
+        dirs.dedup();
+        dirs
+    }
+
     /// Fill in None scan fields with per-processor defaults.
     /// Called after loading from TOML so that `config show` displays resolved values
     /// and processors can access fields without fallbacks.

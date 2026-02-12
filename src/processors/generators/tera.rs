@@ -137,8 +137,9 @@ impl ProductDiscovery for TeraProcessor {
         let extra = resolve_extra_inputs(&self.config.extra_inputs)?;
 
         for item in items {
-            let mut inputs = vec![item.source_path.clone()];
-            inputs.extend(extra.clone());
+            let mut inputs = Vec::with_capacity(1 + extra.len());
+            inputs.push(item.source_path.clone());
+            inputs.extend_from_slice(&extra);
             graph.add_product(
                 inputs,
                 vec![item.output_path.clone()],

@@ -10,6 +10,7 @@ pub use cpp::CppDepAnalyzer;
 pub use python::PythonDepAnalyzer;
 
 use anyhow::Result;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use crate::deps_cache::DepsCache;
 use crate::file_index::FileIndex;
@@ -93,14 +94,14 @@ where
             scanned
         };
 
-        // Add dependencies to the product
+        // Add dependencies to the product (filter out duplicates via HashSet)
         if !deps.is_empty()
             && let Some(product) = graph.get_product_mut(*id) {
-                for dep in deps {
-                    if !product.inputs.contains(&dep) {
-                        product.inputs.push(dep);
-                    }
-                }
+                let existing: HashSet<&PathBuf> = product.inputs.iter().collect();
+                let new_deps: Vec<PathBuf> = deps.into_iter()
+                    .filter(|dep| !existing.contains(dep))
+                    .collect();
+                product.inputs.extend(new_deps);
             }
 
         pb.inc(1);

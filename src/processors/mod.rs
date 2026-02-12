@@ -298,7 +298,7 @@ pub fn discover_directory_products(
             &[],
         );
 
-        let mut inputs: Vec<PathBuf> = Vec::new();
+        let mut inputs: Vec<PathBuf> = Vec::with_capacity(1 + sibling_files.len() + extra.len());
         // Anchor file first so product display shows it
         inputs.push(anchor.clone());
         for file in &sibling_files {
@@ -306,7 +306,7 @@ pub fn discover_directory_products(
                 inputs.push(file.clone());
             }
         }
-        inputs.extend(extra.clone());
+        inputs.extend_from_slice(&extra);
         // Empty outputs: cache entry = success record
         graph.add_product(inputs, vec![], processor_name, hash.clone())?;
     }
@@ -338,8 +338,9 @@ pub fn discover_checker_products(
     let hash = Some(config_hash(cfg_hash));
     let extra = resolve_extra_inputs(extra_inputs)?;
     for file in files {
-        let mut inputs = vec![file];
-        inputs.extend(extra.clone());
+        let mut inputs = Vec::with_capacity(1 + extra.len());
+        inputs.push(file);
+        inputs.extend_from_slice(&extra);
         // Empty outputs: cache entry = success record
         graph.add_product(inputs, vec![], processor_name, hash.clone())?;
     }
