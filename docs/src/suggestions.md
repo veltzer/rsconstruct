@@ -214,13 +214,6 @@ Grades:
 - Viewable in `chrome://tracing` or Perfetto UI.
 - **Urgency**: medium | **Complexity**: medium
 
-### Stamping / workspace status
-- Embed build metadata (git hash, build timestamp, branch name) into outputs.
-- Distinguish volatile keys (don't trigger rebuilds) from stable keys (do trigger rebuilds).
-- Usage: `rsb build --stamp`, with a `workspace_status_command` config option.
-- Useful for embedding version info in compiled binaries or generated files.
-- **Urgency**: medium | **Complexity**: medium
-
 ### Build Event Protocol / structured event stream
 - rsb has `--json` on stdout, but a proper Build Event Protocol (file or gRPC stream) enables external dashboards, CI integrations, and build analytics services.
 - Write events to a file (`--build-event-log=events.pb`) or stream to a remote service.
