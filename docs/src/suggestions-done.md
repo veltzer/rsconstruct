@@ -21,6 +21,15 @@ Items from `suggestions.md` that have been implemented.
 
 - **mypy** — Python type checking using `mypy`. Batch-capable. Config: `checker`, `args`, `extra_inputs`, `scan`.
 
+## Completed Test Coverage
+
+- **Ruff/pylint processor tests** — `tests/processors/ruff.rs` and `tests/processors/pylint.rs` with integration tests.
+- **Make processor tests** — `tests/processors/make.rs` with Makefile discovery and execution tests.
+
+## Completed Caching & Performance
+
+- **Lazy file hashing (mtime-based)** — `mtime_check` config (default `true`), `fast_checksum()` with MTIME_TABLE. Stores `(path, mtime, checksum)` tuples. Disable with `--no-mtime`.
+
 ## Completed Quick Wins
 
 - **Batch processing for more processors** — All checker processors that support multiple file arguments now use batching.

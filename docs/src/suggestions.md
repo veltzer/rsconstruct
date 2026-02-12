@@ -7,18 +7,6 @@ Grades:
 - **Urgency**: `high` (users need this), `medium` (nice to have), `low` (speculative/future)
 - **Complexity**: `low` (hours), `medium` (days), `high` (weeks+)
 
-## Missing Test Coverage
-
-### No ruff/pylint processor tests
-- `tests/processors/` has tests for cc, sleep, spellcheck, and template, but not for ruff or pylint.
-- Add integration tests for both Python linting processors.
-- **Urgency**: high | **Complexity**: low
-
-### No make processor tests
-- `tests/processors/` has no tests for the make processor.
-- Add integration tests covering Makefile discovery and execution.
-- **Urgency**: high | **Complexity**: low
-
 ## New Processors
 
 ### Linting / Checking (stub-based)
@@ -305,13 +293,6 @@ Grades:
 - **Urgency**: low | **Complexity**: high
 
 ## Caching & Performance
-
-### Lazy file hashing (mtime-based)
-- Only re-hash files whose mtime has changed since the last build.
-- Store `(path, mtime, checksum)` tuples in cache database.
-- Config: `mtime_cache = true`.
-- Risk: mtime can be unreliable. `--force` bypasses this.
-- **Urgency**: medium | **Complexity**: medium
 
 ### Compressed cache objects
 - Compress cached objects with zstd to reduce disk usage and remote transfer times.
