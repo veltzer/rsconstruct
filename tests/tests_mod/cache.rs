@@ -56,7 +56,8 @@ fn cache_operations() {
     // Clear cache entirely
     let clear_output = run_rsb(project_path, &["cache", "clear"]);
     assert!(clear_output.status.success());
-    assert!(!project_path.join(".rsb").exists());
+    // .rsb/ exists (fresh db) but objects dir is gone
+    assert!(!project_path.join(".rsb").join("objects").exists());
 
     // Cache size after clear should be 0
     let size_after = run_rsb(project_path, &["cache", "size"]);

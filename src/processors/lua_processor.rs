@@ -1,5 +1,6 @@
 use anyhow::Result;
 use mlua::prelude::*;
+use parking_lot::Mutex;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -17,18 +18,11 @@ fn lua_context<T>(result: LuaResult<T>, msg: impl std::fmt::Display) -> Result<T
 pub struct LuaProcessor {
     name: String,
     description: String,
-    lua: Lua,
+    lua: Mutex<Lua>,
     stub_dir: PathBuf,
     config_value: toml::Value,
     scan_config: ScanConfig,
 }
-
-// SAFETY: mlua with the "send" feature makes Lua implement Send.
-// We need Sync because ProductDiscovery requires Send + Sync.
-// Each LuaProcessor owns its own Lua VM instance and is never shared
-// across threads simultaneously (the executor processes products
-// sequentially per-processor).
-unsafe impl Sync for LuaProcessor {}
 
 impl LuaProcessor {
     /// Create a new LuaProcessor from a plugin script file.
@@ -68,7 +62,7 @@ impl LuaProcessor {
         Ok(Self {
             name,
             description,
-            lua,
+            lua: Mutex::new(lua),
             stub_dir,
             config_value,
             scan_config,
@@ -305,16 +299,16 @@ impl LuaProcessor {
 
     /// Check if a Lua global function exists.
     fn has_function(&self, name: &str) -> bool {
-        self.lua.globals()
+        self.lua.lock().globals()
             .get::<LuaFunction>(name)
             .is_ok()
     }
 
     /// Build a Lua table representing a product (inputs + outputs as string arrays).
-    fn product_to_lua(&self, product: &Product) -> Result<LuaTable> {
-        let product_table = lua_context(self.lua.create_table(), "Failed to create product table")?;
+    fn product_to_lua(lua: &Lua, product: &Product) -> Result<LuaTable> {
+        let product_table = lua_context(lua.create_table(), "Failed to create product table")?;
 
-        let inputs_table = lua_context(self.lua.create_table(), "Failed to create inputs table")?;
+        let inputs_table = lua_context(lua.create_table(), "Failed to create inputs table")?;
         for (i, input) in product.inputs.iter().enumerate() {
             lua_context(
                 inputs_table.set(i + 1, input.to_string_lossy().to_string()),
@@ -323,7 +317,7 @@ impl LuaProcessor {
         }
         lua_context(product_table.set("inputs", inputs_table), "Failed to set inputs")?;
 
-        let outputs_table = lua_context(self.lua.create_table(), "Failed to create outputs table")?;
+        let outputs_table = lua_context(lua.create_table(), "Failed to create outputs table")?;
         for (i, output) in product.outputs.iter().enumerate() {
             lua_context(
                 outputs_table.set(i + 1, output.to_string_lossy().to_string()),
@@ -343,7 +337,7 @@ impl ProductDiscovery for LuaProcessor {
 
     fn processor_type(&self) -> super::ProcessorType {
         if self.has_function("processor_type") {
-            let type_str = self.lua.globals()
+            let type_str = self.lua.lock().globals()
                 .get::<LuaFunction>("processor_type")
                 .and_then(|f| f.call::<String>(()))
                 .unwrap_or_else(|_| "checker".to_string());
@@ -359,7 +353,7 @@ impl ProductDiscovery for LuaProcessor {
 
     fn hidden(&self) -> bool {
         if self.has_function("hidden") {
-            self.lua.globals()
+            self.lua.lock().globals()
                 .get::<LuaFunction>("hidden")
                 .and_then(|f| f.call::<bool>(()))
                 .unwrap_or(false)
@@ -374,8 +368,10 @@ impl ProductDiscovery for LuaProcessor {
             return Ok(());
         }
 
+        let lua = self.lua.lock();
+
         // Build the files list as Lua strings
-        let files_table = lua_context(self.lua.create_table(), "Failed to create files table")?;
+        let files_table = lua_context(lua.create_table(), "Failed to create files table")?;
         for (i, file) in files.iter().enumerate() {
             lua_context(
                 files_table.set(i + 1, file.to_string_lossy().to_string()),
@@ -385,14 +381,14 @@ impl ProductDiscovery for LuaProcessor {
 
         // Convert config to Lua
         let config_lua = lua_context(
-            Self::toml_to_lua(&self.lua, &self.config_value),
+            Self::toml_to_lua(&lua, &self.config_value),
             format!("Failed to convert config for plugin '{}'", self.name),
         )?;
 
         // Call Lua discover(project_root, config, files)
         // project_root is always "." since RSB runs from the project root
         let discover_fn: LuaFunction = lua_context(
-            self.lua.globals().get("discover"),
+            lua.globals().get("discover"),
             format!("Lua plugin '{}' must define a discover() function", self.name),
         )?;
 
@@ -434,11 +430,12 @@ impl ProductDiscovery for LuaProcessor {
     fn execute(&self, product: &Product) -> Result<()> {
         ensure_stub_dir(&self.stub_dir, &self.name)?;
 
-        let product_table = self.product_to_lua(product)?;
+        let lua = self.lua.lock();
+        let product_table = Self::product_to_lua(&lua, product)?;
 
         // Call Lua execute(product)
         let execute_fn: LuaFunction = lua_context(
-            self.lua.globals().get("execute"),
+            lua.globals().get("execute"),
             format!("Lua plugin '{}' must define an execute() function", self.name),
         )?;
 
@@ -452,9 +449,10 @@ impl ProductDiscovery for LuaProcessor {
 
     fn clean(&self, product: &Product) -> Result<()> {
         if self.has_function("clean") {
-            let product_table = self.product_to_lua(product)?;
+            let lua = self.lua.lock();
+            let product_table = Self::product_to_lua(&lua, product)?;
             let clean_fn: LuaFunction = lua_context(
-                self.lua.globals().get("clean"),
+                lua.globals().get("clean"),
                 format!("Lua plugin '{}': clean() not found", self.name),
             )?;
             lua_context(
@@ -470,7 +468,8 @@ impl ProductDiscovery for LuaProcessor {
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         let files = file_index.scan(&self.scan_config, true);
         if self.has_function("auto_detect") {
-            let Ok(files_table) = self.lua.create_table() else {
+            let lua = self.lua.lock();
+            let Ok(files_table) = lua.create_table() else {
                 return !files.is_empty();
             };
             for (i, file) in files.iter().enumerate() {
@@ -478,7 +477,7 @@ impl ProductDiscovery for LuaProcessor {
                     return !files.is_empty();
                 }
             }
-            self.lua.globals()
+            lua.globals()
                 .get::<LuaFunction>("auto_detect")
                 .and_then(|f| f.call::<bool>(files_table))
                 .unwrap_or(!files.is_empty())
@@ -489,7 +488,7 @@ impl ProductDiscovery for LuaProcessor {
 
     fn required_tools(&self) -> Vec<String> {
         if self.has_function("required_tools") {
-            self.lua.globals()
+            self.lua.lock().globals()
                 .get::<LuaFunction>("required_tools")
                 .and_then(|f| f.call::<LuaTable>(()))
                 .and_then(|table| {

@@ -123,6 +123,9 @@ fn run_command_inner(cmd: &mut Command, inherit_stdio: bool, print_on_failure: b
     let program = cmd.get_program().to_os_string();
     let args: Vec<_> = cmd.get_args().map(|a| a.to_os_string()).collect();
     let current_dir = cmd.get_current_dir().map(|p| p.to_path_buf());
+    let envs: Vec<_> = cmd.get_envs()
+        .filter_map(|(k, v)| v.map(|val| (k.to_os_string(), val.to_os_string())))
+        .collect();
 
     let rt = get_runtime();
     rt.block_on(async {
@@ -130,6 +133,9 @@ fn run_command_inner(cmd: &mut Command, inherit_stdio: bool, print_on_failure: b
         tokio_cmd.args(&args);
         if let Some(dir) = &current_dir {
             tokio_cmd.current_dir(dir);
+        }
+        for (key, val) in &envs {
+            tokio_cmd.env(key, val);
         }
 
         if inherit_stdio {

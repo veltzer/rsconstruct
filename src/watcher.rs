@@ -39,9 +39,6 @@ fn should_ignore(path: &Path) -> bool {
         if name.ends_with(".tmp") {
             return true;
         }
-        if name.starts_with("__") {
-            return true;
-        }
     }
 
     false

@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::errors;
+use crate::processors::{check_command_output, run_command_capture};
 
 /// Remote cache backend trait
 pub trait RemoteCache: Send + Sync {
@@ -93,11 +94,9 @@ impl S3Backend {
 
 impl RemoteCache for S3Backend {
     fn exists(&self, key: &str) -> Result<bool> {
-        let output = Command::new("aws")
-            .args(["s3", "ls", &self.s3_uri(key)])
-            .output()
-            .context("Failed to run aws s3 ls")?;
-
+        let mut cmd = Command::new("aws");
+        cmd.args(["s3", "ls", &self.s3_uri(key)]);
+        let output = run_command_capture(&mut cmd)?;
         Ok(output.status.success())
     }
 
@@ -107,45 +106,33 @@ impl RemoteCache for S3Backend {
             fs::create_dir_all(parent)?;
         }
 
-        let output = Command::new("aws")
-            .args([
-                "s3",
-                "cp",
-                &self.s3_uri(key),
-                &dest.display().to_string(),
-                "--only-show-errors",
-            ])
-            .output()
-            .context("Failed to run aws s3 cp")?;
-
+        let mut cmd = Command::new("aws");
+        cmd.args([
+            "s3", "cp",
+            &self.s3_uri(key),
+            &dest.display().to_string(),
+            "--only-show-errors",
+        ]);
+        let output = run_command_capture(&mut cmd)?;
         Ok(output.status.success())
     }
 
     fn upload(&self, key: &str, src: &Path) -> Result<()> {
-        let output = Command::new("aws")
-            .args([
-                "s3",
-                "cp",
-                &src.display().to_string(),
-                &self.s3_uri(key),
-                "--only-show-errors",
-            ])
-            .output()
-            .context("Failed to run aws s3 cp")?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("S3 upload failed: {}", stderr);
-        }
-
-        Ok(())
+        let mut cmd = Command::new("aws");
+        cmd.args([
+            "s3", "cp",
+            &src.display().to_string(),
+            &self.s3_uri(key),
+            "--only-show-errors",
+        ]);
+        let output = run_command_capture(&mut cmd)?;
+        check_command_output(&output, "S3 upload")
     }
 
     fn download_bytes(&self, key: &str) -> Result<Option<Vec<u8>>> {
-        let output = Command::new("aws")
-            .args(["s3", "cp", &self.s3_uri(key), "-"])
-            .output()
-            .context("Failed to run aws s3 cp")?;
+        let mut cmd = Command::new("aws");
+        cmd.args(["s3", "cp", &self.s3_uri(key), "-"]);
+        let output = run_command_capture(&mut cmd)?;
 
         if output.status.success() {
             Ok(Some(output.stdout))
@@ -153,7 +140,6 @@ impl RemoteCache for S3Backend {
             Ok(None)
         }
     }
-
 }
 
 /// HTTP backend using curl
@@ -175,19 +161,12 @@ impl HttpBackend {
 
 impl RemoteCache for HttpBackend {
     fn exists(&self, key: &str) -> Result<bool> {
-        let output = Command::new("curl")
-            .args([
-                "-s",
-                "-o",
-                "/dev/null",
-                "-w",
-                "%{http_code}",
-                "--head",
-                &self.full_url(key),
-            ])
-            .output()
-            .context("Failed to run curl")?;
-
+        let mut cmd = Command::new("curl");
+        cmd.args([
+            "-s", "-o", "/dev/null", "-w", "%{http_code}", "--head",
+            &self.full_url(key),
+        ]);
+        let output = run_command_capture(&mut cmd)?;
         let status_code = String::from_utf8_lossy(&output.stdout);
         Ok(status_code.trim() == "200")
     }
@@ -197,47 +176,31 @@ impl RemoteCache for HttpBackend {
             fs::create_dir_all(parent)?;
         }
 
-        let output = Command::new("curl")
-            .args([
-                "-s",
-                "-f", // Fail on HTTP errors
-                "-o",
-                &dest.display().to_string(),
-                &self.full_url(key),
-            ])
-            .output()
-            .context("Failed to run curl")?;
-
+        let mut cmd = Command::new("curl");
+        cmd.args([
+            "-s", "-f",
+            "-o", &dest.display().to_string(),
+            &self.full_url(key),
+        ]);
+        let output = run_command_capture(&mut cmd)?;
         Ok(output.status.success())
     }
 
     fn upload(&self, key: &str, src: &Path) -> Result<()> {
-        let output = Command::new("curl")
-            .args([
-                "-s",
-                "-f",
-                "-X",
-                "PUT",
-                "--data-binary",
-                &format!("@{}", src.display()),
-                &self.full_url(key),
-            ])
-            .output()
-            .context("Failed to run curl")?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("HTTP upload failed: {}", stderr);
-        }
-
-        Ok(())
+        let mut cmd = Command::new("curl");
+        cmd.args([
+            "-s", "-f", "-X", "PUT",
+            "--data-binary", &format!("@{}", src.display()),
+            &self.full_url(key),
+        ]);
+        let output = run_command_capture(&mut cmd)?;
+        check_command_output(&output, "HTTP upload")
     }
 
     fn download_bytes(&self, key: &str) -> Result<Option<Vec<u8>>> {
-        let output = Command::new("curl")
-            .args(["-s", "-f", &self.full_url(key)])
-            .output()
-            .context("Failed to run curl")?;
+        let mut cmd = Command::new("curl");
+        cmd.args(["-s", "-f", &self.full_url(key)]);
+        let output = run_command_capture(&mut cmd)?;
 
         if output.status.success() {
             Ok(Some(output.stdout))
@@ -245,7 +208,6 @@ impl RemoteCache for HttpBackend {
             Ok(None)
         }
     }
-
 }
 
 /// File backend for local/network filesystem

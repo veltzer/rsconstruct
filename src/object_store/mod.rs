@@ -240,7 +240,8 @@ impl ObjectStore {
         self.objects_dir.join(prefix).join(rest)
     }
 
-    /// Store content in object store, returns checksum
+    /// Store content in object store, returns checksum.
+    /// Objects are made read-only to prevent accidental modification via hardlinks.
     fn store_object(&self, content: &[u8]) -> Result<String> {
         let checksum = Self::calculate_checksum_bytes(content);
         let object_path = self.object_path(&checksum);
@@ -253,6 +254,13 @@ impl ObjectStore {
             }
             fs::write(&object_path, content)
                 .context("Failed to write object")?;
+            // Make read-only to prevent corruption via hardlinks
+            let mut perms = fs::metadata(&object_path)
+                .context("Failed to read object metadata")?
+                .permissions();
+            perms.set_readonly(true);
+            fs::set_permissions(&object_path, perms)
+                .context("Failed to set object read-only")?;
         }
 
         Ok(checksum)

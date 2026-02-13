@@ -43,11 +43,6 @@ impl ObjectStore {
             None => return Ok(false),
         };
 
-        // Verify input checksum matches
-        if entry.input_checksum != input_checksum {
-            return Ok(false);
-        }
-
         // Try to restore each missing output
         for output_path in output_paths {
             if output_path.exists() {

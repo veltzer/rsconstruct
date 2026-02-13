@@ -3,7 +3,15 @@ use redb::ReadableDatabase;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
+use crate::checksum;
 use super::{MtimeEntry, ObjectStore, MTIME_TABLE};
+
+/// Hash a list of individual checksums into a single combined SHA-256 checksum.
+/// This keeps the stored checksum a fixed 64 bytes regardless of input count.
+fn hash_checksums(checksums: &[String]) -> String {
+    let combined = checksums.join(":");
+    checksum::bytes_checksum(combined.as_bytes())
+}
 
 impl ObjectStore {
     /// Get the checksum for a file, using mtime to avoid re-reading unchanged files.
@@ -100,7 +108,7 @@ impl ObjectStore {
         // Flush all dirty mtime entries in a single transaction
         self.flush_mtime_entries(dirty_entries)?;
 
-        Ok(checksums.join(":"))
+        Ok(hash_checksums(&checksums))
     }
 
     /// Get the cached input checksum for a product from its cache entry.
@@ -120,6 +128,6 @@ impl ObjectStore {
                 checksums.push(format!("MISSING:{}", input.display()));
             }
         }
-        Ok(checksums.join(":"))
+        Ok(hash_checksums(&checksums))
     }
 }

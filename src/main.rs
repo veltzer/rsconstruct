@@ -85,6 +85,9 @@ fn run() -> Result<()> {
                 tokio::signal::ctrl_c().await.expect(errors::SIGNAL_LISTEN);
                 interrupted.store(true, std::sync::atomic::Ordering::SeqCst);
                 processors::set_interrupted();
+                eprintln!("\nInterrupted. Press Ctrl+C again to force exit.");
+                tokio::signal::ctrl_c().await.expect(errors::SIGNAL_LISTEN);
+                std::process::exit(130);
             });
         });
     }

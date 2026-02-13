@@ -9,7 +9,7 @@ use super::{
 };
 
 impl ObjectStore {
-    /// Clear the entire cache
+    /// Clear the entire cache and recreate an empty one.
     pub fn clear(&mut self) -> Result<()> {
         // Drop the database before removing the directory.
         // Create a temporary database to replace the current one
@@ -27,6 +27,12 @@ impl ObjectStore {
 
         // Clean up temp dir
         let _ = fs::remove_dir_all(&temp_dir);
+
+        // Recreate .rsb directory and open a fresh database
+        fs::create_dir_all(&self.rsb_dir)
+            .context("Failed to recreate .rsb directory")?;
+        let db_path = self.rsb_dir.join(super::DB_FILE);
+        self.db = crate::db::open_or_recreate(&db_path, "Cache database")?;
 
         Ok(())
     }

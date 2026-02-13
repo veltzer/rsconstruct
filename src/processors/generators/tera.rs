@@ -189,7 +189,7 @@ impl Function for LoadPythonFunction {
         let result = load_python_config(Path::new(path))
             .map_err(|e| tera::Error::msg(format!("Failed to load Python config: {}", e)))?;
 
-        Ok(to_value(result).unwrap_or(TeraValue::Null))
+        to_value(result).map_err(|e| tera::Error::msg(format!("Failed to convert Python config to template value: {e}")))
     }
 }
 

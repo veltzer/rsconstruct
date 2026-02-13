@@ -280,8 +280,7 @@ impl ProductDiscovery for SpellcheckProcessor {
         // Flush all collected words at the end of the batch
         if self.config.auto_add_words
             && let Err(e) = self.flush_words_to_file() {
-                // Return the flush error for all products
-                return products.iter().map(|_| Err(anyhow::anyhow!("{}", e))).collect();
+                eprintln!("Warning: failed to flush spellcheck words file: {}", e);
             }
 
         results
