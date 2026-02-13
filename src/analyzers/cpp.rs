@@ -16,7 +16,7 @@ use crate::errors;
 use crate::deps_cache::DepsCache;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
-use crate::processors::{format_command, run_command_capture};
+use crate::processors::{check_command_output, format_command, run_command_capture};
 
 use super::DepAnalyzer;
 
@@ -476,11 +476,7 @@ impl CppDepAnalyzer {
         }
 
         let output = run_command_capture(&mut cmd)?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("Dependency scan failed for {}: {}", source.display(), stderr);
-        }
+        check_command_output(&output, format_args!("Dependency scan of {}", source.display()))?;
 
         let content = String::from_utf8_lossy(&output.stdout).to_string();
         Ok(self.parse_dep_file(&content))

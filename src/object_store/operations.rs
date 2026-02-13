@@ -119,12 +119,9 @@ impl ObjectStore {
             return Ok(true);
         }
 
-        let remote_key = format!("objects/{}/{}", &checksum[..2], &checksum[2..]);
-        if remote.download(&remote_key, &object_path)? {
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        let (prefix, rest) = checksum.split_at(super::CHECKSUM_PREFIX_LEN.min(checksum.len()));
+        let remote_key = format!("objects/{}/{}", prefix, rest);
+        remote.download(&remote_key, &object_path)
     }
 
     /// Cache the outputs of a successful build.
@@ -211,7 +208,8 @@ impl ObjectStore {
             return Ok(());
         }
 
-        let remote_key = format!("objects/{}/{}", &checksum[..2], &checksum[2..]);
+        let (prefix, rest) = checksum.split_at(super::CHECKSUM_PREFIX_LEN.min(checksum.len()));
+        let remote_key = format!("objects/{}/{}", prefix, rest);
 
         // Check if already exists remotely (avoid redundant uploads)
         if remote.exists(&remote_key).unwrap_or(false) {

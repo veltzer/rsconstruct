@@ -63,7 +63,8 @@ pub(super) fn extract_var_names(content: &str) -> Vec<String> {
         }
         // Check if we hit another section header
         if in_vars_section && trimmed.starts_with('[') && trimmed.ends_with(']') {
-            break;
+            in_vars_section = false;
+            continue;
         }
         if in_vars_section {
             // Match key = value pattern

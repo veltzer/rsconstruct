@@ -7,7 +7,7 @@ use std::process::Command;
 use crate::config::{config_hash, scan_config_from_toml, ScanConfig};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use super::{clean_outputs, ensure_stub_dir, ProductDiscovery};
+use super::{clean_outputs, ensure_stub_dir, run_command, ProductDiscovery};
 
 /// Convert a LuaResult to an anyhow::Result with a contextual message.
 fn lua_context<T>(result: LuaResult<T>, msg: impl std::fmt::Display) -> Result<T> {
@@ -145,7 +145,7 @@ impl LuaProcessor {
                     let arg: String = args.get(i)?;
                     cmd.arg(&arg);
                 }
-                let output = cmd.output().map_err(|e| {
+                let output = run_command(&mut cmd).map_err(|e| {
                     LuaError::external(format!("Failed to run '{}': {}", program, e))
                 })?;
                 if !output.status.success() {
@@ -174,7 +174,7 @@ impl LuaProcessor {
                     cmd.arg(&arg);
                 }
                 cmd.current_dir(&cwd);
-                let output = cmd.output().map_err(|e| {
+                let output = run_command(&mut cmd).map_err(|e| {
                     LuaError::external(format!("Failed to run '{}': {}", program, e))
                 })?;
                 if !output.status.success() {

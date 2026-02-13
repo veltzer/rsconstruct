@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::Command;
 use parking_lot::Mutex;
 
-use crate::processors::run_command_capture;
+use crate::processors::{check_command_output, run_command_capture};
 
 /// Global cache for shell command results to avoid running the same command multiple times.
 /// Key is the command string, value is the resulting flags.
@@ -14,8 +14,8 @@ static SHELL_COMMAND_CACHE: Mutex<Option<HashMap<String, Vec<String>>>> = Mutex:
 
 /// Get or compute flags from a shell command, caching the result.
 fn cached_shell_command(cmd_line: &str, runner: impl FnOnce(&str) -> Result<Vec<String>>) -> Result<Vec<String>> {
-    let mut cache = SHELL_COMMAND_CACHE.lock();
-    let cache = cache.get_or_insert_with(HashMap::new);
+    let mut guard = SHELL_COMMAND_CACHE.lock();
+    let cache = guard.get_or_insert_with(HashMap::new);
 
     if let Some(cached) = cache.get(cmd_line) {
         return Ok(cached.clone());
@@ -28,11 +28,11 @@ fn cached_shell_command(cmd_line: &str, runner: impl FnOnce(&str) -> Result<Vec<
 
 /// Per-file compile/link flags extracted from source comments.
 #[derive(Default)]
-pub struct SourceFlags {
-    pub compile_args_before: Vec<String>,
-    pub compile_args_after: Vec<String>,
-    pub link_args_before: Vec<String>,
-    pub link_args_after: Vec<String>,
+pub(super) struct SourceFlags {
+    pub(super) compile_args_before: Vec<String>,
+    pub(super) compile_args_after: Vec<String>,
+    pub(super) link_args_before: Vec<String>,
+    pub(super) link_args_after: Vec<String>,
 }
 
 /// Extract the comment value from a C/C++ source line.
@@ -72,7 +72,7 @@ fn extract_comment_value(line: &str) -> Option<&str> {
 ///   // EXCLUDE_PROFILE=gcc clang
 ///
 /// Returns true if the file should be excluded for the given profile.
-pub fn should_exclude_for_profile(source: &Path, profile_name: &str) -> bool {
+pub(super) fn should_exclude_for_profile(source: &Path, profile_name: &str) -> bool {
     // If profile name is empty (single compiler setup), never exclude
     if profile_name.is_empty() {
         return false;
@@ -125,7 +125,7 @@ pub fn should_exclude_for_profile(source: &Path, profile_name: &str) -> bool {
 /// The `profile_name` parameter specifies the current compiler profile name.
 /// Directives without a profile suffix apply to all profiles.
 /// Directives with a profile suffix (e.g., `[gcc]`) only apply when that profile is active.
-pub fn parse_source_flags(source: &Path, profile_name: &str) -> Result<SourceFlags> {
+pub(super) fn parse_source_flags(source: &Path, profile_name: &str) -> Result<SourceFlags> {
     let content = fs::read_to_string(source)
         .with_context(|| format!("Failed to read source file: {}", source.display()))?;
 
@@ -249,11 +249,7 @@ fn run_command_for_flags(cmd_line: &str) -> Result<Vec<String>> {
     let mut cmd = Command::new(program);
     cmd.args(args);
     let output = run_command_capture(&mut cmd)?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Command failed: {} — {}", cmd_line, stderr);
-    }
+    check_command_output(&output, cmd_line)?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     Ok(stdout.split_whitespace().map(String::from).collect())
@@ -268,11 +264,7 @@ fn run_shell_for_flags(cmd_line: &str) -> Result<Vec<String>> {
     let mut cmd = Command::new("sh");
     cmd.arg("-c").arg(cmd_line);
     let output = run_command_capture(&mut cmd)?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Shell command failed: {} — {}", cmd_line, stderr);
-    }
+    check_command_output(&output, cmd_line)?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     Ok(stdout.split_whitespace().map(String::from).collect())
@@ -283,10 +275,7 @@ fn run_backtick_command(cmd_str: &str) -> Result<Vec<String>> {
     let mut cmd = Command::new("sh");
     cmd.arg("-c").arg(cmd_str);
     let output = run_command_capture(&mut cmd)?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Backtick command failed: {} — {}", cmd_str, stderr);
-    }
+    check_command_output(&output, cmd_str)?;
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     // Return as single-element vec so caching works uniformly
     Ok(vec![stdout])

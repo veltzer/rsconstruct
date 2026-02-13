@@ -146,7 +146,7 @@ pub struct ProcessorCacheStats {
 }
 
 /// Information about a cache entry for display
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct CacheListEntry {
     pub cache_key: String,
     pub input_checksum: String,
@@ -155,7 +155,7 @@ pub struct CacheListEntry {
 }
 
 /// Information about a single output in a cache list entry
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct CacheListOutput {
     pub path: String,
     pub exists: bool,

@@ -82,7 +82,7 @@ impl ObjectStore {
             return Self::combined_input_checksum(inputs);
         }
 
-        let mut checksums = Vec::new();
+        let mut checksums = Vec::with_capacity(inputs.len());
         let mut dirty_entries = Vec::new();
 
         for input in inputs {
@@ -112,7 +112,7 @@ impl ObjectStore {
     /// Missing files are represented by a sentinel so that different sets of
     /// missing files never collide.
     pub fn combined_input_checksum(inputs: &[PathBuf]) -> Result<String> {
-        let mut checksums = Vec::new();
+        let mut checksums = Vec::with_capacity(inputs.len());
         for input in inputs {
             if input.exists() {
                 checksums.push(Self::calculate_checksum(input)?);

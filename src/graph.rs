@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
@@ -244,7 +244,7 @@ impl BuildGraph {
             .map(|(id, _)| id)
             .collect();
 
-        let mut result = Vec::new();
+        let mut result = Vec::with_capacity(self.products.len());
 
         while let Some(id) = queue.pop_first() {
             result.push(id);
@@ -545,7 +545,7 @@ impl BuildGraph {
     pub fn to_svg(&self) -> Result<String> {
         use std::process::{Command, Stdio};
         use std::io::Write;
-        use crate::processors::log_command;
+        use crate::processors::{check_command_output, log_command};
 
         let dot_content = self.to_dot();
 
@@ -562,10 +562,7 @@ impl BuildGraph {
         child.stdin.take().expect(errors::STDIN_PIPED).write_all(dot_content.as_bytes())?;
 
         let output = child.wait_with_output()?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("dot command failed: {}", stderr);
-        }
+        check_command_output(&output, "dot")?;
 
         Ok(String::from_utf8(output.stdout)?)
     }

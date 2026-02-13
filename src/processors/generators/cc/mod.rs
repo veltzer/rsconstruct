@@ -8,7 +8,7 @@ use std::process::Command;
 use crate::config::{CcConfig, CompilerProfile, config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProductDiscovery, scan_root, clean_outputs, format_command, run_command};
+use crate::processors::{ProductDiscovery, scan_root, clean_outputs, check_command_output, format_command, run_command};
 
 use source_flags::{SourceFlags, parse_source_flags, should_exclude_for_profile};
 
@@ -119,13 +119,7 @@ impl CcProcessor {
         }
 
         let output = run_command(&mut cmd)?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("Compilation failed for {}: {}", source.display(), stderr);
-        }
-
-        Ok(())
+        check_command_output(&output, format_args!("Compilation of {}", source.display()))
     }
 
     /// Extract profile name from product metadata
@@ -224,7 +218,7 @@ impl ProductDiscovery for CcProcessor {
 
     fn execute(&self, product: &Product) -> Result<()> {
         let source = product.primary_input();
-        let executable = &product.outputs[0];
+        let executable = product.outputs.first().expect(crate::errors::EMPTY_PRODUCT_OUTPUTS);
         let is_cpp = source.extension().and_then(|s| s.to_str()) == Some("cc");
         let profile = self.get_profile_from_product(product)?;
         self.compile_source(source, executable, profile, is_cpp)

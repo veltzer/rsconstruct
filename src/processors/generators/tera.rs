@@ -154,7 +154,7 @@ impl ProductDiscovery for TeraProcessor {
     fn execute(&self, product: &Product) -> Result<()> {
         let item = TemplateItem::new(
             product.primary_input().to_path_buf(),
-            product.outputs[0].clone(),
+            product.outputs.first().expect(crate::errors::EMPTY_PRODUCT_OUTPUTS).clone(),
         );
         item.render(&self.config)
     }

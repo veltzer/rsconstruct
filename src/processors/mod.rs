@@ -66,19 +66,19 @@ fn get_interrupt_receiver() -> watch::Receiver<bool> {
 }
 
 /// Mark the global interrupted flag and notify all waiting tasks.
-pub fn set_interrupted() {
+pub(crate) fn set_interrupted() {
     INTERRUPTED.store(true, Ordering::SeqCst);
     // Notify all tasks waiting on the interrupt channel
     let _ = get_interrupt_sender().send(true);
 }
 
 /// Check whether the global interrupted flag is set.
-pub fn is_interrupted() -> bool {
+pub(crate) fn is_interrupted() -> bool {
     INTERRUPTED.load(Ordering::SeqCst)
 }
 
 /// Format a `Command` as a shell-like string for display.
-pub fn format_command(cmd: &Command) -> String {
+pub(crate) fn format_command(cmd: &Command) -> String {
     let program = cmd.get_program().to_string_lossy();
     let args: Vec<_> = cmd.get_args()
         .map(|a| a.to_string_lossy())
@@ -91,7 +91,7 @@ pub fn format_command(cmd: &Command) -> String {
 }
 
 /// If --show-child-processes is enabled, print the command that is about to be executed.
-pub fn log_command(cmd: &Command) {
+pub(crate) fn log_command(cmd: &Command) {
     if crate::runtime_flags::show_child_processes() {
         let cwd = cmd.get_current_dir()
             .map(|p| p.display().to_string())
@@ -180,7 +180,7 @@ fn run_command_inner(cmd: &mut Command, inherit_stdio: bool, print_on_failure: b
 ///
 /// By default, output is captured and only shown on failure. Use `--show-output`
 /// to always show tool output.
-pub fn run_command(cmd: &mut Command) -> Result<Output> {
+pub(crate) fn run_command(cmd: &mut Command) -> Result<Output> {
     let show = crate::runtime_flags::show_output();
     run_command_inner(cmd, show, !show)
 }
@@ -188,23 +188,24 @@ pub fn run_command(cmd: &mut Command) -> Result<Output> {
 /// Run a command and capture its stdout/stderr output.
 /// Use this only when you need to parse the output.
 /// For commands where output should go to terminal, use run_command() instead.
-pub fn run_command_capture(cmd: &mut Command) -> Result<Output> {
+pub(crate) fn run_command_capture(cmd: &mut Command) -> Result<Output> {
     run_command_inner(cmd, false, false)
 }
 
 
 /// Check that a command exited successfully.
 /// On failure, includes any captured stdout/stderr in the error message for debugging.
-pub fn check_command_output(output: &Output, context: impl std::fmt::Display) -> Result<()> {
+pub(crate) fn check_command_output(output: &Output, context: impl std::fmt::Display) -> Result<()> {
     if !output.status.success() {
+        use std::fmt::Write;
         let mut msg = format!("{context} failed");
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
         if !stderr.is_empty() {
-            msg.push_str(&format!("\nstderr:\n{}", stderr.trim_end()));
+            let _ = write!(msg, "\nstderr:\n{}", stderr.trim_end());
         }
         if !stdout.is_empty() {
-            msg.push_str(&format!("\nstdout:\n{}", stdout.trim_end()));
+            let _ = write!(msg, "\nstdout:\n{}", stdout.trim_end());
         }
         anyhow::bail!("{msg}");
     }
@@ -213,12 +214,12 @@ pub fn check_command_output(output: &Output, context: impl std::fmt::Display) ->
 
 /// Compute the scan root directory from a ScanConfig.
 /// Returns empty path if scan_dir is empty, otherwise the scan_dir as a relative path.
-pub fn scan_root(scan: &crate::config::ScanConfig) -> PathBuf {
+pub(crate) fn scan_root(scan: &crate::config::ScanConfig) -> PathBuf {
     PathBuf::from(scan.scan_dir())
 }
 
 /// Check if a scan root is valid (empty means current dir, otherwise must exist).
-pub fn scan_root_valid(scan: &crate::config::ScanConfig) -> bool {
+pub(crate) fn scan_root_valid(scan: &crate::config::ScanConfig) -> bool {
     let root = scan_root(scan);
     root.as_os_str().is_empty() || root.exists()
 }
@@ -226,7 +227,7 @@ pub fn scan_root_valid(scan: &crate::config::ScanConfig) -> bool {
 /// Compute a stub path for a source file.
 /// Maps `a/b/file.ext` -> `stub_dir/a_b_file.ext.suffix`.
 /// Source path is already relative to project root.
-pub fn stub_path(stub_dir: &Path, source: &Path, suffix: &str) -> PathBuf {
+pub(crate) fn stub_path(stub_dir: &Path, source: &Path, suffix: &str) -> PathBuf {
     let stub_name = format!(
         "{}.{}",
         source.display().to_string().replace(['/', '\\'], "_"),
@@ -237,7 +238,7 @@ pub fn stub_path(stub_dir: &Path, source: &Path, suffix: &str) -> PathBuf {
 
 /// Check if a config file exists and return it as extra inputs for discover.
 /// Used by processors that auto-detect config files (e.g. mypy.ini, .pylintrc).
-pub fn config_file_inputs(path: &str) -> Vec<String> {
+pub(crate) fn config_file_inputs(path: &str) -> Vec<String> {
     if Path::new(path).exists() {
         vec![path.to_string()]
     } else {
@@ -246,7 +247,7 @@ pub fn config_file_inputs(path: &str) -> Vec<String> {
 }
 
 /// Clean outputs for a product: remove each output file and print a message.
-pub fn clean_outputs(product: &Product, label: &str) -> Result<()> {
+pub(crate) fn clean_outputs(product: &Product, label: &str) -> Result<()> {
     for output in &product.outputs {
         if output.exists() {
             fs::remove_file(output)?;
@@ -258,7 +259,7 @@ pub fn clean_outputs(product: &Product, label: &str) -> Result<()> {
 
 /// Options for filtering sibling files in directory-based product discovery.
 #[derive(Debug)]
-pub struct SiblingFilter<'a> {
+pub(crate) struct SiblingFilter<'a> {
     pub extensions: &'a [&'a str],
     pub excludes: &'a [&'a str],
 }
@@ -269,7 +270,7 @@ pub struct SiblingFilter<'a> {
 /// Used by processors like `make` and `cargo` where a manifest file (Makefile, Cargo.toml)
 /// represents a build unit and all files in its directory are inputs.
 /// All paths are relative to project root.
-pub fn discover_directory_products(
+pub(crate) fn discover_directory_products(
     graph: &mut BuildGraph,
     scan: &crate::config::ScanConfig,
     file_index: &FileIndex,
@@ -323,7 +324,7 @@ pub fn discover_directory_products(
 /// This is the standard way to implement checker discovery. See [`ProcessorType::Checker`]
 /// for details on the caching behavior.
 /// All paths are relative to project root.
-pub fn discover_checker_products(
+pub(crate) fn discover_checker_products(
     graph: &mut BuildGraph,
     scan: &crate::config::ScanConfig,
     file_index: &FileIndex,
@@ -350,7 +351,7 @@ pub fn discover_checker_products(
 /// Run a command in the parent directory of an anchor file (e.g., Makefile, Cargo.toml).
 /// Sets `current_dir` to the parent directory (unless it's the project root).
 /// Returns a display-friendly directory name for error messages.
-pub fn run_in_anchor_dir(cmd: &mut Command, anchor: &Path) -> Result<Output> {
+pub(crate) fn run_in_anchor_dir(cmd: &mut Command, anchor: &Path) -> Result<Output> {
     let anchor_dir = anchor.parent()
         .context("Anchor file has no parent directory")?;
     if !anchor_dir.as_os_str().is_empty() {
@@ -361,14 +362,14 @@ pub fn run_in_anchor_dir(cmd: &mut Command, anchor: &Path) -> Result<Output> {
 
 /// Format the parent directory of an anchor file for display.
 /// Returns `"."` for root-level files.
-pub fn anchor_display_dir(anchor: &Path) -> &str {
+pub(crate) fn anchor_display_dir(anchor: &Path) -> &str {
     anchor.parent()
         .and_then(|p| if p.as_os_str().is_empty() { None } else { p.to_str() })
         .unwrap_or(".")
 }
 
 /// Ensure a stub directory exists, creating it if necessary.
-pub fn ensure_stub_dir(stub_dir: &Path, processor_name: &str) -> Result<()> {
+pub(crate) fn ensure_stub_dir(stub_dir: &Path, processor_name: &str) -> Result<()> {
     if !stub_dir.exists() {
         fs::create_dir_all(stub_dir)
             .with_context(|| format!("Failed to create {} stub directory", processor_name))?;
@@ -380,7 +381,7 @@ pub fn ensure_stub_dir(stub_dir: &Path, processor_name: &str) -> Result<()> {
 ///
 /// Builds a command from the tool name, optional subcommand, config args, and file paths,
 /// then runs it and checks the output.
-pub fn run_checker(
+pub(crate) fn run_checker(
     tool: &str,
     subcommand: Option<&str>,
     args: &[String],
@@ -404,7 +405,7 @@ pub fn run_checker(
 ///
 /// Runs `batch_fn` with all input paths at once. On success, returns Ok for all products.
 /// On failure, the batch error is returned for all products (the tool's output shows the errors).
-pub fn execute_checker_batch<F>(
+pub(crate) fn execute_checker_batch<F>(
     products: &[&Product],
     batch_fn: F,
 ) -> Vec<Result<()>>

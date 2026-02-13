@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::config::ScanConfig;
 
+#[derive(Debug)]
 pub struct FileIndex {
     files: Vec<PathBuf>,
 }

@@ -141,10 +141,16 @@ pub fn watch(opts: &BuildOptions, interrupted: Arc<AtomicBool>) -> Result<()> {
                 println!("{}", color::red(&format!("Build error: {}", e)));
             }
 
-            // Re-register watches if paths changed (e.g., new scan dirs in config)
+            // Update watches if paths changed (e.g., new scan dirs in config)
             for path in &new_paths {
                 if !watch_paths.contains(path) {
                     register_watches(&mut watcher, std::slice::from_ref(path), opts.verbose);
+                }
+            }
+            // Unwatch paths that are no longer relevant
+            for path in &watch_paths {
+                if !new_paths.contains(path) {
+                    let _ = watcher.unwatch(path);
                 }
             }
             watch_paths = new_paths;
