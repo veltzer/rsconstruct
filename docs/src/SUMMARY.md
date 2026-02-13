@@ -27,6 +27,7 @@
 - [Design Notes](design.md)
 - [Cross-Processor Dependencies](cross-processor-dependencies.md)
 - [Architecture](architecture.md)
+- [Environment Variables](environment-variables.md)
 - [Processor Contract](processor-contract.md)
 - [Coding Standards](coding-standards.md)
 - [Suggestions](suggestions.md)
