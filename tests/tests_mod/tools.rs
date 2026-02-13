@@ -9,12 +9,9 @@ fn tools_list_shows_tools() {
     assert!(output.status.success(), "tools list failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // Template processor requires tera (built-in), so it may not list external tools.
-    // The command should at least succeed without errors.
-    // If tools are listed, they should show the processor name in parentheses.
-    if !stdout.is_empty() {
-        assert!(stdout.contains("("), "Expected processor name in parentheses for each tool");
-    }
+    // Template processor requires python3, so tools list always has output.
+    assert!(!stdout.is_empty(), "tools list should show at least one tool");
+    assert!(stdout.contains("("), "Expected processor name in parentheses for each tool");
 }
 
 #[test]
@@ -31,9 +28,12 @@ fn tools_list_all_includes_disabled() {
     let stdout_default = String::from_utf8_lossy(&output_default.stdout);
     let stdout_all = String::from_utf8_lossy(&output_all.stdout);
 
-    // -a should show at least as many tools as the default
-    assert!(stdout_all.len() >= stdout_default.len(),
-        "tools list -a should include at least as many tools as default");
+    // -a should show at least as many tool entries as the default
+    let count_default = stdout_default.lines().count();
+    let count_all = stdout_all.lines().count();
+    assert!(count_all >= count_default,
+        "tools list -a should include at least as many tools as default ({} vs {})",
+        count_all, count_default);
 }
 
 #[test]

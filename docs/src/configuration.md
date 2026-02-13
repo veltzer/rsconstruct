@@ -31,6 +31,23 @@ shells = ["bash"]
 Per-processor configuration is documented on each processor's page under [Processors](processors.md).
 Lua plugin configuration is documented under [Lua Plugins](plugins.md).
 
+## Variable substitution
+
+Define variables in a `[vars]` section and reference them using `${var_name}` syntax:
+
+```toml
+[vars]
+kernel_excludes = ["/kernel/", "/kernel_standalone/", "/examples_standalone/"]
+
+[processor.cppcheck]
+exclude_dirs = "${kernel_excludes}"
+
+[processor.cc_single_file]
+exclude_dirs = "${kernel_excludes}"
+```
+
+Variables are substituted before TOML parsing. The `"${var_name}"` (including quotes) is replaced with the TOML-serialized value, preserving types (arrays stay arrays, strings stay strings). Undefined variable references produce an error.
+
 ## Section details
 
 ### `[build]`

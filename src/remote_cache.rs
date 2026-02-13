@@ -155,7 +155,7 @@ impl HttpBackend {
     }
 
     fn full_url(&self, key: &str) -> String {
-        format!("{}/{}", self.base_url, key)
+        format!("{}/{}", self.base_url, key.trim_start_matches('/'))
     }
 }
 

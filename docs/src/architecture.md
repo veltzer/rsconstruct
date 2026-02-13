@@ -120,3 +120,51 @@ The cache lives in `.rsb/` and consists of:
 - `deps.redb` — redb database storing source file dependencies (see [Dependency Caching](dependency-caching.md))
 
 Cache restoration can use either hardlinks (fast, same filesystem) or copies (works across filesystems), configured via `restore_method`.
+
+## Caching and clean behavior
+
+The cache (`.rsb/`) stores build state to enable fast incremental builds:
+
+- **Generators**: Cache stores copies of output files. After `rsb clean`, outputs are deleted but cache remains. Next `rsb build` restores outputs from cache (fast hardlink/copy) instead of regenerating.
+
+- **Checkers**: No output files to cache. The cache entry itself serves as a "success marker". After `rsb clean` (nothing to delete), next `rsb build` sees the cache entry is valid and skips the check entirely (instant).
+
+This ensures `rsb clean && rsb build` is fast for both types — generators restore from cache, checkers skip entirely.
+
+## Subprocess execution
+
+RSB uses two internal functions to run external commands:
+
+- **`run_command()`** — by default captures stdout/stderr via OS pipes and only prints output on failure (quiet mode). Use `--show-output` flag to show all tool output. Use for compilers, linters, and any command where errors should be shown.
+
+- **`run_command_capture()`** — always captures stdout/stderr via pipes. Use only when you need to parse the output (dependency analysis, version checks, Python config loading). Returns the output for processing.
+
+### Parallel safety
+
+When running with `-j`, each thread spawns its own subprocess. Each subprocess gets its own OS-level pipes for stdout/stderr, so there is no interleaving of output between concurrent tools. On failure, the captured output for that specific tool is printed atomically. This design requires no shared buffers or cross-thread output coordination.
+
+## Path handling
+
+**All paths are relative to project root.** RSB assumes it is run from the project root directory (where `rsb.toml` lives).
+
+### Internal paths (always relative)
+- `Product.inputs` and `Product.outputs` — stored as relative paths
+- `FileIndex` — returns relative paths from `scan()` and `query()`
+- Cache keys (`Product.cache_key()`) — use relative paths, enabling cache sharing across different checkout locations
+- Cache entries (`CacheEntry.outputs[].path`) — stored as relative paths
+
+### Processor execution
+- Processors pass relative paths directly to external tools
+- Processors set `cmd.current_dir(project_root)` to ensure tools resolve paths correctly
+- `fs::read()`, `fs::write()`, etc. work directly with relative paths since cwd is project root
+
+### Exception: Processors requiring absolute paths
+If a processor absolutely must use absolute paths (e.g., for a tool that doesn't respect current directory), it should:
+1. Store the `project_root` in the processor struct
+2. Join paths with `project_root` only at execution time
+3. Never store absolute paths in `Product.inputs` or `Product.outputs`
+
+### Why relative paths?
+- **Cache portability** — cache keys don't include machine-specific absolute paths
+- **Remote cache sharing** — same project checked out to different paths can share cache
+- **Simpler code** — no need to strip prefixes for display or storage

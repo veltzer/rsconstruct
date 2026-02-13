@@ -246,6 +246,7 @@ int main() {
     let run_output = Command::new(project_path.join("out/cc_single_file/src/flagtest.elf"))
         .output()
         .expect("Failed to run flagtest");
+    assert!(run_output.status.success(), "flagtest exited with error");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
     assert!(stdout.trim() == "42",
         "Executable should output 42, got: {}", stdout.trim());
@@ -284,6 +285,7 @@ int main() {
     let run_output = Command::new(project_path.join("out/cc_single_file/src/mathtest.elf"))
         .output()
         .expect("Failed to run mathtest");
+    assert!(run_output.status.success(), "mathtest exited with error");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
     assert!(stdout.trim() == "12",
         "Executable should output 12, got: {}", stdout.trim());
@@ -321,6 +323,7 @@ int main() {
     let run_output = Command::new(project_path.join("out/cc_single_file/src/backtick.elf"))
         .output()
         .expect("Failed to run backtick");
+    assert!(run_output.status.success(), "backtick exited with error");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
     assert!(stdout.trim() == "99",
         "Executable should output 99, got: {}", stdout.trim());
@@ -356,6 +359,7 @@ int main() {
     let run_output = Command::new(project_path.join("out/cc_single_file/src/plain.elf"))
         .output()
         .expect("Failed to run plain");
+    assert!(run_output.status.success(), "plain exited with error");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
     assert!(stdout.trim() == "hello",
         "Executable should output hello, got: {}", stdout.trim());
@@ -392,6 +396,7 @@ int main() {
     let run_output = Command::new(project_path.join("out/cc_single_file/src/compilecmd.elf"))
         .output()
         .expect("Failed to run compilecmd");
+    assert!(run_output.status.success(), "compilecmd exited with error");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
     assert!(stdout.trim() == "77",
         "Executable should output 77, got: {}", stdout.trim());
@@ -429,6 +434,7 @@ int main() {
     let run_output = Command::new(project_path.join("out/cc_single_file/src/linkcmd.elf"))
         .output()
         .expect("Failed to run linkcmd");
+    assert!(run_output.status.success(), "linkcmd exited with error");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
     assert!(stdout.trim() == "12",
         "Executable should output 12, got: {}", stdout.trim());
@@ -468,6 +474,7 @@ int main() {
     let run_output = Command::new(project_path.join("out/cc_single_file/src/blockstar.elf"))
         .output()
         .expect("Failed to run blockstar");
+    assert!(run_output.status.success(), "blockstar exited with error");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
     assert!(stdout.trim() == "12",
         "Executable should output 12, got: {}", stdout.trim());
@@ -504,6 +511,7 @@ int main() {
     let run_output = Command::new(project_path.join("out/cc_single_file/src/compileshell.elf"))
         .output()
         .expect("Failed to run compileshell");
+    assert!(run_output.status.success(), "compileshell exited with error");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
     assert!(stdout.trim() == "77",
         "Executable should output 77, got: {}", stdout.trim());
@@ -541,6 +549,7 @@ int main() {
     let run_output = Command::new(project_path.join("out/cc_single_file/src/linkshell.elf"))
         .output()
         .expect("Failed to run linkshell");
+    assert!(run_output.status.success(), "linkshell exited with error");
     let stdout = String::from_utf8_lossy(&run_output.stdout);
     assert!(stdout.trim() == "7",
         "Executable should output 7, got: {}", stdout.trim());

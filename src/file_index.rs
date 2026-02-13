@@ -125,9 +125,9 @@ impl FileIndex {
 
         if !recursive {
             // Filter to max_depth=1 from scan root: only files directly in root
-            let root_for_check = if dir.is_empty() { None } else { Some(root.as_path()) };
+            let root_for_check = if dir.is_empty() { Path::new("") } else { root.as_path() };
             results.retain(|path| {
-                path.parent() == root_for_check
+                path.parent() == Some(root_for_check)
             });
         }
 
