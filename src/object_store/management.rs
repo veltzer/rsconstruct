@@ -155,7 +155,9 @@ impl ObjectStore {
                         }
                     }
                 }
-                let _ = write_txn.commit();
+                if write_txn.commit().is_err() {
+                    count = 0;
+                }
             }
 
         count

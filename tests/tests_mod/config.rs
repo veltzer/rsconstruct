@@ -25,8 +25,8 @@ fn config_show_reflects_project_config() {
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // setup_test_project enables only "template", so the output should reflect that
-    assert!(stdout.contains("template"), "Expected template processor in config output");
+    // setup_test_project enables only "tera", so the output should reflect that
+    assert!(stdout.contains("tera"), "Expected tera processor in config output");
 }
 
 #[test]

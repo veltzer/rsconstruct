@@ -297,12 +297,12 @@ fn init_project() -> Result<()> {
 
 [processor]
 # auto_detect = true
-# enabled = ["template", "ruff", "pylint", "cc_single_file", "cppcheck", "shellcheck", "spellcheck", "make"]
+# enabled = ["tera", "ruff", "pylint", "cc_single_file", "cppcheck", "shellcheck", "spellcheck", "make"]
 
 [cache]
 # restore_method = "hardlink"  # or "copy"
 
-[processor.template]
+[processor.tera]
 # strict = true
 # scan_dir = "templates"
 # extensions = [".tera"]

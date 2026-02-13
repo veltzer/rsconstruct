@@ -43,7 +43,7 @@ fn complete_from_config() {
     let project_path = temp_dir.path();
 
     // setup_test_project doesn't set completions config, add it
-    let config = "[processor]\nenabled = [\"template\"]\n\n[completions]\nshells = [\"bash\"]\n";
+    let config = "[processor]\nenabled = [\"tera\"]\n\n[completions]\nshells = [\"bash\"]\n";
     std::fs::write(project_path.join("rsb.toml"), config).expect("Failed to write rsb.toml");
 
     // Running complete without arguments should use config
