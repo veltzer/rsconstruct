@@ -124,10 +124,13 @@ impl FileIndex {
         let mut results = self.query(&root, &ext_refs, &exclude_dir_refs, &exclude_file_refs, &exclude_path_refs);
 
         if !recursive {
-            // Filter to max_depth=1 from scan root: only files directly in root
-            let root_for_check = if dir.is_empty() { Path::new("") } else { root.as_path() };
+            // Filter to depth 1 from scan root: keep only files whose path has
+            // exactly one more component than the root.
+            // e.g. root="src" keeps "src/main.c" but not "src/sub/foo.c"
+            //      root=""    keeps "README.md"   but not "sub/foo.c"
+            let root_depth = root.components().count();
             results.retain(|path| {
-                path.parent() == Some(root_for_check)
+                path.components().count() == root_depth + 1
             });
         }
 

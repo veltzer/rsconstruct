@@ -97,6 +97,8 @@ pub fn emit(event: &BuildEvent) {
 
     let json = serde_json::to_string(event).expect(errors::JSON_SERIALIZE);
     let mut stdout = io::stdout().lock();
+    // Intentionally discard write errors: stdout may be a broken pipe (SIGPIPE)
+    // when the consumer closes early, which is not an error we can recover from.
     let _ = writeln!(stdout, "{}", json);
 }
 

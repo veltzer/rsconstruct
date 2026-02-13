@@ -51,7 +51,8 @@ fn force_rebuild() {
     ).expect("Failed to write template");
 
     // First build
-    run_rsb(project_path, &["build"]);
+    let first_build = run_rsb(project_path, &["build"]);
+    assert!(first_build.status.success(), "First build failed: {}", String::from_utf8_lossy(&first_build.stderr));
 
     // Force rebuild - should process, not skip
     let result = run_rsb_json(project_path, &["build", "--force"]);
