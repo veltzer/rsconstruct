@@ -405,6 +405,7 @@ impl<'a> Executor<'a> {
                     match processor.execute(product) {
                         Ok(()) => {
                             let duration = product_start.elapsed();
+                            last_error = None; // Clear before handle_success to avoid double-failure if caching fails
 
                             if !self.handle_success(&ctx, lctx.object_store, Some(duration)) {
                                 // cache_outputs failed and error was handled
@@ -442,7 +443,6 @@ impl<'a> Executor<'a> {
                                     });
                                 }
                             }
-                            last_error = None;
                             break;
                         }
                         Err(e) => {

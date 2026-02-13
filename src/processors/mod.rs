@@ -154,6 +154,12 @@ fn run_command_inner(cmd: &mut Command, inherit_stdio: bool, print_on_failure: b
 
         let mut interrupt_rx = get_interrupt_receiver();
 
+        // Close race window: re-check after subscribing, since an interrupt
+        // between the INTERRUPTED check above and subscribe() would be missed.
+        if INTERRUPTED.load(Ordering::SeqCst) {
+            anyhow::bail!("Interrupted");
+        }
+
         tokio::select! {
             biased;
 

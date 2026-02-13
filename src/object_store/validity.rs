@@ -98,14 +98,19 @@ impl ObjectStore {
             return ExplainAction::Skip;
         }
 
-        // Check outputs
+        // Check outputs — must verify ALL missing outputs are restorable before
+        // reporting Restore, otherwise the actual restore would fail and fall through
+        // to a rebuild.
+        let mut first_missing: Option<String> = None;
         for output_path in output_paths {
             if !output_path.exists() {
                 let rel_path = Self::path_string(output_path);
                 let cached_output = entry.outputs.iter().find(|o| o.path == rel_path);
                 match cached_output {
                     Some(out) if self.has_object(&out.checksum) => {
-                        return ExplainAction::Restore(RebuildReason::OutputMissing(rel_path));
+                        if first_missing.is_none() {
+                            first_missing = Some(rel_path);
+                        }
                     }
                     _ => {
                         return ExplainAction::Rebuild(RebuildReason::OutputMissing(rel_path));
@@ -114,6 +119,9 @@ impl ObjectStore {
             }
         }
 
-        ExplainAction::Skip
+        match first_missing {
+            Some(path) => ExplainAction::Restore(RebuildReason::OutputMissing(path)),
+            None => ExplainAction::Skip,
+        }
     }
 }

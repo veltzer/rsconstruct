@@ -449,11 +449,11 @@ impl BuildGraph {
             .map(Self::processor_node_id)
             .collect();
 
-        if !tera_procs.is_empty() {
-            let _ = writeln!(buf, "\n    style {} fill:#add8e6", tera_procs.join(","));
+        for proc_id in &tera_procs {
+            let _ = writeln!(buf, "\n    style {} fill:#add8e6", proc_id);
         }
-        if !cc_procs.is_empty() {
-            let _ = writeln!(buf, "\n    style {} fill:#ffa07a", cc_procs.join(","));
+        for proc_id in &cc_procs {
+            let _ = writeln!(buf, "\n    style {} fill:#ffa07a", proc_id);
         }
 
         buf.truncate(buf.trim_end().len());

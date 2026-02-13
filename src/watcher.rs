@@ -17,10 +17,8 @@ fn should_ignore(path: &Path) -> bool {
         return true;
     }
 
-    let path_str = path.to_string_lossy();
-
-    // Ignore out/ directory (generated stubs)
-    if path_str.contains("/out/") || path_str.starts_with("out/") {
+    // Ignore out/ directory (match as a path component, not substring)
+    if path.components().any(|c| c.as_os_str() == "out") {
         return true;
     }
 

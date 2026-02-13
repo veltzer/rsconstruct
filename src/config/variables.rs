@@ -8,7 +8,7 @@ use crate::errors;
 /// This is used for variable substitution to insert values into the config.
 pub(super) fn value_to_toml_inline(value: &toml::Value) -> String {
     match value {
-        toml::Value::String(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
+        toml::Value::String(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "\\r").replace('\t', "\\t")),
         toml::Value::Integer(i) => i.to_string(),
         toml::Value::Float(f) => f.to_string(),
         toml::Value::Boolean(b) => b.to_string(),
@@ -27,6 +27,26 @@ pub(super) fn value_to_toml_inline(value: &toml::Value) -> String {
     }
 }
 
+/// Check if a trimmed line is a TOML section header (e.g., `[section]` or `[section] # comment`).
+fn is_section_header(trimmed: &str) -> bool {
+    if !trimmed.starts_with('[') {
+        return false;
+    }
+    // Strip trailing comment: "[section] # comment" -> "[section]"
+    let header_part = trimmed.split('#').next().unwrap_or(trimmed).trim_end();
+    header_part.ends_with(']')
+}
+
+/// Check if a trimmed line is specifically the `[vars]` section header.
+fn is_vars_header(trimmed: &str) -> bool {
+    if !trimmed.starts_with("[vars]") {
+        return false;
+    }
+    // Allow trailing whitespace/comments: "[vars]", "[vars] # comment"
+    let rest = trimmed["[vars]".len()..].trim_start();
+    rest.is_empty() || rest.starts_with('#')
+}
+
 /// Remove the [vars] section from TOML content.
 /// Removes from [vars] header until the next section header or EOF.
 pub(super) fn remove_vars_section(content: &str) -> String {
@@ -34,11 +54,11 @@ pub(super) fn remove_vars_section(content: &str) -> String {
     let lines: Vec<&str> = content.lines()
         .filter(|line| {
             let trimmed = line.trim();
-            if trimmed == "[vars]" {
+            if is_vars_header(trimmed) {
                 in_vars_section = true;
                 return false;
             }
-            if in_vars_section && trimmed.starts_with('[') && trimmed.ends_with(']') {
+            if in_vars_section && is_section_header(trimmed) {
                 in_vars_section = false;
             }
             !in_vars_section
@@ -57,12 +77,12 @@ pub(super) fn extract_var_names(content: &str) -> Vec<String> {
 
     for line in content.lines() {
         let trimmed = line.trim();
-        if trimmed == "[vars]" {
+        if is_vars_header(trimmed) {
             in_vars_section = true;
             continue;
         }
         // Check if we hit another section header
-        if in_vars_section && trimmed.starts_with('[') && trimmed.ends_with(']') {
+        if in_vars_section && is_section_header(trimmed) {
             in_vars_section = false;
             continue;
         }
