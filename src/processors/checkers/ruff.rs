@@ -1,21 +1,17 @@
 use anyhow::Result;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::config::RuffConfig;
 use crate::graph::Product;
 use crate::processors::run_checker;
 
 pub struct RuffProcessor {
-    project_root: PathBuf,
     config: RuffConfig,
 }
 
 impl RuffProcessor {
-    pub fn new(project_root: PathBuf, config: RuffConfig) -> Self {
-        Self {
-            project_root,
-            config,
-        }
+    pub fn new(config: RuffConfig) -> Self {
+        Self { config }
     }
 
     fn execute_product(&self, product: &Product) -> Result<()> {
@@ -24,7 +20,7 @@ impl RuffProcessor {
 
     /// Run the configured linter on one or more files
     fn lint_files(&self, py_files: &[&Path]) -> Result<()> {
-        run_checker(&self.config.linter, Some("check"), &self.config.args, py_files, &self.project_root)
+        run_checker(&self.config.linter, Some("check"), &self.config.args, py_files)
     }
 }
 

@@ -23,9 +23,9 @@ use super::DepAnalyzer;
 /// C/C++ dependency analyzer that scans source files for #include directives.
 pub struct CppDepAnalyzer {
     config: CppAnalyzerConfig,
-    project_root: PathBuf,
-    canonical_project_root: PathBuf,
     verbose: bool,
+    /// Cached canonical project root path (for stripping absolute prefixes from compiler output)
+    canonical_root: OnceLock<PathBuf>,
     /// Cached system include paths from the C compiler
     system_include_paths_c: OnceLock<Vec<PathBuf>>,
     /// Cached system include paths from the C++ compiler
@@ -37,18 +37,23 @@ pub struct CppDepAnalyzer {
 }
 
 impl CppDepAnalyzer {
-    pub fn new(config: CppAnalyzerConfig, project_root: PathBuf, verbose: bool) -> Self {
-        let canonical_project_root = project_root.canonicalize().unwrap_or_else(|_| project_root.clone());
+    pub fn new(config: CppAnalyzerConfig, verbose: bool) -> Self {
         Self {
             config,
-            project_root,
-            canonical_project_root,
             verbose,
+            canonical_root: OnceLock::new(),
             system_include_paths_c: OnceLock::new(),
             system_include_paths_cxx: OnceLock::new(),
             pkg_config_include_paths: OnceLock::new(),
             command_include_paths: OnceLock::new(),
         }
+    }
+
+    /// Get the canonical project root path (lazily computed).
+    fn canonical_root(&self) -> &Path {
+        self.canonical_root.get_or_init(|| {
+            Path::new(".").canonicalize().unwrap_or_else(|_| PathBuf::from("."))
+        })
     }
 
     /// Query pkg-config for include paths from configured packages.
@@ -62,7 +67,6 @@ impl CppDepAnalyzer {
             let mut cmd = Command::new("pkg-config");
             cmd.arg("--cflags-only-I");
             cmd.args(&self.config.pkg_config);
-            cmd.current_dir(&self.project_root);
 
             if self.verbose {
                 eprintln!("[cpp] Querying pkg-config: {}", format_command(&cmd));
@@ -119,7 +123,6 @@ impl CppDepAnalyzer {
                 let mut cmd = Command::new("sh");
                 cmd.arg("-c");
                 cmd.arg(cmd_str);
-                cmd.current_dir(&self.project_root);
 
                 if self.verbose {
                     eprintln!("[cpp] Running include path command: sh -c '{}'", cmd_str);
@@ -183,7 +186,6 @@ impl CppDepAnalyzer {
 
             let mut cmd = Command::new(compiler);
             cmd.args(["-E", "-Wp,-v", lang_flag, "/dev/null"]);
-            cmd.current_dir(&self.project_root);
 
             if self.verbose {
                 eprintln!("[cpp] Querying {} include paths: {}", compiler, format_command(&cmd));
@@ -247,7 +249,7 @@ impl CppDepAnalyzer {
         };
 
         // Check if it starts with the project root
-        canonical.starts_with(&self.canonical_project_root)
+        canonical.starts_with(self.canonical_root())
     }
 
     /// Check if a path should be excluded based on exclude_dirs config.
@@ -355,10 +357,11 @@ impl CppDepAnalyzer {
                     if self.is_project_local(&header_path) {
                         let relative = if header_path.is_absolute() {
                             // Try to strip project root prefix
-                            if let Ok(rel) = header_path.strip_prefix(&self.project_root) {
+                            let canonical_root = self.canonical_root();
+                            if let Ok(rel) = header_path.strip_prefix(canonical_root) {
                                 rel.to_path_buf()
                             } else if let Ok(canonical) = header_path.canonicalize() {
-                                canonical.strip_prefix(&self.canonical_project_root)
+                                canonical.strip_prefix(canonical_root)
                                     .map(|p| p.to_path_buf())
                                     .unwrap_or_else(|_| header_path.clone())
                             } else {
@@ -467,7 +470,6 @@ impl CppDepAnalyzer {
         }
 
         cmd.arg(source);
-        cmd.current_dir(&self.project_root);
 
         if self.verbose {
             eprintln!("[cpp] {}", format_command(&cmd));
@@ -505,6 +507,7 @@ impl CppDepAnalyzer {
         }
 
         // First token is the source file; remaining are headers
+        let canonical_root = self.canonical_root();
         tokens[1..]
             .iter()
             .filter_map(|token| {
@@ -514,10 +517,10 @@ impl CppDepAnalyzer {
                 if path.is_absolute() {
                     if self.is_project_local(&path) {
                         // Convert to relative path
-                        if let Ok(rel) = path.strip_prefix(&self.project_root) {
+                        if let Ok(rel) = path.strip_prefix(canonical_root) {
                             Some(rel.to_path_buf())
                         } else if let Ok(canonical) = path.canonicalize() {
-                            canonical.strip_prefix(&self.canonical_project_root)
+                            canonical.strip_prefix(canonical_root)
                                 .ok()
                                 .map(|p| p.to_path_buf())
                         } else {

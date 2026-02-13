@@ -13,18 +13,16 @@ use crate::processors::{ProductDiscovery, scan_root, clean_outputs, format_comma
 use source_flags::{SourceFlags, parse_source_flags, should_exclude_for_profile};
 
 pub struct CcProcessor {
-    project_root: PathBuf,
     config: CcConfig,
     profiles: Vec<CompilerProfile>,
     output_dir: PathBuf,
 }
 
 impl CcProcessor {
-    pub fn new(project_root: PathBuf, config: CcConfig) -> Self {
+    pub fn new(config: CcConfig) -> Self {
         let profiles = config.get_compiler_profiles();
         let output_dir = PathBuf::from("out/cc_single_file");
         Self {
-            project_root,
             config,
             profiles,
             output_dir,
@@ -114,7 +112,6 @@ impl CcProcessor {
         for arg in &source_flags.link_args_after {
             cmd.arg(arg);
         }
-        cmd.current_dir(&self.project_root);
 
         if crate::runtime_flags::show_child_processes() {
             let profile_tag = if profile.name.is_empty() { String::new() } else { format!(":{}", profile.name) };

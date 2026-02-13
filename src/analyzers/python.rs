@@ -18,13 +18,11 @@ use crate::graph::BuildGraph;
 use super::DepAnalyzer;
 
 /// Python dependency analyzer that scans source files for import statements.
-pub struct PythonDepAnalyzer {
-    project_root: PathBuf,
-}
+pub struct PythonDepAnalyzer;
 
 impl PythonDepAnalyzer {
-    pub fn new(project_root: PathBuf) -> Self {
-        Self { project_root }
+    pub fn new() -> Self {
+        Self
     }
 
     /// Scan a Python file for import statements.
@@ -102,9 +100,8 @@ impl PythonDepAnalyzer {
             if file_index.contains(candidate) {
                 return Some(candidate.clone());
             }
-            // Also check absolute path
-            let abs_candidate = self.project_root.join(candidate);
-            if abs_candidate.is_file() {
+            // Also check if the file exists on disk (cwd is project root)
+            if candidate.is_file() {
                 return Some(candidate.clone());
             }
         }

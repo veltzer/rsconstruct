@@ -27,7 +27,7 @@ impl Builder {
         executor.clean(&graph)?;
 
         // Remove empty subdirectories under out/
-        let out_dir = self.project_root.join("out");
+        let out_dir = std::path::PathBuf::from("out");
         if out_dir.is_dir() {
             for entry in fs::read_dir(&out_dir)? {
                 let entry = entry?;
@@ -48,16 +48,16 @@ impl Builder {
     pub fn distclean(&self) -> Result<()> {
         println!("{}", color::bold("Removing build directories..."));
 
-        let rsb_dir = self.project_root.join(".rsb");
+        let rsb_dir = std::path::Path::new(".rsb");
         if rsb_dir.exists() {
-            fs::remove_dir_all(&rsb_dir)
+            fs::remove_dir_all(rsb_dir)
                 .context("Failed to remove .rsb/ directory")?;
             println!("Removed {}", rsb_dir.display());
         }
 
-        let out_dir = self.project_root.join("out");
+        let out_dir = std::path::Path::new("out");
         if out_dir.exists() {
-            fs::remove_dir_all(&out_dir)
+            fs::remove_dir_all(out_dir)
                 .context("Failed to remove out/ directory")?;
             println!("Removed {}", out_dir.display());
         }
@@ -70,8 +70,7 @@ impl Builder {
     pub fn hardclean(&self) -> Result<()> {
         use std::process::Command;
 
-        let git_dir = self.project_root.join(".git");
-        if !git_dir.exists() {
+        if !std::path::Path::new(".git").exists() {
             bail!("Not a git repository. Hardclean requires a git repository.");
         }
 
@@ -79,7 +78,6 @@ impl Builder {
 
         let output = Command::new("git")
             .args(["clean", "-qffxd"])
-            .current_dir(&self.project_root)
             .output()
             .context("Failed to run git clean")?;
 

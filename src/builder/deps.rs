@@ -41,7 +41,7 @@ impl Builder {
                     }
                 } else {
                     // Clear the entire dependency cache
-                    let deps_file = self.project_root.join(".rsb").join("deps.redb");
+                    let deps_file = PathBuf::from(".rsb/deps.redb");
                     if deps_file.exists() {
                         fs::remove_file(&deps_file)
                             .context("Failed to remove dependency cache")?;

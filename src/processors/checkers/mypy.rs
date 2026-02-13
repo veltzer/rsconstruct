@@ -1,21 +1,17 @@
 use anyhow::Result;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::config::MypyConfig;
 use crate::graph::Product;
 use crate::processors::{run_checker, config_file_inputs};
 
 pub struct MypyProcessor {
-    project_root: PathBuf,
     config: MypyConfig,
 }
 
 impl MypyProcessor {
-    pub fn new(project_root: PathBuf, config: MypyConfig) -> Self {
-        Self {
-            project_root,
-            config,
-        }
+    pub fn new(config: MypyConfig) -> Self {
+        Self { config }
     }
 
     fn execute_product(&self, product: &Product) -> Result<()> {
@@ -29,7 +25,7 @@ impl MypyProcessor {
 
     /// Run mypy on one or more files
     fn check_files(&self, py_files: &[&Path]) -> Result<()> {
-        run_checker(&self.config.checker, None, &self.config.args, py_files, &self.project_root)
+        run_checker(&self.config.checker, None, &self.config.args, py_files)
     }
 }
 

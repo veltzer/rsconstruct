@@ -439,22 +439,22 @@ pub(crate) struct GraphConfig {
 }
 
 impl Config {
-    pub(crate) fn require_config(project_root: &Path) -> Result<()> {
-        let config_path = project_root.join(CONFIG_FILE);
+    pub(crate) fn require_config() -> Result<()> {
+        let config_path = Path::new(CONFIG_FILE);
         if !config_path.exists() {
             return Err(crate::exit_code::RsbError::new(
                 crate::exit_code::RsbExitCode::ConfigError,
-                format!("No rsb.toml found in {}. Run 'rsb init' to create one.", project_root.display()),
+                "No rsb.toml found. Run 'rsb init' to create one.",
             ).into());
         }
         Ok(())
     }
 
-    pub(crate) fn load(project_root: &Path) -> Result<Self> {
-        let config_path = project_root.join(CONFIG_FILE);
+    pub(crate) fn load() -> Result<Self> {
+        let config_path = Path::new(CONFIG_FILE);
 
         let mut config = if config_path.exists() {
-            let content = fs::read_to_string(&config_path)
+            let content = fs::read_to_string(config_path)
                 .with_context(|| format!("Failed to read config file: {}", config_path.display()))?;
             let substituted = substitute_variables(&content)
                 .with_context(|| format!("Failed to substitute variables in: {}", config_path.display()))?;

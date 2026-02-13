@@ -220,7 +220,7 @@ fn run() -> Result<()> {
         Commands::Complete { shells } => {
             let shells_to_generate = if shells.is_empty() {
                 // Load from config file
-                let config = Config::load(&env::current_dir()?)?;
+                let config = Config::load()?;
                 let mut parsed_shells = Vec::new();
                 for shell_name in &config.completions.shells {
                     match parse_shell(shell_name) {

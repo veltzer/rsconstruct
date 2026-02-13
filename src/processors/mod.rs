@@ -379,13 +379,12 @@ pub fn ensure_stub_dir(stub_dir: &Path, processor_name: &str) -> Result<()> {
 /// Run a checker tool on one or more files.
 ///
 /// Builds a command from the tool name, optional subcommand, config args, and file paths,
-/// then runs it in the project root directory and checks the output.
+/// then runs it and checks the output.
 pub fn run_checker(
     tool: &str,
     subcommand: Option<&str>,
     args: &[String],
     files: &[&Path],
-    project_root: &Path,
 ) -> Result<()> {
     let mut cmd = Command::new(tool);
     if let Some(sub) = subcommand {
@@ -397,7 +396,6 @@ pub fn run_checker(
     for file in files {
         cmd.arg(file);
     }
-    cmd.current_dir(project_root);
     let output = run_command(&mut cmd)?;
     check_command_output(&output, tool)
 }

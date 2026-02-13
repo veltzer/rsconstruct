@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std::path::PathBuf;
 use std::process::Command;
 
 use crate::config::ClangTidyConfig;
@@ -7,16 +6,12 @@ use crate::graph::Product;
 use crate::processors::{scan_root_valid, run_command, check_command_output};
 
 pub struct ClangTidyProcessor {
-    project_root: PathBuf,
     config: ClangTidyConfig,
 }
 
 impl ClangTidyProcessor {
-    pub fn new(project_root: PathBuf, config: ClangTidyConfig) -> Self {
-        Self {
-            project_root,
-            config,
-        }
+    pub fn new(config: ClangTidyConfig) -> Self {
+        Self { config }
     }
 
     fn should_process(&self) -> bool {
@@ -34,7 +29,6 @@ impl ClangTidyProcessor {
         for arg in &self.config.compiler_args {
             cmd.arg(arg);
         }
-        cmd.current_dir(&self.project_root);
 
         let output = run_command(&mut cmd)?;
         check_command_output(&output, "clang-tidy")

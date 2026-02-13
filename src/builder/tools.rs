@@ -48,7 +48,7 @@ impl Builder {
         if tool_commands.is_empty() {
             return Ok(());
         }
-        tool_lock::verify_lock_file(&self.project_root, &tool_commands)
+        tool_lock::verify_lock_file(&tool_commands)
     }
 
     /// Handle `rsb tools` subcommands
@@ -103,7 +103,7 @@ impl Builder {
                 );
 
                 if check {
-                    tool_lock::verify_lock_file(&self.project_root, &tool_commands)?;
+                    tool_lock::verify_lock_file(&tool_commands)?;
                     println!("{}", color::green("Tool versions match lock file."));
                 } else {
                     let lock = tool_lock::create_lock(&tool_commands)?;
@@ -111,7 +111,7 @@ impl Builder {
                         let first_line = info.version_output.lines().next().unwrap_or("");
                         println!("{} {} {}", name, color::green("locked"), color::dim(first_line));
                     }
-                    tool_lock::write_lock_file(&self.project_root, &lock)?;
+                    tool_lock::write_lock_file(&lock)?;
                     println!("Wrote {}", color::bold(".tools.versions"));
                 }
             }

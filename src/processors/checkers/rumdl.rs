@@ -1,21 +1,17 @@
 use anyhow::Result;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::config::RumdlConfig;
 use crate::graph::Product;
 use crate::processors::run_checker;
 
 pub struct RumdlProcessor {
-    project_root: PathBuf,
     config: RumdlConfig,
 }
 
 impl RumdlProcessor {
-    pub fn new(project_root: PathBuf, config: RumdlConfig) -> Self {
-        Self {
-            project_root,
-            config,
-        }
+    pub fn new(config: RumdlConfig) -> Self {
+        Self { config }
     }
 
     fn execute_product(&self, product: &Product) -> Result<()> {
@@ -24,7 +20,7 @@ impl RumdlProcessor {
 
     /// Run rumdl on one or more files
     fn lint_files(&self, files: &[&Path]) -> Result<()> {
-        run_checker(&self.config.linter, Some("check"), &self.config.args, files, &self.project_root)
+        run_checker(&self.config.linter, Some("check"), &self.config.args, files)
     }
 }
 

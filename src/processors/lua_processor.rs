@@ -18,7 +18,6 @@ pub struct LuaProcessor {
     name: String,
     description: String,
     lua: Lua,
-    project_root: PathBuf,
     stub_dir: PathBuf,
     config_value: toml::Value,
     scan_config: ScanConfig,
@@ -36,7 +35,6 @@ impl LuaProcessor {
     pub fn new(
         name: String,
         script_path: &Path,
-        project_root: PathBuf,
         config_value: toml::Value,
     ) -> Result<Self> {
         let lua = Lua::new();
@@ -65,13 +63,12 @@ impl LuaProcessor {
         // Extract scan config from the TOML config value
         let scan_config = scan_config_from_toml(&config_value, "", &[], &[]);
 
-        let stub_dir = project_root.join("out").join(&name);
+        let stub_dir = PathBuf::from("out").join(&name);
 
         Ok(Self {
             name,
             description,
             lua,
-            project_root,
             stub_dir,
             config_value,
             scan_config,
@@ -81,17 +78,16 @@ impl LuaProcessor {
     /// Discover all Lua plugins in the plugins directory.
     /// Returns a Vec of (name, LuaProcessor) pairs.
     pub fn discover_plugins(
-        project_root: &Path,
         plugins_dir: &str,
         extra_configs: &std::collections::HashMap<String, toml::Value>,
     ) -> Result<Vec<(String, LuaProcessor)>> {
-        let dir = project_root.join(plugins_dir);
+        let dir = Path::new(plugins_dir);
         if !dir.is_dir() {
             return Ok(Vec::new());
         }
 
         let mut plugins = Vec::new();
-        let mut entries: Vec<_> = fs::read_dir(&dir)
+        let mut entries: Vec<_> = fs::read_dir(dir)
             .map_err(|e| anyhow::anyhow!("Failed to read plugins directory '{}': {}", dir.display(), e))?
             .filter_map(|e| e.ok())
             .collect();
@@ -116,7 +112,6 @@ impl LuaProcessor {
                 let proc = LuaProcessor::new(
                     name.clone(),
                     &path,
-                    project_root.to_path_buf(),
                     config_value,
                 )?;
                 plugins.push((name, proc));
@@ -394,16 +389,15 @@ impl ProductDiscovery for LuaProcessor {
             format!("Failed to convert config for plugin '{}'", self.name),
         )?;
 
-        let project_root_str = self.project_root.to_string_lossy().to_string();
-
         // Call Lua discover(project_root, config, files)
+        // project_root is always "." since RSB runs from the project root
         let discover_fn: LuaFunction = lua_context(
             self.lua.globals().get("discover"),
             format!("Lua plugin '{}' must define a discover() function", self.name),
         )?;
 
         let products_table: LuaTable = lua_context(
-            discover_fn.call((project_root_str, config_lua, files_table)),
+            discover_fn.call((".".to_string(), config_lua, files_table)),
             format!("Lua plugin '{}': discover() failed", self.name),
         )?;
 

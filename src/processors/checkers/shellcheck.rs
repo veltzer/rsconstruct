@@ -1,21 +1,17 @@
 use anyhow::Result;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::config::ShellcheckConfig;
 use crate::graph::Product;
 use crate::processors::{scan_root_valid, run_checker};
 
 pub struct ShellcheckProcessor {
-    project_root: PathBuf,
     config: ShellcheckConfig,
 }
 
 impl ShellcheckProcessor {
-    pub fn new(project_root: PathBuf, config: ShellcheckConfig) -> Self {
-        Self {
-            project_root,
-            config,
-        }
+    pub fn new(config: ShellcheckConfig) -> Self {
+        Self { config }
     }
 
     fn should_process(&self) -> bool {
@@ -28,7 +24,7 @@ impl ShellcheckProcessor {
 
     /// Run shellcheck on one or more files
     fn check_files(&self, files: &[&Path]) -> Result<()> {
-        run_checker(&self.config.checker, None, &self.config.args, files, &self.project_root)
+        run_checker(&self.config.checker, None, &self.config.args, files)
     }
 }
 

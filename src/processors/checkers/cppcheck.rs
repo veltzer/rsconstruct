@@ -1,21 +1,16 @@
 use anyhow::Result;
-use std::path::PathBuf;
 
 use crate::config::CppcheckConfig;
 use crate::graph::Product;
 use crate::processors::{scan_root_valid, run_checker};
 
 pub struct CppcheckProcessor {
-    project_root: PathBuf,
     config: CppcheckConfig,
 }
 
 impl CppcheckProcessor {
-    pub fn new(project_root: PathBuf, config: CppcheckConfig) -> Self {
-        Self {
-            project_root,
-            config,
-        }
+    pub fn new(config: CppcheckConfig) -> Self {
+        Self { config }
     }
 
     fn should_process(&self) -> bool {
@@ -23,7 +18,7 @@ impl CppcheckProcessor {
     }
 
     fn execute_product(&self, product: &Product) -> Result<()> {
-        run_checker("cppcheck", None, &self.config.args, &[product.primary_input()], &self.project_root)
+        run_checker("cppcheck", None, &self.config.args, &[product.primary_input()])
     }
 }
 

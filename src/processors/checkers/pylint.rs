@@ -1,21 +1,17 @@
 use anyhow::Result;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::config::PylintConfig;
 use crate::graph::Product;
 use crate::processors::{run_checker, config_file_inputs};
 
 pub struct PylintProcessor {
-    project_root: PathBuf,
     config: PylintConfig,
 }
 
 impl PylintProcessor {
-    pub fn new(project_root: PathBuf, config: PylintConfig) -> Self {
-        Self {
-            project_root,
-            config,
-        }
+    pub fn new(config: PylintConfig) -> Self {
+        Self { config }
     }
 
     fn execute_product(&self, product: &Product) -> Result<()> {
@@ -29,7 +25,7 @@ impl PylintProcessor {
 
     /// Run pylint on one or more files
     fn lint_files(&self, py_files: &[&Path]) -> Result<()> {
-        run_checker("pylint", None, &self.config.args, py_files, &self.project_root)
+        run_checker("pylint", None, &self.config.args, py_files)
     }
 }
 

@@ -84,7 +84,7 @@ pub struct TeraProcessor {
 }
 
 impl TeraProcessor {
-    pub fn new(_project_root: PathBuf, config: TeraConfig) -> Result<Self> {
+    pub fn new(config: TeraConfig) -> Result<Self> {
         Ok(Self {
             config,
         })

@@ -17,12 +17,12 @@ impl FileIndex {
 }
 
 impl FileIndex {
-    /// Build a file index by walking the project root once.
+    /// Build a file index by walking the current directory once.
     /// Uses `ignore::WalkBuilder` which natively handles `.gitignore` and
     /// `.rsbignore` (via `add_custom_ignore_filename`).
-    /// All paths are stored relative to project_root.
-    pub fn build(project_root: &Path) -> Result<Self> {
-        let walker = ignore::WalkBuilder::new(project_root)
+    /// All paths are stored relative to project root (cwd).
+    pub fn build() -> Result<Self> {
+        let walker = ignore::WalkBuilder::new(".")
             .add_custom_ignore_filename(".rsbignore")
             .hidden(false) // don't skip hidden files by default (let .gitignore handle it)
             .build();
@@ -32,8 +32,8 @@ impl FileIndex {
             let entry = entry.context("Failed to read directory entry during file indexing")?;
             if entry.file_type().is_some_and(|ft| ft.is_file()) {
                 let path = entry.into_path();
-                // Store relative paths
-                let relative = path.strip_prefix(project_root)
+                // Store relative paths (strip "./" prefix)
+                let relative = path.strip_prefix(".")
                     .unwrap_or(&path)
                     .to_path_buf();
                 files.push(relative);

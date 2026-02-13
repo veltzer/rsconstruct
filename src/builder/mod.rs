@@ -64,7 +64,6 @@ struct ProductStatusLabels<'a> {
 }
 
 pub struct Builder {
-    project_root: PathBuf,
     object_store: ObjectStore,
     config: Config,
     file_index: FileIndex,
@@ -72,9 +71,8 @@ pub struct Builder {
 
 impl Builder {
     pub fn new() -> Result<Self> {
-        let project_root = std::env::current_dir()?;
-        Config::require_config(&project_root)?;
-        let config = Config::load(&project_root)?;
+        Config::require_config()?;
+        let config = Config::load()?;
 
         // Create remote cache backend if configured
         let remote_backend = match &config.cache.remote {
@@ -89,10 +87,9 @@ impl Builder {
             remote_pull: config.cache.remote_pull,
             mtime_check: config.cache.mtime_check,
         })?;
-        let file_index = FileIndex::build(&project_root)?;
+        let file_index = FileIndex::build()?;
 
         Ok(Self {
-            project_root,
             object_store,
             config,
             file_index,
@@ -107,22 +104,21 @@ impl Builder {
     /// Create all available processors
     pub fn create_processors(&self) -> Result<ProcessorMap> {
         let mut processors: ProcessorMap = HashMap::new();
-        let root = &self.project_root;
         let cfg = &self.config.processor;
 
         // Tera processor (fallible init — skip if template dir missing)
-        if let Ok(proc) = TeraProcessor::new(root.clone(), cfg.tera.clone()) {
+        if let Ok(proc) = TeraProcessor::new(cfg.tera.clone()) {
             Self::register(&mut processors, proc_names::TERA, proc);
         }
 
-        Self::register(&mut processors, proc_names::RUFF, RuffProcessor::new(root.clone(), cfg.ruff.clone()));
-        Self::register(&mut processors, proc_names::PYLINT, PylintProcessor::new(root.clone(), cfg.pylint.clone()));
-        Self::register(&mut processors, proc_names::MYPY, MypyProcessor::new(root.clone(), cfg.mypy.clone()));
-        Self::register(&mut processors, proc_names::CC_SINGLE_FILE, CcProcessor::new(root.clone(), cfg.cc_single_file.clone()));
-        Self::register(&mut processors, proc_names::CPPCHECK, CppcheckProcessor::new(root.clone(), cfg.cppcheck.clone()));
-        Self::register(&mut processors, proc_names::CLANG_TIDY, ClangTidyProcessor::new(root.clone(), cfg.clang_tidy.clone()));
-        Self::register(&mut processors, proc_names::SHELLCHECK, ShellcheckProcessor::new(root.clone(), cfg.shellcheck.clone()));
-        Self::register(&mut processors, proc_names::RUMDL, RumdlProcessor::new(root.clone(), cfg.rumdl.clone()));
+        Self::register(&mut processors, proc_names::RUFF, RuffProcessor::new(cfg.ruff.clone()));
+        Self::register(&mut processors, proc_names::PYLINT, PylintProcessor::new(cfg.pylint.clone()));
+        Self::register(&mut processors, proc_names::MYPY, MypyProcessor::new(cfg.mypy.clone()));
+        Self::register(&mut processors, proc_names::CC_SINGLE_FILE, CcProcessor::new(cfg.cc_single_file.clone()));
+        Self::register(&mut processors, proc_names::CPPCHECK, CppcheckProcessor::new(cfg.cppcheck.clone()));
+        Self::register(&mut processors, proc_names::CLANG_TIDY, ClangTidyProcessor::new(cfg.clang_tidy.clone()));
+        Self::register(&mut processors, proc_names::SHELLCHECK, ShellcheckProcessor::new(cfg.shellcheck.clone()));
+        Self::register(&mut processors, proc_names::RUMDL, RumdlProcessor::new(cfg.rumdl.clone()));
         Self::register(&mut processors, proc_names::SLEEP, SleepProcessor::new(cfg.sleep.clone()));
         Self::register(&mut processors, proc_names::MAKE, MakeProcessor::new(cfg.make.clone()));
         Self::register(&mut processors, proc_names::CARGO, CargoProcessor::new(cfg.cargo.clone()));
@@ -136,7 +132,6 @@ impl Builder {
 
         // Lua plugin processors
         let lua_plugins = LuaProcessor::discover_plugins(
-            root,
             &self.config.plugins.dir,
             &cfg.extra,
         )?;
@@ -186,13 +181,12 @@ impl Builder {
         // C/C++ dependency analyzer
         let cpp_analyzer = CppDepAnalyzer::new(
             self.config.analyzer.cpp.clone(),
-            self.project_root.clone(),
             verbose,
         );
         analyzers.insert("cpp".to_string(), Box::new(cpp_analyzer));
 
         // Python dependency analyzer
-        let python_analyzer = PythonDepAnalyzer::new(self.project_root.clone());
+        let python_analyzer = PythonDepAnalyzer::new();
         analyzers.insert("python".to_string(), Box::new(python_analyzer));
 
         analyzers
@@ -298,7 +292,6 @@ impl Builder {
         }
         let config = &self.config;
         let tool_hashes = tool_lock::processor_tool_hashes(
-            &self.project_root,
             processors,
             &|name| config.processor.is_enabled(name),
         )?;
@@ -382,14 +375,14 @@ impl Builder {
         let mut paths: Vec<PathBuf> = Vec::new();
 
         // Always watch rsb.toml
-        let config_path = self.project_root.join("rsb.toml");
+        let config_path = PathBuf::from("rsb.toml");
         if config_path.exists() {
             paths.push(config_path);
         }
 
         // Add scan directories from all processor configs
         for dir in self.config.processor.scan_dirs() {
-            let full = self.project_root.join(&dir);
+            let full = PathBuf::from(&dir);
             if full.exists() {
                 paths.push(full);
             }
@@ -398,14 +391,14 @@ impl Builder {
         // Processors with empty scan_dir scan the project root — watch common
         // top-level files/dirs that wouldn't be covered by scan_dirs above.
         for name in &["pyproject.toml", "config"] {
-            let p = self.project_root.join(name);
+            let p = PathBuf::from(name);
             if p.exists() {
                 paths.push(p);
             }
         }
 
         // Plugins directory
-        let plugins = self.project_root.join(&self.config.plugins.dir);
+        let plugins = PathBuf::from(&self.config.plugins.dir);
         if plugins.exists() {
             paths.push(plugins);
         }

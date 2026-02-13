@@ -112,22 +112,22 @@ pub fn create_lock(
 }
 
 /// Write the lock file to disk.
-pub fn write_lock_file(project_root: &Path, lock: &ToolLockFile) -> Result<()> {
-    let path = project_root.join(LOCK_FILE);
+pub fn write_lock_file(lock: &ToolLockFile) -> Result<()> {
+    let path = Path::new(LOCK_FILE);
     let json = serde_json::to_string_pretty(lock)
         .context("Failed to serialize lock file")?;
-    fs::write(&path, format!("{}\n", json))
+    fs::write(path, format!("{}\n", json))
         .with_context(|| format!("Failed to write {}", path.display()))?;
     Ok(())
 }
 
 /// Read the lock file from disk. Returns None if it doesn't exist.
-pub fn read_lock_file(project_root: &Path) -> Result<Option<ToolLockFile>> {
-    let path = project_root.join(LOCK_FILE);
+pub fn read_lock_file() -> Result<Option<ToolLockFile>> {
+    let path = Path::new(LOCK_FILE);
     if !path.exists() {
         return Ok(None);
     }
-    let content = fs::read_to_string(&path)
+    let content = fs::read_to_string(path)
         .with_context(|| format!("Failed to read {}", path.display()))?;
     let lock: ToolLockFile = serde_json::from_str(&content)
         .with_context(|| format!("Failed to parse {}", path.display()))?;
@@ -138,13 +138,12 @@ pub fn read_lock_file(project_root: &Path) -> Result<Option<ToolLockFile>> {
 /// Returns a map from processor name to a hash of its tools' locked version strings.
 /// If there is no lock file, returns an empty map.
 pub fn processor_tool_hashes(
-    project_root: &Path,
     processors: &ProcessorMap,
     enabled: &dyn Fn(&str) -> bool,
 ) -> Result<std::collections::HashMap<String, String>> {
     use sha2::{Digest, Sha256};
 
-    let lock = match read_lock_file(project_root)? {
+    let lock = match read_lock_file()? {
         Some(lock) => lock,
         None => return Ok(std::collections::HashMap::new()),
     };
@@ -185,14 +184,13 @@ pub fn processor_tool_hashes(
 /// Verify that the current tool versions match the lock file.
 /// Returns Ok(()) if everything matches, or an error describing mismatches.
 pub fn verify_lock_file(
-    project_root: &Path,
     tool_commands: &[(String, Vec<String>)],
 ) -> Result<()> {
-    let lock = match read_lock_file(project_root)? {
+    let lock = match read_lock_file()? {
         Some(lock) => lock,
         None => {
             let lock = create_lock(tool_commands)?;
-            write_lock_file(project_root, &lock)?;
+            write_lock_file(&lock)?;
             for (name, info) in &lock.tools {
                 let first_line = info.version_output.lines().next().unwrap_or("");
                 eprintln!("{} {} {}", name, color::green("locked"), color::dim(first_line));
