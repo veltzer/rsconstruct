@@ -14,6 +14,7 @@
 /// - `guard: $guard_method:ident` — method on self returning bool; gates `auto_detect()` and `discover()`
 /// - `tools: [$($tool:expr),+]` — string literal expressions for `required_tools()`
 /// - `tool_field: $field:ident` — config sub-field to clone as a tool name
+/// - `tool_field_extra: $field:ident [$($extra:expr),+]` — config field plus extra static tools
 /// - `config_json: true` — emit `config_json()` using `serde_json::to_string`
 /// - `hidden: true` — `hidden()` returns true
 /// - `batch: $batch_method:ident` — method on self for batch execution
@@ -81,13 +82,17 @@ macro_rules! impl_checker {
     (@tools $self:ident, $cfg:ident, [none]) => {
         Vec::new()
     };
-    // Static tool names (string literals)
+    // Static tool names (expressions that may reference $self.$cfg)
     (@tools $self:ident, $cfg:ident, [literal: $($tool:expr),+]) => {
         vec![$($tool),+]
     };
     // Dynamic tool name from a config field
     (@tools $self:ident, $cfg:ident, [field: $tool_field:ident]) => {
         vec![$self.$cfg.$tool_field.clone()]
+    };
+    // Dynamic tool name from a config field plus extra static tools
+    (@tools $self:ident, $cfg:ident, [field_and_extra: $tool_field:ident, [$($extra:expr),+]]) => {
+        vec![$self.$cfg.$tool_field.clone(), $($extra),+]
     };
 
     // --- discover ---
@@ -221,6 +226,27 @@ macro_rules! impl_checker {
         impl_checker!(@parse $processor, $config_field, $desc, $name, $execute,
             guard: [$($guard)?],
             tools_kind: [field: $tool_field],
+            config_json: $cj,
+            hidden: $hid,
+            batch: [$($batch)?],
+            extra_discover: [$($ed)?],
+            ; $($($rest)*)?
+        );
+    };
+
+    // Parse tool_field_extra (field name + extra static tools, e.g. `tool_field_extra: linter ["python3".to_string()]`)
+    (@parse $processor:ty, $config_field:ident, $desc:expr, $name:expr, $execute:ident,
+     guard: [$($guard:ident)?],
+     tools_kind: [none],
+     config_json: $cj:tt,
+     hidden: $hid:tt,
+     batch: [$($batch:ident)?],
+     extra_discover: [$($ed:ident)?],
+     ; tool_field_extra: $tool_field:ident [$($extra:expr),+] $(, $($rest:tt)*)?
+    ) => {
+        impl_checker!(@parse $processor, $config_field, $desc, $name, $execute,
+            guard: [$($guard)?],
+            tools_kind: [field_and_extra: $tool_field, [$($extra),+]],
             config_json: $cj,
             hidden: $hid,
             batch: [$($batch)?],
