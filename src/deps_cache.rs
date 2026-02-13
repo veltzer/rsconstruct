@@ -14,6 +14,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::checksum::file_checksum;
+
 const RSB_DIR: &str = ".rsb";
 const DEPS_DB_FILE: &str = "deps.redb";
 
@@ -269,5 +271,3 @@ impl DepsCache {
 fn path_to_key(path: &Path) -> String {
     path.display().to_string()
 }
-
-use crate::checksum::file_checksum;

@@ -62,8 +62,12 @@ impl Builder {
             if !show_all && !self.config.processor.is_enabled(name) {
                 continue;
             }
-            for tool in processors[name].required_tools() {
-                tool_pairs.push((tool, name.clone()));
+            let tools = processors[name].required_tools();
+            if !tools.is_empty() {
+                let name_owned = name.clone();
+                for tool in tools {
+                    tool_pairs.push((tool, name_owned.clone()));
+                }
             }
         }
         tool_pairs.sort();
@@ -79,7 +83,8 @@ impl Builder {
                 let mut any_missing = false;
                 for (tool, processor) in &tool_pairs {
                     if let Ok(path) = which::which(tool) {
-                        println!("{} ({}) {} {}", tool, processor, color::green("found"), color::dim(&path.display().to_string()));
+                        let path_str = path.display().to_string();
+                        println!("{} ({}) {} {}", tool, processor, color::green("found"), color::dim(&path_str));
                     } else {
                         let hint = install_hint(tool)
                             .map(|h| format!(" — install with: {}", color::dim(h)))

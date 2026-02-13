@@ -255,7 +255,7 @@ fn run_command_for_flags(cmd_line: &str) -> Result<Vec<String>> {
         anyhow::bail!("Command failed: {} — {}", cmd_line, stderr);
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     Ok(stdout.split_whitespace().map(String::from).collect())
 }
 
@@ -274,7 +274,7 @@ fn run_shell_for_flags(cmd_line: &str) -> Result<Vec<String>> {
         anyhow::bail!("Shell command failed: {} — {}", cmd_line, stderr);
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     Ok(stdout.split_whitespace().map(String::from).collect())
 }
 
@@ -287,7 +287,7 @@ fn run_backtick_command(cmd_str: &str) -> Result<Vec<String>> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!("Backtick command failed: {} — {}", cmd_str, stderr);
     }
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     // Return as single-element vec so caching works uniformly
     Ok(vec![stdout])
 }

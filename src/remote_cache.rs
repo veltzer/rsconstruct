@@ -346,6 +346,8 @@ fn uuid_simple() -> String {
         .expect(errors::SYSTEM_CLOCK)
         .as_nanos();
     let pid = std::process::id();
+    // Relaxed is fine: this counter only needs to be unique within a process,
+    // not synchronized with other memory operations.
     let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
 
     format!("{:x}-{:x}-{:x}", timestamp, pid, seq)

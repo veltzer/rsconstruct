@@ -40,8 +40,8 @@ fn query_tool_version(tool_name: &str, version_args: &[String]) -> Result<Locked
         .with_context(|| format!("Failed to run: {} {}", path.display(), version_args.join(" ")))?;
 
     // Some tools write version to stdout, others to stderr; capture both
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
     let version_output = if stdout.is_empty() {
         stderr
     } else if stderr.is_empty() {

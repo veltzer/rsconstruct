@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .output();
     let describe = match output {
         Ok(o) if o.status.success() => {
-            String::from_utf8_lossy(&o.stdout).trim().to_string()
+            String::from_utf8_lossy(&o.stdout).trim().to_owned()
         }
         _ => String::from("unknown"),
     };
