@@ -252,15 +252,21 @@ pub(crate) fn config_file_inputs(path: &str) -> Vec<String> {
     }
 }
 
-/// Clean outputs for a product: remove each output file and print a message.
-pub(crate) fn clean_outputs(product: &Product, label: &str) -> Result<()> {
+/// Clean outputs for a product: remove each output file.
+/// When `verbose` is true, prints a message for each removed file.
+/// Returns the number of files removed.
+pub(crate) fn clean_outputs(product: &Product, label: &str, verbose: bool) -> Result<usize> {
+    let mut count = 0;
     for output in &product.outputs {
         if output.exists() {
             fs::remove_file(output)?;
-            println!("Removed {} stub: {}", label, output.display());
+            count += 1;
+            if verbose {
+                println!("Removed {} output: {}", label, output.display());
+            }
         }
     }
-    Ok(())
+    Ok(count)
 }
 
 /// Options for filtering sibling files in directory-based product discovery.
@@ -516,8 +522,8 @@ impl ProcessorType {
 ///         graph.add_product(inputs, outputs, "mygen", ...)?;  // non-empty outputs
 ///     }
 ///     fn execute(&self, product: &Product) -> Result<()> { ... }
-///     fn clean(&self, product: &Product) -> Result<()> {
-///         clean_outputs(product, "mygen")
+///     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
+///         clean_outputs(product, "mygen", verbose)
 ///     }
 ///     fn auto_detect(&self, file_index: &FileIndex) -> bool { ... }
 /// }
@@ -553,6 +559,8 @@ pub trait ProductDiscovery: Sync + Send {
     fn execute(&self, product: &Product) -> Result<()>;
 
     /// Clean outputs for a product (called by `rsb clean`).
+    /// When `verbose` is true, prints per-file removal messages.
+    /// Returns the number of files removed.
     ///
     /// - **Checkers**: Use the default (do nothing) - checkers have no output files.
     ///   The cache entry remains intact, so the next build will skip the check.
@@ -560,8 +568,8 @@ pub trait ProductDiscovery: Sync + Send {
     /// - **Generators**: Must override to delete output files. Use `clean_outputs()`
     ///   helper. The cache entry remains intact, so the next build will restore
     ///   outputs from cache instead of regenerating them.
-    fn clean(&self, _product: &Product) -> Result<()> {
-        Ok(())
+    fn clean(&self, _product: &Product, _verbose: bool) -> Result<usize> {
+        Ok(0)
     }
 
     /// Auto-detect whether this processor is relevant for the current project

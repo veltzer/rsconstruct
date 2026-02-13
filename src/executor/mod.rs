@@ -253,13 +253,18 @@ impl<'a> Executor<'a> {
         levels
     }
 
-    /// Clean all products
-    pub fn clean(&self, graph: &BuildGraph) -> Result<()> {
+    /// Clean all products.
+    /// Returns a map of processor name → number of files removed.
+    pub fn clean(&self, graph: &BuildGraph, verbose: bool) -> Result<HashMap<String, usize>> {
+        let mut stats: HashMap<String, usize> = HashMap::new();
         for product in graph.products() {
             if let Some(processor) = self.processors.get(&product.processor) {
-                processor.clean(product)?;
+                let count = processor.clean(product, verbose)?;
+                if count > 0 {
+                    *stats.entry(product.processor.clone()).or_default() += count;
+                }
             }
         }
-        Ok(())
+        Ok(stats)
     }
 }

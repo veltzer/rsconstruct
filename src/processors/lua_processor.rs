@@ -447,7 +447,7 @@ impl ProductDiscovery for LuaProcessor {
         Ok(())
     }
 
-    fn clean(&self, product: &Product) -> Result<()> {
+    fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
         if self.has_function("clean") {
             let lua = self.lua.lock();
             let product_table = Self::product_to_lua(&lua, product)?;
@@ -459,9 +459,10 @@ impl ProductDiscovery for LuaProcessor {
                 clean_fn.call::<()>(product_table),
                 format!("Lua plugin '{}': clean() failed", self.name),
             )?;
-            Ok(())
+            // Lua plugins handle their own clean; count outputs that were removed
+            Ok(product.outputs.iter().filter(|o| !o.exists()).count())
         } else {
-            clean_outputs(product, &self.name)
+            clean_outputs(product, &self.name, verbose)
         }
     }
 

@@ -224,8 +224,8 @@ impl ProductDiscovery for CcProcessor {
         self.compile_source(source, executable, profile, is_cpp)
     }
 
-    fn clean(&self, product: &Product) -> Result<()> {
-        clean_outputs(product, crate::processors::names::CC_SINGLE_FILE)
+    fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
+        clean_outputs(product, crate::processors::names::CC_SINGLE_FILE, verbose)
     }
 
     fn config_json(&self) -> Option<String> {

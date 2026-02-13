@@ -159,14 +159,18 @@ impl ProductDiscovery for TeraProcessor {
         item.render(&self.config)
     }
 
-    fn clean(&self, product: &Product) -> Result<()> {
+    fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
+        let mut count = 0;
         for output in &product.outputs {
             if output.exists() && output.is_file() {
                 fs::remove_file(output)?;
-                println!("Removed generated file: {}", output.display());
+                count += 1;
+                if verbose {
+                    println!("Removed generated file: {}", output.display());
+                }
             }
         }
-        Ok(())
+        Ok(count)
     }
 
     fn config_json(&self) -> Option<String> {

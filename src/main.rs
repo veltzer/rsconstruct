@@ -110,7 +110,7 @@ fn run() -> Result<()> {
             match action.unwrap_or(CleanAction::Outputs) {
                 CleanAction::Outputs => {
                     let builder = Builder::new()?;
-                    builder.clean()?;
+                    builder.clean(cli.verbose)?;
                 }
                 CleanAction::All => {
                     let builder = Builder::new()?;
