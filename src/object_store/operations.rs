@@ -142,9 +142,8 @@ impl ObjectStore {
         let mut any_changed = false;
 
         for output_path in output_paths {
-            if !output_path.exists() {
-                continue;
-            }
+            anyhow::ensure!(output_path.exists(),
+                "Expected output file not produced: {}", output_path.display());
 
             let content = fs::read(output_path)?;
             let checksum = self.store_object(&content)?;

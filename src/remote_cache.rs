@@ -267,6 +267,12 @@ impl RemoteCache for FileBackend {
         fs::copy(src, &dest)
             .with_context(|| format!("Failed to copy to remote cache: {}", dest.display()))?;
 
+        // Make read-only to prevent corruption, consistent with local cache objects
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o444);
+        fs::set_permissions(&dest, perms)
+            .with_context(|| format!("Failed to set remote cache object read-only: {}", dest.display()))?;
+
         Ok(())
     }
 
