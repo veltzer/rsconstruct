@@ -16,6 +16,8 @@ macro_rules! checker_config {
     ($name:ident, extensions: [$($ext:expr),+ $(,)?]) => {
         #[derive(Debug, Deserialize, Serialize, Clone)]
         pub struct $name {
+            #[serde(default = "default_true")]
+            pub enabled: bool,
             #[serde(default)]
             pub args: Vec<String>,
             #[serde(default)]
@@ -27,6 +29,7 @@ macro_rules! checker_config {
         impl Default for $name {
             fn default() -> Self {
                 Self {
+                    enabled: true,
                     args: Vec::new(),
                     extra_inputs: Vec::new(),
                     scan: default_scan!(extensions: [$($ext),+]),
@@ -37,6 +40,8 @@ macro_rules! checker_config {
     ($name:ident, scan_dir: $dir:expr, extensions: [$($ext:expr),+ $(,)?]) => {
         #[derive(Debug, Deserialize, Serialize, Clone)]
         pub struct $name {
+            #[serde(default = "default_true")]
+            pub enabled: bool,
             #[serde(default)]
             pub args: Vec<String>,
             #[serde(default)]
@@ -48,6 +53,7 @@ macro_rules! checker_config {
         impl Default for $name {
             fn default() -> Self {
                 Self {
+                    enabled: true,
                     args: Vec::new(),
                     extra_inputs: Vec::new(),
                     scan: default_scan!(scan_dir: $dir, extensions: [$($ext),+]),
@@ -83,6 +89,8 @@ macro_rules! default_scan {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TeraConfig {
     #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_true")]
     pub strict: bool,
     #[serde(default)]
     pub trim_blocks: bool,
@@ -95,6 +103,7 @@ pub struct TeraConfig {
 impl Default for TeraConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             strict: true,
             trim_blocks: false,
             extra_inputs: Vec::new(),
@@ -109,6 +118,8 @@ fn default_ruff_linter() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct RuffConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     #[serde(default = "default_ruff_linter")]
     pub linter: String,
     #[serde(default)]
@@ -122,6 +133,7 @@ pub struct RuffConfig {
 impl Default for RuffConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             linter: "ruff".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
@@ -141,6 +153,8 @@ fn default_cppcheck_args() -> Vec<String> {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CppcheckConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     #[serde(default = "default_cppcheck_args")]
     pub args: Vec<String>,
     #[serde(default)]
@@ -152,6 +166,7 @@ pub struct CppcheckConfig {
 impl Default for CppcheckConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             args: default_cppcheck_args(),
             extra_inputs: Vec::new(),
             scan: default_scan!(scan_dir: "src", extensions: [".c", ".cc"]),
@@ -161,6 +176,8 @@ impl Default for CppcheckConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ClangTidyConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     #[serde(default)]
     pub args: Vec<String>,
     #[serde(default)]
@@ -174,6 +191,7 @@ pub struct ClangTidyConfig {
 impl Default for ClangTidyConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             args: Vec::new(),
             compiler_args: Vec::new(),
             extra_inputs: Vec::new(),
@@ -218,6 +236,8 @@ pub struct CompilerProfile {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CcConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     /// Legacy single-compiler fields (used when `compilers` is empty)
     #[serde(default = "default_cc_compiler")]
     pub cc: String,
@@ -274,6 +294,7 @@ impl CcConfig {
 impl Default for CcConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             cc: "gcc".into(),
             cxx: "g++".into(),
             cflags: Vec::new(),
@@ -299,6 +320,8 @@ fn default_spellcheck_words_file() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SpellcheckConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     #[serde(default = "default_spellcheck_language")]
     pub language: String,
     #[serde(default = "default_spellcheck_words_file")]
@@ -317,6 +340,7 @@ pub struct SpellcheckConfig {
 impl Default for SpellcheckConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             language: "en_US".into(),
             words_file: ".spellcheck-words".into(),
             use_words_file: false,
@@ -329,6 +353,8 @@ impl Default for SpellcheckConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SleepConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     #[serde(default)]
     pub extra_inputs: Vec<String>,
     #[serde(flatten)]
@@ -338,6 +364,7 @@ pub struct SleepConfig {
 impl Default for SleepConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             extra_inputs: Vec::new(),
             scan: default_scan!(scan_dir: "sleep", extensions: [".sleep"]),
         }
@@ -358,6 +385,8 @@ fn default_cargo_command() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CargoConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     #[serde(default = "default_cargo")]
     pub cargo: String,
     #[serde(default = "default_cargo_command")]
@@ -373,6 +402,7 @@ pub struct CargoConfig {
 impl Default for CargoConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             cargo: "cargo".into(),
             command: "build".into(),
             args: Vec::new(),
@@ -384,6 +414,8 @@ impl Default for CargoConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct MakeConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     #[serde(default = "default_make")]
     pub make: String,
     #[serde(default)]
@@ -399,6 +431,7 @@ pub struct MakeConfig {
 impl Default for MakeConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             make: "make".into(),
             args: Vec::new(),
             target: String::new(),
@@ -414,6 +447,8 @@ fn default_mypy_checker() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct MypyConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     #[serde(default = "default_mypy_checker")]
     pub checker: String,
     #[serde(default)]
@@ -427,6 +462,7 @@ pub struct MypyConfig {
 impl Default for MypyConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             checker: "mypy".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
@@ -441,6 +477,8 @@ fn default_rumdl_linter() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct RumdlConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     #[serde(default = "default_rumdl_linter")]
     pub linter: String,
     #[serde(default)]
@@ -454,6 +492,7 @@ pub struct RumdlConfig {
 impl Default for RumdlConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             linter: "rumdl".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
@@ -468,6 +507,8 @@ fn default_yamllint_linter() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct YamllintConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     #[serde(default = "default_yamllint_linter")]
     pub linter: String,
     #[serde(default)]
@@ -481,6 +522,7 @@ pub struct YamllintConfig {
 impl Default for YamllintConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             linter: "yamllint".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
@@ -495,6 +537,8 @@ fn default_jsonlint_linter() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct JsonlintConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     #[serde(default = "default_jsonlint_linter")]
     pub linter: String,
     #[serde(default)]
@@ -508,6 +552,7 @@ pub struct JsonlintConfig {
 impl Default for JsonlintConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             linter: "jsonlint".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
@@ -522,6 +567,8 @@ fn default_taplo_linter() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TaploConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     #[serde(default = "default_taplo_linter")]
     pub linter: String,
     #[serde(default)]
@@ -535,6 +582,7 @@ pub struct TaploConfig {
 impl Default for TaploConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             linter: "taplo".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
@@ -551,6 +599,8 @@ fn default_shellcheck_checker() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ShellcheckConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     #[serde(default = "default_shellcheck_checker")]
     pub checker: String,
     #[serde(default)]
@@ -564,6 +614,7 @@ pub struct ShellcheckConfig {
 impl Default for ShellcheckConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             checker: "shellcheck".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),

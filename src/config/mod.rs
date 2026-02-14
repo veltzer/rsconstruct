@@ -345,8 +345,31 @@ impl Default for ProcessorConfig {
 }
 
 impl ProcessorConfig {
+    fn processor_enabled_field(&self, name: &str) -> bool {
+        match name {
+            "tera" => self.tera.enabled,
+            "ruff" => self.ruff.enabled,
+            "pylint" => self.pylint.enabled,
+            "cc_single_file" => self.cc_single_file.enabled,
+            "cppcheck" => self.cppcheck.enabled,
+            "clang_tidy" => self.clang_tidy.enabled,
+            "shellcheck" => self.shellcheck.enabled,
+            "spellcheck" => self.spellcheck.enabled,
+            "sleep" => self.sleep.enabled,
+            "make" => self.make.enabled,
+            "cargo" => self.cargo.enabled,
+            "rumdl" => self.rumdl.enabled,
+            "mypy" => self.mypy.enabled,
+            "yamllint" => self.yamllint.enabled,
+            "jsonlint" => self.jsonlint.enabled,
+            "taplo" => self.taplo.enabled,
+            "json_schema" => self.json_schema.enabled,
+            _ => true, // unknown processors (plugins) default to enabled
+        }
+    }
+
     pub(crate) fn is_enabled(&self, name: &str) -> bool {
-        self.enabled.iter().any(|p| p == name)
+        self.enabled.iter().any(|p| p == name) && self.processor_enabled_field(name)
     }
 
     /// Collect unique scan directories from all processor configs.
