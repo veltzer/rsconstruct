@@ -190,3 +190,29 @@ fn json_schema_nested_mismatch() {
         "Build should fail when nested object has mismatched propertyOrdering"
     );
 }
+
+#[test]
+fn json_schema_no_property_ordering_passes() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"json_schema\"]\n",
+    )
+    .unwrap();
+
+    fs::write(
+        project_path.join("plain.json"),
+        r#"{"name": "test", "values": [1, 2, 3], "nested": {"a": true}}"#,
+    )
+    .unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "Build should pass for JSON without propertyOrdering: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
