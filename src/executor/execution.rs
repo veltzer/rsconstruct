@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use indicatif::ProgressBar;
@@ -9,13 +10,27 @@ use std::time::Instant;
 
 use crate::color;
 use crate::errors;
-use crate::graph::BuildGraph;
+use crate::graph::{BuildGraph, Product};
 use crate::json_output;
 use crate::object_store::ObjectStore;
 use crate::processors::{BuildStats, ProductTiming};
 use crate::progress;
 
 use super::{Executor, HandlerContext, LevelWork, PreCheckResult, RestoreOutcome, SharedState, WorkItem};
+
+/// Remove existing output files before executing a product.
+///
+/// Cache objects are stored read-only to prevent corruption via hardlinks.
+/// When a restored hardlink exists and a rebuild is needed, the tool cannot
+/// overwrite the read-only file. Removing outputs first ensures the tool
+/// can create fresh files.
+fn remove_stale_outputs(product: &Product) {
+    for output in &product.outputs {
+        if output.exists() {
+            let _ = fs::remove_file(output);
+        }
+    }
+}
 
 /// Per-processor progress counters shared across non-batch threads.
 struct ProgressCounters {
@@ -298,6 +313,7 @@ impl<'a> Executor<'a> {
 
             for p in &product_refs {
                 json_output::emit_product_start(&self.product_display(p), &p.processor);
+                remove_stale_outputs(p);
             }
             let batch_start = Instant::now();
             let results = processor.execute_batch(&product_refs);
@@ -398,6 +414,7 @@ impl<'a> Executor<'a> {
                 }
 
                 json_output::emit_product_start(&self.product_display(product), &product.processor);
+                remove_stale_outputs(product);
                 let product_start = Instant::now();
                 let mut last_error = None;
                 let max_attempts = 1 + self.retry;

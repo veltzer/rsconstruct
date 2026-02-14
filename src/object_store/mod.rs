@@ -271,7 +271,13 @@ impl ObjectStore {
         self.object_path(checksum).exists()
     }
 
-    /// Restore a file from the object store using configured method
+    /// Restore a file from the object store using configured method.
+    ///
+    /// Cache objects are read-only to prevent corruption. For hardlinks, the
+    /// restored file shares the same inode and is therefore also read-only —
+    /// any tool that tries to write in-place will get a permission error,
+    /// which is the desired protection. For copies, we make the output
+    /// writable since it's an independent file that can't corrupt the cache.
     fn restore_file(&self, checksum: &str, output_path: &Path) -> Result<()> {
         let object_path = self.object_path(checksum);
 
@@ -283,6 +289,23 @@ impl ObjectStore {
             RestoreMethod::Copy => {
                 fs::copy(&object_path, output_path)
                     .with_context(|| format!("Failed to copy from cache: {}", checksum))?;
+                // Make the copy writable (owner rw) — it's independent from the cache object
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let perms = std::fs::Permissions::from_mode(0o644);
+                    fs::set_permissions(output_path, perms)
+                        .context("Failed to make restored file writable")?;
+                }
+                #[cfg(not(unix))]
+                {
+                    let mut perms = fs::metadata(output_path)
+                        .context("Failed to read restored file metadata")?
+                        .permissions();
+                    perms.set_readonly(false);
+                    fs::set_permissions(output_path, perms)
+                        .context("Failed to make restored file writable")?;
+                }
             }
         }
 

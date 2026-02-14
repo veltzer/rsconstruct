@@ -116,7 +116,19 @@ impl ObjectStore {
 
         let (prefix, rest) = checksum.split_at(super::CHECKSUM_PREFIX_LEN.min(checksum.len()));
         let remote_key = format!("objects/{}/{}", prefix, rest);
-        remote.download(&remote_key, &object_path)
+        let fetched = remote.download(&remote_key, &object_path)?;
+
+        // Make fetched object read-only to prevent corruption via hardlinks
+        if fetched {
+            let mut perms = fs::metadata(&object_path)
+                .context("Failed to read fetched object metadata")?
+                .permissions();
+            perms.set_readonly(true);
+            fs::set_permissions(&object_path, perms)
+                .context("Failed to set fetched object read-only")?;
+        }
+
+        Ok(fetched)
     }
 
     /// Cache the outputs of a successful build.
