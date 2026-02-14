@@ -1,7 +1,5 @@
 # Summary
 
-Hey I added this
-
 - [Introduction](introduction.md)
 - [Installation](installation.md)
 - [Getting Started](getting-started.md)
