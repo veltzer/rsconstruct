@@ -94,9 +94,6 @@ impl Builder {
 
             #[cfg(target_os = "macos")]
             { "open" }
-
-            #[cfg(target_os = "windows")]
-            { "start" }
         };
 
         let mut open_cmd = Command::new(cmd);

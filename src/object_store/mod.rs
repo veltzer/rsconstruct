@@ -290,22 +290,10 @@ impl ObjectStore {
                 fs::copy(&object_path, output_path)
                     .with_context(|| format!("Failed to copy from cache: {}", checksum))?;
                 // Make the copy writable (owner rw) — it's independent from the cache object
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    let perms = std::fs::Permissions::from_mode(0o644);
-                    fs::set_permissions(output_path, perms)
-                        .context("Failed to make restored file writable")?;
-                }
-                #[cfg(not(unix))]
-                {
-                    let mut perms = fs::metadata(output_path)
-                        .context("Failed to read restored file metadata")?
-                        .permissions();
-                    perms.set_readonly(false);
-                    fs::set_permissions(output_path, perms)
-                        .context("Failed to make restored file writable")?;
-                }
+                use std::os::unix::fs::PermissionsExt;
+                let perms = std::fs::Permissions::from_mode(0o644);
+                fs::set_permissions(output_path, perms)
+                    .context("Failed to make restored file writable")?;
             }
         }
 
