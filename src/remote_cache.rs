@@ -76,6 +76,8 @@ impl S3Backend {
             None => (without_scheme.to_string(), String::new()),
         };
 
+        anyhow::ensure!(!bucket.is_empty(), "Invalid S3 URL: missing bucket name in {}", url);
+
         Ok(Self { bucket, prefix })
     }
 
