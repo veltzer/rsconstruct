@@ -110,3 +110,83 @@ fn json_schema_incremental_skip() {
         stdout2
     );
 }
+
+#[test]
+fn json_schema_nested_valid() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"json_schema\"]\n",
+    )
+    .unwrap();
+
+    fs::write(
+        project_path.join("nested.json"),
+        r#"{
+  "type": "object",
+  "properties": {
+    "name": { "type": "string" },
+    "address": {
+      "type": "object",
+      "properties": {
+        "street": { "type": "string" },
+        "city": { "type": "string" }
+      },
+      "propertyOrdering": ["street", "city"]
+    }
+  },
+  "propertyOrdering": ["name", "address"]
+}"#,
+    )
+    .unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "Build should succeed with valid nested schema: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn json_schema_nested_mismatch() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    fs::write(
+        project_path.join("rsb.toml"),
+        "[processor]\nenabled = [\"json_schema\"]\n",
+    )
+    .unwrap();
+
+    // Top-level is correct, but nested object has mismatched propertyOrdering
+    fs::write(
+        project_path.join("nested_bad.json"),
+        r#"{
+  "type": "object",
+  "properties": {
+    "name": { "type": "string" },
+    "address": {
+      "type": "object",
+      "properties": {
+        "street": { "type": "string" },
+        "city": { "type": "string" },
+        "zip": { "type": "string" }
+      },
+      "propertyOrdering": ["street", "city"]
+    }
+  },
+  "propertyOrdering": ["name", "address"]
+}"#,
+    )
+    .unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    assert!(
+        !output.status.success(),
+        "Build should fail when nested object has mismatched propertyOrdering"
+    );
+}
