@@ -298,6 +298,12 @@ impl RemoteCache for FileBackend {
         fs::write(&path, data)
             .with_context(|| format!("Failed to write to remote cache: {}", path.display()))?;
 
+        // Make read-only to prevent corruption, consistent with upload()
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o444);
+        fs::set_permissions(&path, perms)
+            .with_context(|| format!("Failed to set remote cache entry read-only: {}", path.display()))?;
+
         Ok(())
     }
 }

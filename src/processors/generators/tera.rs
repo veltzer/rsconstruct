@@ -9,7 +9,7 @@ use tera::{Context as TeraContext, Function, Tera, Value as TeraValue, to_value}
 use crate::config::{TeraConfig, config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProductDiscovery, run_command_capture};
+use crate::processors::{ProductDiscovery, clean_outputs, run_command_capture};
 
 /// Represents a single template file to be processed
 struct TemplateItem {
@@ -160,17 +160,7 @@ impl ProductDiscovery for TeraProcessor {
     }
 
     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
-        let mut count = 0;
-        for output in &product.outputs {
-            if output.exists() && output.is_file() {
-                fs::remove_file(output)?;
-                count += 1;
-                if verbose {
-                    println!("Removed generated file: {}", output.display());
-                }
-            }
-        }
-        Ok(count)
+        clean_outputs(product, crate::processors::names::TERA, verbose)
     }
 
     fn config_json(&self) -> Option<String> {
