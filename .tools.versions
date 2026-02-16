@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "locked_at": "2026-02-14T07:53:55Z",
+  "locked_at": "2026-02-16T06:58:20Z",
   "tools": {
     "cppcheck": {
       "path": "/usr/bin/cppcheck",
@@ -23,6 +23,13 @@
         "--version"
       ]
     },
+    "jsonlint": {
+      "path": "/usr/bin/jsonlint",
+      "version_output": "jsonlint (demjson3) version 3.0.5 (2021-09-08)",
+      "version_args": [
+        "--version"
+      ]
+    },
     "make": {
       "path": "/usr/bin/make",
       "version_output": "GNU Make 4.4.1\nBuilt for x86_64-pc-linux-gnu\nCopyright (C) 1988-2023 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.",
@@ -33,6 +40,13 @@
     "pylint": {
       "path": "/home/mark/.venv/bin/pylint",
       "version_output": "pylint 3.3.8\nastroid 3.3.11\nPython 3.13.7 (main, Jan 22 2026, 20:15:57) [GCC 15.2.0]",
+      "version_args": [
+        "--version"
+      ]
+    },
+    "pyrefly": {
+      "path": "/home/mark/.venv/bin/pyrefly",
+      "version_output": "pyrefly 0.52.0",
       "version_args": [
         "--version"
       ]
@@ -54,6 +68,20 @@
     "shellcheck": {
       "path": "/usr/bin/shellcheck",
       "version_output": "ShellCheck - shell script analysis tool\nversion: 0.10.0\nlicense: GNU General Public License, version 3\nwebsite: https://www.shellcheck.net",
+      "version_args": [
+        "--version"
+      ]
+    },
+    "taplo": {
+      "path": "/home/mark/install/cargo/bin/taplo",
+      "version_output": "taplo 0.10.0",
+      "version_args": [
+        "--version"
+      ]
+    },
+    "yamllint": {
+      "path": "/home/mark/.venv/bin/yamllint",
+      "version_output": "yamllint 1.38.0",
       "version_args": [
         "--version"
       ]
