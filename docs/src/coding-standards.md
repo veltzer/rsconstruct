@@ -60,6 +60,11 @@ All config structs that don't intentionally capture extra fields must use
 options in `rsb.toml` produce a clear error instead of being silently ignored.
 
 Structs that use `#[serde(flatten)]` to embed other structs (like `ScanConfig`)
-cannot use `deny_unknown_fields` due to serde limitations. Structs that
-intentionally capture unknown fields (like `ProcessorConfig.extra` for Lua
-plugins) should not use it.
+cannot use `deny_unknown_fields` due to serde limitations. These structs must
+instead implement the `KnownFields` trait, returning a static slice of all
+valid field names (own fields + flattened fields). The `validate_processor_fields()`
+function in `Config::load()` checks all `[processor.X]` keys against these
+lists before deserialization.
+
+Structs that intentionally capture unknown fields (like `ProcessorConfig.extra`
+for Lua plugins) should use neither `deny_unknown_fields` nor `KnownFields`.

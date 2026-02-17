@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{default_true, default_cc_compiler, default_cxx_compiler, default_output_suffix, ScanConfig};
+use super::{default_true, default_cc_compiler, default_cxx_compiler, default_output_suffix, KnownFields, ScanConfig};
 
 /// Generate a simple checker config struct with args, extra_inputs, and scan fields.
 ///
@@ -36,6 +36,16 @@ macro_rules! checker_config {
                 }
             }
         }
+
+        impl KnownFields for $name {
+            fn known_fields() -> &'static [&'static str] {
+                static FIELDS: &[&str] = &[
+                    "enabled", "args", "extra_inputs",
+                    "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+                ];
+                FIELDS
+            }
+        }
     };
     ($name:ident, scan_dir: $dir:expr, extensions: [$($ext:expr),+ $(,)?]) => {
         #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -58,6 +68,16 @@ macro_rules! checker_config {
                     extra_inputs: Vec::new(),
                     scan: default_scan!(scan_dir: $dir, extensions: [$($ext),+]),
                 }
+            }
+        }
+
+        impl KnownFields for $name {
+            fn known_fields() -> &'static [&'static str] {
+                static FIELDS: &[&str] = &[
+                    "enabled", "args", "extra_inputs",
+                    "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+                ];
+                FIELDS
             }
         }
     };
@@ -112,6 +132,15 @@ impl Default for TeraConfig {
     }
 }
 
+impl KnownFields for TeraConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "strict", "trim_blocks", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
 fn default_ruff_linter() -> String {
     "ruff".into()
 }
@@ -139,6 +168,15 @@ impl Default for RuffConfig {
             extra_inputs: Vec::new(),
             scan: default_scan!(extensions: [".py"]),
         }
+    }
+}
+
+impl KnownFields for RuffConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "linter", "args", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
     }
 }
 
@@ -174,6 +212,15 @@ impl Default for CppcheckConfig {
     }
 }
 
+impl KnownFields for CppcheckConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "args", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ClangTidyConfig {
     #[serde(default = "default_true")]
@@ -197,6 +244,15 @@ impl Default for ClangTidyConfig {
             extra_inputs: Vec::new(),
             scan: default_scan!(scan_dir: "src", extensions: [".c", ".cc"]),
         }
+    }
+}
+
+impl KnownFields for ClangTidyConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "args", "compiler_args", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
     }
 }
 
@@ -310,6 +366,16 @@ impl Default for CcConfig {
     }
 }
 
+impl KnownFields for CcConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "cc", "cxx", "cflags", "cxxflags", "ldflags", "output_suffix",
+            "compilers", "include_paths", "extra_inputs", "include_scanner",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
 fn default_spellcheck_language() -> String {
     "en_US".into()
 }
@@ -351,6 +417,15 @@ impl Default for SpellcheckConfig {
     }
 }
 
+impl KnownFields for SpellcheckConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "language", "words_file", "use_words_file", "auto_add_words", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SleepConfig {
     #[serde(default = "default_true")]
@@ -368,6 +443,15 @@ impl Default for SleepConfig {
             extra_inputs: Vec::new(),
             scan: default_scan!(scan_dir: "sleep", extensions: [".sleep"]),
         }
+    }
+}
+
+impl KnownFields for SleepConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
     }
 }
 
@@ -412,6 +496,15 @@ impl Default for CargoConfig {
     }
 }
 
+impl KnownFields for CargoConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "cargo", "command", "args", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct MakeConfig {
     #[serde(default = "default_true")]
@@ -438,6 +531,15 @@ impl Default for MakeConfig {
             extra_inputs: Vec::new(),
             scan: default_scan!(extensions: ["Makefile"]),
         }
+    }
+}
+
+impl KnownFields for MakeConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "make", "args", "target", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
     }
 }
 
@@ -471,6 +573,15 @@ impl Default for MypyConfig {
     }
 }
 
+impl KnownFields for MypyConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "checker", "args", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
 fn default_pyrefly_checker() -> String {
     "pyrefly".into()
 }
@@ -498,6 +609,15 @@ impl Default for PyreflyConfig {
             extra_inputs: Vec::new(),
             scan: default_scan!(extensions: [".py"]),
         }
+    }
+}
+
+impl KnownFields for PyreflyConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "checker", "args", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
     }
 }
 
@@ -531,6 +651,15 @@ impl Default for RumdlConfig {
     }
 }
 
+impl KnownFields for RumdlConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "linter", "args", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
 fn default_yamllint_linter() -> String {
     "yamllint".into()
 }
@@ -558,6 +687,15 @@ impl Default for YamllintConfig {
             extra_inputs: Vec::new(),
             scan: default_scan!(extensions: [".yml", ".yaml"]),
         }
+    }
+}
+
+impl KnownFields for YamllintConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "linter", "args", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
     }
 }
 
@@ -591,6 +729,15 @@ impl Default for JqConfig {
     }
 }
 
+impl KnownFields for JqConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "checker", "args", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
 fn default_jsonlint_linter() -> String {
     "jsonlint".into()
 }
@@ -618,6 +765,15 @@ impl Default for JsonlintConfig {
             extra_inputs: Vec::new(),
             scan: default_scan!(extensions: [".json"]),
         }
+    }
+}
+
+impl KnownFields for JsonlintConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "linter", "args", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
     }
 }
 
@@ -651,6 +807,15 @@ impl Default for TaploConfig {
     }
 }
 
+impl KnownFields for TaploConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "linter", "args", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
 checker_config!(JsonSchemaConfig, extensions: [".json"]);
 
 fn default_shellcheck_checker() -> String {
@@ -680,5 +845,14 @@ impl Default for ShellcheckConfig {
             extra_inputs: Vec::new(),
             scan: default_scan!(extensions: [".sh", ".bash"]),
         }
+    }
+}
+
+impl KnownFields for ShellcheckConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "checker", "args", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
     }
 }

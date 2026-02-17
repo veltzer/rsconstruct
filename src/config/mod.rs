@@ -15,10 +15,16 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::errors;
+use crate::processors::names as processor_names;
 
 use variables::substitute_variables;
 
 const CONFIG_FILE: &str = "rsb.toml";
+
+pub(crate) trait KnownFields {
+    fn known_fields() -> &'static [&'static str];
+}
+
 
 /// Validate extra_inputs paths exist and return them as PathBufs.
 /// Paths are relative to project root (which is cwd).
@@ -491,6 +497,63 @@ pub(crate) struct GraphConfig {
     pub viewer: Option<String>,
 }
 
+/// Validate that all fields in `[processor.X]` sections are known fields for that processor.
+/// Returns an error listing unknown fields. Skips non-table entries (like `auto_detect`)
+/// and unknown processor names (those are Lua plugin sections).
+fn validate_processor_fields(raw: &toml::Value) -> Result<()> {
+    let processor_table = match raw.get("processor").and_then(|v| v.as_table()) {
+        Some(t) => t,
+        None => return Ok(()),
+    };
+
+    let mut errors = Vec::new();
+
+    for (name, value) in processor_table {
+        let table = match value.as_table() {
+            Some(t) => t,
+            None => continue, // skip scalar fields like auto_detect, enabled
+        };
+
+        let known: &[&str] = match name.as_str() {
+            processor_names::TERA => TeraConfig::known_fields(),
+            processor_names::RUFF => RuffConfig::known_fields(),
+            processor_names::PYLINT => PylintConfig::known_fields(),
+            processor_names::CC_SINGLE_FILE => CcConfig::known_fields(),
+            processor_names::CPPCHECK => CppcheckConfig::known_fields(),
+            processor_names::CLANG_TIDY => ClangTidyConfig::known_fields(),
+            processor_names::SHELLCHECK => ShellcheckConfig::known_fields(),
+            processor_names::SPELLCHECK => SpellcheckConfig::known_fields(),
+            processor_names::SLEEP => SleepConfig::known_fields(),
+            processor_names::MAKE => MakeConfig::known_fields(),
+            processor_names::CARGO => CargoConfig::known_fields(),
+            processor_names::RUMDL => RumdlConfig::known_fields(),
+            processor_names::MYPY => MypyConfig::known_fields(),
+            processor_names::PYREFLY => PyreflyConfig::known_fields(),
+            processor_names::YAMLLINT => YamllintConfig::known_fields(),
+            processor_names::JQ => JqConfig::known_fields(),
+            processor_names::JSONLINT => JsonlintConfig::known_fields(),
+            processor_names::TAPLO => TaploConfig::known_fields(),
+            processor_names::JSON_SCHEMA => JsonSchemaConfig::known_fields(),
+            _ => continue, // unknown processor name = Lua plugin, skip
+        };
+
+        for key in table.keys() {
+            if !known.contains(&key.as_str()) {
+                errors.push(format!(
+                    "[processor.{}]: unknown field '{}' (valid fields: {})",
+                    name, key, known.join(", ")
+                ));
+            }
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        anyhow::bail!("Invalid config:\n{}", errors.join("\n"))
+    }
+}
+
 impl Config {
     pub(crate) fn require_config() -> Result<()> {
         let config_path = Path::new(CONFIG_FILE);
@@ -511,6 +574,9 @@ impl Config {
                 .with_context(|| format!("Failed to read config file: {}", config_path.display()))?;
             let substituted = substitute_variables(&content)
                 .with_context(|| format!("Failed to substitute variables in: {}", config_path.display()))?;
+            let raw: toml::Value = toml::from_str(&substituted)
+                .with_context(|| format!("Failed to parse config file: {}", config_path.display()))?;
+            validate_processor_fields(&raw)?;
             toml::from_str(&substituted)
                 .with_context(|| format!("Failed to parse config file: {}", config_path.display()))?
         } else {
