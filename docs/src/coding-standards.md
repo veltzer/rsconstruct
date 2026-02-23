@@ -53,6 +53,16 @@ Output strings passed to `println!`, `pb.println()`, or similar macros must not
 contain trailing newlines. These macros already append a newline. Adding `\n`
 inside the string produces unwanted blank lines in the output.
 
+## Include processor name in error messages
+
+Error messages from processors must identify the processor so the user can
+immediately tell which processor failed. Processors that use `run_checker()`
+or `check_command_output()` get this automatically (the tool name appears in
+the error). Processors with custom error handling must prefix their `bail!`
+messages with `[processor_name]`, for example
+`[aspell] Misspelled words in README.md` rather than just
+`Misspelled words in README.md`.
+
 ## Reject unknown config fields
 
 All config structs that don't intentionally capture extra fields must use
