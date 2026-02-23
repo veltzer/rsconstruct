@@ -691,6 +691,7 @@ pub struct BuildStats {
     pub total_duration: Duration,
     pub failed_count: usize,
     pub failed_messages: Vec<String>,
+    pub phase_timings: Vec<(String, Duration)>,
 }
 
 impl BuildStats {
@@ -797,13 +798,25 @@ impl BuildStats {
         if timings {
             println!();
             println!("{}", color::bold("Timing:"));
+
+            // Phase timings
+            if !self.phase_timings.is_empty() {
+                let max_name_len = self.phase_timings.iter().map(|(n, _)| n.len()).max().unwrap_or(0);
+                for (name, dur) in &self.phase_timings {
+                    println!("  {:width$} {:.3}s", name, dur.as_secs_f64(), width = max_name_len);
+                }
+            }
+
+            // Per-product timings
             for cat in &self.categories {
                 for pt in &cat.product_timings {
                     println!("[{}] {} {}", pt.processor, pt.display,
                         color::dim(&format!("({:.3}s)", pt.duration.as_secs_f64())));
                 }
             }
-            println!("{}", color::bold(&format!("Total: {:.3}s", self.total_duration.as_secs_f64())));
+
+            let total: f64 = self.phase_timings.iter().map(|(_, d)| d.as_secs_f64()).sum();
+            println!("{}", color::bold(&format!("Total: {:.3}s", total)));
         }
     }
 }

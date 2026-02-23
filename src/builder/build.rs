@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Instant;
 use crate::cli::{BuildOptions, BuildPhase, DisplayOptions};
 use crate::color;
 use crate::errors;
@@ -22,7 +23,9 @@ impl Builder {
         let processor_filter = opts.processor_filter.as_deref();
 
         // Create processors
+        let t = Instant::now();
         let processors = self.create_processors()?;
+        let create_processors_dur = t.elapsed();
 
         // Validate processor filter against available processors
         if let Some(filter) = processor_filter {
@@ -41,7 +44,10 @@ impl Builder {
         self.detect_config_changes(&processors);
 
         // Build the dependency graph (may stop early based on stop_after)
-        let graph = self.build_graph_with_processors_and_phase(&processors, opts.stop_after, processor_filter, opts.verbose)?;
+        let (graph, mut phase_timings) = self.build_graph_with_processors_and_phase(&processors, opts.stop_after, processor_filter, opts.verbose)?;
+
+        // Prepend create_processors timing
+        phase_timings.insert(0, ("create_processors".to_string(), create_processors_dur));
 
         // If we stopped early (before classify), we're done
         if opts.stop_after != BuildPhase::Build && opts.stop_after != BuildPhase::Classify {
@@ -55,9 +61,11 @@ impl Builder {
         if phases_debug() {
             eprintln!("{}", color::dim("  Phase: classify"));
         }
+        let t = Instant::now();
         let order = graph.topological_sort()?;
         let (skip_count, restore_count, build_count) =
             crate::executor::classify_products(&graph, &order, &self.object_store, opts.force);
+        phase_timings.push(("classify".to_string(), t.elapsed()));
         if !crate::runtime_flags::quiet() {
             println!("{} products ({} up-to-date, {} to restore, {} to build)",
                 order.len(), skip_count, restore_count, build_count);
@@ -81,7 +89,9 @@ impl Builder {
         }, Arc::clone(&interrupted));
 
         // Execute the build
+        let t = Instant::now();
         let result = executor.execute(&graph, &self.object_store, opts.force, opts.timings, opts.keep_going);
+        let build_dur = t.elapsed();
 
         // Exit if interrupted
         if interrupted.load(std::sync::atomic::Ordering::SeqCst) {
@@ -91,7 +101,11 @@ impl Builder {
             ).into());
         }
 
-        let stats = result?;
+        let mut stats = result?;
+
+        // Add phase timings to stats
+        phase_timings.push(("build".to_string(), build_dur));
+        stats.phase_timings = phase_timings;
 
         // Print summary
         stats.print_summary(opts.summary, opts.timings);

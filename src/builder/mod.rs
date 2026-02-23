@@ -9,6 +9,7 @@ mod tools;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 use anyhow::Result;
 use crate::analyzers::{CppDepAnalyzer, DepAnalyzer, PythonDepAnalyzer};
 use crate::cli::BuildPhase;
@@ -22,6 +23,9 @@ use crate::object_store::{ObjectStore, ObjectStoreOptions};
 use crate::processors::{CargoProcessor, CcProcessor, ClangTidyProcessor, CppcheckProcessor, GemProcessor, JqProcessor, JsonlintProcessor, JsonSchemaProcessor, LuaProcessor, MakeProcessor, MypyProcessor, NpmProcessor, PipProcessor, ProcessorMap, PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor, ShellcheckProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, SphinxProcessor, TagsProcessor, TaploProcessor, TeraProcessor, YamllintProcessor, names as proc_names};
 use crate::remote_cache;
 use crate::tool_lock;
+
+/// Phase timing data collected during graph building.
+pub(crate) type PhaseTimings = Vec<(String, Duration)>;
 
 /// Severity level for validation issues.
 pub enum ValidationSeverity {
@@ -241,17 +245,19 @@ impl Builder {
 
     /// Build the dependency graph using provided processors
     fn build_graph_with_processors(&self, processors: &ProcessorMap) -> Result<BuildGraph> {
-        self.build_graph_with_processors_impl(processors, GraphBuildMode::Normal, BuildPhase::Build, None, false)
+        let (graph, _) = self.build_graph_with_processors_impl(processors, GraphBuildMode::Normal, BuildPhase::Build, None, false)?;
+        Ok(graph)
     }
 
     /// Build the dependency graph with optional early stopping
-    fn build_graph_with_processors_and_phase(&self, processors: &ProcessorMap, stop_after: BuildPhase, processor_filter: Option<&[String]>, verbose: bool) -> Result<BuildGraph> {
+    fn build_graph_with_processors_and_phase(&self, processors: &ProcessorMap, stop_after: BuildPhase, processor_filter: Option<&[String]>, verbose: bool) -> Result<(BuildGraph, PhaseTimings)> {
         self.build_graph_with_processors_impl(processors, GraphBuildMode::Normal, stop_after, processor_filter, verbose)
     }
 
     /// Build the dependency graph for clean (skip expensive dependency scanning)
     fn build_graph_for_clean_with_processors(&self, processors: &ProcessorMap) -> Result<BuildGraph> {
-        self.build_graph_with_processors_impl(processors, GraphBuildMode::ForClean, BuildPhase::Build, None, false)
+        let (graph, _) = self.build_graph_with_processors_impl(processors, GraphBuildMode::ForClean, BuildPhase::Build, None, false)?;
+        Ok(graph)
     }
 
     /// Check whether a processor should run based on enabled list and auto-detect.
@@ -264,11 +270,12 @@ impl Builder {
 
     /// Build the dependency graph using provided processors
     /// processor_filter: if Some, only run processors in this list (in addition to enabled check)
-    fn build_graph_with_processors_impl(&self, processors: &ProcessorMap, mode: GraphBuildMode, stop_after: BuildPhase, processor_filter: Option<&[String]>, verbose: bool) -> Result<BuildGraph> {
+    fn build_graph_with_processors_impl(&self, processors: &ProcessorMap, mode: GraphBuildMode, stop_after: BuildPhase, processor_filter: Option<&[String]>, verbose: bool) -> Result<(BuildGraph, PhaseTimings)> {
         if phases_debug() {
             eprintln!("{}", color::bold("Phase: Building dependency graph..."));
         }
         let mut graph = BuildGraph::new();
+        let mut phase_timings = PhaseTimings::new();
 
         // Collect which processors should run
         let active_processors: Vec<&String> = sorted_keys(processors).into_iter()
@@ -285,6 +292,7 @@ impl Builder {
         if phases_debug() {
             eprintln!("{}", color::dim("  Phase: discover"));
         }
+        let t = Instant::now();
         for name in &active_processors {
             if mode == GraphBuildMode::ForClean {
                 processors[*name].discover_for_clean(&mut graph, &self.file_index)?;
@@ -292,9 +300,10 @@ impl Builder {
                 processors[*name].discover(&mut graph, &self.file_index)?;
             }
         }
+        phase_timings.push(("discover".to_string(), t.elapsed()));
 
         if stop_after == BuildPhase::Discover {
-            return Ok(graph);
+            return Ok((graph, phase_timings));
         }
 
         // Phase 2: Run dependency analyzers (only for regular builds, not clean)
@@ -302,17 +311,20 @@ impl Builder {
             if phases_debug() {
                 eprintln!("{}", color::dim("  Phase: add_dependencies"));
             }
+            let t = Instant::now();
             self.run_analyzers(&mut graph, verbose)?;
+            phase_timings.push(("add_dependencies".to_string(), t.elapsed()));
         }
 
         if stop_after == BuildPhase::AddDependencies {
-            return Ok(graph);
+            return Ok((graph, phase_timings));
         }
 
         // Phase 3: Apply tool version hashes
         if phases_debug() {
             eprintln!("{}", color::dim("  Phase: apply_tool_version_hashes"));
         }
+        let t = Instant::now();
         let config = &self.config;
         let tool_hashes = tool_lock::processor_tool_hashes(
             processors,
@@ -321,15 +333,18 @@ impl Builder {
         if !tool_hashes.is_empty() {
             graph.apply_tool_version_hashes(&tool_hashes);
         }
+        phase_timings.push(("tool_version_hashes".to_string(), t.elapsed()));
 
         // Phase 4: Resolve dependencies
         if phases_debug() {
             eprintln!("{}", color::dim("  Phase: resolve_dependencies"));
         }
+        let t = Instant::now();
         graph.resolve_dependencies();
+        phase_timings.push(("resolve".to_string(), t.elapsed()));
 
         // Note: BuildPhase::Resolve and BuildPhase::Build both complete the graph
-        Ok(graph)
+        Ok((graph, phase_timings))
     }
 
     /// Build the dependency graph, optionally filtering to a single processor.
