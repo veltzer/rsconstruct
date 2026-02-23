@@ -290,14 +290,12 @@ pub enum ConfigAction {
 
 #[derive(Subcommand)]
 pub enum ProcessorAction {
-    /// List available processors and their status
+    /// List available processors with status and descriptions
     List {
-        /// Show all processors, including hidden ones
+        /// Include hidden processors
         #[arg(short, long)]
         all: bool,
     },
-    /// Show all processors (including hidden), with enabled and hidden status
-    All,
     /// Auto-detect which processors are relevant for this project
     Auto,
     /// Show source and target files for each processor

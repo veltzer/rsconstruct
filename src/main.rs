@@ -214,8 +214,12 @@ fn run() -> Result<()> {
         }
         Commands::Processors { action } => {
             match action {
-                cli::ProcessorAction::All => {
-                    builder::processors::list_all_processors()?;
+                cli::ProcessorAction::List { all } => {
+                    // Try with project config; fall back to no-config listing
+                    match Builder::new() {
+                        Ok(builder) => builder.processor(cli::ProcessorAction::List { all })?,
+                        Err(_) => builder::processors::list_processors_no_config(all)?,
+                    }
                 }
                 action => {
                     let builder = Builder::new()?;

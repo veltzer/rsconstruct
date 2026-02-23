@@ -97,16 +97,17 @@ fn processors_files_unknown_processor_fails() {
 }
 
 #[test]
-fn processors_all_shows_descriptions() {
+fn processors_list_shows_descriptions() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output = run_rsb_with_env(project_path, &["processors", "all"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "processors all failed: {}", String::from_utf8_lossy(&output.stderr));
+    let output = run_rsb_with_env(project_path, &["processors", "list"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(), "processors list failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // processors all shows descriptions with " — " separator
+    // processors list shows descriptions with " — " separator
     assert!(stdout.contains("tera"), "Expected tera processor");
+    assert!(stdout.contains("\u{2014}"), "Expected description separator in list output");
 }
 
 #[test]
@@ -157,12 +158,12 @@ fn processors_files_json_empty() {
 }
 
 #[test]
-fn processors_all_works_without_config() {
+fn processors_list_works_without_config() {
     // Run from a temp dir with no rsb.toml
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
 
-    let output = run_rsb_with_env(temp_dir.path(), &["processors", "all"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "processors all should work without rsb.toml: {}", String::from_utf8_lossy(&output.stderr));
+    let output = run_rsb_with_env(temp_dir.path(), &["processors", "list"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(), "processors list should work without rsb.toml: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("tera"), "Expected tera processor in output");
@@ -248,11 +249,11 @@ fn processors_list_json() {
 }
 
 #[test]
-fn processors_all_json() {
+fn processors_list_all_json_without_config() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
 
-    let output = run_rsb_with_env(temp_dir.path(), &["--json", "processors", "all"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "processors all --json failed: {}", String::from_utf8_lossy(&output.stderr));
+    let output = run_rsb_with_env(temp_dir.path(), &["--json", "processors", "list", "--all"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(), "processors list --all --json failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let entries: Vec<serde_json::Value> = serde_json::from_str(&stdout)
@@ -269,7 +270,7 @@ fn processors_all_json() {
     }
 
     // Should include both hidden and non-hidden processors
-    let tera = entries.iter().find(|e| e["name"] == "tera").expect("Expected tera in all");
+    let tera = entries.iter().find(|e| e["name"] == "tera").expect("Expected tera in list --all");
     assert_eq!(tera["hidden"], false);
 }
 

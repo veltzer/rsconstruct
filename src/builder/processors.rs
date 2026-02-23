@@ -6,7 +6,8 @@ use crate::config::ProcessorConfig;
 use super::{Builder, create_builtin_processors, sorted_keys};
 
 /// List all built-in processors (works without rsb.toml).
-pub fn list_all_processors() -> Result<()> {
+/// Used when no project config is available.
+pub fn list_processors_no_config(all: bool) -> Result<()> {
     let mut cfg = ProcessorConfig::default();
     cfg.resolve_scan_defaults();
     let processors = create_builtin_processors(&cfg);
@@ -14,6 +15,7 @@ pub fn list_all_processors() -> Result<()> {
 
     if crate::json_output::is_json_mode() {
         let entries: Vec<crate::json_output::ProcessorListEntry> = proc_names.iter()
+            .filter(|name| all || !processors[name.as_str()].hidden())
             .map(|name| {
                 let proc = &processors[name.as_str()];
                 crate::json_output::ProcessorListEntry {
@@ -32,7 +34,10 @@ pub fn list_all_processors() -> Result<()> {
 
     for name in &proc_names {
         let proc = &processors[name.as_str()];
-        let hidden_status = if proc.hidden() {
+        if proc.hidden() && !all {
+            continue;
+        }
+        let hidden_tag = if proc.hidden() {
             format!(" {}", color::dim("(hidden)"))
         } else {
             String::new()
@@ -44,7 +49,7 @@ pub fn list_all_processors() -> Result<()> {
         } else {
             String::new()
         };
-        println!("{} {}{}{} \u{2014} {}", name, proc_type, batch, hidden_status, color::dim(proc.description()));
+        println!("{} {}{}{} \u{2014} {}", name, proc_type, batch, hidden_tag, color::dim(proc.description()));
     }
 
     Ok(())
@@ -83,48 +88,12 @@ impl Builder {
                     if proc.hidden() && !all {
                         continue;
                     }
-                    let status = if self.config.processor.is_enabled(name) {
-                        color::green("enabled")
-                    } else {
-                        color::dim("disabled")
-                    };
-                    let type_str = format!("[{}]", proc.processor_type().as_str());
-                    let proc_type = color::dim(&type_str);
-                    let batch = if proc.supports_batch() {
-                        format!(" {}", color::dim("[batch]"))
-                    } else {
-                        String::new()
-                    };
-                    println!("{} {}{} {}", name, proc_type, batch, status);
-                }
-            }
-            ProcessorAction::All => {
-                if crate::json_output::is_json_mode() {
-                    let entries: Vec<crate::json_output::ProcessorListEntry> = proc_names.iter()
-                        .map(|name| {
-                            let proc = &processors[name.as_str()];
-                            crate::json_output::ProcessorListEntry {
-                                name: name.to_string(),
-                                processor_type: proc.processor_type().as_str().to_string(),
-                                enabled: self.config.processor.is_enabled(name),
-                                hidden: proc.hidden(),
-                                batch: proc.supports_batch(),
-                                description: proc.description().to_string(),
-                            }
-                        })
-                        .collect();
-                    println!("{}", serde_json::to_string_pretty(&entries)?);
-                    return Ok(());
-                }
-
-                for name in &proc_names {
-                    let proc = &processors[name.as_str()];
                     let enabled_status = if self.config.processor.is_enabled(name) {
                         color::green("enabled")
                     } else {
                         color::dim("disabled")
                     };
-                    let hidden_status = if proc.hidden() {
+                    let hidden_tag = if proc.hidden() {
                         format!(" {}", color::dim("(hidden)"))
                     } else {
                         String::new()
@@ -136,7 +105,7 @@ impl Builder {
                     } else {
                         String::new()
                     };
-                    println!("{} {}{} {}{} \u{2014} {}", name, proc_type, batch, enabled_status, hidden_status, color::dim(proc.description()));
+                    println!("{} {}{} {}{} \u{2014} {}", name, proc_type, batch, enabled_status, hidden_tag, color::dim(proc.description()));
                 }
             }
             ProcessorAction::Auto => {
