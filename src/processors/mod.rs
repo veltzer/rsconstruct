@@ -634,6 +634,43 @@ pub trait ProductDiscovery: Sync + Send {
     }
 }
 
+/// Return the install command for a tool, if known.
+/// This is a property of the tool itself, not the processor — multiple processors
+/// may require the same tool (e.g., python3).
+pub fn tool_install_command(tool: &str) -> Option<&'static str> {
+    match tool {
+        // Python tools (pip)
+        "ruff" => Some("pip install ruff"),
+        "pylint" => Some("pip install pylint"),
+        "mypy" => Some("pip install mypy"),
+        "pyrefly" => Some("pip install pyrefly"),
+        "yamllint" => Some("pip install yamllint"),
+        "sphinx-build" => Some("pip install sphinx"),
+        "pip" => Some("python3 -m ensurepip"),
+        // Rust tools (cargo)
+        "rumdl" => Some("cargo install rumdl"),
+        "taplo" => Some("cargo install taplo-cli"),
+        "cargo" | "rustc" => Some("curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"),
+        // System packages (apt)
+        "shellcheck" => Some("apt install shellcheck"),
+        "cppcheck" => Some("apt install cppcheck"),
+        "clang-tidy" => Some("apt install clang-tidy"),
+        "gcc" => Some("apt install gcc"),
+        "g++" => Some("apt install g++"),
+        "clang" | "clang++" => Some("apt install clang"),
+        "make" => Some("apt install make"),
+        "jq" => Some("apt install jq"),
+        "aspell" => Some("apt install aspell"),
+        "python3" => Some("apt install python3"),
+        // Node tools (npm)
+        "jsonlint" => Some("npm install -g jsonlint"),
+        "npm" => Some("apt install npm"),
+        // Ruby tools
+        "bundle" => Some("gem install bundler"),
+        _ => None,
+    }
+}
+
 /// Timing for a single product execution
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProductTiming {
