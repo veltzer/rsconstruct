@@ -244,28 +244,9 @@ pub fn list_tags(db_path: &str) -> Result<()> {
     Ok(())
 }
 
-/// Search tags matching a query string (substring match).
+/// Search for a tag and list files that have it (exact match).
 pub fn search_tags(db_path: &str, query: &str) -> Result<()> {
-    let db = open_tags_db(db_path)?;
-    let read_txn = db.begin_read().context("Failed to begin read transaction")?;
-    let table = read_txn.open_table(TAG_INDEX).context("Failed to open tag_index table")?;
-
-    let mut matches: Vec<String> = Vec::new();
-    let iter = table.iter().context("Failed to iterate tag_index")?;
-    for entry in iter {
-        let (key, _) = entry.context("Failed to read tag entry")?;
-        let tag = key.value();
-        if tag.contains(query) {
-            matches.push(tag.to_string());
-        }
-    }
-    matches.sort();
-
-    for tag in &matches {
-        println!("{}", tag);
-    }
-
-    Ok(())
+    files_for_tag(db_path, query)
 }
 
 /// List files that have a given tag.

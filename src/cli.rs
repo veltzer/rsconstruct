@@ -379,9 +379,9 @@ pub enum DepsShowFilter {
 
 #[derive(Subcommand)]
 pub enum TagsAction {
-    /// Search tags matching a query string
+    /// Search for an exact tag
     Search {
-        /// Substring to search for in tag names
+        /// Tag name to search for
         query: String,
     },
     /// List all unique tags
