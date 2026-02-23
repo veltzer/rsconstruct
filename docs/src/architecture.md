@@ -54,7 +54,7 @@ Detection heuristics per processor:
 | `taplo` | Project contains `.toml` files |
 | `json_schema` | Project contains `.json` files |
 
-Run `rsb processors auto` to see the auto-detection results for the current project.
+Run `rsb processors list` to see the auto-detection results for the current project.
 
 ### Products
 

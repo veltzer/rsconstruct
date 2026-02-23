@@ -39,12 +39,12 @@ fn processors_auto_detects_tera() {
         "hello"
     ).expect("Failed to write template");
 
-    let output = run_rsb_with_env(project_path, &["processors", "auto"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "processors auto failed: {}", String::from_utf8_lossy(&output.stderr));
+    let output = run_rsb_with_env(project_path, &["processors", "list"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(), "processors list failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("tera"), "Expected tera in auto-detect output");
-    assert!(stdout.contains("detected"), "Expected 'detected' for tera processor");
+    let tera_line = stdout.lines().find(|l| l.contains("tera")).expect("Expected tera in list output");
+    assert!(tera_line.contains("detected"), "Expected 'detected' for tera processor");
 }
 
 #[test]
@@ -238,6 +238,7 @@ fn processors_list_json() {
         assert!(entry.get("name").is_some(), "Entry should have 'name' field");
         assert!(entry.get("processor_type").is_some(), "Entry should have 'processor_type' field");
         assert!(entry.get("enabled").is_some(), "Entry should have 'enabled' field");
+        assert!(entry.get("detected").is_some(), "Entry should have 'detected' field");
         assert!(entry.get("hidden").is_some(), "Entry should have 'hidden' field");
         assert!(entry.get("batch").is_some(), "Entry should have 'batch' field");
         assert!(entry.get("description").is_some(), "Entry should have 'description' field");

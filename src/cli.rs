@@ -296,8 +296,6 @@ pub enum ProcessorAction {
         #[arg(short, long)]
         all: bool,
     },
-    /// Auto-detect which processors are relevant for this project
-    Auto,
     /// Show source and target files for each processor
     Files {
         /// Processor name (omit to show all enabled processors)

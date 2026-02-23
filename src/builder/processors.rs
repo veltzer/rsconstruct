@@ -22,6 +22,7 @@ pub fn list_processors_no_config(all: bool) -> Result<()> {
                     name: name.to_string(),
                     processor_type: proc.processor_type().as_str().to_string(),
                     enabled: false,
+                    detected: false,
                     hidden: proc.hidden(),
                     batch: proc.supports_batch(),
                     description: proc.description().to_string(),
@@ -73,6 +74,7 @@ impl Builder {
                                 name: name.to_string(),
                                 processor_type: proc.processor_type().as_str().to_string(),
                                 enabled: self.config.processor.is_enabled(name),
+                                detected: proc.auto_detect(&self.file_index),
                                 hidden: proc.hidden(),
                                 batch: proc.supports_batch(),
                                 description: proc.description().to_string(),
@@ -88,10 +90,13 @@ impl Builder {
                     if proc.hidden() && !all {
                         continue;
                     }
-                    let enabled_status = if self.config.processor.is_enabled(name) {
-                        color::green("enabled")
-                    } else {
-                        color::dim("disabled")
+                    let enabled = self.config.processor.is_enabled(name);
+                    let detected = proc.auto_detect(&self.file_index);
+                    let status = match (enabled, detected) {
+                        (true, true) => color::green("enabled, detected"),
+                        (true, false) => color::yellow("enabled, not detected"),
+                        (false, true) => color::yellow("disabled, detected"),
+                        (false, false) => color::dim("disabled"),
                     };
                     let hidden_tag = if proc.hidden() {
                         format!(" {}", color::dim("(hidden)"))
@@ -105,21 +110,7 @@ impl Builder {
                     } else {
                         String::new()
                     };
-                    println!("{} {}{} {}{} \u{2014} {}", name, proc_type, batch, enabled_status, hidden_tag, color::dim(proc.description()));
-                }
-            }
-            ProcessorAction::Auto => {
-                for name in &proc_names {
-                    let proc = &processors[name.as_str()];
-                    let detected = proc.auto_detect(&self.file_index);
-                    let enabled = self.config.processor.is_enabled(name);
-                    let status = match (detected, enabled) {
-                        (true, true) => color::green("detected, enabled"),
-                        (true, false) => color::yellow("detected, disabled"),
-                        (false, true) => color::yellow("not detected, enabled"),
-                        (false, false) => color::dim("not detected, disabled"),
-                    };
-                    println!("{:<12} {}", name, status);
+                    println!("{} {}{} {}{} \u{2014} {}", name, proc_type, batch, status, hidden_tag, color::dim(proc.description()));
                 }
             }
             ProcessorAction::Files { name, all } => {

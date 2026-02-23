@@ -89,12 +89,13 @@ pub struct ProcessorFileEntry {
     pub outputs: Vec<String>,
 }
 
-/// Entry for `rsb processors list --json` and `rsb processors all --json`.
+/// Entry for `rsb processors list --json`.
 #[derive(Debug, Serialize)]
 pub struct ProcessorListEntry {
     pub name: String,
     pub processor_type: String,
     pub enabled: bool,
+    pub detected: bool,
     pub hidden: bool,
     pub batch: bool,
     pub description: String,

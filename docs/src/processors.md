@@ -34,9 +34,8 @@ Enable processors in `rsb.toml`:
 enabled = ["tera", "ruff", "pylint", "pyrefly", "cc_single_file", "cppcheck", "shellcheck", "spellcheck", "make", "yamllint", "jq", "jsonlint", "taplo", "json_schema"]
 ```
 
-Use `rsb processors list` to see available processors with status and descriptions.
+Use `rsb processors list` to see available processors with enabled/detected status and descriptions.
 Use `rsb processors list --all` to include hidden processors.
-Use `rsb processors auto` to see which processors are auto-detected for the current project.
 Use `rsb processors files` to see which files each processor discovers.
 
 ## Available Processors

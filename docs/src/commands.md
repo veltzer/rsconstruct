@@ -192,9 +192,8 @@ rsb config validate       # Validate the configuration for errors and warnings
 ## `rsb processors`
 
 ```bash
-rsb processors list          # List processors with status and descriptions (works without rsb.toml)
+rsb processors list          # List processors with enabled/detected status and descriptions (works without rsb.toml)
 rsb processors list -a       # Include hidden processors
-rsb processors auto          # Auto-detect which processors are relevant for this project
 rsb processors files         # Show source and target files for each enabled processor
 rsb processors files ruff    # Show files for a specific processor
 rsb processors files -a      # Include disabled and hidden processors
