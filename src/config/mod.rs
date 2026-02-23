@@ -268,7 +268,7 @@ fn default_processors() -> Vec<String> {
         names::JSON_SCHEMA.into(),
         names::TAGS.into(),
         names::PIP.into(), names::SPHINX.into(), names::NPM.into(), names::GEM.into(),
-        names::MDL.into(),
+        names::MDL.into(), names::MARKDOWNLINT.into(),
     ]
 }
 
@@ -340,6 +340,8 @@ pub(crate) struct ProcessorConfig {
     pub gem: GemConfig,
     #[serde(default)]
     pub mdl: MdlConfig,
+    #[serde(default)]
+    pub markdownlint: MarkdownlintConfig,
     /// Captures unknown [processor.PLUGIN_NAME] sections for Lua plugins
     #[serde(flatten)]
     pub extra: HashMap<String, toml::Value>,
@@ -375,6 +377,7 @@ impl Default for ProcessorConfig {
             npm: NpmConfig::default(),
             gem: GemConfig::default(),
             mdl: MdlConfig::default(),
+            markdownlint: MarkdownlintConfig::default(),
             extra: HashMap::new(),
         }
     }
@@ -408,6 +411,7 @@ impl ProcessorConfig {
             "npm" => self.npm.enabled,
             "gem" => self.gem.enabled,
             "mdl" => self.mdl.enabled,
+            "markdownlint" => self.markdownlint.enabled,
             _ => true, // unknown processors (plugins) default to enabled
         }
     }
@@ -427,7 +431,7 @@ impl ProcessorConfig {
             &self.pyrefly.scan, &self.yamllint.scan, &self.jq.scan, &self.jsonlint.scan,
             &self.taplo.scan, &self.json_schema.scan, &self.tags.scan,
             &self.pip.scan, &self.sphinx.scan, &self.npm.scan, &self.gem.scan,
-            &self.mdl.scan,
+            &self.mdl.scan, &self.markdownlint.scan,
         ];
         let mut dirs: Vec<String> = scans.iter()
             .filter_map(|s| s.scan_dir.as_deref())
@@ -468,6 +472,7 @@ impl ProcessorConfig {
         self.npm.scan.resolve("", &["package.json"], MAKE_CARGO_EXCLUDES);
         self.gem.scan.resolve("", &["Gemfile"], MAKE_CARGO_EXCLUDES);
         self.mdl.scan.resolve("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
+        self.markdownlint.scan.resolve("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
     }
 }
 
@@ -577,6 +582,7 @@ fn validate_processor_fields(raw: &toml::Value) -> Result<()> {
             processor_names::NPM => NpmConfig::known_fields(),
             processor_names::GEM => GemConfig::known_fields(),
             processor_names::MDL => MdlConfig::known_fields(),
+            processor_names::MARKDOWNLINT => MarkdownlintConfig::known_fields(),
             _ => continue, // unknown processor name = Lua plugin, skip
         };
 

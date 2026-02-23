@@ -1092,6 +1092,56 @@ impl KnownFields for MdlConfig {
     }
 }
 
+fn default_markdownlint_bin() -> String {
+    "node_modules/.bin/markdownlint".into()
+}
+
+fn default_markdownlint_extra_inputs() -> Vec<String> {
+    vec![".markdownlint.json".into()]
+}
+
+fn default_npm_stamp() -> String {
+    "out/npm/root.stamp".into()
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct MarkdownlintConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_markdownlint_bin")]
+    pub markdownlint_bin: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default = "default_markdownlint_extra_inputs")]
+    pub extra_inputs: Vec<String>,
+    #[serde(default = "default_npm_stamp")]
+    pub npm_stamp: String,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for MarkdownlintConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            markdownlint_bin: "node_modules/.bin/markdownlint".into(),
+            args: Vec::new(),
+            extra_inputs: default_markdownlint_extra_inputs(),
+            npm_stamp: "out/npm/root.stamp".into(),
+            scan: default_scan!(extensions: [".md"]),
+        }
+    }
+}
+
+impl KnownFields for MarkdownlintConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "markdownlint_bin", "args", "extra_inputs", "npm_stamp",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
 fn default_bundler() -> String {
     "bundle".into()
 }

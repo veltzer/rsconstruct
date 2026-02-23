@@ -20,7 +20,7 @@ use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
 use crate::object_store::{ObjectStore, ObjectStoreOptions};
-use crate::processors::{CargoProcessor, CcProcessor, ClangTidyProcessor, CppcheckProcessor, GemProcessor, JqProcessor, JsonlintProcessor, JsonSchemaProcessor, LuaProcessor, MakeProcessor, MdlProcessor, MypyProcessor, NpmProcessor, PipProcessor, ProcessorMap, PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor, ShellcheckProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, SphinxProcessor, TagsProcessor, TaploProcessor, TeraProcessor, YamllintProcessor, names as proc_names};
+use crate::processors::{CargoProcessor, CcProcessor, ClangTidyProcessor, CppcheckProcessor, GemProcessor, JqProcessor, JsonlintProcessor, JsonSchemaProcessor, LuaProcessor, MakeProcessor, MarkdownlintProcessor, MdlProcessor, MypyProcessor, NpmProcessor, PipProcessor, ProcessorMap, PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor, ShellcheckProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, SphinxProcessor, TagsProcessor, TaploProcessor, TeraProcessor, YamllintProcessor, names as proc_names};
 use crate::remote_cache;
 use crate::tool_lock;
 
@@ -99,6 +99,7 @@ pub(crate) fn create_builtin_processors(cfg: &ProcessorConfig) -> ProcessorMap {
     Builder::register(&mut processors, proc_names::NPM, NpmProcessor::new(cfg.npm.clone()));
     Builder::register(&mut processors, proc_names::GEM, GemProcessor::new(cfg.gem.clone()));
     Builder::register(&mut processors, proc_names::MDL, MdlProcessor::new(cfg.mdl.clone()));
+    Builder::register(&mut processors, proc_names::MARKDOWNLINT, MarkdownlintProcessor::new(cfg.markdownlint.clone()));
 
     // Spellcheck processor (fallible init — silently skip on error)
     if let Ok(proc) = SpellcheckProcessor::new(cfg.spellcheck.clone()) {

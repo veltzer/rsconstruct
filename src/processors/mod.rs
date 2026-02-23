@@ -46,6 +46,7 @@ pub mod names {
     pub const NPM: &str = "npm";
     pub const GEM: &str = "gem";
     pub const MDL: &str = "mdl";
+    pub const MARKDOWNLINT: &str = "markdownlint";
 }
 
 /// Global flag: set to true on Ctrl+C so subprocesses can be killed promptly.
@@ -447,12 +448,12 @@ where
 pub use checkers::{
     CargoProcessor, ClangTidyProcessor, CppcheckProcessor,
     JqProcessor, JsonlintProcessor, JsonSchemaProcessor,
-    MakeProcessor, MdlProcessor, MypyProcessor, NpmProcessor, PipProcessor,
+    MakeProcessor, MarkdownlintProcessor, MdlProcessor, MypyProcessor, PipProcessor,
     PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor,
     ShellcheckProcessor, SleepProcessor, SpellcheckProcessor, SphinxProcessor,
     TaploProcessor, YamllintProcessor,
 };
-pub use generators::{CcProcessor, GemProcessor, TagsProcessor, TeraProcessor};
+pub use generators::{CcProcessor, GemProcessor, NpmProcessor, TagsProcessor, TeraProcessor};
 pub(crate) use generators::tags as tags_cmd;
 pub use lua_processor::LuaProcessor;
 

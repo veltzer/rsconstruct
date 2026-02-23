@@ -410,6 +410,13 @@ fn init_project() -> Result<()> {
 # gem_stamp = "out/gem/root.stamp"
 # extensions = [".md"]
 
+[processor.markdownlint]
+# markdownlint_bin = "node_modules/.bin/markdownlint"
+# args = []
+# extra_inputs = [".markdownlint.json"]
+# npm_stamp = "out/npm/root.stamp"
+# extensions = [".md"]
+
 [graph]
 # viewer = "google-chrome"
 

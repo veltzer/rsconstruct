@@ -366,9 +366,10 @@ mod clang_tidy;
 mod cppcheck;
 
 mod make;
+mod markdownlint;
 mod mdl;
 mod mypy;
-mod npm;
+
 mod pip;
 mod pylint;
 mod pyrefly;
@@ -389,9 +390,10 @@ pub use clang_tidy::ClangTidyProcessor;
 pub use cppcheck::CppcheckProcessor;
 
 pub use make::MakeProcessor;
+pub use markdownlint::MarkdownlintProcessor;
 pub use mdl::MdlProcessor;
 pub use mypy::MypyProcessor;
-pub use npm::NpmProcessor;
+
 pub use pip::PipProcessor;
 pub use pylint::PylintProcessor;
 pub use pyrefly::PyreflyProcessor;
