@@ -349,8 +349,8 @@ pub fn stats_tags(db_path: &str) -> Result<()> {
     println!("Files indexed:    {}", file_count);
     println!("Tag assignments:  {}", total_associations);
     println!("Unique tags:      {}", unique_tags);
-    println!("  bare tags:      {} (e.g. \"docker\")", bare_count);
-    println!("  key=value:      {} (e.g. \"level=intermediate\")", kv_count);
+    println!("  bare tags:      {}", bare_count);
+    println!("  key=value:      {}", kv_count);
 
     Ok(())
 }
