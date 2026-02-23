@@ -818,6 +818,42 @@ impl KnownFields for TaploConfig {
 
 checker_config!(JsonSchemaConfig, extensions: [".json"]);
 
+fn default_tags_output() -> String {
+    "out/tags/tags.db".into()
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct TagsConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_tags_output")]
+    pub output: String,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for TagsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            output: "out/tags/tags.db".into(),
+            extra_inputs: Vec::new(),
+            scan: default_scan!(extensions: [".md"]),
+        }
+    }
+}
+
+impl KnownFields for TagsConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "output", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
 fn default_shellcheck_checker() -> String {
     "shellcheck".into()
 }

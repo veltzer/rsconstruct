@@ -276,6 +276,15 @@ fn run() -> Result<()> {
             let builder = Builder::new()?;
             builder.deps(action)?;
         }
+        Commands::Tags { action } => {
+            let config = Config::load()?;
+            let db_path = &config.processor.tags.output;
+            match action {
+                cli::TagsAction::List => processors::tags_cmd::list_tags(db_path)?,
+                cli::TagsAction::Search { query } => processors::tags_cmd::search_tags(db_path, &query)?,
+                cli::TagsAction::Files { tag } => processors::tags_cmd::files_for_tag(db_path, &tag)?,
+            }
+        }
     }
 
     Ok(())

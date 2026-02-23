@@ -40,6 +40,7 @@ pub mod names {
     pub const TAPLO: &str = "taplo";
     pub const PYREFLY: &str = "pyrefly";
     pub const JSON_SCHEMA: &str = "json_schema";
+    pub const TAGS: &str = "tags";
 }
 
 /// Global flag: set to true on Ctrl+C so subprocesses can be killed promptly.
@@ -458,7 +459,8 @@ pub use checkers::{
     MakeProcessor, MypyProcessor, PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor,
     ShellcheckProcessor, SleepProcessor, SpellcheckProcessor, TaploProcessor, YamllintProcessor,
 };
-pub use generators::{CcProcessor, TeraProcessor};
+pub use generators::{CcProcessor, TagsProcessor, TeraProcessor};
+pub(crate) use generators::tags as tags_cmd;
 pub use lua_processor::LuaProcessor;
 
 /// Map from processor name to processor instance. Used throughout the build pipeline.

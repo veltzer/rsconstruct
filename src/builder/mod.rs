@@ -19,7 +19,7 @@ use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
 use crate::object_store::{ObjectStore, ObjectStoreOptions};
-use crate::processors::{CargoProcessor, CcProcessor, ClangTidyProcessor, CppcheckProcessor, JqProcessor, JsonlintProcessor, JsonSchemaProcessor, LuaProcessor, MakeProcessor, MypyProcessor, ProcessorMap, PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor, ShellcheckProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, TaploProcessor, TeraProcessor, YamllintProcessor, names as proc_names};
+use crate::processors::{CargoProcessor, CcProcessor, ClangTidyProcessor, CppcheckProcessor, JqProcessor, JsonlintProcessor, JsonSchemaProcessor, LuaProcessor, MakeProcessor, MypyProcessor, ProcessorMap, PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor, ShellcheckProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, TagsProcessor, TaploProcessor, TeraProcessor, YamllintProcessor, names as proc_names};
 use crate::remote_cache;
 use crate::tool_lock;
 
@@ -89,6 +89,7 @@ pub(crate) fn create_builtin_processors(cfg: &ProcessorConfig) -> ProcessorMap {
     Builder::register(&mut processors, proc_names::JSONLINT, JsonlintProcessor::new(cfg.jsonlint.clone()));
     Builder::register(&mut processors, proc_names::TAPLO, TaploProcessor::new(cfg.taplo.clone()));
     Builder::register(&mut processors, proc_names::JSON_SCHEMA, JsonSchemaProcessor::new(cfg.json_schema.clone()));
+    Builder::register(&mut processors, proc_names::TAGS, TagsProcessor::new(cfg.tags.clone()));
 
     // Spellcheck processor (fallible init — silently skip on error)
     if let Ok(proc) = SpellcheckProcessor::new(cfg.spellcheck.clone()) {

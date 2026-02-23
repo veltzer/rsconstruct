@@ -264,6 +264,7 @@ fn default_processors() -> Vec<String> {
         names::SHELLCHECK.into(), names::SPELLCHECK.into(), names::MAKE.into(),
         names::YAMLLINT.into(), names::JQ.into(), names::JSONLINT.into(), names::TAPLO.into(),
         names::JSON_SCHEMA.into(),
+        names::TAGS.into(),
     ]
 }
 
@@ -323,6 +324,8 @@ pub(crate) struct ProcessorConfig {
     pub taplo: TaploConfig,
     #[serde(default)]
     pub json_schema: JsonSchemaConfig,
+    #[serde(default)]
+    pub tags: TagsConfig,
     /// Captures unknown [processor.PLUGIN_NAME] sections for Lua plugins
     #[serde(flatten)]
     pub extra: HashMap<String, toml::Value>,
@@ -352,6 +355,7 @@ impl Default for ProcessorConfig {
             jsonlint: JsonlintConfig::default(),
             taplo: TaploConfig::default(),
             json_schema: JsonSchemaConfig::default(),
+            tags: TagsConfig::default(),
             extra: HashMap::new(),
         }
     }
@@ -379,6 +383,7 @@ impl ProcessorConfig {
             "jsonlint" => self.jsonlint.enabled,
             "taplo" => self.taplo.enabled,
             "json_schema" => self.json_schema.enabled,
+            "tags" => self.tags.enabled,
             _ => true, // unknown processors (plugins) default to enabled
         }
     }
@@ -396,7 +401,7 @@ impl ProcessorConfig {
             &self.shellcheck.scan, &self.spellcheck.scan, &self.sleep.scan,
             &self.make.scan, &self.cargo.scan, &self.rumdl.scan, &self.mypy.scan,
             &self.pyrefly.scan, &self.yamllint.scan, &self.jq.scan, &self.jsonlint.scan,
-            &self.taplo.scan, &self.json_schema.scan,
+            &self.taplo.scan, &self.json_schema.scan, &self.tags.scan,
         ];
         let mut dirs: Vec<String> = scans.iter()
             .filter_map(|s| s.scan_dir.as_deref())
@@ -431,6 +436,7 @@ impl ProcessorConfig {
         self.jsonlint.scan.resolve("", &[".json"], BUILD_TOOL_EXCLUDES);
         self.taplo.scan.resolve("", &[".toml"], BUILD_TOOL_EXCLUDES);
         self.json_schema.scan.resolve("", &[".json"], BUILD_TOOL_EXCLUDES);
+        self.tags.scan.resolve("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
     }
 }
 
@@ -534,6 +540,7 @@ fn validate_processor_fields(raw: &toml::Value) -> Result<()> {
             processor_names::JSONLINT => JsonlintConfig::known_fields(),
             processor_names::TAPLO => TaploConfig::known_fields(),
             processor_names::JSON_SCHEMA => JsonSchemaConfig::known_fields(),
+            processor_names::TAGS => TagsConfig::known_fields(),
             _ => continue, // unknown processor name = Lua plugin, skip
         };
 

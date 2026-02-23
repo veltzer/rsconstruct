@@ -243,6 +243,11 @@ pub enum Commands {
         #[command(subcommand)]
         action: DepsAction,
     },
+    /// Search and query frontmatter tags from markdown files
+    Tags {
+        #[command(subcommand)]
+        action: TagsAction,
+    },
 }
 
 #[derive(Subcommand)]
@@ -369,6 +374,22 @@ pub enum DepsShowFilter {
         /// Analyzer names (e.g., "cpp", "python")
         #[arg(required = true)]
         analyzers: Vec<String>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum TagsAction {
+    /// Search tags matching a query string
+    Search {
+        /// Substring to search for in tag names
+        query: String,
+    },
+    /// List all unique tags
+    List,
+    /// List files that have a given tag
+    Files {
+        /// Tag name to search for
+        tag: String,
     },
 }
 
