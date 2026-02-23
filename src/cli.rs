@@ -422,7 +422,7 @@ pub enum TagsAction {
     },
     /// Validate tags against .tags file without building
     Validate,
-    /// Generate .tags file from current tag union
+    /// Generate .tags file from current tag union (requires 'rsb build' first)
     Init,
     /// Add a tag to the .tags file
     Add {

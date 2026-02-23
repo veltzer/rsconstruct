@@ -445,3 +445,53 @@ fn tags_numeric_and_boolean_values() {
     assert!(stdout.contains("difficulty=3"), "numeric value should be indexed: {}", stdout);
     assert!(stdout.contains("published=true"), "boolean value should be indexed: {}", stdout);
 }
+
+#[test]
+fn tags_stale_entries_cleared_on_rebuild() {
+    let temp_dir = setup_tags_project(
+        &[
+            ("a.md", "---\ntags:\n  - alpha\n  - beta\n---\n"),
+        ],
+        None,
+    );
+    let p = temp_dir.path();
+    build_project(p);
+
+    // Verify both tags exist
+    let list1 = run_rsb_with_env(p, &["tags", "list"], &[("NO_COLOR", "1")]);
+    let stdout1 = String::from_utf8_lossy(&list1.stdout);
+    assert!(stdout1.contains("alpha"));
+    assert!(stdout1.contains("beta"));
+
+    // Remove "beta" tag from the file and force rebuild
+    fs::write(p.join("a.md"), "---\ntags:\n  - alpha\n---\n").unwrap();
+    let rebuild = run_rsb_with_env(p, &["build", "--force"], &[("NO_COLOR", "1")]);
+    assert!(rebuild.status.success(), "rebuild failed: {}", String::from_utf8_lossy(&rebuild.stderr));
+
+    // "beta" should no longer appear
+    let list2 = run_rsb_with_env(p, &["tags", "list"], &[("NO_COLOR", "1")]);
+    let stdout2 = String::from_utf8_lossy(&list2.stdout);
+    assert!(stdout2.contains("alpha"), "alpha should still exist: {}", stdout2);
+    assert!(!stdout2.contains("beta"), "beta should be gone after rebuild: {}", stdout2);
+}
+
+#[test]
+fn tags_empty_inline_list() {
+    let temp_dir = setup_tags_project(
+        &[
+            ("a.md", "---\ntags: []\nlevel: beginner\n---\n# Content\n"),
+        ],
+        None,
+    );
+    let p = temp_dir.path();
+    build_project(p);
+
+    // The empty list should not produce any bare tags (no phantom empty-string tag)
+    let list = run_rsb_with_env(p, &["tags", "list"], &[("NO_COLOR", "1")]);
+    assert!(list.status.success());
+    let stdout = String::from_utf8_lossy(&list.stdout);
+    // Should only have level=beginner, no empty tags
+    assert!(stdout.contains("level=beginner"), "should have level=beginner: {}", stdout);
+    let tags: Vec<&str> = stdout.lines().collect();
+    assert_eq!(tags.len(), 1, "should have exactly 1 tag (level=beginner), got: {:?}", tags);
+}

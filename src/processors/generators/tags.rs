@@ -112,18 +112,8 @@ impl ProductDiscovery for TagsProcessor {
                                     .or_default()
                                     .insert(file_key.clone());
                             }
-                            serde_json::Value::Number(n) => {
-                                let tag = format!("{}={}", key, n);
-                                tag_to_files.entry(tag)
-                                    .or_default()
-                                    .insert(file_key.clone());
-                            }
-                            serde_json::Value::Bool(b) => {
-                                let tag = format!("{}={}", key, b);
-                                tag_to_files.entry(tag)
-                                    .or_default()
-                                    .insert(file_key.clone());
-                            }
+                            // parse_simple_yaml produces only String values for scalars,
+                            // so Number/Bool/Null/Object cannot occur here.
                             _ => {}
                         }
                     }
@@ -163,7 +153,11 @@ impl ProductDiscovery for TagsProcessor {
             bail!("Tags file not found: {}. Run 'rsb tags init' to create one.", self.config.tags_file);
         }
 
-        // Write to redb database
+        // Delete old database to avoid stale entries from previous builds
+        if output_path.exists() {
+            fs::remove_file(output_path)
+                .with_context(|| format!("Failed to remove old tags database: {}", output_path.display()))?;
+        }
         let db = crate::db::open_or_recreate(output_path, "tags database")?;
 
         let write_txn = db.begin_write()
@@ -280,13 +274,17 @@ fn parse_simple_yaml(block: &str) -> serde_json::Value {
             } else if value.starts_with('[') && value.ends_with(']') {
                 // Inline list: [item1, item2, item3]
                 let inner = &value[1..value.len() - 1];
-                let items: Vec<serde_json::Value> = inner.split(',')
-                    .map(|s| {
-                        let val = strip_yaml_quotes(s.trim());
-                        serde_json::Value::String(val.to_string())
-                    })
-                    .collect();
-                map.insert(key, serde_json::Value::Array(items));
+                if inner.trim().is_empty() {
+                    map.insert(key, serde_json::Value::Array(Vec::new()));
+                } else {
+                    let items: Vec<serde_json::Value> = inner.split(',')
+                        .map(|s| {
+                            let val = strip_yaml_quotes(s.trim());
+                            serde_json::Value::String(val.to_string())
+                        })
+                        .collect();
+                    map.insert(key, serde_json::Value::Array(items));
+                }
             } else {
                 let val = strip_yaml_quotes(value);
                 map.insert(key, serde_json::Value::String(val.to_string()));
@@ -570,15 +568,24 @@ pub fn frontmatter_for_file(db_path: &str, path: &str) -> Result<()> {
         found_key = Some(path.to_string());
         found_value = Some(value.value().to_string());
     } else {
-        // Suffix match with path boundary
+        // Suffix match with path boundary — collect all matches to detect ambiguity
+        let mut all_matches: Vec<(String, String)> = Vec::new();
         let iter = table.iter().context("Failed to iterate frontmatter")?;
         for entry in iter {
             let (key, value) = entry.context("Failed to read frontmatter entry")?;
             if path_matches(key.value(), path) {
-                found_key = Some(key.value().to_string());
-                found_value = Some(value.value().to_string());
-                break;
+                all_matches.push((key.value().to_string(), value.value().to_string()));
             }
+        }
+        if all_matches.len() > 1 {
+            eprintln!("Warning: '{}' matches {} files, showing first:", path, all_matches.len());
+            for (k, _) in &all_matches {
+                eprintln!("  {}", k);
+            }
+        }
+        if let Some((k, v)) = all_matches.into_iter().next() {
+            found_key = Some(k);
+            found_value = Some(v);
         }
     }
 
@@ -624,6 +631,15 @@ pub fn unused_tags(db_path: &str, tags_file: &str, strict: bool) -> Result<()> {
         .collect();
     unused.sort();
 
+    if strict && !unused.is_empty() {
+        // In strict mode, report via error (nonzero exit) with full details
+        let mut msg = format!("{} unused tag(s) in {}:\n", unused.len(), tags_file);
+        for tag in &unused {
+            msg.push_str(&format!("  {}\n", tag));
+        }
+        bail!("{}", msg.trim_end());
+    }
+
     if crate::json_output::is_json_mode() {
         println!("{}", serde_json::to_string(&unused).expect(crate::errors::JSON_SERIALIZE));
     } else if unused.is_empty() {
@@ -633,10 +649,6 @@ pub fn unused_tags(db_path: &str, tags_file: &str, strict: bool) -> Result<()> {
         for tag in &unused {
             println!("  {}", tag);
         }
-    }
-
-    if strict && !unused.is_empty() {
-        bail!("{} unused tag(s) found in {}", unused.len(), tags_file);
     }
 
     Ok(())
@@ -660,7 +672,11 @@ pub fn validate_tags(db_path: &str, tags_file: &str) -> Result<()> {
     unknown.sort();
 
     if unknown.is_empty() {
-        println!("All tags are valid.");
+        if crate::json_output::is_json_mode() {
+            println!("{}", serde_json::json!({"valid": true, "unknown_count": 0}));
+        } else {
+            println!("All tags are valid.");
+        }
     } else {
         let mut msg = format!("{} unknown tag(s) found:\n", unknown.len());
         for tag in &unknown {
@@ -790,7 +806,9 @@ pub fn sync_tags(db_path: &str, tags_file: &str, prune: bool, verbose: bool) -> 
 
     let mut sorted: Vec<String> = final_tags.into_iter().collect();
     sorted.sort();
-    write_tags_file(tags_file_path, &sorted)?;
+    if !added.is_empty() || !removed.is_empty() {
+        write_tags_file(tags_file_path, &sorted)?;
+    }
 
     if crate::json_output::is_json_mode() {
         println!("{}", serde_json::json!({
@@ -903,9 +921,13 @@ fn load_tags_file_sorted(path: &Path) -> Result<Vec<String>> {
     Ok(tags)
 }
 
-/// Write a sorted list of tags to a .tags file, one per line.
+/// Write a sorted list of tags to a .tags file, one per line with a header comment.
 fn write_tags_file(path: &Path, tags: &[String]) -> Result<()> {
-    let content = tags.join("\n") + "\n";
+    let mut content = String::from("# Allowed tags for rsb frontmatter validation\n# One tag per line. Wildcards supported (e.g. duration_days=*)\n");
+    for tag in tags {
+        content.push_str(tag);
+        content.push('\n');
+    }
     fs::write(path, content)
         .with_context(|| format!("Failed to write {}", path.display()))
 }
@@ -941,8 +963,8 @@ fn pattern_matches_any_tag(pattern: &str, db_tags: &HashSet<String>) -> bool {
 /// Find the most similar tag in the allowed set using Levenshtein distance.
 /// The threshold scales with tag length to avoid spurious matches on short tags.
 fn find_similar_tag(tag: &str, allowed: &HashSet<String>) -> Option<String> {
-    // Scale threshold: at least 1, at most 3, roughly tag.len()/3
-    let max_dist = (tag.len() / 3).clamp(1, 3);
+    // Scale threshold: at least 1, at most 3, roughly tag_char_count/3
+    let max_dist = (tag.chars().count() / 3).clamp(1, 3);
     let mut best: Option<(String, usize)> = None;
     for candidate in allowed {
         // Skip wildcard patterns
@@ -985,4 +1007,241 @@ fn levenshtein(a: &str, b: &str) -> usize {
     }
 
     prev[b_len]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- parse_frontmatter ---
+
+    #[test]
+    fn frontmatter_basic() {
+        let content = "---\ntitle: Hello\ntags:\n  - foo\n---\n# Body\n";
+        let fm = parse_frontmatter(content).unwrap();
+        assert_eq!(fm["title"], "Hello");
+        assert_eq!(fm["tags"][0], "foo");
+    }
+
+    #[test]
+    fn frontmatter_no_markers() {
+        assert!(parse_frontmatter("# Just a heading\n").is_none());
+    }
+
+    #[test]
+    fn frontmatter_only_opening() {
+        assert!(parse_frontmatter("---\ntitle: Hello\n").is_none());
+    }
+
+    #[test]
+    fn frontmatter_empty_block() {
+        // Empty frontmatter (no content between --- markers) returns None
+        // because there is no "\n---" after the opening marker's newline
+        let content = "---\n---\n# Body\n";
+        assert!(parse_frontmatter(content).is_none());
+    }
+
+    // --- parse_simple_yaml ---
+
+    #[test]
+    fn yaml_scalar_values() {
+        let block = "title: Hello World\nlevel: beginner";
+        let v = parse_simple_yaml(block);
+        assert_eq!(v["title"], "Hello World");
+        assert_eq!(v["level"], "beginner");
+    }
+
+    #[test]
+    fn yaml_colon_in_value() {
+        let block = "url: https://example.com/path\ntime: 10:30";
+        let v = parse_simple_yaml(block);
+        assert_eq!(v["url"], "https://example.com/path");
+        assert_eq!(v["time"], "10:30");
+    }
+
+    #[test]
+    fn yaml_multiline_list() {
+        let block = "tags:\n  - alpha\n  - beta\n  - gamma";
+        let v = parse_simple_yaml(block);
+        let tags = v["tags"].as_array().unwrap();
+        assert_eq!(tags.len(), 3);
+        assert_eq!(tags[0], "alpha");
+        assert_eq!(tags[1], "beta");
+        assert_eq!(tags[2], "gamma");
+    }
+
+    #[test]
+    fn yaml_inline_list() {
+        let block = "tags: [alpha, beta, gamma]";
+        let v = parse_simple_yaml(block);
+        let tags = v["tags"].as_array().unwrap();
+        assert_eq!(tags.len(), 3);
+        assert_eq!(tags[0], "alpha");
+        assert_eq!(tags[2], "gamma");
+    }
+
+    #[test]
+    fn yaml_empty_inline_list() {
+        let block = "tags: []";
+        let v = parse_simple_yaml(block);
+        let tags = v["tags"].as_array().unwrap();
+        assert!(tags.is_empty());
+    }
+
+    #[test]
+    fn yaml_quoted_values() {
+        let block = "name: \"quoted value\"\nother: 'single quoted'";
+        let v = parse_simple_yaml(block);
+        assert_eq!(v["name"], "quoted value");
+        assert_eq!(v["other"], "single quoted");
+    }
+
+    #[test]
+    fn yaml_list_no_leading_whitespace() {
+        let block = "tags:\n- alpha\n- beta";
+        let v = parse_simple_yaml(block);
+        let tags = v["tags"].as_array().unwrap();
+        assert_eq!(tags.len(), 2);
+        assert_eq!(tags[0], "alpha");
+    }
+
+    #[test]
+    fn yaml_empty_block() {
+        let v = parse_simple_yaml("");
+        assert!(v.as_object().unwrap().is_empty());
+    }
+
+    #[test]
+    fn yaml_key_no_space_after_colon() {
+        // "tags:" with no space starts a list
+        let block = "tags:\n  - item";
+        let v = parse_simple_yaml(block);
+        let tags = v["tags"].as_array().unwrap();
+        assert_eq!(tags.len(), 1);
+    }
+
+    // --- strip_yaml_quotes ---
+
+    #[test]
+    fn strip_double_quotes() {
+        assert_eq!(strip_yaml_quotes("\"hello\""), "hello");
+    }
+
+    #[test]
+    fn strip_single_quotes() {
+        assert_eq!(strip_yaml_quotes("'hello'"), "hello");
+    }
+
+    #[test]
+    fn strip_no_quotes() {
+        assert_eq!(strip_yaml_quotes("hello"), "hello");
+    }
+
+    #[test]
+    fn strip_mismatched_quotes() {
+        assert_eq!(strip_yaml_quotes("\"hello'"), "\"hello'");
+    }
+
+    #[test]
+    fn strip_single_char() {
+        assert_eq!(strip_yaml_quotes("x"), "x");
+    }
+
+    #[test]
+    fn strip_empty() {
+        assert_eq!(strip_yaml_quotes(""), "");
+    }
+
+    // --- path_matches ---
+
+    #[test]
+    fn path_exact_match() {
+        assert!(path_matches("foo.md", "foo.md"));
+    }
+
+    #[test]
+    fn path_suffix_match() {
+        assert!(path_matches("sub/foo.md", "foo.md"));
+        assert!(path_matches("a/b/foo.md", "b/foo.md"));
+    }
+
+    #[test]
+    fn path_no_false_suffix() {
+        // "barfoo.md" should NOT match query "foo.md"
+        assert!(!path_matches("barfoo.md", "foo.md"));
+        assert!(!path_matches("sub/barfoo.md", "foo.md"));
+    }
+
+    #[test]
+    fn path_query_longer_than_stored() {
+        assert!(!path_matches("foo.md", "sub/foo.md"));
+    }
+
+    #[test]
+    fn path_empty_strings() {
+        assert!(path_matches("", ""));
+        assert!(!path_matches("foo", ""));
+        // empty query with non-empty stored: stored.len() > 0, boundary would need -1
+        // but stored.len() > query.len() is true, boundary = stored.len() - 0 - 1
+        // stored.as_bytes().get(boundary) checks for '/'
+    }
+
+    // --- levenshtein ---
+
+    #[test]
+    fn levenshtein_identical() {
+        assert_eq!(levenshtein("docker", "docker"), 0);
+    }
+
+    #[test]
+    fn levenshtein_empty() {
+        assert_eq!(levenshtein("", ""), 0);
+        assert_eq!(levenshtein("abc", ""), 3);
+        assert_eq!(levenshtein("", "abc"), 3);
+    }
+
+    #[test]
+    fn levenshtein_one_edit() {
+        assert_eq!(levenshtein("docker", "dockker"), 1);
+        assert_eq!(levenshtein("python", "pyhton"), 2); // transposition = 2 edits
+    }
+
+    #[test]
+    fn levenshtein_single_char() {
+        assert_eq!(levenshtein("a", "b"), 1);
+        assert_eq!(levenshtein("a", "a"), 0);
+    }
+
+    // --- tag_matches_allowed ---
+
+    #[test]
+    fn tag_allowed_exact() {
+        let allowed: HashSet<String> = ["docker", "python"].iter().map(|s| s.to_string()).collect();
+        assert!(tag_matches_allowed("docker", &allowed));
+        assert!(!tag_matches_allowed("rust", &allowed));
+    }
+
+    #[test]
+    fn tag_allowed_wildcard() {
+        let allowed: HashSet<String> = ["level=*", "docker"].iter().map(|s| s.to_string()).collect();
+        assert!(tag_matches_allowed("level=beginner", &allowed));
+        assert!(tag_matches_allowed("level=advanced", &allowed));
+        assert!(!tag_matches_allowed("difficulty=3", &allowed));
+    }
+
+    // --- pattern_matches_any_tag ---
+
+    #[test]
+    fn pattern_literal_match() {
+        let db: HashSet<String> = ["docker", "python"].iter().map(|s| s.to_string()).collect();
+        assert!(pattern_matches_any_tag("docker", &db));
+        assert!(!pattern_matches_any_tag("rust", &db));
+    }
+
+    #[test]
+    fn pattern_wildcard_match() {
+        let db: HashSet<String> = ["level=beginner", "level=advanced"].iter().map(|s| s.to_string()).collect();
+        assert!(pattern_matches_any_tag("level=*", &db));
+        assert!(!pattern_matches_any_tag("difficulty=*", &db));
+    }
 }
