@@ -448,12 +448,12 @@ where
 pub use checkers::{
     CargoProcessor, ClangTidyProcessor, CppcheckProcessor,
     JqProcessor, JsonlintProcessor, JsonSchemaProcessor,
-    MakeProcessor, MarkdownlintProcessor, MdlProcessor, MypyProcessor, PipProcessor,
+    MakeProcessor, MarkdownlintProcessor, MdlProcessor, MypyProcessor,
     PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor,
     ShellcheckProcessor, SleepProcessor, SpellcheckProcessor, SphinxProcessor,
     TaploProcessor, YamllintProcessor,
 };
-pub use generators::{CcProcessor, GemProcessor, NpmProcessor, TagsProcessor, TeraProcessor};
+pub use generators::{CcProcessor, GemProcessor, NpmProcessor, PipProcessor, TagsProcessor, TeraProcessor};
 pub(crate) use generators::tags as tags_cmd;
 pub use lua_processor::LuaProcessor;
 

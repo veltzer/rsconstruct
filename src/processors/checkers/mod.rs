@@ -370,7 +370,7 @@ mod markdownlint;
 mod mdl;
 mod mypy;
 
-mod pip;
+
 mod pylint;
 mod pyrefly;
 mod ruff;
@@ -394,7 +394,7 @@ pub use markdownlint::MarkdownlintProcessor;
 pub use mdl::MdlProcessor;
 pub use mypy::MypyProcessor;
 
-pub use pip::PipProcessor;
+
 pub use pylint::PylintProcessor;
 pub use pyrefly::PyreflyProcessor;
 pub use ruff::RuffProcessor;
