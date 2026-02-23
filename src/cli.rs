@@ -379,11 +379,14 @@ pub enum DepsShowFilter {
 
 #[derive(Subcommand)]
 pub enum TagsAction {
-    /// List files matching all given tags (AND semantics)
+    /// List files matching given tags (AND by default, --or for OR)
     Files {
         /// Tags: bare values (e.g. "docker") or key=value (e.g. "level=advanced")
         #[arg(required = true)]
         tags: Vec<String>,
+        /// Use OR semantics (match files with any of the given tags)
+        #[arg(long, short)]
+        or: bool,
     },
     /// Search for tags containing a substring
     GrepTags {
@@ -392,8 +395,39 @@ pub enum TagsAction {
     },
     /// List all unique tags
     List,
+    /// Show each tag with its file count, sorted by frequency
+    Count,
+    /// Show tags grouped by prefix/category
+    Tree,
     /// Show statistics about the tags database
     Stats,
+    /// List all tags for a specific file
+    ForFile {
+        /// Path to the file
+        path: String,
+    },
+    /// List tags in .tags that are not used by any file
+    Unused,
+    /// Validate tags against .tags file without building
+    Validate,
+    /// Generate .tags file from current tag union
+    Init,
+    /// Add a tag to the .tags file
+    Add {
+        /// Tag to add
+        tag: String,
+    },
+    /// Remove a tag from the .tags file
+    Remove {
+        /// Tag to remove
+        tag: String,
+    },
+    /// Sync .tags file with current tag union (add missing, optionally prune unused)
+    Sync {
+        /// Also remove tags from .tags that are no longer used
+        #[arg(long)]
+        prune: bool,
+    },
 }
 
 /// CLI arguments shared between Build and Watch commands.

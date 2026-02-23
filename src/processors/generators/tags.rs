@@ -124,18 +124,11 @@ impl ProductDiscovery for TagsProcessor {
         // Validate tags against allowed set if tags file exists
         let tags_file_path = Path::new(&self.config.tags_file);
         if tags_file_path.exists() {
-            let content = fs::read_to_string(tags_file_path)
-                .with_context(|| format!("Failed to read tags file: {}", tags_file_path.display()))?;
-            let allowed: HashSet<String> = content
-                .lines()
-                .map(|line| line.trim())
-                .filter(|line| !line.is_empty() && !line.starts_with('#'))
-                .map(|line| line.to_string())
-                .collect();
+            let allowed = load_tags_file(tags_file_path)?;
 
             let mut unknown: Vec<(String, Vec<String>)> = Vec::new();
             for (tag, files) in &tag_to_files {
-                if !allowed.contains(tag) {
+                if !tag_matches_allowed(tag, &allowed) {
                     unknown.push((tag.clone(), files.clone()));
                 }
             }
@@ -143,13 +136,19 @@ impl ProductDiscovery for TagsProcessor {
                 unknown.sort_by(|a, b| a.0.cmp(&b.0));
                 let mut msg = String::from("Unknown tags found (not in .tags file):\n");
                 for (tag, files) in &unknown {
-                    msg.push_str(&format!("  {}\n", tag));
+                    msg.push_str(&format!("  {}", tag));
+                    if let Some(suggestion) = find_similar_tag(tag, &allowed) {
+                        msg.push_str(&format!(" (did you mean '{}'?)", suggestion));
+                    }
+                    msg.push('\n');
                     for file in files {
                         msg.push_str(&format!("    - {}\n", file));
                     }
                 }
                 bail!("{}", msg.trim_end());
             }
+        } else if self.config.tags_file_strict {
+            bail!("Tags file not found: {}. Run 'rsb tags init' to create one.", self.config.tags_file);
         }
 
         // Write to redb database
@@ -320,8 +319,8 @@ pub fn grep_tags(db_path: &str, text: &str) -> Result<()> {
     Ok(())
 }
 
-/// List files that have all the given tags (AND semantics).
-pub fn files_for_tags(db_path: &str, tags: &[String]) -> Result<()> {
+/// List files matching given tags. AND by default, OR if `use_or` is true.
+pub fn files_for_tags(db_path: &str, tags: &[String], use_or: bool) -> Result<()> {
     let db = open_tags_db(db_path)?;
     let read_txn = db.begin_read().context("Failed to begin read transaction")?;
     let table = read_txn.open_table(TAG_INDEX).context("Failed to open tag_index table")?;
@@ -338,17 +337,76 @@ pub fn files_for_tags(db_path: &str, tags: &[String]) -> Result<()> {
             None => std::collections::BTreeSet::new(),
         };
         result = Some(match result {
-            Some(acc) => acc.intersection(&files).cloned().collect(),
+            Some(acc) => {
+                if use_or {
+                    acc.union(&files).cloned().collect()
+                } else {
+                    acc.intersection(&files).cloned().collect()
+                }
+            }
             None => files,
         });
     }
 
     let files = result.unwrap_or_default();
     if files.is_empty() {
-        println!("No files found matching all tags: {}", tags.join(", "));
+        let mode = if use_or { "any" } else { "all" };
+        println!("No files found matching {} tags: {}", mode, tags.join(", "));
     } else {
         for file in &files {
             println!("{}", file);
+        }
+    }
+
+    Ok(())
+}
+
+/// Show each tag with its file count, sorted by frequency (descending).
+pub fn count_tags(db_path: &str) -> Result<()> {
+    let tag_counts = load_tag_counts(db_path)?;
+    let mut entries: Vec<(String, usize)> = tag_counts.into_iter().collect();
+    entries.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+
+    for (tag, count) in &entries {
+        println!("{:>4}  {}", count, tag);
+    }
+
+    Ok(())
+}
+
+/// Show tags grouped by prefix/category.
+pub fn tree_tags(db_path: &str) -> Result<()> {
+    let tag_counts = load_tag_counts(db_path)?;
+
+    // Split into key=value groups and bare tags
+    let mut groups: std::collections::BTreeMap<String, Vec<(String, usize)>> = std::collections::BTreeMap::new();
+    let mut bare: Vec<(String, usize)> = Vec::new();
+
+    for (tag, count) in &tag_counts {
+        if let Some((key, value)) = tag.split_once('=') {
+            groups.entry(key.to_string())
+                .or_default()
+                .push((value.to_string(), *count));
+        } else {
+            bare.push((tag.clone(), *count));
+        }
+    }
+
+    // Print key=value groups
+    for (key, mut values) in groups {
+        values.sort_by(|a, b| a.0.cmp(&b.0));
+        println!("{}=", key);
+        for (value, count) in &values {
+            println!("  {:>4}  {}", count, value);
+        }
+    }
+
+    // Print bare tags
+    if !bare.is_empty() {
+        bare.sort_by(|a, b| a.0.cmp(&b.0));
+        println!("(bare tags)");
+        for (tag, count) in &bare {
+            println!("  {:>4}  {}", count, tag);
         }
     }
 
@@ -390,4 +448,327 @@ pub fn stats_tags(db_path: &str) -> Result<()> {
     println!("  key=value:      {}", kv_count);
 
     Ok(())
+}
+
+/// List all tags for a specific file.
+pub fn tags_for_file(db_path: &str, path: &str) -> Result<()> {
+    let db = open_tags_db(db_path)?;
+    let read_txn = db.begin_read().context("Failed to begin read transaction")?;
+    let table = read_txn.open_table(TAG_INDEX).context("Failed to open tag_index table")?;
+
+    let mut file_tags: Vec<String> = Vec::new();
+    let iter = table.iter().context("Failed to iterate tag_index")?;
+    for entry in iter {
+        let (key, value) = entry.context("Failed to read tag entry")?;
+        let files: Vec<String> = serde_json::from_str(value.value())
+            .context("Failed to parse tag file list")?;
+        if files.iter().any(|f| f == path || f.ends_with(path)) {
+            file_tags.push(key.value().to_string());
+        }
+    }
+    file_tags.sort();
+
+    if file_tags.is_empty() {
+        println!("No tags found for: {}", path);
+    } else {
+        for tag in &file_tags {
+            println!("{}", tag);
+        }
+    }
+
+    Ok(())
+}
+
+/// List tags in .tags that are not used by any file.
+pub fn unused_tags(db_path: &str, tags_file: &str) -> Result<()> {
+    let tags_file_path = Path::new(tags_file);
+    if !tags_file_path.exists() {
+        bail!("Tags file not found: {}", tags_file);
+    }
+
+    let allowed = load_tags_file(tags_file_path)?;
+    let db_tags = load_all_tags(db_path)?;
+
+    let mut unused: Vec<&String> = allowed.iter()
+        .filter(|t| !db_tags.contains(*t))
+        .collect();
+    unused.sort();
+
+    if unused.is_empty() {
+        println!("All tags in {} are in use.", tags_file);
+    } else {
+        for tag in &unused {
+            println!("{}", tag);
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate tags against .tags file without building.
+pub fn validate_tags(db_path: &str, tags_file: &str) -> Result<()> {
+    let tags_file_path = Path::new(tags_file);
+    if !tags_file_path.exists() {
+        bail!("Tags file not found: {}. Run 'rsb tags init' to create one.", tags_file);
+    }
+
+    let allowed = load_tags_file(tags_file_path)?;
+    let db_tags = load_all_tags(db_path)?;
+    let tag_counts = load_tag_counts(db_path)?;
+
+    let mut unknown: Vec<String> = db_tags.iter()
+        .filter(|t| !tag_matches_allowed(t, &allowed))
+        .cloned()
+        .collect();
+    unknown.sort();
+
+    if unknown.is_empty() {
+        println!("All tags are valid.");
+    } else {
+        let mut msg = format!("{} unknown tag(s) found:\n", unknown.len());
+        for tag in &unknown {
+            let count = tag_counts.get(tag).copied().unwrap_or(0);
+            msg.push_str(&format!("  {} ({} file(s))", tag, count));
+            // Suggest similar tags
+            if let Some(suggestion) = find_similar_tag(tag, &allowed) {
+                msg.push_str(&format!(" - did you mean '{}'?", suggestion));
+            }
+            msg.push('\n');
+        }
+        bail!("{}", msg.trim_end());
+    }
+
+    Ok(())
+}
+
+/// Generate .tags file from current tag union.
+pub fn init_tags(db_path: &str, tags_file: &str) -> Result<()> {
+    let tags_file_path = Path::new(tags_file);
+    if tags_file_path.exists() {
+        bail!("{} already exists. Use 'rsb tags sync' to update it.", tags_file);
+    }
+
+    let tags = load_all_tags_sorted(db_path)?;
+    let content = tags.join("\n") + "\n";
+    fs::write(tags_file_path, content)
+        .with_context(|| format!("Failed to write {}", tags_file))?;
+    println!("Created {} with {} tags.", tags_file, tags.len());
+
+    Ok(())
+}
+
+/// Add a tag to the .tags file (sorted, deduplicated).
+pub fn add_tag(tags_file: &str, tag: &str) -> Result<()> {
+    let tags_file_path = Path::new(tags_file);
+    let mut tags = if tags_file_path.exists() {
+        load_tags_file_sorted(tags_file_path)?
+    } else {
+        Vec::new()
+    };
+
+    if tags.iter().any(|t| t == tag) {
+        println!("Tag '{}' already in {}.", tag, tags_file);
+        return Ok(());
+    }
+
+    tags.push(tag.to_string());
+    tags.sort();
+    write_tags_file(tags_file_path, &tags)?;
+    println!("Added '{}' to {}.", tag, tags_file);
+
+    Ok(())
+}
+
+/// Remove a tag from the .tags file.
+pub fn remove_tag(tags_file: &str, tag: &str) -> Result<()> {
+    let tags_file_path = Path::new(tags_file);
+    if !tags_file_path.exists() {
+        bail!("Tags file not found: {}", tags_file);
+    }
+
+    let mut tags = load_tags_file_sorted(tags_file_path)?;
+    let before_len = tags.len();
+    tags.retain(|t| t != tag);
+
+    if tags.len() == before_len {
+        println!("Tag '{}' not found in {}.", tag, tags_file);
+    } else {
+        write_tags_file(tags_file_path, &tags)?;
+        println!("Removed '{}' from {}.", tag, tags_file);
+    }
+
+    Ok(())
+}
+
+/// Sync .tags file with current tag union.
+pub fn sync_tags(db_path: &str, tags_file: &str, prune: bool) -> Result<()> {
+    let tags_file_path = Path::new(tags_file);
+    let db_tags: HashSet<String> = load_all_tags(db_path)?;
+
+    let existing = if tags_file_path.exists() {
+        load_tags_file(tags_file_path)?
+    } else {
+        HashSet::new()
+    };
+
+    let added_count = db_tags.iter().filter(|t| !existing.contains(*t)).count();
+    let removed_count = if prune {
+        existing.iter().filter(|t| !db_tags.contains(*t)).count()
+    } else {
+        0
+    };
+
+    // Build final set
+    let mut final_tags: HashSet<String> = existing;
+    // Add all db tags
+    for tag in &db_tags {
+        final_tags.insert(tag.clone());
+    }
+    // Prune tags not in db
+    if prune {
+        final_tags.retain(|t| db_tags.contains(t));
+    }
+
+    let mut sorted: Vec<String> = final_tags.into_iter().collect();
+    sorted.sort();
+    write_tags_file(tags_file_path, &sorted)?;
+
+    println!("Synced {} ({} tags total, {} added{})",
+        tags_file,
+        sorted.len(),
+        added_count,
+        if prune { format!(", {} pruned", removed_count) } else { String::new() },
+    );
+
+    Ok(())
+}
+
+// --- Helper functions ---
+
+/// Load all tags from the database as a HashSet.
+fn load_all_tags(db_path: &str) -> Result<HashSet<String>> {
+    let db = open_tags_db(db_path)?;
+    let read_txn = db.begin_read().context("Failed to begin read transaction")?;
+    let table = read_txn.open_table(TAG_INDEX).context("Failed to open tag_index table")?;
+
+    let mut tags = HashSet::new();
+    let iter = table.iter().context("Failed to iterate tag_index")?;
+    for entry in iter {
+        let (key, _) = entry.context("Failed to read tag entry")?;
+        tags.insert(key.value().to_string());
+    }
+
+    Ok(tags)
+}
+
+/// Load all tags from the database as a sorted Vec.
+fn load_all_tags_sorted(db_path: &str) -> Result<Vec<String>> {
+    let mut tags: Vec<String> = load_all_tags(db_path)?.into_iter().collect();
+    tags.sort();
+    Ok(tags)
+}
+
+/// Load tag -> file count mapping from the database.
+fn load_tag_counts(db_path: &str) -> Result<HashMap<String, usize>> {
+    let db = open_tags_db(db_path)?;
+    let read_txn = db.begin_read().context("Failed to begin read transaction")?;
+    let table = read_txn.open_table(TAG_INDEX).context("Failed to open tag_index table")?;
+
+    let mut counts = HashMap::new();
+    let iter = table.iter().context("Failed to iterate tag_index")?;
+    for entry in iter {
+        let (key, value) = entry.context("Failed to read tag entry")?;
+        let files: Vec<String> = serde_json::from_str(value.value())
+            .context("Failed to parse tag file list")?;
+        counts.insert(key.value().to_string(), files.len());
+    }
+
+    Ok(counts)
+}
+
+/// Parse a .tags file into a HashSet, skipping comments and blank lines.
+fn load_tags_file(path: &Path) -> Result<HashSet<String>> {
+    let content = fs::read_to_string(path)
+        .with_context(|| format!("Failed to read {}", path.display()))?;
+    Ok(content
+        .lines()
+        .map(|line| line.trim())
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(|line| line.to_string())
+        .collect())
+}
+
+/// Parse a .tags file into a sorted Vec, skipping comments and blank lines.
+fn load_tags_file_sorted(path: &Path) -> Result<Vec<String>> {
+    let mut tags: Vec<String> = load_tags_file(path)?.into_iter().collect();
+    tags.sort();
+    Ok(tags)
+}
+
+/// Write a sorted list of tags to a .tags file, one per line.
+fn write_tags_file(path: &Path, tags: &[String]) -> Result<()> {
+    let content = tags.join("\n") + "\n";
+    fs::write(path, content)
+        .with_context(|| format!("Failed to write {}", path.display()))
+}
+
+/// Check if a tag matches the allowed set, supporting wildcard patterns.
+/// Patterns like `duration_days=*` match any tag starting with `duration_days=`.
+fn tag_matches_allowed(tag: &str, allowed: &HashSet<String>) -> bool {
+    if allowed.contains(tag) {
+        return true;
+    }
+    // Check wildcard patterns
+    for pattern in allowed {
+        if let Some(prefix) = pattern.strip_suffix('*') {
+            if tag.starts_with(prefix) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Find the most similar tag in the allowed set using Levenshtein distance.
+/// Returns None if no tag is within distance 3.
+fn find_similar_tag(tag: &str, allowed: &HashSet<String>) -> Option<String> {
+    let mut best: Option<(String, usize)> = None;
+    for candidate in allowed {
+        // Skip wildcard patterns
+        if candidate.ends_with('*') {
+            continue;
+        }
+        let dist = levenshtein(tag, candidate);
+        if dist > 0 && dist <= 3 {
+            if best.is_none() || dist < best.as_ref().unwrap().1 {
+                best = Some((candidate.clone(), dist));
+            }
+        }
+    }
+    best.map(|(s, _)| s)
+}
+
+/// Compute Levenshtein edit distance between two strings.
+fn levenshtein(a: &str, b: &str) -> usize {
+    let a_len = a.len();
+    let b_len = b.len();
+
+    if a_len == 0 { return b_len; }
+    if b_len == 0 { return a_len; }
+
+    let mut prev: Vec<usize> = (0..=b_len).collect();
+    let mut curr = vec![0; b_len + 1];
+
+    for (i, ca) in a.chars().enumerate() {
+        curr[0] = i + 1;
+        for (j, cb) in b.chars().enumerate() {
+            let cost = if ca == cb { 0 } else { 1 };
+            curr[j + 1] = (prev[j] + cost)
+                .min(curr[j] + 1)
+                .min(prev[j + 1] + 1);
+        }
+        std::mem::swap(&mut prev, &mut curr);
+    }
+
+    prev[b_len]
 }

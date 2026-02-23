@@ -834,6 +834,9 @@ pub struct TagsConfig {
     pub output: String,
     #[serde(default = "default_tags_file")]
     pub tags_file: String,
+    /// When true, a missing .tags file is a build error
+    #[serde(default)]
+    pub tags_file_strict: bool,
     #[serde(default)]
     pub extra_inputs: Vec<String>,
     #[serde(flatten)]
@@ -846,6 +849,7 @@ impl Default for TagsConfig {
             enabled: true,
             output: "out/tags/tags.db".into(),
             tags_file: ".tags".into(),
+            tags_file_strict: false,
             extra_inputs: Vec::new(),
             scan: default_scan!(extensions: [".md"]),
         }
@@ -855,7 +859,7 @@ impl Default for TagsConfig {
 impl KnownFields for TagsConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "output", "tags_file", "extra_inputs",
+            "enabled", "output", "tags_file", "tags_file_strict", "extra_inputs",
             "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
         ]
     }

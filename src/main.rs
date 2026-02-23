@@ -279,11 +279,21 @@ fn run() -> Result<()> {
         Commands::Tags { action } => {
             let config = Config::load()?;
             let db_path = &config.processor.tags.output;
+            let tags_file = &config.processor.tags.tags_file;
             match action {
-                cli::TagsAction::Files { tags } => processors::tags_cmd::files_for_tags(db_path, &tags)?,
+                cli::TagsAction::Files { tags, or } => processors::tags_cmd::files_for_tags(db_path, &tags, or)?,
                 cli::TagsAction::GrepTags { text } => processors::tags_cmd::grep_tags(db_path, &text)?,
                 cli::TagsAction::List => processors::tags_cmd::list_tags(db_path)?,
+                cli::TagsAction::Count => processors::tags_cmd::count_tags(db_path)?,
+                cli::TagsAction::Tree => processors::tags_cmd::tree_tags(db_path)?,
                 cli::TagsAction::Stats => processors::tags_cmd::stats_tags(db_path)?,
+                cli::TagsAction::ForFile { path } => processors::tags_cmd::tags_for_file(db_path, &path)?,
+                cli::TagsAction::Unused => processors::tags_cmd::unused_tags(db_path, tags_file)?,
+                cli::TagsAction::Validate => processors::tags_cmd::validate_tags(db_path, tags_file)?,
+                cli::TagsAction::Init => processors::tags_cmd::init_tags(db_path, tags_file)?,
+                cli::TagsAction::Add { tag } => processors::tags_cmd::add_tag(tags_file, &tag)?,
+                cli::TagsAction::Remove { tag } => processors::tags_cmd::remove_tag(tags_file, &tag)?,
+                cli::TagsAction::Sync { prune } => processors::tags_cmd::sync_tags(db_path, tags_file, prune)?,
             }
         }
     }
