@@ -327,24 +327,30 @@ pub fn stats_tags(db_path: &str) -> Result<()> {
     let fm_table = read_txn.open_table(FRONTMATTER).context("Failed to open frontmatter table")?;
     let file_count = fm_table.len().context("Failed to count frontmatter entries")?;
 
-    // Count and classify tags
+    // Count and classify tags, and sum total associations
     let tag_table = read_txn.open_table(TAG_INDEX).context("Failed to open tag_index table")?;
     let mut bare_count: u64 = 0;
     let mut kv_count: u64 = 0;
+    let mut total_associations: u64 = 0;
     let iter = tag_table.iter().context("Failed to iterate tag_index")?;
     for entry in iter {
-        let (key, _) = entry.context("Failed to read tag entry")?;
+        let (key, value) = entry.context("Failed to read tag entry")?;
         if key.value().contains('=') {
             kv_count += 1;
         } else {
             bare_count += 1;
         }
+        let files: Vec<String> = serde_json::from_str(value.value())
+            .context("Failed to parse tag file list")?;
+        total_associations += files.len() as u64;
     }
 
-    println!("Files indexed: {}", file_count);
-    println!("Total tags:    {}", bare_count + kv_count);
-    println!("  bare tags:   {} (e.g. \"docker\")", bare_count);
-    println!("  key=value:   {} (e.g. \"level=intermediate\")", kv_count);
+    let unique_tags = bare_count + kv_count;
+    println!("Files indexed:    {}", file_count);
+    println!("Tag assignments:  {}", total_associations);
+    println!("Unique tags:      {}", unique_tags);
+    println!("  bare tags:      {} (e.g. \"docker\")", bare_count);
+    println!("  key=value:      {} (e.g. \"level=intermediate\")", kv_count);
 
     Ok(())
 }
