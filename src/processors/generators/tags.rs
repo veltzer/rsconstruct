@@ -259,27 +259,59 @@ pub fn list_tags(db_path: &str) -> Result<()> {
     Ok(())
 }
 
-/// Search for a tag and list files that have it (exact match).
-pub fn search_tags(db_path: &str, query: &str) -> Result<()> {
-    files_for_tag(db_path, query)
-}
-
-/// List files that have a given tag.
-pub fn files_for_tag(db_path: &str, tag: &str) -> Result<()> {
+/// List tags containing the given substring.
+pub fn grep_tags(db_path: &str, text: &str) -> Result<()> {
     let db = open_tags_db(db_path)?;
     let read_txn = db.begin_read().context("Failed to begin read transaction")?;
     let table = read_txn.open_table(TAG_INDEX).context("Failed to open tag_index table")?;
 
-    match table.get(tag).context("Failed to query tag")? {
-        Some(value) => {
-            let files: Vec<String> = serde_json::from_str(value.value())
-                .context("Failed to parse tag file list")?;
-            for file in &files {
-                println!("{}", file);
-            }
+    let mut matches: Vec<String> = Vec::new();
+    let iter = table.iter().context("Failed to iterate tag_index")?;
+    for entry in iter {
+        let (key, _) = entry.context("Failed to read tag entry")?;
+        let tag = key.value();
+        if tag.contains(text) {
+            matches.push(tag.to_string());
         }
-        None => {
-            println!("No files found with tag: {}", tag);
+    }
+    matches.sort();
+
+    for tag in &matches {
+        println!("{}", tag);
+    }
+
+    Ok(())
+}
+
+/// List files that have all the given tags (AND semantics).
+pub fn files_for_tags(db_path: &str, tags: &[String]) -> Result<()> {
+    let db = open_tags_db(db_path)?;
+    let read_txn = db.begin_read().context("Failed to begin read transaction")?;
+    let table = read_txn.open_table(TAG_INDEX).context("Failed to open tag_index table")?;
+
+    let mut result: Option<std::collections::BTreeSet<String>> = None;
+
+    for tag in tags {
+        let files: std::collections::BTreeSet<String> = match table.get(tag.as_str()).context("Failed to query tag")? {
+            Some(value) => {
+                let v: Vec<String> = serde_json::from_str(value.value())
+                    .context("Failed to parse tag file list")?;
+                v.into_iter().collect()
+            }
+            None => std::collections::BTreeSet::new(),
+        };
+        result = Some(match result {
+            Some(acc) => acc.intersection(&files).cloned().collect(),
+            None => files,
+        });
+    }
+
+    let files = result.unwrap_or_default();
+    if files.is_empty() {
+        println!("No files found matching all tags: {}", tags.join(", "));
+    } else {
+        for file in &files {
+            println!("{}", file);
         }
     }
 

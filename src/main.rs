@@ -280,9 +280,9 @@ fn run() -> Result<()> {
             let config = Config::load()?;
             let db_path = &config.processor.tags.output;
             match action {
+                cli::TagsAction::Files { tags } => processors::tags_cmd::files_for_tags(db_path, &tags)?,
+                cli::TagsAction::GrepTags { text } => processors::tags_cmd::grep_tags(db_path, &text)?,
                 cli::TagsAction::List => processors::tags_cmd::list_tags(db_path)?,
-                cli::TagsAction::Search { query } => processors::tags_cmd::search_tags(db_path, &query)?,
-                cli::TagsAction::Files { tag } => processors::tags_cmd::files_for_tag(db_path, &tag)?,
                 cli::TagsAction::Stats => processors::tags_cmd::stats_tags(db_path)?,
             }
         }

@@ -379,20 +379,21 @@ pub enum DepsShowFilter {
 
 #[derive(Subcommand)]
 pub enum TagsAction {
-    /// Search for a tag and list matching files (e.g. "docker" or "level=advanced")
-    Search {
-        /// Tag to search for: bare value (e.g. "docker") or key=value (e.g. "level=advanced")
-        query: String,
+    /// List files matching all given tags (AND semantics)
+    Files {
+        /// Tags: bare values (e.g. "docker") or key=value (e.g. "level=advanced")
+        #[arg(required = true)]
+        tags: Vec<String>,
+    },
+    /// Search for tags containing a substring
+    GrepTags {
+        /// Text to search for in tag names
+        text: String,
     },
     /// List all unique tags
     List,
     /// Show statistics about the tags database
     Stats,
-    /// List files that have a given tag (e.g. "docker" or "level=advanced")
-    Files {
-        /// Tag: bare value (e.g. "docker") or key=value (e.g. "level=advanced")
-        tag: String,
-    },
 }
 
 /// CLI arguments shared between Build and Watch commands.
