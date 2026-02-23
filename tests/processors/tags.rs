@@ -26,6 +26,12 @@ fn setup_tags_project(md_files: &[(&str, &str)], tags_file: Option<&str>) -> Tem
     temp_dir
 }
 
+/// Helper: build the project and assert success.
+fn build_project(p: &std::path::Path) {
+    let output = run_rsb_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(), "build failed: {}", String::from_utf8_lossy(&output.stderr));
+}
+
 #[test]
 fn tags_basic_build_and_query() {
     let temp_dir = setup_tags_project(
@@ -38,8 +44,7 @@ fn tags_basic_build_and_query() {
     let p = temp_dir.path();
 
     // Build should succeed and create the tags database
-    let output = run_rsb_with_env(p, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "build failed: {}", String::from_utf8_lossy(&output.stderr));
+    build_project(p);
     assert!(p.join("out/tags/tags.db").exists(), "tags database should be created");
 
     // `rsb tags list` should show all tags sorted
@@ -125,8 +130,7 @@ fn tags_for_file_path_matching() {
     );
     let p = temp_dir.path();
 
-    let output = run_rsb_with_env(p, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "build failed: {}", String::from_utf8_lossy(&output.stderr));
+    build_project(p);
 
     // Querying for "sub/foo.md" should return alpha, NOT beta
     let for_file = run_rsb_with_env(p, &["tags", "for-file", "sub/foo.md"], &[("NO_COLOR", "1")]);
@@ -147,8 +151,7 @@ fn tags_init_and_unused() {
     let p = temp_dir.path();
 
     // Build first to populate db
-    let build = run_rsb_with_env(p, &["build"], &[("NO_COLOR", "1")]);
-    assert!(build.status.success());
+    build_project(p);
 
     // Init should create .tags
     let init = run_rsb_with_env(p, &["tags", "init"], &[("NO_COLOR", "1")]);
@@ -167,4 +170,278 @@ fn tags_init_and_unused() {
     let unused_stdout = String::from_utf8_lossy(&unused.stdout);
     assert!(unused_stdout.contains("obsolete"), "should report 'obsolete' as unused: {}", unused_stdout);
     assert!(!unused_stdout.contains("used\n"), "should not report 'used' as unused");
+}
+
+#[test]
+fn tags_count_and_tree() {
+    let temp_dir = setup_tags_project(
+        &[
+            ("a.md", "---\nlevel: beginner\ntags:\n  - python\n  - docker\n---\n"),
+            ("b.md", "---\nlevel: advanced\ntags:\n  - docker\n---\n"),
+        ],
+        None,
+    );
+    let p = temp_dir.path();
+    build_project(p);
+
+    // Count should show docker with count 2
+    let count = run_rsb_with_env(p, &["tags", "count"], &[("NO_COLOR", "1")]);
+    assert!(count.status.success());
+    let stdout = String::from_utf8_lossy(&count.stdout);
+    assert!(stdout.contains("docker"), "count should list docker: {}", stdout);
+    // docker appears in 2 files, should be first (highest count)
+    let first_line = stdout.lines().next().unwrap();
+    assert!(first_line.contains("docker"), "docker should be first (highest count): {}", first_line);
+
+    // Tree should group level= tags
+    let tree = run_rsb_with_env(p, &["tags", "tree"], &[("NO_COLOR", "1")]);
+    assert!(tree.status.success());
+    let tree_stdout = String::from_utf8_lossy(&tree.stdout);
+    assert!(tree_stdout.contains("level="), "tree should show level= group: {}", tree_stdout);
+    assert!(tree_stdout.contains("beginner"), "tree should show beginner value: {}", tree_stdout);
+    assert!(tree_stdout.contains("advanced"), "tree should show advanced value: {}", tree_stdout);
+    assert!(tree_stdout.contains("(bare tags)"), "tree should show bare tags section: {}", tree_stdout);
+}
+
+#[test]
+fn tags_stats() {
+    let temp_dir = setup_tags_project(
+        &[
+            ("a.md", "---\nlevel: beginner\ntags:\n  - python\n---\n"),
+            ("b.md", "---\ntags:\n  - docker\n---\n"),
+        ],
+        None,
+    );
+    let p = temp_dir.path();
+    build_project(p);
+
+    let stats = run_rsb_with_env(p, &["tags", "stats"], &[("NO_COLOR", "1")]);
+    assert!(stats.status.success());
+    let stdout = String::from_utf8_lossy(&stats.stdout);
+    assert!(stdout.contains("Files indexed:"), "stats should show file count: {}", stdout);
+    assert!(stdout.contains("2"), "should index 2 files: {}", stdout);
+    assert!(stdout.contains("Unique tags:"), "stats should show unique tags: {}", stdout);
+}
+
+#[test]
+fn tags_grep() {
+    let temp_dir = setup_tags_project(
+        &[
+            ("a.md", "---\ntags:\n  - python\n  - python-advanced\n  - docker\n---\n"),
+        ],
+        None,
+    );
+    let p = temp_dir.path();
+    build_project(p);
+
+    // Grep for "python" should match both python tags but not docker
+    let grep = run_rsb_with_env(p, &["tags", "grep", "python"], &[("NO_COLOR", "1")]);
+    assert!(grep.status.success());
+    let stdout = String::from_utf8_lossy(&grep.stdout);
+    assert!(stdout.contains("python"), "grep should find 'python': {}", stdout);
+    assert!(stdout.contains("python-advanced"), "grep should find 'python-advanced': {}", stdout);
+    assert!(!stdout.contains("docker"), "grep should NOT find 'docker': {}", stdout);
+
+    // Case-insensitive grep
+    let grep_i = run_rsb_with_env(p, &["tags", "grep", "-i", "PYTHON"], &[("NO_COLOR", "1")]);
+    assert!(grep_i.status.success());
+    let stdout_i = String::from_utf8_lossy(&grep_i.stdout);
+    assert!(stdout_i.contains("python"), "case-insensitive grep should find 'python': {}", stdout_i);
+}
+
+#[test]
+fn tags_frontmatter() {
+    let temp_dir = setup_tags_project(
+        &[
+            ("course.md", "---\ntitle: My Course\nlevel: beginner\ntags:\n  - python\n---\n# Content\n"),
+        ],
+        None,
+    );
+    let p = temp_dir.path();
+    build_project(p);
+
+    let fm = run_rsb_with_env(p, &["tags", "frontmatter", "course.md"], &[("NO_COLOR", "1")]);
+    assert!(fm.status.success());
+    let stdout = String::from_utf8_lossy(&fm.stdout);
+    assert!(stdout.contains("title"), "frontmatter should show title: {}", stdout);
+    assert!(stdout.contains("My Course"), "frontmatter should show title value: {}", stdout);
+    assert!(stdout.contains("level"), "frontmatter should show level: {}", stdout);
+}
+
+#[test]
+fn tags_add_and_remove() {
+    let temp_dir = setup_tags_project(
+        &[("a.md", "---\ntags:\n  - existing\n---\n")],
+        None,
+    );
+    let p = temp_dir.path();
+    build_project(p);
+
+    // Add a new tag
+    let add = run_rsb_with_env(p, &["tags", "add", "newtag"], &[("NO_COLOR", "1")]);
+    assert!(add.status.success());
+    let tags_content = fs::read_to_string(p.join(".tags")).unwrap();
+    assert!(tags_content.contains("newtag"), "newtag should be in .tags: {}", tags_content);
+
+    // Add the same tag again — should report already exists
+    let add2 = run_rsb_with_env(p, &["tags", "add", "newtag"], &[("NO_COLOR", "1")]);
+    assert!(add2.status.success());
+    let stdout = String::from_utf8_lossy(&add2.stdout);
+    assert!(stdout.contains("already"), "should say tag already exists: {}", stdout);
+
+    // Remove the tag
+    let remove = run_rsb_with_env(p, &["tags", "remove", "newtag"], &[("NO_COLOR", "1")]);
+    assert!(remove.status.success());
+    let tags_content = fs::read_to_string(p.join(".tags")).unwrap();
+    assert!(!tags_content.contains("newtag"), "newtag should be removed from .tags: {}", tags_content);
+}
+
+#[test]
+fn tags_sync_with_prune() {
+    let temp_dir = setup_tags_project(
+        &[
+            ("a.md", "---\ntags:\n  - active\n---\n"),
+        ],
+        Some("active\nobsolete\n"),
+    );
+    let p = temp_dir.path();
+    build_project(p);
+
+    // Sync without prune — should keep obsolete
+    let sync = run_rsb_with_env(p, &["tags", "sync"], &[("NO_COLOR", "1")]);
+    assert!(sync.status.success());
+    let tags_content = fs::read_to_string(p.join(".tags")).unwrap();
+    assert!(tags_content.contains("obsolete"), "sync without prune should keep obsolete: {}", tags_content);
+
+    // Sync with prune — should remove obsolete
+    let sync_prune = run_rsb_with_env(p, &["tags", "sync", "--prune"], &[("NO_COLOR", "1")]);
+    assert!(sync_prune.status.success());
+    let tags_content = fs::read_to_string(p.join(".tags")).unwrap();
+    assert!(!tags_content.contains("obsolete"), "sync with prune should remove obsolete: {}", tags_content);
+    assert!(tags_content.contains("active"), "sync should keep active: {}", tags_content);
+}
+
+#[test]
+fn tags_sync_respects_wildcards() {
+    let temp_dir = setup_tags_project(
+        &[
+            ("a.md", "---\ndifficulty: 3\ntags:\n  - python\n---\n"),
+        ],
+        Some("python\ndifficulty=*\n"),
+    );
+    let p = temp_dir.path();
+    build_project(p);
+
+    // Sync should NOT add difficulty=3 since difficulty=* already covers it
+    let sync = run_rsb_with_env(p, &["tags", "sync"], &[("NO_COLOR", "1")]);
+    assert!(sync.status.success());
+    let tags_content = fs::read_to_string(p.join(".tags")).unwrap();
+    assert!(tags_content.contains("difficulty=*"), "wildcard should be preserved: {}", tags_content);
+    assert!(!tags_content.contains("difficulty=3"), "concrete value should NOT be added when wildcard exists: {}", tags_content);
+}
+
+#[test]
+fn tags_inline_yaml_list() {
+    let temp_dir = setup_tags_project(
+        &[
+            ("a.md", "---\ntags: [alpha, beta, gamma]\nlevel: beginner\n---\n# Content\n"),
+        ],
+        None,
+    );
+    let p = temp_dir.path();
+    build_project(p);
+
+    let list = run_rsb_with_env(p, &["tags", "list"], &[("NO_COLOR", "1")]);
+    assert!(list.status.success());
+    let stdout = String::from_utf8_lossy(&list.stdout);
+    assert!(stdout.contains("alpha"), "should parse inline list item 'alpha': {}", stdout);
+    assert!(stdout.contains("beta"), "should parse inline list item 'beta': {}", stdout);
+    assert!(stdout.contains("gamma"), "should parse inline list item 'gamma': {}", stdout);
+}
+
+#[test]
+fn tags_colon_in_yaml_value() {
+    let temp_dir = setup_tags_project(
+        &[
+            ("a.md", "---\nurl: https://example.com/path\ntime: 10:30\ntags:\n  - web\n---\n"),
+        ],
+        None,
+    );
+    let p = temp_dir.path();
+    build_project(p);
+
+    let fm = run_rsb_with_env(p, &["tags", "frontmatter", "a.md"], &[("NO_COLOR", "1")]);
+    assert!(fm.status.success());
+    let stdout = String::from_utf8_lossy(&fm.stdout);
+    assert!(stdout.contains("https://example.com/path"), "URL value should be preserved: {}", stdout);
+    assert!(stdout.contains("10:30"), "time value should be preserved: {}", stdout);
+
+    // Also check tags list for key=value indexing
+    let list = run_rsb_with_env(p, &["tags", "list"], &[("NO_COLOR", "1")]);
+    assert!(list.status.success());
+    let list_stdout = String::from_utf8_lossy(&list.stdout);
+    assert!(list_stdout.contains("url=https://example.com/path"), "URL should be indexed correctly: {}", list_stdout);
+    assert!(list_stdout.contains("time=10:30"), "time should be indexed correctly: {}", list_stdout);
+}
+
+#[test]
+fn tags_unused_strict_fails() {
+    let temp_dir = setup_tags_project(
+        &[
+            ("a.md", "---\ntags:\n  - active\n---\n"),
+        ],
+        Some("active\nobsolete\n"),
+    );
+    let p = temp_dir.path();
+    build_project(p);
+
+    // Without --strict, should succeed even with unused tags
+    let unused = run_rsb_with_env(p, &["tags", "unused"], &[("NO_COLOR", "1")]);
+    assert!(unused.status.success(), "unused without --strict should succeed");
+
+    // With --strict, should fail
+    let unused_strict = run_rsb_with_env(p, &["tags", "unused", "--strict"], &[("NO_COLOR", "1")]);
+    assert!(!unused_strict.status.success(), "unused with --strict should fail when unused tags exist");
+}
+
+#[test]
+fn tags_validate_standalone() {
+    // Build without .tags so build succeeds, then add .tags and run validate
+    let temp_dir = setup_tags_project(
+        &[
+            ("a.md", "---\ntags:\n  - python\n  - dockker\n---\n"),
+        ],
+        None,
+    );
+    let p = temp_dir.path();
+    build_project(p);
+
+    // Now create .tags file with allowed tags (dockker is a typo not in the list)
+    fs::write(p.join(".tags"), "python\ndocker\n").unwrap();
+
+    // validate should fail and suggest the correct tag
+    let validate = run_rsb_with_env(p, &["tags", "validate"], &[("NO_COLOR", "1")]);
+    assert!(!validate.status.success(), "validate should fail with unknown tags");
+    let stderr = String::from_utf8_lossy(&validate.stderr);
+    assert!(stderr.contains("dockker"), "should mention unknown tag: {}", stderr);
+    assert!(stderr.contains("docker"), "should suggest correction: {}", stderr);
+}
+
+#[test]
+fn tags_numeric_and_boolean_values() {
+    let temp_dir = setup_tags_project(
+        &[
+            ("a.md", "---\ndifficulty: 3\npublished: true\ntags:\n  - test\n---\n"),
+        ],
+        None,
+    );
+    let p = temp_dir.path();
+    build_project(p);
+
+    let list = run_rsb_with_env(p, &["tags", "list"], &[("NO_COLOR", "1")]);
+    assert!(list.status.success());
+    let stdout = String::from_utf8_lossy(&list.stdout);
+    // Our simple YAML parser returns everything as strings, so these are string values
+    assert!(stdout.contains("difficulty=3"), "numeric value should be indexed: {}", stdout);
+    assert!(stdout.contains("published=true"), "boolean value should be indexed: {}", stdout);
 }

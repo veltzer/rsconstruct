@@ -112,6 +112,18 @@ impl ProductDiscovery for TagsProcessor {
                                     .or_default()
                                     .insert(file_key.clone());
                             }
+                            serde_json::Value::Number(n) => {
+                                let tag = format!("{}={}", key, n);
+                                tag_to_files.entry(tag)
+                                    .or_default()
+                                    .insert(file_key.clone());
+                            }
+                            serde_json::Value::Bool(b) => {
+                                let tag = format!("{}={}", key, b);
+                                tag_to_files.entry(tag)
+                                    .or_default()
+                                    .insert(file_key.clone());
+                            }
                             _ => {}
                         }
                     }
@@ -220,11 +232,14 @@ fn strip_yaml_quotes(s: &str) -> &str {
 
 /// Parse simple YAML key-value pairs and lists.
 /// Supports:
-///   key: value
+///   key: value           (scalar, including values with colons like URLs)
 ///   key: "quoted value"
+///   key: [a, b, c]       (inline list)
 ///   key:
 ///     - item1
 ///     - item2
+///
+/// Limitations: no multi-line strings (| or >), no nested objects, no anchors.
 fn parse_simple_yaml(block: &str) -> serde_json::Value {
     let mut map = serde_json::Map::new();
     let mut current_key: Option<String> = None;
@@ -234,14 +249,13 @@ fn parse_simple_yaml(block: &str) -> serde_json::Value {
     for line in block.lines() {
         let stripped = line.trim_end();
 
-        // Check for list item (indented with -)
-        if let Some(item) = stripped.strip_prefix(|c: char| c == ' ' || c == '\t') {
-            if let Some(item) = item.trim_start().strip_prefix("- ") {
-                if in_list {
-                    let val = strip_yaml_quotes(item.trim());
-                    current_list.push(serde_json::Value::String(val.to_string()));
-                    continue;
-                }
+        // Check for list item: optional leading whitespace followed by "- "
+        let trimmed = stripped.trim_start();
+        if let Some(item) = trimmed.strip_prefix("- ") {
+            if in_list {
+                let val = strip_yaml_quotes(item.trim());
+                current_list.push(serde_json::Value::String(val.to_string()));
+                continue;
             }
         }
 
@@ -253,20 +267,36 @@ fn parse_simple_yaml(block: &str) -> serde_json::Value {
             in_list = false;
         }
 
-        // Parse key: value
-        if let Some((key, value)) = stripped.split_once(':') {
+        // Parse key: value — split on first ": " (colon+space) to preserve colons in values
+        if let Some((key, value)) = stripped.split_once(": ") {
             let key = key.trim().to_string();
             let value = value.trim();
 
             if value.is_empty() {
-                // Start of a list
+                // Start of a multi-line list
                 current_key = Some(key);
                 in_list = true;
                 current_list.clear();
+            } else if value.starts_with('[') && value.ends_with(']') {
+                // Inline list: [item1, item2, item3]
+                let inner = &value[1..value.len() - 1];
+                let items: Vec<serde_json::Value> = inner.split(',')
+                    .map(|s| {
+                        let val = strip_yaml_quotes(s.trim());
+                        serde_json::Value::String(val.to_string())
+                    })
+                    .collect();
+                map.insert(key, serde_json::Value::Array(items));
             } else {
                 let val = strip_yaml_quotes(value);
                 map.insert(key, serde_json::Value::String(val.to_string()));
             }
+        } else if let Some((key, _)) = stripped.split_once(':') {
+            // Key with no value after colon (no space) — start of a multi-line list
+            let key = key.trim().to_string();
+            current_key = Some(key);
+            in_list = true;
+            current_list.clear();
         }
     }
 
@@ -304,10 +334,17 @@ pub fn list_tags(db_path: &str) -> Result<()> {
 }
 
 /// Search for tags containing a substring.
-pub fn grep_tags(db_path: &str, text: &str) -> Result<()> {
+pub fn grep_tags(db_path: &str, text: &str, ignore_case: bool) -> Result<()> {
     let all_tags = load_all_tags_sorted(db_path)?;
+    let needle = if ignore_case { text.to_lowercase() } else { text.to_string() };
     let matches: Vec<&String> = all_tags.iter()
-        .filter(|t| t.contains(text))
+        .filter(|t| {
+            if ignore_case {
+                t.to_lowercase().contains(&needle)
+            } else {
+                t.contains(text)
+            }
+        })
         .collect();
     if crate::json_output::is_json_mode() {
         println!("{}", serde_json::to_string(&matches).expect(crate::errors::JSON_SERIALIZE));
@@ -403,12 +440,14 @@ pub fn tree_tags(db_path: &str) -> Result<()> {
 
     if crate::json_output::is_json_mode() {
         let mut json_groups: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
-        for (key, values) in &groups {
+        for (key, mut values) in groups {
+            values.sort_by(|a, b| a.0.cmp(&b.0));
             let entries: Vec<serde_json::Value> = values.iter()
                 .map(|(v, c)| serde_json::json!({"value": v, "count": c}))
                 .collect();
-            json_groups.insert(key.clone(), serde_json::Value::Array(entries));
+            json_groups.insert(key, serde_json::Value::Array(entries));
         }
+        bare.sort_by(|a, b| a.0.cmp(&b.0));
         let bare_entries: Vec<serde_json::Value> = bare.iter()
             .map(|(t, c)| serde_json::json!({"tag": t, "count": c}))
             .collect();
@@ -507,7 +546,7 @@ pub fn tags_for_file(db_path: &str, path: &str) -> Result<()> {
     if crate::json_output::is_json_mode() {
         println!("{}", serde_json::to_string(&file_tags).expect(crate::errors::JSON_SERIALIZE));
     } else if file_tags.is_empty() {
-        println!("No tags found for: {}", path);
+        eprintln!("No tags found for: {}", path);
     } else {
         for tag in &file_tags {
             println!("{}", tag);
@@ -546,18 +585,23 @@ pub fn frontmatter_for_file(db_path: &str, path: &str) -> Result<()> {
     match (found_key, found_value) {
         (Some(key), Some(json)) => {
             if crate::json_output::is_json_mode() {
-                // Already JSON, just print it
-                println!("{}", json);
+                let fm_value: serde_json::Value = serde_json::from_str(&json)
+                    .context("Failed to parse stored frontmatter")?;
+                let output = serde_json::json!({"file": key, "frontmatter": fm_value});
+                println!("{}", serde_json::to_string(&output).expect(crate::errors::JSON_SERIALIZE));
             } else {
                 println!("{}:", key);
-                // Pretty-print the JSON
                 let value: serde_json::Value = serde_json::from_str(&json)
                     .context("Failed to parse stored frontmatter")?;
                 println!("{}", serde_json::to_string_pretty(&value).expect(crate::errors::JSON_SERIALIZE));
             }
         }
         _ => {
-            println!("No frontmatter found for: {}", path);
+            if crate::json_output::is_json_mode() {
+                println!("{}", serde_json::json!({"file": null, "frontmatter": null}));
+            } else {
+                println!("No frontmatter found for: {}", path);
+            }
         }
     }
 
@@ -565,7 +609,8 @@ pub fn frontmatter_for_file(db_path: &str, path: &str) -> Result<()> {
 }
 
 /// List tags in .tags that are not used by any file.
-pub fn unused_tags(db_path: &str, tags_file: &str) -> Result<()> {
+/// If `strict` is true, returns an error when unused tags are found (for CI).
+pub fn unused_tags(db_path: &str, tags_file: &str, strict: bool) -> Result<()> {
     let tags_file_path = Path::new(tags_file);
     if !tags_file_path.exists() {
         bail!("Tags file not found: {}", tags_file);
@@ -588,6 +633,10 @@ pub fn unused_tags(db_path: &str, tags_file: &str) -> Result<()> {
         for tag in &unused {
             println!("  {}", tag);
         }
+    }
+
+    if strict && !unused.is_empty() {
+        bail!("{} unused tag(s) found in {}", unused.len(), tags_file);
     }
 
     Ok(())
@@ -638,7 +687,11 @@ pub fn init_tags(db_path: &str, tags_file: &str) -> Result<()> {
 
     let tags = load_all_tags_sorted(db_path)?;
     write_tags_file(tags_file_path, &tags)?;
-    println!("Created {} with {} tags.", tags_file, tags.len());
+    if crate::json_output::is_json_mode() {
+        println!("{}", serde_json::json!({"action": "init", "file": tags_file, "count": tags.len()}));
+    } else {
+        println!("Created {} with {} tags.", tags_file, tags.len());
+    }
 
     Ok(())
 }
@@ -653,14 +706,22 @@ pub fn add_tag(tags_file: &str, tag: &str) -> Result<()> {
     };
 
     if tags.iter().any(|t| t == tag) {
-        println!("Tag '{}' already in {}.", tag, tags_file);
+        if crate::json_output::is_json_mode() {
+            println!("{}", serde_json::json!({"action": "add", "tag": tag, "added": false}));
+        } else {
+            println!("Tag '{}' already in {}.", tag, tags_file);
+        }
         return Ok(());
     }
 
     tags.push(tag.to_string());
     tags.sort();
     write_tags_file(tags_file_path, &tags)?;
-    println!("Added '{}' to {}.", tag, tags_file);
+    if crate::json_output::is_json_mode() {
+        println!("{}", serde_json::json!({"action": "add", "tag": tag, "added": true}));
+    } else {
+        println!("Added '{}' to {}.", tag, tags_file);
+    }
 
     Ok(())
 }
@@ -676,11 +737,16 @@ pub fn remove_tag(tags_file: &str, tag: &str) -> Result<()> {
     let before_len = tags.len();
     tags.retain(|t| t != tag);
 
-    if tags.len() == before_len {
-        println!("Tag '{}' not found in {}.", tag, tags_file);
-    } else {
+    let removed = tags.len() < before_len;
+    if removed {
         write_tags_file(tags_file_path, &tags)?;
+    }
+    if crate::json_output::is_json_mode() {
+        println!("{}", serde_json::json!({"action": "remove", "tag": tag, "removed": removed}));
+    } else if removed {
         println!("Removed '{}' from {}.", tag, tags_file);
+    } else {
+        println!("Tag '{}' not found in {}.", tag, tags_file);
     }
 
     Ok(())
@@ -698,7 +764,7 @@ pub fn sync_tags(db_path: &str, tags_file: &str, prune: bool, verbose: bool) -> 
     };
 
     let mut added: Vec<String> = db_tags.iter()
-        .filter(|t| !existing.contains(*t))
+        .filter(|t| !tag_matches_allowed(t, &existing))
         .cloned()
         .collect();
     added.sort();
@@ -726,19 +792,29 @@ pub fn sync_tags(db_path: &str, tags_file: &str, prune: bool, verbose: bool) -> 
     sorted.sort();
     write_tags_file(tags_file_path, &sorted)?;
 
-    println!("Synced {} ({} tags total, {} added{})",
-        tags_file,
-        sorted.len(),
-        added.len(),
-        if prune { format!(", {} pruned", removed.len()) } else { String::new() },
-    );
+    if crate::json_output::is_json_mode() {
+        println!("{}", serde_json::json!({
+            "action": "sync",
+            "file": tags_file,
+            "total": sorted.len(),
+            "added": added,
+            "removed": removed,
+        }));
+    } else {
+        println!("Synced {} ({} tags total, {} added{})",
+            tags_file,
+            sorted.len(),
+            added.len(),
+            if prune { format!(", {} pruned", removed.len()) } else { String::new() },
+        );
 
-    if verbose {
-        for tag in &added {
-            println!("  + {}", tag);
-        }
-        for tag in &removed {
-            println!("  - {}", tag);
+        if verbose {
+            for tag in &added {
+                println!("  + {}", tag);
+            }
+            for tag in &removed {
+                println!("  - {}", tag);
+            }
         }
     }
 
@@ -753,7 +829,9 @@ fn path_matches(stored: &str, query: &str) -> bool {
     if stored == query {
         return true;
     }
-    // Suffix match: stored must end with /query
+    // Suffix match: stored must end with /query.
+    // Subtraction is safe: the guard ensures stored.len() > query.len(),
+    // so stored.len() - query.len() - 1 cannot underflow.
     if stored.len() > query.len() {
         let boundary = stored.len() - query.len() - 1;
         if stored.as_bytes().get(boundary) == Some(&b'/')
@@ -882,9 +960,12 @@ fn find_similar_tag(tag: &str, allowed: &HashSet<String>) -> Option<String> {
 }
 
 /// Compute Levenshtein edit distance between two strings.
+/// Uses char-level comparison for correct handling of non-ASCII input.
 fn levenshtein(a: &str, b: &str) -> usize {
-    let a_len = a.len();
-    let b_len = b.len();
+    let a_chars: Vec<char> = a.chars().collect();
+    let b_chars: Vec<char> = b.chars().collect();
+    let a_len = a_chars.len();
+    let b_len = b_chars.len();
 
     if a_len == 0 { return b_len; }
     if b_len == 0 { return a_len; }
@@ -892,9 +973,9 @@ fn levenshtein(a: &str, b: &str) -> usize {
     let mut prev: Vec<usize> = (0..=b_len).collect();
     let mut curr = vec![0; b_len + 1];
 
-    for (i, ca) in a.chars().enumerate() {
+    for (i, ca) in a_chars.iter().enumerate() {
         curr[0] = i + 1;
-        for (j, cb) in b.chars().enumerate() {
+        for (j, cb) in b_chars.iter().enumerate() {
             let cost = if ca == cb { 0 } else { 1 };
             curr[j + 1] = (prev[j] + cost)
                 .min(curr[j] + 1)

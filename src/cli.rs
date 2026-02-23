@@ -392,6 +392,9 @@ pub enum TagsAction {
     Grep {
         /// Text to search for in tag names
         text: String,
+        /// Case-insensitive search
+        #[arg(short, long)]
+        ignore_case: bool,
     },
     /// List all unique tags
     List,
@@ -412,7 +415,11 @@ pub enum TagsAction {
         path: String,
     },
     /// List tags in .tags that are not used by any file
-    Unused,
+    Unused {
+        /// Exit with error if unused tags are found (useful for CI)
+        #[arg(long)]
+        strict: bool,
+    },
     /// Validate tags against .tags file without building
     Validate,
     /// Generate .tags file from current tag union
