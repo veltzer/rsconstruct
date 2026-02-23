@@ -147,10 +147,10 @@ impl ProductDiscovery for TagsProcessor {
                         msg.push_str(&format!("    - {}\n", file));
                     }
                 }
-                bail!("{}", msg.trim_end());
+                bail!("[tags] {}", msg.trim_end());
             }
         } else if self.config.tags_file_strict {
-            bail!("Tags file not found: {}. Run 'rsb tags init' to create one.", self.config.tags_file);
+            bail!("[tags] Tags file not found: {}. Run 'rsb tags init' to create one.", self.config.tags_file);
         }
 
         // Delete old database to avoid stale entries from previous builds

@@ -197,7 +197,7 @@ fn load_python_config(python_file: &Path) -> Result<Map<String, Value>> {
     };
 
     if !absolute_path.exists() {
-        anyhow::bail!("Python config file not found: {}", absolute_path.display());
+        anyhow::bail!("[tera] Python config file not found: {}", absolute_path.display());
     }
 
     // Create a Python script that will execute the config file and output variables as JSON.
@@ -249,7 +249,7 @@ print(json.dumps(result))
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Python config execution failed: {}", stderr);
+        anyhow::bail!("[tera] Python config execution failed: {}", stderr);
     }
 
     // Parse the JSON output

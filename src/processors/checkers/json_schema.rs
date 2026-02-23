@@ -27,7 +27,7 @@ impl JsonSchemaProcessor {
 
         if !errors.is_empty() {
             anyhow::bail!(
-                "propertyOrdering mismatch in {}:\n{}",
+                "[json_schema] propertyOrdering mismatch in {}:\n{}",
                 path.display(),
                 errors.join("\n")
             );
