@@ -47,6 +47,12 @@ pub mod names {
     pub const GEM: &str = "gem";
     pub const MDL: &str = "mdl";
     pub const MARKDOWNLINT: &str = "markdownlint";
+    pub const ASPELL: &str = "aspell";
+    pub const PANDOC: &str = "pandoc";
+    pub const MARKDOWN: &str = "markdown";
+    pub const PDFLATEX: &str = "pdflatex";
+    pub const A2X: &str = "a2x";
+    pub const ASCII_CHECK: &str = "ascii_check";
 }
 
 /// Global flag: set to true on Ctrl+C so subprocesses can be killed promptly.
@@ -446,6 +452,7 @@ where
 
 // Re-export from subdirectories
 pub use checkers::{
+    AsciiCheckProcessor, AspellProcessor,
     CargoProcessor, ClangTidyProcessor, CppcheckProcessor,
     JqProcessor, JsonlintProcessor, JsonSchemaProcessor,
     MakeProcessor, MarkdownlintProcessor, MdlProcessor, MypyProcessor,
@@ -453,7 +460,7 @@ pub use checkers::{
     ShellcheckProcessor, SleepProcessor, SpellcheckProcessor, SphinxProcessor,
     TaploProcessor, YamllintProcessor,
 };
-pub use generators::{CcProcessor, GemProcessor, NpmProcessor, PipProcessor, TagsProcessor, TeraProcessor};
+pub use generators::{A2xProcessor, CcProcessor, GemProcessor, MarkdownProcessor, NpmProcessor, PandocProcessor, PdflatexProcessor, PipProcessor, TagsProcessor, TeraProcessor};
 pub(crate) use generators::tags as tags_cmd;
 pub use lua_processor::LuaProcessor;
 
@@ -648,6 +655,11 @@ pub fn tool_install_command(tool: &str) -> Option<&'static str> {
         "make" => Some("apt install make"),
         "jq" => Some("apt install jq"),
         "aspell" => Some("apt install aspell"),
+        "pandoc" => Some("apt install pandoc"),
+        "markdown" => Some("apt install markdown"),
+        "pdflatex" => Some("apt install texlive-latex-base"),
+        "qpdf" => Some("apt install qpdf"),
+        "a2x" => Some("apt install asciidoc"),
         "python3" => Some("apt install python3"),
         // Node tools (npm)
         "jsonlint" => Some("npm install -g jsonlint"),

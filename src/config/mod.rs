@@ -269,6 +269,8 @@ fn default_processors() -> Vec<String> {
         names::TAGS.into(),
         names::PIP.into(), names::SPHINX.into(), names::NPM.into(), names::GEM.into(),
         names::MDL.into(), names::MARKDOWNLINT.into(),
+        names::ASPELL.into(), names::PANDOC.into(), names::MARKDOWN.into(),
+        names::PDFLATEX.into(), names::A2X.into(), names::ASCII_CHECK.into(),
     ]
 }
 
@@ -342,6 +344,18 @@ pub(crate) struct ProcessorConfig {
     pub mdl: MdlConfig,
     #[serde(default)]
     pub markdownlint: MarkdownlintConfig,
+    #[serde(default)]
+    pub aspell: AspellConfig,
+    #[serde(default)]
+    pub pandoc: PandocConfig,
+    #[serde(default)]
+    pub markdown: MarkdownGenConfig,
+    #[serde(default)]
+    pub pdflatex: PdflatexConfig,
+    #[serde(default)]
+    pub a2x: A2xConfig,
+    #[serde(default)]
+    pub ascii_check: AsciiCheckConfig,
     /// Captures unknown [processor.PLUGIN_NAME] sections for Lua plugins
     #[serde(flatten)]
     pub extra: HashMap<String, toml::Value>,
@@ -378,6 +392,12 @@ impl Default for ProcessorConfig {
             gem: GemConfig::default(),
             mdl: MdlConfig::default(),
             markdownlint: MarkdownlintConfig::default(),
+            aspell: AspellConfig::default(),
+            pandoc: PandocConfig::default(),
+            markdown: MarkdownGenConfig::default(),
+            pdflatex: PdflatexConfig::default(),
+            a2x: A2xConfig::default(),
+            ascii_check: AsciiCheckConfig::default(),
             extra: HashMap::new(),
         }
     }
@@ -412,6 +432,12 @@ impl ProcessorConfig {
             "gem" => self.gem.enabled,
             "mdl" => self.mdl.enabled,
             "markdownlint" => self.markdownlint.enabled,
+            "aspell" => self.aspell.enabled,
+            "pandoc" => self.pandoc.enabled,
+            "markdown" => self.markdown.enabled,
+            "pdflatex" => self.pdflatex.enabled,
+            "a2x" => self.a2x.enabled,
+            "ascii_check" => self.ascii_check.enabled,
             _ => true, // unknown processors (plugins) default to enabled
         }
     }
@@ -432,6 +458,8 @@ impl ProcessorConfig {
             &self.taplo.scan, &self.json_schema.scan, &self.tags.scan,
             &self.pip.scan, &self.sphinx.scan, &self.npm.scan, &self.gem.scan,
             &self.mdl.scan, &self.markdownlint.scan,
+            &self.aspell.scan, &self.pandoc.scan, &self.markdown.scan,
+            &self.pdflatex.scan, &self.a2x.scan, &self.ascii_check.scan,
         ];
         let mut dirs: Vec<String> = scans.iter()
             .filter_map(|s| s.scan_dir.as_deref())
@@ -473,6 +501,12 @@ impl ProcessorConfig {
         self.gem.scan.resolve("", &["Gemfile"], MAKE_CARGO_EXCLUDES);
         self.mdl.scan.resolve("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
         self.markdownlint.scan.resolve("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
+        self.aspell.scan.resolve("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
+        self.pandoc.scan.resolve("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
+        self.markdown.scan.resolve("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
+        self.pdflatex.scan.resolve("", &[".tex"], BUILD_TOOL_EXCLUDES);
+        self.a2x.scan.resolve("", &[".txt"], BUILD_TOOL_EXCLUDES);
+        self.ascii_check.scan.resolve("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
     }
 }
 
@@ -583,6 +617,12 @@ fn validate_processor_fields(raw: &toml::Value) -> Result<()> {
             processor_names::GEM => GemConfig::known_fields(),
             processor_names::MDL => MdlConfig::known_fields(),
             processor_names::MARKDOWNLINT => MarkdownlintConfig::known_fields(),
+            processor_names::ASPELL => AspellConfig::known_fields(),
+            processor_names::PANDOC => PandocConfig::known_fields(),
+            processor_names::MARKDOWN => MarkdownGenConfig::known_fields(),
+            processor_names::PDFLATEX => PdflatexConfig::known_fields(),
+            processor_names::A2X => A2xConfig::known_fields(),
+            processor_names::ASCII_CHECK => AsciiCheckConfig::known_fields(),
             _ => continue, // unknown processor name = Lua plugin, skip
         };
 

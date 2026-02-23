@@ -417,6 +417,47 @@ fn init_project() -> Result<()> {
 # npm_stamp = "out/npm/root.stamp"
 # extensions = [".md"]
 
+[processor.aspell]
+# aspell = "aspell"
+# conf_dir = "."
+# conf = ".aspell.conf"
+# args = []
+# extra_inputs = [".aspell.conf", ".aspell.en.pws", ".aspell.en.prepl"]
+# extensions = [".md"]
+
+[processor.pandoc]
+# pandoc = "pandoc"
+# from = "markdown"
+# to = "pdf"
+# args = []
+# output_dir = "out/pandoc"
+# extensions = [".md"]
+
+[processor.markdown]
+# markdown_bin = "markdown"
+# args = []
+# output_dir = "out/markdown"
+# extensions = [".md"]
+
+[processor.pdflatex]
+# pdflatex = "pdflatex"
+# args = []
+# runs = 2
+# qpdf = true
+# output_dir = "out/pdflatex"
+# extensions = [".tex"]
+
+[processor.a2x]
+# a2x = "a2x"
+# format = "pdf"
+# args = []
+# output_dir = "out/a2x"
+# extensions = [".txt"]
+
+[processor.ascii_check]
+# args = []
+# extensions = [".md"]
+
 [graph]
 # viewer = "google-chrome"
 

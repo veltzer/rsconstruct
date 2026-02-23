@@ -1142,6 +1142,280 @@ impl KnownFields for MarkdownlintConfig {
     }
 }
 
+fn default_aspell() -> String {
+    "aspell".into()
+}
+
+fn default_aspell_conf_dir() -> String {
+    ".".into()
+}
+
+fn default_aspell_conf() -> String {
+    ".aspell.conf".into()
+}
+
+fn default_aspell_extra_inputs() -> Vec<String> {
+    vec![".aspell.conf".into(), ".aspell.en.pws".into(), ".aspell.en.prepl".into()]
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct AspellConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_aspell")]
+    pub aspell: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default = "default_aspell_conf_dir")]
+    pub conf_dir: String,
+    #[serde(default = "default_aspell_conf")]
+    pub conf: String,
+    #[serde(default = "default_aspell_extra_inputs")]
+    pub extra_inputs: Vec<String>,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for AspellConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            aspell: "aspell".into(),
+            args: Vec::new(),
+            conf_dir: ".".into(),
+            conf: ".aspell.conf".into(),
+            extra_inputs: default_aspell_extra_inputs(),
+            scan: default_scan!(extensions: [".md"]),
+        }
+    }
+}
+
+impl KnownFields for AspellConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "aspell", "args", "conf_dir", "conf", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
+checker_config!(AsciiCheckConfig, extensions: [".md"]);
+
+fn default_pandoc() -> String {
+    "pandoc".into()
+}
+
+fn default_pandoc_from() -> String {
+    "markdown".into()
+}
+
+fn default_pandoc_to() -> String {
+    "pdf".into()
+}
+
+fn default_pandoc_output_dir() -> String {
+    "out/pandoc".into()
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct PandocConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_pandoc")]
+    pub pandoc: String,
+    #[serde(default = "default_pandoc_from")]
+    pub from: String,
+    #[serde(default = "default_pandoc_to")]
+    pub to: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(default = "default_pandoc_output_dir")]
+    pub output_dir: String,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for PandocConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            pandoc: "pandoc".into(),
+            from: "markdown".into(),
+            to: "pdf".into(),
+            args: Vec::new(),
+            extra_inputs: Vec::new(),
+            output_dir: "out/pandoc".into(),
+            scan: default_scan!(extensions: [".md"]),
+        }
+    }
+}
+
+impl KnownFields for PandocConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "pandoc", "from", "to", "args", "extra_inputs", "output_dir",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
+fn default_markdown_bin() -> String {
+    "markdown".into()
+}
+
+fn default_markdown_output_dir() -> String {
+    "out/markdown".into()
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct MarkdownGenConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_markdown_bin")]
+    pub markdown_bin: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(default = "default_markdown_output_dir")]
+    pub output_dir: String,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for MarkdownGenConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            markdown_bin: "markdown".into(),
+            args: Vec::new(),
+            extra_inputs: Vec::new(),
+            output_dir: "out/markdown".into(),
+            scan: default_scan!(extensions: [".md"]),
+        }
+    }
+}
+
+impl KnownFields for MarkdownGenConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "markdown_bin", "args", "extra_inputs", "output_dir",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
+fn default_pdflatex() -> String {
+    "pdflatex".into()
+}
+
+fn default_pdflatex_runs() -> usize {
+    2
+}
+
+fn default_pdflatex_output_dir() -> String {
+    "out/pdflatex".into()
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct PdflatexConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_pdflatex")]
+    pub pdflatex: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(default = "default_pdflatex_runs")]
+    pub runs: usize,
+    #[serde(default = "default_true")]
+    pub qpdf: bool,
+    #[serde(default = "default_pdflatex_output_dir")]
+    pub output_dir: String,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for PdflatexConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            pdflatex: "pdflatex".into(),
+            args: Vec::new(),
+            extra_inputs: Vec::new(),
+            runs: 2,
+            qpdf: true,
+            output_dir: "out/pdflatex".into(),
+            scan: default_scan!(extensions: [".tex"]),
+        }
+    }
+}
+
+impl KnownFields for PdflatexConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "pdflatex", "args", "extra_inputs", "runs", "qpdf", "output_dir",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
+fn default_a2x() -> String {
+    "a2x".into()
+}
+
+fn default_a2x_format() -> String {
+    "pdf".into()
+}
+
+fn default_a2x_output_dir() -> String {
+    "out/a2x".into()
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct A2xConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_a2x")]
+    pub a2x: String,
+    #[serde(default = "default_a2x_format")]
+    pub format: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(default = "default_a2x_output_dir")]
+    pub output_dir: String,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for A2xConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            a2x: "a2x".into(),
+            format: "pdf".into(),
+            args: Vec::new(),
+            extra_inputs: Vec::new(),
+            output_dir: "out/a2x".into(),
+            scan: default_scan!(extensions: [".txt"]),
+        }
+    }
+}
+
+impl KnownFields for A2xConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "a2x", "format", "args", "extra_inputs", "output_dir",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
 fn default_bundler() -> String {
     "bundle".into()
 }

@@ -1,13 +1,21 @@
+mod a2x;
 mod cc;
 mod gem;
+mod markdown;
 mod npm;
+mod pandoc;
+mod pdflatex;
 mod pip;
 pub mod tags;
 mod tera;
 
+pub use a2x::A2xProcessor;
 pub use cc::CcProcessor;
 pub use gem::GemProcessor;
+pub use markdown::MarkdownProcessor;
 pub use npm::NpmProcessor;
+pub use pandoc::PandocProcessor;
+pub use pdflatex::PdflatexProcessor;
 pub use pip::PipProcessor;
 pub use tags::TagsProcessor;
 pub use tera::TeraProcessor;

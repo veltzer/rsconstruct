@@ -361,6 +361,8 @@ macro_rules! impl_checker {
     };
 }
 
+mod aspell;
+mod ascii_check;
 mod cargo;
 mod clang_tidy;
 mod cppcheck;
@@ -385,6 +387,8 @@ mod taplo;
 mod jq;
 mod json_schema;
 
+pub use aspell::AspellProcessor;
+pub use ascii_check::AsciiCheckProcessor;
 pub use cargo::CargoProcessor;
 pub use clang_tidy::ClangTidyProcessor;
 pub use cppcheck::CppcheckProcessor;
