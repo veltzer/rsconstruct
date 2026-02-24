@@ -21,11 +21,11 @@ impl PandocProcessor {
         scan_root_valid(&self.config.scan)
     }
 
-    fn output_path(&self, source: &Path) -> PathBuf {
+    fn output_path(&self, source: &Path, format: &str) -> PathBuf {
         let stem = source.file_stem().unwrap_or_default();
         let parent = source.parent().unwrap_or(Path::new(""));
-        let output_name = format!("{}.{}", stem.to_string_lossy(), self.config.to);
-        Path::new(&self.config.output_dir).join(parent).join(output_name)
+        let output_name = format!("{}.{}", stem.to_string_lossy(), format);
+        Path::new(&self.config.output_dir).join(format).join(parent).join(output_name)
     }
 }
 
@@ -59,14 +59,16 @@ impl ProductDiscovery for PandocProcessor {
         let hash = Some(config_hash(&self.config));
         let extra = resolve_extra_inputs(&self.config.extra_inputs)?;
 
-        for source in files {
-            let output = self.output_path(&source);
+        for source in &files {
+            for format in &self.config.formats {
+                let output = self.output_path(source, format);
 
-            let mut inputs = Vec::with_capacity(1 + extra.len());
-            inputs.push(source);
-            inputs.extend_from_slice(&extra);
+                let mut inputs = Vec::with_capacity(1 + extra.len());
+                inputs.push(source.clone());
+                inputs.extend_from_slice(&extra);
 
-            graph.add_product(inputs, vec![output], crate::processors::names::PANDOC, hash.clone())?;
+                graph.add_product(inputs, vec![output], crate::processors::names::PANDOC, hash.clone())?;
+            }
         }
 
         Ok(())
@@ -77,6 +79,10 @@ impl ProductDiscovery for PandocProcessor {
         let output = product.outputs.first()
             .context("pandoc product has no output")?;
 
+        let format = output.extension()
+            .context("pandoc output has no extension")?
+            .to_string_lossy();
+
         if let Some(parent) = output.parent() {
             fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create pandoc output directory: {}", parent.display()))?;
@@ -84,7 +90,7 @@ impl ProductDiscovery for PandocProcessor {
 
         let mut cmd = Command::new(&self.config.pandoc);
         cmd.arg("--from").arg(&self.config.from);
-        cmd.arg("--to").arg(&self.config.to);
+        cmd.arg("--to").arg(format.as_ref());
         for arg in &self.config.args {
             cmd.arg(arg);
         }

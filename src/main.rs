@@ -428,7 +428,7 @@ fn init_project() -> Result<()> {
 [processor.pandoc]
 # pandoc = "pandoc"
 # from = "markdown"
-# to = "pdf"
+# formats = ["pdf"]
 # args = []
 # output_dir = "out/pandoc"
 # extensions = [".md"]

@@ -1197,8 +1197,8 @@ fn default_pandoc_from() -> String {
     "markdown".into()
 }
 
-fn default_pandoc_to() -> String {
-    "pdf".into()
+fn default_pandoc_formats() -> Vec<String> {
+    vec!["pdf".into()]
 }
 
 fn default_pandoc_output_dir() -> String {
@@ -1213,8 +1213,8 @@ pub struct PandocConfig {
     pub pandoc: String,
     #[serde(default = "default_pandoc_from")]
     pub from: String,
-    #[serde(default = "default_pandoc_to")]
-    pub to: String,
+    #[serde(default = "default_pandoc_formats")]
+    pub formats: Vec<String>,
     #[serde(default)]
     pub args: Vec<String>,
     #[serde(default)]
@@ -1231,7 +1231,7 @@ impl Default for PandocConfig {
             enabled: true,
             pandoc: "pandoc".into(),
             from: "markdown".into(),
-            to: "pdf".into(),
+            formats: vec!["pdf".into()],
             args: Vec::new(),
             extra_inputs: Vec::new(),
             output_dir: "out/pandoc".into(),
@@ -1243,7 +1243,7 @@ impl Default for PandocConfig {
 impl KnownFields for PandocConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "pandoc", "from", "to", "args", "extra_inputs", "output_dir",
+            "enabled", "pandoc", "from", "formats", "args", "extra_inputs", "output_dir",
             "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
         ]
     }
