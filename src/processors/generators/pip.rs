@@ -59,7 +59,7 @@ impl ProductDiscovery for PipProcessor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        self.should_process() && !file_index.scan(&self.config.scan, true).is_empty()
+        self.should_process() && !file_index.scan(&self.config.scan, false).is_empty()
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -71,7 +71,7 @@ impl ProductDiscovery for PipProcessor {
             return Ok(());
         }
 
-        let files = file_index.scan(&self.config.scan, true);
+        let files = file_index.scan(&self.config.scan, false);
         if files.is_empty() {
             return Ok(());
         }
