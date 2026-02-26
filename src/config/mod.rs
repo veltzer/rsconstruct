@@ -573,9 +573,133 @@ pub(crate) struct GraphConfig {
     pub viewer: Option<String>,
 }
 
-/// Validate that all fields in `[processor.X]` sections are known fields for that processor.
-/// Returns an error listing unknown fields. Skips non-table entries (like `auto_detect`)
-/// and unknown processor names (those are Lua plugin sections).
+/// Expected TOML type for a config field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FieldType {
+    String,
+    Bool,
+    Integer,
+    StringArray,
+    /// Array of tables (e.g., [[processor.cc_single_file.compilers]])
+    TableArray,
+}
+
+impl FieldType {
+    fn label(self) -> &'static str {
+        match self {
+            FieldType::String => "a string",
+            FieldType::Bool => "a boolean",
+            FieldType::Integer => "an integer",
+            FieldType::StringArray => "an array of strings",
+            FieldType::TableArray => "an array of tables",
+        }
+    }
+
+    /// Check whether a TOML value matches this expected type.
+    fn matches(self, value: &toml::Value) -> bool {
+        match self {
+            FieldType::String => value.is_str(),
+            FieldType::Bool => value.as_bool().is_some(),
+            FieldType::Integer => value.is_integer(),
+            FieldType::StringArray => value.as_array()
+                .is_some_and(|arr| arr.iter().all(|v| v.is_str())),
+            FieldType::TableArray => value.as_array()
+                .is_some_and(|arr| arr.iter().all(|v| v.is_table())),
+        }
+    }
+
+    fn describe_value(value: &toml::Value) -> &'static str {
+        match value {
+            toml::Value::String(_) => "a string",
+            toml::Value::Integer(_) => "an integer",
+            toml::Value::Float(_) => "a float",
+            toml::Value::Boolean(_) => "a boolean",
+            toml::Value::Datetime(_) => "a datetime",
+            toml::Value::Array(_) => "an array",
+            toml::Value::Table(_) => "a table",
+        }
+    }
+}
+
+/// Return the expected TOML type for a processor config field.
+/// Fields common to all processors (ScanConfig fields, enabled, args, extra_inputs)
+/// are handled generically. Processor-specific fields are looked up by processor name.
+fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
+    // ScanConfig fields — shared by all processors
+    match field {
+        "scan_dir" => return Some(FieldType::String),
+        "extensions" => return Some(FieldType::StringArray),
+        "exclude_dirs" => return Some(FieldType::StringArray),
+        "exclude_files" => return Some(FieldType::StringArray),
+        "exclude_paths" => return Some(FieldType::StringArray),
+        // Common processor fields
+        "enabled" => return Some(FieldType::Bool),
+        "args" => return Some(FieldType::StringArray),
+        "extra_inputs" => return Some(FieldType::StringArray),
+        _ => {}
+    }
+
+    // Processor-specific fields
+    match (processor, field) {
+        // tera
+        ("tera", "strict" | "trim_blocks") => Some(FieldType::Bool),
+        // ruff
+        ("ruff", "linter") => Some(FieldType::String),
+        // cc_single_file
+        ("cc_single_file", "cc" | "cxx" | "output_suffix") => Some(FieldType::String),
+        ("cc_single_file", "cflags" | "cxxflags" | "ldflags" | "include_paths") => Some(FieldType::StringArray),
+        ("cc_single_file", "include_scanner") => Some(FieldType::String),
+        ("cc_single_file", "compilers") => Some(FieldType::TableArray),
+        // cppcheck — only common fields
+        // clang_tidy
+        ("clang_tidy", "compiler_args") => Some(FieldType::StringArray),
+        // spellcheck
+        ("spellcheck", "language" | "words_file") => Some(FieldType::String),
+        ("spellcheck", "use_words_file" | "auto_add_words") => Some(FieldType::Bool),
+        // make
+        ("make", "make" | "target") => Some(FieldType::String),
+        // cargo
+        ("cargo", "cargo" | "command") => Some(FieldType::String),
+        // mypy, pyrefly, shellcheck, rumdl, yamllint, jq, jsonlint, taplo
+        ("mypy" | "pyrefly" | "shellcheck", "checker") => Some(FieldType::String),
+        ("rumdl" | "yamllint" | "jsonlint" | "taplo", "linter") => Some(FieldType::String),
+        ("jq", "checker") => Some(FieldType::String),
+        // tags
+        ("tags", "output" | "tags_file") => Some(FieldType::String),
+        ("tags", "tags_file_strict") => Some(FieldType::Bool),
+        // pip
+        ("pip", "pip") => Some(FieldType::String),
+        // sphinx
+        ("sphinx", "sphinx_build" | "output_dir") => Some(FieldType::String),
+        // npm
+        ("npm", "npm" | "command") => Some(FieldType::String),
+        // gem
+        ("gem", "bundler" | "command") => Some(FieldType::String),
+        // mdl
+        ("mdl", "gem_home" | "mdl_bin" | "gem_stamp") => Some(FieldType::String),
+        // markdownlint
+        ("markdownlint", "markdownlint_bin" | "npm_stamp") => Some(FieldType::String),
+        // aspell
+        ("aspell", "aspell" | "conf_dir" | "conf") => Some(FieldType::String),
+        // pandoc
+        ("pandoc", "pandoc" | "from" | "output_dir") => Some(FieldType::String),
+        ("pandoc", "formats") => Some(FieldType::StringArray),
+        // markdown
+        ("markdown", "markdown_bin" | "output_dir") => Some(FieldType::String),
+        // pdflatex
+        ("pdflatex", "pdflatex" | "output_dir") => Some(FieldType::String),
+        ("pdflatex", "runs") => Some(FieldType::Integer),
+        ("pdflatex", "qpdf") => Some(FieldType::Bool),
+        // a2x
+        ("a2x", "a2x" | "format" | "output_dir") => Some(FieldType::String),
+        _ => None,
+    }
+}
+
+/// Validate that all fields in `[processor.X]` sections are known fields for that processor
+/// and have the correct TOML types.
+/// Returns an error listing unknown fields and type mismatches. Skips non-table entries
+/// (like `auto_detect`) and unknown processor names (those are Lua plugin sections).
 fn validate_processor_fields(raw: &toml::Value) -> Result<()> {
     let processor_table = match raw.get("processor").and_then(|v| v.as_table()) {
         Some(t) => t,
@@ -626,12 +750,25 @@ fn validate_processor_fields(raw: &toml::Value) -> Result<()> {
             _ => continue, // unknown processor name = Lua plugin, skip
         };
 
-        for key in table.keys() {
+        for (key, field_value) in table {
             if !known.contains(&key.as_str()) {
                 errors.push(format!(
                     "[processor.{}]: unknown field '{}' (valid fields: {})",
                     name, key, known.join(", ")
                 ));
+                continue;
+            }
+
+            // Check field type if we know the expected type
+            if let Some(expected) = expected_field_type(name, key) {
+                if !expected.matches(field_value) {
+                    errors.push(format!(
+                        "[processor.{}]: field '{}' must be {}, got {} ({})",
+                        name, key, expected.label(),
+                        FieldType::describe_value(field_value),
+                        field_value,
+                    ));
+                }
             }
         }
     }
