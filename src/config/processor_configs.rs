@@ -1506,3 +1506,226 @@ impl KnownFields for GemConfig {
         ]
     }
 }
+
+fn default_mmdc_bin() -> String {
+    "mmdc".into()
+}
+
+fn default_mermaid_formats() -> Vec<String> {
+    vec!["png".into()]
+}
+
+fn default_mermaid_output_dir() -> String {
+    "out/mermaid".into()
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct MermaidConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_mmdc_bin")]
+    pub mmdc_bin: String,
+    #[serde(default = "default_mermaid_formats")]
+    pub formats: Vec<String>,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(default = "default_mermaid_output_dir")]
+    pub output_dir: String,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for MermaidConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            mmdc_bin: "mmdc".into(),
+            formats: vec!["png".into()],
+            args: Vec::new(),
+            extra_inputs: Vec::new(),
+            output_dir: "out/mermaid".into(),
+            scan: default_scan!(extensions: [".mmd"]),
+        }
+    }
+}
+
+impl KnownFields for MermaidConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "mmdc_bin", "formats", "args", "extra_inputs", "output_dir",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
+fn default_drawio_bin() -> String {
+    "drawio".into()
+}
+
+fn default_drawio_formats() -> Vec<String> {
+    vec!["png".into()]
+}
+
+fn default_drawio_output_dir() -> String {
+    "out/drawio".into()
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct DrawioConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_drawio_bin")]
+    pub drawio_bin: String,
+    #[serde(default = "default_drawio_formats")]
+    pub formats: Vec<String>,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(default = "default_drawio_output_dir")]
+    pub output_dir: String,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for DrawioConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            drawio_bin: "drawio".into(),
+            formats: vec!["png".into()],
+            args: Vec::new(),
+            extra_inputs: Vec::new(),
+            output_dir: "out/drawio".into(),
+            scan: default_scan!(extensions: [".drawio"]),
+        }
+    }
+}
+
+impl KnownFields for DrawioConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "drawio_bin", "formats", "args", "extra_inputs", "output_dir",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
+fn default_libreoffice_bin() -> String {
+    "libreoffice".into()
+}
+
+fn default_libreoffice_formats() -> Vec<String> {
+    vec!["pdf".into()]
+}
+
+fn default_libreoffice_output_dir() -> String {
+    "out/libreoffice".into()
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct LibreofficeConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_libreoffice_bin")]
+    pub libreoffice_bin: String,
+    #[serde(default = "default_libreoffice_formats")]
+    pub formats: Vec<String>,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(default = "default_libreoffice_output_dir")]
+    pub output_dir: String,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for LibreofficeConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            libreoffice_bin: "libreoffice".into(),
+            formats: vec!["pdf".into()],
+            args: Vec::new(),
+            extra_inputs: Vec::new(),
+            output_dir: "out/libreoffice".into(),
+            scan: default_scan!(extensions: [".odp"]),
+        }
+    }
+}
+
+impl KnownFields for LibreofficeConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "libreoffice_bin", "formats", "args", "extra_inputs", "output_dir",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
+fn default_pdfunite_bin() -> String {
+    "pdfunite".into()
+}
+
+fn default_pdfunite_source_dir() -> String {
+    "marp/courses".into()
+}
+
+fn default_pdfunite_source_ext() -> String {
+    ".md".into()
+}
+
+fn default_pdfunite_source_output_dir() -> String {
+    "out/marp/pdf".into()
+}
+
+fn default_pdfunite_output_dir() -> String {
+    "out/courses".into()
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct PdfuniteConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_pdfunite_bin")]
+    pub pdfunite_bin: String,
+    #[serde(default = "default_pdfunite_source_dir")]
+    pub source_dir: String,
+    #[serde(default = "default_pdfunite_source_ext")]
+    pub source_ext: String,
+    #[serde(default = "default_pdfunite_source_output_dir")]
+    pub source_output_dir: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(default = "default_pdfunite_output_dir")]
+    pub output_dir: String,
+}
+
+impl Default for PdfuniteConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            pdfunite_bin: "pdfunite".into(),
+            source_dir: "marp/courses".into(),
+            source_ext: ".md".into(),
+            source_output_dir: "out/marp/pdf".into(),
+            args: Vec::new(),
+            extra_inputs: Vec::new(),
+            output_dir: "out/courses".into(),
+        }
+    }
+}
+
+impl KnownFields for PdfuniteConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "pdfunite_bin", "source_dir", "source_ext", "source_output_dir",
+            "args", "extra_inputs", "output_dir",
+        ]
+    }
+}

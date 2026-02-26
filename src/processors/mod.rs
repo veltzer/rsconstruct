@@ -54,6 +54,10 @@ pub mod names {
     pub const PDFLATEX: &str = "pdflatex";
     pub const A2X: &str = "a2x";
     pub const ASCII_CHECK: &str = "ascii_check";
+    pub const MERMAID: &str = "mermaid";
+    pub const DRAWIO: &str = "drawio";
+    pub const LIBREOFFICE: &str = "libreoffice";
+    pub const PDFUNITE: &str = "pdfunite";
 }
 
 /// Global flag: set to true on Ctrl+C so subprocesses can be killed promptly.
@@ -461,7 +465,7 @@ pub use checkers::{
     ShellcheckProcessor, SleepProcessor, SpellcheckProcessor, SphinxProcessor,
     TaploProcessor, YamllintProcessor,
 };
-pub use generators::{A2xProcessor, CcProcessor, GemProcessor, MarpProcessor, MarkdownProcessor, NpmProcessor, PandocProcessor, PdflatexProcessor, PipProcessor, TagsProcessor, TeraProcessor};
+pub use generators::{A2xProcessor, CcProcessor, DrawioProcessor, GemProcessor, LibreofficeProcessor, MarpProcessor, MarkdownProcessor, MermaidProcessor, NpmProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, PipProcessor, TagsProcessor, TeraProcessor};
 pub(crate) use generators::tags as tags_cmd;
 pub use lua_processor::LuaProcessor;
 
@@ -661,9 +665,13 @@ pub fn tool_install_command(tool: &str) -> Option<&'static str> {
         "pdflatex" => Some("apt install texlive-latex-base"),
         "qpdf" => Some("apt install qpdf"),
         "a2x" => Some("apt install asciidoc"),
+        "drawio" => Some("snap install drawio"),
+        "libreoffice" => Some("apt install libreoffice"),
+        "pdfunite" => Some("apt install poppler-utils"),
         "python3" => Some("apt install python3"),
         // Node tools (npm)
         "marp" => Some("npm install -g @marp-team/marp-cli"),
+        "mmdc" => Some("npm install -g @mermaid-js/mermaid-cli"),
         "jsonlint" => Some("npm install -g jsonlint"),
         "npm" => Some("apt install npm"),
         // Ruby tools

@@ -271,6 +271,8 @@ fn default_processors() -> Vec<String> {
         names::MDL.into(), names::MARKDOWNLINT.into(),
         names::ASPELL.into(), names::MARP.into(), names::PANDOC.into(), names::MARKDOWN.into(),
         names::PDFLATEX.into(), names::A2X.into(), names::ASCII_CHECK.into(),
+        names::MERMAID.into(), names::DRAWIO.into(), names::LIBREOFFICE.into(),
+        names::PDFUNITE.into(),
     ]
 }
 
@@ -358,6 +360,14 @@ pub(crate) struct ProcessorConfig {
     pub a2x: A2xConfig,
     #[serde(default)]
     pub ascii_check: AsciiCheckConfig,
+    #[serde(default)]
+    pub mermaid: MermaidConfig,
+    #[serde(default)]
+    pub drawio: DrawioConfig,
+    #[serde(default)]
+    pub libreoffice: LibreofficeConfig,
+    #[serde(default)]
+    pub pdfunite: PdfuniteConfig,
     /// Captures unknown [processor.PLUGIN_NAME] sections for Lua plugins
     #[serde(flatten)]
     pub extra: HashMap<String, toml::Value>,
@@ -401,6 +411,10 @@ impl Default for ProcessorConfig {
             pdflatex: PdflatexConfig::default(),
             a2x: A2xConfig::default(),
             ascii_check: AsciiCheckConfig::default(),
+            mermaid: MermaidConfig::default(),
+            drawio: DrawioConfig::default(),
+            libreoffice: LibreofficeConfig::default(),
+            pdfunite: PdfuniteConfig::default(),
             extra: HashMap::new(),
         }
     }
@@ -442,6 +456,10 @@ impl ProcessorConfig {
             "pdflatex" => self.pdflatex.enabled,
             "a2x" => self.a2x.enabled,
             "ascii_check" => self.ascii_check.enabled,
+            "mermaid" => self.mermaid.enabled,
+            "drawio" => self.drawio.enabled,
+            "libreoffice" => self.libreoffice.enabled,
+            "pdfunite" => self.pdfunite.enabled,
             _ => true, // unknown processors (plugins) default to enabled
         }
     }
@@ -464,6 +482,7 @@ impl ProcessorConfig {
             &self.mdl.scan, &self.markdownlint.scan,
             &self.aspell.scan, &self.marp.scan, &self.pandoc.scan, &self.markdown.scan,
             &self.pdflatex.scan, &self.a2x.scan, &self.ascii_check.scan,
+            &self.mermaid.scan, &self.drawio.scan, &self.libreoffice.scan,
         ];
         let mut dirs: Vec<String> = scans.iter()
             .filter_map(|s| s.scan_dir.as_deref())
@@ -512,6 +531,9 @@ impl ProcessorConfig {
         self.pdflatex.scan.resolve("", &[".tex"], BUILD_TOOL_EXCLUDES);
         self.a2x.scan.resolve("", &[".txt"], BUILD_TOOL_EXCLUDES);
         self.ascii_check.scan.resolve("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
+        self.mermaid.scan.resolve("", &[".mmd"], BUILD_TOOL_EXCLUDES);
+        self.drawio.scan.resolve("", &[".drawio"], BUILD_TOOL_EXCLUDES);
+        self.libreoffice.scan.resolve("", &[".odp"], BUILD_TOOL_EXCLUDES);
     }
 }
 
@@ -700,6 +722,17 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
         ("pdflatex", "qpdf") => Some(FieldType::Bool),
         // a2x
         ("a2x", "a2x" | "format" | "output_dir") => Some(FieldType::String),
+        // mermaid
+        ("mermaid", "mmdc_bin" | "output_dir") => Some(FieldType::String),
+        ("mermaid", "formats") => Some(FieldType::StringArray),
+        // drawio
+        ("drawio", "drawio_bin" | "output_dir") => Some(FieldType::String),
+        ("drawio", "formats") => Some(FieldType::StringArray),
+        // libreoffice
+        ("libreoffice", "libreoffice_bin" | "output_dir") => Some(FieldType::String),
+        ("libreoffice", "formats") => Some(FieldType::StringArray),
+        // pdfunite
+        ("pdfunite", "pdfunite_bin" | "source_dir" | "source_ext" | "source_output_dir" | "output_dir") => Some(FieldType::String),
         _ => None,
     }
 }
@@ -756,6 +789,10 @@ fn validate_processor_fields(raw: &toml::Value) -> Result<()> {
             processor_names::PDFLATEX => PdflatexConfig::known_fields(),
             processor_names::A2X => A2xConfig::known_fields(),
             processor_names::ASCII_CHECK => AsciiCheckConfig::known_fields(),
+            processor_names::MERMAID => MermaidConfig::known_fields(),
+            processor_names::DRAWIO => DrawioConfig::known_fields(),
+            processor_names::LIBREOFFICE => LibreofficeConfig::known_fields(),
+            processor_names::PDFUNITE => PdfuniteConfig::known_fields(),
             _ => continue, // unknown processor name = Lua plugin, skip
         };
 

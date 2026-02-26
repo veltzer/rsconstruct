@@ -20,7 +20,7 @@ use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
 use crate::object_store::{ObjectStore, ObjectStoreOptions};
-use crate::processors::{A2xProcessor, AsciiCheckProcessor, AspellProcessor, CargoProcessor, CcProcessor, ClangTidyProcessor, CppcheckProcessor, GemProcessor, JqProcessor, JsonlintProcessor, JsonSchemaProcessor, LuaProcessor, MakeProcessor, MarpProcessor, MarkdownProcessor, MarkdownlintProcessor, MdlProcessor, MypyProcessor, NpmProcessor, PandocProcessor, PdflatexProcessor, PipProcessor, ProcessorMap, PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor, ShellcheckProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, SphinxProcessor, TagsProcessor, TaploProcessor, TeraProcessor, YamllintProcessor, names as proc_names};
+use crate::processors::{A2xProcessor, AsciiCheckProcessor, AspellProcessor, CargoProcessor, CcProcessor, ClangTidyProcessor, CppcheckProcessor, DrawioProcessor, GemProcessor, JqProcessor, JsonlintProcessor, JsonSchemaProcessor, LibreofficeProcessor, LuaProcessor, MakeProcessor, MarpProcessor, MarkdownProcessor, MarkdownlintProcessor, MdlProcessor, MermaidProcessor, MypyProcessor, NpmProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, PipProcessor, ProcessorMap, PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor, ShellcheckProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, SphinxProcessor, TagsProcessor, TaploProcessor, TeraProcessor, YamllintProcessor, names as proc_names};
 use crate::remote_cache;
 use crate::tool_lock;
 
@@ -107,6 +107,10 @@ pub(crate) fn create_builtin_processors(cfg: &ProcessorConfig) -> ProcessorMap {
     Builder::register(&mut processors, proc_names::PDFLATEX, PdflatexProcessor::new(cfg.pdflatex.clone()));
     Builder::register(&mut processors, proc_names::A2X, A2xProcessor::new(cfg.a2x.clone()));
     Builder::register(&mut processors, proc_names::ASCII_CHECK, AsciiCheckProcessor::new(cfg.ascii_check.clone()));
+    Builder::register(&mut processors, proc_names::MERMAID, MermaidProcessor::new(cfg.mermaid.clone()));
+    Builder::register(&mut processors, proc_names::DRAWIO, DrawioProcessor::new(cfg.drawio.clone()));
+    Builder::register(&mut processors, proc_names::LIBREOFFICE, LibreofficeProcessor::new(cfg.libreoffice.clone()));
+    Builder::register(&mut processors, proc_names::PDFUNITE, PdfuniteProcessor::new(cfg.pdfunite.clone()));
 
     // Spellcheck processor (fallible init — silently skip on error)
     if let Ok(proc) = SpellcheckProcessor::new(cfg.spellcheck.clone()) {
