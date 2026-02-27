@@ -3,17 +3,17 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::config::{MarkdownGenConfig, config_hash, resolve_extra_inputs};
+use crate::config::{MarkdownConfig, config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use crate::processors::{ProductDiscovery, ProcessorType, clean_outputs, scan_root_valid, run_command_capture, check_command_output};
 
 pub struct MarkdownProcessor {
-    config: MarkdownGenConfig,
+    config: MarkdownConfig,
 }
 
 impl MarkdownProcessor {
-    pub fn new(config: MarkdownGenConfig) -> Self {
+    pub fn new(config: MarkdownConfig) -> Self {
         Self { config }
     }
 

@@ -267,7 +267,7 @@ fn default_processors() -> Vec<String> {
         names::YAMLLINT.into(), names::JQ.into(), names::JSONLINT.into(), names::TAPLO.into(),
         names::JSON_SCHEMA.into(),
         names::TAGS.into(),
-        names::PIP.into(), names::SPHINX.into(), names::NPM.into(), names::GEM.into(),
+        names::PIP.into(), names::SPHINX.into(), names::MDBOOK.into(), names::NPM.into(), names::GEM.into(),
         names::MDL.into(), names::MARKDOWNLINT.into(),
         names::ASPELL.into(), names::MARP.into(), names::PANDOC.into(), names::MARKDOWN.into(),
         names::PDFLATEX.into(), names::A2X.into(), names::ASCII_CHECK.into(),
@@ -301,7 +301,7 @@ pub(crate) struct ProcessorConfig {
     #[serde(default)]
     pub pylint: PylintConfig,
     #[serde(default)]
-    pub cc_single_file: CcConfig,
+    pub cc_single_file: CcSingleFileConfig,
     #[serde(default)]
     pub cppcheck: CppcheckConfig,
     #[serde(default)]
@@ -339,6 +339,8 @@ pub(crate) struct ProcessorConfig {
     #[serde(default)]
     pub sphinx: SphinxConfig,
     #[serde(default)]
+    pub mdbook: MdbookConfig,
+    #[serde(default)]
     pub npm: NpmConfig,
     #[serde(default)]
     pub gem: GemConfig,
@@ -353,7 +355,7 @@ pub(crate) struct ProcessorConfig {
     #[serde(default)]
     pub pandoc: PandocConfig,
     #[serde(default)]
-    pub markdown: MarkdownGenConfig,
+    pub markdown: MarkdownConfig,
     #[serde(default)]
     pub pdflatex: PdflatexConfig,
     #[serde(default)]
@@ -381,7 +383,7 @@ impl Default for ProcessorConfig {
             tera: TeraConfig::default(),
             ruff: RuffConfig::default(),
             pylint: PylintConfig::default(),
-            cc_single_file: CcConfig::default(),
+            cc_single_file: CcSingleFileConfig::default(),
             cppcheck: CppcheckConfig::default(),
             clang_tidy: ClangTidyConfig::default(),
             shellcheck: ShellcheckConfig::default(),
@@ -400,6 +402,7 @@ impl Default for ProcessorConfig {
             tags: TagsConfig::default(),
             pip: PipConfig::default(),
             sphinx: SphinxConfig::default(),
+            mdbook: MdbookConfig::default(),
             npm: NpmConfig::default(),
             gem: GemConfig::default(),
             mdl: MdlConfig::default(),
@@ -407,7 +410,7 @@ impl Default for ProcessorConfig {
             aspell: AspellConfig::default(),
             marp: MarpConfig::default(),
             pandoc: PandocConfig::default(),
-            markdown: MarkdownGenConfig::default(),
+            markdown: MarkdownConfig::default(),
             pdflatex: PdflatexConfig::default(),
             a2x: A2xConfig::default(),
             ascii_check: AsciiCheckConfig::default(),
@@ -445,6 +448,7 @@ impl ProcessorConfig {
             "tags" => self.tags.enabled,
             "pip" => self.pip.enabled,
             "sphinx" => self.sphinx.enabled,
+            "mdbook" => self.mdbook.enabled,
             "npm" => self.npm.enabled,
             "gem" => self.gem.enabled,
             "mdl" => self.mdl.enabled,
@@ -478,7 +482,7 @@ impl ProcessorConfig {
             &self.make.scan, &self.cargo.scan, &self.rumdl.scan, &self.mypy.scan,
             &self.pyrefly.scan, &self.yamllint.scan, &self.jq.scan, &self.jsonlint.scan,
             &self.taplo.scan, &self.json_schema.scan, &self.tags.scan,
-            &self.pip.scan, &self.sphinx.scan, &self.npm.scan, &self.gem.scan,
+            &self.pip.scan, &self.sphinx.scan, &self.mdbook.scan, &self.npm.scan, &self.gem.scan,
             &self.mdl.scan, &self.markdownlint.scan,
             &self.aspell.scan, &self.marp.scan, &self.pandoc.scan, &self.markdown.scan,
             &self.pdflatex.scan, &self.a2x.scan, &self.ascii_check.scan,
@@ -520,6 +524,7 @@ impl ProcessorConfig {
         self.tags.scan.resolve("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
         self.pip.scan.resolve("", &["requirements.txt"], MAKE_CARGO_EXCLUDES);
         self.sphinx.scan.resolve("", &["conf.py"], BUILD_TOOL_EXCLUDES);
+        self.mdbook.scan.resolve("", &["book.toml"], BUILD_TOOL_EXCLUDES);
         self.npm.scan.resolve("", &["package.json"], MAKE_CARGO_EXCLUDES);
         self.gem.scan.resolve("", &["Gemfile"], MAKE_CARGO_EXCLUDES);
         self.mdl.scan.resolve("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
@@ -698,6 +703,8 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
         ("pip", "pip") => Some(FieldType::String),
         // sphinx
         ("sphinx", "sphinx_build" | "output_dir") => Some(FieldType::String),
+        // mdbook
+        ("mdbook", "mdbook" | "output_dir") => Some(FieldType::String),
         // npm
         ("npm", "npm" | "command") => Some(FieldType::String),
         // gem
@@ -759,7 +766,7 @@ fn validate_processor_fields(raw: &toml::Value) -> Result<()> {
             processor_names::TERA => TeraConfig::known_fields(),
             processor_names::RUFF => RuffConfig::known_fields(),
             processor_names::PYLINT => PylintConfig::known_fields(),
-            processor_names::CC_SINGLE_FILE => CcConfig::known_fields(),
+            processor_names::CC_SINGLE_FILE => CcSingleFileConfig::known_fields(),
             processor_names::CPPCHECK => CppcheckConfig::known_fields(),
             processor_names::CLANG_TIDY => ClangTidyConfig::known_fields(),
             processor_names::SHELLCHECK => ShellcheckConfig::known_fields(),
@@ -778,6 +785,7 @@ fn validate_processor_fields(raw: &toml::Value) -> Result<()> {
             processor_names::TAGS => TagsConfig::known_fields(),
             processor_names::PIP => PipConfig::known_fields(),
             processor_names::SPHINX => SphinxConfig::known_fields(),
+            processor_names::MDBOOK => MdbookConfig::known_fields(),
             processor_names::NPM => NpmConfig::known_fields(),
             processor_names::GEM => GemConfig::known_fields(),
             processor_names::MDL => MdlConfig::known_fields(),
@@ -785,7 +793,7 @@ fn validate_processor_fields(raw: &toml::Value) -> Result<()> {
             processor_names::ASPELL => AspellConfig::known_fields(),
             processor_names::MARP => MarpConfig::known_fields(),
             processor_names::PANDOC => PandocConfig::known_fields(),
-            processor_names::MARKDOWN => MarkdownGenConfig::known_fields(),
+            processor_names::MARKDOWN => MarkdownConfig::known_fields(),
             processor_names::PDFLATEX => PdflatexConfig::known_fields(),
             processor_names::A2X => A2xConfig::known_fields(),
             processor_names::ASCII_CHECK => AsciiCheckConfig::known_fields(),

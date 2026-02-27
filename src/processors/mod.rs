@@ -45,6 +45,7 @@ pub mod names {
     pub const SPHINX: &str = "sphinx";
     pub const NPM: &str = "npm";
     pub const GEM: &str = "gem";
+    pub const MDBOOK: &str = "mdbook";
     pub const MDL: &str = "mdl";
     pub const MARKDOWNLINT: &str = "markdownlint";
     pub const ASPELL: &str = "aspell";
@@ -460,12 +461,12 @@ pub use checkers::{
     AsciiCheckProcessor, AspellProcessor,
     CargoProcessor, ClangTidyProcessor, CppcheckProcessor,
     JqProcessor, JsonlintProcessor, JsonSchemaProcessor,
-    MakeProcessor, MarkdownlintProcessor, MdlProcessor, MypyProcessor,
+    MakeProcessor, MarkdownlintProcessor, MdbookProcessor, MdlProcessor, MypyProcessor,
     PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor,
     ShellcheckProcessor, SleepProcessor, SpellcheckProcessor, SphinxProcessor,
     TaploProcessor, YamllintProcessor,
 };
-pub use generators::{A2xProcessor, CcProcessor, DrawioProcessor, GemProcessor, LibreofficeProcessor, MarpProcessor, MarkdownProcessor, MermaidProcessor, NpmProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, PipProcessor, TagsProcessor, TeraProcessor};
+pub use generators::{A2xProcessor, CcSingleFileProcessor, DrawioProcessor, GemProcessor, LibreofficeProcessor, MarpProcessor, MarkdownProcessor, MermaidProcessor, NpmProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, PipProcessor, TagsProcessor, TeraProcessor};
 pub(crate) use generators::tags as tags_cmd;
 pub use lua_processor::LuaProcessor;
 
@@ -647,6 +648,7 @@ pub fn tool_install_command(tool: &str) -> Option<&'static str> {
         "sphinx-build" => Some("pip install sphinx"),
         "pip" => Some("python3 -m ensurepip"),
         // Rust tools (cargo)
+        "mdbook" => Some("cargo install mdbook"),
         "rumdl" => Some("cargo install rumdl"),
         "taplo" => Some("cargo install taplo-cli"),
         "cargo" | "rustc" => Some("curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"),

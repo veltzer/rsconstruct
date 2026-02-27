@@ -291,7 +291,7 @@ pub struct CompilerProfile {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct CcConfig {
+pub struct CcSingleFileConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
     /// Legacy single-compiler fields (used when `compilers` is empty)
@@ -324,7 +324,7 @@ pub struct CcConfig {
     pub scan: ScanConfig,
 }
 
-impl CcConfig {
+impl CcSingleFileConfig {
     /// Get the list of enabled compiler profiles to use.
     /// If `compilers` is set, returns enabled profiles from that list.
     /// Otherwise, creates a single profile from the legacy fields.
@@ -347,7 +347,7 @@ impl CcConfig {
     }
 }
 
-impl Default for CcConfig {
+impl Default for CcSingleFileConfig {
     fn default() -> Self {
         Self {
             enabled: true,
@@ -366,7 +366,7 @@ impl Default for CcConfig {
     }
 }
 
-impl KnownFields for CcConfig {
+impl KnownFields for CcSingleFileConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
             "enabled", "cc", "cxx", "cflags", "cxxflags", "ldflags", "output_suffix",
@@ -989,6 +989,52 @@ impl KnownFields for SphinxConfig {
     }
 }
 
+fn default_mdbook() -> String {
+    "mdbook".into()
+}
+
+fn default_mdbook_output_dir() -> String {
+    "book".into()
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct MdbookConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_mdbook")]
+    pub mdbook: String,
+    #[serde(default = "default_mdbook_output_dir")]
+    pub output_dir: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for MdbookConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            mdbook: "mdbook".into(),
+            output_dir: "book".into(),
+            args: Vec::new(),
+            extra_inputs: Vec::new(),
+            scan: default_scan!(extensions: ["book.toml"]),
+        }
+    }
+}
+
+impl KnownFields for MdbookConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "mdbook", "output_dir", "args", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
 fn default_npm() -> String {
     "npm".into()
 }
@@ -1315,7 +1361,7 @@ fn default_markdown_output_dir() -> String {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct MarkdownGenConfig {
+pub struct MarkdownConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
     #[serde(default = "default_markdown_bin")]
@@ -1330,7 +1376,7 @@ pub struct MarkdownGenConfig {
     pub scan: ScanConfig,
 }
 
-impl Default for MarkdownGenConfig {
+impl Default for MarkdownConfig {
     fn default() -> Self {
         Self {
             enabled: true,
@@ -1343,7 +1389,7 @@ impl Default for MarkdownGenConfig {
     }
 }
 
-impl KnownFields for MarkdownGenConfig {
+impl KnownFields for MarkdownConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
             "enabled", "markdown_bin", "args", "extra_inputs", "output_dir",

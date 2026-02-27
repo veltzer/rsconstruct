@@ -12,6 +12,33 @@ an error. The user must fix their configuration or their project, not the code.
 Optional features must be opt-in via explicit configuration (default off).
 When the user enables a feature, all resources it requires must exist.
 
+## Processor naming conventions
+
+Every processor has a single **identity string** (e.g. `ruff`, `clang_tidy`,
+`mdbook`). All artifacts derived from a processor must use that same string
+consistently:
+
+| Artifact | Convention | Example (`clang_tidy`) |
+|---|---|---|
+| Name constant | `pub const UPPER: &str = "name";` in `processors::names` | `CLANG_TIDY: &str = "clang_tidy"` |
+| Source file | `src/processors/checkers/{name}.rs` or `generators/{name}.rs` | `checkers/clang_tidy.rs` |
+| Processor struct | `{PascalCase}Processor` | `ClangTidyProcessor` |
+| Config struct | `{PascalCase}Config` | `ClangTidyConfig` |
+| Field on `ProcessorConfig` | `pub {name}: {PascalCase}Config` | `pub clang_tidy: ClangTidyConfig` |
+| Match arm in `processor_enabled_field()` | `"{name}" => self.{name}.enabled` | `"clang_tidy" => self.clang_tidy.enabled` |
+| Entry in `default_processors()` | `names::UPPER.into()` | `names::CLANG_TIDY.into()` |
+| Entry in `validate_processor_fields()` | `processor_names::UPPER => {PascalCase}Config::known_fields()` | `processor_names::CLANG_TIDY => ClangTidyConfig::known_fields()` |
+| Entry in `expected_field_type()` | `("{name}", "field") => Some(FieldType::...)` | `("clang_tidy", "compiler_args") => ...` |
+| Entry in `scan_dirs()` | `&self.{name}.scan` | `&self.clang_tidy.scan` |
+| Entry in `resolve_scan_defaults()` | `self.{name}.scan.resolve(...)` | `self.clang_tidy.scan.resolve(...)` |
+| Registration in `create_builtin_processors()` | `Builder::register(..., proc_names::UPPER, {PascalCase}Processor::new(cfg.{name}.clone()))` | `Builder::register(..., proc_names::CLANG_TIDY, ClangTidyProcessor::new(cfg.clang_tidy.clone()))` |
+| Re-export in `processors/mod.rs` | `pub use checkers::{PascalCase}Processor` | `pub use checkers::ClangTidyProcessor` |
+| Install command in `tool_install_command()` | `"{tool}" => Some("...")` | `"clang-tidy" => Some("apt install clang-tidy")` |
+
+When adding a new processor, use the identity string everywhere. Do not
+abbreviate, rename, or add suffixes (`Gen`, `Bin`, etc.) to any of the
+derived names.
+
 ## Test naming for processors
 
 Test functions for a processor must be prefixed with the processor name.

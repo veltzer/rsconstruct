@@ -5,21 +5,21 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::config::{CcConfig, CompilerProfile, config_hash, resolve_extra_inputs};
+use crate::config::{CcSingleFileConfig, CompilerProfile, config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use crate::processors::{ProductDiscovery, scan_root, clean_outputs, check_command_output, format_command, run_command};
 
 use source_flags::{SourceFlags, parse_source_flags, should_exclude_for_profile};
 
-pub struct CcProcessor {
-    config: CcConfig,
+pub struct CcSingleFileProcessor {
+    config: CcSingleFileConfig,
     profiles: Vec<CompilerProfile>,
     output_dir: PathBuf,
 }
 
-impl CcProcessor {
-    pub fn new(config: CcConfig) -> Self {
+impl CcSingleFileProcessor {
+    pub fn new(config: CcSingleFileConfig) -> Self {
         let profiles = config.get_compiler_profiles();
         let output_dir = PathBuf::from("out/cc_single_file");
         Self {
@@ -184,7 +184,7 @@ impl CcProcessor {
     }
 }
 
-impl ProductDiscovery for CcProcessor {
+impl ProductDiscovery for CcSingleFileProcessor {
     fn description(&self) -> &str {
         "Compile C/C++ source files into executables (single-file)"
     }

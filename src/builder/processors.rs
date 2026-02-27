@@ -4,11 +4,11 @@ use crate::cli::ProcessorAction;
 use crate::color;
 use crate::config::{
     ProcessorConfig,
-    TeraConfig, RuffConfig, PylintConfig, CcConfig, CppcheckConfig, ClangTidyConfig,
+    TeraConfig, RuffConfig, PylintConfig, CcSingleFileConfig, CppcheckConfig, ClangTidyConfig,
     ShellcheckConfig, SpellcheckConfig, SleepConfig, MakeConfig, CargoConfig, RumdlConfig,
     MypyConfig, PyreflyConfig, YamllintConfig, JqConfig, JsonlintConfig, TaploConfig,
     JsonSchemaConfig, TagsConfig, PipConfig, SphinxConfig, NpmConfig, GemConfig, MdlConfig,
-    MarkdownlintConfig, AspellConfig, PandocConfig, MarkdownGenConfig, PdflatexConfig,
+    MarkdownlintConfig, AspellConfig, PandocConfig, MarkdownConfig, PdflatexConfig,
     A2xConfig, AsciiCheckConfig,
 };
 use crate::processors::names;
@@ -71,7 +71,7 @@ fn defconfig_json(name: &str) -> Option<String> {
         names::TERA => serde_json::to_value(TeraConfig::default()).ok()?,
         names::RUFF => serde_json::to_value(RuffConfig::default()).ok()?,
         names::PYLINT => serde_json::to_value(PylintConfig::default()).ok()?,
-        names::CC_SINGLE_FILE => serde_json::to_value(CcConfig::default()).ok()?,
+        names::CC_SINGLE_FILE => serde_json::to_value(CcSingleFileConfig::default()).ok()?,
         names::CPPCHECK => serde_json::to_value(CppcheckConfig::default()).ok()?,
         names::CLANG_TIDY => serde_json::to_value(ClangTidyConfig::default()).ok()?,
         names::SHELLCHECK => serde_json::to_value(ShellcheckConfig::default()).ok()?,
@@ -96,7 +96,7 @@ fn defconfig_json(name: &str) -> Option<String> {
         names::MARKDOWNLINT => serde_json::to_value(MarkdownlintConfig::default()).ok()?,
         names::ASPELL => serde_json::to_value(AspellConfig::default()).ok()?,
         names::PANDOC => serde_json::to_value(PandocConfig::default()).ok()?,
-        names::MARKDOWN => serde_json::to_value(MarkdownGenConfig::default()).ok()?,
+        names::MARKDOWN => serde_json::to_value(MarkdownConfig::default()).ok()?,
         names::PDFLATEX => serde_json::to_value(PdflatexConfig::default()).ok()?,
         names::A2X => serde_json::to_value(A2xConfig::default()).ok()?,
         names::ASCII_CHECK => serde_json::to_value(AsciiCheckConfig::default()).ok()?,

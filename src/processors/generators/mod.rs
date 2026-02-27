@@ -1,5 +1,5 @@
 mod a2x;
-mod cc;
+mod cc_single_file;
 mod drawio;
 mod gem;
 mod libreoffice;
@@ -15,7 +15,7 @@ pub mod tags;
 mod tera;
 
 pub use a2x::A2xProcessor;
-pub use cc::CcProcessor;
+pub use cc_single_file::CcSingleFileProcessor;
 pub use drawio::DrawioProcessor;
 pub use gem::GemProcessor;
 pub use libreoffice::LibreofficeProcessor;

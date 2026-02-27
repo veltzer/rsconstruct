@@ -369,6 +369,7 @@ mod cppcheck;
 
 mod make;
 mod markdownlint;
+mod mdbook;
 mod mdl;
 mod mypy;
 
@@ -395,6 +396,7 @@ pub use cppcheck::CppcheckProcessor;
 
 pub use make::MakeProcessor;
 pub use markdownlint::MarkdownlintProcessor;
+pub use mdbook::MdbookProcessor;
 pub use mdl::MdlProcessor;
 pub use mypy::MypyProcessor;
 
