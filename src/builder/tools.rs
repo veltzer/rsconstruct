@@ -23,7 +23,7 @@ impl Builder {
     }
 
     /// Handle `rsb tools` subcommands
-    pub fn tools(&self, action: ToolsAction) -> Result<()> {
+    pub fn tools(&self, action: ToolsAction, verbose: bool) -> Result<()> {
         let processors = self.create_processors()?;
 
         let show_all = matches!(&action, ToolsAction::List { all: true });
@@ -75,6 +75,15 @@ impl Builder {
                     &|name| config.processor.is_enabled(name),
                 );
                 tool_lock::verify_lock_file(&tool_commands)?;
+                if verbose {
+                    let lock = tool_lock::read_lock_file()?;
+                    if let Some(lock) = lock {
+                        for (name, info) in &lock.tools {
+                            let version = tool_lock::extract_semver(&info.version_output).unwrap_or("?");
+                            println!("{} {} {}", name, color::green("ok"), color::dim(version));
+                        }
+                    }
+                }
                 println!("{}", color::green("Tool versions match lock file."));
             }
             ToolsAction::Lock => {

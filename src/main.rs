@@ -250,7 +250,7 @@ fn run() -> Result<()> {
         }
         Commands::Tools { action } => {
             let builder = Builder::new()?;
-            builder.tools(action)?;
+            builder.tools(action, cli.verbose)?;
         }
         Commands::Complete { shells } => {
             let shells_to_generate = if shells.is_empty() {
