@@ -105,3 +105,10 @@ lists before deserialization.
 
 Structs that intentionally capture unknown fields (like `ProcessorConfig.extra`
 for Lua plugins) should use neither `deny_unknown_fields` nor `KnownFields`.
+
+## No "latest" git tag
+
+Never create a git tag named `latest`. Use only semver tags (e.g. `v0.3.0`).
+A `latest` tag causes confusion with container registries and package managers
+that use the word "latest" as a moving pointer, and it conflicts with GitHub's
+release conventions.

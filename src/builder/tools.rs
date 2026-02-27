@@ -187,7 +187,7 @@ impl Builder {
                     println!("{}", serde_json::to_string_pretty(&output)?);
                 } else {
                     // Human-readable output
-                    println!("{}","Tools:");
+                    println!("Tools:");
                     let max_name = tool_stats.iter().map(|t| t.name.len()).max().unwrap_or(0);
                     for stat in &tool_stats {
                         let status = if stat.installed {
