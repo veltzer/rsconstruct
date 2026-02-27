@@ -22,6 +22,7 @@ pub struct ToolLockFile {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LockedTool {
     pub path: String,
+    pub version: Option<String>,
     pub version_output: String,
     pub version_args: Vec<String>,
 }
@@ -65,8 +66,11 @@ pub fn query_tool_version(tool_name: &str, version_args: &[String]) -> Result<Lo
         );
     }
 
+    let version = extract_semver(&version_output).map(String::from);
+
     Ok(LockedTool {
         path: path.display().to_string(),
+        version,
         version_output,
         version_args: version_args.to_vec(),
     })
