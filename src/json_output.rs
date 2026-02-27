@@ -108,18 +108,6 @@ pub struct ToolListEntry {
     pub processors: Vec<String>,
 }
 
-/// Entry for `rsb tools check --json`.
-#[derive(Debug, Serialize)]
-pub struct ToolCheckEntry {
-    pub tool: String,
-    pub processors: Vec<String>,
-    pub found: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub version: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
-}
-
 /// Emit a JSON event to stdout.
 pub fn emit(event: &BuildEvent) {
     if !is_json_mode() {

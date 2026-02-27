@@ -61,11 +61,11 @@ fn tools_check_succeeds() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    // With only template enabled, there may be no external tools to check.
-    // The command should succeed in that case.
+    // First create the lock file so check has something to verify against
+    let lock_output = run_rsb_with_env(project_path, &["tools", "lock"], &[("NO_COLOR", "1")]);
+    assert!(lock_output.status.success(), "tools lock failed: {}", String::from_utf8_lossy(&lock_output.stderr));
+
+    // Now check should succeed since versions match the just-created lock file
     let output = run_rsb_with_env(project_path, &["tools", "check"], &[("NO_COLOR", "1")]);
-    // Don't assert success here since it depends on what tools are installed,
-    // but it should at least run without crashing
-    let _stdout = String::from_utf8_lossy(&output.stdout);
-    let _stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "tools check failed: {}", String::from_utf8_lossy(&output.stderr));
 }

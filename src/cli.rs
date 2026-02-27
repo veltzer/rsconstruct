@@ -337,18 +337,10 @@ pub enum ToolsAction {
         #[arg(short, long)]
         all: bool,
     },
-    /// Check if required external tools are available on PATH
-    Check {
-        /// Check tools from all processors (including disabled)
-        #[arg(short, long)]
-        all: bool,
-    },
+    /// Verify tool versions against .tools.versions lock file
+    Check,
     /// Lock tool versions to .tools.versions (creates or updates the lock file)
-    Lock {
-        /// Only verify the lock file without writing (exit with error if mismatched)
-        #[arg(long)]
-        check: bool,
-    },
+    Lock,
     /// Install missing external tools (all missing, or a specific tool by name)
     Install {
         /// Tool name to install (omit to install all missing tools)

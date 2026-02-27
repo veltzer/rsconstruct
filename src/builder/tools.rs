@@ -26,7 +26,7 @@ impl Builder {
     pub fn tools(&self, action: ToolsAction) -> Result<()> {
         let processors = self.create_processors()?;
 
-        let show_all = matches!(&action, ToolsAction::List { all: true } | ToolsAction::Check { all: true });
+        let show_all = matches!(&action, ToolsAction::List { all: true });
         let install_yes = matches!(&action, ToolsAction::Install { yes: true, .. });
 
         let mut tool_map: std::collections::BTreeMap<String, Vec<String>> = std::collections::BTreeMap::new();
@@ -68,92 +68,28 @@ impl Builder {
                     println!("{} ({})", tool, procs.join(", "));
                 }
             }
-            ToolsAction::Check { .. } => {
-                // Build a lookup from tool name to version args
-                let config = &self.config;
-                let version_commands: std::collections::HashMap<String, Vec<String>> =
-                    tool_lock::collect_tool_commands(
-                        &processors,
-                        &|name| config.processor.is_enabled(name),
-                    ).into_iter().collect();
-
-                let json_mode = crate::json_output::is_json_mode();
-                let mut json_entries = Vec::new();
-                let mut any_missing = false;
-                for (tool, procs) in &tool_map {
-                    let procs_str = procs.join(", ");
-                    if let Ok(path) = which::which(tool) {
-                        let path_str = path.display().to_string();
-                        let version_str = version_commands.get(tool)
-                            .and_then(|args| tool_lock::query_tool_version(tool, args).ok())
-                            .and_then(|locked| tool_lock::extract_semver(&locked.version_output).map(String::from));
-                        if json_mode {
-                            json_entries.push(crate::json_output::ToolCheckEntry {
-                                tool: tool.clone(),
-                                processors: procs.clone(),
-                                found: true,
-                                version: version_str,
-                                path: Some(path_str),
-                            });
-                        } else if let Some(ver) = version_str {
-                            println!("{} ({}) {} {} {}", tool, procs_str, color::green("found"), ver, color::dim(&path_str));
-                        } else {
-                            println!("{} ({}) {} {}", tool, procs_str, color::green("found"), color::dim(&path_str));
-                        }
-                    } else {
-                        if json_mode {
-                            json_entries.push(crate::json_output::ToolCheckEntry {
-                                tool: tool.clone(),
-                                processors: procs.clone(),
-                                found: false,
-                                version: None,
-                                path: None,
-                            });
-                        } else {
-                            let hint = install_map.get(tool).and_then(|c| c.as_deref())
-                                .map(|h| format!(" \u{2014} install with: {}", color::dim(h)))
-                                .unwrap_or_default();
-                            println!("{} ({}) {}{}", tool, procs_str, color::red("missing"), hint);
-                        }
-                        any_missing = true;
-                    }
-                }
-                if json_mode {
-                    println!("{}", serde_json::to_string_pretty(&json_entries)?);
-                    if any_missing {
-                        return Err(crate::exit_code::RsbError::new(
-                            crate::exit_code::RsbExitCode::ToolError,
-                            "Some required tools are missing",
-                        ).into());
-                    }
-                    return Ok(());
-                }
-                if any_missing {
-                    return Err(crate::exit_code::RsbError::new(
-                        crate::exit_code::RsbExitCode::ToolError,
-                        "Some required tools are missing",
-                    ).into());
-                }
-            }
-            ToolsAction::Lock { check } => {
+            ToolsAction::Check => {
                 let config = &self.config;
                 let tool_commands = tool_lock::collect_tool_commands(
                     &processors,
                     &|name| config.processor.is_enabled(name),
                 );
-
-                if check {
-                    tool_lock::verify_lock_file(&tool_commands)?;
-                    println!("{}", color::green("Tool versions match lock file."));
-                } else {
-                    let lock = tool_lock::create_lock(&tool_commands)?;
-                    for (name, info) in &lock.tools {
-                        let version = tool_lock::extract_semver(&info.version_output).unwrap_or("?");
-                        println!("{} {} {}", name, color::green("locked"), color::dim(version));
-                    }
-                    tool_lock::write_lock_file(&lock)?;
-                    println!("Wrote {}", color::bold(".tools.versions"));
+                tool_lock::verify_lock_file(&tool_commands)?;
+                println!("{}", color::green("Tool versions match lock file."));
+            }
+            ToolsAction::Lock => {
+                let config = &self.config;
+                let tool_commands = tool_lock::collect_tool_commands(
+                    &processors,
+                    &|name| config.processor.is_enabled(name),
+                );
+                let lock = tool_lock::create_lock(&tool_commands)?;
+                for (name, info) in &lock.tools {
+                    let version = tool_lock::extract_semver(&info.version_output).unwrap_or("?");
+                    println!("{} {} {}", name, color::green("locked"), color::dim(version));
                 }
+                tool_lock::write_lock_file(&lock)?;
+                println!("Wrote {}", color::bold(".tools.versions"));
             }
             ToolsAction::Install { name, .. } => {
                 let to_install: Vec<(String, String)> = if let Some(ref name) = name {
