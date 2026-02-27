@@ -105,18 +105,19 @@ The watch command accepts the same build flags as `rsb build` (e.g., `--jobs`, `
 
 ## `rsb graph`
 
-Print the dependency graph in various formats.
+Display the build dependency graph.
 
 ```bash
-rsb graph                    # Default SVG format
-rsb graph --format dot       # Graphviz DOT format
-rsb graph --format mermaid   # Mermaid format
-rsb graph --format json      # JSON format
-rsb graph --format text      # Plain text hierarchical view
-rsb graph --format svg       # SVG format (requires Graphviz dot)
-rsb graph --view             # Open as SVG (default viewer)
-rsb graph --view mermaid     # Open as HTML with Mermaid in browser
-rsb graph --view svg         # Generate and open SVG using Graphviz dot
+rsb graph show                    # Default SVG format
+rsb graph show --format dot       # Graphviz DOT format
+rsb graph show --format mermaid   # Mermaid format
+rsb graph show --format json      # JSON format
+rsb graph show --format text      # Plain text hierarchical view
+rsb graph show --format svg       # SVG format (requires Graphviz dot)
+rsb graph view                    # Open as SVG (default viewer)
+rsb graph view --viewer mermaid   # Open as HTML with Mermaid in browser
+rsb graph view --viewer svg       # Generate and open SVG using Graphviz dot
+rsb graph stats                   # Show graph statistics (products, processors, dependencies)
 ```
 
 ## `rsb cache`
@@ -192,29 +193,58 @@ rsb config validate       # Validate the configuration for errors and warnings
 ## `rsb processors`
 
 ```bash
-rsb processors list          # List processors with enabled/detected status and descriptions (works without rsb.toml)
-rsb processors list -a       # Include hidden processors
-rsb processors files         # Show source and target files for each enabled processor
-rsb processors files ruff    # Show files for a specific processor
-rsb processors files -a      # Include disabled and hidden processors
+rsb processors list              # List processors with enabled/detected status and descriptions
+rsb processors list -a           # Include hidden processors
+rsb processors files             # Show source and target files for each enabled processor
+rsb processors files ruff        # Show files for a specific processor
+rsb processors files -a          # Include disabled and hidden processors
+rsb processors config ruff       # Show resolved configuration for a processor
+rsb processors defconfig ruff    # Show default configuration for a processor
 ```
-
-The `all` subcommand does not require an `rsb.toml` — it lists every built-in processor with its type, batch capability, and description. This is useful for discovering what rsb supports before initializing a project. All other subcommands require a project configuration.
 
 ## `rsb tools`
 
 List or check external tools required by enabled processors.
 
 ```bash
-rsb tools list      # List required tools and which processor needs them
-rsb tools check     # Check if required tools are available on PATH
-rsb tools list -a   # Include tools from disabled processors
-rsb tools check -a  # Check tools from all processors
-rsb tools lock      # Lock tool versions to .tools.versions
-rsb tools lock --check  # Verify the lock file without writing (exit with error if mismatched)
-rsb tools install   # Install all missing external tools
-rsb tools install ruff  # Install a specific tool by name
-rsb tools install -y    # Skip confirmation prompt
+rsb tools list              # List required tools and which processor needs them
+rsb tools list -a           # Include tools from disabled processors
+rsb tools check             # Verify tool versions against .tools.versions lock file
+rsb tools lock              # Lock tool versions to .tools.versions
+rsb tools install           # Install all missing external tools
+rsb tools install ruff      # Install a specific tool by name
+rsb tools install -y        # Skip confirmation prompt
+rsb tools stats             # Show tool availability and language runtime breakdown
+rsb tools stats --json      # Show tool stats in JSON format
+rsb tools graph             # Show tool-to-processor dependency graph (DOT format)
+rsb tools graph --format mermaid  # Mermaid format
+rsb tools graph --view      # Open tool graph in browser
+```
+
+## `rsb tags`
+
+Search and query frontmatter tags from markdown files.
+
+```bash
+rsb tags list                        # List all unique tags
+rsb tags count                       # Show each tag with file count, sorted by frequency
+rsb tags tree                        # Show tags grouped by prefix/category
+rsb tags stats                       # Show statistics about the tags database
+rsb tags files docker                # List files matching a tag (AND semantics)
+rsb tags files docker --or k8s       # List files matching any tag (OR semantics)
+rsb tags files level=advanced        # Match key=value tags
+rsb tags grep deploy                 # Search for tags containing a substring
+rsb tags grep deploy -i              # Case-insensitive tag search
+rsb tags for-file src/main.md        # List all tags for a specific file
+rsb tags frontmatter src/main.md     # Show raw frontmatter for a file
+rsb tags validate                    # Validate tags against .tags file
+rsb tags unused                      # List tags in .tags not used by any file
+rsb tags unused --strict             # Exit with error if unused tags found (CI)
+rsb tags init                        # Generate .tags file from current tag union
+rsb tags add docker                  # Add a tag to the .tags file
+rsb tags remove docker               # Remove a tag from the .tags file
+rsb tags sync                        # Add missing tags to .tags
+rsb tags sync --prune                # Sync and remove unused tags from .tags
 ```
 
 ## `rsb complete`

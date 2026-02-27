@@ -13,7 +13,7 @@ Processors implement the `ProductDiscovery` trait. Each processor:
 3. Creates **products** describing what to build
 4. Executes the build for each product
 
-Available processors: `tera`, `ruff`, `pylint`, `mypy`, `pyrefly`, `cc_single_file`, `cppcheck`, `clang_tidy`, `shellcheck`, `spellcheck`, `rumdl`, `sleep`, `make`, `cargo`, `yamllint`, `jq`, `jsonlint`, `taplo`, `json_schema`.
+Run `rsb processors list` to see all available processors and their auto-detection results.
 
 ### Auto-detection
 
@@ -32,27 +32,46 @@ Both `auto_detect` and `discover` receive a `&FileIndex` — a pre-built index o
 
 Detection heuristics per processor:
 
-| Processor | Detected when |
-|---|---|
-| `tera` | `templates/` directory contains files matching configured extensions |
-| `ruff` | Project contains `.py` files (excluding `.venv/`, `__pycache__/`, etc.) |
-| `pylint` | Same as `ruff` |
-| `mypy` | Same as `ruff` |
-| `pyrefly` | Same as `ruff` |
-| `cc_single_file` | Configured source directory contains `.c` or `.cc` files |
-| `cppcheck` | Same as `cc_single_file` |
-| `clang_tidy` | Same as `cc_single_file` |
-| `shellcheck` | Project contains `.sh` or `.bash` files |
-| `spellcheck` | Project contains files matching configured extensions (e.g., `.md`) |
-| `rumdl` | Project contains `.md` files |
-| `sleep` | `sleep/` directory contains `.sleep` files |
-| `make` | Project contains `Makefile` files |
-| `cargo` | Project contains `Cargo.toml` files |
-| `yamllint` | Project contains `.yml` or `.yaml` files |
-| `jq` | Project contains `.json` files |
-| `jsonlint` | Project contains `.json` files |
-| `taplo` | Project contains `.toml` files |
-| `json_schema` | Project contains `.json` files |
+| Processor | Type | Detected when |
+|---|---|---|
+| `tera` | Generator | `templates/` directory contains files matching configured extensions |
+| `ruff` | Checker | Project contains `.py` files |
+| `pylint` | Checker | Project contains `.py` files |
+| `mypy` | Checker | Project contains `.py` files |
+| `pyrefly` | Checker | Project contains `.py` files |
+| `cc_single_file` | Generator | Configured source directory contains `.c` or `.cc` files |
+| `cppcheck` | Checker | Configured source directory contains `.c` or `.cc` files |
+| `clang_tidy` | Checker | Configured source directory contains `.c` or `.cc` files |
+| `shellcheck` | Checker | Project contains `.sh` or `.bash` files |
+| `spellcheck` | Checker | Project contains files matching configured extensions (e.g., `.md`) |
+| `aspell` | Checker | Project contains `.md` files |
+| `ascii_check` | Checker | Project contains `.md` files |
+| `rumdl` | Checker | Project contains `.md` files |
+| `mdl` | Checker | Project contains `.md` files |
+| `markdownlint` | Checker | Project contains `.md` files |
+| `sleep` | Checker | `sleep/` directory contains `.sleep` files |
+| `make` | Checker | Project contains `Makefile` files |
+| `cargo` | Checker | Project contains `Cargo.toml` files |
+| `sphinx` | Checker | Project contains `conf.py` files |
+| `mdbook` | Checker | Project contains `book.toml` files |
+| `yamllint` | Checker | Project contains `.yml` or `.yaml` files |
+| `jq` | Checker | Project contains `.json` files |
+| `jsonlint` | Checker | Project contains `.json` files |
+| `json_schema` | Checker | Project contains `.json` files |
+| `taplo` | Checker | Project contains `.toml` files |
+| `pip` | Generator | Project contains `requirements.txt` files |
+| `npm` | Generator | Project contains `package.json` files |
+| `gem` | Generator | Project contains `Gemfile` files |
+| `pandoc` | Generator | Project contains `.md` files |
+| `markdown` | Generator | Project contains `.md` files |
+| `marp` | Generator | Project contains `.md` files |
+| `mermaid` | Generator | Project contains `.mmd` files |
+| `drawio` | Generator | Project contains `.drawio` files |
+| `a2x` | Generator | Project contains `.txt` (AsciiDoc) files |
+| `pdflatex` | Generator | Project contains `.tex` files |
+| `libreoffice` | Generator | Project contains `.odp` files |
+| `pdfunite` | Generator | Source directory contains subdirectories with PDF-source files |
+| `tags` | Generator | Project contains `.md` files with YAML frontmatter |
 
 Run `rsb processors list` to see the auto-detection results for the current project.
 

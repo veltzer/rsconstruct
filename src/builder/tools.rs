@@ -11,13 +11,19 @@ use super::{Builder, sorted_keys};
 /// Return the language runtime category for a tool.
 fn tool_runtime(tool: &str) -> &'static str {
     match tool {
-        "ruff" | "pylint" | "mypy" | "yamllint" | "sphinx-build" | "pip" | "jsonlint"
-        | "a2x" | "pyrefly" | "python3" => "python",
+        "ruff" | "pylint" | "mypy" | "pyrefly" | "yamllint" | "sphinx-build" | "pip"
+        | "jsonlint" | "a2x" | "python3" => "python",
         "marp" | "mmdc" | "markdownlint" | "npm" | "node" => "node",
         "bundle" | "mdl" | "ruby" => "ruby",
         "cargo" | "rustc" | "mdbook" | "rumdl" | "taplo" => "rust",
         "perl" | "markdown" => "perl",
-        _ => "system",
+        "gcc" | "g++" | "clang" | "clang++" | "clang-tidy" | "cppcheck" | "make"
+        | "shellcheck" | "jq" | "aspell" | "pandoc" | "pdflatex" | "qpdf" | "drawio"
+        | "libreoffice" | "flock" | "pdfunite" | "dot" => "system",
+        tool => {
+            debug_assert!(false, "tool_runtime: unrecognized tool '{tool}'");
+            "system"
+        }
     }
 }
 

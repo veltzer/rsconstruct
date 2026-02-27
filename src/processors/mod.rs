@@ -741,10 +741,10 @@ pub fn tool_install_command(tool: &str) -> Option<&'static str> {
         "flock" => Some("apt install util-linux"),
         "pdfunite" => Some("apt install poppler-utils"),
         "python3" => Some("apt install python3"),
+        "jsonlint" => Some("pip install jsonlint"),
         // Node tools (npm)
         "marp" => Some("npm install -g @marp-team/marp-cli"),
         "mmdc" => Some("npm install -g @mermaid-js/mermaid-cli"),
-        "jsonlint" => Some("pip install jsonlint"),
         "npm" => Some("apt install npm"),
         "node" => Some("apt install nodejs"),
         // Ruby tools
