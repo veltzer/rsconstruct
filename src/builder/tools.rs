@@ -1,7 +1,8 @@
+use std::collections::BTreeMap;
 use std::io::Write;
 use std::process::Command;
 use anyhow::Result;
-use crate::cli::ToolsAction;
+use crate::cli::{GraphFormat, ToolsAction};
 use crate::color;
 use crate::tool_lock;
 use super::{Builder, sorted_keys};
@@ -100,6 +101,16 @@ impl Builder {
                 tool_lock::write_lock_file(&lock)?;
                 println!("Wrote {}", color::bold(".tools.versions"));
             }
+            ToolsAction::Graph { format } => {
+                let output = match format {
+                    GraphFormat::Dot => tools_graph_dot(&tool_map),
+                    GraphFormat::Mermaid => tools_graph_mermaid(&tool_map),
+                    GraphFormat::Text => tools_graph_text(&tool_map),
+                    GraphFormat::Json => tools_graph_json(&tool_map)?,
+                    GraphFormat::Svg => tools_graph_svg(&tool_map)?,
+                };
+                println!("{}", output);
+            }
             ToolsAction::Install { name, .. } => {
                 let to_install: Vec<(String, String)> = if let Some(ref name) = name {
                     match install_map.get(name).and_then(|c| c.as_ref()) {
@@ -182,4 +193,119 @@ impl Builder {
 
         Ok(())
     }
+}
+
+/// Sanitize a name for use as a DOT node identifier
+fn sanitize_node_id(prefix: &str, name: &str) -> String {
+    format!("{}_{}", prefix, name.replace(['.', '-', ' '], "_"))
+}
+
+fn tools_graph_dot(tool_map: &BTreeMap<String, Vec<String>>) -> String {
+    let mut out = String::from("digraph tools {\n    rankdir=LR;\n    node [fontname=\"sans-serif\"];\n");
+
+    // Collect unique processor names
+    let mut processors: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+    for procs in tool_map.values() {
+        for p in procs {
+            processors.insert(p);
+        }
+    }
+
+    // Tool nodes
+    out.push_str("    // Tools\n");
+    for tool in tool_map.keys() {
+        let id = sanitize_node_id("tool", tool);
+        out.push_str(&format!(
+            "    {} [label=\"{}\" shape=box style=filled fillcolor=lightblue];\n",
+            id, tool
+        ));
+    }
+
+    // Processor nodes
+    out.push_str("    // Processors\n");
+    for proc in &processors {
+        let id = sanitize_node_id("proc", proc);
+        out.push_str(&format!(
+            "    {} [label=\"{}\" shape=box style=filled fillcolor=lightyellow];\n",
+            id, proc
+        ));
+    }
+
+    // Edges
+    out.push_str("    // Edges\n");
+    for (tool, procs) in tool_map {
+        let tool_id = sanitize_node_id("tool", tool);
+        for proc in procs {
+            let proc_id = sanitize_node_id("proc", proc);
+            out.push_str(&format!("    {} -> {};\n", tool_id, proc_id));
+        }
+    }
+
+    out.push_str("}\n");
+    out
+}
+
+fn tools_graph_mermaid(tool_map: &BTreeMap<String, Vec<String>>) -> String {
+    let mut out = String::from("graph LR\n");
+
+    for (tool, procs) in tool_map {
+        let tool_id = sanitize_node_id("tool", tool);
+        for proc in procs {
+            let proc_id = sanitize_node_id("proc", proc);
+            out.push_str(&format!(
+                "    {}[\"{}\"]:::tool --> {}[\"{}\"]:::processor\n",
+                tool_id, tool, proc_id, proc
+            ));
+        }
+    }
+
+    out.push_str("    classDef tool fill:#add8e6\n");
+    out.push_str("    classDef processor fill:#ffffe0\n");
+    out
+}
+
+fn tools_graph_text(tool_map: &BTreeMap<String, Vec<String>>) -> String {
+    let mut lines = Vec::new();
+    for (tool, procs) in tool_map {
+        for proc in procs {
+            lines.push(format!("{} \u{2192} {}", tool, proc));
+        }
+    }
+    lines.join("\n")
+}
+
+fn tools_graph_json(tool_map: &BTreeMap<String, Vec<String>>) -> Result<String> {
+    let entries: Vec<crate::json_output::ToolListEntry> = tool_map
+        .iter()
+        .map(|(tool, procs)| crate::json_output::ToolListEntry {
+            tool: tool.clone(),
+            processors: procs.clone(),
+        })
+        .collect();
+    Ok(serde_json::to_string_pretty(&entries)?)
+}
+
+fn tools_graph_svg(tool_map: &BTreeMap<String, Vec<String>>) -> Result<String> {
+    use std::process::Stdio;
+    use crate::errors;
+    use crate::processors::{check_command_output, log_command};
+
+    let dot_content = tools_graph_dot(tool_map);
+
+    let mut cmd = Command::new("dot");
+    cmd.arg("-Tsvg")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    log_command(&cmd);
+    let mut child = cmd
+        .spawn()
+        .map_err(|_| anyhow::anyhow!("Graphviz 'dot' command not found. Install Graphviz to use SVG format"))?;
+
+    child.stdin.take().expect(errors::STDIN_PIPED).write_all(dot_content.as_bytes())?;
+
+    let output = child.wait_with_output()?;
+    check_command_output(&output, "dot")?;
+
+    Ok(String::from_utf8(output.stdout)?)
 }

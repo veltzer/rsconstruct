@@ -349,6 +349,12 @@ pub enum ToolsAction {
         #[arg(short, long)]
         yes: bool,
     },
+    /// Show tool-to-processor dependency graph
+    Graph {
+        /// Output format
+        #[arg(short, long, value_enum, default_value = "dot")]
+        format: GraphFormat,
+    },
 }
 
 #[derive(Subcommand)]
