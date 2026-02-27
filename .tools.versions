@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "locked_at": "2026-02-27T10:22:51Z",
+  "locked_at": "2026-02-27T11:18:13Z",
   "tools": {
     "a2x": {
       "path": "/home/mark/.venv/bin/a2x",
@@ -118,6 +118,14 @@
       "path": "/home/mark/install/node/bin/marp",
       "version": "4.2.3",
       "version_output": "@marp-team/marp-cli v4.2.3 (w/ @marp-team/marp-core v4.2.0)",
+      "version_args": [
+        "--version"
+      ]
+    },
+    "mdbook": {
+      "path": "/home/mark/install/cargo/bin/mdbook",
+      "version": "0.5.2",
+      "version_output": "mdbook v0.5.2",
       "version_args": [
         "--version"
       ]
