@@ -26,9 +26,10 @@ pub struct LockedTool {
     pub version_args: Vec<String>,
 }
 
-/// Extract the first semantic version (`X.Y.Z`) from a version output string.
+/// Extract the first version string from version output.
+/// Matches `X.Y.Z`, `X.Y`, or bare `X` (in that priority order).
 pub fn extract_semver(version_output: &str) -> Option<&str> {
-    let re = regex::Regex::new(r"\d+\.\d+\.\d+").unwrap();
+    let re = regex::Regex::new(r"\d+\.\d+\.\d+|\d+\.\d+").unwrap();
     re.find(version_output).map(|m| m.as_str())
 }
 
