@@ -199,8 +199,8 @@ pub fn verify_lock_file(
             let lock = create_lock(tool_commands)?;
             write_lock_file(&lock)?;
             for (name, info) in &lock.tools {
-                let first_line = info.version_output.lines().next().unwrap_or("");
-                eprintln!("{} {} {}", name, color::green("locked"), color::dim(first_line));
+                let version = extract_semver(&info.version_output).unwrap_or("?");
+                eprintln!("{} {} {}", name, color::green("locked"), color::dim(version));
             }
             eprintln!("Created {}", color::bold(".tools.versions"));
             return Ok(());
@@ -231,8 +231,8 @@ pub fn verify_lock_file(
             mismatches.push(format!(
                 "{} — version changed (locked: {}, current: {})",
                 tool_name,
-                locked.version_output.lines().next().unwrap_or(""),
-                current.version_output.lines().next().unwrap_or(""),
+                extract_semver(&locked.version_output).unwrap_or("?"),
+                extract_semver(&current.version_output).unwrap_or("?"),
             ));
         } else if current.path != locked.path {
             mismatches.push(format!(

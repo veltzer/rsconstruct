@@ -148,8 +148,8 @@ impl Builder {
                 } else {
                     let lock = tool_lock::create_lock(&tool_commands)?;
                     for (name, info) in &lock.tools {
-                        let first_line = info.version_output.lines().next().unwrap_or("");
-                        println!("{} {} {}", name, color::green("locked"), color::dim(first_line));
+                        let version = tool_lock::extract_semver(&info.version_output).unwrap_or("?");
+                        println!("{} {} {}", name, color::green("locked"), color::dim(version));
                     }
                     tool_lock::write_lock_file(&lock)?;
                     println!("Wrote {}", color::bold(".tools.versions"));
