@@ -197,7 +197,7 @@ impl Builder {
 
 /// Sanitize a name for use as a DOT node identifier
 fn sanitize_node_id(prefix: &str, name: &str) -> String {
-    format!("{}_{}", prefix, name.replace(['.', '-', ' '], "_"))
+    format!("{}_{}", prefix, name.replace(['.', '-', ' ', '+'], "_"))
 }
 
 fn tools_graph_dot(tool_map: &BTreeMap<String, Vec<String>>) -> String {

@@ -49,6 +49,10 @@ impl ProductDiscovery for MarkdownlintProcessor {
         Ok(())
     }
 
+    fn required_tools(&self) -> Vec<String> {
+        vec![self.config.markdownlint_bin.clone()]
+    }
+
     fn execute(&self, product: &Product) -> Result<()> {
         let file = product.primary_input();
         let mut cmd = Command::new(&self.config.markdownlint_bin);
