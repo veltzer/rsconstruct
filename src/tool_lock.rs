@@ -26,8 +26,14 @@ pub struct LockedTool {
     pub version_args: Vec<String>,
 }
 
+/// Extract the first semantic version (`X.Y.Z`) from a version output string.
+pub fn extract_semver(version_output: &str) -> Option<&str> {
+    let re = regex::Regex::new(r"\d+\.\d+\.\d+").unwrap();
+    re.find(version_output).map(|m| m.as_str())
+}
+
 /// Query a single tool for its version information.
-fn query_tool_version(tool_name: &str, version_args: &[String]) -> Result<LockedTool> {
+pub fn query_tool_version(tool_name: &str, version_args: &[String]) -> Result<LockedTool> {
     let path = which::which(tool_name)
         .with_context(|| format!("Tool not found on PATH: {}", tool_name))?;
 

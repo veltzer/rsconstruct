@@ -69,12 +69,27 @@ impl Builder {
                 }
             }
             ToolsAction::Check { .. } => {
+                // Build a lookup from tool name to version args
+                let config = &self.config;
+                let version_commands: std::collections::HashMap<String, Vec<String>> =
+                    tool_lock::collect_tool_commands(
+                        &processors,
+                        &|name| config.processor.is_enabled(name),
+                    ).into_iter().collect();
+
                 let mut any_missing = false;
                 for (tool, procs) in &tool_map {
                     let procs_str = procs.join(", ");
                     if let Ok(path) = which::which(tool) {
                         let path_str = path.display().to_string();
-                        println!("{} ({}) {} {}", tool, procs_str, color::green("found"), color::dim(&path_str));
+                        let version_str = version_commands.get(tool)
+                            .and_then(|args| tool_lock::query_tool_version(tool, args).ok())
+                            .and_then(|locked| tool_lock::extract_semver(&locked.version_output).map(String::from));
+                        if let Some(ver) = version_str {
+                            println!("{} ({}) {} {} {}", tool, procs_str, color::green("found"), ver, color::dim(&path_str));
+                        } else {
+                            println!("{} ({}) {} {}", tool, procs_str, color::green("found"), color::dim(&path_str));
+                        }
                     } else {
                         let hint = install_map.get(tool).and_then(|c| c.as_deref())
                             .map(|h| format!(" \u{2014} install with: {}", color::dim(h)))
