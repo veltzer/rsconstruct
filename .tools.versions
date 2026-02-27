@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "locked_at": "2026-02-27T11:18:13Z",
+  "locked_at": "2026-02-27T16:05:43Z",
   "tools": {
     "a2x": {
       "path": "/home/mark/.venv/bin/a2x",
@@ -146,6 +146,14 @@
         "--version"
       ]
     },
+    "node": {
+      "path": "/usr/bin/node",
+      "version": "20.19.4",
+      "version_output": "v20.19.4",
+      "version_args": [
+        "--version"
+      ]
+    },
     "npm": {
       "path": "/usr/bin/npm",
       "version": "9.2.0",
@@ -166,6 +174,14 @@
       "path": "/usr/bin/pdfunite",
       "version": "25.03.0",
       "version_output": "pdfunite version 25.03.0\nCopyright 2005-2025 The Poppler Developers - http://poppler.freedesktop.org\nCopyright 1996-2011, 2022 Glyph & Cog, LLC\nUsage: pdfunite [options] <PDF-sourcefile-1>..<PDF-sourcefile-n> <PDF-destfile>\n  -v             : print copyright and version info\n  -h             : print usage information\n  -help          : print usage information\n  --help         : print usage information\n  -?             : print usage information",
+      "version_args": [
+        "--version"
+      ]
+    },
+    "perl": {
+      "path": "/usr/bin/perl",
+      "version": "5.40.1",
+      "version_output": "This is perl 5, version 40, subversion 1 (v5.40.1) built for x86_64-linux-gnu-thread-multi\n(with 48 registered patches, see perl -V for more detail)\n\nCopyright 1987-2025, Larry Wall\n\nPerl may be copied only under the terms of either the Artistic License or the\nGNU General Public License, which may be found in the Perl 5 source kit.\n\nComplete documentation for Perl, including FAQ lists, should be found on\nthis system using \"man perl\" or \"perldoc perl\".  If you have access to the\nInternet, point your browser at https://www.perl.org/, the Perl Home Page.",
       "version_args": [
         "--version"
       ]
@@ -206,6 +222,14 @@
       "path": "/usr/bin/qpdf",
       "version": "12.2.0",
       "version_output": "qpdf version 12.2.0\nRun qpdf --copyright to see copyright and license information.",
+      "version_args": [
+        "--version"
+      ]
+    },
+    "ruby": {
+      "path": "/usr/bin/ruby",
+      "version": "3.3.8",
+      "version_output": "ruby 3.3.8 (2025-04-09 revision b200bad6cd) [x86_64-linux-gnu]",
       "version_args": [
         "--version"
       ]
