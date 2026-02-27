@@ -3,6 +3,7 @@ api
 apis
 aren
 args
+asciidoc
 aws
 backend
 backends
@@ -51,6 +52,7 @@ fileindex
 filesystem
 filesystems
 flamegraph
+frontmatter
 fsevents
 gb
 gc
