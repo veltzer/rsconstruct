@@ -1,4 +1,5 @@
 use crate::common::{setup_test_project, run_rsb_with_env};
+use serde_json::Value;
 
 #[test]
 fn tools_list_shows_tools() {
@@ -68,4 +69,70 @@ fn tools_check_succeeds() {
     // Now check should succeed since versions match the just-created lock file
     let output = run_rsb_with_env(project_path, &["tools", "check"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "tools check failed: {}", String::from_utf8_lossy(&output.stderr));
+}
+
+#[test]
+fn tools_stats_shows_summary() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    let output = run_rsb_with_env(project_path, &["tools", "stats"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(), "tools stats failed: {}", String::from_utf8_lossy(&output.stderr));
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Tools:"), "Expected 'Tools:' header");
+    assert!(stdout.contains("Runtime summary:"), "Expected 'Runtime summary:' section");
+    assert!(stdout.contains("Total:"), "Expected 'Total:' summary line");
+    assert!(stdout.contains("installed"), "Expected 'installed' count");
+}
+
+#[test]
+fn tools_stats_json() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    let output = run_rsb_with_env(project_path, &["--json", "tools", "stats"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(), "tools stats --json failed: {}", String::from_utf8_lossy(&output.stderr));
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: Value = serde_json::from_str(&stdout).expect("Expected valid JSON");
+
+    // Verify top-level structure
+    assert!(parsed.get("tools").is_some(), "Expected 'tools' field");
+    assert!(parsed.get("runtimes").is_some(), "Expected 'runtimes' field");
+    assert!(parsed.get("summary").is_some(), "Expected 'summary' field");
+
+    // Verify tools array entries
+    let tools = parsed["tools"].as_array().expect("'tools' should be an array");
+    assert!(!tools.is_empty(), "tools array should not be empty");
+    for tool in tools {
+        assert!(tool.get("name").is_some(), "Tool entry should have 'name'");
+        assert!(tool.get("installed").is_some(), "Tool entry should have 'installed'");
+        assert!(tool.get("runtime").is_some(), "Tool entry should have 'runtime'");
+        assert!(tool.get("processors").is_some(), "Tool entry should have 'processors'");
+    }
+
+    // Verify runtimes array entries
+    let runtimes = parsed["runtimes"].as_array().expect("'runtimes' should be an array");
+    for rt in runtimes {
+        assert!(rt.get("runtime").is_some(), "Runtime entry should have 'runtime'");
+        assert!(rt.get("total").is_some(), "Runtime entry should have 'total'");
+        assert!(rt.get("installed").is_some(), "Runtime entry should have 'installed'");
+        assert!(rt.get("missing").is_some(), "Runtime entry should have 'missing'");
+    }
+
+    // Verify summary
+    let summary = &parsed["summary"];
+    assert!(summary.get("total_tools").is_some(), "Summary should have 'total_tools'");
+    assert!(summary.get("installed").is_some(), "Summary should have 'installed'");
+    assert!(summary.get("missing").is_some(), "Summary should have 'missing'");
+
+    // Verify consistency: total_tools == tools.len()
+    let total_tools = summary["total_tools"].as_u64().unwrap();
+    assert_eq!(total_tools as usize, tools.len(), "summary.total_tools should match tools array length");
+
+    // Verify consistency: installed + missing == total_tools
+    let installed = summary["installed"].as_u64().unwrap();
+    let missing = summary["missing"].as_u64().unwrap();
+    assert_eq!(installed + missing, total_tools, "installed + missing should equal total_tools");
 }
