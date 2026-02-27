@@ -240,7 +240,7 @@ fn match_directive_with_profile<'a>(line: &'a str, directive: &str, profile_name
 /// The value is split on whitespace: first token is the program, rest are arguments.
 ///
 /// These are user-specified commands (EXTRA_*_CMD directives), so we temporarily
-/// clear the declared tools check to allow arbitrary programs.
+/// suspend the declared tools check to allow arbitrary programs.
 fn run_command_for_flags(cmd_line: &str) -> Result<Vec<String>> {
     let parts: Vec<&str> = cmd_line.split_whitespace().collect();
     if parts.is_empty() {
@@ -251,12 +251,8 @@ fn run_command_for_flags(cmd_line: &str) -> Result<Vec<String>> {
 
     let mut cmd = Command::new(program);
     cmd.args(args);
-    // User-specified command: suspend tool declaration check
-    crate::processors::set_declared_tools(None);
-    let output = run_command_capture(&mut cmd);
-    // Note: we don't restore here because the caller (parse_source_flags)
-    // runs inside execute() which sets/clears declared tools around the whole call.
-    let output = output?;
+    let _guard = crate::processors::suspend_tool_check();
+    let output = run_command_capture(&mut cmd)?;
     check_command_output(&output, cmd_line)?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
@@ -266,7 +262,7 @@ fn run_command_for_flags(cmd_line: &str) -> Result<Vec<String>> {
 /// Run a command via `sh -c` and return stdout split into flags.
 ///
 /// These are user-specified commands (EXTRA_*_SHELL directives), so we temporarily
-/// clear the declared tools check to allow arbitrary programs.
+/// suspend the declared tools check to allow arbitrary programs.
 fn run_shell_for_flags(cmd_line: &str) -> Result<Vec<String>> {
     if cmd_line.is_empty() {
         return Ok(Vec::new());
@@ -274,8 +270,7 @@ fn run_shell_for_flags(cmd_line: &str) -> Result<Vec<String>> {
 
     let mut cmd = Command::new("sh");
     cmd.arg("-c").arg(cmd_line);
-    // User-specified command: suspend tool declaration check
-    crate::processors::set_declared_tools(None);
+    let _guard = crate::processors::suspend_tool_check();
     let output = run_command_capture(&mut cmd)?;
     check_command_output(&output, cmd_line)?;
 
@@ -286,12 +281,11 @@ fn run_shell_for_flags(cmd_line: &str) -> Result<Vec<String>> {
 /// Run a backtick command and return its output as a single string.
 ///
 /// These are user-specified commands (backtick expansion), so we temporarily
-/// clear the declared tools check to allow arbitrary programs.
+/// suspend the declared tools check to allow arbitrary programs.
 fn run_backtick_command(cmd_str: &str) -> Result<Vec<String>> {
     let mut cmd = Command::new("sh");
     cmd.arg("-c").arg(cmd_str);
-    // User-specified command: suspend tool declaration check
-    crate::processors::set_declared_tools(None);
+    let _guard = crate::processors::suspend_tool_check();
     let output = run_command_capture(&mut cmd)?;
     check_command_output(&output, cmd_str)?;
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();

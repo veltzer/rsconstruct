@@ -123,6 +123,41 @@ pub(crate) fn set_declared_tools(tools: Option<Vec<String>>) {
 #[cfg(not(debug_assertions))]
 pub(crate) fn set_declared_tools(_tools: Option<Vec<String>>) {}
 
+/// Temporarily suspend the declared-tools check for user-specified commands.
+/// Returns a guard that restores the previous value when dropped.
+#[cfg(debug_assertions)]
+pub(crate) fn suspend_tool_check() -> ToolCheckGuard {
+    let prev = DECLARED_TOOLS.with(|dt| dt.borrow_mut().take());
+    ToolCheckGuard { prev }
+}
+
+/// No-op in release builds.
+#[cfg(not(debug_assertions))]
+pub(crate) fn suspend_tool_check() -> ToolCheckGuard {
+    ToolCheckGuard { _private: () }
+}
+
+/// RAII guard that restores the declared tools when dropped.
+#[cfg(debug_assertions)]
+pub(crate) struct ToolCheckGuard {
+    prev: Option<Vec<String>>,
+}
+
+#[cfg(debug_assertions)]
+impl Drop for ToolCheckGuard {
+    fn drop(&mut self) {
+        DECLARED_TOOLS.with(|dt| {
+            *dt.borrow_mut() = self.prev.take();
+        });
+    }
+}
+
+/// No-op guard for release builds.
+#[cfg(not(debug_assertions))]
+pub(crate) struct ToolCheckGuard {
+    _private: (),
+}
+
 /// Format a `Command` as a shell-like string for display.
 pub(crate) fn format_command(cmd: &Command) -> String {
     let program = cmd.get_program().to_string_lossy();
