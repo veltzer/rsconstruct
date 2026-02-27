@@ -3,6 +3,7 @@ mod generators;
 pub mod lua_processor;
 
 use anyhow::{Context, Result};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -102,6 +103,26 @@ pub(crate) fn is_interrupted() -> bool {
     INTERRUPTED.load(Ordering::SeqCst)
 }
 
+// Thread-local holding the current processor's declared tools.
+// Set before execute()/execute_batch() and cleared after.
+// Used by debug_assert in run_command_inner() to catch undeclared tool usage.
+#[cfg(debug_assertions)]
+thread_local! {
+    static DECLARED_TOOLS: RefCell<Option<Vec<String>>> = const { RefCell::new(None) };
+}
+
+/// Set the declared tools for the current thread (debug builds only).
+#[cfg(debug_assertions)]
+pub(crate) fn set_declared_tools(tools: Option<Vec<String>>) {
+    DECLARED_TOOLS.with(|dt| {
+        *dt.borrow_mut() = tools;
+    });
+}
+
+/// No-op in release builds.
+#[cfg(not(debug_assertions))]
+pub(crate) fn set_declared_tools(_tools: Option<Vec<String>>) {}
+
 /// Format a `Command` as a shell-like string for display.
 pub(crate) fn format_command(cmd: &Command) -> String {
     let program = cmd.get_program().to_string_lossy();
@@ -136,6 +157,18 @@ pub(crate) fn log_command(cmd: &Command) {
 ///   if false, always capture via pipes.
 fn run_command_inner(cmd: &mut Command, inherit_stdio: bool) -> Result<Output> {
     log_command(cmd);
+
+    #[cfg(debug_assertions)]
+    DECLARED_TOOLS.with(|dt| {
+        if let Some(ref tools) = *dt.borrow() {
+            let program = cmd.get_program().to_string_lossy();
+            let basename = program.rsplit('/').next().unwrap_or(&program);
+            assert!(
+                tools.iter().any(|t| t == basename),
+                "Processor executed undeclared tool '{basename}'. Declared: {tools:?}",
+            );
+        }
+    });
 
     // Check if already interrupted before spawning
     if INTERRUPTED.load(Ordering::SeqCst) {

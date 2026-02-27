@@ -354,6 +354,9 @@ pub enum ToolsAction {
         /// Output format
         #[arg(short, long, value_enum, default_value = "dot")]
         format: GraphFormat,
+        /// Open the graph in a browser instead of printing to stdout
+        #[arg(long)]
+        view: bool,
     },
 }
 

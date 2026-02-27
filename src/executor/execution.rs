@@ -323,7 +323,9 @@ impl<'a> Executor<'a> {
                 remove_stale_outputs(p);
             }
             let batch_start = Instant::now();
+            crate::processors::set_declared_tools(Some(processor.required_tools()));
             let results = processor.execute_batch(&product_refs);
+            crate::processors::set_declared_tools(None);
             let batch_duration = batch_start.elapsed();
 
             // Validate batch returned correct number of results
@@ -430,6 +432,7 @@ impl<'a> Executor<'a> {
                 let product_start = Instant::now();
                 let mut last_error = None;
                 let max_attempts = 1 + self.retry;
+                crate::processors::set_declared_tools(Some(processor.required_tools()));
                 for attempt in 1..=max_attempts {
                     match processor.execute(product) {
                         Ok(()) => {
@@ -497,6 +500,7 @@ impl<'a> Executor<'a> {
                     let duration = product_start.elapsed();
                     self.handle_error(&ctx, e, Some(duration));
                 }
+                crate::processors::set_declared_tools(None);
                 Self::inc_progress(lctx.pb, lctx.shared);
             }
         }

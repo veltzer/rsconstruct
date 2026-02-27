@@ -101,15 +101,24 @@ impl Builder {
                 tool_lock::write_lock_file(&lock)?;
                 println!("Wrote {}", color::bold(".tools.versions"));
             }
-            ToolsAction::Graph { format } => {
-                let output = match format {
-                    GraphFormat::Dot => tools_graph_dot(&tool_map),
-                    GraphFormat::Mermaid => tools_graph_mermaid(&tool_map),
-                    GraphFormat::Text => tools_graph_text(&tool_map),
-                    GraphFormat::Json => tools_graph_json(&tool_map)?,
-                    GraphFormat::Svg => tools_graph_svg(&tool_map)?,
-                };
-                println!("{}", output);
+            ToolsAction::Graph { format, view } => {
+                if view {
+                    let html_content = tools_graph_html(&tool_map);
+                    let html_path = std::env::temp_dir().join("rsb_tools_graph.html");
+                    std::fs::write(&html_path, html_content)
+                        .map_err(|e| anyhow::anyhow!("Failed to write HTML file: {}", e))?;
+                    self.open_file(&html_path)?;
+                    println!("Opened tools graph in browser: {}", html_path.display());
+                } else {
+                    let output = match format {
+                        GraphFormat::Dot => tools_graph_dot(&tool_map),
+                        GraphFormat::Mermaid => tools_graph_mermaid(&tool_map),
+                        GraphFormat::Text => tools_graph_text(&tool_map),
+                        GraphFormat::Json => tools_graph_json(&tool_map)?,
+                        GraphFormat::Svg => tools_graph_svg(&tool_map)?,
+                    };
+                    println!("{}", output);
+                }
             }
             ToolsAction::Install { name, .. } => {
                 let to_install: Vec<(String, String)> = if let Some(ref name) = name {
@@ -283,6 +292,44 @@ fn tools_graph_json(tool_map: &BTreeMap<String, Vec<String>>) -> Result<String> 
         })
         .collect();
     Ok(serde_json::to_string_pretty(&entries)?)
+}
+
+fn tools_graph_html(tool_map: &BTreeMap<String, Vec<String>>) -> String {
+    let mermaid_content = tools_graph_mermaid(tool_map);
+    format!(r#"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>RSB Tools Graph</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 40px;
+            background: #f5f5f5;
+        }}
+        h1 {{
+            color: #333;
+        }}
+        .mermaid {{
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+    </style>
+</head>
+<body>
+    <h1>RSB Tools Graph</h1>
+    <div class="mermaid">
+{mermaid_content}
+    </div>
+    <script>
+        mermaid.initialize({{ startOnLoad: true, theme: 'default', maxTextSize: 500000 }});
+    </script>
+</body>
+</html>
+"#)
 }
 
 fn tools_graph_svg(tool_map: &BTreeMap<String, Vec<String>>) -> Result<String> {
