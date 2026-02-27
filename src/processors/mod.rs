@@ -743,7 +743,7 @@ pub fn tool_install_command(tool: &str) -> Option<&'static str> {
         // Node tools (npm)
         "marp" => Some("npm install -g @marp-team/marp-cli"),
         "mmdc" => Some("npm install -g @mermaid-js/mermaid-cli"),
-        "jsonlint" => Some("npm install -g jsonlint"),
+        "jsonlint" => Some("pip install jsonlint"),
         "npm" => Some("apt install npm"),
         "node" => Some("apt install nodejs"),
         // Ruby tools

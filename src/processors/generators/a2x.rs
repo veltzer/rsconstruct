@@ -43,7 +43,7 @@ impl ProductDiscovery for A2xProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.a2x.clone()]
+        vec![self.config.a2x.clone(), "python3".to_string()]
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {

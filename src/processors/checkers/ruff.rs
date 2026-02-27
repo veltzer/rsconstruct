@@ -29,7 +29,7 @@ impl_checker!(RuffProcessor,
     description: "Lint Python files with ruff",
     name: crate::processors::names::RUFF,
     execute: execute_product,
-    tool_field_extra: linter ["python3".to_string()],
+    tool_field: linter,
     config_json: true,
     batch: lint_files,
 );

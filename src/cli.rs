@@ -349,6 +349,8 @@ pub enum ToolsAction {
         #[arg(short, long)]
         yes: bool,
     },
+    /// Show tool availability statistics and language runtime breakdown
+    Stats,
     /// Show tool-to-processor dependency graph
     Graph {
         /// Output format

@@ -4,8 +4,22 @@ use std::process::Command;
 use anyhow::Result;
 use crate::cli::{GraphFormat, ToolsAction};
 use crate::color;
+use crate::json_output;
 use crate::tool_lock;
 use super::{Builder, sorted_keys};
+
+/// Return the language runtime category for a tool.
+fn tool_runtime(tool: &str) -> &'static str {
+    match tool {
+        "ruff" | "pylint" | "mypy" | "yamllint" | "sphinx-build" | "pip" | "jsonlint"
+        | "a2x" | "pyrefly" | "python3" => "python",
+        "marp" | "mmdc" | "markdownlint" | "npm" | "node" => "node",
+        "bundle" | "mdl" | "ruby" => "ruby",
+        "cargo" | "rustc" | "mdbook" | "rumdl" | "taplo" => "rust",
+        "perl" | "markdown" => "perl",
+        _ => "system",
+    }
+}
 
 impl Builder {
     /// Verify tool versions against .tools.versions lock file.
@@ -118,6 +132,105 @@ impl Builder {
                         GraphFormat::Svg => tools_graph_svg(&tool_map)?,
                     };
                     println!("{}", output);
+                }
+            }
+            ToolsAction::Stats => {
+                // Collect per-tool info
+                let mut tool_stats: Vec<json_output::ToolStat> = Vec::new();
+                for (tool, procs) in &tool_map {
+                    let installed = which::which(tool).is_ok();
+                    let runtime = tool_runtime(tool).to_string();
+                    let install_command = crate::processors::tool_install_command(tool)
+                        .map(|s| s.to_string());
+                    tool_stats.push(json_output::ToolStat {
+                        name: tool.clone(),
+                        installed,
+                        runtime,
+                        processors: procs.clone(),
+                        install_command,
+                    });
+                }
+
+                // Build runtime summary
+                let mut runtime_map: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
+                for stat in &tool_stats {
+                    let entry = runtime_map.entry(tool_runtime(&stat.name)).or_insert((0, 0));
+                    entry.0 += 1;
+                    if stat.installed {
+                        entry.1 += 1;
+                    }
+                }
+                let runtime_stats: Vec<json_output::RuntimeStat> = runtime_map
+                    .iter()
+                    .map(|(runtime, (total, installed))| json_output::RuntimeStat {
+                        runtime: runtime.to_string(),
+                        total: *total,
+                        installed: *installed,
+                        missing: total - installed,
+                    })
+                    .collect();
+
+                let total_tools = tool_stats.len();
+                let installed_count = tool_stats.iter().filter(|t| t.installed).count();
+                let missing_count = total_tools - installed_count;
+
+                if crate::json_output::is_json_mode() {
+                    let output = json_output::ToolStatsOutput {
+                        tools: tool_stats,
+                        runtimes: runtime_stats,
+                        summary: json_output::StatsSummary {
+                            total_tools,
+                            installed: installed_count,
+                            missing: missing_count,
+                        },
+                    };
+                    println!("{}", serde_json::to_string_pretty(&output)?);
+                } else {
+                    // Human-readable output
+                    println!("{}","Tools:");
+                    let max_name = tool_stats.iter().map(|t| t.name.len()).max().unwrap_or(0);
+                    for stat in &tool_stats {
+                        let status = if stat.installed {
+                            color::green("\u{2713}")
+                        } else {
+                            color::red("\u{2717}")
+                        };
+                        let procs = stat.processors.join(", ");
+                        let install = stat.install_command.as_deref()
+                            .map(|c| format!("  ({})", color::dim(c)))
+                            .unwrap_or_default();
+                        println!("  {:width$}  {}  {}{}", stat.name, status, procs, install, width = max_name);
+                    }
+
+                    // Runtime summary
+                    println!();
+                    println!("Runtime summary:");
+                    let runtime_display: &[(&str, &str)] = &[
+                        ("python", "Python"),
+                        ("node", "Node.js"),
+                        ("ruby", "Ruby"),
+                        ("rust", "Rust"),
+                        ("perl", "Perl"),
+                        ("system", "System"),
+                    ];
+                    for (key, label) in runtime_display {
+                        if let Some(rs) = runtime_stats.iter().find(|r| r.runtime == *key) {
+                            let line = format!("  {:10}{}/{} installed", label, rs.installed, rs.total);
+                            if rs.missing > 0 {
+                                println!("{}", color::yellow(&line));
+                            } else {
+                                println!("{}", color::green(&line));
+                            }
+                        }
+                    }
+
+                    println!();
+                    let total_line = format!("Total: {}/{} tools installed", installed_count, total_tools);
+                    if missing_count > 0 {
+                        println!("{}", color::yellow(&total_line));
+                    } else {
+                        println!("{}", color::green(&total_line));
+                    }
                 }
             }
             ToolsAction::Install { name, .. } => {

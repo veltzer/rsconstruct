@@ -34,7 +34,7 @@ impl_checker!(PyreflyProcessor,
     description: "Type-check Python files with pyrefly",
     name: crate::processors::names::PYREFLY,
     execute: execute_product,
-    tool_field_extra: checker ["python3".to_string()],
+    tool_field: checker,
     config_json: true,
     batch: check_files,
 );

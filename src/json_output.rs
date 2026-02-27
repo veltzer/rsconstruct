@@ -108,6 +108,41 @@ pub struct ToolListEntry {
     pub processors: Vec<String>,
 }
 
+/// Output for `rsb tools stats --json`.
+#[derive(Debug, Serialize)]
+pub struct ToolStatsOutput {
+    pub tools: Vec<ToolStat>,
+    pub runtimes: Vec<RuntimeStat>,
+    pub summary: StatsSummary,
+}
+
+/// Per-tool availability info for `rsb tools stats --json`.
+#[derive(Debug, Serialize)]
+pub struct ToolStat {
+    pub name: String,
+    pub installed: bool,
+    pub runtime: String,
+    pub processors: Vec<String>,
+    pub install_command: Option<String>,
+}
+
+/// Per-runtime summary for `rsb tools stats --json`.
+#[derive(Debug, Serialize)]
+pub struct RuntimeStat {
+    pub runtime: String,
+    pub total: usize,
+    pub installed: usize,
+    pub missing: usize,
+}
+
+/// Overall summary for `rsb tools stats --json`.
+#[derive(Debug, Serialize)]
+pub struct StatsSummary {
+    pub total_tools: usize,
+    pub installed: usize,
+    pub missing: usize,
+}
+
 /// Emit a JSON event to stdout.
 pub fn emit(event: &BuildEvent) {
     if !is_json_mode() {
