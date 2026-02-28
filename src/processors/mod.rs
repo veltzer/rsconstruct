@@ -60,6 +60,7 @@ pub mod names {
     pub const ASCII_CHECK: &str = "ascii_check";
     pub const MERMAID: &str = "mermaid";
     pub const DRAWIO: &str = "drawio";
+    pub const MAKO: &str = "mako";
     pub const LIBREOFFICE: &str = "libreoffice";
     pub const PDFUNITE: &str = "pdfunite";
 }
@@ -536,7 +537,7 @@ pub use checkers::{
     ShellcheckProcessor, SleepProcessor, SpellcheckProcessor, SphinxProcessor,
     TaploProcessor, YamllintProcessor,
 };
-pub use generators::{A2xProcessor, CcSingleFileProcessor, DrawioProcessor, GemProcessor, LibreofficeProcessor, MarpProcessor, MarkdownProcessor, MermaidProcessor, NpmProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, PipProcessor, TagsProcessor, TeraProcessor};
+pub use generators::{A2xProcessor, CcSingleFileProcessor, DrawioProcessor, GemProcessor, LibreofficeProcessor, MakoProcessor, MarpProcessor, MarkdownProcessor, MermaidProcessor, NpmProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, PipProcessor, TagsProcessor, TeraProcessor};
 pub(crate) use generators::tags as tags_cmd;
 pub use lua_processor::LuaProcessor;
 

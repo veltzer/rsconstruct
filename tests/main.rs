@@ -35,6 +35,7 @@ mod processors {
     pub mod cc_single_file;
     pub mod clang_tidy;
     pub mod cppcheck;
+    pub mod mako;
     pub mod make;
     pub mod mypy;
     pub mod pylint;

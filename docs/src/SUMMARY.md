@@ -26,6 +26,7 @@
     - [Jsonlint](processors/jsonlint.md)
     - [LibreOffice](processors/libreoffice.md)
     - [Make](processors/make.md)
+    - [Mako](processors/mako.md)
     - [Markdown](processors/markdown.md)
     - [Markdownlint](processors/markdownlint.md)
     - [Marp](processors/marp.md)

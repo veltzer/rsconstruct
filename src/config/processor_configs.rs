@@ -141,6 +141,35 @@ impl KnownFields for TeraConfig {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct MakoConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for MakoConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            extra_inputs: Vec::new(),
+            scan: default_scan!(scan_dir: "templates", extensions: [".mako"]),
+        }
+    }
+}
+
+impl KnownFields for MakoConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
 fn default_ruff_linter() -> String {
     "ruff".into()
 }

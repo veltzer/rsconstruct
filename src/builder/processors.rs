@@ -4,7 +4,7 @@ use crate::cli::ProcessorAction;
 use crate::color;
 use crate::config::{
     ProcessorConfig,
-    TeraConfig, RuffConfig, PylintConfig, CcSingleFileConfig, CppcheckConfig, ClangTidyConfig,
+    TeraConfig, MakoConfig, RuffConfig, PylintConfig, CcSingleFileConfig, CppcheckConfig, ClangTidyConfig,
     ShellcheckConfig, SpellcheckConfig, SleepConfig, MakeConfig, CargoConfig, ClippyConfig,
     RumdlConfig, MypyConfig, PyreflyConfig, YamllintConfig, JqConfig, JsonlintConfig, TaploConfig,
     JsonSchemaConfig, TagsConfig, PipConfig, SphinxConfig, NpmConfig, GemConfig, MdlConfig,
@@ -69,6 +69,7 @@ pub fn list_processors_no_config(all: bool) -> Result<()> {
 fn defconfig_json(name: &str) -> Option<String> {
     let json: serde_json::Value = match name {
         names::TERA => serde_json::to_value(TeraConfig::default()).ok()?,
+        names::MAKO => serde_json::to_value(MakoConfig::default()).ok()?,
         names::RUFF => serde_json::to_value(RuffConfig::default()).ok()?,
         names::PYLINT => serde_json::to_value(PylintConfig::default()).ok()?,
         names::CC_SINGLE_FILE => serde_json::to_value(CcSingleFileConfig::default()).ok()?,

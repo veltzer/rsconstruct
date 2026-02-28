@@ -271,6 +271,7 @@ fn default_processors() -> Vec<String> {
         names::MDL.into(), names::MARKDOWNLINT.into(),
         names::ASPELL.into(), names::MARP.into(), names::PANDOC.into(), names::MARKDOWN.into(),
         names::PDFLATEX.into(), names::A2X.into(), names::ASCII_CHECK.into(),
+        names::MAKO.into(),
         names::MERMAID.into(), names::DRAWIO.into(), names::LIBREOFFICE.into(),
         names::PDFUNITE.into(),
     ]
@@ -369,6 +370,8 @@ pub(crate) struct ProcessorConfig {
     #[serde(default)]
     pub drawio: DrawioConfig,
     #[serde(default)]
+    pub mako: MakoConfig,
+    #[serde(default)]
     pub libreoffice: LibreofficeConfig,
     #[serde(default)]
     pub pdfunite: PdfuniteConfig,
@@ -419,6 +422,7 @@ impl Default for ProcessorConfig {
             ascii_check: AsciiCheckConfig::default(),
             mermaid: MermaidConfig::default(),
             drawio: DrawioConfig::default(),
+            mako: MakoConfig::default(),
             libreoffice: LibreofficeConfig::default(),
             pdfunite: PdfuniteConfig::default(),
             extra: HashMap::new(),
@@ -466,6 +470,7 @@ impl ProcessorConfig {
             "ascii_check" => self.ascii_check.enabled,
             "mermaid" => self.mermaid.enabled,
             "drawio" => self.drawio.enabled,
+            "mako" => self.mako.enabled,
             "libreoffice" => self.libreoffice.enabled,
             "pdfunite" => self.pdfunite.enabled,
             _ => true, // unknown processors (plugins) default to enabled
@@ -490,6 +495,7 @@ impl ProcessorConfig {
             &self.mdl.scan, &self.markdownlint.scan,
             &self.aspell.scan, &self.marp.scan, &self.pandoc.scan, &self.markdown.scan,
             &self.pdflatex.scan, &self.a2x.scan, &self.ascii_check.scan,
+            &self.mako.scan,
             &self.mermaid.scan, &self.drawio.scan, &self.libreoffice.scan,
         ];
         let mut dirs: Vec<String> = scans.iter()
@@ -541,6 +547,7 @@ impl ProcessorConfig {
         self.pdflatex.scan.resolve("", &[".tex"], BUILD_TOOL_EXCLUDES);
         self.a2x.scan.resolve("", &[".txt"], BUILD_TOOL_EXCLUDES);
         self.ascii_check.scan.resolve("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
+        self.mako.scan.resolve("templates", &[".mako"], &[]);
         self.mermaid.scan.resolve("", &[".mmd"], BUILD_TOOL_EXCLUDES);
         self.drawio.scan.resolve("", &[".drawio"], BUILD_TOOL_EXCLUDES);
         self.libreoffice.scan.resolve("", &[".odp"], BUILD_TOOL_EXCLUDES);
@@ -805,6 +812,7 @@ fn validate_processor_fields(raw: &toml::Value) -> Result<()> {
             processor_names::ASCII_CHECK => AsciiCheckConfig::known_fields(),
             processor_names::MERMAID => MermaidConfig::known_fields(),
             processor_names::DRAWIO => DrawioConfig::known_fields(),
+            processor_names::MAKO => MakoConfig::known_fields(),
             processor_names::LIBREOFFICE => LibreofficeConfig::known_fields(),
             processor_names::PDFUNITE => PdfuniteConfig::known_fields(),
             _ => continue, // unknown processor name = Lua plugin, skip

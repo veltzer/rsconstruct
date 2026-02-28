@@ -20,7 +20,7 @@ use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
 use crate::object_store::{ObjectStore, ObjectStoreOptions};
-use crate::processors::{A2xProcessor, AsciiCheckProcessor, AspellProcessor, CargoProcessor, CcSingleFileProcessor, ClangTidyProcessor, ClippyProcessor, CppcheckProcessor, DrawioProcessor, GemProcessor, JqProcessor, JsonlintProcessor, JsonSchemaProcessor, LibreofficeProcessor, LuaProcessor, MakeProcessor, MarpProcessor, MarkdownProcessor, MarkdownlintProcessor, MdbookProcessor, MdlProcessor, MermaidProcessor, MypyProcessor, NpmProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, PipProcessor, ProcessorMap, PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor, ShellcheckProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, SphinxProcessor, TagsProcessor, TaploProcessor, TeraProcessor, YamllintProcessor, names as proc_names};
+use crate::processors::{A2xProcessor, AsciiCheckProcessor, AspellProcessor, CargoProcessor, CcSingleFileProcessor, ClangTidyProcessor, ClippyProcessor, CppcheckProcessor, DrawioProcessor, GemProcessor, JqProcessor, JsonlintProcessor, JsonSchemaProcessor, LibreofficeProcessor, LuaProcessor, MakoProcessor, MakeProcessor, MarpProcessor, MarkdownProcessor, MarkdownlintProcessor, MdbookProcessor, MdlProcessor, MermaidProcessor, MypyProcessor, NpmProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, PipProcessor, ProcessorMap, PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor, ShellcheckProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, SphinxProcessor, TagsProcessor, TaploProcessor, TeraProcessor, YamllintProcessor, names as proc_names};
 use crate::remote_cache;
 use crate::tool_lock;
 
@@ -111,6 +111,11 @@ pub(crate) fn create_builtin_processors(cfg: &ProcessorConfig) -> ProcessorMap {
     Builder::register(&mut processors, proc_names::ASCII_CHECK, AsciiCheckProcessor::new(cfg.ascii_check.clone()));
     Builder::register(&mut processors, proc_names::MERMAID, MermaidProcessor::new(cfg.mermaid.clone()));
     Builder::register(&mut processors, proc_names::DRAWIO, DrawioProcessor::new(cfg.drawio.clone()));
+    // Mako processor (fallible init — skip if template dir missing)
+    if let Ok(proc) = MakoProcessor::new(cfg.mako.clone()) {
+        Builder::register(&mut processors, proc_names::MAKO, proc);
+    }
+
     Builder::register(&mut processors, proc_names::LIBREOFFICE, LibreofficeProcessor::new(cfg.libreoffice.clone()));
     Builder::register(&mut processors, proc_names::PDFUNITE, PdfuniteProcessor::new(cfg.pdfunite.clone()));
 
