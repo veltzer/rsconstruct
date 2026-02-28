@@ -6,8 +6,66 @@ use crate::cli::{BuildOptions, BuildPhase, DisplayOptions};
 use crate::color;
 use crate::errors;
 use crate::executor::{Executor, ExecutorOptions};
-use crate::processors::BuildStats;
+use crate::processors::{BuildStats, ProcessorMap, ProcessorType};
 use super::{Builder, ProductStatusLabels, phases_debug};
+
+/// Expand `@`-prefixed shortcuts in the processor filter.
+///
+/// Three categories of shortcuts:
+/// - **By type**: `@checkers`, `@generators`, `@mass_generators`
+/// - **By tool**: `@python3`, `@node`, etc. — matches processors whose `required_tools()` contains the name
+/// - **By processor name**: `@ruff` → `"ruff"` — strips the `@` prefix
+fn expand_aliases(filter: &[String], processors: &ProcessorMap) -> Vec<String> {
+    let mut expanded = Vec::new();
+    for name in filter {
+        if let Some(alias) = name.strip_prefix('@') {
+            match alias {
+                "checkers" => {
+                    expanded.extend(
+                        processors.iter()
+                            .filter(|(_, p)| p.processor_type() == ProcessorType::Checker)
+                            .map(|(n, _)| n.clone())
+                    );
+                }
+                "generators" => {
+                    expanded.extend(
+                        processors.iter()
+                            .filter(|(_, p)| p.processor_type() == ProcessorType::Generator)
+                            .map(|(n, _)| n.clone())
+                    );
+                }
+                "mass_generators" => {
+                    expanded.extend(
+                        processors.iter()
+                            .filter(|(_, p)| p.processor_type() == ProcessorType::MassGenerator)
+                            .map(|(n, _)| n.clone())
+                    );
+                }
+                _ => {
+                    // Check if it's a tool name
+                    let by_tool: Vec<_> = processors.iter()
+                        .filter(|(_, p)| p.required_tools().iter().any(|t| t == alias))
+                        .map(|(n, _)| n.clone())
+                        .collect();
+                    if !by_tool.is_empty() {
+                        expanded.extend(by_tool);
+                    } else if processors.contains_key(alias) {
+                        // Fall back to processor name
+                        expanded.push(alias.to_string());
+                    } else {
+                        // Unknown alias — keep original so validation reports the error
+                        expanded.push(name.clone());
+                    }
+                }
+            }
+        } else {
+            expanded.push(name.clone());
+        }
+    }
+    expanded.sort();
+    expanded.dedup();
+    expanded
+}
 
 impl Builder {
     /// Execute an incremental build using the dependency graph
@@ -23,12 +81,15 @@ impl Builder {
             self.object_store.set_mtime_check(false);
         }
 
-        let processor_filter = opts.processor_filter.as_deref();
-
         // Create processors
         let t = Instant::now();
         let processors = self.create_processors()?;
         let create_processors_dur = t.elapsed();
+
+        // Expand @-prefixed shortcuts in the processor filter
+        let expanded_filter = opts.processor_filter.as_ref()
+            .map(|f| expand_aliases(f, &processors));
+        let processor_filter = expanded_filter.as_deref();
 
         // Validate processor filter against available processors
         if let Some(filter) = processor_filter {

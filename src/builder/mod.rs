@@ -139,6 +139,12 @@ impl Builder {
         Config::require_config()?;
         let config = Config::load()?;
 
+        // Validate: compression and hardlink restore are incompatible
+        if config.cache.compression && config.cache.restore_method == crate::config::RestoreMethod::Hardlink {
+            anyhow::bail!("Cannot use cache compression with hardlink restore method. \
+                Set restore_method = \"copy\" or disable compression.");
+        }
+
         // Create remote cache backend if configured
         let remote_backend = match &config.cache.remote {
             Some(url) => Some(remote_cache::create_backend(url)?),
@@ -147,6 +153,7 @@ impl Builder {
 
         let object_store = ObjectStore::new(ObjectStoreOptions {
             restore_method: config.cache.restore_method,
+            compression: config.cache.compression,
             remote: remote_backend,
             remote_push: config.cache.remote_push,
             remote_pull: config.cache.remote_pull,

@@ -109,6 +109,8 @@ pub struct ObjectStore {
     db: Database,
     /// Method to restore files from cache
     restore_method: RestoreMethod,
+    /// Whether to compress cached objects with zstd
+    compression: bool,
     /// Optional remote cache backend
     remote: Option<Box<dyn RemoteCache>>,
     /// Whether to push to remote cache
@@ -167,6 +169,7 @@ pub struct CacheListOutput {
 /// Options for configuring an ObjectStore instance.
 pub struct ObjectStoreOptions {
     pub restore_method: RestoreMethod,
+    pub compression: bool,
     pub remote: Option<Box<dyn RemoteCache>>,
     pub remote_push: bool,
     pub remote_pull: bool,
@@ -190,6 +193,7 @@ impl ObjectStore {
             objects_dir,
             db,
             restore_method: opts.restore_method,
+            compression: opts.compression,
             remote: opts.remote,
             remote_push: opts.remote_push,
             remote_pull: opts.remote_pull,
@@ -244,6 +248,8 @@ impl ObjectStore {
     }
 
     /// Store content in object store, returns checksum.
+    /// The checksum is always computed on the **original** (uncompressed) content
+    /// so cache keys remain stable regardless of compression setting.
     /// Objects are made read-only to prevent accidental modification via hardlinks.
     fn store_object(&self, content: &[u8]) -> Result<String> {
         let checksum = Self::calculate_checksum_bytes(content);
@@ -255,7 +261,13 @@ impl ObjectStore {
                 fs::create_dir_all(parent)
                     .context("Failed to create object directory")?;
             }
-            fs::write(&object_path, content)
+            let blob = if self.compression {
+                zstd::encode_all(content, 0)
+                    .context("Failed to zstd-compress object")?
+            } else {
+                content.to_vec()
+            };
+            fs::write(&object_path, &blob)
                 .context("Failed to write object")?;
             // Make read-only to prevent corruption via hardlinks
             let mut perms = fs::metadata(&object_path)
@@ -281,8 +293,24 @@ impl ObjectStore {
     /// any tool that tries to write in-place will get a permission error,
     /// which is the desired protection. For copies, we make the output
     /// writable since it's an independent file that can't corrupt the cache.
+    ///
+    /// When compression is enabled, the stored blob is zstd-compressed so we
+    /// must decompress before writing the output file. (Hardlink path is
+    /// unreachable due to config validation.)
     fn restore_file(&self, checksum: &str, output_path: &Path) -> Result<()> {
         let object_path = self.object_path(checksum);
+
+        if self.compression {
+            // Decompress and write the output file
+            let content = self.read_object(checksum)?;
+            fs::write(output_path, &content)
+                .with_context(|| format!("Failed to write decompressed output: {}", output_path.display()))?;
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(0o644);
+            fs::set_permissions(output_path, perms)
+                .context("Failed to make restored file writable")?;
+            return Ok(());
+        }
 
         match self.restore_method {
             RestoreMethod::Hardlink => {
@@ -301,6 +329,19 @@ impl ObjectStore {
         }
 
         Ok(())
+    }
+
+    /// Read and optionally decompress an object from the store.
+    pub(crate) fn read_object(&self, checksum: &str) -> Result<Vec<u8>> {
+        let object_path = self.object_path(checksum);
+        let raw = fs::read(&object_path)
+            .with_context(|| format!("Failed to read object: {}", checksum))?;
+        if self.compression {
+            zstd::decode_all(raw.as_slice())
+                .with_context(|| format!("Failed to decompress object: {}", checksum))
+        } else {
+            Ok(raw)
+        }
     }
 
     /// Convert path to string for storage. Paths are already relative.

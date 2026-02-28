@@ -226,6 +226,10 @@ pub(crate) enum RestoreMethod {
 pub(crate) struct CacheConfig {
     #[serde(default)]
     pub restore_method: RestoreMethod,
+    /// Whether to compress cached objects with zstd (default: false).
+    /// Incompatible with hardlink restore method.
+    #[serde(default)]
+    pub compression: bool,
     /// Remote cache URL (e.g., "s3://bucket/prefix", "http://host:port/path", or local "file:///path")
     #[serde(default)]
     pub remote: Option<String>,
@@ -244,6 +248,7 @@ impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             restore_method: RestoreMethod::default(),
+            compression: false,
             remote: None,
             remote_push: true,
             remote_pull: true,
