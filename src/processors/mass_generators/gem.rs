@@ -40,9 +40,7 @@ impl GemProcessor {
     fn execute_gem(&self, gemfile: &Path) -> Result<()> {
         let mut cmd = Command::new(&self.config.bundler);
         cmd.arg(&self.config.command);
-        if self.config.cache_output_dir {
-            cmd.args(["--path", "vendor/bundle"]);
-        }
+        cmd.env("GEM_HOME", &self.config.gem_home);
         for arg in &self.config.args {
             cmd.arg(arg);
         }
@@ -110,9 +108,9 @@ impl ProductDiscovery for GemProcessor {
 
             if self.config.cache_output_dir {
                 let output_dir = if anchor_dir.as_os_str().is_empty() {
-                    PathBuf::from("vendor/bundle")
+                    PathBuf::from(&self.config.gem_home)
                 } else {
-                    anchor_dir.join("vendor/bundle")
+                    anchor_dir.join(&self.config.gem_home)
                 };
                 graph.add_product_with_output_dir(inputs, vec![stamp], crate::processors::names::GEM, hash.clone(), output_dir)?;
             } else {

@@ -409,6 +409,11 @@ fn init_project() -> Result<()> {
 # extensions = ["Makefile"]
 # exclude_paths = []
 
+[processor.gem]
+# bundler = "bundle"
+# command = "install"
+# gem_home = "gems"
+
 [processor.mdl]
 # gem_home = "gems"
 # mdl_bin = "gems/bin/mdl"

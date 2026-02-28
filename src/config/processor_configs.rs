@@ -1619,6 +1619,8 @@ pub struct GemConfig {
     pub bundler: String,
     #[serde(default = "default_bundler_command")]
     pub command: String,
+    #[serde(default = "default_gem_home")]
+    pub gem_home: String,
     #[serde(default)]
     pub args: Vec<String>,
     #[serde(default)]
@@ -1635,6 +1637,7 @@ impl Default for GemConfig {
             enabled: true,
             bundler: "bundle".into(),
             command: "install".into(),
+            gem_home: "gems".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
             cache_output_dir: true,
@@ -1646,7 +1649,7 @@ impl Default for GemConfig {
 impl KnownFields for GemConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "bundler", "command", "args", "extra_inputs", "cache_output_dir",
+            "enabled", "bundler", "command", "gem_home", "args", "extra_inputs", "cache_output_dir",
             "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
         ]
     }

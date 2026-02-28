@@ -725,7 +725,7 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
         // npm
         ("npm", "npm" | "command") => Some(FieldType::String),
         // gem
-        ("gem", "bundler" | "command") => Some(FieldType::String),
+        ("gem", "bundler" | "command" | "gem_home") => Some(FieldType::String),
         // mdl
         ("mdl", "gem_home" | "mdl_bin" | "gem_stamp") => Some(FieldType::String),
         // markdownlint
