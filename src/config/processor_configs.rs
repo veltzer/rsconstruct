@@ -1315,7 +1315,7 @@ fn default_pandoc_from() -> String {
 }
 
 fn default_pandoc_formats() -> Vec<String> {
-    vec!["pdf".into()]
+    vec!["pdf".into(), "html".into(), "docx".into()]
 }
 
 fn default_pandoc_output_dir() -> String {
@@ -1348,7 +1348,7 @@ impl Default for PandocConfig {
             enabled: true,
             pandoc: "pandoc".into(),
             from: "markdown".into(),
-            formats: vec!["pdf".into()],
+            formats: vec!["pdf".into(), "html".into(), "docx".into()],
             args: Vec::new(),
             extra_inputs: Vec::new(),
             output_dir: "out/pandoc".into(),
