@@ -160,10 +160,10 @@ fn count_lines(path: &Path, comment: &CommentStyle) -> LineCounts {
 
         if in_block {
             comment_lines += 1;
-            if let Some(end) = comment.block_end {
-                if trimmed.contains(end) {
-                    in_block = false;
-                }
+            if let Some(end) = comment.block_end
+                && trimmed.contains(end)
+            {
+                in_block = false;
             }
             continue;
         }
@@ -175,16 +175,16 @@ fn count_lines(path: &Path, comment: &CommentStyle) -> LineCounts {
         }
 
         // Check block comment start
-        if let Some(start) = comment.block_start {
-            if trimmed.starts_with(start) {
-                comment_lines += 1;
-                if let Some(end) = comment.block_end {
-                    if !trimmed[start.len()..].contains(end) {
-                        in_block = true;
-                    }
-                }
-                continue;
+        if let Some(start) = comment.block_start
+            && let Some(rest) = trimmed.strip_prefix(start)
+        {
+            comment_lines += 1;
+            if let Some(end) = comment.block_end
+                && !rest.contains(end)
+            {
+                in_block = true;
             }
+            continue;
         }
 
         code += 1;

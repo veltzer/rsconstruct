@@ -61,6 +61,7 @@ impl ProductDiscovery for MdlProcessor {
         }
         cmd.arg(file);
         cmd.env("GEM_HOME", &self.config.gem_home);
+        cmd.env("GEM_PATH", &self.config.gem_home);
         let output = run_command(&mut cmd)?;
         check_command_output(&output, format_args!("mdl {}", file.display()))
     }

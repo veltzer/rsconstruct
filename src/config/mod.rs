@@ -130,7 +130,7 @@ const COMMON_EXCLUDE_DIRS: &[&str] = &["/.git/", "/out/", "/build/", "/dist/"];
 /// Used by processors that scan broadly and need to skip build artifacts.
 const BUILD_TOOL_EXCLUDES: &[&str] = &[
     "/.git/", "/out/", "/build/", "/dist/",
-    "/.rsb/", "/node_modules/", "/target/",
+    "/.rsb/", "/node_modules/", "/target/", "/gems/",
 ];
 
 const PYTHON_EXCLUDE_DIRS: &[&str] = &[

@@ -41,6 +41,7 @@ impl GemProcessor {
         let mut cmd = Command::new(&self.config.bundler);
         cmd.arg(&self.config.command);
         cmd.env("GEM_HOME", &self.config.gem_home);
+        cmd.env("GEM_PATH", &self.config.gem_home);
         for arg in &self.config.args {
             cmd.arg(arg);
         }
@@ -81,7 +82,7 @@ impl ProductDiscovery for GemProcessor {
 
         let siblings = SiblingFilter {
             extensions: &[".rb", ".gemspec"],
-            excludes: &["/.git/", "/out/", "/.rsb/", "/vendor/"],
+            excludes: &["/.git/", "/out/", "/.rsb/", "/gems/"],
         };
 
         for anchor in files {
