@@ -273,6 +273,10 @@ impl ProductDiscovery for SpellcheckProcessor {
         result
     }
 
+    fn config_json(&self) -> Option<String> {
+        serde_json::to_string(&self.config).ok()
+    }
+
     fn supports_batch(&self) -> bool {
         self.config.auto_add_words
     }

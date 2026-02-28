@@ -491,10 +491,14 @@ pub struct SpellcheckConfig {
     pub auto_add_words: bool,
     #[serde(default)]
     pub extra_inputs: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "default_spellcheck_auto_inputs")]
     pub auto_inputs: Vec<String>,
     #[serde(flatten)]
     pub scan: ScanConfig,
+}
+
+fn default_spellcheck_auto_inputs() -> Vec<String> {
+    vec![".spellcheck-words".into()]
 }
 
 impl Default for SpellcheckConfig {
@@ -506,7 +510,7 @@ impl Default for SpellcheckConfig {
             use_words_file: false,
             auto_add_words: false,
             extra_inputs: Vec::new(),
-            auto_inputs: Vec::new(),
+            auto_inputs: default_spellcheck_auto_inputs(),
             scan: default_scan!(extensions: [".md"]),
         }
     }
