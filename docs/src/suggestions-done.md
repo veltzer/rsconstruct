@@ -29,6 +29,7 @@ Items from `suggestions.md` that have been implemented.
 ## Completed Caching & Performance
 
 - **Lazy file hashing (mtime-based)** — `mtime_check` config (default `true`), `fast_checksum()` with MTIME_TABLE. Stores `(path, mtime, checksum)` tuples. Disable with `--no-mtime`.
+- **Compressed cache objects** — Optional zstd compression for `.rsb/objects/`. Config: `compression = true` in `[cache]`. Incompatible with hardlink restore (must use `restore_method = "copy"`). Checksums computed on original content for stable cache keys.
 
 ## Completed Developer Experience
 

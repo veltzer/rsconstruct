@@ -56,6 +56,32 @@ rsb build --verify-tool-versions       # Verify tool versions against .tools.ver
 
 By default, tool output (compiler messages, linter output) is only shown when a command fails. Use `--show-output` to see all output.
 
+### Processor Shortcuts (`@` aliases)
+
+The `-p` flag supports `@`-prefixed shortcuts that expand to groups of processors:
+
+**By type:**
+- `@checkers` — all checker processors (ruff, pylint, shellcheck, etc.)
+- `@generators` — all generator processors (tera, cc_single_file, etc.)
+- `@mass_generators` — all mass generator processors (pip, npm, cargo, etc.)
+
+**By tool:**
+- `@python3` — all processors that require `python3`
+- `@node` — all processors that require `node`
+- Any tool name works (matched against each processor's `required_tools()`)
+
+**By processor name:**
+- `@ruff` — equivalent to `ruff` (strips the `@` prefix)
+
+Examples:
+
+```bash
+rsb build -p @checkers              # Run only checker processors
+rsb build -p @generators            # Run only generator processors
+rsb build -p @python3               # Run all Python-based processors
+rsb build -p @checkers,tera         # Mix shortcuts with processor names
+```
+
 The `--stop-after` flag allows stopping the build at a specific phase:
 - `discover` — stop after discovering products (before dependency scanning)
 - `add-dependencies` — stop after adding dependencies (before resolving graph)

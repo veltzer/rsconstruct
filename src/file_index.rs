@@ -141,6 +141,11 @@ impl FileIndex {
         results
     }
 
+    /// Return all files in the index.
+    pub fn files(&self) -> &[PathBuf] {
+        &self.files
+    }
+
     /// Check if the index contains any file with the given extension.
     /// Extension should include the dot, e.g., ".py", ".c".
     pub fn has_extension(&self, ext: &str) -> bool {

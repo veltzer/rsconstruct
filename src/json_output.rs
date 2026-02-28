@@ -143,6 +143,44 @@ pub struct StatsSummary {
     pub missing: usize,
 }
 
+/// Per-language SLOC entry for JSON output.
+#[derive(Debug, Serialize)]
+pub struct SlocLanguageEntry {
+    pub language: String,
+    pub files: usize,
+    pub blank: usize,
+    pub comment: usize,
+    pub code: usize,
+}
+
+/// SLOC totals for JSON output.
+#[derive(Debug, Serialize)]
+pub struct SlocTotals {
+    pub files: usize,
+    pub blank: usize,
+    pub comment: usize,
+    pub code: usize,
+}
+
+/// COCOMO estimation for JSON output.
+#[derive(Debug, Serialize)]
+pub struct SlocCocomoEstimate {
+    pub effort_person_months: f64,
+    pub schedule_months: f64,
+    pub people: f64,
+    pub cost: f64,
+    pub salary: u64,
+}
+
+/// Top-level SLOC output for JSON mode.
+#[derive(Debug, Serialize)]
+pub struct SlocOutput {
+    pub languages: Vec<SlocLanguageEntry>,
+    pub total: SlocTotals,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cocomo: Option<SlocCocomoEstimate>,
+}
+
 /// Emit a JSON event to stdout.
 pub fn emit(event: &BuildEvent) {
     if !is_json_mode() {

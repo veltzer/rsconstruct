@@ -241,6 +241,15 @@ pub enum Commands {
     },
     /// Check build environment: tool availability, config validity, common problems
     Doctor,
+    /// Count source lines of code (SLOC) by language
+    Sloc {
+        /// Show COCOMO effort/cost estimation
+        #[arg(long)]
+        cocomo: bool,
+        /// Annual salary for COCOMO cost estimation (default: 56286)
+        #[arg(long, default_value = "56286")]
+        salary: u64,
+    },
     /// Search and query frontmatter tags from markdown files
     Tags {
         #[command(subcommand)]

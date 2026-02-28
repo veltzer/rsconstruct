@@ -285,6 +285,15 @@ Grades:
 - Equivalent to `rsb build -p ruff,pylint,...` but shorter.
 - **Urgency**: low | **Complexity**: low
 
+### `rsb sloc` — Source lines of code statistics
+- Count source lines of code across the project, broken down by language/extension.
+- Leverage rsb's existing file index and extension-to-language mapping from processor configs.
+- Show: files, blank lines, comment lines, code lines per language. Total summary.
+- Optional COCOMO-style effort/cost estimation (person-months, schedule, cost at configurable salary).
+- Usage: `rsb sloc`, `rsb sloc --json`, `rsb sloc --cocomo --salary 100000`
+- Similar to external tools: `sloccount`, `cloc`, `tokei`.
+- **Urgency**: low | **Complexity**: medium
+
 ### Watch mode keyboard commands
 - During `rsb watch`, support `r` (rebuild), `c` (clean), `q` (quit), `Enter` (rebuild now), `s` (status).
 - Only activate when stdin is a TTY.
@@ -311,12 +320,6 @@ Grades:
 - **Urgency**: low | **Complexity**: high
 
 ## Caching & Performance
-
-### Compressed cache objects
-- Compress cached objects with zstd to reduce disk usage and remote transfer times.
-- Config: `compression = "zstd"`, `compression_level = 3`.
-- Typical savings: 50-80% for text files.
-- **Urgency**: low | **Complexity**: medium
 
 ### Deferred materialization
 - Don't write cached outputs to disk until they're actually needed by a downstream product.

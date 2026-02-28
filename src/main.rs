@@ -304,6 +304,10 @@ fn run() -> Result<()> {
             let builder = Builder::new()?;
             builder.doctor()?;
         }
+        Commands::Sloc { cocomo, salary } => {
+            let file_index = file_index::FileIndex::build()?;
+            builder::sloc::run_sloc(&file_index, cocomo, salary)?;
+        }
         Commands::Tags { action } => {
             let config = Config::load()?;
             let db_path = &config.processor.tags.output;
