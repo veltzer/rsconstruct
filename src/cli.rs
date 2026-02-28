@@ -494,7 +494,7 @@ pub struct SharedBuildArgs {
     #[arg(short, long, value_delimiter = ',')]
     pub processors: Option<Vec<String>>,
 
-    /// Automatically add misspelled words to .spellcheck-words instead of failing
+    /// Automatically add misspelled words to words files instead of failing (spellcheck + aspell)
     #[arg(long)]
     pub auto_add_words: bool,
 

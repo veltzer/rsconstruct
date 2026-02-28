@@ -726,7 +726,8 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
         // markdownlint
         ("markdownlint", "markdownlint_bin" | "npm_stamp") => Some(FieldType::String),
         // aspell
-        ("aspell", "aspell" | "conf_dir" | "conf") => Some(FieldType::String),
+        ("aspell", "aspell" | "conf_dir" | "conf" | "words_file") => Some(FieldType::String),
+        ("aspell", "auto_add_words") => Some(FieldType::Bool),
         // marp
         ("marp", "marp_bin" | "output_dir") => Some(FieldType::String),
         ("marp", "formats") => Some(FieldType::StringArray),

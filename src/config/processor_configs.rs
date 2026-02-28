@@ -1278,6 +1278,10 @@ fn default_aspell_conf() -> String {
     ".aspell.conf".into()
 }
 
+fn default_aspell_words_file() -> String {
+    ".aspell-words".into()
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AspellConfig {
     #[serde(default = "default_true")]
@@ -1290,6 +1294,10 @@ pub struct AspellConfig {
     pub conf_dir: String,
     #[serde(default = "default_aspell_conf")]
     pub conf: String,
+    #[serde(default)]
+    pub auto_add_words: bool,
+    #[serde(default = "default_aspell_words_file")]
+    pub words_file: String,
     #[serde(default)]
     pub extra_inputs: Vec<String>,
     #[serde(flatten)]
@@ -1304,6 +1312,8 @@ impl Default for AspellConfig {
             args: Vec::new(),
             conf_dir: ".".into(),
             conf: ".aspell.conf".into(),
+            auto_add_words: false,
+            words_file: ".aspell-words".into(),
             extra_inputs: Vec::new(),
             scan: default_scan!(extensions: [".md"]),
         }
@@ -1313,7 +1323,7 @@ impl Default for AspellConfig {
 impl KnownFields for AspellConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "aspell", "args", "conf_dir", "conf", "extra_inputs",
+            "enabled", "aspell", "args", "conf_dir", "conf", "auto_add_words", "words_file", "extra_inputs",
             "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
         ]
     }

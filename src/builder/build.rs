@@ -12,9 +12,10 @@ use super::{Builder, ProductStatusLabels, phases_debug};
 impl Builder {
     /// Execute an incremental build using the dependency graph
     pub fn build(&mut self, opts: &BuildOptions, interrupted: Arc<std::sync::atomic::AtomicBool>, init_timings: Vec<(String, Duration)>) -> Result<(), anyhow::Error> {
-        // CLI override for spellcheck auto_add_words
+        // CLI override for spellcheck and aspell auto_add_words
         if opts.auto_add_words {
             self.config.processor.spellcheck.auto_add_words = true;
+            self.config.processor.aspell.auto_add_words = true;
         }
 
         // CLI override for mtime pre-check
