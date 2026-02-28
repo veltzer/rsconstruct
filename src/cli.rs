@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 #[derive(Parser)]
 #[command(name = "rsb")]
+#[command(version = concat!(env!("CARGO_PKG_VERSION"), " by ", env!("CARGO_PKG_AUTHORS")))]
 #[command(about = "Rust Build Tool - Incremental build system with templates", long_about = None)]
 pub struct Cli {
     /// Show skip/restore/cache messages during build

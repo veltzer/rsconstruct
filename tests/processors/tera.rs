@@ -248,3 +248,26 @@ fn extra_inputs_nonexistent_file_fails() {
     assert!(stderr.contains("extra_inputs file not found") || stderr.contains("nonexistent_file.txt"),
         "Error should mention missing extra_inputs file: {}", stderr);
 }
+
+#[test]
+fn subdirectory_output() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Create a template in a subdirectory
+    fs::create_dir_all(project_path.join("templates.tera/sub")).unwrap();
+    fs::write(
+        project_path.join("templates.tera/sub/output.txt.tera"),
+        "Hello from subdirectory"
+    ).unwrap();
+
+    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(), "rsb build failed: {}", String::from_utf8_lossy(&output.stderr));
+
+    // Output should be at sub/output.txt (templates.tera/ prefix stripped)
+    let output_file = project_path.join("sub/output.txt");
+    assert!(output_file.exists(), "Output file sub/output.txt was not created");
+
+    let content = fs::read_to_string(&output_file).unwrap();
+    assert_eq!(content, "Hello from subdirectory");
+}

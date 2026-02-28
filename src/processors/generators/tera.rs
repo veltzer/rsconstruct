@@ -29,6 +29,13 @@ impl TemplateItem {
 
     /// Render the template and write to output
     fn render(&self, config: &TeraConfig) -> Result<()> {
+        // Ensure parent directory of output exists
+        if let Some(parent) = self.output_path.parent()
+            && !parent.as_os_str().is_empty() && !parent.exists()
+        {
+            fs::create_dir_all(parent)?;
+        }
+
         // Read template content
         let template_content = fs::read_to_string(&self.source_path)?;
 
@@ -92,8 +99,9 @@ impl TeraProcessor {
 
     /// Find all template files matching configured extensions
     fn find_templates(&self, file_index: &FileIndex) -> Result<Vec<TemplateItem>> {
-        let paths = file_index.scan(&self.config.scan, false);
+        let paths = file_index.scan(&self.config.scan, true);
         let extensions = self.config.scan.extensions();
+        let scan_dir = self.config.scan.scan_dir();
 
         let mut items = Vec::new();
         for path in paths {
@@ -102,8 +110,16 @@ impl TeraProcessor {
                 if filename.ends_with(ext.as_str()) {
                     let output_name = &filename[..filename.len() - ext.len()];
                     if !output_name.is_empty() {
-                        // Output is at project root with the .tera extension stripped
-                        let output_path = PathBuf::from(output_name);
+                        // Strip the scan_dir prefix to get the output path
+                        let output_path = if !scan_dir.is_empty() {
+                            if let Ok(relative) = path.strip_prefix(scan_dir) {
+                                relative.with_file_name(output_name)
+                            } else {
+                                PathBuf::from(output_name)
+                            }
+                        } else {
+                            PathBuf::from(output_name)
+                        };
                         items.push(TemplateItem::new(path.clone(), output_path));
                         break;
                     }
