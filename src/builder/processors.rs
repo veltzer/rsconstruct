@@ -250,6 +250,20 @@ impl Builder {
             ProcessorAction::Defconfig { ref name } => {
                 processor_defconfig(name)?;
             }
+            ProcessorAction::Allowlist => {
+                let enabled: Vec<&str> = proc_names.iter()
+                    .map(|s| s.as_str())
+                    .filter(|n| self.config.processor.is_enabled(n))
+                    .collect();
+                if crate::json_output::is_json_mode() {
+                    println!("{}", serde_json::to_string_pretty(&enabled)?);
+                } else {
+                    println!("enabled = [{}]", enabled.iter()
+                        .map(|n| format!("\"{}\"", n))
+                        .collect::<Vec<_>>()
+                        .join(", "));
+                }
+            }
             ProcessorAction::Files { name, all } => {
                 if let Some(ref n) = name
                     && !processors.contains_key(n.as_str()) {

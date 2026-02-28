@@ -342,6 +342,8 @@ pub enum ProcessorAction {
         /// Processor name
         name: String,
     },
+    /// Show the current processor allowlist (for use in rsb.toml [processor] enabled)
+    Allowlist,
 }
 
 #[derive(Subcommand)]

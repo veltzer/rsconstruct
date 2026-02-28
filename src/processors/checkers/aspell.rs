@@ -8,7 +8,7 @@ use parking_lot::Mutex;
 use crate::config::AspellConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProductDiscovery, config_file_inputs, scan_root_valid, log_command, format_command};
+use crate::processors::{ProductDiscovery, config_file_inputs, flush_words, scan_root_valid, log_command, format_command};
 
 pub struct AspellProcessor {
     config: AspellConfig,
@@ -114,33 +114,9 @@ impl AspellProcessor {
         if words_to_add.is_empty() {
             return Ok(());
         }
-
         let words_path = Path::new(&self.config.words_file);
-
-        // Read existing words if file exists (skip the pws header line)
-        let mut all_words: HashSet<String> = Self::load_custom_words(words_path);
-
-        let new_count = words_to_add.iter().filter(|w| !all_words.contains(*w)).count();
-        for word in words_to_add.iter() {
-            all_words.insert(word.clone());
-        }
-
-        if new_count == 0 {
-            return Ok(());
-        }
-
-        let mut sorted: Vec<_> = all_words.into_iter().collect();
-        sorted.sort();
-
-        let mut file = std::fs::File::create(words_path)
-            .with_context(|| format!("Failed to create words file: {}", words_path.display()))?;
-        writeln!(file, "personal_ws-1.1 en {}", sorted.len())?;
-        for word in &sorted {
-            writeln!(file, "{}", word)?;
-        }
-
-        println!("Added {} word(s) to {}", new_count, words_path.display());
-        Ok(())
+        let existing = Self::load_custom_words(words_path);
+        flush_words(existing, &words_to_add, words_path, Some(|n| format!("personal_ws-1.1 en {n}")))
     }
 }
 

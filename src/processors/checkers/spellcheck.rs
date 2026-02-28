@@ -2,7 +2,6 @@ use anyhow::{Context, Result};
 use regex::Regex;
 use std::collections::HashSet;
 use std::fs;
-use std::io::Write;
 use std::path::Path;
 use parking_lot::Mutex;
 use std::sync::OnceLock;
@@ -11,7 +10,7 @@ use crate::config::SpellcheckConfig;
 use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProductDiscovery, config_file_inputs, discover_checker_products};
+use crate::processors::{ProductDiscovery, config_file_inputs, discover_checker_products, flush_words};
 
 const DICT_DIR: &str = "/usr/share/hunspell";
 
@@ -194,38 +193,13 @@ impl SpellcheckProcessor {
         if words_to_add.is_empty() {
             return Ok(());
         }
-
         let words_path = Path::new(&self.config.words_file);
-
-        // Read existing words if file exists
-        let mut all_words: HashSet<String> = if words_path.exists() {
+        let existing = if words_path.exists() {
             Self::load_custom_words(words_path).unwrap_or_default()
         } else {
             HashSet::new()
         };
-
-        // Add new words
-        let new_count = words_to_add.iter().filter(|w| !all_words.contains(*w)).count();
-        for word in words_to_add.iter() {
-            all_words.insert(word.clone());
-        }
-
-        if new_count == 0 {
-            return Ok(());
-        }
-
-        // Sort and write
-        let mut sorted: Vec<_> = all_words.into_iter().collect();
-        sorted.sort();
-
-        let mut file = fs::File::create(words_path)
-            .with_context(|| format!("Failed to create words file: {}", words_path.display()))?;
-        for word in &sorted {
-            writeln!(file, "{}", word)?;
-        }
-
-        println!("Added {} word(s) to {}", new_count, words_path.display());
-        Ok(())
+        flush_words(existing, &words_to_add, words_path, None::<fn(usize) -> String>)
     }
 }
 

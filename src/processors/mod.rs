@@ -6,8 +6,9 @@ pub mod lua_processor;
 use anyhow::{Context, Result};
 #[cfg(debug_assertions)]
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -331,6 +332,39 @@ pub(crate) fn stub_path(stub_dir: &Path, source: &Path, suffix: &str) -> PathBuf
         suffix,
     );
     stub_dir.join(stub_name)
+}
+
+/// Merge new words into an existing words set, sort, and write to file.
+/// Used by aspell and spellcheck processors for their auto_add_words feature.
+/// `existing` is the set of words already on disk, `new_words` the words to add.
+/// If `header` is Some, it is written as the first line of the file.
+/// Returns Ok(()) and prints a summary of how many words were added.
+pub(crate) fn flush_words(
+    existing: HashSet<String>,
+    new_words: &HashSet<String>,
+    words_path: &Path,
+    header: Option<impl FnOnce(usize) -> String>,
+) -> Result<()> {
+    let mut all_words = existing;
+    let new_count = new_words.iter().filter(|w| !all_words.contains(*w)).count();
+    for word in new_words {
+        all_words.insert(word.clone());
+    }
+    if new_count == 0 {
+        return Ok(());
+    }
+    let mut sorted: Vec<_> = all_words.into_iter().collect();
+    sorted.sort();
+    let mut file = std::fs::File::create(words_path)
+        .with_context(|| format!("Failed to create words file: {}", words_path.display()))?;
+    if let Some(fmt) = header {
+        writeln!(file, "{}", fmt(sorted.len()))?;
+    }
+    for word in &sorted {
+        writeln!(file, "{}", word)?;
+    }
+    println!("Added {} word(s) to {}", new_count, words_path.display());
+    Ok(())
 }
 
 /// Check if a config file exists and return it as extra inputs for discover.
