@@ -203,7 +203,10 @@ fn run_command_inner(cmd: &mut Command, inherit_stdio: bool) -> Result<Output> {
             let program = cmd.get_program().to_string_lossy();
             let basename = program.rsplit('/').next().unwrap_or(&program);
             assert!(
-                tools.iter().any(|t| t == basename),
+                tools.iter().any(|t| {
+                    let t_basename = t.rsplit('/').next().unwrap_or(t);
+                    t_basename == basename
+                }),
                 "Processor executed undeclared tool '{basename}'. Declared: {tools:?}",
             );
         }
