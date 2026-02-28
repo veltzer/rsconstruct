@@ -344,6 +344,12 @@ pub enum ProcessorAction {
     },
     /// Show the current processor allowlist (for use in rsb.toml [processor] enabled)
     Allowlist,
+    /// Show inter-processor dependencies
+    Graph {
+        /// Output format
+        #[arg(short, long, value_enum, default_value = "text")]
+        format: GraphFormat,
+    },
 }
 
 #[derive(Subcommand)]

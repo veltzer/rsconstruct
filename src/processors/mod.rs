@@ -334,6 +334,24 @@ pub(crate) fn stub_path(stub_dir: &Path, source: &Path, suffix: &str) -> PathBuf
     stub_dir.join(stub_name)
 }
 
+/// Convert a DOT graph string to SVG using the `dot` command.
+pub(crate) fn dot_to_svg(dot_content: &str) -> Result<String> {
+    use std::process::{Command, Stdio};
+    let mut cmd = Command::new("dot");
+    cmd.arg("-Tsvg")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    log_command(&cmd);
+    let mut child = cmd
+        .spawn()
+        .map_err(|_| anyhow::anyhow!("Graphviz 'dot' command not found. Install Graphviz to use SVG format"))?;
+    child.stdin.take().expect(crate::errors::STDIN_PIPED).write_all(dot_content.as_bytes())?;
+    let output = child.wait_with_output()?;
+    check_command_output(&output, "dot")?;
+    Ok(String::from_utf8(output.stdout)?)
+}
+
 /// Merge new words into an existing words set, sort, and write to file.
 /// Used by aspell and spellcheck processors for their auto_add_words feature.
 /// `existing` is the set of words already on disk, `new_words` the words to add.

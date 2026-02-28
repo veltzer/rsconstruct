@@ -253,7 +253,7 @@ impl Builder {
             ProcessorAction::Allowlist => {
                 let enabled: Vec<&str> = proc_names.iter()
                     .map(|s| s.as_str())
-                    .filter(|n| self.config.processor.is_enabled(n))
+                    .filter(|n| self.config.processor.is_enabled(n) && processors[*n].auto_detect(&self.file_index))
                     .collect();
                 if crate::json_output::is_json_mode() {
                     println!("{}", serde_json::to_string_pretty(&enabled)?);
@@ -262,6 +262,54 @@ impl Builder {
                         .map(|n| format!("\"{}\"", n))
                         .collect::<Vec<_>>()
                         .join(", "));
+                }
+            }
+            ProcessorAction::Graph { format } => {
+                let graph = self.build_graph()?;
+                let proc_deps = graph.processor_dependencies();
+                match format {
+                    crate::cli::GraphFormat::Text => {
+                        for (proc, deps) in &proc_deps {
+                            if deps.is_empty() {
+                                println!("{}", proc);
+                            } else {
+                                println!("{} \u{2192} {}", proc, deps.iter().cloned().collect::<Vec<_>>().join(", "));
+                            }
+                        }
+                    }
+                    crate::cli::GraphFormat::Dot => {
+                        println!("digraph processors {{");
+                        println!("    rankdir=LR;");
+                        println!("    node [fontname=\"sans-serif\" shape=box style=filled fillcolor=lightyellow];");
+                        for (proc, deps) in &proc_deps {
+                            for dep in deps {
+                                println!("    \"{}\" -> \"{}\";", proc, dep);
+                            }
+                        }
+                        println!("}}");
+                    }
+                    crate::cli::GraphFormat::Mermaid => {
+                        println!("graph LR");
+                        for (proc, deps) in &proc_deps {
+                            for dep in deps {
+                                println!("    {} --> {}", proc, dep);
+                            }
+                        }
+                    }
+                    crate::cli::GraphFormat::Json => {
+                        println!("{}", serde_json::to_string_pretty(&proc_deps)?);
+                    }
+                    crate::cli::GraphFormat::Svg => {
+                        let mut dot = String::from("digraph processors {\n    rankdir=LR;\n    node [fontname=\"sans-serif\" shape=box style=filled fillcolor=lightyellow];\n");
+                        for (proc, deps) in &proc_deps {
+                            for dep in deps {
+                                dot.push_str(&format!("    \"{}\" -> \"{}\";\n", proc, dep));
+                            }
+                        }
+                        dot.push_str("}\n");
+                        let svg = crate::processors::dot_to_svg(&dot)?;
+                        println!("{}", svg);
+                    }
                 }
             }
             ProcessorAction::Files { name, all } => {

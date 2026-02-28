@@ -1,5 +1,5 @@
 use anyhow::Result;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -295,6 +295,22 @@ impl BuildGraph {
     /// Get dependencies of a product (products that must be built before this one)
     pub fn get_dependencies(&self, id: usize) -> &[usize] {
         self.dependencies.get(id).expect(crate::errors::INVALID_PRODUCT_ID)
+    }
+
+    /// Get processor-level dependencies: returns a map from processor name
+    /// to the set of processor names it depends on.
+    pub fn processor_dependencies(&self) -> BTreeMap<String, BTreeSet<String>> {
+        let mut deps: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        for product in &self.products {
+            deps.entry(product.processor.clone()).or_default();
+            for &dep_id in self.dependencies.get(product.id).expect(crate::errors::INVALID_PRODUCT_ID) {
+                let dep_proc = &self.products[dep_id].processor;
+                if dep_proc != &product.processor {
+                    deps.entry(product.processor.clone()).or_default().insert(dep_proc.clone());
+                }
+            }
+        }
+        deps
     }
 
     /// Get mutable access to a product by id
