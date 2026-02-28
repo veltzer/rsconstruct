@@ -3,21 +3,21 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::config::{NpmConfig, config_hash, resolve_extra_inputs};
+use crate::config::{GemConfig, config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use crate::processors::{ProductDiscovery, ProcessorType, SiblingFilter, clean_outputs, scan_root_valid, run_in_anchor_dir, anchor_display_dir, check_command_output};
 
-pub struct NpmProcessor {
-    config: NpmConfig,
+pub struct GemProcessor {
+    config: GemConfig,
     output_dir: PathBuf,
 }
 
-impl NpmProcessor {
-    pub fn new(config: NpmConfig) -> Self {
+impl GemProcessor {
+    pub fn new(config: GemConfig) -> Self {
         Self {
             config,
-            output_dir: PathBuf::from("out/npm"),
+            output_dir: PathBuf::from("out/gem"),
         }
     }
 
@@ -25,7 +25,7 @@ impl NpmProcessor {
         scan_root_valid(&self.config.scan)
     }
 
-    /// Compute the stamp file path for a package.json anchor.
+    /// Compute the stamp file path for a Gemfile anchor.
     fn stamp_path(&self, anchor: &Path) -> PathBuf {
         let anchor_dir = anchor.parent().unwrap_or(Path::new(""));
         let name = if anchor_dir.as_os_str().is_empty() {
@@ -36,25 +36,25 @@ impl NpmProcessor {
         self.output_dir.join(format!("{}.stamp", name))
     }
 
-    /// Run npm install in the package.json's directory
-    fn execute_npm(&self, package_json: &Path) -> Result<()> {
-        let mut cmd = Command::new(&self.config.npm);
+    /// Run bundle install in the Gemfile's directory
+    fn execute_gem(&self, gemfile: &Path) -> Result<()> {
+        let mut cmd = Command::new(&self.config.bundler);
         cmd.arg(&self.config.command);
         for arg in &self.config.args {
             cmd.arg(arg);
         }
-        let output = run_in_anchor_dir(&mut cmd, package_json)?;
-        check_command_output(&output, format_args!("npm {} in {}", self.config.command, anchor_display_dir(package_json)))
+        let output = run_in_anchor_dir(&mut cmd, gemfile)?;
+        check_command_output(&output, format_args!("bundle {} in {}", self.config.command, anchor_display_dir(gemfile)))
     }
 }
 
-impl ProductDiscovery for NpmProcessor {
+impl ProductDiscovery for GemProcessor {
     fn description(&self) -> &str {
-        "Install Node.js dependencies using npm"
+        "Install Ruby dependencies using Bundler"
     }
 
     fn processor_type(&self) -> ProcessorType {
-        ProcessorType::Generator
+        ProcessorType::MassGenerator
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
@@ -62,7 +62,7 @@ impl ProductDiscovery for NpmProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.npm.clone(), "node".to_string()]
+        vec![self.config.bundler.clone(), "ruby".to_string()]
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
@@ -79,8 +79,8 @@ impl ProductDiscovery for NpmProcessor {
         let extra = resolve_extra_inputs(&self.config.extra_inputs)?;
 
         let siblings = SiblingFilter {
-            extensions: &[".json", ".js", ".ts"],
-            excludes: &["/.git/", "/out/", "/.rsb/", "/node_modules/"],
+            extensions: &[".rb", ".gemspec"],
+            excludes: &["/.git/", "/out/", "/.rsb/", "/vendor/"],
         };
 
         for anchor in files {
@@ -105,29 +105,29 @@ impl ProductDiscovery for NpmProcessor {
             }
             inputs.extend_from_slice(&extra);
 
-            graph.add_product(inputs, vec![stamp], crate::processors::names::NPM, hash.clone())?;
+            graph.add_product(inputs, vec![stamp], crate::processors::names::GEM, hash.clone())?;
         }
 
         Ok(())
     }
 
     fn execute(&self, product: &Product) -> Result<()> {
-        self.execute_npm(product.primary_input())?;
+        self.execute_gem(product.primary_input())?;
 
         // Create stamp file
         let stamp = product.outputs.first()
-            .context("npm product has no output stamp")?;
+            .context("gem product has no output stamp")?;
         if let Some(parent) = stamp.parent() {
             fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create npm output directory: {}", parent.display()))?;
+                .with_context(|| format!("Failed to create gem output directory: {}", parent.display()))?;
         }
         fs::write(stamp, "")
-            .with_context(|| format!("Failed to write npm stamp file: {}", stamp.display()))?;
+            .with_context(|| format!("Failed to write gem stamp file: {}", stamp.display()))?;
         Ok(())
     }
 
     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
-        clean_outputs(product, crate::processors::names::NPM, verbose)
+        clean_outputs(product, crate::processors::names::GEM, verbose)
     }
 
     fn config_json(&self) -> Option<String> {

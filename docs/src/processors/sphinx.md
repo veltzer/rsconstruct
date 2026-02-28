@@ -13,7 +13,7 @@ A non-zero exit code fails the product.
 ## Source Files
 
 - Input: `**/conf.py` (plus sibling `.rst`, `.py`, `.md` files)
-- Output: none (checker)
+- Output: none (mass_generator — produces output in `_build` directory)
 
 ## Configuration
 

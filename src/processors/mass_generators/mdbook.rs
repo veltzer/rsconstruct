@@ -5,7 +5,7 @@ use std::process::Command;
 use crate::config::MdbookConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProductDiscovery, SiblingFilter, discover_directory_products, scan_root_valid, run_in_anchor_dir, anchor_display_dir, check_command_output};
+use crate::processors::{ProductDiscovery, ProcessorType, SiblingFilter, discover_directory_products, scan_root_valid, run_in_anchor_dir, anchor_display_dir, check_command_output};
 
 pub struct MdbookProcessor {
     config: MdbookConfig,
@@ -36,6 +36,10 @@ impl MdbookProcessor {
 impl ProductDiscovery for MdbookProcessor {
     fn description(&self) -> &str {
         "Build mdbook documentation"
+    }
+
+    fn processor_type(&self) -> ProcessorType {
+        ProcessorType::MassGenerator
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {

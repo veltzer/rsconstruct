@@ -42,7 +42,8 @@ previously-passing product to fail).
 
 ## Execution isolation
 
-A processor's `execute()` must only write to the declared output paths.
+A processor's `execute()` must only write to the declared output paths
+(or, for mass generators, to the expected output directory).
 It must not modify source files, other products' outputs, or global state.
 
 ## Error reporting

@@ -13,7 +13,7 @@ fails the product.
 ## Source Files
 
 - Input: `**/book.toml` (plus sibling `.md`, `.toml` files)
-- Output: none (checker)
+- Output: none (mass_generator — produces output in `book` directory)
 
 ## Configuration
 

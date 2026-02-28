@@ -55,7 +55,7 @@ impl ProductDiscovery for PipProcessor {
     }
 
     fn processor_type(&self) -> ProcessorType {
-        ProcessorType::Generator
+        ProcessorType::MassGenerator
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {

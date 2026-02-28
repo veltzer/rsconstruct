@@ -206,7 +206,9 @@ impl Builder {
                 if crate::json_output::is_json_mode() {
                     let entries: Vec<crate::json_output::ProcessorFileEntry> = products.iter()
                         .map(|p| {
-                            let proc_type = if p.outputs.is_empty() { "checker" } else { "generator" };
+                            let proc_type = processors.get(p.processor.as_str())
+                                .map(|proc| proc.processor_type().as_str())
+                                .unwrap_or("unknown");
                             crate::json_output::ProcessorFileEntry {
                                 processor: p.processor.clone(),
                                 processor_type: proc_type.to_string(),
@@ -246,9 +248,14 @@ impl Builder {
                     let inputs: Vec<String> = product.inputs.iter()
                         .map(|p| p.display().to_string())
                         .collect();
-                    // For checkers (empty outputs), display "(checker)" instead of output paths
+                    let proc_type = processors.get(product.processor.as_str())
+                        .map(|proc| proc.processor_type());
                     if product.outputs.is_empty() {
-                        println!("{} \u{2192} {}", inputs.join(", "), color::dim("(checker)"));
+                        let label = match proc_type {
+                            Some(crate::processors::ProcessorType::MassGenerator) => "(mass_generator)",
+                            _ => "(checker)",
+                        };
+                        println!("{} \u{2192} {}", inputs.join(", "), color::dim(label));
                     } else {
                         let outputs: Vec<String> = product.outputs.iter()
                             .map(|p| p.display().to_string())

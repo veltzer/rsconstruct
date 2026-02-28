@@ -1,5 +1,6 @@
 mod checkers;
 mod generators;
+mod mass_generators;
 pub mod lua_processor;
 
 use anyhow::{Context, Result};
@@ -530,25 +531,27 @@ where
 // Re-export from subdirectories
 pub use checkers::{
     AsciiCheckProcessor, AspellProcessor,
-    CargoProcessor, ClippyProcessor, ClangTidyProcessor, CppcheckProcessor,
+    ClippyProcessor, ClangTidyProcessor, CppcheckProcessor,
     JqProcessor, JsonlintProcessor, JsonSchemaProcessor,
-    MakeProcessor, MarkdownlintProcessor, MdbookProcessor, MdlProcessor, MypyProcessor,
+    MakeProcessor, MarkdownlintProcessor, MdlProcessor, MypyProcessor,
     PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor,
-    ShellcheckProcessor, SleepProcessor, SpellcheckProcessor, SphinxProcessor,
+    ShellcheckProcessor, SleepProcessor, SpellcheckProcessor,
     TaploProcessor, YamllintProcessor,
 };
-pub use generators::{A2xProcessor, CcSingleFileProcessor, DrawioProcessor, GemProcessor, LibreofficeProcessor, MakoProcessor, MarpProcessor, MarkdownProcessor, MermaidProcessor, NpmProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, PipProcessor, TagsProcessor, TeraProcessor};
+pub use generators::{A2xProcessor, CcSingleFileProcessor, DrawioProcessor, LibreofficeProcessor, MakoProcessor, MarpProcessor, MarkdownProcessor, MermaidProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, TagsProcessor, TeraProcessor};
+pub use mass_generators::{CargoProcessor, GemProcessor, MdbookProcessor, NpmProcessor, PipProcessor, SphinxProcessor};
 pub(crate) use generators::tags as tags_cmd;
 pub use lua_processor::LuaProcessor;
 
 /// Map from processor name to processor instance. Used throughout the build pipeline.
 pub type ProcessorMap = HashMap<String, Box<dyn ProductDiscovery>>;
 
-/// The type of processor - whether it generates new files or checks existing files.
+/// The type of processor - whether it generates new files, checks existing files,
+/// or produces a mass of output files in a directory.
 ///
 /// # Caching Behavior
 ///
-/// Both processor types use the cache to avoid redundant work:
+/// All processor types use the cache to avoid redundant work:
 ///
 /// - **Generators** produce output files (e.g., executables, rendered templates). The cache
 ///   stores copies of these outputs. On `rsb clean`, output files are deleted but the cache
@@ -560,8 +563,12 @@ pub type ProcessorMap = HashMap<String, Box<dyn ProductDiscovery>>;
 ///   `rsb build`, if the cache entry exists and inputs haven't changed, the check is skipped
 ///   entirely (instant).
 ///
-/// This design ensures that `rsb clean && rsb build` is fast for both types - generators
-/// restore from cache, checkers skip entirely.
+/// - **Mass generators** produce a mass of output files in a directory but don't enumerate
+///   those outputs individually (e.g., pip → site-packages, npm → node_modules, cargo → target).
+///   They use stamp files or empty outputs for cache tracking, similar to checkers.
+///
+/// This design ensures that `rsb clean && rsb build` is fast for all types - generators
+/// restore from cache, checkers skip entirely, mass generators re-run only when inputs change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcessorType {
     /// Generates new output files from input files (e.g., tera, cc_single_file).
@@ -570,6 +577,10 @@ pub enum ProcessorType {
     /// Checks/validates input files without producing output files (e.g., ruff, pylint, shellcheck).
     /// Products have empty `outputs`; the cache entry serves as the success marker.
     Checker,
+    /// Produces a mass of output files in a directory without enumerating them individually
+    /// (e.g., pip → site-packages, npm → node_modules, cargo → target).
+    /// May use stamp files for cache tracking.
+    MassGenerator,
 }
 
 impl ProcessorType {
@@ -578,15 +589,17 @@ impl ProcessorType {
         match self {
             ProcessorType::Generator => "generator",
             ProcessorType::Checker => "checker",
+            ProcessorType::MassGenerator => "mass_generator",
         }
     }
 }
 
 /// Trait for processors that can discover products for the build graph.
 ///
-/// Processors come in two types (see [`ProcessorType`]):
+/// Processors come in three types (see [`ProcessorType`]):
 /// - **Generators**: Create output files from inputs (must override `clean()`)
 /// - **Checkers**: Validate inputs without producing outputs (use default `clean()`)
+/// - **Mass generators**: Produce a mass of output files in a directory without enumerating them
 ///
 /// # Implementing a Checker
 ///
