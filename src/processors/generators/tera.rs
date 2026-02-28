@@ -29,7 +29,7 @@ impl TemplateItem {
     }
 
     /// Render the template and write to output
-    fn render(&self, config: &TeraConfig) -> Result<()> {
+    fn render(&self, config: &TeraConfig, scan_dir: &str) -> Result<()> {
         // Ensure parent directory of output exists
         if let Some(parent) = self.output_path.parent()
             && !parent.as_os_str().is_empty() && !parent.exists()
@@ -61,6 +61,35 @@ impl TemplateItem {
         // Add the template
         tera.add_raw_template("template", &template_content)
             .context("Failed to parse template")?;
+
+        // Register all .tera files in scan_dir so {% include %} can resolve them
+        if !scan_dir.is_empty() {
+            let glob_pattern = format!("{scan_dir}/**/*.tera");
+            for entry in glob::glob(&glob_pattern)
+                .with_context(|| format!("Invalid glob pattern: {glob_pattern}"))?
+            {
+                let path = entry?;
+                let name = path
+                    .strip_prefix(scan_dir)
+                    .with_context(|| {
+                        format!(
+                            "Failed to strip prefix '{}' from '{}'",
+                            scan_dir,
+                            path.display()
+                        )
+                    })?
+                    .to_string_lossy()
+                    .to_string();
+                // Skip if this is the main template we already registered
+                if path == self.source_path {
+                    continue;
+                }
+                let content = fs::read_to_string(&path)
+                    .with_context(|| format!("Failed to read template: {}", path.display()))?;
+                tera.add_raw_template(&name, &content)
+                    .with_context(|| format!("Failed to parse template: {}", path.display()))?;
+            }
+        }
 
         // Configure strict mode (fail on undefined variables)
         tera.set_escape_fn(|s| s.to_string()); // No HTML escaping by default
@@ -178,7 +207,7 @@ impl ProductDiscovery for TeraProcessor {
             product.primary_input().to_path_buf(),
             product.outputs.first().expect(crate::errors::EMPTY_PRODUCT_OUTPUTS).clone(),
         );
-        item.render(&self.config)
+        item.render(&self.config, self.config.scan.scan_dir())
     }
 
     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
