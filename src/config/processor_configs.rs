@@ -791,6 +791,10 @@ fn default_rumdl_linter() -> String {
     "rumdl".into()
 }
 
+fn default_rumdl_auto_inputs() -> Vec<String> {
+    vec![".rumdl.toml".into()]
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct RumdlConfig {
     #[serde(default = "default_true")]
@@ -801,7 +805,7 @@ pub struct RumdlConfig {
     pub args: Vec<String>,
     #[serde(default)]
     pub extra_inputs: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "default_rumdl_auto_inputs")]
     pub auto_inputs: Vec<String>,
     #[serde(flatten)]
     pub scan: ScanConfig,
@@ -814,7 +818,7 @@ impl Default for RumdlConfig {
             linter: "rumdl".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
-            auto_inputs: Vec::new(),
+            auto_inputs: default_rumdl_auto_inputs(),
             scan: default_scan!(extensions: [".md"]),
         }
     }
