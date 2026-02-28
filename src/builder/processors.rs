@@ -176,17 +176,30 @@ impl Builder {
                 }
             }
             ProcessorAction::Config { ref name } => {
-                if !processors.contains_key(name.as_str()) {
-                    bail!("Unknown processor: '{}'. Run 'rsb processors list' to see available processors.", name);
-                }
-                let proc = &processors[name.as_str()];
-                match proc.config_json() {
-                    Some(json) => {
-                        let value: serde_json::Value = serde_json::from_str(&json)?;
-                        println!("{}", serde_json::to_string_pretty(&value)?);
+                let names: Vec<&str> = if let Some(n) = name {
+                    if !processors.contains_key(n.as_str()) {
+                        bail!("Unknown processor: '{}'. Run 'rsb processors list' to see available processors.", n);
                     }
-                    None => {
-                        println!("Processor '{}' does not expose configuration.", name);
+                    vec![n.as_str()]
+                } else {
+                    proc_names.iter()
+                        .map(|s| s.as_str())
+                        .filter(|n| self.config.processor.is_enabled(n))
+                        .collect()
+                };
+                for (i, n) in names.iter().enumerate() {
+                    let proc = &processors[*n];
+                    if let Some(json) = proc.config_json() {
+                        let value: serde_json::Value = serde_json::from_str(&json)?;
+                        if names.len() > 1 {
+                            println!("{}:", n);
+                        }
+                        println!("{}", serde_json::to_string_pretty(&value)?);
+                        if i + 1 < names.len() {
+                            println!();
+                        }
+                    } else if name.is_some() {
+                        println!("Processor '{}' does not expose configuration.", n);
                     }
                 }
             }

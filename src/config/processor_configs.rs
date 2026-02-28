@@ -272,6 +272,10 @@ fn default_cppcheck_args() -> Vec<String> {
     ]
 }
 
+fn default_cppcheck_auto_inputs() -> Vec<String> {
+    vec![".cppcheck".into()]
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CppcheckConfig {
     #[serde(default = "default_true")]
@@ -280,7 +284,7 @@ pub struct CppcheckConfig {
     pub args: Vec<String>,
     #[serde(default)]
     pub extra_inputs: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "default_cppcheck_auto_inputs")]
     pub auto_inputs: Vec<String>,
     #[serde(flatten)]
     pub scan: ScanConfig,
@@ -292,7 +296,7 @@ impl Default for CppcheckConfig {
             enabled: true,
             args: default_cppcheck_args(),
             extra_inputs: Vec::new(),
-            auto_inputs: Vec::new(),
+            auto_inputs: default_cppcheck_auto_inputs(),
             scan: default_scan!(scan_dir: "src", extensions: [".c", ".cc"]),
         }
     }

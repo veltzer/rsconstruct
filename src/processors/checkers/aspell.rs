@@ -12,14 +12,18 @@ use crate::processors::{ProductDiscovery, config_file_inputs, scan_root_valid, l
 
 pub struct AspellProcessor {
     config: AspellConfig,
+    /// Custom words, loaded once at initialization
+    custom_words: HashSet<String>,
     /// Words to add to the words file (collected during auto_add_words mode)
     words_to_add: Mutex<HashSet<String>>,
 }
 
 impl AspellProcessor {
     pub fn new(config: AspellConfig) -> Self {
+        let custom_words = Self::load_custom_words(Path::new(&config.words_file));
         Self {
             config,
+            custom_words,
             words_to_add: Mutex::new(HashSet::new()),
         }
     }
@@ -29,8 +33,7 @@ impl AspellProcessor {
     }
 
     /// Load custom words from the aspell personal word list (.pws) file
-    fn load_custom_words(&self) -> HashSet<String> {
-        let words_path = Path::new(&self.config.words_file);
+    fn load_custom_words(words_path: &Path) -> HashSet<String> {
         if !words_path.exists() {
             return HashSet::new();
         }
@@ -80,11 +83,10 @@ impl AspellProcessor {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let custom_words = self.load_custom_words();
         let misspelled: Vec<&str> = stdout.lines()
             .map(|l| l.trim())
             .filter(|l| !l.is_empty())
-            .filter(|l| !custom_words.contains(&l.to_lowercase()))
+            .filter(|l| !self.custom_words.contains(&l.to_lowercase()))
             .collect();
 
         if !misspelled.is_empty() {
@@ -116,20 +118,7 @@ impl AspellProcessor {
         let words_path = Path::new(&self.config.words_file);
 
         // Read existing words if file exists (skip the pws header line)
-        let mut all_words: HashSet<String> = if words_path.exists() {
-            std::fs::read_to_string(words_path)
-                .map(|content| {
-                    content
-                        .lines()
-                        .filter(|l| !l.starts_with("personal_ws"))
-                        .map(|l| l.trim().to_string())
-                        .filter(|l| !l.is_empty())
-                        .collect()
-                })
-                .unwrap_or_default()
-        } else {
-            HashSet::new()
-        };
+        let mut all_words: HashSet<String> = Self::load_custom_words(words_path);
 
         let new_count = words_to_add.iter().filter(|w| !all_words.contains(*w)).count();
         for word in words_to_add.iter() {

@@ -13,8 +13,8 @@ fn tool_runtime(tool: &str) -> &'static str {
     match tool {
         "ruff" | "pylint" | "mypy" | "pyrefly" | "yamllint" | "sphinx-build" | "pip"
         | "jsonlint" | "a2x" | "python3" => "python",
-        "marp" | "mmdc" | "markdownlint" | "npm" | "node" => "node",
-        "bundle" | "mdl" | "ruby" => "ruby",
+        "marp" | "mmdc" | "markdownlint" | "npm" | "node" | "node_modules/.bin/markdownlint" => "node",
+        "bundle" | "mdl" | "ruby" | "gems/bin/mdl" => "ruby",
         "cargo" | "rustc" | "mdbook" | "rumdl" | "taplo" => "rust",
         "perl" | "markdown" => "perl",
         "gcc" | "g++" | "clang" | "clang++" | "clang-tidy" | "cppcheck" | "make"

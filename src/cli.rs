@@ -331,8 +331,8 @@ pub enum ProcessorAction {
     },
     /// Show resolved configuration for a processor
     Config {
-        /// Processor name
-        name: String,
+        /// Processor name (omit to show all enabled processors)
+        name: Option<String>,
     },
     /// Show default configuration for a processor
     Defconfig {
