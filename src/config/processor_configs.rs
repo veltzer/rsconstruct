@@ -317,10 +317,14 @@ pub struct ClangTidyConfig {
     pub compiler_args: Vec<String>,
     #[serde(default)]
     pub extra_inputs: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "default_clang_tidy_auto_inputs")]
     pub auto_inputs: Vec<String>,
     #[serde(flatten)]
     pub scan: ScanConfig,
+}
+
+fn default_clang_tidy_auto_inputs() -> Vec<String> {
+    vec![".clang-tidy".into()]
 }
 
 impl Default for ClangTidyConfig {
@@ -330,7 +334,7 @@ impl Default for ClangTidyConfig {
             args: Vec::new(),
             compiler_args: Vec::new(),
             extra_inputs: Vec::new(),
-            auto_inputs: Vec::new(),
+            auto_inputs: default_clang_tidy_auto_inputs(),
             scan: default_scan!(scan_dir: "src", extensions: [".c", ".cc"]),
         }
     }
@@ -757,10 +761,14 @@ pub struct PyreflyConfig {
     pub args: Vec<String>,
     #[serde(default)]
     pub extra_inputs: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "default_pyrefly_auto_inputs")]
     pub auto_inputs: Vec<String>,
     #[serde(flatten)]
     pub scan: ScanConfig,
+}
+
+fn default_pyrefly_auto_inputs() -> Vec<String> {
+    vec!["pyproject.toml".into()]
 }
 
 impl Default for PyreflyConfig {
@@ -770,7 +778,7 @@ impl Default for PyreflyConfig {
             checker: "pyrefly".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
-            auto_inputs: Vec::new(),
+            auto_inputs: default_pyrefly_auto_inputs(),
             scan: default_scan!(extensions: [".py"]),
         }
     }
@@ -845,10 +853,14 @@ pub struct YamllintConfig {
     pub args: Vec<String>,
     #[serde(default)]
     pub extra_inputs: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "default_yamllint_auto_inputs")]
     pub auto_inputs: Vec<String>,
     #[serde(flatten)]
     pub scan: ScanConfig,
+}
+
+fn default_yamllint_auto_inputs() -> Vec<String> {
+    vec![".yamllint".into(), ".yamllint.yml".into(), ".yamllint.yaml".into()]
 }
 
 impl Default for YamllintConfig {
@@ -858,7 +870,7 @@ impl Default for YamllintConfig {
             linter: "yamllint".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
-            auto_inputs: Vec::new(),
+            auto_inputs: default_yamllint_auto_inputs(),
             scan: default_scan!(extensions: [".yml", ".yaml"]),
         }
     }
@@ -971,10 +983,14 @@ pub struct TaploConfig {
     pub args: Vec<String>,
     #[serde(default)]
     pub extra_inputs: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "default_taplo_auto_inputs")]
     pub auto_inputs: Vec<String>,
     #[serde(flatten)]
     pub scan: ScanConfig,
+}
+
+fn default_taplo_auto_inputs() -> Vec<String> {
+    vec!["taplo.toml".into(), ".taplo.toml".into()]
 }
 
 impl Default for TaploConfig {
@@ -984,7 +1000,7 @@ impl Default for TaploConfig {
             linter: "taplo".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
-            auto_inputs: Vec::new(),
+            auto_inputs: default_taplo_auto_inputs(),
             scan: default_scan!(extensions: [".toml"]),
         }
     }
