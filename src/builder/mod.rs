@@ -431,11 +431,6 @@ impl Builder {
         &self.object_store
     }
 
-    /// Get a mutable reference to the object store.
-    pub fn object_store_mut(&mut self) -> &mut ObjectStore {
-        &mut self.object_store
-    }
-
     /// Return directories that should be watched for file changes.
     /// Derived from processor scan configs plus standard project files.
     pub fn watch_paths(&self) -> Vec<PathBuf> {

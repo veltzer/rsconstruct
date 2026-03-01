@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use redb::{Database, ReadableDatabase, ReadableTable};
+use redb::{ReadableDatabase, ReadableTable};
 use std::collections::BTreeMap;
 use std::fs;
 
@@ -9,34 +9,6 @@ use super::{
 };
 
 impl ObjectStore {
-    /// Clear the entire cache and recreate an empty one.
-    pub fn clear(&mut self) -> Result<()> {
-        // Drop the database before removing the directory.
-        // Create a temporary database to replace the current one
-        let temp_dir = std::env::temp_dir().join(format!("rsb_temp_{}", std::process::id()));
-        fs::create_dir_all(&temp_dir)?;
-        let temp_db_path = temp_dir.join("temp.redb");
-        let temp_db = Database::create(&temp_db_path)
-            .context("Failed to create temporary database")?;
-        self.db = temp_db;
-
-        if self.rsb_dir.exists() {
-            fs::remove_dir_all(&self.rsb_dir)
-                .context("Failed to remove .rsb directory")?;
-        }
-
-        // Clean up temp dir
-        let _ = fs::remove_dir_all(&temp_dir);
-
-        // Recreate .rsb directory and open a fresh database
-        fs::create_dir_all(&self.rsb_dir)
-            .context("Failed to recreate .rsb directory")?;
-        let db_path = self.rsb_dir.join(super::DB_FILE);
-        self.db = crate::db::open_or_recreate(&db_path, "Cache database")?;
-
-        Ok(())
-    }
-
     /// Get cache size in bytes and number of objects
     pub fn size(&self) -> Result<(u64, usize)> {
         let mut total_bytes = 0u64;

@@ -150,8 +150,12 @@ fn run() -> Result<()> {
         Commands::Cache { action } => {
             match action {
                 CacheAction::Clear => {
-                    let mut builder = Builder::new()?;
-                    builder.object_store_mut().clear()?;
+                    // Delete .rsb directory directly — must work even if the
+                    // database is corrupted and Builder::new() would fail.
+                    let rsb_dir = std::path::Path::new(".rsb");
+                    if rsb_dir.exists() {
+                        fs::remove_dir_all(rsb_dir)?;
+                    }
                     println!("Cache cleared.");
                 }
                 CacheAction::Size => {

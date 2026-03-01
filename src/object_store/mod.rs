@@ -101,8 +101,6 @@ impl std::fmt::Display for ExplainAction {
 /// Uses git-like object storage: .rsb/objects/[2 chars]/[rest of hash]
 /// Index is stored in a redb embedded key/value database at .rsb/db.redb
 pub struct ObjectStore {
-    /// Path to .rsb directory
-    rsb_dir: PathBuf,
     /// Path to objects directory
     objects_dir: PathBuf,
     /// redb database for cache index
@@ -189,7 +187,6 @@ impl ObjectStore {
         let db = crate::db::open_or_recreate(&db_path, "Cache database")?;
 
         Ok(Self {
-            rsb_dir,
             objects_dir,
             db,
             restore_method: opts.restore_method,
