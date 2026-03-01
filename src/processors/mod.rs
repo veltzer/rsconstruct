@@ -65,6 +65,7 @@ pub mod names {
     pub const MAKO: &str = "mako";
     pub const LIBREOFFICE: &str = "libreoffice";
     pub const PDFUNITE: &str = "pdfunite";
+    pub const SCRIPT_CHECK: &str = "script_check";
 }
 
 /// Global flag: set to true on Ctrl+C so subprocesses can be killed promptly.
@@ -610,7 +611,7 @@ pub use checkers::{
     JqProcessor, JsonlintProcessor, JsonSchemaProcessor,
     MakeProcessor, MarkdownlintProcessor, MdlProcessor, MypyProcessor,
     PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor,
-    ShellcheckProcessor, SleepProcessor, SpellcheckProcessor,
+    ScriptCheckProcessor, ShellcheckProcessor, SleepProcessor, SpellcheckProcessor,
     TaploProcessor, YamllintProcessor,
 };
 pub use generators::{A2xProcessor, CcSingleFileProcessor, DrawioProcessor, LibreofficeProcessor, MakoProcessor, MarpProcessor, MarkdownProcessor, MermaidProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, TagsProcessor, TeraProcessor};

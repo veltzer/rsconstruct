@@ -1125,6 +1125,50 @@ impl KnownFields for ShellcheckConfig {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ScriptCheckConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub checker: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(default)]
+    pub auto_inputs: Vec<String>,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for ScriptCheckConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            checker: String::new(),
+            args: Vec::new(),
+            extra_inputs: Vec::new(),
+            auto_inputs: Vec::new(),
+            scan: ScanConfig {
+                scan_dir: None,
+                extensions: None,
+                exclude_dirs: None,
+                exclude_files: None,
+                exclude_paths: None,
+            },
+        }
+    }
+}
+
+impl KnownFields for ScriptCheckConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "checker", "args", "extra_inputs", "auto_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
 fn default_pip() -> String {
     "pip".into()
 }
