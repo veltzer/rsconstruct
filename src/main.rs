@@ -138,6 +138,10 @@ fn run() -> Result<()> {
                     let builder = Builder::new()?;
                     builder.hardclean()?;
                 }
+                CleanAction::Unknown { force } => {
+                    let builder = Builder::new()?;
+                    builder.clean_unknown(force, cli.verbose)?;
+                }
             }
         }
         Commands::Status => {

@@ -283,6 +283,12 @@ pub enum CleanAction {
     All,
     /// Hard clean using git clean (requires git repository)
     Git,
+    /// Remove files not tracked by git and not known as RSB build outputs (dry-run by default)
+    Unknown {
+        /// Actually delete the files (default is dry-run)
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand)]

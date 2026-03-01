@@ -1,4 +1,6 @@
+use std::collections::HashSet;
 use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
 use anyhow::{Context, Result, bail};
 use crate::cli::DisplayOptions;
@@ -117,6 +119,137 @@ impl Builder {
         }
 
         println!("{}", color::green("Hardclean completed!"));
+        Ok(())
+    }
+
+    /// Remove files not tracked by git and not known as RSB build outputs.
+    /// Dry-run by default (lists files); use `force` to actually delete.
+    pub fn clean_unknown(&self, force: bool, verbose: bool) -> Result<()> {
+        use ignore::WalkBuilder;
+        use std::process::Command;
+
+        if !std::path::Path::new(".git").exists() {
+            bail!("Not a git repository. clean unknown requires a git repository.");
+        }
+
+        // Build graph to discover RSB outputs
+        let processors = self.create_processors()?;
+        let graph = self.build_graph_for_clean_with_processors(&processors)?;
+
+        // Collect RSB-known output files
+        let mut rsb_outputs: HashSet<PathBuf> = HashSet::new();
+        let mut rsb_output_dirs: Vec<PathBuf> = Vec::new();
+        for product in graph.products() {
+            for output in &product.outputs {
+                rsb_outputs.insert(output.clone());
+            }
+            if let Some(ref dir) = product.output_dir {
+                rsb_output_dirs.push(dir.as_ref().clone());
+            }
+        }
+
+        // Get git-tracked files
+        let output = Command::new("git")
+            .args(["ls-files", "--cached"])
+            .output()
+            .context("Failed to run git ls-files")?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("git ls-files failed:\n{}", stderr);
+        }
+        let git_tracked: HashSet<PathBuf> = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .map(PathBuf::from)
+            .collect();
+
+        // Walk the project tree, collecting unknown files
+        let mut unknown_files: Vec<PathBuf> = Vec::new();
+        let walker = WalkBuilder::new(".")
+            .hidden(false)
+            .build();
+
+        for entry in walker {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+            // Skip directories — we only care about files
+            if !entry.file_type().is_some_and(|ft| ft.is_file()) {
+                continue;
+            }
+            let path = entry.path().strip_prefix("./").unwrap_or(entry.path());
+            let path = PathBuf::from(path);
+
+            // Skip .git/ and .rsb/
+            if path.starts_with(".git") || path.starts_with(".rsb") {
+                continue;
+            }
+
+            // Skip git-tracked files
+            if git_tracked.contains(&path) {
+                continue;
+            }
+
+            // Skip RSB output files
+            if rsb_outputs.contains(&path) {
+                continue;
+            }
+
+            // Skip files inside RSB output directories
+            if rsb_output_dirs.iter().any(|dir| path.starts_with(dir)) {
+                continue;
+            }
+
+            unknown_files.push(path);
+        }
+
+        unknown_files.sort();
+
+        if unknown_files.is_empty() {
+            println!("{}", color::green("No unknown files found."));
+            return Ok(());
+        }
+
+        if force {
+            println!("{}", color::bold("Removing unknown files..."));
+            let mut removed = 0usize;
+            for path in &unknown_files {
+                if let Err(e) = fs::remove_file(path) {
+                    eprintln!("  Failed to remove {}: {}", path.display(), e);
+                } else {
+                    if verbose {
+                        println!("  {}", path.display());
+                    }
+                    removed += 1;
+                }
+            }
+
+            // Clean up empty parent directories (bottom-up)
+            let mut dirs_to_check: HashSet<PathBuf> = HashSet::new();
+            for path in &unknown_files {
+                if let Some(parent) = path.parent()
+                    && parent != std::path::Path::new("") {
+                    dirs_to_check.insert(parent.to_path_buf());
+                }
+            }
+            let mut sorted_dirs: Vec<PathBuf> = dirs_to_check.into_iter().collect();
+            // Sort by depth descending so we remove leaf dirs first
+            sorted_dirs.sort_by_key(|b| std::cmp::Reverse(b.components().count()));
+            for dir in &sorted_dirs {
+                // Try to remove — only succeeds if empty
+                let _ = fs::remove_dir(dir);
+            }
+
+            println!("{}", color::green(&format!("Removed {} unknown file(s).", removed)));
+        } else {
+            println!("{}", color::bold(&format!("Found {} unknown file(s):", unknown_files.len())));
+            for path in &unknown_files {
+                println!("  {}", path.display());
+            }
+            println!();
+            println!("{}", color::dim("Use --force to delete them."));
+        }
+
         Ok(())
     }
 }
