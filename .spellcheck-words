@@ -66,6 +66,7 @@ gc
 gcc
 gcs
 github
+globals
 gradle
 grpc
 hardlink

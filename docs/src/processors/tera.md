@@ -2,8 +2,8 @@
 
 ## Purpose
 
-Renders Tera template files into output files, with support for loading Python
-configuration variables.
+Renders Tera template files into output files, with support for loading
+configuration variables from Python or Lua files.
 
 ## How It Works
 
@@ -16,8 +16,21 @@ templates.tera/sub/readme.txt.tera  →  sub/readme.txt
 ```
 
 Templates use the [Tera](https://keats.github.io/tera/) templating engine and can call
-`load_python(path="...")` to load variables from Python `.py` files. The Python files are
-parsed for simple assignments (strings, numbers, booleans, lists).
+`load_python(path="...")` or `load_lua(path="...")` to load variables from config files.
+
+### Loading Lua config
+
+```jinja2
+{% set config = load_lua(path="config/settings.lua") %}
+[app]
+name = "{{ config.project_name }}"
+version = "{{ config.version }}"
+```
+
+Lua configs are executed via the embedded Lua 5.4 interpreter (no external
+dependency). All user-defined globals (strings, numbers, booleans, tables) are
+exported. Built-in Lua globals and functions are automatically filtered out.
+`dofile()` and `require()` work relative to the config file's directory.
 
 ### Loading Python config
 

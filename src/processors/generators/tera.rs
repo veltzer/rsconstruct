@@ -1,5 +1,7 @@
 use anyhow::{Context, Result};
 use chrono::Datelike;
+use mlua::LuaSerdeExt;
+use mlua::prelude::*;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fs;
@@ -52,6 +54,7 @@ impl TemplateItem {
 
         // Register template functions
         tera.register_function("load_python", LoadPythonFunction);
+        tera.register_function("load_lua", LoadLuaFunction);
         tera.register_function("version_str", VersionStrFunction);
         tera.register_function("copyright_years", CopyrightYearsFunction);
         tera.register_function("git_count_files", GitCountFilesFunction);
@@ -225,6 +228,23 @@ impl Function for LoadPythonFunction {
     }
 }
 
+/// Custom Tera function to load Lua configuration files
+struct LoadLuaFunction;
+
+impl Function for LoadLuaFunction {
+    fn call(&self, args: &HashMap<String, TeraValue>) -> tera::Result<TeraValue> {
+        let path = args
+            .get("path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| tera::Error::msg("load_lua requires a 'path' argument"))?;
+
+        let result = load_lua_config(Path::new(path))
+            .map_err(|e| tera::Error::msg(format!("Failed to load Lua config: {e}")))?;
+
+        to_value(result).map_err(|e| tera::Error::msg(format!("Failed to convert Lua config to template value: {e}")))
+    }
+}
+
 /// Load a Python file containing a `tup` variable and return a dot-joined version string.
 /// e.g. `tup = (0, 0, 1)` → `"0.0.1"`
 struct VersionStrFunction;
@@ -236,8 +256,12 @@ impl Function for VersionStrFunction {
             .and_then(|v| v.as_str())
             .unwrap_or("config/version.py");
 
-        let config = load_python_config(Path::new(path))
-            .map_err(|e| tera::Error::msg(format!("version_str: failed to load {path}: {e}")))?;
+        let config = if path.ends_with(".lua") {
+            load_lua_config(Path::new(path))
+        } else {
+            load_python_config(Path::new(path))
+        }
+        .map_err(|e| tera::Error::msg(format!("version_str: failed to load {path}: {e}")))?;
 
         let tup = config
             .get("tup")
@@ -457,4 +481,73 @@ print(json.dumps(result))
         serde_json::from_str(&stdout).context("Failed to parse Python config output")?;
 
     Ok(variables)
+}
+
+/// Names of Lua built-in globals to skip when extracting user-defined variables.
+const LUA_BUILTIN_GLOBALS: &[&str] = &[
+    "string", "table", "math", "io", "os", "debug", "coroutine", "utf8", "package",
+    "assert", "collectgarbage", "dofile", "error", "getmetatable", "ipairs", "load",
+    "loadfile", "next", "pairs", "pcall", "print", "rawequal", "rawget", "rawlen",
+    "rawset", "require", "select", "setmetatable", "tonumber", "tostring", "type",
+    "warn", "xpcall",
+];
+
+/// Load configuration from a Lua file
+fn load_lua_config(lua_file: &Path) -> Result<Map<String, Value>> {
+    let absolute_path = if lua_file.is_absolute() {
+        lua_file.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(lua_file)
+    };
+
+    if !absolute_path.exists() {
+        anyhow::bail!("Lua config file not found: {}", absolute_path.display());
+    }
+
+    let lua = Lua::new();
+
+    // Set up package.path so require() works relative to the file's directory
+    if let Some(dir) = absolute_path.parent() {
+        let package: LuaTable = lua.globals().get("package")
+            .map_err(|e| anyhow::anyhow!("Failed to get Lua package table: {e}"))?;
+        let new_path = format!("{}/?.lua;{}/?.lua", dir.display(), dir.display());
+        package.set("path", new_path)
+            .map_err(|e| anyhow::anyhow!("Failed to set Lua package.path: {e}"))?;
+    }
+
+    // Load and execute the Lua file
+    let script = fs::read_to_string(&absolute_path)
+        .with_context(|| format!("Failed to read Lua config: {}", absolute_path.display()))?;
+    lua.load(&script)
+        .set_name(absolute_path.to_string_lossy())
+        .exec()
+        .map_err(|e| anyhow::anyhow!("Failed to execute Lua config '{}': {e}", absolute_path.display()))?;
+
+    // Extract user-defined globals
+    let globals = lua.globals();
+    let mut result = Map::new();
+
+    for pair in globals.pairs::<String, LuaValue>() {
+        let (key, value) = pair
+            .map_err(|e| anyhow::anyhow!("Failed to iterate Lua globals: {e}"))?;
+
+        // Skip built-in globals and names starting with _
+        if key.starts_with('_') || LUA_BUILTIN_GLOBALS.contains(&key.as_str()) {
+            continue;
+        }
+
+        // Skip functions and non-serializable types
+        match &value {
+            LuaValue::Function(_) | LuaValue::Thread(_) | LuaValue::UserData(_)
+            | LuaValue::LightUserData(_) => continue,
+            _ => {}
+        }
+
+        // Convert to serde_json::Value using mlua's serde support
+        let json_value: Value = lua.from_value(value)
+            .map_err(|e| anyhow::anyhow!("Failed to convert Lua global '{key}' to JSON: {e}"))?;
+        result.insert(key, json_value);
+    }
+
+    Ok(result)
 }
