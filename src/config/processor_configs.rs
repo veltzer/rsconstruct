@@ -1268,6 +1268,8 @@ pub struct SphinxConfig {
     #[serde(default = "default_sphinx_output_dir")]
     pub output_dir: String,
     #[serde(default)]
+    pub working_dir: Option<String>,
+    #[serde(default)]
     pub args: Vec<String>,
     #[serde(default)]
     pub extra_inputs: Vec<String>,
@@ -1283,6 +1285,7 @@ impl Default for SphinxConfig {
             enabled: true,
             sphinx_build: "sphinx-build".into(),
             output_dir: "docs".into(),
+            working_dir: None,
             args: Vec::new(),
             extra_inputs: Vec::new(),
             cache_output_dir: true,
@@ -1294,7 +1297,7 @@ impl Default for SphinxConfig {
 impl KnownFields for SphinxConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "sphinx_build", "output_dir", "args", "extra_inputs", "cache_output_dir",
+            "enabled", "sphinx_build", "output_dir", "working_dir", "args", "extra_inputs", "cache_output_dir",
             "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
         ]
     }

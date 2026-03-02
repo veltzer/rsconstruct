@@ -34,6 +34,9 @@ impl SphinxProcessor {
         for arg in &self.config.args {
             cmd.arg(arg);
         }
+        if let Some(ref dir) = self.config.working_dir {
+            cmd.current_dir(dir);
+        }
         let output = run_command(&mut cmd)?;
         check_command_output(&output, format_args!("sphinx-build in {}", anchor_display_dir(conf_py)))
     }

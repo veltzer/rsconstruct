@@ -732,7 +732,7 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
         // pip
         ("pip", "pip") => Some(FieldType::String),
         // sphinx
-        ("sphinx", "sphinx_build" | "output_dir") => Some(FieldType::String),
+        ("sphinx", "sphinx_build" | "output_dir" | "working_dir") => Some(FieldType::String),
         // mdbook
         ("mdbook", "mdbook" | "output_dir") => Some(FieldType::String),
         // npm
