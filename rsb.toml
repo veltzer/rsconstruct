@@ -20,3 +20,6 @@ enabled = false
 
 [processor.markdownlint]
 enabled = false
+
+[processor.cargo]
+enabled = false
