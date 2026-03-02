@@ -1,34 +1,50 @@
 use std::process::Command;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Emit standard vergen variables (commit hash, branch, etc.)
-    // NOTE: BuildBuilder is intentionally excluded — it emits VERGEN_BUILD_TIMESTAMP
-    // which changes every second, breaking incremental builds.
-    let cargo = vergen_gix::CargoBuilder::all_cargo()?;
-    let gix = vergen_gix::GixBuilder::all_git()?;
-    let rustc = vergen_gix::RustcBuilder::all_rustc()?;
-    vergen_gix::Emitter::default()
-        .add_instructions(&cargo)?
-        .add_instructions(&gix)?
-        .add_instructions(&rustc)?
-        .emit()?;
+fn git(args: &[&str]) -> String {
+    Command::new("git")
+        .args(args)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
+        .unwrap_or_else(|| "unknown".to_owned())
+}
 
-    // Emit git describe (tag + distance + short hash, e.g. v0.5.0-3-gabcdef1)
-    let output = Command::new("git")
-        .args(["describe", "--tags", "--always", "--dirty"])
-        .output();
-    let describe = match output {
-        Ok(o) if o.status.success() => {
-            String::from_utf8_lossy(&o.stdout).trim().to_owned()
-        }
-        _ => String::from("unknown"),
-    };
+fn main() {
+    let sha = git(&["rev-parse", "HEAD"]);
+    let branch = git(&["rev-parse", "--abbrev-ref", "HEAD"]);
+    let describe = git(&["describe", "--tags", "--always", "--dirty"]);
+
+    let dirty = Command::new("git")
+        .args(["diff", "--quiet", "HEAD"])
+        .status()
+        .map(|s| if s.success() { "false" } else { "true" })
+        .unwrap_or("unknown");
+
+    let rustc_ver = Command::new("rustc")
+        .arg("--version")
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| {
+            let s = String::from_utf8_lossy(&o.stdout).to_string();
+            // "rustc 1.93.1 (083ac5135 ...)" -> "1.93.1"
+            s.split_whitespace().nth(1).map(|v| v.to_owned())
+        })
+        .unwrap_or_else(|| "unknown".to_owned());
+
+    println!("cargo:rustc-env=VERGEN_GIT_SHA={sha}");
+    println!("cargo:rustc-env=VERGEN_GIT_BRANCH={branch}");
+    println!("cargo:rustc-env=VERGEN_GIT_DIRTY={dirty}");
+    println!("cargo:rustc-env=VERGEN_RUSTC_SEMVER={rustc_ver}");
     println!("cargo:rustc-env=RSB_GIT_DESCRIBE={describe}");
 
-    // NOTE: vergen already emits proper rerun-if-changed directives for
-    // .git/HEAD and .git/refs/heads/<branch>. Do NOT add manual directives
-    // for directories like .git/refs/heads/ — cargo treats directories as
-    // always-changed, which breaks incremental builds.
-
-    Ok(())
+    // Only re-run when the git HEAD or branch ref changes.
+    println!("cargo:rerun-if-changed=.git/HEAD");
+    // Read .git/HEAD to find the current ref and watch it.
+    if let Ok(head) = std::fs::read_to_string(".git/HEAD") {
+        if let Some(refpath) = head.trim().strip_prefix("ref: ") {
+            println!("cargo:rerun-if-changed=.git/{refpath}");
+        }
+    }
 }
