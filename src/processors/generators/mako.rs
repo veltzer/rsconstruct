@@ -46,8 +46,8 @@ pub struct MakoProcessor {
 }
 
 impl MakoProcessor {
-    pub fn new(config: MakoConfig) -> Result<Self> {
-        Ok(Self { config })
+    pub fn new(config: MakoConfig) -> Self {
+        Self { config }
     }
 }
 

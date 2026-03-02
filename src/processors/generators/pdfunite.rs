@@ -91,8 +91,8 @@ impl ProductDiscovery for PdfuniteProcessor {
 
             // Compute the expected PDF paths from the upstream processor
             let inputs: Vec<PathBuf> = source_files.iter().map(|src| {
-                let stem = src.file_stem().expect("PDF source file has no stem");
-                let parent = src.parent().expect("PDF source file has no parent directory");
+                let stem = src.file_stem().expect(crate::errors::PATH_NO_STEM);
+                let parent = src.parent().expect(crate::errors::PATH_NO_PARENT);
                 Path::new(&self.config.source_output_dir)
                     .join(parent)
                     .join(format!("{}.pdf", stem.to_string_lossy()))

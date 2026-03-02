@@ -73,10 +73,7 @@ struct ProductStatusLabels<'a> {
 pub(crate) fn create_builtin_processors(cfg: &ProcessorConfig) -> ProcessorMap {
     let mut processors: ProcessorMap = HashMap::new();
 
-    // Tera processor (fallible init — skip if template dir missing)
-    if let Ok(proc) = TeraProcessor::new(cfg.tera.clone()) {
-        Builder::register(&mut processors, proc_names::TERA, proc);
-    }
+    Builder::register(&mut processors, proc_names::TERA, TeraProcessor::new(cfg.tera.clone()));
 
     Builder::register(&mut processors, proc_names::RUFF, RuffProcessor::new(cfg.ruff.clone()));
     Builder::register(&mut processors, proc_names::PYLINT, PylintProcessor::new(cfg.pylint.clone()));
@@ -114,10 +111,7 @@ pub(crate) fn create_builtin_processors(cfg: &ProcessorConfig) -> ProcessorMap {
     Builder::register(&mut processors, proc_names::ASCII_CHECK, AsciiCheckProcessor::new(cfg.ascii_check.clone()));
     Builder::register(&mut processors, proc_names::MERMAID, MermaidProcessor::new(cfg.mermaid.clone()));
     Builder::register(&mut processors, proc_names::DRAWIO, DrawioProcessor::new(cfg.drawio.clone()));
-    // Mako processor (fallible init — skip if template dir missing)
-    if let Ok(proc) = MakoProcessor::new(cfg.mako.clone()) {
-        Builder::register(&mut processors, proc_names::MAKO, proc);
-    }
+    Builder::register(&mut processors, proc_names::MAKO, MakoProcessor::new(cfg.mako.clone()));
 
     Builder::register(&mut processors, proc_names::LIBREOFFICE, LibreofficeProcessor::new(cfg.libreoffice.clone()));
     Builder::register(&mut processors, proc_names::PDFUNITE, PdfuniteProcessor::new(cfg.pdfunite.clone()));

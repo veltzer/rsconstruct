@@ -23,6 +23,10 @@ pub const CONFIG_SERIALIZE: &str = "internal error: failed to serialize config";
 pub const SCAN_CONFIG_NOT_RESOLVED: &str = "internal error: ScanConfig not resolved";
 pub const CAPTURE_GROUP_MISSING: &str = "internal error: capture group missing";
 
+// -- Path operations --
+pub const PATH_NO_STEM: &str = "internal error: path has no file stem";
+pub const PATH_NO_PARENT: &str = "internal error: path has no parent directory";
+
 // -- Runtime / system --
 pub const TOKIO_RUNTIME: &str = "internal error: failed to create tokio runtime";
 pub const SIGNAL_HANDLER_RUNTIME: &str = "internal error: failed to create signal handler runtime";

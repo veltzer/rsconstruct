@@ -101,10 +101,8 @@ pub struct TeraProcessor {
 }
 
 impl TeraProcessor {
-    pub fn new(config: TeraConfig) -> Result<Self> {
-        Ok(Self {
-            config,
-        })
+    pub fn new(config: TeraConfig) -> Self {
+        Self { config }
     }
 }
 

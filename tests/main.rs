@@ -44,6 +44,7 @@ mod processors {
     pub mod json_schema;
     pub mod jsonlint;
     pub mod libreoffice;
+    pub mod luacheck;
     pub mod mako;
     pub mod make;
     pub mod markdown;
@@ -62,6 +63,7 @@ mod processors {
     pub mod pyrefly;
     pub mod ruff;
     pub mod rumdl;
+    pub mod script_check;
     pub mod shellcheck;
     pub mod sleep;
     pub mod spellcheck;
