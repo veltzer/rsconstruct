@@ -131,7 +131,9 @@ jsmin
 json
 jsonlint
 jsonschema
+kbuild
 kcpp
+kdir
 kotlin
 kotlinc
 ldc

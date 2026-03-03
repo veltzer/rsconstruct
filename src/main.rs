@@ -320,6 +320,25 @@ fn run() -> Result<()> {
                 cli::SmartAction::DisableAll => {
                     builder::smart::disable_all()?;
                 }
+                cli::SmartAction::EnableAll => {
+                    builder::smart::enable_all()?;
+                }
+                cli::SmartAction::Disable { ref name } => {
+                    builder::smart::disable(name)?;
+                }
+                cli::SmartAction::Enable { ref name } => {
+                    builder::smart::enable(name)?;
+                }
+                cli::SmartAction::EnableDetected => {
+                    let builder = Builder::new()?;
+                    let detected = builder.detected_processors()?;
+                    builder::smart::enable_detected(&detected)?;
+                }
+                cli::SmartAction::Minimal => {
+                    let builder = Builder::new()?;
+                    let detected = builder.detected_processors()?;
+                    builder::smart::minimal(&detected)?;
+                }
             }
         }
         Commands::Tags { action } => {

@@ -266,6 +266,22 @@ pub enum Commands {
 pub enum SmartAction {
     /// Disable all processors in rsb.toml (so you can enable them one by one)
     DisableAll,
+    /// Enable all processors in rsb.toml (remove enabled = false from all)
+    EnableAll,
+    /// Enable only processors whose files are detected in the project
+    EnableDetected,
+    /// Disable a single processor in rsb.toml
+    Disable {
+        /// Processor name
+        name: String,
+    },
+    /// Enable a single processor in rsb.toml
+    Enable {
+        /// Processor name
+        name: String,
+    },
+    /// Disable all, then enable only detected processors (clean minimal config)
+    Minimal,
 }
 
 #[derive(Subcommand)]

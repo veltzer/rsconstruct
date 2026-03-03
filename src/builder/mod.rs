@@ -283,6 +283,19 @@ impl Builder {
         Ok(graph)
     }
 
+    /// Return the set of processor names whose files are detected in the project.
+    /// Checks auto_detect regardless of enabled status.
+    pub fn detected_processors(&self) -> Result<std::collections::HashSet<String>> {
+        let processors = self.create_processors()?;
+        let mut detected = std::collections::HashSet::new();
+        for (name, proc) in &processors {
+            if !proc.hidden() && proc.auto_detect(&self.file_index) {
+                detected.insert(name.clone());
+            }
+        }
+        Ok(detected)
+    }
+
     /// Check whether a processor should run based on enabled list and auto-detect.
     fn is_processor_active(&self, name: &str, processor: &dyn ProductDiscovery) -> bool {
         if !self.config.processor.is_enabled(name) {
