@@ -717,7 +717,7 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
         ("cc_single_file", "include_scanner") => Some(FieldType::String),
         ("cc_single_file", "compilers") => Some(FieldType::TableArray),
         // cc (full project builds)
-        ("cc", "cc" | "cxx" | "output_dir") => Some(FieldType::String),
+        ("cc", "cc" | "cxx") => Some(FieldType::String),
         ("cc", "cflags" | "cxxflags" | "ldflags" | "include_dirs") => Some(FieldType::StringArray),
         ("cc", "single_invocation" | "cache_output_dir") => Some(FieldType::Bool),
         // cppcheck — only common fields

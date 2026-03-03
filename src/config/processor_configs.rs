@@ -478,10 +478,6 @@ impl KnownFields for CcSingleFileConfig {
 
 // --- cc (full C/C++ project builds) ---
 
-fn default_cc_output_dir() -> String {
-    "out/cc".into()
-}
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CcLibraryDef {
     pub name: String,
@@ -533,8 +529,6 @@ pub struct CcManifest {
     pub ldflags: Vec<String>,
     #[serde(default)]
     pub include_dirs: Vec<String>,
-    #[serde(default = "default_cc_output_dir")]
-    pub output_dir: String,
     #[serde(default)]
     pub libraries: Vec<CcLibraryDef>,
     #[serde(default)]
@@ -557,8 +551,6 @@ pub struct CcConfig {
     pub ldflags: Vec<String>,
     #[serde(default)]
     pub include_dirs: Vec<String>,
-    #[serde(default = "default_cc_output_dir")]
-    pub output_dir: String,
     #[serde(default)]
     pub single_invocation: bool,
     #[serde(default)]
@@ -579,7 +571,6 @@ impl Default for CcConfig {
             cxxflags: Vec::new(),
             ldflags: Vec::new(),
             include_dirs: Vec::new(),
-            output_dir: "out/cc".into(),
             single_invocation: false,
             extra_inputs: Vec::new(),
             cache_output_dir: true,
@@ -592,7 +583,7 @@ impl KnownFields for CcConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
             "enabled", "cc", "cxx", "cflags", "cxxflags", "ldflags",
-            "include_dirs", "output_dir", "single_invocation",
+            "include_dirs", "single_invocation",
             "extra_inputs", "cache_output_dir",
             "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
         ]
