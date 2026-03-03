@@ -265,7 +265,7 @@ fn default_processors() -> Vec<String> {
     use crate::processors::names;
     vec![
         names::TERA.into(), names::RUFF.into(), names::PYLINT.into(),
-        names::MYPY.into(), names::PYREFLY.into(), names::CC_SINGLE_FILE.into(),
+        names::MYPY.into(), names::PYREFLY.into(), names::CC_SINGLE_FILE.into(), names::CC.into(),
         names::CPPCHECK.into(), names::CLANG_TIDY.into(),
         names::SHELLCHECK.into(), names::LUACHECK.into(), names::SPELLCHECK.into(), names::MAKE.into(),
         names::CARGO.into(), names::CLIPPY.into(), names::RUMDL.into(),
@@ -308,6 +308,8 @@ pub(crate) struct ProcessorConfig {
     pub pylint: PylintConfig,
     #[serde(default)]
     pub cc_single_file: CcSingleFileConfig,
+    #[serde(default)]
+    pub cc: CcConfig,
     #[serde(default)]
     pub cppcheck: CppcheckConfig,
     #[serde(default)]
@@ -398,6 +400,7 @@ impl Default for ProcessorConfig {
             ruff: RuffConfig::default(),
             pylint: PylintConfig::default(),
             cc_single_file: CcSingleFileConfig::default(),
+            cc: CcConfig::default(),
             cppcheck: CppcheckConfig::default(),
             clang_tidy: ClangTidyConfig::default(),
             shellcheck: ShellcheckConfig::default(),
@@ -448,6 +451,7 @@ impl ProcessorConfig {
             "ruff" => self.ruff.enabled,
             "pylint" => self.pylint.enabled,
             "cc_single_file" => self.cc_single_file.enabled,
+            "cc" => self.cc.enabled,
             "cppcheck" => self.cppcheck.enabled,
             "clang_tidy" => self.clang_tidy.enabled,
             "shellcheck" => self.shellcheck.enabled,
@@ -499,7 +503,7 @@ impl ProcessorConfig {
     pub(crate) fn scan_dirs(&self) -> Vec<String> {
         let scans = [
             &self.tera.scan, &self.ruff.scan, &self.pylint.scan,
-            &self.cc_single_file.scan, &self.cppcheck.scan, &self.clang_tidy.scan,
+            &self.cc_single_file.scan, &self.cc.scan, &self.cppcheck.scan, &self.clang_tidy.scan,
             &self.shellcheck.scan, &self.luacheck.scan, &self.spellcheck.scan, &self.sleep.scan,
             &self.make.scan, &self.cargo.scan, &self.clippy.scan, &self.rumdl.scan, &self.mypy.scan,
             &self.pyrefly.scan, &self.yamllint.scan, &self.jq.scan, &self.jsonlint.scan,
@@ -530,6 +534,7 @@ impl ProcessorConfig {
         self.ruff.scan.resolve("", &[".py"], PYTHON_EXCLUDE_DIRS);
         self.pylint.scan.resolve("", &[".py"], PYTHON_EXCLUDE_DIRS);
         self.cc_single_file.scan.resolve("src", &[".c", ".cc"], &[]);
+        self.cc.scan.resolve("", &["cc.yaml"], CC_EXCLUDE_DIRS);
         self.cppcheck.scan.resolve("src", &[".c", ".cc"], CC_EXCLUDE_DIRS);
         self.clang_tidy.scan.resolve("src", &[".c", ".cc"], CC_EXCLUDE_DIRS);
         self.shellcheck.scan.resolve("", &[".sh", ".bash"], SHELL_EXCLUDE_DIRS);
@@ -711,6 +716,10 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
         ("cc_single_file", "cflags" | "cxxflags" | "ldflags" | "include_paths") => Some(FieldType::StringArray),
         ("cc_single_file", "include_scanner") => Some(FieldType::String),
         ("cc_single_file", "compilers") => Some(FieldType::TableArray),
+        // cc (full project builds)
+        ("cc", "cc" | "cxx" | "output_dir") => Some(FieldType::String),
+        ("cc", "cflags" | "cxxflags" | "ldflags" | "include_dirs") => Some(FieldType::StringArray),
+        ("cc", "single_invocation" | "cache_output_dir") => Some(FieldType::Bool),
         // cppcheck — only common fields
         // clang_tidy
         ("clang_tidy", "compiler_args") => Some(FieldType::StringArray),
@@ -800,6 +809,7 @@ fn validate_processor_fields(raw: &toml::Value) -> Result<()> {
             processor_names::RUFF => RuffConfig::known_fields(),
             processor_names::PYLINT => PylintConfig::known_fields(),
             processor_names::CC_SINGLE_FILE => CcSingleFileConfig::known_fields(),
+            processor_names::CC => CcConfig::known_fields(),
             processor_names::CPPCHECK => CppcheckConfig::known_fields(),
             processor_names::CLANG_TIDY => ClangTidyConfig::known_fields(),
             processor_names::SHELLCHECK => ShellcheckConfig::known_fields(),

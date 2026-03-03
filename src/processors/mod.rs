@@ -30,6 +30,7 @@ pub mod names {
     pub const PYLINT: &str = "pylint";
     pub const MYPY: &str = "mypy";
     pub const CC_SINGLE_FILE: &str = "cc_single_file";
+    pub const CC: &str = "cc";
     pub const CPPCHECK: &str = "cppcheck";
     pub const CLANG_TIDY: &str = "clang_tidy";
     pub const SHELLCHECK: &str = "shellcheck";
@@ -616,7 +617,7 @@ pub use checkers::{
     TaploProcessor, YamllintProcessor,
 };
 pub use generators::{A2xProcessor, CcSingleFileProcessor, DrawioProcessor, LibreofficeProcessor, MakoProcessor, MarpProcessor, MarkdownProcessor, MermaidProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, TagsProcessor, TeraProcessor};
-pub use mass_generators::{CargoProcessor, GemProcessor, MdbookProcessor, NpmProcessor, PipProcessor, SphinxProcessor};
+pub use mass_generators::{CargoProcessor, CcProcessor, GemProcessor, MdbookProcessor, NpmProcessor, PipProcessor, SphinxProcessor};
 pub(crate) use generators::tags as tags_cmd;
 pub use lua_processor::LuaProcessor;
 

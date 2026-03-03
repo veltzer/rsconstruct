@@ -476,6 +476,129 @@ impl KnownFields for CcSingleFileConfig {
     }
 }
 
+// --- cc (full C/C++ project builds) ---
+
+fn default_cc_output_dir() -> String {
+    "out/cc".into()
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CcLibraryDef {
+    pub name: String,
+    #[serde(default = "default_cc_lib_type")]
+    pub lib_type: String,
+    pub sources: Vec<String>,
+    #[serde(default)]
+    pub include_dirs: Vec<String>,
+    #[serde(default)]
+    pub cflags: Vec<String>,
+    #[serde(default)]
+    pub cxxflags: Vec<String>,
+    #[serde(default)]
+    pub ldflags: Vec<String>,
+}
+
+fn default_cc_lib_type() -> String {
+    "shared".into()
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CcProgramDef {
+    pub name: String,
+    pub sources: Vec<String>,
+    #[serde(default)]
+    pub link: Vec<String>,
+    #[serde(default)]
+    pub include_dirs: Vec<String>,
+    #[serde(default)]
+    pub cflags: Vec<String>,
+    #[serde(default)]
+    pub cxxflags: Vec<String>,
+    #[serde(default)]
+    pub ldflags: Vec<String>,
+}
+
+/// Parsed contents of a cc.yaml file.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CcManifest {
+    #[serde(default = "default_cc_compiler")]
+    pub cc: String,
+    #[serde(default = "default_cxx_compiler")]
+    pub cxx: String,
+    #[serde(default)]
+    pub cflags: Vec<String>,
+    #[serde(default)]
+    pub cxxflags: Vec<String>,
+    #[serde(default)]
+    pub ldflags: Vec<String>,
+    #[serde(default)]
+    pub include_dirs: Vec<String>,
+    #[serde(default = "default_cc_output_dir")]
+    pub output_dir: String,
+    #[serde(default)]
+    pub libraries: Vec<CcLibraryDef>,
+    #[serde(default)]
+    pub programs: Vec<CcProgramDef>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CcConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_cc_compiler")]
+    pub cc: String,
+    #[serde(default = "default_cxx_compiler")]
+    pub cxx: String,
+    #[serde(default)]
+    pub cflags: Vec<String>,
+    #[serde(default)]
+    pub cxxflags: Vec<String>,
+    #[serde(default)]
+    pub ldflags: Vec<String>,
+    #[serde(default)]
+    pub include_dirs: Vec<String>,
+    #[serde(default = "default_cc_output_dir")]
+    pub output_dir: String,
+    #[serde(default)]
+    pub single_invocation: bool,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(default = "default_true")]
+    pub cache_output_dir: bool,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for CcConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            cc: "gcc".into(),
+            cxx: "g++".into(),
+            cflags: Vec::new(),
+            cxxflags: Vec::new(),
+            ldflags: Vec::new(),
+            include_dirs: Vec::new(),
+            output_dir: "out/cc".into(),
+            single_invocation: false,
+            extra_inputs: Vec::new(),
+            cache_output_dir: true,
+            scan: default_scan!(extensions: ["cc.yaml"]),
+        }
+    }
+}
+
+impl KnownFields for CcConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "cc", "cxx", "cflags", "cxxflags", "ldflags",
+            "include_dirs", "output_dir", "single_invocation",
+            "extra_inputs", "cache_output_dir",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
 fn default_spellcheck_language() -> String {
     "en_US".into()
 }

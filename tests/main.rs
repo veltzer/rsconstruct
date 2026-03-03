@@ -34,6 +34,7 @@ mod processors {
     pub mod ascii_check;
     pub mod aspell;
     pub mod cargo;
+    pub mod cc;
     pub mod clippy;
     pub mod cc_single_file;
     pub mod clang_tidy;
