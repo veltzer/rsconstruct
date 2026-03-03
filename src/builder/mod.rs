@@ -6,6 +6,7 @@ mod doctor;
 mod graph;
 pub(crate) mod processors;
 pub(crate) mod sloc;
+pub(crate) mod smart;
 mod tools;
 
 use std::borrow::Cow;

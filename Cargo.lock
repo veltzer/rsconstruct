@@ -1175,6 +1175,7 @@ dependencies = [
  "tera",
  "tokio",
  "toml",
+ "toml_edit",
  "which 7.0.3",
  "zspell",
  "zstd",

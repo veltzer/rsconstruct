@@ -261,7 +261,7 @@ pub(crate) fn default_true() -> bool {
     true
 }
 
-fn default_processors() -> Vec<String> {
+pub(crate) fn default_processors() -> Vec<String> {
     use crate::processors::names;
     vec![
         names::TERA.into(), names::RUFF.into(), names::PYLINT.into(),

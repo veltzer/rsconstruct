@@ -255,6 +255,17 @@ pub enum Commands {
         #[command(subcommand)]
         action: TagsAction,
     },
+    /// Smart config manipulation commands
+    Smart {
+        #[command(subcommand)]
+        action: SmartAction,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum SmartAction {
+    /// Disable all processors in rsb.toml (so you can enable them one by one)
+    DisableAll,
 }
 
 #[derive(Subcommand)]

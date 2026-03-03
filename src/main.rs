@@ -315,6 +315,13 @@ fn run() -> Result<()> {
             let file_index = file_index::FileIndex::build()?;
             builder::sloc::run_sloc(&file_index, cocomo, salary)?;
         }
+        Commands::Smart { action } => {
+            match action {
+                cli::SmartAction::DisableAll => {
+                    builder::smart::disable_all()?;
+                }
+            }
+        }
         Commands::Tags { action } => {
             let config = Config::load()?;
             let db_path = &config.processor.tags.output;
