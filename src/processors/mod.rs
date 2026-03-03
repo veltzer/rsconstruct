@@ -68,6 +68,7 @@ pub mod names {
     pub const LIBREOFFICE: &str = "libreoffice";
     pub const PDFUNITE: &str = "pdfunite";
     pub const SCRIPT_CHECK: &str = "script_check";
+    pub const LINUX_MODULE: &str = "linux_module";
 }
 
 /// Global flag: set to true on Ctrl+C so subprocesses can be killed promptly.
@@ -616,7 +617,7 @@ pub use checkers::{
     ScriptCheckProcessor, ShellcheckProcessor, SleepProcessor, SpellcheckProcessor,
     TaploProcessor, YamllintProcessor,
 };
-pub use generators::{A2xProcessor, CcSingleFileProcessor, DrawioProcessor, LibreofficeProcessor, MakoProcessor, MarpProcessor, MarkdownProcessor, MermaidProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, TagsProcessor, TeraProcessor};
+pub use generators::{A2xProcessor, CcSingleFileProcessor, DrawioProcessor, LibreofficeProcessor, LinuxModuleProcessor, MakoProcessor, MarpProcessor, MarkdownProcessor, MermaidProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, TagsProcessor, TeraProcessor};
 pub use mass_generators::{CargoProcessor, CcProcessor, GemProcessor, MdbookProcessor, NpmProcessor, PipProcessor, SphinxProcessor};
 pub(crate) use generators::tags as tags_cmd;
 pub use lua_processor::LuaProcessor;

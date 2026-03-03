@@ -48,6 +48,7 @@ Use `rsb processors files` to see which files each processor discovers.
 - [Pyrefly](processors/pyrefly.md) — type-checks Python files with pyrefly
 - [CC](processors/cc.md) — builds full C/C++ projects from cc.yaml manifests
 - [CC Single File](processors/cc_single_file.md) — compiles C/C++ source files into executables (single-file)
+- [Linux Module](processors/linux_module.md) — builds Linux kernel modules from linux-module.yaml manifests
 - [Cppcheck](processors/cppcheck.md) — runs static analysis on C/C++ source files
 - [Clang-Tidy](processors/clang_tidy.md) — runs clang-tidy static analysis on C/C++ source files
 - [Shellcheck](processors/shellcheck.md) — lints shell scripts using shellcheck

@@ -26,6 +26,7 @@
     - [Json Schema](processors/json_schema.md)
     - [Jsonlint](processors/jsonlint.md)
     - [LibreOffice](processors/libreoffice.md)
+    - [Linux Module](processors/linux_module.md)
     - [Make](processors/make.md)
     - [Mako](processors/mako.md)
     - [Markdown](processors/markdown.md)

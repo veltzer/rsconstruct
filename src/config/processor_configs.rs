@@ -590,6 +590,76 @@ impl KnownFields for CcConfig {
     }
 }
 
+// --- linux_module (Linux kernel module builds) ---
+
+/// A single kernel module definition inside linux-module.yaml.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct LinuxModuleModuleDef {
+    pub name: String,
+    pub sources: Vec<String>,
+    #[serde(default)]
+    pub extra_cflags: Vec<String>,
+}
+
+/// Parsed contents of a linux-module.yaml file.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct LinuxModuleManifest {
+    #[serde(default = "default_make_tool")]
+    pub make: String,
+    #[serde(default)]
+    pub kdir: Option<String>,
+    #[serde(default)]
+    pub arch: Option<String>,
+    #[serde(default)]
+    pub cross_compile: Option<String>,
+    #[serde(default = "default_linux_module_v")]
+    pub v: u32,
+    #[serde(default = "default_linux_module_w")]
+    pub w: u32,
+    pub modules: Vec<LinuxModuleModuleDef>,
+}
+
+fn default_make_tool() -> String {
+    "make".into()
+}
+
+fn default_linux_module_v() -> u32 {
+    0
+}
+
+fn default_linux_module_w() -> u32 {
+    1
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct LinuxModuleConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for LinuxModuleConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            extra_inputs: Vec::new(),
+            scan: default_scan!(extensions: ["linux-module.yaml"]),
+        }
+    }
+}
+
+impl KnownFields for LinuxModuleConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "extra_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}
+
 fn default_spellcheck_language() -> String {
     "en_US".into()
 }

@@ -22,7 +22,7 @@ use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
 use crate::object_store::{ObjectStore, ObjectStoreOptions};
-use crate::processors::{A2xProcessor, AsciiCheckProcessor, AspellProcessor, CargoProcessor, CcProcessor, CcSingleFileProcessor, ClangTidyProcessor, ClippyProcessor, CppcheckProcessor, DrawioProcessor, GemProcessor, JqProcessor, JsonlintProcessor, JsonSchemaProcessor, LibreofficeProcessor, LuaProcessor, LuacheckProcessor, MakoProcessor, MakeProcessor, MarpProcessor, MarkdownProcessor, MarkdownlintProcessor, MdbookProcessor, MdlProcessor, MermaidProcessor, MypyProcessor, NpmProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, PipProcessor, ProcessorMap, PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor, ScriptCheckProcessor, ShellcheckProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, SphinxProcessor, TagsProcessor, TaploProcessor, TeraProcessor, YamllintProcessor, names as proc_names};
+use crate::processors::{A2xProcessor, AsciiCheckProcessor, AspellProcessor, CargoProcessor, CcProcessor, CcSingleFileProcessor, ClangTidyProcessor, ClippyProcessor, CppcheckProcessor, DrawioProcessor, GemProcessor, JqProcessor, JsonlintProcessor, JsonSchemaProcessor, LibreofficeProcessor, LinuxModuleProcessor, LuaProcessor, LuacheckProcessor, MakoProcessor, MakeProcessor, MarpProcessor, MarkdownProcessor, MarkdownlintProcessor, MdbookProcessor, MdlProcessor, MermaidProcessor, MypyProcessor, NpmProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, PipProcessor, ProcessorMap, PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor, ScriptCheckProcessor, ShellcheckProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, SphinxProcessor, TagsProcessor, TaploProcessor, TeraProcessor, YamllintProcessor, names as proc_names};
 use crate::remote_cache;
 use crate::tool_lock;
 
@@ -117,6 +117,7 @@ pub(crate) fn create_builtin_processors(cfg: &ProcessorConfig) -> ProcessorMap {
     Builder::register(&mut processors, proc_names::LIBREOFFICE, LibreofficeProcessor::new(cfg.libreoffice.clone()));
     Builder::register(&mut processors, proc_names::PDFUNITE, PdfuniteProcessor::new(cfg.pdfunite.clone()));
     Builder::register(&mut processors, proc_names::SCRIPT_CHECK, ScriptCheckProcessor::new(cfg.script_check.clone()));
+    Builder::register(&mut processors, proc_names::LINUX_MODULE, LinuxModuleProcessor::new(cfg.linux_module.clone()));
 
     processors
 }

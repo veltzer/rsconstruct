@@ -279,6 +279,7 @@ fn default_processors() -> Vec<String> {
         names::MAKO.into(),
         names::MERMAID.into(), names::DRAWIO.into(), names::LIBREOFFICE.into(),
         names::PDFUNITE.into(), names::SCRIPT_CHECK.into(),
+        names::LINUX_MODULE.into(),
     ]
 }
 
@@ -386,6 +387,8 @@ pub(crate) struct ProcessorConfig {
     pub pdfunite: PdfuniteConfig,
     #[serde(default)]
     pub script_check: ScriptCheckConfig,
+    #[serde(default)]
+    pub linux_module: LinuxModuleConfig,
     /// Captures unknown [processor.PLUGIN_NAME] sections for Lua plugins
     #[serde(flatten)]
     pub extra: HashMap<String, toml::Value>,
@@ -439,6 +442,7 @@ impl Default for ProcessorConfig {
             libreoffice: LibreofficeConfig::default(),
             pdfunite: PdfuniteConfig::default(),
             script_check: ScriptCheckConfig::default(),
+            linux_module: LinuxModuleConfig::default(),
             extra: HashMap::new(),
         }
     }
@@ -490,6 +494,7 @@ impl ProcessorConfig {
             "libreoffice" => self.libreoffice.enabled,
             "pdfunite" => self.pdfunite.enabled,
             "script_check" => self.script_check.enabled,
+            "linux_module" => self.linux_module.enabled,
             _ => true, // unknown processors (plugins) default to enabled
         }
     }
@@ -514,7 +519,7 @@ impl ProcessorConfig {
             &self.pdflatex.scan, &self.a2x.scan, &self.ascii_check.scan,
             &self.mako.scan,
             &self.mermaid.scan, &self.drawio.scan, &self.libreoffice.scan,
-            &self.script_check.scan,
+            &self.script_check.scan, &self.linux_module.scan,
         ];
         let mut dirs: Vec<String> = scans.iter()
             .filter_map(|s| s.scan_dir.as_deref())
@@ -572,6 +577,7 @@ impl ProcessorConfig {
         self.drawio.scan.resolve("", &[".drawio"], BUILD_TOOL_EXCLUDES);
         self.libreoffice.scan.resolve("", &[".odp"], BUILD_TOOL_EXCLUDES);
         self.script_check.scan.resolve("", &[], &[]);
+        self.linux_module.scan.resolve("", &["linux-module.yaml"], BUILD_TOOL_EXCLUDES);
     }
 }
 
@@ -848,6 +854,7 @@ fn validate_processor_fields(raw: &toml::Value) -> Result<()> {
             processor_names::LIBREOFFICE => LibreofficeConfig::known_fields(),
             processor_names::PDFUNITE => PdfuniteConfig::known_fields(),
             processor_names::SCRIPT_CHECK => ScriptCheckConfig::known_fields(),
+            processor_names::LINUX_MODULE => LinuxModuleConfig::known_fields(),
             _ => continue, // unknown processor name = Lua plugin, skip
         };
 
