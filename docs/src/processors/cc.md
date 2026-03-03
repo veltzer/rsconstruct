@@ -10,24 +10,28 @@ processor supports multi-file targets with dependency linking.
 ## How It Works
 
 The processor scans for `cc.yaml` files. Each manifest defines libraries
-and programs to build. All compiler and linker commands run with the working
-directory set to the `cc.yaml` file's directory, so all paths in the manifest
-(sources, include directories, output directory) are relative to that location —
-just like Make operates from the Makefile's directory.
+and programs to build. All paths in the manifest (sources, include directories)
+are relative to the `cc.yaml` file's location and are automatically resolved
+to project-root-relative paths before compilation. All commands run from the
+project root.
+
+Output goes under `out/cc/<path-to-cc.yaml-dir>/`, so a manifest at
+`src/exercises/foo/cc.yaml` produces output in `out/cc/src/exercises/foo/`.
+A manifest at the project root produces output in `out/cc/`.
 
 Source files are compiled to object files, then linked into the final targets:
 
 ```
-cc.yaml defines:
-  library "mymath" (static) from src/math.c, src/utils.c
-  program "main" from src/main.c, links mymath
+src/exercises/foo/cc.yaml defines:
+  library "mymath" (static) from math.c, utils.c
+  program "main" from main.c, links mymath
 
 Build produces:
-  out/cc/obj/mymath/math.o
-  out/cc/obj/mymath/utils.o
-  out/cc/lib/libmymath.a
-  out/cc/obj/main/main.o
-  out/cc/bin/main
+  out/cc/src/exercises/foo/obj/mymath/math.o
+  out/cc/src/exercises/foo/obj/mymath/utils.o
+  out/cc/src/exercises/foo/lib/libmymath.a
+  out/cc/src/exercises/foo/obj/main/main.o
+  out/cc/src/exercises/foo/bin/main
 ```
 
 ## cc.yaml Format
@@ -41,8 +45,7 @@ cxx: g++              # C++ compiler (default: g++)
 cflags: [-Wall]       # Global C flags
 cxxflags: [-Wall]     # Global C++ flags
 ldflags: []           # Global linker flags
-include_dirs: [include]  # Global -I paths
-output_dir: out/cc    # Build output directory (default: out/cc)
+include_dirs: [include]  # Global -I paths (relative to cc.yaml location)
 
 # Library definitions
 libraries:
@@ -91,8 +94,10 @@ Global `cflags` are used for C files and `cxxflags` for C++ files.
 
 ## Output Layout
 
+Output is placed under `out/cc/<cc.yaml-relative-dir>/`:
+
 ```
-<output_dir>/
+out/cc/<cc.yaml-dir>/
   obj/<target_name>/    # Object files per target
     file.o
   lib/                  # Libraries
@@ -126,14 +131,13 @@ cflags = []               # Additional global C flags
 cxxflags = []             # Additional global C++ flags
 ldflags = []              # Additional global linker flags
 include_dirs = []         # Additional global -I paths
-output_dir = "out/cc"     # Output directory (default: "out/cc")
 single_invocation = false # Use single-invocation mode (default: false)
 extra_inputs = []         # Extra files that trigger rebuilds
 cache_output_dir = true   # Cache entire output directory (default: true)
 ```
 
 Note: The `cc.yaml` manifest settings override the `rsb.toml` defaults for
-compiler, flags, and output directory.
+compiler and flags.
 
 ### Configuration Reference
 
@@ -146,7 +150,6 @@ compiler, flags, and output directory.
 | `cxxflags` | string[] | `[]` | Global C++ compiler flags |
 | `ldflags` | string[] | `[]` | Global linker flags |
 | `include_dirs` | string[] | `[]` | Global include directories |
-| `output_dir` | string | `"out/cc"` | Build output directory |
 | `single_invocation` | bool | `false` | Build programs in single compiler invocation |
 | `extra_inputs` | string[] | `[]` | Extra files that trigger rebuilds when changed |
 | `cache_output_dir` | bool | `true` | Cache the entire output directory |
@@ -159,16 +162,17 @@ Given this project layout:
 
 ```
 myproject/
-  cc.yaml
-  include/
-    math.h
-  src/
-    math.c
-    main.c
   rsb.toml
+  exercises/
+    math/
+      cc.yaml
+      include/
+        math.h
+      math.c
+      main.c
 ```
 
-With `cc.yaml`:
+With `exercises/math/cc.yaml`:
 
 ```yaml
 include_dirs: [include]
@@ -176,19 +180,19 @@ include_dirs: [include]
 libraries:
   - name: math
     lib_type: static
-    sources: [src/math.c]
+    sources: [math.c]
 
 programs:
   - name: main
-    sources: [src/main.c]
+    sources: [main.c]
     link: [math]
 ```
 
 Running `rsb build` produces:
 
 ```
-out/cc/obj/math/math.o
-out/cc/lib/libmath.a
-out/cc/obj/main/main.o
-out/cc/bin/main
+out/cc/exercises/math/obj/math/math.o
+out/cc/exercises/math/lib/libmath.a
+out/cc/exercises/math/obj/main/main.o
+out/cc/exercises/math/bin/main
 ```
