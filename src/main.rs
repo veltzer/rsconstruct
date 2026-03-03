@@ -339,6 +339,17 @@ fn run() -> Result<()> {
                     let detected = builder.detected_processors()?;
                     builder::smart::minimal(&detected)?;
                 }
+                cli::SmartAction::Reset => {
+                    builder::smart::reset()?;
+                }
+                cli::SmartAction::EnableIfAvailable => {
+                    let builder = Builder::new()?;
+                    let available = builder.detected_and_available_processors()?;
+                    builder::smart::enable_if_available(&available)?;
+                }
+                cli::SmartAction::Only { ref names } => {
+                    builder::smart::only(names)?;
+                }
             }
         }
         Commands::Tags { action } => {

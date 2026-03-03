@@ -180,6 +180,71 @@ pub(crate) fn enable_detected(detected: &HashSet<String>) -> Result<()> {
     Ok(())
 }
 
+/// Remove all [processor.*] sections from rsb.toml, returning to pure defaults.
+pub(crate) fn reset() -> Result<()> {
+    let mut doc = load_doc()?;
+    let table = processor_table(&mut doc)?;
+    let all_names = default_processors();
+    let mut count = 0;
+
+    for name in &all_names {
+        if table.remove(name.as_str()).is_some() {
+            count += 1;
+        }
+    }
+
+    save_doc(&doc)?;
+    println!("Reset {} processor sections in {}.", count, CONFIG_FILE);
+    Ok(())
+}
+
+/// Disable all, then enable only the listed processors.
+pub(crate) fn only(names: &[String]) -> Result<()> {
+    for name in names {
+        validate_name(name)?;
+    }
+
+    let mut doc = load_doc()?;
+    let table = processor_table(&mut doc)?;
+    let all_names = default_processors();
+    let selected: HashSet<&str> = names.iter().map(|s| s.as_str()).collect();
+    let mut disabled_count = 0;
+    let mut enabled_count = 0;
+
+    for name in &all_names {
+        let section = table.entry(name.as_str())
+            .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()))
+            .as_table_mut();
+        let section = match section {
+            Some(t) => t,
+            None => continue,
+        };
+
+        if selected.contains(name.as_str()) {
+            let is_disabled = section.get("enabled")
+                .and_then(|v| v.as_bool())
+                .is_some_and(|b| !b);
+            if is_disabled {
+                section.remove("enabled");
+                enabled_count += 1;
+            }
+        } else {
+            let already_disabled = section.get("enabled")
+                .and_then(|v| v.as_bool())
+                .is_some_and(|b| !b);
+            if !already_disabled {
+                section.insert("enabled", toml_edit::value(false));
+                disabled_count += 1;
+            }
+        }
+    }
+
+    save_doc(&doc)?;
+    println!("Only: enabled {}, disabled {} others.", enabled_count, disabled_count);
+    println!("{}", color::dim(&format!("Active processors: {}", names.join(", "))));
+    Ok(())
+}
+
 /// Disable all processors, then enable only detected ones.
 pub(crate) fn minimal(detected: &HashSet<String>) -> Result<()> {
     let mut doc = load_doc()?;
@@ -225,5 +290,34 @@ pub(crate) fn minimal(detected: &HashSet<String>) -> Result<()> {
         names.sort();
         println!("{}", color::dim(&format!("Active processors: {}", names.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "))));
     }
+    Ok(())
+}
+
+/// Enable only processors whose files are detected AND tools are installed.
+pub(crate) fn enable_if_available(available: &HashSet<String>) -> Result<()> {
+    let mut doc = load_doc()?;
+    let table = processor_table(&mut doc)?;
+    let all_names = default_processors();
+    let mut enabled_count = 0;
+
+    for name in &all_names {
+        let section = match table.get_mut(name.as_str()).and_then(|v| v.as_table_mut()) {
+            Some(t) => t,
+            None => continue,
+        };
+
+        if available.contains(name.as_str()) {
+            let is_disabled = section.get("enabled")
+                .and_then(|v| v.as_bool())
+                .is_some_and(|b| !b);
+            if is_disabled {
+                section.remove("enabled");
+                enabled_count += 1;
+            }
+        }
+    }
+
+    save_doc(&doc)?;
+    println!("Enabled {} available processors in {}.", enabled_count, CONFIG_FILE);
     Ok(())
 }

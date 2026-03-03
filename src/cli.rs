@@ -282,6 +282,16 @@ pub enum SmartAction {
     },
     /// Disable all, then enable only detected processors (clean minimal config)
     Minimal,
+    /// Remove all [processor.*] sections, returning to pure defaults
+    Reset,
+    /// Enable only processors whose files are detected and tools are installed
+    EnableIfAvailable,
+    /// Disable all, then enable only the listed processors
+    Only {
+        /// Processor names to enable
+        #[arg(required = true)]
+        names: Vec<String>,
+    },
 }
 
 #[derive(Subcommand)]

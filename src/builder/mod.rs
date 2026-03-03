@@ -296,6 +296,23 @@ impl Builder {
         Ok(detected)
     }
 
+    /// Return the set of processor names whose files are detected AND whose
+    /// required tools are all installed.
+    pub fn detected_and_available_processors(&self) -> Result<std::collections::HashSet<String>> {
+        let processors = self.create_processors()?;
+        let mut available = std::collections::HashSet::new();
+        for (name, proc) in &processors {
+            if proc.hidden() || !proc.auto_detect(&self.file_index) {
+                continue;
+            }
+            let tools = proc.required_tools();
+            if tools.iter().all(|t| which::which(t).is_ok()) {
+                available.insert(name.clone());
+            }
+        }
+        Ok(available)
+    }
+
     /// Check whether a processor should run based on enabled list and auto-detect.
     fn is_processor_active(&self, name: &str, processor: &dyn ProductDiscovery) -> bool {
         if !self.config.processor.is_enabled(name) {
