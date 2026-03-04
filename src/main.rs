@@ -288,11 +288,21 @@ fn run() -> Result<()> {
             watcher::watch(&opts, Arc::clone(&interrupted))?;
         }
         Commands::Version => {
+            let is_dirty = std::process::Command::new("git")
+                .args(["diff", "--quiet", "HEAD"])
+                .status()
+                .is_ok_and(|s| !s.success());
+            let dirty_str = if is_dirty { "true" } else { "false" };
+            let describe = if is_dirty {
+                format!("{}-dirty", env!("RSB_GIT_DESCRIBE"))
+            } else {
+                env!("RSB_GIT_DESCRIBE").to_string()
+            };
             println!("rsb {} by {}", env!("CARGO_PKG_VERSION"), env!("CARGO_PKG_AUTHORS"));
-            println!("RSB_GIT_DESCRIBE: {}", env!("RSB_GIT_DESCRIBE"));
+            println!("RSB_GIT_DESCRIBE: {}", describe);
             println!("VERGEN_GIT_SHA: {}", env!("VERGEN_GIT_SHA"));
             println!("VERGEN_GIT_BRANCH: {}", env!("VERGEN_GIT_BRANCH"));
-            println!("VERGEN_GIT_DIRTY: {}", env!("VERGEN_GIT_DIRTY"));
+            println!("VERGEN_GIT_DIRTY: {}", dirty_str);
             println!("VERGEN_RUSTC_SEMVER: {}", env!("VERGEN_RUSTC_SEMVER"));
         }
         Commands::Config { action } => {

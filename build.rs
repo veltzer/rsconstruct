@@ -13,13 +13,7 @@ fn git(args: &[&str]) -> String {
 fn main() {
     let sha = git(&["rev-parse", "HEAD"]);
     let branch = git(&["rev-parse", "--abbrev-ref", "HEAD"]);
-    let describe = git(&["describe", "--tags", "--always", "--dirty"]);
-
-    let dirty = Command::new("git")
-        .args(["diff", "--quiet", "HEAD"])
-        .status()
-        .map(|s| if s.success() { "false" } else { "true" })
-        .unwrap_or("unknown");
+    let describe = git(&["describe", "--tags", "--always"]);
 
     let rustc_ver = Command::new("rustc")
         .arg("--version")
@@ -35,16 +29,22 @@ fn main() {
 
     println!("cargo:rustc-env=VERGEN_GIT_SHA={sha}");
     println!("cargo:rustc-env=VERGEN_GIT_BRANCH={branch}");
-    println!("cargo:rustc-env=VERGEN_GIT_DIRTY={dirty}");
     println!("cargo:rustc-env=VERGEN_RUSTC_SEMVER={rustc_ver}");
     println!("cargo:rustc-env=RSB_GIT_DESCRIBE={describe}");
 
     // Only re-run when the git HEAD or branch ref changes.
     println!("cargo:rerun-if-changed=.git/HEAD");
     // Read .git/HEAD to find the current ref and watch it.
+    // The loose ref file may not exist if git has packed the ref,
+    // so fall back to watching .git/packed-refs.
     if let Ok(head) = std::fs::read_to_string(".git/HEAD")
         && let Some(refpath) = head.trim().strip_prefix("ref: ")
     {
-        println!("cargo:rerun-if-changed=.git/{refpath}");
+        let loose = format!(".git/{refpath}");
+        if std::path::Path::new(&loose).exists() {
+            println!("cargo:rerun-if-changed={loose}");
+        } else {
+            println!("cargo:rerun-if-changed=.git/packed-refs");
+        }
     }
 }
