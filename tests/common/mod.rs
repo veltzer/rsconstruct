@@ -35,7 +35,7 @@ pub fn setup_test_project() -> TempDir {
 
 /// Helper to run rsbuild command in a directory
 pub fn run_rsb(dir: &Path, args: &[&str]) -> std::process::Output {
-    let rsb_path = env!("CARGO_BIN_EXE_rsb");
+    let rsb_path = env!("CARGO_BIN_EXE_rsbuild");
     Command::new(rsb_path)
         .current_dir(dir)
         .args(args)
@@ -45,7 +45,7 @@ pub fn run_rsb(dir: &Path, args: &[&str]) -> std::process::Output {
 
 /// Helper to run rsbuild command with extra environment variables
 pub fn run_rsb_with_env(dir: &Path, args: &[&str], env_vars: &[(&str, &str)]) -> std::process::Output {
-    let rsb_path = env!("CARGO_BIN_EXE_rsb");
+    let rsb_path = env!("CARGO_BIN_EXE_rsbuild");
     let mut cmd = Command::new(rsb_path);
     cmd.current_dir(dir).args(args);
     for (key, val) in env_vars {

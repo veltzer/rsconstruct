@@ -15,7 +15,7 @@ fn watch_does_initial_build() {
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
-    let rsb_path = env!("CARGO_BIN_EXE_rsb");
+    let rsb_path = env!("CARGO_BIN_EXE_rsbuild");
     let mut child = Command::new(rsb_path)
         .current_dir(project_path)
         .args(["watch"])
@@ -50,7 +50,7 @@ fn watch_rebuilds_on_change() {
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
-    let rsb_path = env!("CARGO_BIN_EXE_rsb");
+    let rsb_path = env!("CARGO_BIN_EXE_rsbuild");
     let mut child = Command::new(rsb_path)
         .current_dir(project_path)
         .args(["watch"])

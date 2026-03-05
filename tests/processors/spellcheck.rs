@@ -70,7 +70,7 @@ fn spellcheck_custom_words_file() {
     // Add "rsbuild" to custom words file
     fs::write(
         project_path.join(".spellcheck-words"),
-        "# Custom project words\nrsb\n"
+        "# Custom project words\nrsbuild\n"
     ).unwrap();
 
     fs::write(
