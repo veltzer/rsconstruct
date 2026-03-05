@@ -13,7 +13,7 @@ directory, then runs the configured checker command on each file (or batch of
 files). A non-zero exit code from the script fails the product.
 
 This processor is **disabled by default** — you must set `enabled = true` and
-provide a `checker` command in your `rsb.toml`.
+provide a `checker` command in your `rsbuild.toml`.
 
 This processor supports batch mode, allowing multiple files to be checked in a
 single invocation for better performance.

@@ -13,7 +13,7 @@ fn pdflatex_valid_file() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"pdflatex\"]\n\n[processor.pdflatex]\nqpdf = false\n",
     )
     .unwrap();
@@ -46,7 +46,7 @@ fn pdflatex_no_project_discovered() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"pdflatex\"]\n",
     )
     .unwrap();

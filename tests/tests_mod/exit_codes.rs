@@ -7,7 +7,7 @@ fn missing_config_returns_config_error() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
-    // No rsb.toml in directory
+    // No rsbuild.toml in directory
     let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(!output.status.success());
 
@@ -23,8 +23,8 @@ fn init_already_exists_returns_config_error() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
-    // Create rsb.toml first
-    fs::write(project_path.join("rsb.toml"), "# existing").unwrap();
+    // Create rsbuild.toml first
+    fs::write(project_path.join("rsbuild.toml"), "# existing").unwrap();
 
     let output = run_rsb_with_env(project_path, &["init"], &[("NO_COLOR", "1")]);
     assert!(!output.status.success());

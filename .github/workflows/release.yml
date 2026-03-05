@@ -31,13 +31,13 @@ jobs:
         run: cargo test --release
 
       - name: Rename binary with target triple
-        run: cp ./target/release/rsb ./target/release/rsb-${{ matrix.target }}
+        run: cp ./target/release/rsbuild ./target/release/rsbuild-${{ matrix.target }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rsb-${{ matrix.target }}
-          path: ./target/release/rsb-${{ matrix.target }}
+          name: rsbuild-${{ matrix.target }}
+          path: ./target/release/rsbuild-${{ matrix.target }}
 
   release:
     needs: build
@@ -63,8 +63,8 @@ jobs:
       - name: Create latest release
         run: |
           gh release create latest \
-            artifacts/rsb-x86_64-unknown-linux-gnu \
-            artifacts/rsb-aarch64-unknown-linux-gnu \
+            artifacts/rsbuild-x86_64-unknown-linux-gnu \
+            artifacts/rsbuild-aarch64-unknown-linux-gnu \
             --target master \
             --title "Latest build" \
             --notes "Rolling release built from master ($(git rev-parse --short HEAD))" \

@@ -9,7 +9,7 @@ fn explain_first_build() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/explain_first.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -28,7 +28,7 @@ fn explain_incremental_skip() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/explain_skip.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -52,7 +52,7 @@ fn explain_input_change() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/explain_change.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -79,7 +79,7 @@ fn explain_force() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/explain_force.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -130,7 +130,7 @@ fn explain_dry_run() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/explain_dry.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 

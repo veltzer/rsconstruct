@@ -1,6 +1,6 @@
 use std::fmt;
 
-/// Exit codes for rsb, allowing CI scripts to distinguish error types.
+/// Exit codes for rsbuild, allowing CI scripts to distinguish error types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RsbExitCode {
     Success = 0,
@@ -69,8 +69,8 @@ pub fn classify_error(err: &anyhow::Error) -> RsbExitCode {
 
     if lower.contains("interrupted") || lower.contains("ctrl+c") {
         RsbExitCode::Interrupted
-    } else if lower.contains("no rsb.toml found")
-        || lower.contains("rsb.toml already exists")
+    } else if lower.contains("no rsbuild.toml found")
+        || lower.contains("rsbuild.toml already exists")
         || lower.contains("unknown processor")
         || lower.contains("unknown shell")
         || lower.contains("undefined variable")
@@ -122,8 +122,8 @@ mod tests {
     #[test]
     fn classify_config_errors() {
         for msg in [
-            "No rsb.toml found in current directory",
-            "rsb.toml already exists",
+            "No rsbuild.toml found in current directory",
+            "rsbuild.toml already exists",
             "unknown processor 'foo'",
             "unknown shell 'fish'",
             "undefined variable 'x'",

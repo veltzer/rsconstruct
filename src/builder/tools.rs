@@ -43,7 +43,7 @@ impl Builder {
         tool_lock::verify_lock_file(&tool_commands)
     }
 
-    /// Handle `rsb tools` subcommands
+    /// Handle `rsbuild tools` subcommands
     pub fn tools(&self, action: ToolsAction, verbose: bool) -> Result<()> {
         let processors = self.create_processors()?;
 
@@ -419,7 +419,7 @@ fn tools_graph_html(tool_map: &BTreeMap<String, Vec<String>>) -> String {
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>RSB Tools Graph</title>
+    <title>RSBuild Tools Graph</title>
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <style>
         body {{
@@ -439,7 +439,7 @@ fn tools_graph_html(tool_map: &BTreeMap<String, Vec<String>>) -> String {
     </style>
 </head>
 <body>
-    <h1>RSB Tools Graph</h1>
+    <h1>RSBuild Tools Graph</h1>
     <div class="mermaid">
 {mermaid_content}
     </div>

@@ -33,7 +33,7 @@ impl LuaProcessor {
     ) -> Result<Self> {
         let lua = Lua::new();
 
-        // Register the rsb API before loading the script
+        // Register the rsbuild API before loading the script
         Self::register_api(&lua, &name)?;
 
         // Load and execute the Lua script
@@ -115,11 +115,11 @@ impl LuaProcessor {
         Ok(plugins)
     }
 
-    /// Register the `rsb` global table with helper functions.
+    /// Register the `rsbuild` global table with helper functions.
     fn register_api(lua: &Lua, proc_name: &str) -> Result<()> {
-        let rsb = lua_context(lua.create_table(), "Failed to create rsb table")?;
+        let rsbuild = lua_context(lua.create_table(), "Failed to create rsbuild table")?;
 
-        // rsb.stub_path(source, suffix) - paths are relative to project root
+        // rsbuild.stub_path(source, suffix) - paths are relative to project root
         let stub_path_fn = lua_context(
             lua.create_function(|_, (source, suffix): (String, String)| {
                 let src = PathBuf::from(&source);
@@ -129,9 +129,9 @@ impl LuaProcessor {
             }),
             "Failed to create stub_path function",
         )?;
-        lua_context(rsb.set("stub_path", stub_path_fn), "Failed to set stub_path")?;
+        lua_context(rsbuild.set("stub_path", stub_path_fn), "Failed to set stub_path")?;
 
-        // rsb.run_command(program, args)
+        // rsbuild.run_command(program, args)
         let run_cmd_fn = lua_context(
             lua.create_function(|_, (program, args): (String, LuaTable)| {
                 let mut cmd = Command::new(&program);
@@ -157,9 +157,9 @@ impl LuaProcessor {
             }),
             "Failed to create run_command function",
         )?;
-        lua_context(rsb.set("run_command", run_cmd_fn), "Failed to set run_command")?;
+        lua_context(rsbuild.set("run_command", run_cmd_fn), "Failed to set run_command")?;
 
-        // rsb.run_command_cwd(program, args, cwd)
+        // rsbuild.run_command_cwd(program, args, cwd)
         let run_cmd_cwd_fn = lua_context(
             lua.create_function(|_, (program, args, cwd): (String, LuaTable, String)| {
                 let mut cmd = Command::new(&program);
@@ -186,9 +186,9 @@ impl LuaProcessor {
             }),
             "Failed to create run_command_cwd function",
         )?;
-        lua_context(rsb.set("run_command_cwd", run_cmd_cwd_fn), "Failed to set run_command_cwd")?;
+        lua_context(rsbuild.set("run_command_cwd", run_cmd_cwd_fn), "Failed to set run_command_cwd")?;
 
-        // rsb.write_stub(path, content)
+        // rsbuild.write_stub(path, content)
         let write_stub_fn = lua_context(
             lua.create_function(|_, (path, content): (String, String)| {
                 let p = PathBuf::from(&path);
@@ -204,9 +204,9 @@ impl LuaProcessor {
             }),
             "Failed to create write_stub function",
         )?;
-        lua_context(rsb.set("write_stub", write_stub_fn), "Failed to set write_stub")?;
+        lua_context(rsbuild.set("write_stub", write_stub_fn), "Failed to set write_stub")?;
 
-        // rsb.remove_file(path)
+        // rsbuild.remove_file(path)
         let remove_file_fn = lua_context(
             lua.create_function(|_, path: String| {
                 let p = PathBuf::from(&path);
@@ -219,18 +219,18 @@ impl LuaProcessor {
             }),
             "Failed to create remove_file function",
         )?;
-        lua_context(rsb.set("remove_file", remove_file_fn), "Failed to set remove_file")?;
+        lua_context(rsbuild.set("remove_file", remove_file_fn), "Failed to set remove_file")?;
 
-        // rsb.file_exists(path)
+        // rsbuild.file_exists(path)
         let file_exists_fn = lua_context(
             lua.create_function(|_, path: String| {
                 Ok(PathBuf::from(&path).exists())
             }),
             "Failed to create file_exists function",
         )?;
-        lua_context(rsb.set("file_exists", file_exists_fn), "Failed to set file_exists")?;
+        lua_context(rsbuild.set("file_exists", file_exists_fn), "Failed to set file_exists")?;
 
-        // rsb.read_file(path)
+        // rsbuild.read_file(path)
         let read_file_fn = lua_context(
             lua.create_function(|_, path: String| {
                 let content = fs::read_to_string(&path).map_err(|e| {
@@ -240,9 +240,9 @@ impl LuaProcessor {
             }),
             "Failed to create read_file function",
         )?;
-        lua_context(rsb.set("read_file", read_file_fn), "Failed to set read_file")?;
+        lua_context(rsbuild.set("read_file", read_file_fn), "Failed to set read_file")?;
 
-        // rsb.path_join(parts...) - takes a table of path components
+        // rsbuild.path_join(parts...) - takes a table of path components
         let path_join_fn = lua_context(
             lua.create_function(|_, parts: LuaTable| {
                 let mut path = PathBuf::new();
@@ -254,9 +254,9 @@ impl LuaProcessor {
             }),
             "Failed to create path_join function",
         )?;
-        lua_context(rsb.set("path_join", path_join_fn), "Failed to set path_join")?;
+        lua_context(rsbuild.set("path_join", path_join_fn), "Failed to set path_join")?;
 
-        // rsb.log(message)
+        // rsbuild.log(message)
         let proc_name_owned = proc_name.to_string();
         let log_fn = lua_context(
             lua.create_function(move |_, message: String| {
@@ -265,9 +265,9 @@ impl LuaProcessor {
             }),
             "Failed to create log function",
         )?;
-        lua_context(rsb.set("log", log_fn), "Failed to set log")?;
+        lua_context(rsbuild.set("log", log_fn), "Failed to set log")?;
 
-        lua_context(lua.globals().set("rsb", rsb), "Failed to set rsb global")?;
+        lua_context(lua.globals().set("rsbuild", rsbuild), "Failed to set rsbuild global")?;
 
         Ok(())
     }
@@ -387,7 +387,7 @@ impl ProductDiscovery for LuaProcessor {
         )?;
 
         // Call Lua discover(project_root, config, files)
-        // project_root is always "." since RSB runs from the project root
+        // project_root is always "." since RSBuild runs from the project root
         let discover_fn: LuaFunction = lua_context(
             lua.globals().get("discover"),
             format!("Lua plugin '{}' must define a discover() function", self.name),

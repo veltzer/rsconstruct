@@ -21,7 +21,7 @@ impl PyreflyProcessor {
     /// Run pyrefly on one or more files.
     /// We pass --disable-project-excludes-heuristics because pyrefly's default
     /// project-excludes pattern rejects files in dot-prefixed directories,
-    /// and RSB already handles file filtering via its own scan config.
+    /// and RSBuild already handles file filtering via its own scan config.
     fn check_files(&self, py_files: &[&Path]) -> Result<()> {
         let mut args = vec!["--disable-project-excludes-heuristics".to_string()];
         args.extend_from_slice(&self.config.args);

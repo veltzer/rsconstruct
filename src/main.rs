@@ -154,9 +154,9 @@ fn run() -> Result<()> {
         Commands::Cache { action } => {
             match action {
                 CacheAction::Clear => {
-                    // Delete .rsb directory directly — must work even if the
+                    // Delete .rsbuild directory directly — must work even if the
                     // database is corrupted and Builder::new() would fail.
-                    let rsb_dir = std::path::Path::new(".rsb");
+                    let rsb_dir = std::path::Path::new(".rsbuild");
                     if rsb_dir.exists() {
                         fs::remove_dir_all(rsb_dir)?;
                     }
@@ -298,7 +298,7 @@ fn run() -> Result<()> {
             } else {
                 env!("RSB_GIT_DESCRIBE").to_string()
             };
-            println!("rsb {} by {}", env!("CARGO_PKG_VERSION"), env!("CARGO_PKG_AUTHORS"));
+            println!("rsbuild {} by {}", env!("CARGO_PKG_VERSION"), env!("CARGO_PKG_AUTHORS"));
             println!("RSB_GIT_DESCRIBE: {}", describe);
             println!("VERGEN_GIT_SHA: {}", env!("VERGEN_GIT_SHA"));
             println!("VERGEN_GIT_BRANCH: {}", env!("VERGEN_GIT_BRANCH"));
@@ -389,20 +389,20 @@ fn run() -> Result<()> {
     Ok(())
 }
 
-/// Initialize a new rsb project in the current directory
+/// Initialize a new rsbuild project in the current directory
 fn init_project() -> Result<()> {
     let cwd = env::current_dir()?;
-    let config_path = cwd.join("rsb.toml");
+    let config_path = cwd.join("rsbuild.toml");
 
     if config_path.exists() {
         return Err(RsbError::new(
             RsbExitCode::ConfigError,
-            "rsb.toml already exists in the current directory",
+            "rsbuild.toml already exists in the current directory",
         ).into());
     }
 
-    // Create rsb.toml with commented defaults
-    let config_content = r#"# RSB Build Tool Configuration
+    // Create rsbuild.toml with commented defaults
+    let config_content = r#"# RSBuild Build Tool Configuration
 
 [build]
 # Number of parallel jobs (1 = sequential, 0 = auto-detect CPU cores)
@@ -537,10 +537,10 @@ fn init_project() -> Result<()> {
     fs::write(&config_path, config_content)?;
     println!("Created {}", config_path.display());
 
-    // Create .rsbignore if it doesn't exist
-    let rsbignore_path = cwd.join(".rsbignore");
+    // Create .rsbuildignore if it doesn't exist
+    let rsbignore_path = cwd.join(".rsbuildignore");
     if !rsbignore_path.exists() {
-        let rsbignore_content = r#"# .rsbignore - Exclude files from rsb processing
+        let rsbignore_content = r#"# .rsbuildignore - Exclude files from rsbuild processing
 # Uses .gitignore syntax (glob patterns, one per line)
 # Lines starting with # are comments
 #
@@ -552,11 +552,11 @@ fn init_project() -> Result<()> {
 # *.bak             # Exclude backup files
 "#;
         fs::write(&rsbignore_path, rsbignore_content)?;
-        println!("Created .rsbignore");
+        println!("Created .rsbuildignore");
     }
 
     println!("{}", color::green("Project initialized successfully!"));
-    println!("{}", color::dim("Hint: edit .rsbignore to exclude files from processing"));
+    println!("{}", color::dim("Hint: edit .rsbuildignore to exclude files from processing"));
     Ok(())
 }
 

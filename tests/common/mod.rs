@@ -26,24 +26,24 @@ pub fn setup_test_project() -> TempDir {
 
     // Only enable the tera processor so config/*.py files aren't picked up by linters
     fs::write(
-        temp_dir.path().join("rsb.toml"),
+        temp_dir.path().join("rsbuild.toml"),
         "[processor]\nenabled = [\"tera\"]\n"
-    ).expect("Failed to write rsb.toml");
+    ).expect("Failed to write rsbuild.toml");
 
     temp_dir
 }
 
-/// Helper to run rsb command in a directory
+/// Helper to run rsbuild command in a directory
 pub fn run_rsb(dir: &Path, args: &[&str]) -> std::process::Output {
     let rsb_path = env!("CARGO_BIN_EXE_rsb");
     Command::new(rsb_path)
         .current_dir(dir)
         .args(args)
         .output()
-        .expect("Failed to execute rsb")
+        .expect("Failed to execute rsbuild")
 }
 
-/// Helper to run rsb command with extra environment variables
+/// Helper to run rsbuild command with extra environment variables
 pub fn run_rsb_with_env(dir: &Path, args: &[&str], env_vars: &[(&str, &str)]) -> std::process::Output {
     let rsb_path = env!("CARGO_BIN_EXE_rsb");
     let mut cmd = Command::new(rsb_path);
@@ -51,21 +51,21 @@ pub fn run_rsb_with_env(dir: &Path, args: &[&str], env_vars: &[(&str, &str)]) ->
     for (key, val) in env_vars {
         cmd.env(key, val);
     }
-    cmd.output().expect("Failed to execute rsb")
+    cmd.output().expect("Failed to execute rsbuild")
 }
 
 /// Helper to set up a C project with the cc processor enabled
 pub fn setup_cc_project(project_path: &Path) {
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"cc_single_file\"]\n"
     ).unwrap();
 }
 
 // --- JSON output parsing for tests ---
 
-/// Run rsb with --json flag and return parsed build result
+/// Run rsbuild with --json flag and return parsed build result
 pub fn run_rsb_json(dir: &Path, args: &[&str]) -> BuildResult {
     let mut full_args = vec!["--json"];
     full_args.extend(args);
@@ -73,7 +73,7 @@ pub fn run_rsb_json(dir: &Path, args: &[&str]) -> BuildResult {
     BuildResult::parse(&output)
 }
 
-/// Run rsb with --json flag and extra environment variables
+/// Run rsbuild with --json flag and extra environment variables
 pub fn run_rsb_json_with_env(dir: &Path, args: &[&str], env_vars: &[(&str, &str)]) -> BuildResult {
     let mut full_args = vec!["--json"];
     full_args.extend(args);
@@ -81,7 +81,7 @@ pub fn run_rsb_json_with_env(dir: &Path, args: &[&str], env_vars: &[(&str, &str)
     BuildResult::parse(&output)
 }
 
-/// JSON event from rsb --json output
+/// JSON event from rsbuild --json output
 #[derive(Debug, Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum BuildEvent {
@@ -109,7 +109,7 @@ pub enum BuildEvent {
     },
 }
 
-/// Parsed build result from rsb --json output
+/// Parsed build result from rsbuild --json output
 #[derive(Debug, Default)]
 pub struct BuildResult {
     pub exit_success: bool,
@@ -134,7 +134,7 @@ pub struct ProductResult {
 }
 
 impl BuildResult {
-    /// Parse rsb --json output into structured BuildResult
+    /// Parse rsbuild --json output into structured BuildResult
     pub fn parse(output: &std::process::Output) -> Self {
         let mut result = BuildResult {
             exit_success: output.status.success(),

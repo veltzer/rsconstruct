@@ -8,7 +8,7 @@ fn pdfunite_no_project_discovered() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"pdfunite\"]\n",
     )
     .unwrap();
@@ -36,7 +36,7 @@ fn pdfunite_discovers_courses() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"pdfunite\"]\n",
     )
     .unwrap();

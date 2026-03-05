@@ -13,7 +13,7 @@ fn mypy_valid_python() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"mypy\"]\n",
     )
     .unwrap();
@@ -51,7 +51,7 @@ fn mypy_incremental_skip() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"mypy\"]\n",
     )
     .unwrap();

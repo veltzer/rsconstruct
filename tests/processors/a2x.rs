@@ -13,7 +13,7 @@ fn a2x_valid_file() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"a2x\"]\n",
     )
     .unwrap();
@@ -47,7 +47,7 @@ fn a2x_no_project_discovered() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"a2x\"]\n",
     )
     .unwrap();

@@ -32,4 +32,4 @@ cache_output_dir = true                # Cache the vendor/bundle directory for f
 | `command` | string | `"install"` | The bundle subcommand to execute |
 | `args` | string[] | `[]` | Extra arguments passed to bundler |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
-| `cache_output_dir` | boolean | `true` | Cache the `vendor/bundle/` directory so `rsb clean && rsb build` restores from cache |
+| `cache_output_dir` | boolean | `true` | Cache the `vendor/bundle/` directory so `rsbuild clean && rsbuild build` restores from cache |

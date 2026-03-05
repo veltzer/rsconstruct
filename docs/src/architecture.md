@@ -1,6 +1,6 @@
 # Architecture
 
-This page describes RSB's internal design for contributors and those interested in how the tool works.
+This page describes RSBuild's internal design for contributors and those interested in how the tool works.
 
 ## Core concepts
 
@@ -13,11 +13,11 @@ Processors implement the `ProductDiscovery` trait. Each processor:
 3. Creates **products** describing what to build
 4. Executes the build for each product
 
-Run `rsb processors list` to see all available processors and their auto-detection results.
+Run `rsbuild processors list` to see all available processors and their auto-detection results.
 
 ### Auto-detection
 
-Every processor implements `auto_detect()`, which returns `true` if the processor appears relevant for the current project based on filesystem heuristics. This allows RSB to guess which processors a project needs without requiring manual configuration.
+Every processor implements `auto_detect()`, which returns `true` if the processor appears relevant for the current project based on filesystem heuristics. This allows RSBuild to guess which processors a project needs without requiring manual configuration.
 
 The `ProductDiscovery` trait requires four methods:
 
@@ -73,7 +73,7 @@ Detection heuristics per processor:
 | `pdfunite` | Generator | Source directory contains subdirectories with PDF-source files |
 | `tags` | Generator | Project contains `.md` files with YAML frontmatter |
 
-Run `rsb processors list` to see the auto-detection results for the current project.
+Run `rsbuild processors list` to see the auto-detection results for the current project.
 
 ### Products
 
@@ -111,10 +111,10 @@ The global `INTERRUPTED` flag is an `AtomicBool` set once by the `ctrlc` handler
 
 ## File indexing
 
-RSB walks the project tree once at startup and builds a `FileIndex` — a sorted list of all non-ignored files. The walk is performed by the `ignore` crate (`ignore::WalkBuilder`), which natively handles:
+RSBuild walks the project tree once at startup and builds a `FileIndex` — a sorted list of all non-ignored files. The walk is performed by the `ignore` crate (`ignore::WalkBuilder`), which natively handles:
 
 - `.gitignore` — standard git ignore rules, including nested `.gitignore` files and negation patterns
-- `.rsbignore` — project-specific ignore patterns using the same glob syntax as `.gitignore`
+- `.rsbuildignore` — project-specific ignore patterns using the same glob syntax as `.gitignore`
 
 Processors never walk the filesystem themselves. Instead, `auto_detect` and `discover` receive a `&FileIndex` and query it with their scan configuration (extensions, exclude directories, exclude files). This replaces the previous design where each processor performed its own recursive walk.
 
@@ -144,7 +144,7 @@ Processor configuration (compiler flags, linter arguments, etc.) is hashed into 
 
 ## Cache storage
 
-The cache lives in `.rsb/` and consists of:
+The cache lives in `.rsbuild/` and consists of:
 
 - `db.redb` — redb database storing the object store index (maps product hashes to cached outputs)
 - `objects/` — stored build artifacts (addressed by content hash)
@@ -154,19 +154,19 @@ Cache restoration can use either hardlinks (fast, same filesystem) or copies (wo
 
 ## Caching and clean behavior
 
-The cache (`.rsb/`) stores build state to enable fast incremental builds:
+The cache (`.rsbuild/`) stores build state to enable fast incremental builds:
 
-- **Generators**: Cache stores copies of output files. After `rsb clean`, outputs are deleted but cache remains. Next `rsb build` restores outputs from cache (fast hardlink/copy) instead of regenerating.
+- **Generators**: Cache stores copies of output files. After `rsbuild clean`, outputs are deleted but cache remains. Next `rsbuild build` restores outputs from cache (fast hardlink/copy) instead of regenerating.
 
-- **Checkers**: No output files to cache. The cache entry itself serves as a "success marker". After `rsb clean` (nothing to delete), next `rsb build` sees the cache entry is valid and skips the check entirely (instant).
+- **Checkers**: No output files to cache. The cache entry itself serves as a "success marker". After `rsbuild clean` (nothing to delete), next `rsbuild build` sees the cache entry is valid and skips the check entirely (instant).
 
-- **Mass generators**: When `cache_output_dir` is enabled (default), the entire output directory is walked after execution. Each file is stored as a content-addressed object in `.rsb/objects/`, and a manifest records the relative path, checksum, and Unix permissions of every file. After `rsb clean` (which removes the output directory), `rsb build` recreates the directory from cached objects with permissions restored. This makes `rsb clean && rsb build` fast for doc builders like sphinx and mdbook.
+- **Mass generators**: When `cache_output_dir` is enabled (default), the entire output directory is walked after execution. Each file is stored as a content-addressed object in `.rsbuild/objects/`, and a manifest records the relative path, checksum, and Unix permissions of every file. After `rsbuild clean` (which removes the output directory), `rsbuild build` recreates the directory from cached objects with permissions restored. This makes `rsbuild clean && rsbuild build` fast for doc builders like sphinx and mdbook.
 
-This ensures `rsb clean && rsb build` is fast for all types — generators restore from cache, checkers skip entirely, mass generators restore their output directories.
+This ensures `rsbuild clean && rsbuild build` is fast for all types — generators restore from cache, checkers skip entirely, mass generators restore their output directories.
 
 ## Subprocess execution
 
-RSB uses two internal functions to run external commands:
+RSBuild uses two internal functions to run external commands:
 
 - **`run_command()`** — by default captures stdout/stderr via OS pipes and only prints output on failure (quiet mode). Use `--show-output` flag to show all tool output. Use for compilers, linters, and any command where errors should be shown.
 
@@ -178,7 +178,7 @@ When running with `-j`, each thread spawns its own subprocess. Each subprocess g
 
 ## Path handling
 
-**All paths are relative to project root.** RSB assumes it is run from the project root directory (where `rsb.toml` lives).
+**All paths are relative to project root.** RSBuild assumes it is run from the project root directory (where `rsbuild.toml` lives).
 
 ### Internal paths (always relative)
 - `Product.inputs` and `Product.outputs` — stored as relative paths

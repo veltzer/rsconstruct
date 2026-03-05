@@ -32,4 +32,4 @@ cache_output_dir = true                # Cache the node_modules directory for fa
 | `command` | string | `"install"` | The npm subcommand to execute |
 | `args` | string[] | `[]` | Extra arguments passed to npm |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
-| `cache_output_dir` | boolean | `true` | Cache the `node_modules/` directory so `rsb clean && rsb build` restores from cache |
+| `cache_output_dir` | boolean | `true` | Cache the `node_modules/` directory so `rsbuild clean && rsbuild build` restores from cache |

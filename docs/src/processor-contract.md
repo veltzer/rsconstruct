@@ -56,7 +56,7 @@ On restore, the entire directory is recreated from cache.
 
 The `cache_output_dir` config option (default `true`) controls this.
 When disabled, mass generators fall back to stamp-file or empty-output
-caching (no directory restore on `rsb clean && rsb build`).
+caching (no directory restore on `rsbuild clean && rsbuild build`).
 
 Mass generators that use output_dir caching must implement `clean()` to
 remove the output directory so it can be restored from cache.

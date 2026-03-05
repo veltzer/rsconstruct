@@ -76,14 +76,14 @@ impl Builder {
         Ok(())
     }
 
-    /// Remove all build outputs and cache directories (.rsb/ and out/)
+    /// Remove all build outputs and cache directories (.rsbuild/ and out/)
     pub fn distclean(&self) -> Result<()> {
         println!("{}", color::bold("Removing build directories..."));
 
-        let rsb_dir = std::path::Path::new(".rsb");
+        let rsb_dir = std::path::Path::new(".rsbuild");
         if rsb_dir.exists() {
             fs::remove_dir_all(rsb_dir)
-                .context("Failed to remove .rsb/ directory")?;
+                .context("Failed to remove .rsbuild/ directory")?;
             println!("Removed {}", rsb_dir.display());
         }
 
@@ -122,7 +122,7 @@ impl Builder {
         Ok(())
     }
 
-    /// Remove files not tracked by git and not known as RSB build outputs.
+    /// Remove files not tracked by git and not known as RSBuild build outputs.
     /// Dry-run by default (lists files); use `force` to actually delete.
     pub fn clean_unknown(&self, force: bool, verbose: bool) -> Result<()> {
         use ignore::WalkBuilder;
@@ -132,11 +132,11 @@ impl Builder {
             bail!("Not a git repository. clean unknown requires a git repository.");
         }
 
-        // Build graph to discover RSB outputs
+        // Build graph to discover RSBuild outputs
         let processors = self.create_processors()?;
         let graph = self.build_graph_for_clean_with_processors(&processors)?;
 
-        // Collect RSB-known output files
+        // Collect RSBuild-known output files
         let mut rsb_outputs: HashSet<PathBuf> = HashSet::new();
         let mut rsb_output_dirs: Vec<PathBuf> = Vec::new();
         for product in graph.products() {
@@ -164,7 +164,7 @@ impl Builder {
 
         // Walk the entire project tree. We disable .gitignore handling because
         // unknown files often live in gitignored directories (e.g. out/).
-        // We do our own filtering against git-tracked and RSB output sets.
+        // We do our own filtering against git-tracked and RSBuild output sets.
         let mut unknown_files: Vec<PathBuf> = Vec::new();
         let walker = WalkBuilder::new(".")
             .hidden(false)
@@ -185,8 +185,8 @@ impl Builder {
             let path = entry.path().strip_prefix("./").unwrap_or(entry.path());
             let path = PathBuf::from(path);
 
-            // Skip .git/ and .rsb/
-            if path.starts_with(".git") || path.starts_with(".rsb") {
+            // Skip .git/ and .rsbuild/
+            if path.starts_with(".git") || path.starts_with(".rsbuild") {
                 continue;
             }
 
@@ -195,12 +195,12 @@ impl Builder {
                 continue;
             }
 
-            // Skip RSB output files
+            // Skip RSBuild output files
             if rsb_outputs.contains(&path) {
                 continue;
             }
 
-            // Skip files inside RSB output directories
+            // Skip files inside RSBuild output directories
             if rsb_output_dirs.iter().any(|dir| path.starts_with(dir)) {
                 continue;
             }

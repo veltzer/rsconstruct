@@ -9,7 +9,7 @@ fn script_check_valid_file() {
 
     // script_check is disabled by default, so we must explicitly enable and configure it
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         concat!(
             "[processor]\n",
             "enabled = [\"script_check\"]\n",
@@ -50,7 +50,7 @@ fn script_check_incremental_skip() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         concat!(
             "[processor]\n",
             "enabled = [\"script_check\"]\n",
@@ -91,7 +91,7 @@ fn script_check_no_project_discovered() {
 
     // Without configuring extensions or checker, script_check should discover nothing
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"script_check\"]\n",
     )
     .unwrap();

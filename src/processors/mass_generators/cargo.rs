@@ -59,7 +59,7 @@ impl ProductDiscovery for CargoProcessor {
 
         let siblings = SiblingFilter {
             extensions: &[".rs", ".toml"],
-            excludes: &["/.git/", "/target/", "/.rsb/"],
+            excludes: &["/.git/", "/target/", "/.rsbuild/"],
         };
         let hash = Some(config_hash(&self.config));
         let extra = resolve_extra_inputs(&self.config.extra_inputs)?;

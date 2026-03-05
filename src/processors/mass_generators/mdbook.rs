@@ -59,7 +59,7 @@ impl ProductDiscovery for MdbookProcessor {
             cfg_hash: &self.config,
             siblings: &SiblingFilter {
                 extensions: &[".md", ".toml"],
-                excludes: &["/.git/", "/out/", "/.rsb/", "/book/"],
+                excludes: &["/.git/", "/out/", "/.rsbuild/", "/book/"],
             },
             processor_name: crate::processors::names::MDBOOK,
             output_dir_name: if self.config.cache_output_dir {

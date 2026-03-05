@@ -23,7 +23,7 @@ fn clean_command() {
 
     // Verify files exist
     assert!(project_path.join("cleanme.txt").exists());
-    assert!(project_path.join(".rsb/db.redb").exists());
+    assert!(project_path.join(".rsbuild/db.redb").exists());
 
     // Clean
     let clean_output = run_rsb(project_path, &["clean", "outputs"]);
@@ -31,7 +31,7 @@ fn clean_command() {
 
     // Verify build outputs are removed but cache is preserved
     assert!(!project_path.join("cleanme.txt").exists());
-    assert!(project_path.join(".rsb").exists());
+    assert!(project_path.join(".rsbuild").exists());
 }
 
 #[test]
@@ -70,7 +70,7 @@ fn no_color_env() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/color_test.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -92,7 +92,7 @@ fn timings_flag() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/timing_test.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -115,7 +115,7 @@ fn no_timings_by_default() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/no_timing.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -139,7 +139,7 @@ fn keep_going_continues_after_failure() {
     fs::write(project_path.join("sleep/bad.sleep"), "not_a_number").unwrap();
     fs::write(project_path.join("sleep/good.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -164,7 +164,7 @@ fn keep_going_short_flag() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/bad_k.sleep"), "invalid").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -193,7 +193,7 @@ fn build_stops_on_first_error() {
     fs::write(project_path.join("sleep/aaa.sleep"), "not_a_number").unwrap();
     fs::write(project_path.join("sleep/zzz.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -216,7 +216,7 @@ fn keep_going_continues_after_error() {
     fs::write(project_path.join("sleep/bad.sleep"), "not_a_number").unwrap();
     fs::write(project_path.join("sleep/good.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -252,7 +252,7 @@ fn parallel_build_with_j_flag() {
         ).unwrap();
     }
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -275,7 +275,7 @@ fn parallel_keep_going_continues_after_failure() {
     fs::write(project_path.join("sleep/good2.sleep"), "0.01").unwrap();
     fs::write(project_path.join("sleep/good3.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n\n[build]\nparallel = 2\n"
     ).unwrap();
 
@@ -289,7 +289,7 @@ fn parallel_keep_going_continues_after_failure() {
 
 #[test]
 fn parallel_builds_all_independent_products() {
-    // Verify parallel config in rsb.toml works and all products complete
+    // Verify parallel config in rsbuild.toml works and all products complete
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
@@ -301,7 +301,7 @@ fn parallel_builds_all_independent_products() {
         ).unwrap();
     }
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n\n[build]\nparallel = 4\n"
     ).unwrap();
 
@@ -330,7 +330,7 @@ fn parallel_timings_flag() {
         ).unwrap();
     }
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n\n[build]\nparallel = 2\n"
     ).unwrap();
 
@@ -372,7 +372,7 @@ fn deterministic_build_order() {
         }
 
         fs::write(
-            project_path.join("rsb.toml"),
+            project_path.join("rsbuild.toml"),
             "[processor]\nenabled = [\"sleep\"]\n"
         ).unwrap();
 
@@ -430,7 +430,7 @@ fn classify_propagates_through_dependencies() {
 
     // Phase 2: enable sleep with extra_inputs pointing to the tera output
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"tera\", \"sleep\"]\n\n[processor.sleep]\nextra_inputs = [\"step1.txt\"]\n"
     ).unwrap();
     fs::write(project_path.join("sleep/test.sleep"), "0.01").unwrap();

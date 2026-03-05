@@ -13,7 +13,7 @@ fn spellcheck_correct_spelling() {
     ).unwrap();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
@@ -41,7 +41,7 @@ fn spellcheck_misspelled_word() {
     ).unwrap();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
@@ -64,17 +64,17 @@ fn spellcheck_custom_words_file() {
     // Create a markdown file with a "misspelled" word that is actually a custom word
     fs::write(
         project_path.join("README.md"),
-        "# Hello World\n\nThis uses rsb for building.\n"
+        "# Hello World\n\nThis uses rsbuild for building.\n"
     ).unwrap();
 
-    // Add "rsb" to custom words file
+    // Add "rsbuild" to custom words file
     fs::write(
         project_path.join(".spellcheck-words"),
         "# Custom project words\nrsb\n"
     ).unwrap();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
@@ -96,7 +96,7 @@ fn spellcheck_incremental_skip() {
     ).unwrap();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
@@ -126,7 +126,7 @@ fn spellcheck_clean() {
     ).unwrap();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
@@ -158,7 +158,7 @@ fn spellcheck_stops_after_first_error() {
     ).unwrap();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
@@ -175,7 +175,7 @@ fn spellcheck_stops_after_first_error() {
         "Should report the error from the first file (aaa.md): {}", combined);
     assert!(!combined.contains("diferent"),
         "Should NOT report the error from the second file (bbb.md) — \
-         rsb stops after the first failure: {}", combined);
+         rsbuild stops after the first failure: {}", combined);
 }
 
 #[test]
@@ -190,7 +190,7 @@ fn spellcheck_ignores_code_blocks() {
     ).unwrap();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
@@ -209,11 +209,11 @@ fn spellcheck_auto_add_words() {
     // Create a markdown file with "misspelled" words (project-specific terms)
     fs::write(
         project_path.join("README.md"),
-        "# Hello World\n\nThis uses rsb and tera for building.\n"
+        "# Hello World\n\nThis uses rsbuild and tera for building.\n"
     ).unwrap();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"spellcheck\"]\n\n[processor.spellcheck]\nauto_add_words = true\n"
     ).unwrap();
 
@@ -229,7 +229,7 @@ fn spellcheck_auto_add_words() {
     assert!(words_path.exists(), "Words file should be created");
 
     let words_content = fs::read_to_string(&words_path).unwrap();
-    assert!(words_content.contains("rsb"), "Should contain 'rsb': {}", words_content);
+    assert!(words_content.contains("rsbuild"), "Should contain 'rsbuild': {}", words_content);
     assert!(words_content.contains("tera"), "Should contain 'tera': {}", words_content);
 
     // Verify output mentions adding words

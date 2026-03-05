@@ -36,7 +36,7 @@ fn walk_files(dir: &Path) -> Vec<PathBuf> {
     result
 }
 
-const RSB_DIR: &str = ".rsb";
+const RSB_DIR: &str = ".rsbuild";
 const OBJECTS_DIR: &str = "objects";
 const DB_FILE: &str = "db.redb";
 
@@ -98,8 +98,8 @@ impl std::fmt::Display for ExplainAction {
 }
 
 /// Object store for caching build outputs
-/// Uses git-like object storage: .rsb/objects/[2 chars]/[rest of hash]
-/// Index is stored in a redb embedded key/value database at .rsb/db.redb
+/// Uses git-like object storage: .rsbuild/objects/[2 chars]/[rest of hash]
+/// Index is stored in a redb embedded key/value database at .rsbuild/db.redb
 pub struct ObjectStore {
     /// Path to objects directory
     objects_dir: PathBuf,
@@ -180,9 +180,9 @@ impl ObjectStore {
         let objects_dir = rsb_dir.join(OBJECTS_DIR);
         let db_path = rsb_dir.join(DB_FILE);
 
-        // Ensure .rsb directory exists
+        // Ensure .rsbuild directory exists
         fs::create_dir_all(&rsb_dir)
-            .context("Failed to create .rsb directory")?;
+            .context("Failed to create .rsbuild directory")?;
 
         let db = crate::db::open_or_recreate(&db_path, "Cache database")?;
 
@@ -238,7 +238,7 @@ impl ObjectStore {
         checksum::bytes_checksum(data)
     }
 
-    /// Get object path for a checksum (e.g., .rsb/objects/ab/cdef123...)
+    /// Get object path for a checksum (e.g., .rsbuild/objects/ab/cdef123...)
     fn object_path(&self, checksum: &str) -> PathBuf {
         let (prefix, rest) = checksum.split_at(CHECKSUM_PREFIX_LEN.min(checksum.len()));
         self.objects_dir.join(prefix).join(rest)
@@ -312,7 +312,7 @@ impl ObjectStore {
         match self.restore_method {
             RestoreMethod::Hardlink => {
                 fs::hard_link(&object_path, output_path)
-                    .with_context(|| format!("Failed to hard link from cache: {}. If on a cross-filesystem setup, set restore_method = \"copy\" in rsb.toml.", checksum))?;
+                    .with_context(|| format!("Failed to hard link from cache: {}. If on a cross-filesystem setup, set restore_method = \"copy\" in rsbuild.toml.", checksum))?;
             }
             RestoreMethod::Copy => {
                 fs::copy(&object_path, output_path)

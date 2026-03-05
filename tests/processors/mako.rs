@@ -7,9 +7,9 @@ fn setup_mako_project() -> TempDir {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     fs::create_dir_all(temp_dir.path().join("templates.mako")).expect("Failed to create templates.mako dir");
     fs::write(
-        temp_dir.path().join("rsb.toml"),
+        temp_dir.path().join("rsbuild.toml"),
         "[processor]\nenabled = [\"mako\"]\n"
-    ).expect("Failed to write rsb.toml");
+    ).expect("Failed to write rsbuild.toml");
     temp_dir
 }
 
@@ -24,9 +24,9 @@ fn mako_basic_render() {
         "Hello, ${'World'}!\nCount: ${2 + 3}\n"
     ).expect("Failed to write mako template");
 
-    // Run rsb build
+    // Run rsbuild build
     let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "rsb build failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(output.status.success(), "rsbuild build failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Check that the output file was created
     let output_file = project_path.join("hello.txt");
@@ -50,7 +50,7 @@ fn mako_subdirectory_output() {
     ).unwrap();
 
     let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "rsb build failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(output.status.success(), "rsbuild build failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Output should be at config/app.conf (templates.mako/ prefix stripped)
     let output_file = project_path.join("config/app.conf");

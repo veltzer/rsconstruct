@@ -270,7 +270,7 @@ redb
 reinstallation
 repos
 reprepro
-rsb
+rsbuild
 rumdl
 runfiles
 rustc

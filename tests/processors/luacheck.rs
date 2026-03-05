@@ -13,7 +13,7 @@ fn luacheck_valid_file() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"luacheck\"]\n",
     )
     .unwrap();
@@ -51,7 +51,7 @@ fn luacheck_incremental_skip() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"luacheck\"]\n",
     )
     .unwrap();
@@ -83,7 +83,7 @@ fn luacheck_no_project_discovered() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"luacheck\"]\n",
     )
     .unwrap();

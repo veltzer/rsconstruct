@@ -8,7 +8,7 @@ fn ascii_check_valid_file() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"ascii_check\"]\n",
     )
     .unwrap();
@@ -41,7 +41,7 @@ fn ascii_check_incremental_skip() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"ascii_check\"]\n",
     )
     .unwrap();
@@ -73,7 +73,7 @@ fn ascii_check_non_ascii_fails() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"ascii_check\"]\n",
     )
     .unwrap();

@@ -51,9 +51,9 @@ optimization = 3
         tera_content
     ).expect("Failed to write tera file");
 
-    // Run rsb build
+    // Run rsbuild build
     let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "rsb build failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(output.status.success(), "rsbuild build failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Check that the output file was created
     let output_file = project_path.join("app.config");
@@ -107,7 +107,7 @@ fn incremental_build() {
     assert!(stdout2.contains("[tera] Skipping (unchanged):"));
 
     // Verify cache directory exists
-    assert!(project_path.join(".rsb/db.redb").exists());
+    assert!(project_path.join(".rsbuild/db.redb").exists());
 }
 
 #[test]
@@ -172,7 +172,7 @@ fn extra_inputs_triggers_rebuild() {
 
     // Configure tera processor with extra_inputs pointing to the config file
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"tera\"]\n\n[processor.tera]\nextra_inputs = [\"config/settings.py\"]\n"
     ).unwrap();
 
@@ -234,7 +234,7 @@ fn extra_inputs_nonexistent_file_fails() {
 
     // Configure with a nonexistent extra_input — should cause an error
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"tera\"]\n\n[processor.tera]\nextra_inputs = [\"nonexistent_file.txt\"]\n"
     ).unwrap();
 
@@ -262,7 +262,7 @@ fn subdirectory_output() {
     ).unwrap();
 
     let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "rsb build failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(output.status.success(), "rsbuild build failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Output should be at sub/output.txt (templates.tera/ prefix stripped)
     let output_file = project_path.join("sub/output.txt");

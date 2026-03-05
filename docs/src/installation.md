@@ -8,26 +8,26 @@ Using the GitHub CLI:
 
 ```bash
 # x86_64
-gh release download latest --repo veltzer/rsb --pattern 'rsb-x86_64-unknown-linux-gnu' --output rsb --clobber
+gh release download latest --repo veltzer/rsbuild --pattern 'rsbuild-x86_64-unknown-linux-gnu' --output rsbuild --clobber
 
 # aarch64 / arm64
-gh release download latest --repo veltzer/rsb --pattern 'rsb-aarch64-unknown-linux-gnu' --output rsb --clobber
+gh release download latest --repo veltzer/rsbuild --pattern 'rsbuild-aarch64-unknown-linux-gnu' --output rsbuild --clobber
 
-chmod +x rsb
-sudo mv rsb /usr/local/bin/
+chmod +x rsbuild
+sudo mv rsbuild /usr/local/bin/
 ```
 
 Or with curl:
 
 ```bash
 # x86_64
-curl -Lo rsb https://github.com/veltzer/rsb/releases/download/latest/rsb-x86_64-unknown-linux-gnu
+curl -Lo rsbuild https://github.com/veltzer/rsbuild/releases/download/latest/rsbuild-x86_64-unknown-linux-gnu
 
 # aarch64 / arm64
-curl -Lo rsb https://github.com/veltzer/rsb/releases/download/latest/rsb-aarch64-unknown-linux-gnu
+curl -Lo rsbuild https://github.com/veltzer/rsbuild/releases/download/latest/rsbuild-aarch64-unknown-linux-gnu
 
-chmod +x rsb
-sudo mv rsb /usr/local/bin/
+chmod +x rsbuild
+sudo mv rsbuild /usr/local/bin/
 ```
 
 ## Build from source
@@ -36,7 +36,7 @@ sudo mv rsb /usr/local/bin/
 cargo build --release
 ```
 
-The binary will be at `target/release/rsb`.
+The binary will be at `target/release/rsbuild`.
 
 ## Release profile
 

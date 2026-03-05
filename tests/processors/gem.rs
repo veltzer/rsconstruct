@@ -13,13 +13,13 @@ fn gem_valid_project() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"gem\"]\n",
     )
     .unwrap();
 
     // Exclude gems from file index
-    fs::write(project_path.join(".rsbignore"), "gems/\n").unwrap();
+    fs::write(project_path.join(".rsbuildignore"), "gems/\n").unwrap();
 
     fs::write(
         project_path.join("Gemfile"),
@@ -54,12 +54,12 @@ fn gem_incremental_skip() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"gem\"]\n",
     )
     .unwrap();
 
-    fs::write(project_path.join(".rsbignore"), "gems/\n").unwrap();
+    fs::write(project_path.join(".rsbuildignore"), "gems/\n").unwrap();
 
     fs::write(
         project_path.join("Gemfile"),
@@ -88,7 +88,7 @@ fn gem_no_project_discovered() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"gem\"]\n",
     )
     .unwrap();

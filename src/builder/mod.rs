@@ -463,8 +463,8 @@ impl Builder {
     pub fn watch_paths(&self) -> Vec<PathBuf> {
         let mut paths: Vec<PathBuf> = Vec::new();
 
-        // Always watch rsb.toml
-        let config_path = PathBuf::from("rsb.toml");
+        // Always watch rsbuild.toml
+        let config_path = PathBuf::from("rsbuild.toml");
         if config_path.exists() {
             paths.push(config_path);
         }

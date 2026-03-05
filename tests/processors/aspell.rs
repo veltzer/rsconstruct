@@ -13,7 +13,7 @@ fn aspell_valid_file() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"aspell\"]\n",
     )
     .unwrap();
@@ -58,7 +58,7 @@ fn aspell_incremental_skip() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"aspell\"]\n",
     )
     .unwrap();
@@ -96,7 +96,7 @@ fn aspell_no_project_discovered() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"aspell\"]\n\n[processor.aspell]\nscan_dir = \"aspell_docs\"\n",
     )
     .unwrap();

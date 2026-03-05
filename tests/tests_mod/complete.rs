@@ -10,7 +10,7 @@ fn complete_bash_generates_output() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(!stdout.is_empty(), "Expected completion output for bash");
-    assert!(stdout.contains("rsb"), "Expected 'rsb' in bash completion script");
+    assert!(stdout.contains("rsbuild"), "Expected 'rsbuild' in bash completion script");
 }
 
 #[test]
@@ -44,7 +44,7 @@ fn complete_from_config() {
 
     // setup_test_project doesn't set completions config, add it
     let config = "[processor]\nenabled = [\"tera\"]\n\n[completions]\nshells = [\"bash\"]\n";
-    std::fs::write(project_path.join("rsb.toml"), config).expect("Failed to write rsb.toml");
+    std::fs::write(project_path.join("rsbuild.toml"), config).expect("Failed to write rsbuild.toml");
 
     // Running complete without arguments should use config
     let output = run_rsb_with_env(project_path, &["complete"], &[("NO_COLOR", "1")]);
@@ -52,5 +52,5 @@ fn complete_from_config() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(!stdout.is_empty(), "Expected completion output from config");
-    assert!(stdout.contains("rsb"), "Expected 'rsb' in completion output");
+    assert!(stdout.contains("rsbuild"), "Expected 'rsbuild' in completion output");
 }

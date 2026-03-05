@@ -13,7 +13,7 @@ fn yamllint_valid_yaml() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"yamllint\"]\n",
     )
     .unwrap();
@@ -51,7 +51,7 @@ fn yamllint_incremental_skip() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"yamllint\"]\n",
     )
     .unwrap();

@@ -10,7 +10,7 @@ fn status_command() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/status_test.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -41,7 +41,7 @@ fn status_empty_project() {
 
     // No sleep dir, no templates to process — disable all processors
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = []\n"
     ).unwrap();
 

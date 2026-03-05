@@ -8,7 +8,7 @@ fn setup_tags_project(md_files: &[(&str, &str)], tags_file: Option<&str>) -> Tem
     let p = temp_dir.path();
 
     let config = "[processor]\nenabled = [\"tags\"]\n";
-    fs::write(p.join("rsb.toml"), config).unwrap();
+    fs::write(p.join("rsbuild.toml"), config).unwrap();
 
     for (name, content) in md_files {
         if let Some(parent) = std::path::Path::new(name).parent() {
@@ -47,7 +47,7 @@ fn tags_basic_build_and_query() {
     build_project(p);
     assert!(p.join("out/tags/tags.db").exists(), "tags database should be created");
 
-    // `rsb tags list` should show all tags sorted
+    // `rsbuild tags list` should show all tags sorted
     let list_output = run_rsb_with_env(p, &["tags", "list"], &[("NO_COLOR", "1")]);
     assert!(list_output.status.success());
     let stdout = String::from_utf8_lossy(&list_output.stdout);
@@ -58,21 +58,21 @@ fn tags_basic_build_and_query() {
     assert!(tags.contains(&"level=beginner"));
     assert!(tags.contains(&"level=advanced"));
 
-    // `rsb tags files docker` should return both files
+    // `rsbuild tags files docker` should return both files
     let files_output = run_rsb_with_env(p, &["tags", "files", "docker"], &[("NO_COLOR", "1")]);
     assert!(files_output.status.success());
     let files_stdout = String::from_utf8_lossy(&files_output.stdout);
     assert!(files_stdout.contains("course1.md"));
     assert!(files_stdout.contains("course2.md"));
 
-    // `rsb tags files docker rust` (AND) should return only course2
+    // `rsbuild tags files docker rust` (AND) should return only course2
     let and_output = run_rsb_with_env(p, &["tags", "files", "docker", "rust"], &[("NO_COLOR", "1")]);
     assert!(and_output.status.success());
     let and_stdout = String::from_utf8_lossy(&and_output.stdout);
     assert!(!and_stdout.contains("course1.md"));
     assert!(and_stdout.contains("course2.md"));
 
-    // `rsb tags files --or python rust` (OR) should return both files
+    // `rsbuild tags files --or python rust` (OR) should return both files
     let or_output = run_rsb_with_env(p, &["tags", "files", "--or", "python", "rust"], &[("NO_COLOR", "1")]);
     assert!(or_output.status.success());
     let or_stdout = String::from_utf8_lossy(&or_output.stdout);
@@ -164,7 +164,7 @@ fn tags_init_and_unused() {
     // Add an extra tag that doesn't exist in any file
     fs::write(p.join(".tags"), "used\nobsolete\n").unwrap();
 
-    // `rsb tags unused` should report "obsolete" as unused
+    // `rsbuild tags unused` should report "obsolete" as unused
     let unused = run_rsb_with_env(p, &["tags", "unused"], &[("NO_COLOR", "1")]);
     assert!(unused.status.success());
     let unused_stdout = String::from_utf8_lossy(&unused.stdout);

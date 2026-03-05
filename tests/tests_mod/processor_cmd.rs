@@ -159,11 +159,11 @@ fn processors_files_json_empty() {
 
 #[test]
 fn processors_list_works_without_config() {
-    // Run from a temp dir with no rsb.toml
+    // Run from a temp dir with no rsbuild.toml
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
 
     let output = run_rsb_with_env(temp_dir.path(), &["processors", "list"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "processors list should work without rsb.toml: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(output.status.success(), "processors list should work without rsbuild.toml: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("tera"), "Expected tera processor in output");
@@ -182,7 +182,7 @@ fn per_processor_enabled_false_disables_processor() {
 
     // Enable sleep in the enabled list but disable it via per-processor config
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n\n[processor.sleep]\nenabled = false\n"
     ).unwrap();
 
@@ -210,7 +210,7 @@ fn per_processor_enabled_true_is_default() {
 
     // Enable sleep in the enabled list without setting per-processor enabled
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -288,7 +288,7 @@ fn per_processor_enabled_false_non_hidden_processor() {
 
     // Enable tera in the enabled list but disable it via per-processor config
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"tera\"]\n\n[processor.tera]\nenabled = false\n"
     ).unwrap();
 

@@ -64,7 +64,7 @@ fn config_vars_substitution_array() {
 
     // Write config with vars section and array variable
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         r#"
 [vars]
 my_excludes = ["/kernel/", "/vendor/"]
@@ -93,7 +93,7 @@ fn config_vars_substitution_string() {
 
     // Write config with a string variable
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         r#"
 [vars]
 my_dir = "custom_templates"
@@ -120,7 +120,7 @@ fn config_vars_multiple_uses() {
 
     // Use the same variable in multiple places
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         r#"
 [vars]
 shared_excludes = ["/out/", "/build/"]
@@ -152,7 +152,7 @@ fn config_vars_undefined_variable_error() {
 
     // Reference an undefined variable
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         r#"
 [processor]
 enabled = ["tera"]
@@ -176,7 +176,7 @@ fn config_vars_no_vars_section() {
 
     // Config without vars section should work normally
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         r#"
 [processor]
 enabled = ["tera"]
@@ -213,7 +213,7 @@ fn config_validate_unknown_processor() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"nonexistent_proc\"]\n"
     ).unwrap();
 
@@ -231,7 +231,7 @@ fn config_validate_no_matching_files_warning() {
 
     // Enable sleep processor but don't create any .sleep files
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -250,7 +250,7 @@ fn config_validate_json() {
 
     // Enable sleep processor but don't create any .sleep files (to get a warning)
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 

@@ -3,7 +3,7 @@ settings for this project
 """
 
 # Sample configuration file
-PROJECT_NAME = "RSB"
+PROJECT_NAME = "RSBuild"
 VERSION = "0.1.0"
 AUTHOR = "Mark Veltzer"
 DESCRIPTION = "Rust Build Tool"

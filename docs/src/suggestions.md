@@ -11,7 +11,7 @@ Grades:
 
 ### Add tests for untested generators
 - 14 out of 17 generator processors have no integration tests: a2x, drawio, gem, libreoffice, markdown, marp, mermaid, npm, pandoc, pdflatex, pdfunite, pip, sphinx.
-- The test pattern is well-established in `tests/processors/` — each test creates a temp project, writes source files, runs `rsb build`, and verifies outputs.
+- The test pattern is well-established in `tests/processors/` — each test creates a temp project, writes source files, runs `rsbuild build`, and verifies outputs.
 - **Urgency**: high | **Complexity**: low (per processor)
 
 ### Add tests for untested checkers
@@ -102,7 +102,7 @@ Grades:
 
 ### Distributed builds
 - Run builds across multiple machines, similar to distcc or icecream for C/C++.
-- A coordinator node distributes work to worker nodes, each running rsb in worker mode.
+- A coordinator node distributes work to worker nodes, each running rsbuild in worker mode.
 - Workers execute products and return outputs to the coordinator, which caches them locally.
 - Challenges: network overhead for small products, identical tool versions across workers, local filesystem access.
 - **Urgency**: low | **Complexity**: high
@@ -119,10 +119,10 @@ Grades:
 - **Urgency**: medium | **Complexity**: medium
 
 ### Persistent daemon mode
-- Keep rsb running as a background daemon to avoid startup overhead.
+- Keep rsbuild running as a background daemon to avoid startup overhead.
 - Benefits: instant file index via inotify, warm Lua VMs, connection pooling, faster incremental builds.
-- Daemon listens on Unix socket (`.rsb/daemon.sock`).
-- `rsb watch` becomes a client that triggers rebuilds on file events.
+- Daemon listens on Unix socket (`.rsbuild/daemon.sock`).
+- `rsbuild watch` becomes a client that triggers rebuilds on file events.
 - **Urgency**: low | **Complexity**: high
 
 ### Persistent workers
@@ -147,7 +147,7 @@ Grades:
 ### Build profiles
 - Named configuration sets for different build scenarios (ci, dev, release).
 - Profiles inherit from base configuration and override specific values.
-- Usage: `rsb build --profile=ci`
+- Usage: `rsbuild build --profile=ci`
 - **Urgency**: medium | **Complexity**: medium
 
 ### Conditional processors
@@ -157,15 +157,15 @@ Grades:
 
 ### Target aliases
 - Define named groups of processors for easy invocation.
-- Usage: `rsb build @lint`, `rsb build @test`
+- Usage: `rsbuild build @lint`, `rsbuild build @test`
 - Special aliases: `@all`, `@changed`, `@failed`
-- File-based targeting: `rsb build src/main.c`
+- File-based targeting: `rsbuild build src/main.c`
 - **Urgency**: medium | **Complexity**: medium
 
 ## Graph & Query
 
 ### Build graph query language
-- Support queries like `rsb query deps out/foo`, `rsb query rdeps src/main.c`, `rsb query processor:ruff`.
+- Support queries like `rsbuild query deps out/foo`, `rsbuild query rdeps src/main.c`, `rsbuild query processor:ruff`.
 - Useful for debugging builds and CI systems that want to build only affected targets.
 - **Urgency**: low | **Complexity**: medium
 
@@ -177,21 +177,21 @@ Grades:
 ### Critical path analysis
 - Identify the longest sequential chain of actions in a build.
 - Helps users optimize their slowest builds by showing what's actually on the critical path.
-- Display with `rsb build --critical-path` or include in `--timings` output.
+- Display with `rsbuild build --critical-path` or include in `--timings` output.
 - **Urgency**: medium | **Complexity**: medium
 
 ## Extensibility
 
 ### Plugin registry
 - A central repository of community-contributed Lua plugins.
-- Install with `rsb plugin install eslint`.
+- Install with `rsbuild plugin install eslint`.
 - Registry could be a GitHub repository with a JSON index.
-- Version pinning in `rsb.toml`.
+- Version pinning in `rsbuild.toml`.
 - **Urgency**: low | **Complexity**: high
 
 ### Project templates
 - Initialize new projects with pre-configured processors and directory structure.
-- `rsb init --template=python`, `rsb init --template=cpp`, etc.
+- `rsbuild init --template=python`, `rsbuild init --template=cpp`, etc.
 - Custom templates from local directories or URLs.
 - **Urgency**: low | **Complexity**: medium
 
@@ -201,14 +201,14 @@ Grades:
 
 ### Output groups / subtargets
 - Named subsets of a target's outputs that can be requested selectively.
-- E.g., `rsb build --output-group=debug` or per-product subtarget selection.
+- E.g., `rsbuild build --output-group=debug` or per-product subtarget selection.
 - Useful for targets that produce multiple output types (headers, binaries, docs).
 - **Urgency**: low | **Complexity**: medium
 
 ### Visibility / access control
 - Restrict which processors can consume which files or directories.
 - Prevents accidental cross-boundary dependencies in large repos.
-- Config: per-processor `visibility` rules or directory-level `.rsb-visibility` files.
+- Config: per-processor `visibility` rules or directory-level `.rsbuild-visibility` files.
 - **Urgency**: low | **Complexity**: medium
 
 ## Developer Experience
@@ -216,12 +216,12 @@ Grades:
 ### Build profiling / tracing
 - Generate Chrome trace format or flamegraph SVG showing what ran when, including parallel lanes.
 - Include critical path highlighting, CPU usage, and idle time analysis.
-- Usage: `rsb build --trace=build.json`
+- Usage: `rsbuild build --trace=build.json`
 - Viewable in `chrome://tracing` or Perfetto UI.
 - **Urgency**: medium | **Complexity**: medium
 
 ### Build Event Protocol / structured event stream
-- rsb has `--json` on stdout, but a proper Build Event Protocol (file or gRPC stream) enables external dashboards, CI integrations, and build analytics services.
+- rsbuild has `--json` on stdout, but a proper Build Event Protocol (file or gRPC stream) enables external dashboards, CI integrations, and build analytics services.
 - Write events to a file (`--build-event-log=events.pb`) or stream to a remote service.
 - Richer event types than current JSON Lines: action graph, configuration, progress, test results.
 - **Urgency**: medium | **Complexity**: medium
@@ -232,9 +232,9 @@ Grades:
 - Config: `notify = true`, `notify_on_success = false`.
 - **Urgency**: low | **Complexity**: low
 
-### `rsb build <target>` — Build specific targets
+### `rsbuild build <target>` — Build specific targets
 - Build only specific targets by name or pattern:
-  `rsb build src/main.c`, `rsb build out/cc_single_file/`, `rsb build "*.py"`
+  `rsbuild build src/main.c`, `rsbuild build out/cc_single_file/`, `rsbuild build "*.py"`
 - **Urgency**: medium | **Complexity**: medium
 
 ### Parallel dependency analysis
@@ -250,13 +250,13 @@ Grades:
 
 ### Build log capture
 - Save stdout/stderr from each product execution to a log file.
-- Config: `log_dir = ".rsb/logs"`, `log_retention = 10`.
-- `rsb log ruff:main.py` to view logs.
+- Config: `log_dir = ".rsbuild/logs"`, `log_retention = 10`.
+- `rsbuild log ruff:main.py` to view logs.
 - **Urgency**: low | **Complexity**: medium
 
 ### Build timing history
-- Store timing data to `.rsb/timings.json` after each build.
-- `rsb timings` shows slowest products, trends, time per processor.
+- Store timing data to `.rsbuild/timings.json` after each build.
+- `rsbuild timings` shows slowest products, trends, time per processor.
 - **Urgency**: low | **Complexity**: medium
 
 ### Remote cache authentication
@@ -264,43 +264,43 @@ Grades:
 - Variable substitution from environment for secrets.
 - **Urgency**: medium | **Complexity**: medium
 
-### `rsb fmt` — Auto-format source files
+### `rsbuild fmt` — Auto-format source files
 - Run formatters (black, isort, clang-format, rustfmt) that modify files in-place.
 - Distinct from checkers which only verify — formatters actually fix formatting.
 - Could be a new processor type (`Formatter`) or a convenience command that runs formatter processors.
 - **Urgency**: medium | **Complexity**: medium
 
-### `rsb why <file>` — Explain why a file is built
+### `rsbuild why <file>` — Explain why a file is built
 - Show which processors consume a given file, what products it belongs to, and what triggered a rebuild.
 - Useful for debugging unexpected rebuilds or understanding the build graph.
 - **Urgency**: medium | **Complexity**: low
 
-### `rsb doctor` — Diagnose build environment
+### `rsbuild doctor` — Diagnose build environment
 - Check for common issues: missing tools, misconfigured processors, stale cache, version mismatches.
 - Report warnings and suggestions for fixing problems.
 - **Urgency**: medium | **Complexity**: low
 
-### `rsb lint` — Run only checkers
+### `rsbuild lint` — Run only checkers
 - Convenience command to run only checker processors.
-- Equivalent to `rsb build -p ruff,pylint,...` but shorter.
+- Equivalent to `rsbuild build -p ruff,pylint,...` but shorter.
 - **Urgency**: low | **Complexity**: low
 
-### `rsb sloc` — Source lines of code statistics
+### `rsbuild sloc` — Source lines of code statistics
 - Count source lines of code across the project, broken down by language/extension.
-- Leverage rsb's existing file index and extension-to-language mapping from processor configs.
+- Leverage rsbuild's existing file index and extension-to-language mapping from processor configs.
 - Show: files, blank lines, comment lines, code lines per language. Total summary.
 - Optional COCOMO-style effort/cost estimation (person-months, schedule, cost at configurable salary).
-- Usage: `rsb sloc`, `rsb sloc --json`, `rsb sloc --cocomo --salary 100000`
+- Usage: `rsbuild sloc`, `rsbuild sloc --json`, `rsbuild sloc --cocomo --salary 100000`
 - Similar to external tools: `sloccount`, `cloc`, `tokei`.
 - **Urgency**: low | **Complexity**: medium
 
 ### Watch mode keyboard commands
-- During `rsb watch`, support `r` (rebuild), `c` (clean), `q` (quit), `Enter` (rebuild now), `s` (status).
+- During `rsbuild watch`, support `r` (rebuild), `c` (clean), `q` (quit), `Enter` (rebuild now), `s` (status).
 - Only activate when stdin is a TTY.
 - **Urgency**: low | **Complexity**: medium
 
 ### Layered config files
-- Support config file layering: system (`/etc/rsb/config.toml`), user (`~/.config/rsb/config.toml`), project (`rsb.toml`).
+- Support config file layering: system (`/etc/rsbuild/config.toml`), user (`~/.config/rsbuild/config.toml`), project (`rsbuild.toml`).
 - Lower layers provide defaults, higher layers override.
 - Per-command overrides via `[build]`, `[watch]` sections.
 - Similar to Bazel's `.bazelrc` layering.
@@ -328,11 +328,11 @@ Grades:
 ### Garbage collection policy
 - Time-based or size-based cache policies: "keep cache under 1GB" or "evict entries older than 30 days."
 - Config: `max_size = "1GB"`, `max_age = "30d"`, `gc_policy = "lru"`.
-- `rsb cache gc` for manual garbage collection.
+- `rsbuild cache gc` for manual garbage collection.
 - **Urgency**: low | **Complexity**: medium
 
 ### Shared cache across branches
-- Surface in `rsb status` when products are restorable from another branch.
+- Surface in `rsbuild status` when products are restorable from another branch.
 - Already works implicitly via input hash matching.
 - **Urgency**: low | **Complexity**: low
 
@@ -347,11 +347,11 @@ Grades:
 ### Hermetic builds
 - Control all inputs beyond tool versions: isolate env vars, control timestamps, sandbox network, pin system libraries.
 - Config: `hermetic = true`, `allowed_env = ["HOME", "PATH"]`.
-- Verification: `rsb build --verify` builds twice and compares outputs.
+- Verification: `rsbuild build --verify` builds twice and compares outputs.
 - **Urgency**: low | **Complexity**: high
 
 ### Determinism verification
-- `rsb build --verify` mode that builds each product twice and compares outputs.
+- `rsbuild build --verify` mode that builds each product twice and compares outputs.
 - **Urgency**: low | **Complexity**: medium
 
 ## Security

@@ -10,7 +10,7 @@ fn dry_run_shows_build_actions() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/dry.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -44,7 +44,7 @@ fn dry_run_short_flag() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/short.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -64,7 +64,7 @@ fn dry_run_with_force() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/force_dry.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 

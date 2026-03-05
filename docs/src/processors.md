@@ -1,6 +1,6 @@
 # Processors
 
-RSB uses **processors** to discover and build products. Each processor scans for source files matching its conventions and produces output files.
+RSBuild uses **processors** to discover and build products. Each processor scans for source files matching its conventions and produces output files.
 
 ## Processor Types
 
@@ -10,7 +10,7 @@ Processors are classified into three types:
 - **Checkers** — validate input files without producing output files (e.g., linters, spell checkers, static analyzers). Success is recorded in the cache database.
 - **Mass generators** — produce a directory of output files without enumerating them individually (e.g., sphinx, mdbook, cargo, pip, npm, gem). Output directories can be cached and restored as a whole — see [Output directory caching](#output-directory-caching) below.
 
-The processor type is displayed in `rsb processors list` output:
+The processor type is displayed in `rsbuild processors list` output:
 
 ```
 cc_single_file [generator] enabled
@@ -18,7 +18,7 @@ ruff [checker] enabled
 tera [generator] enabled
 ```
 
-For checkers, `rsb processors files` shows "(checker)" instead of output paths since no files are produced:
+For checkers, `rsbuild processors files` shows "(checker)" instead of output paths since no files are produced:
 
 ```
 [ruff] (3 products)
@@ -28,16 +28,16 @@ src/bar.py → (checker)
 
 ## Configuration
 
-Enable processors in `rsb.toml`:
+Enable processors in `rsbuild.toml`:
 
 ```toml
 [processor]
 enabled = ["tera", "ruff", "pylint", "pyrefly", "cc_single_file", "cppcheck", "shellcheck", "spellcheck", "make", "yamllint", "jq", "jsonlint", "taplo", "json_schema"]
 ```
 
-Use `rsb processors list` to see available processors with enabled/detected status and descriptions.
-Use `rsb processors list --all` to include hidden processors.
-Use `rsb processors files` to see which files each processor discovers.
+Use `rsbuild processors list` to see available processors with enabled/detected status and descriptions.
+Use `rsbuild processors list --all` to include hidden processors.
+Use `rsbuild processors files` to see which files each processor discovers.
 
 ## Available Processors
 
@@ -66,11 +66,11 @@ Use `rsb processors files` to see which files each processor discovers.
 ## Output Directory Caching
 
 Mass generators (sphinx, mdbook, cargo, pip, npm, gem) produce output in directories
-rather than individual files. RSB can cache these entire directories so that after
-`rsb clean && rsb build`, the output is restored from cache instead of being regenerated.
+rather than individual files. RSBuild can cache these entire directories so that after
+`rsbuild clean && rsbuild build`, the output is restored from cache instead of being regenerated.
 
-After a successful build, RSB walks the output directory, stores every file as a
-content-addressed blob in `.rsb/objects/`, and records a manifest (path, checksum,
+After a successful build, RSBuild walks the output directory, stores every file as a
+content-addressed blob in `.rsbuild/objects/`, and records a manifest (path, checksum,
 Unix permissions) in the cache entry. On restore, the entire directory is recreated
 from cached objects with permissions preserved.
 

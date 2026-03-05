@@ -13,7 +13,7 @@ fn marp_valid_file() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"marp\"]\n\n[processor.marp]\nformats = [\"html\"]\n",
     )
     .unwrap();
@@ -46,7 +46,7 @@ fn marp_no_project_discovered() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"marp\"]\n\n[processor.marp]\nscan_dir = \"marp\"\n",
     )
     .unwrap();

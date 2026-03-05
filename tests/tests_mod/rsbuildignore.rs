@@ -3,7 +3,7 @@ use tempfile::TempDir;
 use crate::common::{setup_test_project, setup_cc_project, run_rsb_with_env};
 
 #[test]
-fn rsbignore_excludes_sleep_files() {
+fn rsbuildignore_excludes_sleep_files() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
@@ -13,19 +13,19 @@ fn rsbignore_excludes_sleep_files() {
     fs::write(project_path.join("sleep/excluded.sleep"), "0.01").unwrap();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
-    // Create .rsbignore that excludes one file
+    // Create .rsbuildignore that excludes one file
     fs::write(
-        project_path.join(".rsbignore"),
+        project_path.join(".rsbuildignore"),
         "sleep/excluded.sleep\n"
     ).unwrap();
 
     // Build
     let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "rsb build failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(output.status.success(), "rsbuild build failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Verify via output - only included file should be processed
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -34,7 +34,7 @@ fn rsbignore_excludes_sleep_files() {
 }
 
 #[test]
-fn rsbignore_glob_pattern() {
+fn rsbuildignore_glob_pattern() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
@@ -45,19 +45,19 @@ fn rsbignore_glob_pattern() {
     fs::write(project_path.join("sleep/subdir/skip2.sleep"), "0.01").unwrap();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
     // Use a glob pattern to exclude the entire subdirectory
     fs::write(
-        project_path.join(".rsbignore"),
+        project_path.join(".rsbuildignore"),
         "# Exclude all files in subdir\nsleep/subdir/**\n"
     ).unwrap();
 
     // Build
     let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "rsb build failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(output.status.success(), "rsbuild build failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Verify via output - keep.sleep should be processed, subdir files should not
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -67,32 +67,32 @@ fn rsbignore_glob_pattern() {
 }
 
 #[test]
-fn rsbignore_no_file() {
+fn rsbuildignore_no_file() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    // Create sleep directory — no .rsbignore
+    // Create sleep directory — no .rsbuildignore
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/normal.sleep"), "0.01").unwrap();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
-    // Build should work fine without .rsbignore
+    // Build should work fine without .rsbuildignore
     let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "rsb build failed without .rsbignore: {}",
+    assert!(output.status.success(), "rsbuild build failed without .rsbuildignore: {}",
         String::from_utf8_lossy(&output.stderr));
 
     // Verify via output that the file was processed
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("normal.sleep"),
-        "Sleep file should be processed when no .rsbignore exists: {}", stdout);
+        "Sleep file should be processed when no .rsbuildignore exists: {}", stdout);
 }
 
 #[test]
-fn rsbignore_comments_and_blank_lines() {
+fn rsbuildignore_comments_and_blank_lines() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
@@ -101,13 +101,13 @@ fn rsbignore_comments_and_blank_lines() {
     fs::write(project_path.join("sleep/b.sleep"), "0.01").unwrap();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
-    // .rsbignore with comments, blank lines, and one real pattern
+    // .rsbuildignore with comments, blank lines, and one real pattern
     fs::write(
-        project_path.join(".rsbignore"),
+        project_path.join(".rsbuildignore"),
         "# This is a comment\n\n   \n# Another comment\nsleep/b.sleep\n\n"
     ).unwrap();
 
@@ -121,7 +121,7 @@ fn rsbignore_comments_and_blank_lines() {
 }
 
 #[test]
-fn rsbignore_cc_processor() {
+fn rsbuildignore_cc_processor() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -141,7 +141,7 @@ fn rsbignore_cc_processor() {
 
     // Exclude the subdirectory
     fs::write(
-        project_path.join(".rsbignore"),
+        project_path.join(".rsbuildignore"),
         "src/excluded/**\n"
     ).unwrap();
 
@@ -158,7 +158,7 @@ fn rsbignore_cc_processor() {
 }
 
 #[test]
-fn rsbignore_leading_slash() {
+fn rsbuildignore_leading_slash() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -177,7 +177,7 @@ fn rsbignore_leading_slash() {
 
     // Leading '/' should work like .gitignore (anchored to project root)
     fs::write(
-        project_path.join(".rsbignore"),
+        project_path.join(".rsbuildignore"),
         "/src/skip_dir/**\n"
     ).unwrap();
 
@@ -194,7 +194,7 @@ fn rsbignore_leading_slash() {
 }
 
 #[test]
-fn rsbignore_trailing_slash() {
+fn rsbuildignore_trailing_slash() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -213,7 +213,7 @@ fn rsbignore_trailing_slash() {
 
     // Trailing '/' should exclude the directory and all its contents
     fs::write(
-        project_path.join(".rsbignore"),
+        project_path.join(".rsbuildignore"),
         "/src/skipme/\n"
     ).unwrap();
 

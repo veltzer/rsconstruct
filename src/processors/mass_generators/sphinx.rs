@@ -71,7 +71,7 @@ impl ProductDiscovery for SphinxProcessor {
         let extra = resolve_extra_inputs(&self.config.extra_inputs)?;
         let siblings = SiblingFilter {
             extensions: &[".rst", ".py", ".md"],
-            excludes: &["/.git/", "/out/", "/.rsb/", "/_build/", "/docs/"],
+            excludes: &["/.git/", "/out/", "/.rsbuild/", "/_build/", "/docs/"],
         };
         for anchor in files {
             let anchor_dir = anchor.parent().map(|p| p.to_path_buf()).unwrap_or_default();

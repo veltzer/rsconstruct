@@ -1,6 +1,6 @@
 //! JSON output mode for machine-readable build events.
 //!
-//! When enabled, rsb outputs JSON Lines (one JSON object per line) instead of
+//! When enabled, rsbuild outputs JSON Lines (one JSON object per line) instead of
 //! human-readable text. This is useful for CI integration, build dashboards,
 //! and IDE integration.
 
@@ -80,7 +80,7 @@ pub enum BuildEvent {
 
 }
 
-/// Processor file entry for `rsb processors files --json`.
+/// Processor file entry for `rsbuild processors files --json`.
 #[derive(Debug, Serialize)]
 pub struct ProcessorFileEntry {
     pub processor: String,
@@ -89,7 +89,7 @@ pub struct ProcessorFileEntry {
     pub outputs: Vec<String>,
 }
 
-/// Entry for `rsb processors list --json`.
+/// Entry for `rsbuild processors list --json`.
 #[derive(Debug, Serialize)]
 pub struct ProcessorListEntry {
     pub name: String,
@@ -101,14 +101,14 @@ pub struct ProcessorListEntry {
     pub description: String,
 }
 
-/// Entry for `rsb tools list --json`.
+/// Entry for `rsbuild tools list --json`.
 #[derive(Debug, Serialize)]
 pub struct ToolListEntry {
     pub tool: String,
     pub processors: Vec<String>,
 }
 
-/// Output for `rsb tools stats --json`.
+/// Output for `rsbuild tools stats --json`.
 #[derive(Debug, Serialize)]
 pub struct ToolStatsOutput {
     pub tools: Vec<ToolStat>,
@@ -116,7 +116,7 @@ pub struct ToolStatsOutput {
     pub summary: StatsSummary,
 }
 
-/// Per-tool availability info for `rsb tools stats --json`.
+/// Per-tool availability info for `rsbuild tools stats --json`.
 #[derive(Debug, Serialize)]
 pub struct ToolStat {
     pub name: String,
@@ -126,7 +126,7 @@ pub struct ToolStat {
     pub install_command: Option<String>,
 }
 
-/// Per-runtime summary for `rsb tools stats --json`.
+/// Per-runtime summary for `rsbuild tools stats --json`.
 #[derive(Debug, Serialize)]
 pub struct RuntimeStat {
     pub runtime: String,
@@ -135,7 +135,7 @@ pub struct RuntimeStat {
     pub missing: usize,
 }
 
-/// Overall summary for `rsb tools stats --json`.
+/// Overall summary for `rsbuild tools stats --json`.
 #[derive(Debug, Serialize)]
 pub struct StatsSummary {
     pub total_tools: usize,

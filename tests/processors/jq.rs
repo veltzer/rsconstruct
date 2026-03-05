@@ -13,7 +13,7 @@ fn jq_valid_json() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"jq\"]\n",
     )
     .unwrap();
@@ -51,7 +51,7 @@ fn jq_incremental_skip() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"jq\"]\n",
     )
     .unwrap();

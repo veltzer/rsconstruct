@@ -6,7 +6,7 @@ use crate::common::{run_rsb_with_env, run_rsb_json};
 fn setup_cc_project(project_path: &std::path::Path, cc_yaml: &str) {
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"cc\"]\n",
     ).unwrap();
     fs::write(project_path.join("cc.yaml"), cc_yaml).unwrap();
@@ -19,7 +19,7 @@ fn cc_no_project_discovered() {
 
     // Enable cc processor but don't create cc.yaml
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"cc\"]\n",
     ).unwrap();
 
@@ -166,7 +166,7 @@ fn cc_single_invocation_mode() {
 
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"cc\"]\n\n[processor.cc]\nsingle_invocation = true\n",
     ).unwrap();
     fs::write(

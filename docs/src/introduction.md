@@ -1,4 +1,4 @@
-# RSB - Rust Build Tool
+# RSBuild - Rust Build Tool
 
 I added this
 
@@ -13,7 +13,7 @@ A fast, incremental build tool written in Rust with C/C++ compilation, template 
 - **Python linting** with ruff and pylint
 - **Documentation spell checking** using hunspell dictionaries
 - **Make integration** — run make in directories containing Makefiles
-- **`.gitignore` support** — respects `.gitignore` and `.rsbignore` patterns
+- **`.gitignore` support** — respects `.gitignore` and `.rsbuildignore` patterns
 - **Deterministic builds** — same input always produces same build order
 - **Graceful interrupt** — Ctrl+C saves progress, next build resumes where it left off
 - **Config-aware caching** — changing compiler flags or linter config triggers rebuilds

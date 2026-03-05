@@ -13,7 +13,7 @@ fn drawio_discovery() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"drawio\"]\n",
     )
     .unwrap();
@@ -48,7 +48,7 @@ fn drawio_no_project_discovered() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"drawio\"]\n",
     )
     .unwrap();

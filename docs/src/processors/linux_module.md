@@ -25,7 +25,7 @@ file's directory — not the project root.
 
 The processor is a **generator**: it knows exactly which `.ko` files it
 produces. Outputs are tracked in the build graph, cached in the object
-store, and can be restored from cache after `rsb clean` without
+store, and can be restored from cache after `rsbuild clean` without
 recompiling.
 
 ## linux-module.yaml Format
@@ -117,8 +117,8 @@ extra_inputs = []        # Extra files that trigger rebuilds
 
 ## Caching
 
-The `.ko` outputs are cached in the rsb object store. After `rsb clean`,
-a subsequent `rsb build` restores `.ko` files from cache (via hardlink or
+The `.ko` outputs are cached in the rsbuild object store. After `rsbuild clean`,
+a subsequent `rsbuild build` restores `.ko` files from cache (via hardlink or
 copy) without invoking the kernel build system. A rebuild is triggered when
 any source file or the yaml manifest changes.
 
@@ -136,7 +136,7 @@ Given this project layout:
 
 ```
 myproject/
-  rsb.toml
+  rsbuild.toml
   drivers/
     hello/
       linux-module.yaml
@@ -172,7 +172,7 @@ module_init(hello_init);
 module_exit(hello_exit);
 ```
 
-Running `rsb build` produces:
+Running `rsbuild build` produces:
 
 ```
 out/linux-module/drivers/hello/hello.ko

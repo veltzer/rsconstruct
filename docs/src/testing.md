@@ -1,6 +1,6 @@
 # Testing
 
-RSB uses integration tests exclusively. All tests live in the `tests/` directory and exercise the compiled `rsb` binary as a black box — no unit tests are embedded in `src/`.
+RSBuild uses integration tests exclusively. All tests live in the `tests/` directory and exercise the compiled `rsbuild` binary as a black box — no unit tests are embedded in `src/`.
 
 ## Running tests
 
@@ -24,7 +24,7 @@ tests/
 ├── graph.rs                    # Dependency graph tests
 ├── init.rs                     # Project initialization tests
 ├── processor_cmd.rs            # Processor list/auto/files tests
-├── rsbignore.rs                # .rsbignore / .gitignore exclusion tests
+├── rsbignore.rs                # .rsbuildignore / .gitignore exclusion tests
 ├── status.rs                   # Status command tests
 ├── tools.rs                    # Tools list/check tests
 ├── watch.rs                    # File watcher tests
@@ -56,9 +56,9 @@ This is the standard Rust pattern for grouping related integration tests into su
 
 | Helper | Purpose |
 |---|---|
-| `setup_test_project()` | Create an isolated project in a temp directory with `rsb.toml` and basic directories |
+| `setup_test_project()` | Create an isolated project in a temp directory with `rsbuild.toml` and basic directories |
 | `setup_cc_project(path)` | Create a C project structure with the `cc_single_file` processor enabled |
-| `run_rsb(dir, args)` | Execute the `rsb` binary in the given directory and return its output |
+| `run_rsb(dir, args)` | Execute the `rsbuild` binary in the given directory and return its output |
 | `run_rsb_with_env(dir, args, env)` | Same as `run_rsb` but with extra environment variables (e.g., `NO_COLOR=1`) |
 
 All helpers use `env!("CARGO_BIN_EXE_rsb")` to locate the compiled binary, ensuring tests run against the freshly built version.
@@ -90,13 +90,13 @@ These tests verify exit codes, stdout messages, and side effects (files created 
 Tests under `processors/` verify individual processor behavior: file discovery, compilation, linting, incremental skip logic, and error handling. Each processor test module follows the same pattern:
 
 1. Set up a temp project with appropriate source files
-2. Run `rsb build`
+2. Run `rsbuild build`
 3. Assert outputs exist and contain expected content
 4. Optionally modify a file and rebuild to test incrementality
 
 ### Ignore tests
 
-`rsbignore.rs` tests `.rsbignore` pattern matching: exact file patterns, glob patterns, leading `/` (anchored), trailing `/` (directory), comments, blank lines, and interaction with multiple processors.
+`rsbignore.rs` tests `.rsbuildignore` pattern matching: exact file patterns, glob patterns, leading `/` (anchored), trailing `/` (directory), comments, blank lines, and interaction with multiple processors.
 
 ## Common assertion patterns
 
@@ -150,7 +150,7 @@ assert!(stdout.contains("Processing:"));
 1. Add a test function in the appropriate file (or create a new `.rs` file under `tests/` for a new feature area)
 2. Use `setup_test_project()` or `setup_cc_project()` to create an isolated environment
 3. Write source files and configuration into the temp directory
-4. Run `rsb` with `run_rsb()` or `run_rsb_with_env()`
+4. Run `rsbuild` with `run_rsb()` or `run_rsb_with_env()`
 5. Assert on exit code, stdout/stderr content, and output file existence
 
 If adding a new processor test module, declare it in `tests/processors.rs`:

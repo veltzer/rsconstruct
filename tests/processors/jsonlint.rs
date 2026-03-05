@@ -13,7 +13,7 @@ fn jsonlint_valid_json() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"jsonlint\"]\n",
     )
     .unwrap();
@@ -51,7 +51,7 @@ fn jsonlint_incremental_skip() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"jsonlint\"]\n",
     )
     .unwrap();

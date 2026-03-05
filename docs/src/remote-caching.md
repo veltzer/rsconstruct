@@ -1,14 +1,14 @@
 # Remote Caching
 
-RSB supports sharing build artifacts across machines via remote caching. When enabled, build outputs are pushed to a remote store and can be pulled by other machines, avoiding redundant rebuilds.
+RSBuild supports sharing build artifacts across machines via remote caching. When enabled, build outputs are pushed to a remote store and can be pulled by other machines, avoiding redundant rebuilds.
 
 ## Configuration
 
-Add a `remote` URL to your `[cache]` section in `rsb.toml`:
+Add a `remote` URL to your `[cache]` section in `rsbuild.toml`:
 
 ```toml
 [cache]
-remote = "s3://my-bucket/rsb-cache"
+remote = "s3://my-bucket/rsbuild-cache"
 ```
 
 ## Supported Backends
@@ -30,9 +30,9 @@ The S3 backend uses `aws s3 cp` and `aws s3 ls` commands.
 
 ```toml
 [cache]
-remote = "http://cache-server.example.com:8080/rsb"
+remote = "http://cache-server.example.com:8080/rsbuild"
 # or
-remote = "https://cache-server.example.com/rsb"
+remote = "https://cache-server.example.com/rsbuild"
 ```
 
 Requires:
@@ -48,7 +48,7 @@ The HTTP backend expects:
 
 ```toml
 [cache]
-remote = "file:///shared/cache/rsb"
+remote = "file:///shared/cache/rsbuild"
 ```
 
 Useful for:
@@ -61,7 +61,7 @@ You can control push and pull separately:
 
 ```toml
 [cache]
-remote = "s3://my-bucket/rsb-cache"
+remote = "s3://my-bucket/rsbuild-cache"
 remote_push = true   # Push local builds to remote (default: true)
 remote_pull = true   # Pull from remote on cache miss (default: true)
 ```
@@ -72,7 +72,7 @@ To share a read-only cache (e.g., from CI):
 
 ```toml
 [cache]
-remote = "s3://ci-cache/rsb"
+remote = "s3://ci-cache/rsbuild"
 remote_push = false
 remote_pull = true
 ```
@@ -83,7 +83,7 @@ To populate a cache without using it (e.g., in CI):
 
 ```toml
 [cache]
-remote = "s3://ci-cache/rsb"
+remote = "s3://ci-cache/rsbuild"
 remote_push = true
 remote_pull = false
 ```
@@ -104,7 +104,7 @@ Remote cache stores two types of objects:
 
 ### On Build
 
-1. RSB computes the cache key and input checksum
+1. RSBuild computes the cache key and input checksum
 2. Checks local cache first
 3. If local miss and `remote_pull = true`:
    - Fetches index entry from remote
@@ -138,7 +138,7 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
 steps:
-  - run: rsb build
+  - run: rsbuild build
 ```
 
 ### Separate CI and Developer Caches
@@ -146,17 +146,17 @@ steps:
 Use different prefixes to avoid conflicts:
 
 ```toml
-# CI: rsb.toml.ci
+# CI: rsbuild.toml.ci
 [cache]
-remote = "s3://cache/rsb/ci"
+remote = "s3://cache/rsbuild/ci"
 remote_push = true
 remote_pull = true
 ```
 
 ```toml
-# Developers: rsb.toml
+# Developers: rsbuild.toml
 [cache]
-remote = "s3://cache/rsb/ci"
+remote = "s3://cache/rsbuild/ci"
 remote_push = false  # Read from CI cache only
 remote_pull = true
 ```
@@ -171,13 +171,13 @@ Cache entries are keyed by:
 To force a full rebuild ignoring caches:
 
 ```bash
-rsb build --force
+rsbuild build --force
 ```
 
 To clear only the local cache:
 
 ```bash
-rsb cache clear
+rsbuild cache clear
 ```
 
 ## Troubleshooting
@@ -206,7 +206,7 @@ Consider:
 Use verbose output to see cache operations:
 
 ```bash
-rsb build -v
+rsbuild build -v
 ```
 
 This shows which products are restored from local cache, remote cache, or rebuilt.

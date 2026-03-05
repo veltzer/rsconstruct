@@ -12,13 +12,13 @@ fn make_valid_makefile() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
-    // Put the Makefile in a subdirectory so .rsb/ cache files
+    // Put the Makefile in a subdirectory so .rsbuild/ cache files
     // (which are sibling-scanned by the make processor) don't
     // cause spurious rebuilds.
     fs::create_dir_all(project_path.join("proj")).unwrap();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"make\"]\n",
     )
     .unwrap();
@@ -58,7 +58,7 @@ fn make_incremental_skip() {
     fs::create_dir_all(project_path.join("proj")).unwrap();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"make\"]\n",
     )
     .unwrap();

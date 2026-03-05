@@ -657,7 +657,7 @@ impl BuildGraph {
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>RSB Build Graph</title>
+    <title>RSBuild Build Graph</title>
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <style>
         body {{
@@ -677,7 +677,7 @@ impl BuildGraph {
     </style>
 </head>
 <body>
-    <h1>RSB Build Graph</h1>
+    <h1>RSBuild Build Graph</h1>
     <div class="mermaid">
 {mermaid_content}
     </div>

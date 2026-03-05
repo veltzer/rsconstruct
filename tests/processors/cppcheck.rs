@@ -15,7 +15,7 @@ fn cppcheck_valid_c_file() {
     fs::create_dir_all(project_path.join("src")).unwrap();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"cppcheck\"]\n",
     )
     .unwrap();
@@ -55,7 +55,7 @@ fn cppcheck_incremental_skip() {
     fs::create_dir_all(project_path.join("src")).unwrap();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"cppcheck\"]\n",
     )
     .unwrap();

@@ -21,8 +21,8 @@ fn cache_operations() {
     let output = run_rsb(project_path, &["build"]);
     assert!(output.status.success());
     assert!(project_path.join("cached.txt").exists());
-    assert!(project_path.join(".rsb/db.redb").exists());
-    assert!(project_path.join(".rsb/objects").exists());
+    assert!(project_path.join(".rsbuild/db.redb").exists());
+    assert!(project_path.join(".rsbuild/objects").exists());
 
     // Check cache size reports objects
     let size_output = run_rsb(project_path, &["cache", "size"]);
@@ -56,8 +56,8 @@ fn cache_operations() {
     // Clear cache entirely
     let clear_output = run_rsb(project_path, &["cache", "clear"]);
     assert!(clear_output.status.success());
-    // .rsb/ exists (fresh db) but objects dir is gone
-    assert!(!project_path.join(".rsb").join("objects").exists());
+    // .rsbuild/ exists (fresh db) but objects dir is gone
+    assert!(!project_path.join(".rsbuild").join("objects").exists());
 
     // Cache size after clear should be 0
     let size_after = run_rsb(project_path, &["cache", "size"]);
@@ -75,7 +75,7 @@ fn cache_list_shows_entries() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/list_test.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -105,7 +105,7 @@ fn cache_list_empty() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = []\n"
     ).unwrap();
 
@@ -125,7 +125,7 @@ fn cache_stats_empty() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = []\n"
     ).unwrap();
 
@@ -143,7 +143,7 @@ fn cache_stats_after_build() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/stats_test.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -167,7 +167,7 @@ fn cache_stats_json() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/json_test.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 

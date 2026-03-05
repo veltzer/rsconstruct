@@ -5,9 +5,9 @@ use std::fs;
 use crate::color;
 use crate::config::default_processors;
 
-const CONFIG_FILE: &str = "rsb.toml";
+const CONFIG_FILE: &str = "rsbuild.toml";
 
-/// Load rsb.toml as a toml_edit document.
+/// Load rsbuild.toml as a toml_edit document.
 fn load_doc() -> Result<toml_edit::DocumentMut> {
     let content = fs::read_to_string(CONFIG_FILE)
         .with_context(|| format!("Failed to read {}", CONFIG_FILE))?;
@@ -15,7 +15,7 @@ fn load_doc() -> Result<toml_edit::DocumentMut> {
         .with_context(|| format!("Failed to parse {}", CONFIG_FILE))
 }
 
-/// Write a toml_edit document back to rsb.toml.
+/// Write a toml_edit document back to rsbuild.toml.
 fn save_doc(doc: &toml_edit::DocumentMut) -> Result<()> {
     fs::write(CONFIG_FILE, doc.to_string())
         .with_context(|| format!("Failed to write {}", CONFIG_FILE))
@@ -34,7 +34,7 @@ fn validate_name(name: &str) -> Result<()> {
     let all = default_processors();
     if !all.iter().any(|n| n == name) {
         bail!(
-            "Unknown processor '{}'. Run 'rsb processors list --all' to see available processors.",
+            "Unknown processor '{}'. Run 'rsbuild processors list --all' to see available processors.",
             name
         );
     }
@@ -180,7 +180,7 @@ pub(crate) fn enable_detected(detected: &HashSet<String>) -> Result<()> {
     Ok(())
 }
 
-/// Remove all [processor.*] sections from rsb.toml, returning to pure defaults.
+/// Remove all [processor.*] sections from rsbuild.toml, returning to pure defaults.
 pub(crate) fn reset() -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;

@@ -13,13 +13,13 @@ fn npm_valid_project() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"npm\"]\n",
     )
     .unwrap();
 
     // Exclude node_modules from file index so npm's package.json isn't rediscovered
-    fs::write(project_path.join(".rsbignore"), "node_modules/\n").unwrap();
+    fs::write(project_path.join(".rsbuildignore"), "node_modules/\n").unwrap();
 
     // Need at least one dependency so npm creates node_modules
     fs::write(
@@ -55,13 +55,13 @@ fn npm_incremental_skip() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"npm\"]\n",
     )
     .unwrap();
 
     // Ignore node_modules and package-lock.json (created by npm install)
-    fs::write(project_path.join(".rsbignore"), "node_modules/\npackage-lock.json\n").unwrap();
+    fs::write(project_path.join(".rsbuildignore"), "node_modules/\npackage-lock.json\n").unwrap();
 
     fs::write(
         project_path.join("package.json"),
@@ -90,7 +90,7 @@ fn npm_no_project_discovered() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"npm\"]\n",
     )
     .unwrap();

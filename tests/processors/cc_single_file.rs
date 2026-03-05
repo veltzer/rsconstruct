@@ -17,7 +17,7 @@ fn cc_single_file_compile_single_c_file() {
 
     let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
-        "rsb build failed: stdout={}, stderr={}",
+        "rsbuild build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
@@ -143,9 +143,9 @@ fn cc_single_file_clean() {
     let clean_output = run_rsb(project_path, &["clean", "outputs"]);
     assert!(clean_output.status.success());
 
-    // Verify outputs are removed but .rsb cache is preserved
+    // Verify outputs are removed but .rsbuild cache is preserved
     assert!(!project_path.join("out/cc_single_file/src/main.elf").exists(), "output should be removed after clean");
-    assert!(project_path.join(".rsb").exists(), ".rsb cache should be preserved after clean");
+    assert!(project_path.join(".rsbuild").exists(), ".rsbuild cache should be preserved after clean");
 }
 
 #[test]
@@ -197,9 +197,9 @@ fn cc_single_file_config_change_triggers_rebuild() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("[cc_single_file] Skipping (unchanged):"), "Second build should skip: {}", stdout2);
 
-    // Change cflags in rsb.toml
+    // Change cflags in rsbuild.toml
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"cc_single_file\"]\n\n[processor.cc_single_file]\ncflags = [\"-O2\"]\n"
     ).unwrap();
 
@@ -776,7 +776,7 @@ fn cc_single_file_angle_bracket_include_dependency() {
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::create_dir_all(project_path.join("include")).unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         r#"[processor]
 enabled = ["cc_single_file"]
 
@@ -840,7 +840,7 @@ fn cc_single_file_multiple_compiler_profiles() {
     // Create project with multiple compiler profiles
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         r#"[processor]
 enabled = ["cc_single_file"]
 
@@ -868,7 +868,7 @@ output_suffix = ".elf"
 
     let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
-        "rsb build with multiple compilers failed: stdout={}, stderr={}",
+        "rsbuild build with multiple compilers failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr));
 
@@ -898,7 +898,7 @@ fn cc_single_file_missing_include_errors() {
     // Create minimal project
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         r#"[processor]
 enabled = ["cc_single_file"]
 
@@ -932,7 +932,7 @@ fn cc_single_file_profile_specific_flags() {
     // Create project with multiple compiler profiles
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         r#"[processor]
 enabled = ["cc_single_file"]
 
@@ -1012,7 +1012,7 @@ fn cc_single_file_exclude_profile() {
     // Create project with multiple compiler profiles
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         r#"[processor]
 enabled = ["cc_single_file"]
 

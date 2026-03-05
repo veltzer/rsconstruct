@@ -149,7 +149,7 @@ impl ProductDiscovery for TagsProcessor {
                 bail!("{}", msg.trim_end());
             }
         } else if self.config.tags_file_strict {
-            bail!("Tags file not found: {}. Run 'rsb tags init' to create one.", self.config.tags_file);
+            bail!("Tags file not found: {}. Run 'rsbuild tags init' to create one.", self.config.tags_file);
         }
 
         // Delete old database to avoid stale entries from previous builds
@@ -306,11 +306,11 @@ fn parse_simple_yaml(block: &str) -> serde_json::Value {
     serde_json::Value::Object(map)
 }
 
-/// Open the tags database for reading. Used by the `rsb tags` CLI subcommand.
+/// Open the tags database for reading. Used by the `rsbuild tags` CLI subcommand.
 pub fn open_tags_db(db_path: &str) -> Result<redb::Database> {
     let path = std::path::Path::new(db_path);
     if !path.exists() {
-        anyhow::bail!("Tags database not found: {}. Run 'rsb build' first.", db_path);
+        anyhow::bail!("Tags database not found: {}. Run 'rsbuild build' first.", db_path);
     }
     redb::Database::open(path)
         .with_context(|| format!("Failed to open tags database: {}", db_path))
@@ -656,7 +656,7 @@ pub fn unused_tags(db_path: &str, tags_file: &str, strict: bool) -> Result<()> {
 pub fn validate_tags(db_path: &str, tags_file: &str) -> Result<()> {
     let tags_file_path = Path::new(tags_file);
     if !tags_file_path.exists() {
-        bail!("Tags file not found: {}. Run 'rsb tags init' to create one.", tags_file);
+        bail!("Tags file not found: {}. Run 'rsbuild tags init' to create one.", tags_file);
     }
 
     let allowed = load_tags_file(tags_file_path)?;
@@ -696,7 +696,7 @@ pub fn validate_tags(db_path: &str, tags_file: &str) -> Result<()> {
 pub fn init_tags(db_path: &str, tags_file: &str) -> Result<()> {
     let tags_file_path = Path::new(tags_file);
     if tags_file_path.exists() {
-        bail!("{} already exists. Use 'rsb tags sync' to update it.", tags_file);
+        bail!("{} already exists. Use 'rsbuild tags sync' to update it.", tags_file);
     }
 
     let tags = load_all_tags_sorted(db_path)?;
@@ -921,7 +921,7 @@ fn load_tags_file_sorted(path: &Path) -> Result<Vec<String>> {
 
 /// Write a sorted list of tags to a .tags file, one per line with a header comment.
 fn write_tags_file(path: &Path, tags: &[String]) -> Result<()> {
-    let mut content = String::from("# Allowed tags for rsb frontmatter validation\n# One tag per line. Wildcards supported (e.g. duration_days=*)\n");
+    let mut content = String::from("# Allowed tags for rsbuild frontmatter validation\n# One tag per line. Wildcards supported (e.g. duration_days=*)\n");
     for tag in tags {
         content.push_str(tag);
         content.push('\n');

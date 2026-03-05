@@ -1,13 +1,13 @@
 # Binary Releases
 
-RSB publishes pre-built binaries as GitHub releases on every push to master.
+RSBuild publishes pre-built binaries as GitHub releases on every push to master.
 
 ## Supported Architectures
 
 | Architecture | Binary name | GitHub runner |
 |---|---|---|
-| x86_64 | `rsb-x86_64-unknown-linux-gnu` | `ubuntu-latest` |
-| aarch64 (arm64) | `rsb-aarch64-unknown-linux-gnu` | `ubuntu-24.04-arm` |
+| x86_64 | `rsbuild-x86_64-unknown-linux-gnu` | `ubuntu-latest` |
+| aarch64 (arm64) | `rsbuild-aarch64-unknown-linux-gnu` | `ubuntu-24.04-arm` |
 
 Both binaries are built natively (no cross-compilation) and tests run on the
 actual target architecture before the release is published.

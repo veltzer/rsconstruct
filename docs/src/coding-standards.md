@@ -1,6 +1,6 @@
 # Coding Standards
 
-Rules that apply to the RSB codebase and its documentation.
+Rules that apply to the RSBuild codebase and its documentation.
 
 ## Fail hard, never degrade gracefully
 
@@ -55,7 +55,7 @@ or tabs for visual indentation unless when printing some data with structure.
 ## Suppress tool output on success
 
 External tool output (compilers, linters, etc.) must be captured and only
-shown when a command fails. On success, only rsb's own status messages appear.
+shown when a command fails. On success, only rsbuild's own status messages appear.
 Users who want to always see tool output can use `--show-output`. This keeps
 build output clean while still showing errors when something goes wrong.
 
@@ -94,7 +94,7 @@ to manually prefix their `bail!` messages. Just write the error naturally
 
 All config structs that don't intentionally capture extra fields must use
 `#[serde(deny_unknown_fields)]`. This ensures that typos or unsupported
-options in `rsb.toml` produce a clear error instead of being silently ignored.
+options in `rsbuild.toml` produce a clear error instead of being silently ignored.
 
 Structs that use `#[serde(flatten)]` to embed other structs (like `ScanConfig`)
 cannot use `deny_unknown_fields` due to serde limitations. These structs must

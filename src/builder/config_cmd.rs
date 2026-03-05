@@ -5,7 +5,7 @@ use crate::config::Config;
 use super::{Builder, ValidationSeverity, ValidationIssue};
 
 impl Builder {
-    /// Handle `rsb config` subcommands
+    /// Handle `rsbuild config` subcommands
     pub fn config(&self, action: ConfigAction) -> Result<()> {
         match action {
             ConfigAction::Show => {

@@ -16,7 +16,7 @@ fn cargo_valid_project() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         SINGLE_PROFILE_CONFIG,
     )
     .unwrap();
@@ -63,7 +63,7 @@ fn cargo_incremental_skip() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         SINGLE_PROFILE_CONFIG,
     )
     .unwrap();
@@ -108,7 +108,7 @@ fn cargo_rebuild_on_source_change() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         SINGLE_PROFILE_CONFIG,
     )
     .unwrap();
@@ -155,7 +155,7 @@ fn cargo_no_project_discovered() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"cargo\"]\n",
     )
     .unwrap();
@@ -188,7 +188,7 @@ fn cargo_build_failure() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         SINGLE_PROFILE_CONFIG,
     )
     .unwrap();
@@ -227,7 +227,7 @@ fn cargo_check_command() {
 
     // Use "cargo check" instead of "cargo build", single profile for speed
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"cargo\"]\n\n[processor.cargo]\ncommand = \"check\"\nprofiles = [\"dev\"]\n",
     )
     .unwrap();
@@ -274,7 +274,7 @@ fn cargo_multi_profile() {
 
     // Default profiles: dev + release
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"cargo\"]\n",
     )
     .unwrap();

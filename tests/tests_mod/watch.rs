@@ -11,7 +11,7 @@ fn watch_does_initial_build() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/watch_init.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -23,7 +23,7 @@ fn watch_does_initial_build() {
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .expect("Failed to spawn rsb watch");
+        .expect("Failed to spawn rsbuild watch");
 
     // Wait for initial build to complete
     std::thread::sleep(Duration::from_secs(2));
@@ -46,7 +46,7 @@ fn watch_rebuilds_on_change() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/watch_change.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
@@ -58,7 +58,7 @@ fn watch_rebuilds_on_change() {
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .expect("Failed to spawn rsb watch");
+        .expect("Failed to spawn rsbuild watch");
 
     // Wait for initial build
     std::thread::sleep(Duration::from_secs(2));

@@ -119,7 +119,7 @@ iterations.
 
 ### D. Explicit Cross-Processor Wiring in Config
 
-Let users declare chains in `rsb.toml`:
+Let users declare chains in `rsbuild.toml`:
 
 ```toml
 [[pipeline]]
@@ -127,7 +127,7 @@ from = "template"
 to = "ruff"
 ```
 
-rsb then knows that template outputs matching ruff's scan configuration should
+rsbuild then knows that template outputs matching ruff's scan configuration should
 become ruff inputs.
 
 - **Pro:** Explicit, no magic, user controls what gets chained

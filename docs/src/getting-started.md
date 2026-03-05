@@ -1,12 +1,12 @@
 # Getting Started
 
-This guide walks through setting up an rsb project for the two primary supported languages: Python and C++.
+This guide walks through setting up an rsbuild project for the two primary supported languages: Python and C++.
 
 ## Python
 
 ### Prerequisites
 
-- rsb installed ([Installation](installation.md))
+- rsbuild installed ([Installation](installation.md))
 - [ruff](https://docs.astral.sh/ruff/) on PATH
 
 ### Setup
@@ -18,7 +18,7 @@ mkdir myproject && cd myproject
 ```
 
 ```toml
-# rsb.toml
+# rsbuild.toml
 [processor]
 enabled = ["ruff"]
 ```
@@ -41,7 +41,7 @@ if __name__ == "__main__":
 Run the build:
 
 ```bash
-rsb build
+rsbuild build
 ```
 
 Expected output:
@@ -51,7 +51,7 @@ Processing ruff (1 product)
   hello.py
 ```
 
-Run again — nothing has changed, so rsb skips the check:
+Run again — nothing has changed, so rsbuild skips the check:
 
 ```
 Processing ruff (1 product)
@@ -63,7 +63,7 @@ Processing ruff (1 product)
 Install [pylint](https://pylint.readthedocs.io/) and add it to the enabled list:
 
 ```toml
-# rsb.toml
+# rsbuild.toml
 [processor]
 enabled = ["ruff", "pylint"]
 ```
@@ -90,7 +90,7 @@ Create a `.spellcheck-words` file in the project root with any custom words (one
 
 ### Prerequisites
 
-- rsb installed ([Installation](installation.md))
+- rsbuild installed ([Installation](installation.md))
 - gcc/g++ on PATH
 
 ### Setup
@@ -102,7 +102,7 @@ mkdir myproject && cd myproject
 ```
 
 ```toml
-# rsb.toml
+# rsbuild.toml
 [processor]
 enabled = ["cc_single_file"]
 ```
@@ -126,7 +126,7 @@ int main() {
 Run the build:
 
 ```bash
-rsb build
+rsbuild build
 ```
 
 Expected output:
@@ -138,7 +138,7 @@ Processing cc_single_file (1 product)
 
 The compiled executable is at `out/cc_single_file/hello.elf`.
 
-Run again — the source hasn't changed, so rsb restores from cache:
+Run again — the source hasn't changed, so rsbuild restores from cache:
 
 ```
 Processing cc_single_file (1 product)
@@ -167,10 +167,10 @@ Install [cppcheck](http://cppcheck.net/) and add it to the enabled list:
 enabled = ["cc_single_file", "cppcheck"]
 ```
 
-Both processors run on the same source files — rsb handles them independently.
+Both processors run on the same source files — rsbuild handles them independently.
 
 ## Next Steps
 
-- [Commands](commands.md) — full list of rsb commands
+- [Commands](commands.md) — full list of rsbuild commands
 - [Configuration](configuration.md) — all configuration options
 - [Processors](processors.md) — detailed docs for each processor

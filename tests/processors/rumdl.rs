@@ -13,7 +13,7 @@ fn rumdl_valid_markdown() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"rumdl\"]\n",
     )
     .unwrap();
@@ -51,7 +51,7 @@ fn rumdl_incremental_skip() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"rumdl\"]\n",
     )
     .unwrap();

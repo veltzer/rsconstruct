@@ -62,7 +62,7 @@ impl ProductDiscovery for GemProcessor {
 
         let siblings = SiblingFilter {
             extensions: &[".gemspec"],
-            excludes: &["/.git/", "/out/", "/.rsb/", "/gems/"],
+            excludes: &["/.git/", "/out/", "/.rsbuild/", "/gems/"],
         };
 
         for anchor in files {

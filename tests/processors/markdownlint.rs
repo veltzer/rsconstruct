@@ -19,7 +19,7 @@ fn markdownlint_valid_file() {
 
     // Point markdownlint_bin to the system markdownlint, skip npm dependency
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"markdownlint\"]\n\n[processor.markdownlint]\nmarkdownlint_bin = \"markdownlint\"\n",
     )
     .unwrap();
@@ -52,7 +52,7 @@ fn markdownlint_no_project_discovered() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsb.toml"),
+        project_path.join("rsbuild.toml"),
         "[processor]\nenabled = [\"markdownlint\"]\n\n[processor.markdownlint]\nscan_dir = \"mdlint_docs\"\n",
     )
     .unwrap();

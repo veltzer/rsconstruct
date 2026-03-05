@@ -2,14 +2,14 @@
 
 ## Parallel builds
 
-RSB can build independent products concurrently. Set the number of parallel jobs:
+RSBuild can build independent products concurrently. Set the number of parallel jobs:
 
 ```bash
-rsb build -j4       # 4 parallel jobs
-rsb build -j0       # Auto-detect CPU cores
+rsbuild build -j4       # 4 parallel jobs
+rsbuild build -j0       # Auto-detect CPU cores
 ```
 
-Or configure it in `rsb.toml`:
+Or configure it in `rsbuild.toml`:
 
 ```toml
 [build]
@@ -23,7 +23,7 @@ The `-j` flag on the command line overrides the config file setting.
 Watch source files and automatically rebuild on changes:
 
 ```bash
-rsb watch
+rsbuild watch
 ```
 
 This monitors all source files and triggers an incremental build whenever a file is modified.
@@ -33,14 +33,14 @@ This monitors all source files and triggers an incremental build whenever a file
 Visualize the build dependency graph in multiple formats:
 
 ```bash
-rsb graph                    # Default text format
-rsb graph --format dot       # Graphviz DOT format
-rsb graph --format mermaid   # Mermaid diagram format
-rsb graph --format json      # JSON format
-rsb graph --view             # Open in browser or viewer
+rsbuild graph                    # Default text format
+rsbuild graph --format dot       # Graphviz DOT format
+rsbuild graph --format mermaid   # Mermaid diagram format
+rsbuild graph --format json      # JSON format
+rsbuild graph --view             # Open in browser or viewer
 ```
 
-The `--view` flag opens the graph using the configured viewer (set in `rsb.toml`):
+The `--view` flag opens the graph using the configured viewer (set in `rsbuild.toml`):
 
 ```toml
 [graph]
@@ -49,9 +49,9 @@ viewer = "google-chrome"
 
 ## Ignoring files
 
-RSB respects `.gitignore` files automatically. Any file ignored by git is also ignored by all processors. Nested `.gitignore` files and negation patterns are supported.
+RSBuild respects `.gitignore` files automatically. Any file ignored by git is also ignored by all processors. Nested `.gitignore` files and negation patterns are supported.
 
-For project-specific exclusions that should not go in `.gitignore`, create a `.rsbignore` file in the project root with glob patterns (one per line):
+For project-specific exclusions that should not go in `.gitignore`, create a `.rsbuildignore` file in the project root with glob patterns (one per line):
 
 ```
 /src/experiments/**
@@ -76,15 +76,15 @@ Control the detail level of build output with `-v N`:
 Preview what would be built without executing anything:
 
 ```bash
-rsb build --dry-run
+rsbuild build --dry-run
 ```
 
 ## Keep going after errors
 
-By default, RSB stops on the first error. Use `--keep-going` to continue building other products:
+By default, RSBuild stops on the first error. Use `--keep-going` to continue building other products:
 
 ```bash
-rsb build --keep-going
+rsbuild build --keep-going
 ```
 
 ## Build timings
@@ -92,7 +92,7 @@ rsb build --keep-going
 Show per-product and total timing information:
 
 ```bash
-rsb build --timings
+rsbuild build --timings
 ```
 
 ## Shell completions
@@ -100,9 +100,9 @@ rsb build --timings
 Generate shell completions for your shell:
 
 ```bash
-rsb complete bash    # Bash completions
-rsb complete zsh     # Zsh completions
-rsb complete fish    # Fish completions
+rsbuild complete bash    # Bash completions
+rsbuild complete zsh     # Zsh completions
+rsbuild complete fish    # Fish completions
 ```
 
 Configure which shells to generate completions for:

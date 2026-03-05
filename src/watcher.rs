@@ -12,8 +12,8 @@ use crate::color;
 
 /// Check if a path should be ignored (editor temp files, build artifacts)
 fn should_ignore(path: &Path) -> bool {
-    // Ignore .rsb cache directory (match as a path component, not substring)
-    if path.components().any(|c| c.as_os_str() == ".rsb") {
+    // Ignore .rsbuild cache directory (match as a path component, not substring)
+    if path.components().any(|c| c.as_os_str() == ".rsbuild") {
         return true;
     }
 

@@ -8,7 +8,7 @@ Extracts YAML frontmatter tags from markdown files into a searchable database.
 
 Scans `.md` files for YAML frontmatter blocks (delimited by `---`), parses tag
 metadata, and builds a tags database. The database enables querying files by
-tags via `rsb tags` subcommands.
+tags via `rsbuild tags` subcommands.
 
 Optionally validates tags against a `.tags` allowlist file.
 
