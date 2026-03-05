@@ -1,13 +1,13 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::run_rsb;
+use crate::common::run_rsbuild;
 
 #[test]
 fn init_creates_project() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
-    let output = run_rsb(project_path, &["init"]);
+    let output = run_rsbuild(project_path, &["init"]);
     assert!(output.status.success(), "rsbuild init failed: {}", String::from_utf8_lossy(&output.stderr));
     let stdout = String::from_utf8_lossy(&output.stdout);
 
@@ -35,7 +35,7 @@ fn init_fails_if_exists() {
     // Create rsbuild.toml first
     fs::write(project_path.join("rsbuild.toml"), "# existing").unwrap();
 
-    let output = run_rsb(project_path, &["init"]);
+    let output = run_rsbuild(project_path, &["init"]);
     assert!(!output.status.success(), "rsbuild init should fail if rsbuild.toml exists");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("already exists"), "Error should mention 'already exists': {}", stderr);
@@ -50,7 +50,7 @@ fn init_ignores_existing_dirs() {
     fs::create_dir_all(project_path.join("templates.tera")).unwrap();
     fs::write(project_path.join("templates.tera/existing.txt"), "do not delete").unwrap();
 
-    let output = run_rsb(project_path, &["init"]);
+    let output = run_rsbuild(project_path, &["init"]);
     assert!(output.status.success());
 
     // Existing file should still be there
@@ -69,7 +69,7 @@ fn init_preserves_existing_rsbuildignore() {
     let custom_content = "# my custom ignore rules\n*.tmp\n";
     fs::write(project_path.join(".rsbuildignore"), custom_content).unwrap();
 
-    let output = run_rsb(project_path, &["init"]);
+    let output = run_rsbuild(project_path, &["init"]);
     assert!(output.status.success(), "rsbuild init failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Verify .rsbuildignore was not overwritten

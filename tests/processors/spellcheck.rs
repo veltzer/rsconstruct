@@ -1,5 +1,5 @@
 use std::fs;
-use crate::common::{setup_test_project, run_rsb, run_rsb_with_env};
+use crate::common::{setup_test_project, run_rsbuild, run_rsbuild_with_env};
 
 #[test]
 fn spellcheck_correct_spelling() {
@@ -17,7 +17,7 @@ fn spellcheck_correct_spelling() {
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build should succeed with correct spelling: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -45,7 +45,7 @@ fn spellcheck_misspelled_word() {
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(!output.status.success(),
         "Build should fail with misspelled word");
 
@@ -78,7 +78,7 @@ fn spellcheck_custom_words_file() {
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build should succeed with custom words: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -101,14 +101,14 @@ fn spellcheck_incremental_skip() {
     ).unwrap();
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(stdout1.contains("Processing:"),
         "First build should process: {}", stdout1);
 
     // Second build should skip
-    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("[spellcheck] Skipping (unchanged):"),
@@ -131,12 +131,12 @@ fn spellcheck_clean() {
     ).unwrap();
 
     // Build
-    let build_output = run_rsb(project_path, &["build"]);
+    let build_output = run_rsbuild(project_path, &["build"]);
     assert!(build_output.status.success());
     // Checkers no longer create stub files - nothing in out/ for spellcheck
 
     // Clean is a no-op for checkers (nothing to clean)
-    let clean_output = run_rsb(project_path, &["clean", "outputs"]);
+    let clean_output = run_rsbuild(project_path, &["clean", "outputs"]);
     assert!(clean_output.status.success());
 }
 
@@ -162,7 +162,7 @@ fn spellcheck_stops_after_first_error() {
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(!output.status.success(),
         "Build should fail with misspelled words");
 
@@ -194,7 +194,7 @@ fn spellcheck_ignores_code_blocks() {
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build should succeed — code blocks should be ignored: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -218,7 +218,7 @@ fn spellcheck_auto_add_words() {
     ).unwrap();
 
     // Build should succeed and add words to .spellcheck-words
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build should succeed with auto_add_words: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),

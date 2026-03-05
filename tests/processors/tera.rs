@@ -1,5 +1,5 @@
 use std::fs;
-use crate::common::{setup_test_project, run_rsb, run_rsb_with_env};
+use crate::common::{setup_test_project, run_rsbuild, run_rsbuild_with_env};
 
 #[test]
 fn tera_to_file_translation() {
@@ -52,7 +52,7 @@ optimization = 3
     ).expect("Failed to write tera file");
 
     // Run rsbuild build
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "rsbuild build failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Check that the output file was created
@@ -95,13 +95,13 @@ fn incremental_build() {
     ).expect("Failed to write tera");
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(stdout1.contains("Processing:"));
 
     // Second build (should skip unchanged tera - use verbose to see skip message)
-    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("[tera] Skipping (unchanged):"));
@@ -136,7 +136,7 @@ fn multiple_templates() {
     ).unwrap();
 
     // Build
-    let output = run_rsb(project_path, &["build"]);
+    let output = run_rsbuild(project_path, &["build"]);
     assert!(output.status.success());
 
     // Check all files were created
@@ -177,7 +177,7 @@ fn extra_inputs_triggers_rebuild() {
     ).unwrap();
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success(),
         "First build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output1.stdout),
@@ -186,7 +186,7 @@ fn extra_inputs_triggers_rebuild() {
     assert!(stdout1.contains("Processing:"), "First build should process: {}", stdout1);
 
     // Second build — should skip (nothing changed)
-    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("[tera] Skipping (unchanged):"), "Second build should skip: {}", stdout2);
@@ -201,7 +201,7 @@ fn extra_inputs_triggers_rebuild() {
     ).unwrap();
 
     // Third build — should rebuild because extra input changed
-    let output3 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output3 = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output3.status.success(),
         "Third build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output3.stdout),
@@ -238,7 +238,7 @@ fn extra_inputs_nonexistent_file_fails() {
         "[processor]\nenabled = [\"tera\"]\n\n[processor.tera]\nextra_inputs = [\"nonexistent_file.txt\"]\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(!output.status.success(),
         "Build should fail with nonexistent extra_input: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -261,7 +261,7 @@ fn subdirectory_output() {
         "Hello from subdirectory"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "rsbuild build failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Output should be at sub/output.txt (templates.tera/ prefix stripped)

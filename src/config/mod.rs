@@ -916,8 +916,8 @@ impl Config {
     pub(crate) fn require_config() -> Result<()> {
         let config_path = Path::new(CONFIG_FILE);
         if !config_path.exists() {
-            return Err(crate::exit_code::RsbError::new(
-                crate::exit_code::RsbExitCode::ConfigError,
+            return Err(crate::exit_code::RsbuildError::new(
+                crate::exit_code::RsbuildExitCode::ConfigError,
                 "No rsbuild.toml found. Run 'rsbuild init' to create one.",
             ).into());
         }

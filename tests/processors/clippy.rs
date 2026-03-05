@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsb_with_env, tool_available};
+use crate::common::{run_rsbuild_with_env, tool_available};
 
 #[test]
 fn clippy_valid_project() {
@@ -33,7 +33,7 @@ fn clippy_valid_project() {
     )
     .unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Build should succeed with valid Cargo project: stdout={}, stderr={}",
@@ -80,11 +80,11 @@ fn clippy_incremental_skip() {
     .unwrap();
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
 
     // Second build should skip
-    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
@@ -106,7 +106,7 @@ fn clippy_no_project_discovered() {
     .unwrap();
 
     // No Cargo.toml anywhere — should succeed with nothing to build
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Build should succeed with no Cargo.toml: stdout={}, stderr={}",
@@ -154,7 +154,7 @@ fn clippy_lint_failure() {
     )
     .unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(
         !output.status.success(),
         "Build should fail with clippy warnings when -D warnings is set"

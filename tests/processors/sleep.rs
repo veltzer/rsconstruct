@@ -1,5 +1,5 @@
 use std::fs;
-use crate::common::{setup_test_project, run_rsb, run_rsb_with_env};
+use crate::common::{setup_test_project, run_rsbuild, run_rsbuild_with_env};
 
 #[test]
 fn sleep_processor() {
@@ -17,7 +17,7 @@ fn sleep_processor() {
     ).unwrap();
 
     // Build
-    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "rsbuild build failed: {}", String::from_utf8_lossy(&output.stderr));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Processing:"));
@@ -27,13 +27,13 @@ fn sleep_processor() {
     assert!(project_path.join(".rsbuild/db.redb").exists(), "Cache database should exist after build");
 
     // Second build should skip (incremental)
-    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("[sleep] Skipping (unchanged):"));
 
     // Clean should be a no-op for checkers (nothing to clean)
-    let clean_output = run_rsb(project_path, &["clean", "outputs"]);
+    let clean_output = run_rsbuild(project_path, &["clean", "outputs"]);
     assert!(clean_output.status.success());
 }
 
@@ -55,7 +55,7 @@ fn sleep_extra_inputs_valid() {
         "[processor]\nenabled = [\"sleep\"]\n\n[processor.sleep]\nextra_inputs = [\"extra.txt\"]\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build should succeed with valid sleep extra_inputs: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -81,7 +81,7 @@ fn sleep_extra_inputs_nonexistent_fails() {
         "[processor]\nenabled = [\"sleep\"]\n\n[processor.sleep]\nextra_inputs = [\"does_not_exist.txt\"]\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(!output.status.success(),
         "Build should fail with nonexistent sleep extra_input: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),

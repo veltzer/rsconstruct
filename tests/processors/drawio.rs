@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsb_with_env, tool_available};
+use crate::common::{run_rsbuild_with_env, tool_available};
 
 #[test]
 fn drawio_discovery() {
@@ -26,7 +26,7 @@ fn drawio_discovery() {
     .unwrap();
 
     // Use dry-run to verify discovery (drawio CLI needs X display for rendering)
-    let output = run_rsb_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Dry run should succeed with valid drawio file: stdout={}, stderr={}",
@@ -53,7 +53,7 @@ fn drawio_no_project_discovered() {
     )
     .unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);

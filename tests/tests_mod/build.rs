@@ -1,5 +1,5 @@
 use std::fs;
-use crate::common::{setup_test_project, run_rsb, run_rsb_with_env, run_rsb_json};
+use crate::common::{setup_test_project, run_rsbuild, run_rsbuild_with_env, run_rsbuild_json};
 
 #[test]
 fn clean_command() {
@@ -18,7 +18,7 @@ fn clean_command() {
     ).expect("Failed to write template");
 
     // Build
-    let build_output = run_rsb(project_path, &["build"]);
+    let build_output = run_rsbuild(project_path, &["build"]);
     assert!(build_output.status.success());
 
     // Verify files exist
@@ -26,7 +26,7 @@ fn clean_command() {
     assert!(project_path.join(".rsbuild/db.redb").exists());
 
     // Clean
-    let clean_output = run_rsb(project_path, &["clean", "outputs"]);
+    let clean_output = run_rsbuild(project_path, &["clean", "outputs"]);
     assert!(clean_output.status.success());
 
     // Verify build outputs are removed but cache is preserved
@@ -51,11 +51,11 @@ fn force_rebuild() {
     ).expect("Failed to write template");
 
     // First build
-    let first_build = run_rsb(project_path, &["build"]);
+    let first_build = run_rsbuild(project_path, &["build"]);
     assert!(first_build.status.success(), "First build failed: {}", String::from_utf8_lossy(&first_build.stderr));
 
     // Force rebuild - should process, not skip
-    let result = run_rsb_json(project_path, &["build", "--force"]);
+    let result = run_rsbuild_json(project_path, &["build", "--force"]);
     assert!(result.exit_success);
     assert_eq!(result.success, 1, "Should have 1 successful build");
     assert_eq!(result.skipped, 0, "Should not skip anything with --force");
@@ -75,7 +75,7 @@ fn no_color_env() {
     ).unwrap();
 
     // Run with NO_COLOR set
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
 
@@ -97,7 +97,7 @@ fn timings_flag() {
     ).unwrap();
 
     // Run with --timings
-    let output = run_rsb_with_env(project_path, &["build", "--timings"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "--timings"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
 
@@ -120,7 +120,7 @@ fn no_timings_by_default() {
     ).unwrap();
 
     // Run without --timings (and without --verbose)
-    let output = run_rsb(project_path, &["build"]);
+    let output = run_rsbuild(project_path, &["build"]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
 
@@ -144,7 +144,7 @@ fn keep_going_continues_after_failure() {
     ).unwrap();
 
     // Run with --keep-going
-    let output = run_rsb_with_env(project_path, &["build", "-v", "--keep-going"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "-v", "--keep-going"], &[("NO_COLOR", "1")]);
 
     // Should exit non-zero because of the failure
     assert!(!output.status.success(), "Build should fail with bad sleep file");
@@ -169,7 +169,7 @@ fn keep_going_short_flag() {
     ).unwrap();
 
     // Run with -k (short form)
-    let output = run_rsb_with_env(project_path, &["build", "-k"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "-k"], &[("NO_COLOR", "1")]);
 
     // Should exit non-zero since the sleep file has invalid content
     assert!(!output.status.success(), "Build should fail with bad sleep file");
@@ -198,7 +198,7 @@ fn build_stops_on_first_error() {
     ).unwrap();
 
     // Build should fail on aaa.sleep and stop
-    let result = run_rsb_json(project_path, &["build"]);
+    let result = run_rsbuild_json(project_path, &["build"]);
     assert!(!result.exit_success, "Build should fail with bad sleep file");
     assert_eq!(result.failed, 1, "Should have exactly 1 failure");
     // zzz.sleep should NOT be processed because we stop on first error
@@ -221,7 +221,7 @@ fn keep_going_continues_after_error() {
     ).unwrap();
 
     // First build with --keep-going — should fail but process all files
-    let result1 = run_rsb_json(project_path, &["build", "--keep-going"]);
+    let result1 = run_rsbuild_json(project_path, &["build", "--keep-going"]);
     assert!(!result1.exit_success, "Build should fail with bad sleep file");
     assert_eq!(result1.failed, 1, "Should have 1 failure");
     assert_eq!(result1.success, 1, "Should have 1 success (good.sleep)");
@@ -232,7 +232,7 @@ fn keep_going_continues_after_error() {
     fs::write(project_path.join("sleep/bad.sleep"), "0.01").unwrap();
 
     // Second build — good.sleep should be skipped (cached)
-    let result2 = run_rsb_json(project_path, &["build"]);
+    let result2 = run_rsbuild_json(project_path, &["build"]);
     assert!(result2.exit_success, "Second build should succeed");
     assert_eq!(result2.skipped, 1, "Good sleep file should be skipped (cached)");
     assert_eq!(result2.success, 1, "Bad sleep file (now fixed) should be processed");
@@ -256,7 +256,7 @@ fn parallel_build_with_j_flag() {
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
-    let result = run_rsb_json(project_path, &["build", "-j2"]);
+    let result = run_rsbuild_json(project_path, &["build", "-j2"]);
     assert!(result.exit_success, "Parallel build with -j2 should succeed");
     assert_eq!(result.success, 4, "Should process all 4 sleep files");
     assert_eq!(result.total_products, 4);
@@ -279,7 +279,7 @@ fn parallel_keep_going_continues_after_failure() {
         "[processor]\nenabled = [\"sleep\"]\n\n[build]\nparallel = 2\n"
     ).unwrap();
 
-    let result = run_rsb_json(project_path, &["build", "--keep-going"]);
+    let result = run_rsbuild_json(project_path, &["build", "--keep-going"]);
 
     // Should fail overall
     assert!(!result.exit_success, "Build should fail with bad sleep file even with --keep-going");
@@ -305,13 +305,13 @@ fn parallel_builds_all_independent_products() {
         "[processor]\nenabled = [\"sleep\"]\n\n[build]\nparallel = 4\n"
     ).unwrap();
 
-    let result = run_rsb_json(project_path, &["build"]);
+    let result = run_rsbuild_json(project_path, &["build"]);
     assert!(result.exit_success, "Parallel build with 8 products and 4 jobs should succeed");
     assert_eq!(result.success, 8, "Should process all 8 sleep files");
     assert_eq!(result.total_products, 8);
 
     // Incremental: second build should skip everything
-    let result2 = run_rsb_json(project_path, &["build"]);
+    let result2 = run_rsbuild_json(project_path, &["build"]);
     assert!(result2.exit_success);
     assert_eq!(result2.skipped, 8, "All 8 products should be skipped on second build");
 }
@@ -334,7 +334,7 @@ fn parallel_timings_flag() {
         "[processor]\nenabled = [\"sleep\"]\n\n[build]\nparallel = 2\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(
+    let output = run_rsbuild_with_env(
         project_path, &["build", "--timings"], &[("NO_COLOR", "1")]
     );
     assert!(output.status.success(),
@@ -376,7 +376,7 @@ fn deterministic_build_order() {
             "[processor]\nenabled = [\"sleep\"]\n"
         ).unwrap();
 
-        let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+        let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
         assert!(output.status.success(),
             "Build failed: {}",
             String::from_utf8_lossy(&output.stderr));
@@ -421,7 +421,7 @@ fn classify_propagates_through_dependencies() {
         "{% set c = load_python(path='config/gen.py') %}step1={{ c.val }}"
     ).unwrap();
 
-    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success(),
         "Phase 1 build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output1.stdout),
@@ -436,14 +436,14 @@ fn classify_propagates_through_dependencies() {
     fs::write(project_path.join("sleep/test.sleep"), "0.01").unwrap();
 
     // Build both processors
-    let output2 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success(),
         "Phase 2 build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output2.stdout),
         String::from_utf8_lossy(&output2.stderr));
 
     // Verify everything is up-to-date
-    let output3 = run_rsb_with_env(
+    let output3 = run_rsbuild_with_env(
         project_path, &["build", "--stop-after", "classify"], &[("NO_COLOR", "1")]
     );
     assert!(output3.status.success());
@@ -461,7 +461,7 @@ fn classify_propagates_through_dependencies() {
     ).unwrap();
 
     // Classify: both products should need work (tera rebuild + sleep rebuild/restore)
-    let output4 = run_rsb_with_env(
+    let output4 = run_rsbuild_with_env(
         project_path, &["build", "--stop-after", "classify"], &[("NO_COLOR", "1")]
     );
     assert!(output4.status.success());

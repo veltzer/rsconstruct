@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsb, run_rsb_with_env, setup_test_project};
+use crate::common::{run_rsbuild, run_rsbuild_with_env, setup_test_project};
 
 #[test]
 fn missing_config_returns_config_error() {
@@ -8,7 +8,7 @@ fn missing_config_returns_config_error() {
     let project_path = temp_dir.path();
 
     // No rsbuild.toml in directory
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(!output.status.success());
 
     let exit_code = output.status.code().unwrap();
@@ -26,7 +26,7 @@ fn init_already_exists_returns_config_error() {
     // Create rsbuild.toml first
     fs::write(project_path.join("rsbuild.toml"), "# existing").unwrap();
 
-    let output = run_rsb_with_env(project_path, &["init"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["init"], &[("NO_COLOR", "1")]);
     assert!(!output.status.success());
 
     let exit_code = output.status.code().unwrap();
@@ -41,7 +41,7 @@ fn success_returns_zero() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
-    let output = run_rsb(project_path, &["init"]);
+    let output = run_rsbuild(project_path, &["init"]);
     assert!(output.status.success());
 
     let exit_code = output.status.code().unwrap();
@@ -53,7 +53,7 @@ fn unknown_processor_returns_config_error() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output = run_rsb_with_env(project_path, &["build", "-p", "nonexistent"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "-p", "nonexistent"], &[("NO_COLOR", "1")]);
     assert!(!output.status.success());
 
     let exit_code = output.status.code().unwrap();

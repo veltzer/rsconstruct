@@ -6,7 +6,7 @@ RSBuild uses integration tests exclusively. All tests live in the `tests/` direc
 
 ```bash
 cargo test              # Run all tests
-cargo test rsbignore    # Run tests matching a name
+cargo test rsbuildignore    # Run tests matching a name
 cargo test -- --nocapture  # Show stdout/stderr from tests
 ```
 
@@ -24,7 +24,7 @@ tests/
 ├── graph.rs                    # Dependency graph tests
 ├── init.rs                     # Project initialization tests
 ├── processor_cmd.rs            # Processor list/auto/files tests
-├── rsbignore.rs                # .rsbuildignore / .gitignore exclusion tests
+├── rsbuildignore.rs                # .rsbuildignore / .gitignore exclusion tests
 ├── status.rs                   # Status command tests
 ├── tools.rs                    # Tools list/check tests
 ├── watch.rs                    # File watcher tests
@@ -58,10 +58,10 @@ This is the standard Rust pattern for grouping related integration tests into su
 |---|---|
 | `setup_test_project()` | Create an isolated project in a temp directory with `rsbuild.toml` and basic directories |
 | `setup_cc_project(path)` | Create a C project structure with the `cc_single_file` processor enabled |
-| `run_rsb(dir, args)` | Execute the `rsbuild` binary in the given directory and return its output |
-| `run_rsb_with_env(dir, args, env)` | Same as `run_rsb` but with extra environment variables (e.g., `NO_COLOR=1`) |
+| `run_rsbuild(dir, args)` | Execute the `rsbuild` binary in the given directory and return its output |
+| `run_rsbuild_with_env(dir, args, env)` | Same as `run_rsbuild` but with extra environment variables (e.g., `NO_COLOR=1`) |
 
-All helpers use `env!("CARGO_BIN_EXE_rsb")` to locate the compiled binary, ensuring tests run against the freshly built version.
+All helpers use `env!("CARGO_BIN_EXE_rsbuild")` to locate the compiled binary, ensuring tests run against the freshly built version.
 
 Every test creates a fresh `TempDir` for isolation. The directory is automatically cleaned up when the test ends.
 
@@ -76,7 +76,7 @@ Tests in `build.rs`, `clean`, `dry_run.rs`, `init.rs`, `status.rs`, and `watch.r
 fn force_rebuild() {
     let temp_dir = setup_test_project();
     // ... set up files ...
-    let output = run_rsb_with_env(temp_dir.path(), &["build", "--force"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(temp_dir.path(), &["build", "--force"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("[template] Processing:"));
@@ -96,7 +96,7 @@ Tests under `processors/` verify individual processor behavior: file discovery, 
 
 ### Ignore tests
 
-`rsbignore.rs` tests `.rsbuildignore` pattern matching: exact file patterns, glob patterns, leading `/` (anchored), trailing `/` (directory), comments, blank lines, and interaction with multiple processors.
+`rsbuildignore.rs` tests `.rsbuildignore` pattern matching: exact file patterns, glob patterns, leading `/` (anchored), trailing `/` (directory), comments, blank lines, and interaction with multiple processors.
 
 ## Common assertion patterns
 
@@ -125,10 +125,10 @@ assert!(!path.join("out/sleep/excluded.done").exists());
 
 ```rust
 // First build
-run_rsb(path, &["build"]);
+run_rsbuild(path, &["build"]);
 
 // Second build should skip
-let output = run_rsb_with_env(path, &["build"], &[("NO_COLOR", "1")]);
+let output = run_rsbuild_with_env(path, &["build"], &[("NO_COLOR", "1")]);
 let stdout = String::from_utf8_lossy(&output.stdout);
 assert!(stdout.contains("Skipping (unchanged):"));
 ```
@@ -140,7 +140,7 @@ assert!(stdout.contains("Skipping (unchanged):"));
 std::thread::sleep(std::time::Duration::from_millis(100));
 fs::write(path.join("src/header.h"), "// changed\n").unwrap();
 
-let output = run_rsb(path, &["build"]);
+let output = run_rsbuild(path, &["build"]);
 let stdout = String::from_utf8_lossy(&output.stdout);
 assert!(stdout.contains("Processing:"));
 ```
@@ -150,7 +150,7 @@ assert!(stdout.contains("Processing:"));
 1. Add a test function in the appropriate file (or create a new `.rs` file under `tests/` for a new feature area)
 2. Use `setup_test_project()` or `setup_cc_project()` to create an isolated environment
 3. Write source files and configuration into the temp directory
-4. Run `rsbuild` with `run_rsb()` or `run_rsb_with_env()`
+4. Run `rsbuild` with `run_rsbuild()` or `run_rsbuild_with_env()`
 5. Assert on exit code, stdout/stderr content, and output file existence
 
 If adding a new processor test module, declare it in `tests/processors.rs`:
@@ -180,7 +180,7 @@ mod processors {
 | Status | `status.rs` | UP-TO-DATE / STALE / RESTORABLE reporting |
 | Tools | `tools.rs` | List tools, list all, check availability |
 | Watch | `watch.rs` | Initial build, rebuild on change |
-| Ignore | `rsbignore.rs` | Exact match, globs, leading slash, trailing slash, comments, cross-processor |
+| Ignore | `rsbuildignore.rs` | Exact match, globs, leading slash, trailing slash, comments, cross-processor |
 | Template | `processors/template.rs` | Rendering, incremental, extra_inputs |
 | CC | `processors/cc_single_file.rs` | Compilation, headers, per-file flags, mixed C/C++, config change detection |
 | Sleep | `processors/sleep.rs` | Basic execution, extra_inputs |

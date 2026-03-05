@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsb_with_env, tool_available};
+use crate::common::{run_rsbuild_with_env, tool_available};
 
 #[test]
 fn pdflatex_valid_file() {
@@ -24,7 +24,7 @@ fn pdflatex_valid_file() {
     )
     .unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Build should succeed with valid LaTeX file: stdout={}, stderr={}",
@@ -51,7 +51,7 @@ fn pdflatex_no_project_discovered() {
     )
     .unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);

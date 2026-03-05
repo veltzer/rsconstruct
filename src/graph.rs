@@ -179,8 +179,8 @@ impl BuildGraph {
         for output in &outputs {
             if let Some(&existing_id) = self.output_to_product.get(output) {
                 let existing = self.products.get(existing_id).expect(crate::errors::INVALID_PRODUCT_ID);
-                return Err(crate::exit_code::RsbError::new(
-                    crate::exit_code::RsbExitCode::GraphError,
+                return Err(crate::exit_code::RsbuildError::new(
+                    crate::exit_code::RsbuildExitCode::GraphError,
                     format!(
                         "Output conflict: {} is produced by both [{}] and [{}]",
                         output.display(),
@@ -284,8 +284,8 @@ impl BuildGraph {
         }
 
         if result.len() != self.products.len() {
-            return Err(crate::exit_code::RsbError::new(
-                crate::exit_code::RsbExitCode::GraphError,
+            return Err(crate::exit_code::RsbuildError::new(
+                crate::exit_code::RsbuildExitCode::GraphError,
                 "Cycle detected in build graph",
             ).into());
         }

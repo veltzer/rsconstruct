@@ -124,7 +124,7 @@ impl Builder {
             ToolsAction::Graph { format, view } => {
                 if view {
                     let html_content = tools_graph_html(&tool_map);
-                    let html_path = std::env::temp_dir().join("rsb_tools_graph.html");
+                    let html_path = std::env::temp_dir().join("rsbuild_tools_graph.html");
                     std::fs::write(&html_path, html_content)
                         .map_err(|e| anyhow::anyhow!("Failed to write HTML file: {}", e))?;
                     self.open_file(&html_path)?;
@@ -245,8 +245,8 @@ impl Builder {
                         Some(cmd) => vec![(name.clone(), cmd.clone())],
                         None => {
                             eprintln!("{}: Installation procedure still not setup for '{}'", color::red("Error"), name);
-                            return Err(crate::exit_code::RsbError::new(
-                                crate::exit_code::RsbExitCode::ToolError,
+                            return Err(crate::exit_code::RsbuildError::new(
+                                crate::exit_code::RsbuildExitCode::ToolError,
                                 format!("No install command known for tool '{}'", name),
                             ).into());
                         }
@@ -266,8 +266,8 @@ impl Builder {
                         }
                     }
                     if any_unknown {
-                        return Err(crate::exit_code::RsbError::new(
-                            crate::exit_code::RsbExitCode::ToolError,
+                        return Err(crate::exit_code::RsbuildError::new(
+                            crate::exit_code::RsbuildExitCode::ToolError,
                             "Some tools have no known install procedure",
                         ).into());
                     }
@@ -311,8 +311,8 @@ impl Builder {
                     }
                 }
                 if any_failed {
-                    return Err(crate::exit_code::RsbError::new(
-                        crate::exit_code::RsbExitCode::ToolError,
+                    return Err(crate::exit_code::RsbuildError::new(
+                        crate::exit_code::RsbuildExitCode::ToolError,
                         "Some tools failed to install",
                     ).into());
                 }

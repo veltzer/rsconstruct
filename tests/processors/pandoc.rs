@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsb_with_env, tool_available};
+use crate::common::{run_rsbuild_with_env, tool_available};
 
 #[test]
 fn pandoc_valid_file() {
@@ -25,7 +25,7 @@ fn pandoc_valid_file() {
     )
     .unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Build should succeed with valid markdown for pandoc: stdout={}, stderr={}",
@@ -64,11 +64,11 @@ fn pandoc_incremental_skip() {
     .unwrap();
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
 
     // Second build should skip
-    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
@@ -89,7 +89,7 @@ fn pandoc_no_project_discovered() {
     )
     .unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);

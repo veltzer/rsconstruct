@@ -28,7 +28,7 @@ use clap::Parser;
 use cli::{BuildPhase, CacheAction, CleanAction, Cli, Commands, parse_shell, print_completions};
 use config::Config;
 use builder::Builder;
-use exit_code::{RsbExitCode, RsbError, classify_error};
+use exit_code::{RsbuildExitCode, RsbuildError, classify_error};
 use std::env;
 use std::fs;
 use std::sync::Arc;
@@ -44,7 +44,7 @@ fn main() -> std::process::ExitCode {
     }
 
     match run() {
-        Ok(()) => std::process::ExitCode::from(RsbExitCode::Success.code()),
+        Ok(()) => std::process::ExitCode::from(RsbuildExitCode::Success.code()),
         Err(err) => {
             let exit_code = classify_error(&err);
             if json_output::is_json_mode() {
@@ -156,9 +156,9 @@ fn run() -> Result<()> {
                 CacheAction::Clear => {
                     // Delete .rsbuild directory directly — must work even if the
                     // database is corrupted and Builder::new() would fail.
-                    let rsb_dir = std::path::Path::new(".rsbuild");
-                    if rsb_dir.exists() {
-                        fs::remove_dir_all(rsb_dir)?;
+                    let rsbuild_dir = std::path::Path::new(".rsbuild");
+                    if rsbuild_dir.exists() {
+                        fs::remove_dir_all(rsbuild_dir)?;
                     }
                     println!("Cache cleared.");
                 }
@@ -294,17 +294,17 @@ fn run() -> Result<()> {
                 .is_ok_and(|s| !s.success());
             let dirty_str = if is_dirty { "true" } else { "false" };
             let describe = if is_dirty {
-                format!("{}-dirty", env!("RSB_GIT_DESCRIBE"))
+                format!("{}-dirty", env!("RSBUILD_GIT_DESCRIBE"))
             } else {
-                env!("RSB_GIT_DESCRIBE").to_string()
+                env!("RSBUILD_GIT_DESCRIBE").to_string()
             };
             println!("rsbuild {} by {}", env!("CARGO_PKG_VERSION"), env!("CARGO_PKG_AUTHORS"));
-            println!("RSB_GIT_DESCRIBE: {}", describe);
+            println!("RSBUILD_GIT_DESCRIBE: {}", describe);
             println!("VERGEN_GIT_SHA: {}", env!("VERGEN_GIT_SHA"));
             println!("VERGEN_GIT_BRANCH: {}", env!("VERGEN_GIT_BRANCH"));
             println!("VERGEN_GIT_DIRTY: {}", dirty_str);
             println!("VERGEN_RUSTC_SEMVER: {}", env!("VERGEN_RUSTC_SEMVER"));
-            println!("RUST_EDITION: {}", env!("RSB_RUST_EDITION"));
+            println!("RUST_EDITION: {}", env!("RSBUILD_RUST_EDITION"));
         }
         Commands::Config { action } => {
             let builder = Builder::new()?;
@@ -395,8 +395,8 @@ fn init_project() -> Result<()> {
     let config_path = cwd.join("rsbuild.toml");
 
     if config_path.exists() {
-        return Err(RsbError::new(
-            RsbExitCode::ConfigError,
+        return Err(RsbuildError::new(
+            RsbuildExitCode::ConfigError,
             "rsbuild.toml already exists in the current directory",
         ).into());
     }
@@ -538,9 +538,9 @@ fn init_project() -> Result<()> {
     println!("Created {}", config_path.display());
 
     // Create .rsbuildignore if it doesn't exist
-    let rsbignore_path = cwd.join(".rsbuildignore");
-    if !rsbignore_path.exists() {
-        let rsbignore_content = r#"# .rsbuildignore - Exclude files from rsbuild processing
+    let rsbuildignore_path = cwd.join(".rsbuildignore");
+    if !rsbuildignore_path.exists() {
+        let rsbuildignore_content = r#"# .rsbuildignore - Exclude files from rsbuild processing
 # Uses .gitignore syntax (glob patterns, one per line)
 # Lines starting with # are comments
 #
@@ -551,7 +551,7 @@ fn init_project() -> Result<()> {
 # /experiments/     # Exclude experimental code
 # *.bak             # Exclude backup files
 "#;
-        fs::write(&rsbignore_path, rsbignore_content)?;
+        fs::write(&rsbuildignore_path, rsbuildignore_content)?;
         println!("Created .rsbuildignore");
     }
 

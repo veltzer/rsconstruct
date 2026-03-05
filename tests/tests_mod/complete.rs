@@ -1,11 +1,11 @@
-use crate::common::{setup_test_project, run_rsb_with_env};
+use crate::common::{setup_test_project, run_rsbuild_with_env};
 
 #[test]
 fn complete_bash_generates_output() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output = run_rsb_with_env(project_path, &["complete", "bash"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["complete", "bash"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "complete bash failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -18,7 +18,7 @@ fn complete_zsh_generates_output() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output = run_rsb_with_env(project_path, &["complete", "zsh"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["complete", "zsh"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "complete zsh failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -30,7 +30,7 @@ fn complete_fish_generates_output() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output = run_rsb_with_env(project_path, &["complete", "fish"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["complete", "fish"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "complete fish failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -47,7 +47,7 @@ fn complete_from_config() {
     std::fs::write(project_path.join("rsbuild.toml"), config).expect("Failed to write rsbuild.toml");
 
     // Running complete without arguments should use config
-    let output = run_rsb_with_env(project_path, &["complete"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["complete"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "complete from config failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);

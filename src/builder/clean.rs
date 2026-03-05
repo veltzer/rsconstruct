@@ -80,11 +80,11 @@ impl Builder {
     pub fn distclean(&self) -> Result<()> {
         println!("{}", color::bold("Removing build directories..."));
 
-        let rsb_dir = std::path::Path::new(".rsbuild");
-        if rsb_dir.exists() {
-            fs::remove_dir_all(rsb_dir)
+        let rsbuild_dir = std::path::Path::new(".rsbuild");
+        if rsbuild_dir.exists() {
+            fs::remove_dir_all(rsbuild_dir)
                 .context("Failed to remove .rsbuild/ directory")?;
-            println!("Removed {}", rsb_dir.display());
+            println!("Removed {}", rsbuild_dir.display());
         }
 
         let out_dir = std::path::Path::new("out");
@@ -137,14 +137,14 @@ impl Builder {
         let graph = self.build_graph_for_clean_with_processors(&processors)?;
 
         // Collect RSBuild-known output files
-        let mut rsb_outputs: HashSet<PathBuf> = HashSet::new();
-        let mut rsb_output_dirs: Vec<PathBuf> = Vec::new();
+        let mut rsbuild_outputs: HashSet<PathBuf> = HashSet::new();
+        let mut rsbuild_output_dirs: Vec<PathBuf> = Vec::new();
         for product in graph.products() {
             for output in &product.outputs {
-                rsb_outputs.insert(output.clone());
+                rsbuild_outputs.insert(output.clone());
             }
             if let Some(ref dir) = product.output_dir {
-                rsb_output_dirs.push(dir.as_ref().clone());
+                rsbuild_output_dirs.push(dir.as_ref().clone());
             }
         }
 
@@ -196,12 +196,12 @@ impl Builder {
             }
 
             // Skip RSBuild output files
-            if rsb_outputs.contains(&path) {
+            if rsbuild_outputs.contains(&path) {
                 continue;
             }
 
             // Skip files inside RSBuild output directories
-            if rsb_output_dirs.iter().any(|dir| path.starts_with(dir)) {
+            if rsbuild_output_dirs.iter().any(|dir| path.starts_with(dir)) {
                 continue;
             }
 

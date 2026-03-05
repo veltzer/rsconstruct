@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::run_rsb_with_env;
+use crate::common::run_rsbuild_with_env;
 
 #[test]
 fn json_schema_valid() {
@@ -26,7 +26,7 @@ fn json_schema_valid() {
     )
     .unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Build should succeed with valid schema: stdout={}, stderr={}",
@@ -66,7 +66,7 @@ fn json_schema_mismatch() {
     )
     .unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         !output.status.success(),
         "Build should fail with mismatched propertyOrdering"
@@ -97,11 +97,11 @@ fn json_schema_incremental_skip() {
     .unwrap();
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
 
     // Second build should skip
-    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
@@ -142,7 +142,7 @@ fn json_schema_nested_valid() {
     )
     .unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Build should succeed with valid nested schema: stdout={}, stderr={}",
@@ -184,7 +184,7 @@ fn json_schema_nested_mismatch() {
     )
     .unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         !output.status.success(),
         "Build should fail when nested object has mismatched propertyOrdering"
@@ -208,7 +208,7 @@ fn json_schema_no_property_ordering_passes() {
     )
     .unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Build should pass for JSON without propertyOrdering: stdout={}, stderr={}",

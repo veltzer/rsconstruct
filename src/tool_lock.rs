@@ -254,8 +254,8 @@ pub fn verify_lock_file(
     }
 
     if !mismatches.is_empty() {
-        return Err(crate::exit_code::RsbError::new(
-            crate::exit_code::RsbExitCode::ToolError,
+        return Err(crate::exit_code::RsbuildError::new(
+            crate::exit_code::RsbuildExitCode::ToolError,
             format!("Tool version mismatch (run 'rsbuild tools lock' to update):\n{}", mismatches.join("\n")),
         ).into());
     }

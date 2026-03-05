@@ -36,7 +36,7 @@ fn walk_files(dir: &Path) -> Vec<PathBuf> {
     result
 }
 
-const RSB_DIR: &str = ".rsbuild";
+const RSBUILD_DIR: &str = ".rsbuild";
 const OBJECTS_DIR: &str = "objects";
 const DB_FILE: &str = "db.redb";
 
@@ -176,12 +176,12 @@ pub struct ObjectStoreOptions {
 
 impl ObjectStore {
     pub fn new(opts: ObjectStoreOptions) -> Result<Self> {
-        let rsb_dir = PathBuf::from(RSB_DIR);
-        let objects_dir = rsb_dir.join(OBJECTS_DIR);
-        let db_path = rsb_dir.join(DB_FILE);
+        let rsbuild_dir = PathBuf::from(RSBUILD_DIR);
+        let objects_dir = rsbuild_dir.join(OBJECTS_DIR);
+        let db_path = rsbuild_dir.join(DB_FILE);
 
         // Ensure .rsbuild directory exists
-        fs::create_dir_all(&rsb_dir)
+        fs::create_dir_all(&rsbuild_dir)
             .context("Failed to create .rsbuild directory")?;
 
         let db = crate::db::open_or_recreate(&db_path, "Cache database")?;

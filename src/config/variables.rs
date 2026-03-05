@@ -118,8 +118,8 @@ pub(super) fn substitute_variables(content: &str) -> Result<String> {
     for captures in var_pattern.captures_iter(content) {
         let var_name = captures.get(1).expect(errors::CAPTURE_GROUP_MISSING).as_str();
         if !defined_vars.iter().any(|v| v == var_name) {
-            return Err(crate::exit_code::RsbError::new(
-                crate::exit_code::RsbExitCode::ConfigError,
+            return Err(crate::exit_code::RsbuildError::new(
+                crate::exit_code::RsbuildExitCode::ConfigError,
                 format!("Undefined variable: ${{{}}}", var_name),
             ).into());
         }

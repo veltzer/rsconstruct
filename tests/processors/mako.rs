@@ -1,5 +1,5 @@
 use std::fs;
-use crate::common::{run_rsb, run_rsb_with_env};
+use crate::common::{run_rsbuild, run_rsbuild_with_env};
 use tempfile::TempDir;
 
 /// Set up a test project with the mako processor enabled
@@ -25,7 +25,7 @@ fn mako_basic_render() {
     ).expect("Failed to write mako template");
 
     // Run rsbuild build
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "rsbuild build failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Check that the output file was created
@@ -49,7 +49,7 @@ fn mako_subdirectory_output() {
         "[app]\nname = ${'TestApp'}\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "rsbuild build failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Output should be at config/app.conf (templates.mako/ prefix stripped)
@@ -75,7 +75,7 @@ fn mako_multiple_templates() {
         "[section]\nvalue = ${'hello'}\n"
     ).unwrap();
 
-    let output = run_rsb(project_path, &["build"]);
+    let output = run_rsbuild(project_path, &["build"]);
     assert!(output.status.success());
 
     assert!(project_path.join("first.txt").exists());
@@ -99,13 +99,13 @@ fn mako_incremental_build() {
     ).unwrap();
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(stdout1.contains("Processing:"));
 
     // Second build (should skip unchanged)
-    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("[mako] Skipping (unchanged):"));
@@ -122,12 +122,12 @@ fn mako_clean() {
     ).unwrap();
 
     // Build
-    let output = run_rsb(project_path, &["build"]);
+    let output = run_rsbuild(project_path, &["build"]);
     assert!(output.status.success());
     assert!(project_path.join("output.txt").exists());
 
     // Clean
-    let output = run_rsb(project_path, &["clean"]);
+    let output = run_rsbuild(project_path, &["clean"]);
     assert!(output.status.success());
     assert!(!project_path.join("output.txt").exists(), "Output should be removed after clean");
 }

@@ -63,7 +63,7 @@ impl ProductDiscovery for LibreofficeProcessor {
 
         // Use flock to serialize LibreOffice invocations (it can't run multiple instances)
         let mut cmd = Command::new("flock");
-        cmd.arg("/tmp/rsb_libreoffice");
+        cmd.arg("/tmp/rsbuild_libreoffice");
         cmd.arg(&self.config.libreoffice_bin);
         cmd.arg("--headless");
         cmd.arg("--convert-to").arg(format.as_ref());

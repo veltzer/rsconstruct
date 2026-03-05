@@ -1,5 +1,5 @@
 use std::fs;
-use crate::common::{setup_test_project, run_rsb_with_env, run_rsb};
+use crate::common::{setup_test_project, run_rsbuild_with_env, run_rsbuild};
 
 #[test]
 fn explain_first_build() {
@@ -13,7 +13,7 @@ fn explain_first_build() {
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build", "--explain"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "--explain"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "build failed: {}", String::from_utf8_lossy(&output.stderr));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("BUILD"), "Expected BUILD in explain output, got: {}", stdout);
@@ -33,11 +33,11 @@ fn explain_incremental_skip() {
     ).unwrap();
 
     // First build
-    let output = run_rsb(project_path, &["build"]);
+    let output = run_rsbuild(project_path, &["build"]);
     assert!(output.status.success());
 
     // Second build with explain
-    let output = run_rsb_with_env(project_path, &["build", "--explain"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "--explain"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("SKIP"), "Expected SKIP in explain output, got: {}", stdout);
@@ -57,14 +57,14 @@ fn explain_input_change() {
     ).unwrap();
 
     // First build
-    let output = run_rsb(project_path, &["build"]);
+    let output = run_rsbuild(project_path, &["build"]);
     assert!(output.status.success());
 
     // Modify the input
     fs::write(project_path.join("sleep/explain_change.sleep"), "0.02").unwrap();
 
     // Second build with explain
-    let output = run_rsb_with_env(project_path, &["build", "--explain"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "--explain"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("BUILD"), "Expected BUILD in explain output, got: {}", stdout);
@@ -84,11 +84,11 @@ fn explain_force() {
     ).unwrap();
 
     // First build
-    let output = run_rsb(project_path, &["build"]);
+    let output = run_rsbuild(project_path, &["build"]);
     assert!(output.status.success());
 
     // Force build with explain
-    let output = run_rsb_with_env(project_path, &["build", "--force", "--explain"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "--force", "--explain"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("BUILD"), "Expected BUILD in explain output, got: {}", stdout);
@@ -107,15 +107,15 @@ fn explain_after_clean() {
     ).unwrap();
 
     // First build
-    let output = run_rsb(project_path, &["build"]);
+    let output = run_rsbuild(project_path, &["build"]);
     assert!(output.status.success());
 
     // Clean outputs
-    let output = run_rsb(project_path, &["clean"]);
+    let output = run_rsbuild(project_path, &["clean"]);
     assert!(output.status.success());
 
     // Build with explain — should show RESTORE
-    let output = run_rsb_with_env(project_path, &["build", "--explain"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "--explain"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("RESTORE"), "Expected RESTORE in explain output, got: {}", stdout);
@@ -135,7 +135,7 @@ fn explain_dry_run() {
     ).unwrap();
 
     // Dry run with explain on first build
-    let output = run_rsb_with_env(project_path, &["build", "--dry-run", "--explain"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "--dry-run", "--explain"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("BUILD"), "Expected BUILD in explain dry-run output, got: {}", stdout);

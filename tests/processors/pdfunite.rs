@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsb_with_env, tool_available};
+use crate::common::{run_rsbuild_with_env, tool_available};
 
 #[test]
 fn pdfunite_no_project_discovered() {
@@ -14,7 +14,7 @@ fn pdfunite_no_project_discovered() {
     .unwrap();
 
     // No source directory — should succeed with nothing to build
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -50,7 +50,7 @@ fn pdfunite_discovers_courses() {
     .unwrap();
 
     // Run with dry-run to check discovery without needing actual PDFs
-    let output = run_rsb_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Dry run should succeed: stdout={}, stderr={}",

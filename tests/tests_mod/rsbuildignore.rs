@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{setup_test_project, setup_cc_project, run_rsb_with_env};
+use crate::common::{setup_test_project, setup_cc_project, run_rsbuild_with_env};
 
 #[test]
 fn rsbuildignore_excludes_sleep_files() {
@@ -24,7 +24,7 @@ fn rsbuildignore_excludes_sleep_files() {
     ).unwrap();
 
     // Build
-    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "rsbuild build failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Verify via output - only included file should be processed
@@ -56,7 +56,7 @@ fn rsbuildignore_glob_pattern() {
     ).unwrap();
 
     // Build
-    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "rsbuild build failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Verify via output - keep.sleep should be processed, subdir files should not
@@ -81,7 +81,7 @@ fn rsbuildignore_no_file() {
     ).unwrap();
 
     // Build should work fine without .rsbuildignore
-    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "rsbuild build failed without .rsbuildignore: {}",
         String::from_utf8_lossy(&output.stderr));
 
@@ -111,7 +111,7 @@ fn rsbuildignore_comments_and_blank_lines() {
         "# This is a comment\n\n   \n# Another comment\nsleep/b.sleep\n\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
 
     // Verify via output
@@ -145,7 +145,7 @@ fn rsbuildignore_cc_processor() {
         "src/excluded/**\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -181,7 +181,7 @@ fn rsbuildignore_leading_slash() {
         "/src/skip_dir/**\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -217,7 +217,7 @@ fn rsbuildignore_trailing_slash() {
         "/src/skipme/\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),

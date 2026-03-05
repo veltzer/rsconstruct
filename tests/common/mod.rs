@@ -34,9 +34,9 @@ pub fn setup_test_project() -> TempDir {
 }
 
 /// Helper to run rsbuild command in a directory
-pub fn run_rsb(dir: &Path, args: &[&str]) -> std::process::Output {
-    let rsb_path = env!("CARGO_BIN_EXE_rsbuild");
-    Command::new(rsb_path)
+pub fn run_rsbuild(dir: &Path, args: &[&str]) -> std::process::Output {
+    let rsbuild_path = env!("CARGO_BIN_EXE_rsbuild");
+    Command::new(rsbuild_path)
         .current_dir(dir)
         .args(args)
         .output()
@@ -44,9 +44,9 @@ pub fn run_rsb(dir: &Path, args: &[&str]) -> std::process::Output {
 }
 
 /// Helper to run rsbuild command with extra environment variables
-pub fn run_rsb_with_env(dir: &Path, args: &[&str], env_vars: &[(&str, &str)]) -> std::process::Output {
-    let rsb_path = env!("CARGO_BIN_EXE_rsbuild");
-    let mut cmd = Command::new(rsb_path);
+pub fn run_rsbuild_with_env(dir: &Path, args: &[&str], env_vars: &[(&str, &str)]) -> std::process::Output {
+    let rsbuild_path = env!("CARGO_BIN_EXE_rsbuild");
+    let mut cmd = Command::new(rsbuild_path);
     cmd.current_dir(dir).args(args);
     for (key, val) in env_vars {
         cmd.env(key, val);
@@ -66,18 +66,18 @@ pub fn setup_cc_project(project_path: &Path) {
 // --- JSON output parsing for tests ---
 
 /// Run rsbuild with --json flag and return parsed build result
-pub fn run_rsb_json(dir: &Path, args: &[&str]) -> BuildResult {
+pub fn run_rsbuild_json(dir: &Path, args: &[&str]) -> BuildResult {
     let mut full_args = vec!["--json"];
     full_args.extend(args);
-    let output = run_rsb(dir, &full_args);
+    let output = run_rsbuild(dir, &full_args);
     BuildResult::parse(&output)
 }
 
 /// Run rsbuild with --json flag and extra environment variables
-pub fn run_rsb_json_with_env(dir: &Path, args: &[&str], env_vars: &[(&str, &str)]) -> BuildResult {
+pub fn run_rsbuild_json_with_env(dir: &Path, args: &[&str], env_vars: &[(&str, &str)]) -> BuildResult {
     let mut full_args = vec!["--json"];
     full_args.extend(args);
-    let output = run_rsb_with_env(dir, &full_args, env_vars);
+    let output = run_rsbuild_with_env(dir, &full_args, env_vars);
     BuildResult::parse(&output)
 }
 

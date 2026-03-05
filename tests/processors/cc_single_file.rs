@@ -1,7 +1,7 @@
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
-use crate::common::{setup_cc_project, run_rsb, run_rsb_with_env};
+use crate::common::{setup_cc_project, run_rsbuild, run_rsbuild_with_env};
 
 #[test]
 fn cc_single_file_compile_single_c_file() {
@@ -15,7 +15,7 @@ fn cc_single_file_compile_single_c_file() {
         "int main() { return 0; }\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "rsbuild build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -38,13 +38,13 @@ fn cc_single_file_incremental_skip() {
     ).unwrap();
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(stdout1.contains("Processing:"), "First build should process: {}", stdout1);
 
     // Second build - should skip
-    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("[cc_single_file] Skipping (unchanged):"), "Second build should skip: {}", stdout2);
@@ -69,7 +69,7 @@ fn cc_single_file_header_dependency() {
     ).unwrap();
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success(),
         "First build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output1.stdout),
@@ -85,7 +85,7 @@ fn cc_single_file_header_dependency() {
     ).unwrap();
 
     // Rebuild - should recompile files that include utils.h
-    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success(),
         "Rebuild failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output2.stdout),
@@ -112,7 +112,7 @@ fn cc_single_file_mixed_c_and_cpp() {
         "int main() { return 0; }\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Mixed C/C++ build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -135,12 +135,12 @@ fn cc_single_file_clean() {
     ).unwrap();
 
     // Build
-    let build_output = run_rsb(project_path, &["build"]);
+    let build_output = run_rsbuild(project_path, &["build"]);
     assert!(build_output.status.success());
     assert!(project_path.join("out/cc_single_file/src/main.elf").exists());
 
     // Clean
-    let clean_output = run_rsb(project_path, &["clean", "outputs"]);
+    let clean_output = run_rsbuild(project_path, &["clean", "outputs"]);
     assert!(clean_output.status.success());
 
     // Verify outputs are removed but .rsbuild cache is preserved
@@ -161,7 +161,7 @@ fn cc_single_file_dry_run() {
     ).unwrap();
 
     // Dry run
-    let output = run_rsb_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("BUILD"), "Dry run should show BUILD for cc products: {}", stdout);
@@ -183,7 +183,7 @@ fn cc_single_file_config_change_triggers_rebuild() {
     ).unwrap();
 
     // First build — should process
-    let output1 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success(),
         "First build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output1.stdout),
@@ -192,7 +192,7 @@ fn cc_single_file_config_change_triggers_rebuild() {
     assert!(stdout1.contains("Processing:"), "First build should process: {}", stdout1);
 
     // Second build — should skip (nothing changed)
-    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("[cc_single_file] Skipping (unchanged):"), "Second build should skip: {}", stdout2);
@@ -204,7 +204,7 @@ fn cc_single_file_config_change_triggers_rebuild() {
     ).unwrap();
 
     // Third build — should rebuild because config changed
-    let output3 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output3 = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output3.status.success(),
         "Third build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output3.stdout),
@@ -233,7 +233,7 @@ int main() {
 "#
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build with per-file compile flags failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -272,7 +272,7 @@ int main() {
 "#
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build with per-file link flags failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -310,7 +310,7 @@ int main() {
 "#
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build with backtick substitution failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -347,7 +347,7 @@ int main() {
 "#
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build without per-file flags failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -384,7 +384,7 @@ int main() {
 "#
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build with EXTRA_COMPILE_CMD failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -422,7 +422,7 @@ int main() {
 "#
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build with EXTRA_LINK_CMD failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -462,7 +462,7 @@ int main() {
 "#
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build with block comment * prefix failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -499,7 +499,7 @@ int main() {
 "#
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build with EXTRA_COMPILE_SHELL failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -537,7 +537,7 @@ int main() {
 "#
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build with EXTRA_LINK_SHELL failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -574,7 +574,7 @@ fn cc_single_file_direct_header_change_triggers_rebuild() {
     ).unwrap();
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success(),
         "First build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output1.stdout),
@@ -583,7 +583,7 @@ fn cc_single_file_direct_header_change_triggers_rebuild() {
     assert!(stdout1.contains("Processing:"), "First build should process: {}", stdout1);
 
     // Second build — should skip (nothing changed)
-    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("[cc_single_file] Skipping (unchanged):"),
@@ -596,7 +596,7 @@ fn cc_single_file_direct_header_change_triggers_rebuild() {
     ).unwrap();
 
     // Third build — should recompile because the direct header changed
-    let output3 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output3 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output3.status.success(),
         "Rebuild after direct header change failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output3.stdout),
@@ -637,7 +637,7 @@ fn cc_single_file_indirect_header_change_triggers_rebuild() {
     ).unwrap();
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success(),
         "First build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output1.stdout),
@@ -652,7 +652,7 @@ fn cc_single_file_indirect_header_change_triggers_rebuild() {
     assert!(run_output.status.success(), "Executable should exit 0 initially");
 
     // Second build — should skip (nothing changed)
-    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("[cc_single_file] Skipping (unchanged):"),
@@ -665,7 +665,7 @@ fn cc_single_file_indirect_header_change_triggers_rebuild() {
     ).unwrap();
 
     // Third build — should recompile because an indirect header changed
-    let output3 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output3 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output3.status.success(),
         "Rebuild after indirect header change failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output3.stdout),
@@ -696,7 +696,7 @@ fn cc_single_file_new_include_triggers_dependency_recomputation() {
     ).unwrap();
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success(),
         "First build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output1.stdout),
@@ -705,7 +705,7 @@ fn cc_single_file_new_include_triggers_dependency_recomputation() {
     assert!(stdout1.contains("Processing:"), "First build should process: {}", stdout1);
 
     // Step 2: Second build — should skip (nothing changed)
-    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("[cc_single_file] Skipping (unchanged):"),
@@ -725,7 +725,7 @@ fn cc_single_file_new_include_triggers_dependency_recomputation() {
     ).unwrap();
 
     // Step 4: Build — should recompile (source changed, deps re-scanned picking up newheader.h)
-    let output3 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output3 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output3.status.success(),
         "Build after adding include failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output3.stdout),
@@ -735,7 +735,7 @@ fn cc_single_file_new_include_triggers_dependency_recomputation() {
         "Should recompile after source changed to add include: {}", stdout3);
 
     // Step 5: Build again — should skip (nothing changed)
-    let output4 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output4 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output4.status.success());
     let stdout4 = String::from_utf8_lossy(&output4.stdout);
     assert!(stdout4.contains("[cc_single_file] Skipping (unchanged):"),
@@ -750,7 +750,7 @@ fn cc_single_file_new_include_triggers_dependency_recomputation() {
     ).unwrap();
 
     // Step 7: Build — should recompile (newly-tracked header changed)
-    let output5 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output5 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output5.status.success(),
         "Build after modifying new header failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output5.stdout),
@@ -802,14 +802,14 @@ include_paths = ["include"]
     ).unwrap();
 
     // First build
-    let output1 = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success(),
         "First build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output1.stdout),
         String::from_utf8_lossy(&output1.stderr));
 
     // Second build - should skip (nothing changed)
-    let output2 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("[cc_single_file] Skipping (unchanged):"),
@@ -822,7 +822,7 @@ include_paths = ["include"]
     ).unwrap();
 
     // Third build - should recompile because the header changed
-    let output3 = run_rsb_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output3 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output3.status.success(),
         "Rebuild after angle-bracket header change failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output3.stdout),
@@ -866,7 +866,7 @@ output_suffix = ".elf"
         "int main() { return 0; }\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "rsbuild build with multiple compilers failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -916,7 +916,7 @@ int main() { return 0; }
     ).unwrap();
 
     // Build should fail with error about missing include
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(!output.status.success(),
         "Build with missing include should fail");
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -977,7 +977,7 @@ int main() {
     ).unwrap();
 
     // Build
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build with profile-specific flags failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -1055,7 +1055,7 @@ int main() { return 0; }
     ).unwrap();
 
     // Build
-    let output = run_rsb_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),

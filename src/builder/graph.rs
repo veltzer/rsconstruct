@@ -45,7 +45,7 @@ impl Builder {
 
         match viewer {
             GraphViewer::Mermaid => {
-                let html_path = temp_dir.join("rsb_graph.html");
+                let html_path = temp_dir.join("rsbuild_graph.html");
                 let html_content = graph.to_html();
                 fs::write(&html_path, html_content)
                     .context("Failed to write HTML file")?;
@@ -64,8 +64,8 @@ impl Builder {
                     anyhow::bail!("Graphviz 'dot' command not found. Install Graphviz or use --view=mermaid");
                 }
 
-                let dot_path = temp_dir.join("rsb_graph.dot");
-                let svg_path = temp_dir.join("rsb_graph.svg");
+                let dot_path = temp_dir.join("rsbuild_graph.dot");
+                let svg_path = temp_dir.join("rsbuild_graph.svg");
 
                 // Write DOT file
                 let dot_content = graph.to_dot();

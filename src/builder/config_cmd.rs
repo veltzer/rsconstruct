@@ -57,8 +57,8 @@ impl Builder {
                         color::bold("Summary"), error_count, warning_count);
 
                     if error_count > 0 {
-                        return Err(crate::exit_code::RsbError::new(
-                            crate::exit_code::RsbExitCode::ConfigError,
+                        return Err(crate::exit_code::RsbuildError::new(
+                            crate::exit_code::RsbuildExitCode::ConfigError,
                             format!("Config validation failed with {} error(s)", error_count),
                         ).into());
                     }

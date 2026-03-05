@@ -1,5 +1,5 @@
 use std::fs;
-use crate::common::{setup_test_project, run_rsb, run_rsb_with_env};
+use crate::common::{setup_test_project, run_rsbuild, run_rsbuild_with_env};
 
 #[test]
 fn dry_run_shows_build_actions() {
@@ -15,7 +15,7 @@ fn dry_run_shows_build_actions() {
     ).unwrap();
 
     // Dry run before any build — should show BUILD
-    let output = run_rsb_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("BUILD"), "Dry run should show BUILD for unbuilt product: {}", stdout);
@@ -25,12 +25,12 @@ fn dry_run_shows_build_actions() {
     assert!(!project_path.join("out/sleep").exists(), "Dry run should not create output directories");
 
     // Now do a real build
-    let build = run_rsb(project_path, &["build"]);
+    let build = run_rsbuild(project_path, &["build"]);
     assert!(build.status.success());
     // Checkers don't create stub files anymore
 
     // Dry run after build — should show SKIP (cache entry exists)
-    let output2 = run_rsb_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsbuild_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("SKIP"), "Dry run after build should show SKIP: {}", stdout2);
@@ -48,7 +48,7 @@ fn dry_run_short_flag() {
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
-    let output = run_rsb_with_env(project_path, &["build", "-n"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "-n"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "Short flag -n should work: {}", String::from_utf8_lossy(&output.stderr));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("BUILD"), "-n flag should show BUILD: {}", stdout);
@@ -69,11 +69,11 @@ fn dry_run_with_force() {
     ).unwrap();
 
     // Build first
-    let build = run_rsb(project_path, &["build"]);
+    let build = run_rsbuild(project_path, &["build"]);
     assert!(build.status.success());
 
     // Dry run with --force — should show BUILD even though up-to-date
-    let output = run_rsb_with_env(project_path, &["build", "--dry-run", "--force"], &[("NO_COLOR", "1")]);
+    let output = run_rsbuild_with_env(project_path, &["build", "--dry-run", "--force"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("BUILD"), "Dry run with --force should show BUILD: {}", stdout);
