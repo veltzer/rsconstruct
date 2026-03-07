@@ -36,3 +36,7 @@ rsb_build:
 .PHONY: rsb_clean
 rsb_clean:
 	@target/release/rsbuild clean -v
+
+.PHONY: artifacts
+artifacts:
+	@gh release view --json assets --jq '.assets[] | "\(.name)\t\(.size)\t\(.downloadCount)"' | column -t -N NAME,SIZE,DOWNLOADS
