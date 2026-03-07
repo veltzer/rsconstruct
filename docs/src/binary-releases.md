@@ -1,30 +1,34 @@
 # Binary Releases
 
-RSBuild publishes pre-built binaries as GitHub releases on every push to master.
+RSBuild publishes pre-built binaries as GitHub releases when a version tag
+(`v*`) is pushed.
 
-## Supported Architectures
+## Supported Platforms
 
-| Architecture | Binary name | GitHub runner |
-|---|---|---|
-| x86_64 | `rsbuild-x86_64-unknown-linux-gnu` | `ubuntu-latest` |
-| aarch64 (arm64) | `rsbuild-aarch64-unknown-linux-gnu` | `ubuntu-24.04-arm` |
-
-Both binaries are built natively (no cross-compilation) and tests run on the
-actual target architecture before the release is published.
+| Platform | Binary name |
+|---|---|
+| Linux x86_64 | `rsbuild-linux-x86_64` |
+| Linux aarch64 (arm64) | `rsbuild-linux-aarch64` |
+| macOS x86_64 | `rsbuild-macos-x86_64` |
+| macOS aarch64 (Apple Silicon) | `rsbuild-macos-aarch64` |
+| Windows x86_64 | `rsbuild-windows-x86_64.exe` |
 
 ## How It Works
 
 The release workflow (`.github/workflows/release.yml`) has two jobs:
 
-1. **build** — a matrix job that runs in parallel on x86_64 and arm64
-   runners. Each job builds the release binary, runs all tests, and uploads
-   the binary as a GitHub Actions artifact.
-2. **release** — waits for both builds to finish, downloads the artifacts,
-   and creates a single GitHub release tagged `latest` with both binaries
-   attached.
+1. **build** — a matrix job that builds the release binary for each platform
+   and uploads it as a GitHub Actions artifact.
+2. **release** — waits for all builds to finish, downloads the artifacts,
+   and creates a GitHub release with auto-generated release notes and all
+   binaries attached.
 
-The release is a rolling prerelease — each push to master replaces the
-previous `latest` release.
+## Creating a Release
+
+1. Update `version` in `Cargo.toml`
+2. Commit and push
+3. Tag and push: `git tag v0.2.2 && git push origin v0.2.2`
+4. The workflow creates the GitHub release automatically
 
 ## Release Profile
 
@@ -36,23 +40,3 @@ strip = true        # Remove debug symbols
 lto = true          # Link-time optimization across all crates
 codegen-units = 1   # Single codegen unit for better optimization
 ```
-
-## Known Issues
-
-### No `ubuntu-latest-arm` runner
-
-GitHub provides `ubuntu-latest` for x86_64, which automatically rolls
-forward to the newest Ubuntu version. There is no equivalent
-`ubuntu-latest-arm` for arm64. The arm64 runner must be pinned to a
-specific version (`ubuntu-24.04-arm`).
-
-This means the arm64 runner version needs to be updated manually in
-`.github/workflows/release.yml` when GitHub releases newer arm64 runner
-images (e.g., `ubuntu-26.04-arm`). There is an
-[open community discussion](https://github.com/orgs/community/discussions/149392)
-requesting that GitHub add `ubuntu-latest-arm`.
-
-### Linux only
-
-Only Linux binaries are published. macOS and Windows users must build from
-source with `cargo build --release`.
