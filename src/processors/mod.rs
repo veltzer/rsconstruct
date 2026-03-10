@@ -359,36 +359,44 @@ pub(crate) fn dot_to_svg(dot_content: &str) -> Result<String> {
     Ok(String::from_utf8(output.stdout)?)
 }
 
-/// Merge new words into an existing words set, sort, and write to file.
+/// Append new words to a words file without truncating existing content.
 /// Used by aspell and spellcheck processors for their auto_add_words feature.
 /// `existing` is the set of words already on disk, `new_words` the words to add.
-/// If `header` is Some, it is written as the first line of the file.
-/// Returns Ok(()) and prints a summary of how many words were added.
+/// If `header_line` is Some and the file does not yet exist, it is written as the
+/// first line (e.g. aspell .pws header). New words are appended to the end of the
+/// file so that existing content is never lost.
 pub(crate) fn flush_words(
-    existing: HashSet<String>,
+    existing: &HashSet<String>,
     new_words: &HashSet<String>,
     words_path: &Path,
-    header: Option<impl FnOnce(usize) -> String>,
+    header_line: Option<&str>,
 ) -> Result<()> {
-    let mut all_words = existing;
-    let new_count = new_words.iter().filter(|w| !all_words.contains(*w)).count();
-    for word in new_words {
-        all_words.insert(word.clone());
-    }
-    if new_count == 0 {
+    let to_add: Vec<_> = new_words.iter()
+        .filter(|w| !existing.contains(*w))
+        .collect();
+    if to_add.is_empty() {
         return Ok(());
     }
-    let mut sorted: Vec<_> = all_words.into_iter().collect();
+    let mut sorted: Vec<_> = to_add;
     sorted.sort();
-    let mut file = std::fs::File::create(words_path)
-        .with_context(|| format!("Failed to create words file: {}", words_path.display()))?;
-    if let Some(fmt) = header {
-        writeln!(file, "{}", fmt(sorted.len()))?;
+
+    // If the file doesn't exist yet, create it with the header line.
+    // Otherwise just append — never truncate.
+    let file_exists = words_path.exists();
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(words_path)
+        .with_context(|| format!("Failed to open words file: {}", words_path.display()))?;
+    if !file_exists {
+        if let Some(header) = header_line {
+            writeln!(file, "{}", header)?;
+        }
     }
     for word in &sorted {
         writeln!(file, "{}", word)?;
     }
-    println!("Added {} word(s) to {}", new_count, words_path.display());
+    println!("Added {} word(s) to {}", sorted.len(), words_path.display());
     Ok(())
 }
 

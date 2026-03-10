@@ -190,16 +190,13 @@ impl SpellcheckProcessor {
     /// Write collected words to the words file
     fn flush_words_to_file(&self) -> Result<()> {
         let words_to_add = self.words_to_add.lock();
-        if words_to_add.is_empty() {
-            return Ok(());
-        }
         let words_path = Path::new(&self.config.words_file);
-        let existing = if words_path.exists() {
-            Self::load_custom_words(words_path).unwrap_or_default()
-        } else {
-            HashSet::new()
-        };
-        flush_words(existing, &words_to_add, words_path, None::<fn(usize) -> String>)
+        flush_words(
+            &self.custom_words,
+            &words_to_add,
+            words_path,
+            None,
+        )
     }
 }
 

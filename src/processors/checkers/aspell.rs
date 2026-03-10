@@ -111,12 +111,13 @@ impl AspellProcessor {
     /// Write collected words to the aspell personal word list (.pws) file
     fn flush_words_to_file(&self) -> Result<()> {
         let words_to_add = self.words_to_add.lock();
-        if words_to_add.is_empty() {
-            return Ok(());
-        }
         let words_path = Path::new(&self.config.words_file);
-        let existing = Self::load_custom_words(words_path);
-        flush_words(existing, &words_to_add, words_path, Some(|n| format!("personal_ws-1.1 en {n}")))
+        flush_words(
+            &self.custom_words,
+            &words_to_add,
+            words_path,
+            Some("personal_ws-1.1 en 0"),
+        )
     }
 }
 
