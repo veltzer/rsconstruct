@@ -1,7 +1,5 @@
 # RSBuild - Rust Build Tool
 
-I added this
-
 A fast, incremental build tool written in Rust with C/C++ compilation, template support, Python linting, and parallel execution.
 
 ## Features
