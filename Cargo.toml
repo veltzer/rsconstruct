@@ -3,6 +3,9 @@ name = "rsbuild"
 version = "0.2.5"
 edition = "2024"
 authors = ["Mark Veltzer <mark.veltzer@gmail.com>"]
+description = "Rust based fast build system"
+license = "MIT"
+repository = "https://github.com/veltzer/rsbuild"
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
