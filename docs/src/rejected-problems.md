@@ -56,7 +56,7 @@ Templates in subdirectories produce output at project root (e.g., `templates.ter
 **File:** `src/processors/lua_processor.rs` (line 126)
 **Flagged in:** round 10
 
-`rsbuild.stub_path(source, suffix)` uses `suffix` to construct the output directory (`out/{suffix}`). This is the designed Lua API — plugins control their own output directory naming via the suffix parameter.
+`rsconstruct.stub_path(source, suffix)` uses `suffix` to construct the output directory (`out/{suffix}`). This is the designed Lua API — plugins control their own output directory naming via the suffix parameter.
 
 ## Lua clean count masking with saturating_sub
 
@@ -91,7 +91,7 @@ Originally flagged as a design choice. User overruled — missing outputs are no
 **File:** `src/processors/checkers/spellcheck.rs` (lines 192-229)
 **Flagged in:** round 11
 
-Agent claimed file read-modify-write isn't protected. Wrong — `self.words_to_add.lock()` on line 193 acquires the mutex, which is held for the entire function (not dropped until return). The lock prevents concurrent threads from interleaving. Cross-process races are not a concern for RSBuild.
+Agent claimed file read-modify-write isn't protected. Wrong — `self.words_to_add.lock()` on line 193 acquires the mutex, which is held for the entire function (not dropped until return). The lock prevents concurrent threads from interleaving. Cross-process races are not a concern for RSConstruct.
 
 ## Duplicate dependency edges in resolve_dependencies
 
@@ -118,7 +118,7 @@ Agent suggested replacing `assert_eq!` with `anyhow::bail!` for batch result cou
 
 **Flagged in:** rounds 9, 10, 11, 12
 
-Multiple agents flagged `std::os::unix` usage without `#[cfg(unix)]` guards, and missing `#[cfg(windows)]`/`#[cfg(target_os = "macos")]` blocks. RSBuild is Linux-only. No platform compatibility code will be added.
+Multiple agents flagged `std::os::unix` usage without `#[cfg(unix)]` guards, and missing `#[cfg(windows)]`/`#[cfg(target_os = "macos")]` blocks. RSConstruct is Linux-only. No platform compatibility code will be added.
 
 ## DB recovery — file might not exist
 

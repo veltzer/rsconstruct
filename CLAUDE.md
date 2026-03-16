@@ -1,4 +1,4 @@
-# RSBuild - Rust Build Tool
+# RSConstruct - Rust Build Tool
 
 A fast, incremental build tool written in Rust with tera support, Python linting, and parallel execution.
 

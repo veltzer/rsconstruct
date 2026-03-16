@@ -19,39 +19,39 @@ These flags can be used with any command:
 Example:
 
 ```bash
-rsbuild --phases build                    # Show phase messages during build
-rsbuild --show-child-processes build      # Show each command being executed
-rsbuild --show-output build               # Show compiler/linter output even on success
-rsbuild --phases --show-child-processes build # Show both phases and commands
-rsbuild -O path build                     # Show output file paths in build messages
-rsbuild -I all build                      # Show all input files (including headers)
+rsconstruct --phases build                    # Show phase messages during build
+rsconstruct --show-child-processes build      # Show each command being executed
+rsconstruct --show-output build               # Show compiler/linter output even on success
+rsconstruct --phases --show-child-processes build # Show both phases and commands
+rsconstruct -O path build                     # Show output file paths in build messages
+rsconstruct -I all build                      # Show all input files (including headers)
 ```
 
-## `rsbuild build`
+## `rsconstruct build`
 
 Incremental build — only rebuilds products whose inputs have changed.
 
 ```bash
-rsbuild build                              # Incremental build
-rsbuild build --force                      # Force full rebuild
-rsbuild build -j4                          # Build with 4 parallel jobs
-rsbuild build --dry-run                    # Show what would be built without executing
-rsbuild build --keep-going                 # Continue after errors
-rsbuild build --timings                    # Show per-product and total timing info
-rsbuild build --stop-after discover        # Stop after product discovery
-rsbuild build --stop-after add-dependencies # Stop after dependency scanning
-rsbuild build --stop-after resolve         # Stop after graph resolution
-rsbuild build --stop-after classify        # Stop after classifying products
-rsbuild build --show-output                # Show compiler/linter output even on success
-rsbuild build --auto-add-words             # Add misspelled words to .spellcheck-words instead of failing
-rsbuild build --auto-add-words -p spellcheck # Run only spellcheck and auto-add words
-rsbuild build -p ruff,pylint               # Run only specific processors
-rsbuild build --explain                    # Show why each product is skipped/restored/rebuilt
-rsbuild build --retry 3                    # Retry failed products up to 3 times
-rsbuild build --no-mtime                   # Disable mtime pre-check, always compute checksums
-rsbuild build --no-summary                 # Suppress the build summary
-rsbuild build --batch-size 10              # Limit batch size for batch-capable processors
-rsbuild build --verify-tool-versions       # Verify tool versions against .tools.versions
+rsconstruct build                              # Incremental build
+rsconstruct build --force                      # Force full rebuild
+rsconstruct build -j4                          # Build with 4 parallel jobs
+rsconstruct build --dry-run                    # Show what would be built without executing
+rsconstruct build --keep-going                 # Continue after errors
+rsconstruct build --timings                    # Show per-product and total timing info
+rsconstruct build --stop-after discover        # Stop after product discovery
+rsconstruct build --stop-after add-dependencies # Stop after dependency scanning
+rsconstruct build --stop-after resolve         # Stop after graph resolution
+rsconstruct build --stop-after classify        # Stop after classifying products
+rsconstruct build --show-output                # Show compiler/linter output even on success
+rsconstruct build --auto-add-words             # Add misspelled words to .spellcheck-words instead of failing
+rsconstruct build --auto-add-words -p spellcheck # Run only spellcheck and auto-add words
+rsconstruct build -p ruff,pylint               # Run only specific processors
+rsconstruct build --explain                    # Show why each product is skipped/restored/rebuilt
+rsconstruct build --retry 3                    # Retry failed products up to 3 times
+rsconstruct build --no-mtime                   # Disable mtime pre-check, always compute checksums
+rsconstruct build --no-summary                 # Suppress the build summary
+rsconstruct build --batch-size 10              # Limit batch size for batch-capable processors
+rsconstruct build --verify-tool-versions       # Verify tool versions against .tools.versions
 ```
 
 By default, tool output (compiler messages, linter output) is only shown when a command fails. Use `--show-output` to see all output.
@@ -76,10 +76,10 @@ The `-p` flag supports `@`-prefixed shortcuts that expand to groups of processor
 Examples:
 
 ```bash
-rsbuild build -p @checkers              # Run only checker processors
-rsbuild build -p @generators            # Run only generator processors
-rsbuild build -p @python3               # Run all Python-based processors
-rsbuild build -p @checkers,tera         # Mix shortcuts with processor names
+rsconstruct build -p @checkers              # Run only checker processors
+rsconstruct build -p @generators            # Run only generator processors
+rsconstruct build -p @python3               # Run all Python-based processors
+rsconstruct build -p @checkers,tera         # Mix shortcuts with processor names
 ```
 
 The `--stop-after` flag allows stopping the build at a specific phase:
@@ -89,95 +89,95 @@ The `--stop-after` flag allows stopping the build at a specific phase:
 - `classify` — stop after classifying products (show skip/restore/build counts)
 - `build` — run the full build (default)
 
-## `rsbuild clean`
+## `rsconstruct clean`
 
-Clean build artifacts. When run without a subcommand, removes build output files (same as `rsbuild clean outputs`).
+Clean build artifacts. When run without a subcommand, removes build output files (same as `rsconstruct clean outputs`).
 
 ```bash
-rsbuild clean                # Remove build output files (preserves cache) [default]
-rsbuild clean outputs        # Remove build output files (preserves cache)
-rsbuild clean all            # Remove out/ and .rsbuild/ directories
-rsbuild clean git            # Hard clean using git clean -qffxd (requires git repository)
+rsconstruct clean                # Remove build output files (preserves cache) [default]
+rsconstruct clean outputs        # Remove build output files (preserves cache)
+rsconstruct clean all            # Remove out/ and .rsconstruct/ directories
+rsconstruct clean git            # Hard clean using git clean -qffxd (requires git repository)
 ```
 
-## `rsbuild status`
+## `rsconstruct status`
 
 Show product status — whether each product is up-to-date, stale, or restorable from cache.
 
 ```bash
-rsbuild status
+rsconstruct status
 ```
 
-## `rsbuild init`
+## `rsconstruct init`
 
-Initialize a new rsbuild project in the current directory.
+Initialize a new rsconstruct project in the current directory.
 
 ```bash
-rsbuild init
+rsconstruct init
 ```
 
-## `rsbuild watch`
+## `rsconstruct watch`
 
 Watch source files and auto-rebuild on changes.
 
 ```bash
-rsbuild watch                              # Watch and rebuild on changes
-rsbuild watch --auto-add-words             # Watch with spellcheck auto-add words
-rsbuild watch -j4                          # Watch with 4 parallel jobs
-rsbuild watch -p ruff                      # Watch and only run the ruff processor
+rsconstruct watch                              # Watch and rebuild on changes
+rsconstruct watch --auto-add-words             # Watch with spellcheck auto-add words
+rsconstruct watch -j4                          # Watch with 4 parallel jobs
+rsconstruct watch -p ruff                      # Watch and only run the ruff processor
 ```
 
-The watch command accepts the same build flags as `rsbuild build` (e.g., `--jobs`, `--keep-going`, `--timings`, `--processors`, `--batch-size`, `--explain`, `--retry`, `--no-mtime`, `--no-summary`).
+The watch command accepts the same build flags as `rsconstruct build` (e.g., `--jobs`, `--keep-going`, `--timings`, `--processors`, `--batch-size`, `--explain`, `--retry`, `--no-mtime`, `--no-summary`).
 
-## `rsbuild graph`
+## `rsconstruct graph`
 
 Display the build dependency graph.
 
 ```bash
-rsbuild graph show                    # Default SVG format
-rsbuild graph show --format dot       # Graphviz DOT format
-rsbuild graph show --format mermaid   # Mermaid format
-rsbuild graph show --format json      # JSON format
-rsbuild graph show --format text      # Plain text hierarchical view
-rsbuild graph show --format svg       # SVG format (requires Graphviz dot)
-rsbuild graph view                    # Open as SVG (default viewer)
-rsbuild graph view --viewer mermaid   # Open as HTML with Mermaid in browser
-rsbuild graph view --viewer svg       # Generate and open SVG using Graphviz dot
-rsbuild graph stats                   # Show graph statistics (products, processors, dependencies)
+rsconstruct graph show                    # Default SVG format
+rsconstruct graph show --format dot       # Graphviz DOT format
+rsconstruct graph show --format mermaid   # Mermaid format
+rsconstruct graph show --format json      # JSON format
+rsconstruct graph show --format text      # Plain text hierarchical view
+rsconstruct graph show --format svg       # SVG format (requires Graphviz dot)
+rsconstruct graph view                    # Open as SVG (default viewer)
+rsconstruct graph view --viewer mermaid   # Open as HTML with Mermaid in browser
+rsconstruct graph view --viewer svg       # Generate and open SVG using Graphviz dot
+rsconstruct graph stats                   # Show graph statistics (products, processors, dependencies)
 ```
 
-## `rsbuild cache`
+## `rsconstruct cache`
 
 Manage the build cache.
 
 ```bash
-rsbuild cache clear         # Clear the entire cache
-rsbuild cache size          # Show cache size
-rsbuild cache trim          # Remove unreferenced objects
-rsbuild cache list          # List all cache entries and their status
-rsbuild cache stale         # Show which cache entries are stale vs current
-rsbuild cache stats         # Show per-processor cache statistics
-rsbuild cache remove-stale  # Remove stale index entries not matching any current product
+rsconstruct cache clear         # Clear the entire cache
+rsconstruct cache size          # Show cache size
+rsconstruct cache trim          # Remove unreferenced objects
+rsconstruct cache list          # List all cache entries and their status
+rsconstruct cache stale         # Show which cache entries are stale vs current
+rsconstruct cache stats         # Show per-processor cache statistics
+rsconstruct cache remove-stale  # Remove stale index entries not matching any current product
 ```
 
-## `rsbuild deps`
+## `rsconstruct deps`
 
 Show or manage source file dependencies from the dependency cache. The cache is populated during builds when dependency analyzers scan source files (e.g., C/C++ headers, Python imports).
 
 ```bash
-rsbuild deps list                        # List all available dependency analyzers
-rsbuild deps show all                    # Show all cached dependencies
-rsbuild deps show files src/main.c       # Show dependencies for a specific file
-rsbuild deps show files src/a.c src/b.c  # Show dependencies for multiple files
-rsbuild deps show analyzers cpp          # Show dependencies from the C/C++ analyzer
-rsbuild deps show analyzers cpp python   # Show dependencies from multiple analyzers
-rsbuild deps stats                       # Show statistics by analyzer
-rsbuild deps clean                       # Clear the entire dependency cache
-rsbuild deps clean --analyzer cpp        # Clear only C/C++ dependencies
-rsbuild deps clean --analyzer python     # Clear only Python dependencies
+rsconstruct deps list                        # List all available dependency analyzers
+rsconstruct deps show all                    # Show all cached dependencies
+rsconstruct deps show files src/main.c       # Show dependencies for a specific file
+rsconstruct deps show files src/a.c src/b.c  # Show dependencies for multiple files
+rsconstruct deps show analyzers cpp          # Show dependencies from the C/C++ analyzer
+rsconstruct deps show analyzers cpp python   # Show dependencies from multiple analyzers
+rsconstruct deps stats                       # Show statistics by analyzer
+rsconstruct deps clean                       # Clear the entire dependency cache
+rsconstruct deps clean --analyzer cpp        # Clear only C/C++ dependencies
+rsconstruct deps clean --analyzer python     # Clear only Python dependencies
 ```
 
-Example output for `rsbuild deps show all`:
+Example output for `rsconstruct deps show all`:
 
 ```
 src/main.c: [cpp] (no dependencies)
@@ -188,7 +188,7 @@ config/settings.py: [python]
   config/base.py
 ```
 
-Example output for `rsbuild deps stats`:
+Example output for `rsconstruct deps stats`:
 
 ```
 cpp: 15 files, 42 dependencies
@@ -197,7 +197,7 @@ python: 8 files, 12 dependencies
 Total: 23 files, 54 dependencies
 ```
 
-Note: This command reads directly from the dependency cache (`.rsbuild/deps.redb`). If the cache is empty, run a build first to populate it.
+Note: This command reads directly from the dependency cache (`.rsconstruct/deps.redb`). If the cache is empty, run a build first to populate it.
 
 This command is useful for:
 - Debugging why a file is being rebuilt
@@ -206,87 +206,87 @@ This command is useful for:
 - Viewing statistics about cached dependencies by analyzer
 - Clearing dependencies for a specific analyzer without affecting others
 
-## `rsbuild config`
+## `rsconstruct config`
 
 Show or inspect the configuration.
 
 ```bash
-rsbuild config show           # Show the active configuration (defaults merged with rsbuild.toml)
-rsbuild config show-default   # Show the default configuration (without rsbuild.toml overrides)
-rsbuild config validate       # Validate the configuration for errors and warnings
+rsconstruct config show           # Show the active configuration (defaults merged with rsconstruct.toml)
+rsconstruct config show-default   # Show the default configuration (without rsconstruct.toml overrides)
+rsconstruct config validate       # Validate the configuration for errors and warnings
 ```
 
-## `rsbuild processors`
+## `rsconstruct processors`
 
 ```bash
-rsbuild processors list              # List processors with enabled/detected status and descriptions
-rsbuild processors list -a           # Include hidden processors
-rsbuild processors files             # Show source and target files for each enabled processor
-rsbuild processors files ruff        # Show files for a specific processor
-rsbuild processors files -a          # Include disabled and hidden processors
-rsbuild processors config ruff       # Show resolved configuration for a processor
-rsbuild processors defconfig ruff    # Show default configuration for a processor
+rsconstruct processors list              # List processors with enabled/detected status and descriptions
+rsconstruct processors list -a           # Include hidden processors
+rsconstruct processors files             # Show source and target files for each enabled processor
+rsconstruct processors files ruff        # Show files for a specific processor
+rsconstruct processors files -a          # Include disabled and hidden processors
+rsconstruct processors config ruff       # Show resolved configuration for a processor
+rsconstruct processors defconfig ruff    # Show default configuration for a processor
 ```
 
-## `rsbuild tools`
+## `rsconstruct tools`
 
 List or check external tools required by enabled processors.
 
 ```bash
-rsbuild tools list              # List required tools and which processor needs them
-rsbuild tools list -a           # Include tools from disabled processors
-rsbuild tools check             # Verify tool versions against .tools.versions lock file
-rsbuild tools lock              # Lock tool versions to .tools.versions
-rsbuild tools install           # Install all missing external tools
-rsbuild tools install ruff      # Install a specific tool by name
-rsbuild tools install -y        # Skip confirmation prompt
-rsbuild tools stats             # Show tool availability and language runtime breakdown
-rsbuild tools stats --json      # Show tool stats in JSON format
-rsbuild tools graph             # Show tool-to-processor dependency graph (DOT format)
-rsbuild tools graph --format mermaid  # Mermaid format
-rsbuild tools graph --view      # Open tool graph in browser
+rsconstruct tools list              # List required tools and which processor needs them
+rsconstruct tools list -a           # Include tools from disabled processors
+rsconstruct tools check             # Verify tool versions against .tools.versions lock file
+rsconstruct tools lock              # Lock tool versions to .tools.versions
+rsconstruct tools install           # Install all missing external tools
+rsconstruct tools install ruff      # Install a specific tool by name
+rsconstruct tools install -y        # Skip confirmation prompt
+rsconstruct tools stats             # Show tool availability and language runtime breakdown
+rsconstruct tools stats --json      # Show tool stats in JSON format
+rsconstruct tools graph             # Show tool-to-processor dependency graph (DOT format)
+rsconstruct tools graph --format mermaid  # Mermaid format
+rsconstruct tools graph --view      # Open tool graph in browser
 ```
 
-## `rsbuild tags`
+## `rsconstruct tags`
 
 Search and query frontmatter tags from markdown files.
 
 ```bash
-rsbuild tags list                        # List all unique tags
-rsbuild tags count                       # Show each tag with file count, sorted by frequency
-rsbuild tags tree                        # Show tags grouped by prefix/category
-rsbuild tags stats                       # Show statistics about the tags database
-rsbuild tags files docker                # List files matching a tag (AND semantics)
-rsbuild tags files docker --or k8s       # List files matching any tag (OR semantics)
-rsbuild tags files level=advanced        # Match key=value tags
-rsbuild tags grep deploy                 # Search for tags containing a substring
-rsbuild tags grep deploy -i              # Case-insensitive tag search
-rsbuild tags for-file src/main.md        # List all tags for a specific file
-rsbuild tags frontmatter src/main.md     # Show raw frontmatter for a file
-rsbuild tags validate                    # Validate tags against .tags file
-rsbuild tags unused                      # List tags in .tags not used by any file
-rsbuild tags unused --strict             # Exit with error if unused tags found (CI)
-rsbuild tags init                        # Generate .tags file from current tag union
-rsbuild tags add docker                  # Add a tag to the .tags file
-rsbuild tags remove docker               # Remove a tag from the .tags file
-rsbuild tags sync                        # Add missing tags to .tags
-rsbuild tags sync --prune                # Sync and remove unused tags from .tags
+rsconstruct tags list                        # List all unique tags
+rsconstruct tags count                       # Show each tag with file count, sorted by frequency
+rsconstruct tags tree                        # Show tags grouped by prefix/category
+rsconstruct tags stats                       # Show statistics about the tags database
+rsconstruct tags files docker                # List files matching a tag (AND semantics)
+rsconstruct tags files docker --or k8s       # List files matching any tag (OR semantics)
+rsconstruct tags files level=advanced        # Match key=value tags
+rsconstruct tags grep deploy                 # Search for tags containing a substring
+rsconstruct tags grep deploy -i              # Case-insensitive tag search
+rsconstruct tags for-file src/main.md        # List all tags for a specific file
+rsconstruct tags frontmatter src/main.md     # Show raw frontmatter for a file
+rsconstruct tags validate                    # Validate tags against .tags file
+rsconstruct tags unused                      # List tags in .tags not used by any file
+rsconstruct tags unused --strict             # Exit with error if unused tags found (CI)
+rsconstruct tags init                        # Generate .tags file from current tag union
+rsconstruct tags add docker                  # Add a tag to the .tags file
+rsconstruct tags remove docker               # Remove a tag from the .tags file
+rsconstruct tags sync                        # Add missing tags to .tags
+rsconstruct tags sync --prune                # Sync and remove unused tags from .tags
 ```
 
-## `rsbuild complete`
+## `rsconstruct complete`
 
 Generate shell completions.
 
 ```bash
-rsbuild complete bash    # Generate bash completions
-rsbuild complete zsh     # Generate zsh completions
-rsbuild complete fish    # Generate fish completions
+rsconstruct complete bash    # Generate bash completions
+rsconstruct complete zsh     # Generate zsh completions
+rsconstruct complete fish    # Generate fish completions
 ```
 
-## `rsbuild version`
+## `rsconstruct version`
 
 Print version information.
 
 ```bash
-rsbuild version
+rsconstruct version
 ```

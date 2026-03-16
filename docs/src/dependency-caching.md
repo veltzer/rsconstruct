@@ -1,12 +1,12 @@
 # Dependency Caching
 
-RSBuild includes a dependency cache that stores source file dependencies (e.g., C/C++ header files) to avoid re-scanning files that haven't changed. This significantly speeds up the graph-building phase for projects with many source files.
+RSConstruct includes a dependency cache that stores source file dependencies (e.g., C/C++ header files) to avoid re-scanning files that haven't changed. This significantly speeds up the graph-building phase for projects with many source files.
 
 ## Overview
 
 When processors like `cc_single_file` discover products, they need to scan source files to find dependencies (header files). This scanning can be slow for large projects. The dependency cache stores the results so subsequent builds can skip the scanning step.
 
-The cache is stored in `.rsbuild/deps.redb` using [redb](https://github.com/cberner/redb), an embedded key-value database.
+The cache is stored in `.rsconstruct/deps.redb` using [redb](https://github.com/cberner/redb), an embedded key-value database.
 
 ## Cache Structure
 
@@ -58,7 +58,7 @@ This minimizes work in the common case where files haven't changed.
 
 ## Cache Statistics
 
-During graph construction, RSBuild displays cache statistics:
+During graph construction, RSConstruct displays cache statistics:
 
 ```
 [cc_single_file] Dependency cache: 42 hits, 3 recalculated
@@ -68,13 +68,13 @@ This shows how many source files had their dependencies retrieved from cache (hi
 
 ## Viewing Dependencies
 
-Use the `rsbuild deps` command to view the dependencies stored in the cache:
+Use the `rsconstruct deps` command to view the dependencies stored in the cache:
 
 ```bash
-rsbuild deps all                    # Show all cached dependencies
-rsbuild deps for src/main.c         # Show dependencies for a specific file
-rsbuild deps for src/a.c src/b.c    # Show dependencies for multiple files
-rsbuild deps clean                  # Clear the dependency cache
+rsconstruct deps all                    # Show all cached dependencies
+rsconstruct deps for src/main.c         # Show dependencies for a specific file
+rsconstruct deps for src/a.c src/b.c    # Show dependencies for multiple files
+rsconstruct deps clean                  # Clear the dependency cache
 ```
 
 Example output:
@@ -86,7 +86,7 @@ src/test.c:
   src/config.h
 ```
 
-The `rsbuild deps` command reads directly from the dependency cache without building the graph. If the cache is empty (e.g., after `rsbuild deps clean` or on a fresh checkout), run a build first to populate it.
+The `rsconstruct deps` command reads directly from the dependency cache without building the graph. If the cache is empty (e.g., after `rsconstruct deps clean` or on a fresh checkout), run a build first to populate it.
 
 This is useful for debugging rebuild behavior or understanding the include structure of your project.
 
@@ -97,7 +97,7 @@ The cache automatically invalidates entries when:
 - The source file content changes (checksum mismatch)
 - Any cached dependency file no longer exists
 
-You can manually clear the entire dependency cache by removing the `.rsbuild/deps.redb` file, or by running `rsbuild clean all` which removes the entire `.rsbuild/` directory.
+You can manually clear the entire dependency cache by removing the `.rsconstruct/deps.redb` file, or by running `rsconstruct clean all` which removes the entire `.rsconstruct/` directory.
 
 ## Processors Using Dependency Caching
 

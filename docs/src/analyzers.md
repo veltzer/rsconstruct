@@ -1,6 +1,6 @@
 # Dependency Analyzers
 
-rsbuild uses **dependency analyzers** to scan source files and discover dependencies between files. Analyzers run after processors discover products and add dependency information to the build graph.
+rsconstruct uses **dependency analyzers** to scan source files and discover dependencies between files. Analyzers run after processors discover products and add dependency information to the build graph.
 
 ## How Analyzers Work
 
@@ -29,7 +29,7 @@ Scans C/C++ source files for `#include` directives and adds header file dependen
 
 The cpp analyzer queries the compiler for its include search paths using `gcc -E -Wp,-v -xc /dev/null`. This allows it to properly identify which headers are system headers vs project-local headers. Only headers within the project directory are tracked as dependencies.
 
-**Configuration** (`rsbuild.toml`):
+**Configuration** (`rsconstruct.toml`):
 
 ```toml
 [analyzer.cpp]
@@ -80,7 +80,7 @@ Scans Python source files for `import` and `from ... import` statements and adds
 
 ## Configuration
 
-Analyzers can be configured in `rsbuild.toml`:
+Analyzers can be configured in `rsconstruct.toml`:
 
 ```toml
 [analyzer]
@@ -98,17 +98,17 @@ This is similar to how processors work.
 
 ## Caching
 
-Analyzer results are cached in the dependency cache (`.rsbuild/deps.redb`). On subsequent builds:
+Analyzer results are cached in the dependency cache (`.rsconstruct/deps.redb`). On subsequent builds:
 - If a source file hasn't changed, its cached dependencies are used
 - If a source file has changed, dependencies are re-scanned
 - The cache is shared across all analyzers
 
-Use `rsbuild deps` commands to inspect the cache:
+Use `rsconstruct deps` commands to inspect the cache:
 
 ```bash
-rsbuild deps all                # Show all cached dependencies
-rsbuild deps for src/main.c     # Show dependencies for specific files
-rsbuild deps clean              # Clear the dependency cache
+rsconstruct deps all                # Show all cached dependencies
+rsconstruct deps for src/main.c     # Show dependencies for specific files
+rsconstruct deps clean              # Clear the dependency cache
 ```
 
 ## Build Phases
@@ -116,7 +116,7 @@ rsbuild deps clean              # Clear the dependency cache
 With `--phases` flag, you can see when analyzers run:
 
 ```bash
-rsbuild --phases build
+rsconstruct --phases build
 ```
 
 Output:
@@ -131,7 +131,7 @@ Phase: Building dependency graph...
 Use `--stop-after add-dependencies` to stop after dependency analysis:
 
 ```bash
-rsbuild build --stop-after add-dependencies
+rsconstruct build --stop-after add-dependencies
 ```
 
 ## Adding Custom Analyzers

@@ -32,4 +32,4 @@ cache_output_dir = true                # Cache the output directory for fast res
 | `output_dir` | string | `"book"` | Output directory for generated documentation |
 | `args` | string[] | `[]` | Extra arguments passed to mdbook |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
-| `cache_output_dir` | boolean | `true` | Cache the `book/` directory so `rsbuild clean && rsbuild build` restores from cache |
+| `cache_output_dir` | boolean | `true` | Cache the `book/` directory so `rsconstruct clean && rsconstruct build` restores from cache |

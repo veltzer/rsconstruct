@@ -8,32 +8,32 @@ Using the GitHub CLI:
 
 ```bash
 # x86_64
-gh release download latest --repo veltzer/rsbuild --pattern 'rsbuild-x86_64-unknown-linux-gnu' --output rsbuild --clobber
+gh release download latest --repo veltzer/rsconstruct --pattern 'rsconstruct-x86_64-unknown-linux-gnu' --output rsconstruct --clobber
 
 # aarch64 / arm64
-gh release download latest --repo veltzer/rsbuild --pattern 'rsbuild-aarch64-unknown-linux-gnu' --output rsbuild --clobber
+gh release download latest --repo veltzer/rsconstruct --pattern 'rsconstruct-aarch64-unknown-linux-gnu' --output rsconstruct --clobber
 
-chmod +x rsbuild
-sudo mv rsbuild /usr/local/bin/
+chmod +x rsconstruct
+sudo mv rsconstruct /usr/local/bin/
 ```
 
 Or with curl:
 
 ```bash
 # x86_64
-curl -Lo rsbuild https://github.com/veltzer/rsbuild/releases/download/latest/rsbuild-x86_64-unknown-linux-gnu
+curl -Lo rsconstruct https://github.com/veltzer/rsconstruct/releases/download/latest/rsconstruct-x86_64-unknown-linux-gnu
 
 # aarch64 / arm64
-curl -Lo rsbuild https://github.com/veltzer/rsbuild/releases/download/latest/rsbuild-aarch64-unknown-linux-gnu
+curl -Lo rsconstruct https://github.com/veltzer/rsconstruct/releases/download/latest/rsconstruct-aarch64-unknown-linux-gnu
 
-chmod +x rsbuild
-sudo mv rsbuild /usr/local/bin/
+chmod +x rsconstruct
+sudo mv rsconstruct /usr/local/bin/
 ```
 
 ## Install from crates.io
 
 ```bash
-cargo install rsbuild
+cargo install rsconstruct
 ```
 
 This downloads, compiles, and installs the latest published version into `~/.cargo/bin/`.
@@ -44,7 +44,7 @@ This downloads, compiles, and installs the latest published version into `~/.car
 cargo build --release
 ```
 
-The binary will be at `target/release/rsbuild`.
+The binary will be at `target/release/rsconstruct`.
 
 ## Release profile
 

@@ -644,20 +644,20 @@ pub type ProcessorMap = HashMap<String, Box<dyn ProductDiscovery>>;
 /// All processor types use the cache to avoid redundant work:
 ///
 /// - **Generators** produce output files (e.g., executables, rendered templates). The cache
-///   stores copies of these outputs. On `rsbuild clean`, output files are deleted but the cache
-///   remains intact. On the next `rsbuild build`, outputs are restored from cache (fast copy/hardlink)
+///   stores copies of these outputs. On `rsconstruct clean`, output files are deleted but the cache
+///   remains intact. On the next `rsconstruct build`, outputs are restored from cache (fast copy/hardlink)
 ///   instead of being regenerated.
 ///
 /// - **Checkers** validate input files but produce no output files. The cache entry itself
-///   serves as a "success marker". On `rsbuild clean`, there's nothing to delete. On the next
-///   `rsbuild build`, if the cache entry exists and inputs haven't changed, the check is skipped
+///   serves as a "success marker". On `rsconstruct clean`, there's nothing to delete. On the next
+///   `rsconstruct build`, if the cache entry exists and inputs haven't changed, the check is skipped
 ///   entirely (instant).
 ///
 /// - **Mass generators** produce a mass of output files in a directory but don't enumerate
 ///   those outputs individually (e.g., pip → site-packages, npm → node_modules, cargo → target).
 ///   They use stamp files or empty outputs for cache tracking, similar to checkers.
 ///
-/// This design ensures that `rsbuild clean && rsbuild build` is fast for all types - generators
+/// This design ensures that `rsconstruct clean && rsconstruct build` is fast for all types - generators
 /// restore from cache, checkers skip entirely, mass generators re-run only when inputs change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcessorType {
@@ -756,7 +756,7 @@ pub trait ProductDiscovery: Sync + Send {
     /// Execute a single product
     fn execute(&self, product: &Product) -> Result<()>;
 
-    /// Clean outputs for a product (called by `rsbuild clean`).
+    /// Clean outputs for a product (called by `rsconstruct clean`).
     /// When `verbose` is true, prints per-file removal messages.
     /// Returns the number of files removed.
     ///

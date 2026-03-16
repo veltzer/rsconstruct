@@ -76,15 +76,15 @@ impl Builder {
         Ok(())
     }
 
-    /// Remove all build outputs and cache directories (.rsbuild/ and out/)
+    /// Remove all build outputs and cache directories (.rsconstruct/ and out/)
     pub fn distclean(&self) -> Result<()> {
         println!("{}", color::bold("Removing build directories..."));
 
-        let rsbuild_dir = std::path::Path::new(".rsbuild");
-        if rsbuild_dir.exists() {
-            fs::remove_dir_all(rsbuild_dir)
-                .context("Failed to remove .rsbuild/ directory")?;
-            println!("Removed {}", rsbuild_dir.display());
+        let rsconstruct_dir = std::path::Path::new(".rsconstruct");
+        if rsconstruct_dir.exists() {
+            fs::remove_dir_all(rsconstruct_dir)
+                .context("Failed to remove .rsconstruct/ directory")?;
+            println!("Removed {}", rsconstruct_dir.display());
         }
 
         let out_dir = std::path::Path::new("out");
@@ -122,7 +122,7 @@ impl Builder {
         Ok(())
     }
 
-    /// Remove files not tracked by git and not known as RSBuild build outputs.
+    /// Remove files not tracked by git and not known as RSConstruct build outputs.
     /// Dry-run by default (lists files); use `force` to actually delete.
     pub fn clean_unknown(&self, force: bool, verbose: bool) -> Result<()> {
         use ignore::WalkBuilder;
@@ -132,19 +132,19 @@ impl Builder {
             bail!("Not a git repository. clean unknown requires a git repository.");
         }
 
-        // Build graph to discover RSBuild outputs
+        // Build graph to discover RSConstruct outputs
         let processors = self.create_processors()?;
         let graph = self.build_graph_for_clean_with_processors(&processors)?;
 
-        // Collect RSBuild-known output files
-        let mut rsbuild_outputs: HashSet<PathBuf> = HashSet::new();
-        let mut rsbuild_output_dirs: Vec<PathBuf> = Vec::new();
+        // Collect RSConstruct-known output files
+        let mut rsconstruct_outputs: HashSet<PathBuf> = HashSet::new();
+        let mut rsconstruct_output_dirs: Vec<PathBuf> = Vec::new();
         for product in graph.products() {
             for output in &product.outputs {
-                rsbuild_outputs.insert(output.clone());
+                rsconstruct_outputs.insert(output.clone());
             }
             if let Some(ref dir) = product.output_dir {
-                rsbuild_output_dirs.push(dir.as_ref().clone());
+                rsconstruct_output_dirs.push(dir.as_ref().clone());
             }
         }
 
@@ -164,7 +164,7 @@ impl Builder {
 
         // Walk the entire project tree. We disable .gitignore handling because
         // unknown files often live in gitignored directories (e.g. out/).
-        // We do our own filtering against git-tracked and RSBuild output sets.
+        // We do our own filtering against git-tracked and RSConstruct output sets.
         let mut unknown_files: Vec<PathBuf> = Vec::new();
         let walker = WalkBuilder::new(".")
             .hidden(false)
@@ -185,8 +185,8 @@ impl Builder {
             let path = entry.path().strip_prefix("./").unwrap_or(entry.path());
             let path = PathBuf::from(path);
 
-            // Skip .git/ and .rsbuild/
-            if path.starts_with(".git") || path.starts_with(".rsbuild") {
+            // Skip .git/ and .rsconstruct/
+            if path.starts_with(".git") || path.starts_with(".rsconstruct") {
                 continue;
             }
 
@@ -195,13 +195,13 @@ impl Builder {
                 continue;
             }
 
-            // Skip RSBuild output files
-            if rsbuild_outputs.contains(&path) {
+            // Skip RSConstruct output files
+            if rsconstruct_outputs.contains(&path) {
                 continue;
             }
 
-            // Skip files inside RSBuild output directories
-            if rsbuild_output_dirs.iter().any(|dir| path.starts_with(dir)) {
+            // Skip files inside RSConstruct output directories
+            if rsconstruct_output_dirs.iter().any(|dir| path.starts_with(dir)) {
                 continue;
             }
 

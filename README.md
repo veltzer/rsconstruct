@@ -1,10 +1,10 @@
-# RSBuild - Rust Build Tool
+# RSConstruct - Rust Build Tool
 
 A fast, incremental build tool written in Rust with C/C++ compilation, template support, Python linting, and parallel execution.
 
 ## Documentation
 
-Full documentation: <https://veltzer.github.io/rsbuild/>
+Full documentation: <https://veltzer.github.io/rsconstruct/>
 
 ## Features
 
@@ -28,26 +28,26 @@ Pre-built binaries are available for x86_64 and aarch64 (arm64).
 
 ```bash
 # x86_64
-gh release download latest --repo veltzer/rsbuild --pattern 'rsbuild-x86_64-unknown-linux-gnu' --output rsbuild --clobber
+gh release download latest --repo veltzer/rsconstruct --pattern 'rsconstruct-x86_64-unknown-linux-gnu' --output rsconstruct --clobber
 
 # aarch64 / arm64
-gh release download latest --repo veltzer/rsbuild --pattern 'rsbuild-aarch64-unknown-linux-gnu' --output rsbuild --clobber
+gh release download latest --repo veltzer/rsconstruct --pattern 'rsconstruct-aarch64-unknown-linux-gnu' --output rsconstruct --clobber
 
-chmod +x rsbuild
-sudo mv rsbuild /usr/local/bin/
+chmod +x rsconstruct
+sudo mv rsconstruct /usr/local/bin/
 ```
 
 Or without the GitHub CLI:
 
 ```bash
 # x86_64
-curl -Lo rsbuild https://github.com/veltzer/rsbuild/releases/download/latest/rsbuild-x86_64-unknown-linux-gnu
+curl -Lo rsconstruct https://github.com/veltzer/rsconstruct/releases/download/latest/rsconstruct-x86_64-unknown-linux-gnu
 
 # aarch64 / arm64
-curl -Lo rsbuild https://github.com/veltzer/rsbuild/releases/download/latest/rsbuild-aarch64-unknown-linux-gnu
+curl -Lo rsconstruct https://github.com/veltzer/rsconstruct/releases/download/latest/rsconstruct-aarch64-unknown-linux-gnu
 
-chmod +x rsbuild
-sudo mv rsbuild /usr/local/bin/
+chmod +x rsconstruct
+sudo mv rsconstruct /usr/local/bin/
 ```
 
 ### Build from source
@@ -59,14 +59,14 @@ cargo build --release
 ## Quick Start
 
 ```bash
-rsbuild init                     # Create a new project
-rsbuild build                    # Incremental build
-rsbuild build --force            # Force full rebuild
-rsbuild build -j4                # Build with 4 parallel jobs
-rsbuild build --timings          # Show timing info
-rsbuild status                   # Show what needs rebuilding
-rsbuild watch                    # Watch for changes and rebuild
-rsbuild clean                    # Remove build artifacts
-rsbuild graph --view             # Visualize dependency graph
-rsbuild processor list           # List available processors
+rsconstruct init                     # Create a new project
+rsconstruct build                    # Incremental build
+rsconstruct build --force            # Force full rebuild
+rsconstruct build -j4                # Build with 4 parallel jobs
+rsconstruct build --timings          # Show timing info
+rsconstruct status                   # Show what needs rebuilding
+rsconstruct watch                    # Watch for changes and rebuild
+rsconstruct clean                    # Remove build artifacts
+rsconstruct graph --view             # Visualize dependency graph
+rsconstruct processor list           # List available processors
 ```

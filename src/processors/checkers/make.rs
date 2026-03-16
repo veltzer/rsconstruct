@@ -62,7 +62,7 @@ impl ProductDiscovery for MakeProcessor {
             cfg_hash: &self.config,
             siblings: &SiblingFilter {
                 extensions: &[""],
-                excludes: &["/.git/", "/out/", "/.rsbuild/"],
+                excludes: &["/.git/", "/out/", "/.rsconstruct/"],
             },
             processor_name: crate::processors::names::MAKE,
             output_dir_name: None,

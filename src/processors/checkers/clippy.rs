@@ -58,7 +58,7 @@ impl ProductDiscovery for ClippyProcessor {
             cfg_hash: &self.config,
             siblings: &SiblingFilter {
                 extensions: &[".rs", ".toml"],
-                excludes: &["/.git/", "/target/", "/.rsbuild/"],
+                excludes: &["/.git/", "/target/", "/.rsconstruct/"],
             },
             processor_name: crate::processors::names::CLIPPY,
             output_dir_name: None,

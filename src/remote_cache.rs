@@ -31,7 +31,7 @@ pub trait RemoteCache: Send + Sync {
     /// Default implementation writes to a temp file and delegates to upload().
     fn upload_bytes(&self, key: &str, data: &[u8]) -> Result<()> {
         let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join(format!("rsbuild-upload-{}", uuid_simple()));
+        let temp_file = temp_dir.join(format!("rsconstruct-upload-{}", uuid_simple()));
         fs::write(&temp_file, data)?;
         let result = self.upload(key, &temp_file);
         let _ = fs::remove_file(&temp_file);

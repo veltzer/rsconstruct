@@ -1,12 +1,12 @@
 use std::fs;
-use crate::common::{setup_test_project, run_rsbuild_with_env};
+use crate::common::{setup_test_project, run_rsconstruct_with_env};
 
 #[test]
 fn config_show_outputs_toml() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output = run_rsbuild_with_env(project_path, &["config", "show"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["config", "show"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "config show failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -21,7 +21,7 @@ fn config_show_reflects_project_config() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output = run_rsbuild_with_env(project_path, &["config", "show"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["config", "show"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -34,7 +34,7 @@ fn config_show_default_outputs_toml() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output = run_rsbuild_with_env(project_path, &["config", "show-default"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["config", "show-default"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "config show-default failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -48,7 +48,7 @@ fn config_show_includes_annotations() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output = run_rsbuild_with_env(project_path, &["config", "show"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["config", "show"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -64,7 +64,7 @@ fn config_vars_substitution_array() {
 
     // Write config with vars section and array variable
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         r#"
 [vars]
 my_excludes = ["/kernel/", "/vendor/"]
@@ -77,7 +77,7 @@ exclude_dirs = "${my_excludes}"
 "#
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["config", "show"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["config", "show"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "config show failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -93,7 +93,7 @@ fn config_vars_substitution_string() {
 
     // Write config with a string variable
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         r#"
 [vars]
 my_dir = "custom_templates"
@@ -106,7 +106,7 @@ scan_dir = "${my_dir}"
 "#
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["config", "show"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["config", "show"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "config show failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -120,7 +120,7 @@ fn config_vars_multiple_uses() {
 
     // Use the same variable in multiple places
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         r#"
 [vars]
 shared_excludes = ["/out/", "/build/"]
@@ -136,7 +136,7 @@ exclude_dirs = "${shared_excludes}"
 "#
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["config", "show"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["config", "show"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "config show failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -152,7 +152,7 @@ fn config_vars_undefined_variable_error() {
 
     // Reference an undefined variable
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         r#"
 [processor]
 enabled = ["tera"]
@@ -162,7 +162,7 @@ exclude_dirs = "${undefined_var}"
 "#
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["config", "show"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["config", "show"], &[("NO_COLOR", "1")]);
     assert!(!output.status.success(), "Expected config show to fail for undefined variable");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -176,7 +176,7 @@ fn config_vars_no_vars_section() {
 
     // Config without vars section should work normally
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         r#"
 [processor]
 enabled = ["tera"]
@@ -186,7 +186,7 @@ scan_dir = "templates"
 "#
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["config", "show"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["config", "show"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "config show failed: {}", String::from_utf8_lossy(&output.stderr));
 }
 
@@ -201,7 +201,7 @@ fn config_validate_ok() {
         "hello"
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "config validate failed: {}", String::from_utf8_lossy(&output.stderr));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Config OK"), "Expected 'Config OK', got: {}", stdout);
@@ -213,11 +213,11 @@ fn config_validate_unknown_processor() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"nonexistent_proc\"]\n"
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
     assert!(!output.status.success(), "Expected config validate to fail for unknown processor");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("nonexistent_proc"), "Expected error about unknown processor, got: {}", stdout);
@@ -231,11 +231,11 @@ fn config_validate_no_matching_files_warning() {
 
     // Enable sleep processor but don't create any .sleep files
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
     // Should succeed (warnings only, no errors)
     assert!(output.status.success(), "config validate should succeed with only warnings: {}", String::from_utf8_lossy(&output.stderr));
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -250,11 +250,11 @@ fn config_validate_json() {
 
     // Enable sleep processor but don't create any .sleep files (to get a warning)
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["--json", "config", "validate"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["--json", "config", "validate"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     let parsed: serde_json::Value = serde_json::from_str(&stdout)

@@ -1,6 +1,6 @@
 # Missing Processors
 
-Tools found in Makefiles across `../*/` sibling projects that rsbuild does not yet have processors for.
+Tools found in Makefiles across `../*/` sibling projects that rsconstruct does not yet have processors for.
 Organized by category, with priority based on breadth of usage.
 
 ## High Priority — Linters and Validators
@@ -24,7 +24,7 @@ Organized by category, with priority based on breadth of usage.
 - **Processor type:** Checker
 
 ### check-jsonschema
-- **What it does:** Validates YAML/JSON files against JSON Schema (distinct from rsbuild's json_schema which validates JSON against schemas found via `$schema` key).
+- **What it does:** Validates YAML/JSON files against JSON Schema (distinct from rsconstruct's json_schema which validates JSON against schemas found via `$schema` key).
 - **Projects:** data, schemas, veltzer.github.io
 - **Invocation:** `check-jsonschema --schemafile $(yq -r '.["$schema"]' $<) $<`
 - **Processor type:** Checker
@@ -313,7 +313,7 @@ Organized by category, with priority based on breadth of usage.
 - **What it does:** Generates C/C++ header dependency rules for Makefiles.
 - **Projects:** xmeltdown
 - **Invocation:** `makedepend -I... -- $(CFLAGS) -- $(SRC)`
-- **Notes:** rsbuild's built-in C/C++ dependency analyzer already handles this.
+- **Notes:** rsconstruct's built-in C/C++ dependency analyzer already handles this.
 
 ## Low Priority — Embedded
 

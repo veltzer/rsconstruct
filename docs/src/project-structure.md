@@ -1,13 +1,13 @@
 # Project Structure
 
-RSBuild follows a convention-over-configuration approach. The directory layout determines how files are processed.
+RSConstruct follows a convention-over-configuration approach. The directory layout determines how files are processed.
 
 ## Directory layout
 
 ```
 project/
-├── rsbuild.toml          # Configuration file
-├── .rsbuildignore        # Glob patterns for files to exclude
+├── rsconstruct.toml          # Configuration file
+├── .rsconstructignore        # Glob patterns for files to exclude
 ├── config/           # Python config files (loaded by templates)
 ├── templates.tera/   # .tera template files
 ├── templates.mako/   # .mako template files
@@ -21,7 +21,7 @@ project/
 │   ├── spellcheck/   # Spellcheck stub files
 │   ├── sleep/        # Sleep stub files
 │   └── make/         # Make stub files
-└── .rsbuild/             # Cache directory
+└── .rsconstruct/             # Cache directory
     ├── index.json    # Cache index
     ├── objects/       # Cached build artifacts
     └── deps/          # Dependency files
@@ -54,4 +54,4 @@ Python files are linted and stub outputs are written to `out/ruff/` (ruff proces
 
 ### Build artifacts
 
-All build outputs go into `out/`. The cache lives in `.rsbuild/`. Use `rsbuild clean` to remove `out/` (preserving cache) or `rsbuild clean all` to remove both.
+All build outputs go into `out/`. The cache lives in `.rsconstruct/`. Use `rsconstruct clean` to remove `out/` (preserving cache) or `rsconstruct clean all` to remove both.

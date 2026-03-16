@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsbuild_with_env, tool_available};
+use crate::common::{run_rsconstruct_with_env, tool_available};
 
 #[test]
 fn make_valid_makefile() {
@@ -12,13 +12,13 @@ fn make_valid_makefile() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
-    // Put the Makefile in a subdirectory so .rsbuild/ cache files
+    // Put the Makefile in a subdirectory so .rsconstruct/ cache files
     // (which are sibling-scanned by the make processor) don't
     // cause spurious rebuilds.
     fs::create_dir_all(project_path.join("proj")).unwrap();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"make\"]\n",
     )
     .unwrap();
@@ -29,7 +29,7 @@ fn make_valid_makefile() {
     )
     .unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Build should succeed with valid Makefile: stdout={}, stderr={}",
@@ -58,7 +58,7 @@ fn make_incremental_skip() {
     fs::create_dir_all(project_path.join("proj")).unwrap();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"make\"]\n",
     )
     .unwrap();
@@ -70,11 +70,11 @@ fn make_incremental_skip() {
     .unwrap();
 
     // First build
-    let output1 = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
 
     // Second build should skip
-    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(

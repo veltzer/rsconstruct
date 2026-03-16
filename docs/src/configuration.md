@@ -1,6 +1,6 @@
 # Configuration
 
-RSBuild is configured via an `rsbuild.toml` file in the project root.
+RSConstruct is configured via an `rsconstruct.toml` file in the project root.
 
 ## Full reference
 
@@ -19,7 +19,7 @@ enabled = ["tera", "ruff", "pylint", "mypy", "pyrefly", "cc_single_file", "cppch
 
 [cache]
 restore_method = "hardlink"  # or "copy" (hardlink is faster, copy works across filesystems)
-remote = "s3://my-bucket/rsbuild-cache"  # Optional: remote cache URL
+remote = "s3://my-bucket/rsconstruct-cache"  # Optional: remote cache URL
 remote_push = true       # Push local builds to remote (default: true)
 remote_pull = true       # Pull from remote on cache miss (default: true)
 mtime_check = true       # Use mtime pre-check to skip unchanged file checksums (default: true)
@@ -72,7 +72,7 @@ Variables are substituted before TOML parsing. The `"${var_name}"` (including qu
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `auto_detect` | boolean | `true` | When `true`, only run enabled processors that auto-detect relevant files. When `false`, run all enabled processors unconditionally. |
-| `enabled` | array of strings | (see below) | List of processors to enable. By default all built-in processors are enabled. Run `rsbuild processors list` to see the full list. [Lua plugin](plugins.md) names can also be listed here. |
+| `enabled` | array of strings | (see below) | List of processors to enable. By default all built-in processors are enabled. Run `rsconstruct processors list` to see the full list. [Lua plugin](plugins.md) names can also be listed here. |
 
 ### `[cache]`
 

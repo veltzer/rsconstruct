@@ -26,62 +26,62 @@ pub fn setup_test_project() -> TempDir {
 
     // Only enable the tera processor so config/*.py files aren't picked up by linters
     fs::write(
-        temp_dir.path().join("rsbuild.toml"),
+        temp_dir.path().join("rsconstruct.toml"),
         "[processor]\nenabled = [\"tera\"]\n"
-    ).expect("Failed to write rsbuild.toml");
+    ).expect("Failed to write rsconstruct.toml");
 
     temp_dir
 }
 
-/// Helper to run rsbuild command in a directory
-pub fn run_rsbuild(dir: &Path, args: &[&str]) -> std::process::Output {
-    let rsbuild_path = env!("CARGO_BIN_EXE_rsbuild");
-    Command::new(rsbuild_path)
+/// Helper to run rsconstruct command in a directory
+pub fn run_rsconstruct(dir: &Path, args: &[&str]) -> std::process::Output {
+    let rsconstruct_path = env!("CARGO_BIN_EXE_rsconstruct");
+    Command::new(rsconstruct_path)
         .current_dir(dir)
         .args(args)
         .output()
-        .expect("Failed to execute rsbuild")
+        .expect("Failed to execute rsconstruct")
 }
 
-/// Helper to run rsbuild command with extra environment variables
-pub fn run_rsbuild_with_env(dir: &Path, args: &[&str], env_vars: &[(&str, &str)]) -> std::process::Output {
-    let rsbuild_path = env!("CARGO_BIN_EXE_rsbuild");
-    let mut cmd = Command::new(rsbuild_path);
+/// Helper to run rsconstruct command with extra environment variables
+pub fn run_rsconstruct_with_env(dir: &Path, args: &[&str], env_vars: &[(&str, &str)]) -> std::process::Output {
+    let rsconstruct_path = env!("CARGO_BIN_EXE_rsconstruct");
+    let mut cmd = Command::new(rsconstruct_path);
     cmd.current_dir(dir).args(args);
     for (key, val) in env_vars {
         cmd.env(key, val);
     }
-    cmd.output().expect("Failed to execute rsbuild")
+    cmd.output().expect("Failed to execute rsconstruct")
 }
 
 /// Helper to set up a C project with the cc processor enabled
 pub fn setup_cc_project(project_path: &Path) {
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"cc_single_file\"]\n"
     ).unwrap();
 }
 
 // --- JSON output parsing for tests ---
 
-/// Run rsbuild with --json flag and return parsed build result
-pub fn run_rsbuild_json(dir: &Path, args: &[&str]) -> BuildResult {
+/// Run rsconstruct with --json flag and return parsed build result
+pub fn run_rsconstruct_json(dir: &Path, args: &[&str]) -> BuildResult {
     let mut full_args = vec!["--json"];
     full_args.extend(args);
-    let output = run_rsbuild(dir, &full_args);
+    let output = run_rsconstruct(dir, &full_args);
     BuildResult::parse(&output)
 }
 
-/// Run rsbuild with --json flag and extra environment variables
-pub fn run_rsbuild_json_with_env(dir: &Path, args: &[&str], env_vars: &[(&str, &str)]) -> BuildResult {
+/// Run rsconstruct with --json flag and extra environment variables
+pub fn run_rsconstruct_json_with_env(dir: &Path, args: &[&str], env_vars: &[(&str, &str)]) -> BuildResult {
     let mut full_args = vec!["--json"];
     full_args.extend(args);
-    let output = run_rsbuild_with_env(dir, &full_args, env_vars);
+    let output = run_rsconstruct_with_env(dir, &full_args, env_vars);
     BuildResult::parse(&output)
 }
 
-/// JSON event from rsbuild --json output
+/// JSON event from rsconstruct --json output
 #[derive(Debug, Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum BuildEvent {
@@ -109,7 +109,7 @@ pub enum BuildEvent {
     },
 }
 
-/// Parsed build result from rsbuild --json output
+/// Parsed build result from rsconstruct --json output
 #[derive(Debug, Default)]
 pub struct BuildResult {
     pub exit_success: bool,
@@ -134,7 +134,7 @@ pub struct ProductResult {
 }
 
 impl BuildResult {
-    /// Parse rsbuild --json output into structured BuildResult
+    /// Parse rsconstruct --json output into structured BuildResult
     pub fn parse(output: &std::process::Output) -> Self {
         let mut result = BuildResult {
             exit_success: output.status.success(),

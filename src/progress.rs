@@ -5,7 +5,7 @@ use crate::errors;
 /// Width of the progress bar in terminal columns.
 const BAR_WIDTH: usize = 40;
 
-/// Create a progress bar with the standard rsbuild style.
+/// Create a progress bar with the standard rsconstruct style.
 ///
 /// Returns a hidden bar when `hidden` is true (verbose mode or JSON mode),
 /// otherwise a visible bar with the standard template and style.

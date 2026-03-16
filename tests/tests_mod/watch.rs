@@ -11,19 +11,19 @@ fn watch_does_initial_build() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/watch_init.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
-    let rsbuild_path = env!("CARGO_BIN_EXE_rsbuild");
-    let mut child = Command::new(rsbuild_path)
+    let rsconstruct_path = env!("CARGO_BIN_EXE_rsconstruct");
+    let mut child = Command::new(rsconstruct_path)
         .current_dir(project_path)
         .args(["watch"])
         .env("NO_COLOR", "1")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .expect("Failed to spawn rsbuild watch");
+        .expect("Failed to spawn rsconstruct watch");
 
     // Wait for initial build to complete
     std::thread::sleep(Duration::from_secs(2));
@@ -46,19 +46,19 @@ fn watch_rebuilds_on_change() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/watch_change.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
-    let rsbuild_path = env!("CARGO_BIN_EXE_rsbuild");
-    let mut child = Command::new(rsbuild_path)
+    let rsconstruct_path = env!("CARGO_BIN_EXE_rsconstruct");
+    let mut child = Command::new(rsconstruct_path)
         .current_dir(project_path)
         .args(["watch"])
         .env("NO_COLOR", "1")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .expect("Failed to spawn rsbuild watch");
+        .expect("Failed to spawn rsconstruct watch");
 
     // Wait for initial build
     std::thread::sleep(Duration::from_secs(2));

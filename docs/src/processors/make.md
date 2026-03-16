@@ -3,7 +3,7 @@
 ## Purpose
 
 Runs `make` in directories containing Makefiles. Each Makefile produces a stub
-file on success, allowing RSBuild to track incremental rebuilds.
+file on success, allowing RSConstruct to track incremental rebuilds.
 
 ## How It Works
 
@@ -15,7 +15,7 @@ A stub file is created on success.
 
 The make processor treats **all files in the Makefile's directory (and
 subdirectories)** as inputs. This means that if any file alongside the
-Makefile changes — source files, headers, scripts, included makefiles — rsbuild
+Makefile changes — source files, headers, scripts, included makefiles — rsconstruct
 will re-run make.
 
 This is slightly conservative: a change to a file that the Makefile does not
@@ -30,7 +30,7 @@ reliable way to know which ones without running make itself.
 
 ## Dependency Tracking Approaches
 
-RSBuild uses the directory-scan approach described above. Here is why, and what
+RSConstruct uses the directory-scan approach described above. Here is why, and what
 the alternatives are.
 
 ### 1. Directory scan (current)

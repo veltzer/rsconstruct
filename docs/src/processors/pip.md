@@ -30,4 +30,4 @@ cache_output_dir = true                # Cache the stamp directory for fast rest
 | `pip` | string | `"pip"` | The pip executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to pip |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
-| `cache_output_dir` | boolean | `true` | Cache the `out/pip/` directory so `rsbuild clean && rsbuild build` restores from cache |
+| `cache_output_dir` | boolean | `true` | Cache the `out/pip/` directory so `rsconstruct clean && rsconstruct build` restores from cache |

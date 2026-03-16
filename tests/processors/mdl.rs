@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsbuild_with_env, tool_available};
+use crate::common::{run_rsconstruct_with_env, tool_available};
 
 #[test]
 fn mdl_valid_file() {
@@ -14,7 +14,7 @@ fn mdl_valid_file() {
 
     // Point mdl_bin to the system mdl, skip gem dependency
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"mdl\"]\n\n[processor.mdl]\nmdl_bin = \"mdl\"\n",
     )
     .unwrap();
@@ -26,7 +26,7 @@ fn mdl_valid_file() {
     )
     .unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     // mdl may fail due to rule violations even with simple content
     // Just verify discovery and processing attempt
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -44,12 +44,12 @@ fn mdl_no_project_discovered() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"mdl\"]\n\n[processor.mdl]\nscan_dir = \"mdl_docs\"\n",
     )
     .unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);

@@ -19,7 +19,7 @@ use super::DiscoverParams;
 /// The marp-cli maintainer considers this the OS's responsibility to clean up.
 ///
 /// In practice they accumulate (~18 MB each) and are never cleaned up on Linux.
-/// Since rsbuild waits for the marp process to fully exit before reaching this point,
+/// Since rsconstruct waits for the marp process to fully exit before reaching this point,
 /// it is safe to remove them here.
 ///
 /// See: https://github.com/marp-team/marp-cli/issues/678

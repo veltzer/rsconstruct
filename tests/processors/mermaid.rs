@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsbuild_with_env, tool_available};
+use crate::common::{run_rsconstruct_with_env, tool_available};
 
 #[test]
 fn mermaid_discovery() {
@@ -13,7 +13,7 @@ fn mermaid_discovery() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"mermaid\"]\n",
     )
     .unwrap();
@@ -25,7 +25,7 @@ fn mermaid_discovery() {
     .unwrap();
 
     // Use dry-run to verify discovery (mmdc needs Chrome/Puppeteer for rendering)
-    let output = run_rsbuild_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Dry run should succeed with valid Mermaid file: stdout={}, stderr={}",
@@ -47,12 +47,12 @@ fn mermaid_no_project_discovered() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"mermaid\"]\n",
     )
     .unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);

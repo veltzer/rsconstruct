@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsbuild_with_env, tool_available};
+use crate::common::{run_rsconstruct_with_env, tool_available};
 
 #[test]
 fn clang_tidy_valid_c_file() {
@@ -15,7 +15,7 @@ fn clang_tidy_valid_c_file() {
     fs::create_dir_all(project_path.join("src")).unwrap();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"clang_tidy\"]\n",
     )
     .unwrap();
@@ -26,7 +26,7 @@ fn clang_tidy_valid_c_file() {
     )
     .unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Build should succeed with valid C file: stdout={}, stderr={}",
@@ -55,7 +55,7 @@ fn clang_tidy_incremental_skip() {
     fs::create_dir_all(project_path.join("src")).unwrap();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"clang_tidy\"]\n",
     )
     .unwrap();
@@ -67,11 +67,11 @@ fn clang_tidy_incremental_skip() {
     .unwrap();
 
     // First build
-    let output1 = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
 
     // Second build should skip
-    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(

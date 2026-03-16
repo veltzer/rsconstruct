@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsbuild_with_env, tool_available};
+use crate::common::{run_rsconstruct_with_env, tool_available};
 
 #[test]
 fn sphinx_valid_project() {
@@ -13,7 +13,7 @@ fn sphinx_valid_project() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"sphinx\"]\n",
     )
     .unwrap();
@@ -34,7 +34,7 @@ fn sphinx_valid_project() {
     )
     .unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Build should succeed with valid Sphinx project: stdout={}, stderr={}",
@@ -56,12 +56,12 @@ fn sphinx_no_project_discovered() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"sphinx\"]\n",
     )
     .unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);

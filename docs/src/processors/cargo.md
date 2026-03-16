@@ -3,7 +3,7 @@
 ## Purpose
 
 Builds Rust projects using Cargo. Each `Cargo.toml` produces a cached success
-marker, allowing RSBuild to skip rebuilds when source files haven't changed.
+marker, allowing RSConstruct to skip rebuilds when source files haven't changed.
 
 ## How It Works
 
@@ -20,7 +20,7 @@ directory tree as inputs. This includes:
 - Test files, examples, benches
 - Workspace member Cargo.toml files
 
-When any tracked file changes, rsbuild will re-run cargo.
+When any tracked file changes, rsconstruct will re-run cargo.
 
 ### Workspaces
 
@@ -61,7 +61,7 @@ cache_output_dir = true  # Cache the target/ directory for fast restore after cl
 | `exclude_dirs` | string[] | `["/.git/", "/target/", ...]` | Directory patterns to exclude |
 | `exclude_paths` | string[] | `[]` | Paths (relative to project root) to exclude |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
-| `cache_output_dir` | boolean | `true` | Cache the `target/` directory so `rsbuild clean && rsbuild build` restores from cache. Consider disabling for large projects. |
+| `cache_output_dir` | boolean | `true` | Cache the `target/` directory so `rsconstruct clean && rsconstruct build` restores from cache. Consider disabling for large projects. |
 
 ## Examples
 
@@ -125,7 +125,7 @@ exclude_paths = ["crates/"]
 
 ## Notes
 
-- Cargo has its own incremental compilation, so rsbuild's caching mainly avoids
+- Cargo has its own incremental compilation, so rsconstruct's caching mainly avoids
   invoking cargo at all when nothing changed
 - The `target/` directory is automatically excluded from input scanning
 - For monorepos with multiple Rust projects, each Cargo.toml is built separately

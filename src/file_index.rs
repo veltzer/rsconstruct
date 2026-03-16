@@ -20,11 +20,11 @@ impl FileIndex {
 impl FileIndex {
     /// Build a file index by walking the current directory once.
     /// Uses `ignore::WalkBuilder` which natively handles `.gitignore` and
-    /// `.rsbuildignore` (via `add_custom_ignore_filename`).
+    /// `.rsconstructignore` (via `add_custom_ignore_filename`).
     /// All paths are stored relative to project root (cwd).
     pub fn build() -> Result<Self> {
         let walker = ignore::WalkBuilder::new(".")
-            .add_custom_ignore_filename(".rsbuildignore")
+            .add_custom_ignore_filename(".rsconstructignore")
             .hidden(false) // don't skip hidden files by default (let .gitignore handle it)
             .build();
 

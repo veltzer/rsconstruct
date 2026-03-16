@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsbuild_with_env, tool_available};
+use crate::common::{run_rsconstruct_with_env, tool_available};
 
 /// Config that builds only the dev profile for faster tests
 const SINGLE_PROFILE_CONFIG: &str = "[processor]\nenabled = [\"cargo\"]\n\n[processor.cargo]\nprofiles = [\"dev\"]\n";
@@ -16,7 +16,7 @@ fn cargo_valid_project() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         SINGLE_PROFILE_CONFIG,
     )
     .unwrap();
@@ -36,7 +36,7 @@ fn cargo_valid_project() {
     )
     .unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Build should succeed with valid Cargo project: stdout={}, stderr={}",
@@ -63,7 +63,7 @@ fn cargo_incremental_skip() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         SINGLE_PROFILE_CONFIG,
     )
     .unwrap();
@@ -83,11 +83,11 @@ fn cargo_incremental_skip() {
     .unwrap();
 
     // First build
-    let output1 = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
 
     // Second build should skip
-    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
@@ -108,7 +108,7 @@ fn cargo_rebuild_on_source_change() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         SINGLE_PROFILE_CONFIG,
     )
     .unwrap();
@@ -128,7 +128,7 @@ fn cargo_rebuild_on_source_change() {
     .unwrap();
 
     // First build
-    let output1 = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
 
     // Modify source file
@@ -139,7 +139,7 @@ fn cargo_rebuild_on_source_change() {
     .unwrap();
 
     // Second build should rebuild (not skip)
-    let output2 = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
@@ -155,13 +155,13 @@ fn cargo_no_project_discovered() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"cargo\"]\n",
     )
     .unwrap();
 
     // No Cargo.toml anywhere — should succeed with nothing to build
-    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Build should succeed with no Cargo.toml: stdout={}, stderr={}",
@@ -188,7 +188,7 @@ fn cargo_build_failure() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         SINGLE_PROFILE_CONFIG,
     )
     .unwrap();
@@ -208,7 +208,7 @@ fn cargo_build_failure() {
     )
     .unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(
         !output.status.success(),
         "Build should fail with invalid Rust code"
@@ -227,7 +227,7 @@ fn cargo_check_command() {
 
     // Use "cargo check" instead of "cargo build", single profile for speed
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"cargo\"]\n\n[processor.cargo]\ncommand = \"check\"\nprofiles = [\"dev\"]\n",
     )
     .unwrap();
@@ -246,7 +246,7 @@ fn cargo_check_command() {
     )
     .unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "cargo check should succeed: stdout={}, stderr={}",
@@ -274,7 +274,7 @@ fn cargo_multi_profile() {
 
     // Default profiles: dev + release
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"cargo\"]\n",
     )
     .unwrap();
@@ -293,7 +293,7 @@ fn cargo_multi_profile() {
     )
     .unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Multi-profile build should succeed: stdout={}, stderr={}",

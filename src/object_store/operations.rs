@@ -15,7 +15,7 @@ impl ObjectStore {
     ///
     /// - **Checkers** (empty `output_paths`): No files to restore. Returns true if a cache
     ///   entry exists with matching input checksum, indicating the check previously passed.
-    ///   This allows checkers to skip re-running after `rsbuild clean && rsbuild build`.
+    ///   This allows checkers to skip re-running after `rsconstruct clean && rsconstruct build`.
     pub fn restore_from_cache(&self, cache_key: &str, input_checksum: &str, output_paths: &[PathBuf]) -> Result<bool> {
         // For checkers (empty outputs), just verify cache entry exists with matching checksum.
         // The cache entry itself serves as the "success marker" - no files need restoration.

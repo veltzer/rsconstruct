@@ -20,8 +20,8 @@ mod graph;
 mod init;
 #[path = "tests_mod/processor_cmd.rs"]
 mod processor_cmd;
-#[path = "tests_mod/rsbuildignore.rs"]
-mod rsbuildignore;
+#[path = "tests_mod/rsconstructignore.rs"]
+mod rsconstructignore;
 #[path = "tests_mod/status.rs"]
 mod status;
 #[path = "tests_mod/tools.rs"]

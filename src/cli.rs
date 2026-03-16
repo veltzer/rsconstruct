@@ -4,7 +4,7 @@ use std::io;
 use std::str::FromStr;
 
 #[derive(Parser)]
-#[command(name = "rsbuild")]
+#[command(name = "rsconstruct")]
 #[command(version = concat!(env!("CARGO_PKG_VERSION")))]
 #[command(about = "Rust Build Tool - Incremental build system with templates", long_about = None)]
 pub struct Cli {
@@ -220,7 +220,7 @@ pub enum Commands {
         #[command(subcommand)]
         action: GraphAction,
     },
-    /// Initialize a new rsbuild project in the current directory
+    /// Initialize a new rsconstruct project in the current directory
     Init,
     /// Manage processors
     Processors {
@@ -264,18 +264,18 @@ pub enum Commands {
 
 #[derive(Subcommand)]
 pub enum SmartAction {
-    /// Disable all processors in rsbuild.toml (so you can enable them one by one)
+    /// Disable all processors in rsconstruct.toml (so you can enable them one by one)
     DisableAll,
-    /// Enable all processors in rsbuild.toml (remove enabled = false from all)
+    /// Enable all processors in rsconstruct.toml (remove enabled = false from all)
     EnableAll,
     /// Enable only processors whose files are detected in the project
     EnableDetected,
-    /// Disable a single processor in rsbuild.toml
+    /// Disable a single processor in rsconstruct.toml
     Disable {
         /// Processor name
         name: String,
     },
-    /// Enable a single processor in rsbuild.toml
+    /// Enable a single processor in rsconstruct.toml
     Enable {
         /// Processor name
         name: String,
@@ -316,11 +316,11 @@ pub enum GraphAction {
 pub enum CleanAction {
     /// Remove build output files (preserves cache) [default]
     Outputs,
-    /// Remove all build outputs and cache directories (.rsbuild/ and out/)
+    /// Remove all build outputs and cache directories (.rsconstruct/ and out/)
     All,
     /// Hard clean using git clean (requires git repository)
     Git,
-    /// Remove files not tracked by git and not known as RSBuild build outputs (dry-run by default)
+    /// Remove files not tracked by git and not known as RSConstruct build outputs (dry-run by default)
     Unknown {
         /// Actually delete the files (default is dry-run)
         #[arg(long)]
@@ -348,9 +348,9 @@ pub enum CacheAction {
 
 #[derive(Subcommand)]
 pub enum ConfigAction {
-    /// Show the active configuration (defaults merged with rsbuild.toml overrides)
+    /// Show the active configuration (defaults merged with rsconstruct.toml overrides)
     Show,
-    /// Show the default configuration (without rsbuild.toml overrides)
+    /// Show the default configuration (without rsconstruct.toml overrides)
     ShowDefault,
     /// Validate the configuration for errors and warnings
     Validate,
@@ -385,7 +385,7 @@ pub enum ProcessorAction {
         /// Processor name
         name: String,
     },
-    /// Show the current processor allowlist (for use in rsbuild.toml [processor] enabled)
+    /// Show the current processor allowlist (for use in rsconstruct.toml [processor] enabled)
     Allowlist,
     /// Show inter-processor dependencies
     Graph {
@@ -517,7 +517,7 @@ pub enum TagsAction {
     },
     /// Validate tags against .tags file without building
     Validate,
-    /// Generate .tags file from current tag union (requires 'rsbuild build' first)
+    /// Generate .tags file from current tag union (requires 'rsconstruct build' first)
     Init,
     /// Add a tag to the .tags file
     Add {
@@ -657,5 +657,5 @@ pub fn parse_shell(name: &str) -> Option<Shell> {
 /// Generate shell completions and print to stdout
 pub fn print_completions(shell: Shell) {
     let mut cmd = Cli::command();
-    generate(shell, &mut cmd, "rsbuild", &mut io::stdout());
+    generate(shell, &mut cmd, "rsconstruct", &mut io::stdout());
 }

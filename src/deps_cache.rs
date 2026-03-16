@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 
 use crate::checksum::file_checksum;
 
-const RSBUILD_DIR: &str = ".rsbuild";
+const RSBUILD_DIR: &str = ".rsconstruct";
 const DEPS_DB_FILE: &str = "deps.redb";
 
 const DEPS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("deps");
@@ -51,12 +51,12 @@ pub struct DepsCache {
 impl DepsCache {
     /// Open or create the dependency cache
     pub fn open() -> Result<Self> {
-        let rsbuild_dir = PathBuf::from(RSBUILD_DIR);
-        let db_path = rsbuild_dir.join(DEPS_DB_FILE);
+        let rsconstruct_dir = PathBuf::from(RSBUILD_DIR);
+        let db_path = rsconstruct_dir.join(DEPS_DB_FILE);
 
-        // Ensure .rsbuild directory exists
-        fs::create_dir_all(&rsbuild_dir)
-            .context("Failed to create .rsbuild directory")?;
+        // Ensure .rsconstruct directory exists
+        fs::create_dir_all(&rsconstruct_dir)
+            .context("Failed to create .rsconstruct directory")?;
 
         let db = crate::db::open_or_recreate(&db_path, "Dependency cache")?;
 

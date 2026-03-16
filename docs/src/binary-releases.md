@@ -1,17 +1,17 @@
 # Binary Releases
 
-RSBuild publishes pre-built binaries as GitHub releases when a version tag
+RSConstruct publishes pre-built binaries as GitHub releases when a version tag
 (`v*`) is pushed.
 
 ## Supported Platforms
 
 | Platform | Binary name |
 |---|---|
-| Linux x86_64 | `rsbuild-linux-x86_64` |
-| Linux aarch64 (arm64) | `rsbuild-linux-aarch64` |
-| macOS x86_64 | `rsbuild-macos-x86_64` |
-| macOS aarch64 (Apple Silicon) | `rsbuild-macos-aarch64` |
-| Windows x86_64 | `rsbuild-windows-x86_64.exe` |
+| Linux x86_64 | `rsconstruct-linux-x86_64` |
+| Linux aarch64 (arm64) | `rsconstruct-linux-aarch64` |
+| macOS x86_64 | `rsconstruct-macos-x86_64` |
+| macOS aarch64 (Apple Silicon) | `rsconstruct-macos-aarch64` |
+| Windows x86_64 | `rsconstruct-windows-x86_64.exe` |
 
 ## How It Works
 

@@ -14,7 +14,7 @@ use crate::config::{
 use crate::processors::names;
 use super::{Builder, create_builtin_processors, sorted_keys};
 
-/// List all built-in processors (works without rsbuild.toml).
+/// List all built-in processors (works without rsconstruct.toml).
 /// Used when no project config is available.
 pub fn list_processors_no_config(all: bool) -> Result<()> {
     let mut cfg = ProcessorConfig::default();
@@ -127,19 +127,19 @@ fn config_diff(name: &str, current: &serde_json::Value) -> serde_json::Value {
     serde_json::Value::Object(diff)
 }
 
-/// Show default configuration for a processor (works without rsbuild.toml).
+/// Show default configuration for a processor (works without rsconstruct.toml).
 pub fn processor_defconfig(name: &str) -> Result<()> {
     match defconfig_json(name) {
         Some(json) => {
             println!("{}", json);
             Ok(())
         }
-        None => bail!("Unknown processor: '{}'. Run 'rsbuild processors list' to see available processors.", name),
+        None => bail!("Unknown processor: '{}'. Run 'rsconstruct processors list' to see available processors.", name),
     }
 }
 
 impl Builder {
-    /// Handle `rsbuild processor` subcommands
+    /// Handle `rsconstruct processor` subcommands
     pub fn processor(&self, action: ProcessorAction) -> Result<()> {
         let processors = self.create_processors()?;
 
@@ -198,7 +198,7 @@ impl Builder {
             ProcessorAction::Config { ref name, diff } => {
                 let names: Vec<&str> = if let Some(n) = name {
                     if !processors.contains_key(n.as_str()) {
-                        bail!("Unknown processor: '{}'. Run 'rsbuild processors list' to see available processors.", n);
+                        bail!("Unknown processor: '{}'. Run 'rsconstruct processors list' to see available processors.", n);
                     }
                     vec![n.as_str()]
                 } else {
@@ -315,7 +315,7 @@ impl Builder {
             ProcessorAction::Files { name, all } => {
                 if let Some(ref n) = name
                     && !processors.contains_key(n.as_str()) {
-                        bail!("Unknown processor: '{}'. Run 'rsbuild processor list' to see available processors.", n);
+                        bail!("Unknown processor: '{}'. Run 'rsconstruct processor list' to see available processors.", n);
                     }
 
                 let graph = self.build_graph_filtered(name.as_deref(), all)?;

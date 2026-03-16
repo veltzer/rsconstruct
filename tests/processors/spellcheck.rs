@@ -1,5 +1,5 @@
 use std::fs;
-use crate::common::{setup_test_project, run_rsbuild, run_rsbuild_with_env};
+use crate::common::{setup_test_project, run_rsconstruct, run_rsconstruct_with_env};
 
 #[test]
 fn spellcheck_correct_spelling() {
@@ -13,11 +13,11 @@ fn spellcheck_correct_spelling() {
     ).unwrap();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build should succeed with correct spelling: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -41,11 +41,11 @@ fn spellcheck_misspelled_word() {
     ).unwrap();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(!output.status.success(),
         "Build should fail with misspelled word");
 
@@ -64,21 +64,21 @@ fn spellcheck_custom_words_file() {
     // Create a markdown file with a "misspelled" word that is actually a custom word
     fs::write(
         project_path.join("README.md"),
-        "# Hello World\n\nThis uses rsbuild for building.\n"
+        "# Hello World\n\nThis uses rsconstruct for building.\n"
     ).unwrap();
 
-    // Add "rsbuild" to custom words file
+    // Add "rsconstruct" to custom words file
     fs::write(
         project_path.join(".spellcheck-words"),
-        "# Custom project words\nrsbuild\n"
+        "# Custom project words\nrsconstruct\n"
     ).unwrap();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build should succeed with custom words: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -96,19 +96,19 @@ fn spellcheck_incremental_skip() {
     ).unwrap();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
     // First build
-    let output1 = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(stdout1.contains("Processing:"),
         "First build should process: {}", stdout1);
 
     // Second build should skip
-    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("[spellcheck] Skipping (unchanged):"),
@@ -126,17 +126,17 @@ fn spellcheck_clean() {
     ).unwrap();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
     // Build
-    let build_output = run_rsbuild(project_path, &["build"]);
+    let build_output = run_rsconstruct(project_path, &["build"]);
     assert!(build_output.status.success());
     // Checkers no longer create stub files - nothing in out/ for spellcheck
 
     // Clean is a no-op for checkers (nothing to clean)
-    let clean_output = run_rsbuild(project_path, &["clean", "outputs"]);
+    let clean_output = run_rsconstruct(project_path, &["clean", "outputs"]);
     assert!(clean_output.status.success());
 }
 
@@ -158,11 +158,11 @@ fn spellcheck_stops_after_first_error() {
     ).unwrap();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(!output.status.success(),
         "Build should fail with misspelled words");
 
@@ -175,7 +175,7 @@ fn spellcheck_stops_after_first_error() {
         "Should report the error from the first file (aaa.md): {}", combined);
     assert!(!combined.contains("diferent"),
         "Should NOT report the error from the second file (bbb.md) — \
-         rsbuild stops after the first failure: {}", combined);
+         rsconstruct stops after the first failure: {}", combined);
 }
 
 #[test]
@@ -190,11 +190,11 @@ fn spellcheck_ignores_code_blocks() {
     ).unwrap();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"spellcheck\"]\n"
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build should succeed — code blocks should be ignored: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -209,16 +209,16 @@ fn spellcheck_auto_add_words() {
     // Create a markdown file with "misspelled" words (project-specific terms)
     fs::write(
         project_path.join("README.md"),
-        "# Hello World\n\nThis uses rsbuild and tera for building.\n"
+        "# Hello World\n\nThis uses rsconstruct and tera for building.\n"
     ).unwrap();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"spellcheck\"]\n\n[processor.spellcheck]\nauto_add_words = true\n"
     ).unwrap();
 
     // Build should succeed and add words to .spellcheck-words
-    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build should succeed with auto_add_words: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -229,7 +229,7 @@ fn spellcheck_auto_add_words() {
     assert!(words_path.exists(), "Words file should be created");
 
     let words_content = fs::read_to_string(&words_path).unwrap();
-    assert!(words_content.contains("rsbuild"), "Should contain 'rsbuild': {}", words_content);
+    assert!(words_content.contains("rsconstruct"), "Should contain 'rsconstruct': {}", words_content);
     assert!(words_content.contains("tera"), "Should contain 'tera': {}", words_content);
 
     // Verify output mentions adding words

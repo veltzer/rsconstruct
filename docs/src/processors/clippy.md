@@ -3,7 +3,7 @@
 ## Purpose
 
 Lints Rust projects using [Cargo Clippy](https://doc.rust-lang.org/clippy/). Each `Cargo.toml`
-produces a cached success marker, allowing RSBuild to skip re-linting when source files haven't changed.
+produces a cached success marker, allowing RSConstruct to skip re-linting when source files haven't changed.
 
 ## How It Works
 
@@ -20,7 +20,7 @@ directory tree as inputs. This includes:
 - Test files, examples, benches
 - Workspace member Cargo.toml files
 
-When any tracked file changes, rsbuild will re-run clippy.
+When any tracked file changes, rsconstruct will re-run clippy.
 
 ## Source Files
 

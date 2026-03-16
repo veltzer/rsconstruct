@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsbuild_with_env, tool_available};
+use crate::common::{run_rsconstruct_with_env, tool_available};
 
 #[test]
 fn clippy_valid_project() {
@@ -13,7 +13,7 @@ fn clippy_valid_project() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"clippy\"]\n",
     )
     .unwrap();
@@ -33,7 +33,7 @@ fn clippy_valid_project() {
     )
     .unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Build should succeed with valid Cargo project: stdout={}, stderr={}",
@@ -60,7 +60,7 @@ fn clippy_incremental_skip() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"clippy\"]\n",
     )
     .unwrap();
@@ -80,11 +80,11 @@ fn clippy_incremental_skip() {
     .unwrap();
 
     // First build
-    let output1 = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
 
     // Second build should skip
-    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
@@ -100,13 +100,13 @@ fn clippy_no_project_discovered() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"clippy\"]\n",
     )
     .unwrap();
 
     // No Cargo.toml anywhere — should succeed with nothing to build
-    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Build should succeed with no Cargo.toml: stdout={}, stderr={}",
@@ -134,7 +134,7 @@ fn clippy_lint_failure() {
 
     // Use -D warnings so clippy warnings become errors
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"clippy\"]\n\n[processor.clippy]\nargs = [\"--\", \"-D\", \"warnings\"]\n",
     )
     .unwrap();
@@ -154,7 +154,7 @@ fn clippy_lint_failure() {
     )
     .unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(
         !output.status.success(),
         "Build should fail with clippy warnings when -D warnings is set"

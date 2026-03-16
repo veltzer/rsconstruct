@@ -1,5 +1,5 @@
 use std::fs;
-use crate::common::{setup_test_project, run_rsbuild, run_rsbuild_with_env};
+use crate::common::{setup_test_project, run_rsconstruct, run_rsconstruct_with_env};
 
 #[test]
 fn cache_operations() {
@@ -18,14 +18,14 @@ fn cache_operations() {
     ).unwrap();
 
     // Build to populate cache
-    let output = run_rsbuild(project_path, &["build"]);
+    let output = run_rsconstruct(project_path, &["build"]);
     assert!(output.status.success());
     assert!(project_path.join("cached.txt").exists());
-    assert!(project_path.join(".rsbuild/db.redb").exists());
-    assert!(project_path.join(".rsbuild/objects").exists());
+    assert!(project_path.join(".rsconstruct/db.redb").exists());
+    assert!(project_path.join(".rsconstruct/objects").exists());
 
     // Check cache size reports objects
-    let size_output = run_rsbuild(project_path, &["cache", "size"]);
+    let size_output = run_rsconstruct(project_path, &["cache", "size"]);
     assert!(size_output.status.success());
     let size_stdout = String::from_utf8_lossy(&size_output.stdout);
     assert!(size_stdout.contains("Cache size:"));
@@ -37,7 +37,7 @@ fn cache_operations() {
     fs::remove_file(project_path.join("cached.txt")).unwrap();
     assert!(!project_path.join("cached.txt").exists());
 
-    let restore_output = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let restore_output = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(restore_output.status.success());
     let restore_stdout = String::from_utf8_lossy(&restore_output.stdout);
     assert!(restore_stdout.contains("Restored from cache:"));
@@ -48,19 +48,19 @@ fn cache_operations() {
     assert_eq!(content.trim(), "cached");
 
     // Trim cache (nothing unreferenced, so 0 removed)
-    let trim_output = run_rsbuild(project_path, &["cache", "trim"]);
+    let trim_output = run_rsconstruct(project_path, &["cache", "trim"]);
     assert!(trim_output.status.success());
     let trim_stdout = String::from_utf8_lossy(&trim_output.stdout);
     assert!(trim_stdout.contains("0 unreferenced objects"));
 
     // Clear cache entirely
-    let clear_output = run_rsbuild(project_path, &["cache", "clear"]);
+    let clear_output = run_rsconstruct(project_path, &["cache", "clear"]);
     assert!(clear_output.status.success());
-    // .rsbuild/ exists (fresh db) but objects dir is gone
-    assert!(!project_path.join(".rsbuild").join("objects").exists());
+    // .rsconstruct/ exists (fresh db) but objects dir is gone
+    assert!(!project_path.join(".rsconstruct").join("objects").exists());
 
     // Cache size after clear should be 0
-    let size_after = run_rsbuild(project_path, &["cache", "size"]);
+    let size_after = run_rsconstruct(project_path, &["cache", "size"]);
     assert!(size_after.status.success());
     let size_after_stdout = String::from_utf8_lossy(&size_after.stdout);
     assert!(size_after_stdout.contains("0 B"));
@@ -75,16 +75,16 @@ fn cache_list_shows_entries() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/list_test.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
     // Build to populate cache
-    let build = run_rsbuild(project_path, &["build"]);
+    let build = run_rsconstruct(project_path, &["build"]);
     assert!(build.status.success());
 
     // List cache — output is JSON
-    let output = run_rsbuild_with_env(project_path, &["cache", "list"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["cache", "list"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     let entries: serde_json::Value = serde_json::from_str(&stdout)
@@ -105,12 +105,12 @@ fn cache_list_empty() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = []\n"
     ).unwrap();
 
     // Empty cache should produce an empty JSON array
-    let output = run_rsbuild_with_env(project_path, &["cache", "list"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["cache", "list"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     let entries: serde_json::Value = serde_json::from_str(&stdout)
@@ -125,11 +125,11 @@ fn cache_stats_empty() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = []\n"
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["cache", "stats"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["cache", "stats"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Cache is empty"), "Expected 'Cache is empty' message, got: {}", stdout);
@@ -143,16 +143,16 @@ fn cache_stats_after_build() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/stats_test.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
     // Build to populate cache
-    let build = run_rsbuild(project_path, &["build"]);
+    let build = run_rsconstruct(project_path, &["build"]);
     assert!(build.status.success());
 
     // Check stats
-    let output = run_rsbuild_with_env(project_path, &["cache", "stats"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["cache", "stats"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("sleep"), "Expected processor name in stats, got: {}", stdout);
@@ -167,16 +167,16 @@ fn cache_stats_json() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/json_test.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
     // Build to populate cache
-    let build = run_rsbuild(project_path, &["build"]);
+    let build = run_rsconstruct(project_path, &["build"]);
     assert!(build.status.success());
 
     // Verify cache stats outputs valid JSON
-    let output = run_rsbuild_with_env(project_path, &["--json", "cache", "stats"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["--json", "cache", "stats"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     let parsed: serde_json::Value = serde_json::from_str(&stdout)

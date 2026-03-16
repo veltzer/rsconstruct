@@ -2,7 +2,7 @@
 authors = ["veltzer"]
 language = "en"
 src = "src"
-title = "RSBuild - Rust Build Tool"
+title = "RSConstruct - Rust Build Tool"
 
 [build]
 build-dir = "book"
@@ -10,5 +10,5 @@ build-dir = "book"
 [output.html]
 default-theme = "rust"
 preferred-dark-theme = "ayu"
-git-repository-url = "https://github.com/veltzer/rsbuild"
-edit-url-template = "https://github.com/veltzer/rsbuild/edit/master/docs/{path}"
+git-repository-url = "https://github.com/veltzer/rsconstruct"
+edit-url-template = "https://github.com/veltzer/rsconstruct/edit/master/docs/{path}"

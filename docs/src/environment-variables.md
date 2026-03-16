@@ -21,11 +21,11 @@ Common examples of environment variables that silently affect build output:
 | `LANG`, `LC_ALL` | Changes locale-dependent output (sorting, error messages) |
 | `HOME` | Changes where config files are read from |
 
-## RSBuild's approach
+## RSConstruct's approach
 
-RSBuild does **not** use environment variables from the user's environment to control build behavior. All configuration comes from explicit, versioned sources:
+RSConstruct does **not** use environment variables from the user's environment to control build behavior. All configuration comes from explicit, versioned sources:
 
-1. **`rsbuild.toml`** — all processor configuration (compiler flags, linter args, scan dirs, etc.)
+1. **`rsconstruct.toml`** — all processor configuration (compiler flags, linter args, scan dirs, etc.)
 2. **Source file directives** — per-file flags embedded in comments (e.g., `// EXTRA_COMPILE_FLAGS_BEFORE=-pthread`)
 3. **Tool lock file** — `.tools.versions` locks tool versions so changes are detected
 
@@ -39,16 +39,16 @@ This means:
 
 When implementing a processor (built-in or Lua plugin):
 
-1. **Never read `std::env::var()`** to determine build behavior. If a value is configurable, add it to the processor's config struct in `rsbuild.toml`.
+1. **Never read `std::env::var()`** to determine build behavior. If a value is configurable, add it to the processor's config struct in `rsconstruct.toml`.
 
 2. **Never call `cmd.env()`** to pass environment variables to external tools, unless the variable is derived from explicit config (not from `std::env`). The user's environment is inherited by default — the goal is to avoid *adding* env-based configuration on top.
 
-3. **Tool paths come from `PATH`** — RSBuild does inherit the user's `PATH` to find tools like `gcc`, `ruff`, etc. This is acceptable because the tool lock file (`.tools.versions`) detects when tool versions change and triggers rebuilds. Use `rsbuild tools lock` to pin versions.
+3. **Tool paths come from `PATH`** — RSConstruct does inherit the user's `PATH` to find tools like `gcc`, `ruff`, etc. This is acceptable because the tool lock file (`.tools.versions`) detects when tool versions change and triggers rebuilds. Use `rsconstruct tools lock` to pin versions.
 
-4. **Config values, not env vars** — if a tool needs a flag that varies per project, put it in `rsbuild.toml` under the processor's config section. Config values are hashed into cache keys automatically.
+4. **Config values, not env vars** — if a tool needs a flag that varies per project, put it in `rsconstruct.toml` under the processor's config section. Config values are hashed into cache keys automatically.
 
-## What RSBuild does inherit
+## What RSConstruct does inherit
 
-RSBuild inherits the full parent environment for subprocess execution. This is unavoidable — tools need `PATH` to be found, `HOME` to read their own config files, etc. The key design decision is that RSBuild itself never *reads* env vars to make build decisions, and processors never *add* env vars derived from the user's environment.
+RSConstruct inherits the full parent environment for subprocess execution. This is unavoidable — tools need `PATH` to be found, `HOME` to read their own config files, etc. The key design decision is that RSConstruct itself never *reads* env vars to make build decisions, and processors never *add* env vars derived from the user's environment.
 
-The one exception is `NO_COLOR` — RSBuild respects this standard env var to disable colored output, which is a display concern and does not affect build output.
+The one exception is `NO_COLOR` — RSConstruct respects this standard env var to disable colored output, which is a display concern and does not affect build output.

@@ -9,21 +9,21 @@ impl Builder {
         let mut ok_count = 0usize;
         let mut fail_count = 0usize;
 
-        // Check rsbuild.toml
-        if std::path::Path::new("rsbuild.toml").exists() {
-            println!("{} rsbuild.toml found and valid", color::green("[ok]"));
+        // Check rsconstruct.toml
+        if std::path::Path::new("rsconstruct.toml").exists() {
+            println!("{} rsconstruct.toml found and valid", color::green("[ok]"));
             ok_count += 1;
         } else {
-            println!("{} rsbuild.toml not found", color::red("[FAIL]"));
+            println!("{} rsconstruct.toml not found", color::red("[FAIL]"));
             fail_count += 1;
         }
 
-        // Check .rsbuildignore
-        if std::path::Path::new(".rsbuildignore").exists() {
-            println!("{} .rsbuildignore found", color::green("[ok]"));
+        // Check .rsconstructignore
+        if std::path::Path::new(".rsconstructignore").exists() {
+            println!("{} .rsconstructignore found", color::green("[ok]"));
             ok_count += 1;
         } else {
-            println!("{} .rsbuildignore not found (optional)", color::yellow("[warn]"));
+            println!("{} .rsconstructignore not found (optional)", color::yellow("[warn]"));
         }
 
         // Check tools for enabled processors

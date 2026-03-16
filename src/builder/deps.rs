@@ -6,7 +6,7 @@ use crate::deps_cache::DepsCache;
 use super::{Builder, sorted_keys};
 
 impl Builder {
-    /// Handle `rsbuild deps` subcommands
+    /// Handle `rsconstruct deps` subcommands
     pub fn deps(&self, action: crate::cli::DepsAction) -> Result<()> {
         use crate::cli::DepsAction;
 
@@ -112,7 +112,7 @@ impl Builder {
                     }
                 } else {
                     // Clear the entire dependency cache
-                    let deps_file = PathBuf::from(".rsbuild/deps.redb");
+                    let deps_file = PathBuf::from(".rsconstruct/deps.redb");
                     if deps_file.exists() {
                         fs::remove_file(&deps_file)
                             .context("Failed to remove dependency cache")?;

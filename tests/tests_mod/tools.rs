@@ -1,4 +1,4 @@
-use crate::common::{setup_test_project, run_rsbuild_with_env};
+use crate::common::{setup_test_project, run_rsconstruct_with_env};
 use serde_json::Value;
 
 #[test]
@@ -6,7 +6,7 @@ fn tools_list_shows_tools() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output = run_rsbuild_with_env(project_path, &["tools", "list"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["tools", "list"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "tools list failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -20,8 +20,8 @@ fn tools_list_all_includes_disabled() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output_default = run_rsbuild_with_env(project_path, &["tools", "list"], &[("NO_COLOR", "1")]);
-    let output_all = run_rsbuild_with_env(project_path, &["tools", "list", "-a"], &[("NO_COLOR", "1")]);
+    let output_default = run_rsconstruct_with_env(project_path, &["tools", "list"], &[("NO_COLOR", "1")]);
+    let output_all = run_rsconstruct_with_env(project_path, &["tools", "list", "-a"], &[("NO_COLOR", "1")]);
 
     assert!(output_default.status.success());
     assert!(output_all.status.success());
@@ -42,7 +42,7 @@ fn tools_list_json() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output = run_rsbuild_with_env(project_path, &["--json", "tools", "list"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["--json", "tools", "list"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "tools list --json failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -63,11 +63,11 @@ fn tools_check_succeeds() {
     let project_path = temp_dir.path();
 
     // First create the lock file so check has something to verify against
-    let lock_output = run_rsbuild_with_env(project_path, &["tools", "lock"], &[("NO_COLOR", "1")]);
+    let lock_output = run_rsconstruct_with_env(project_path, &["tools", "lock"], &[("NO_COLOR", "1")]);
     assert!(lock_output.status.success(), "tools lock failed: {}", String::from_utf8_lossy(&lock_output.stderr));
 
     // Now check should succeed since versions match the just-created lock file
-    let output = run_rsbuild_with_env(project_path, &["tools", "check"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["tools", "check"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "tools check failed: {}", String::from_utf8_lossy(&output.stderr));
 }
 
@@ -76,7 +76,7 @@ fn tools_stats_shows_summary() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output = run_rsbuild_with_env(project_path, &["tools", "stats"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["tools", "stats"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "tools stats failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -91,7 +91,7 @@ fn tools_stats_json() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output = run_rsbuild_with_env(project_path, &["--json", "tools", "stats"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["--json", "tools", "stats"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "tools stats --json failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);

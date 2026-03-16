@@ -60,7 +60,7 @@ impl ProductDiscovery for NpmProcessor {
 
         let siblings = SiblingFilter {
             extensions: &[".json", ".js", ".ts"],
-            excludes: &["/.git/", "/out/", "/.rsbuild/", "/node_modules/"],
+            excludes: &["/.git/", "/out/", "/.rsconstruct/", "/node_modules/"],
         };
 
         for anchor in files {

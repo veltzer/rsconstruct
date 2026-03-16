@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::run_rsbuild_with_env;
+use crate::common::run_rsconstruct_with_env;
 
 #[test]
 fn ascii_check_valid_file() {
@@ -8,7 +8,7 @@ fn ascii_check_valid_file() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"ascii_check\"]\n",
     )
     .unwrap();
@@ -19,7 +19,7 @@ fn ascii_check_valid_file() {
     )
     .unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Build should succeed with ASCII-only file: stdout={}, stderr={}",
@@ -41,7 +41,7 @@ fn ascii_check_incremental_skip() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"ascii_check\"]\n",
     )
     .unwrap();
@@ -53,11 +53,11 @@ fn ascii_check_incremental_skip() {
     .unwrap();
 
     // First build
-    let output1 = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
 
     // Second build should skip
-    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
@@ -73,7 +73,7 @@ fn ascii_check_non_ascii_fails() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"ascii_check\"]\n",
     )
     .unwrap();
@@ -85,7 +85,7 @@ fn ascii_check_non_ascii_fails() {
     )
     .unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(
         !output.status.success(),
         "Build should fail with non-ASCII characters"

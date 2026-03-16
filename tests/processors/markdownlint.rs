@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsbuild_with_env, tool_available};
+use crate::common::{run_rsconstruct_with_env, tool_available};
 
 /// Check if markdownlint is available on PATH.
 fn markdownlint_available() -> bool {
@@ -19,7 +19,7 @@ fn markdownlint_valid_file() {
 
     // Point markdownlint_bin to the system markdownlint, skip npm dependency
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"markdownlint\"]\n\n[processor.markdownlint]\nmarkdownlint_bin = \"markdownlint\"\n",
     )
     .unwrap();
@@ -30,7 +30,7 @@ fn markdownlint_valid_file() {
     )
     .unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Build should succeed with valid markdown: stdout={}, stderr={}",
@@ -52,12 +52,12 @@ fn markdownlint_no_project_discovered() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"markdownlint\"]\n\n[processor.markdownlint]\nscan_dir = \"mdlint_docs\"\n",
     )
     .unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);

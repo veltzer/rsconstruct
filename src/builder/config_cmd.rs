@@ -5,7 +5,7 @@ use crate::config::Config;
 use super::{Builder, ValidationSeverity, ValidationIssue};
 
 impl Builder {
-    /// Handle `rsbuild config` subcommands
+    /// Handle `rsconstruct config` subcommands
     pub fn config(&self, action: ConfigAction) -> Result<()> {
         match action {
             ConfigAction::Show => {
@@ -57,8 +57,8 @@ impl Builder {
                         color::bold("Summary"), error_count, warning_count);
 
                     if error_count > 0 {
-                        return Err(crate::exit_code::RsbuildError::new(
-                            crate::exit_code::RsbuildExitCode::ConfigError,
+                        return Err(crate::exit_code::RsconstructError::new(
+                            crate::exit_code::RsconstructExitCode::ConfigError,
                             format!("Config validation failed with {} error(s)", error_count),
                         ).into());
                     }

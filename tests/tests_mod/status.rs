@@ -1,5 +1,5 @@
 use std::fs;
-use crate::common::{setup_test_project, run_rsbuild, run_rsbuild_with_env};
+use crate::common::{setup_test_project, run_rsconstruct, run_rsconstruct_with_env};
 
 #[test]
 fn status_command() {
@@ -10,22 +10,22 @@ fn status_command() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/status_test.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
     // Before building, should be STALE (use -v to see per-file status)
-    let status1 = run_rsbuild_with_env(project_path, &["-v", "status"], &[("NO_COLOR", "1")]);
+    let status1 = run_rsconstruct_with_env(project_path, &["-v", "status"], &[("NO_COLOR", "1")]);
     assert!(status1.status.success());
     let stdout1 = String::from_utf8_lossy(&status1.stdout);
     assert!(stdout1.contains("STALE"), "Before build, product should be STALE: {}", stdout1);
 
     // Build it
-    let build = run_rsbuild(project_path, &["build"]);
+    let build = run_rsconstruct(project_path, &["build"]);
     assert!(build.status.success());
 
     // After building, should be UP-TO-DATE (checkers have no output files, cache entry = success)
-    let status2 = run_rsbuild_with_env(project_path, &["-v", "status"], &[("NO_COLOR", "1")]);
+    let status2 = run_rsconstruct_with_env(project_path, &["-v", "status"], &[("NO_COLOR", "1")]);
     assert!(status2.status.success());
     let stdout2 = String::from_utf8_lossy(&status2.stdout);
     assert!(stdout2.contains("UP-TO-DATE"), "After build, product should be UP-TO-DATE: {}", stdout2);
@@ -41,11 +41,11 @@ fn status_empty_project() {
 
     // No sleep dir, no templates to process — disable all processors
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = []\n"
     ).unwrap();
 
-    let output = run_rsbuild(project_path, &["status"]);
+    let output = run_rsconstruct(project_path, &["status"]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("No products discovered"), "Empty project should show 'No products discovered': {}", stdout);

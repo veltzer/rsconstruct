@@ -19,7 +19,7 @@ use crate::processors::names as processor_names;
 
 use variables::substitute_variables;
 
-const CONFIG_FILE: &str = "rsbuild.toml";
+const CONFIG_FILE: &str = "rsconstruct.toml";
 
 pub(crate) trait KnownFields {
     fn known_fields() -> &'static [&'static str];
@@ -126,11 +126,11 @@ impl ScanConfig {
 /// Base exclude dirs shared by all processors.
 const COMMON_EXCLUDE_DIRS: &[&str] = &["/.git/", "/out/", "/build/", "/dist/"];
 
-/// Common + build tool dirs (/.rsbuild/, /node_modules/, /target/).
+/// Common + build tool dirs (/.rsconstruct/, /node_modules/, /target/).
 /// Used by processors that scan broadly and need to skip build artifacts.
 const BUILD_TOOL_EXCLUDES: &[&str] = &[
     "/.git/", "/out/", "/build/", "/dist/",
-    "/.rsbuild/", "/node_modules/", "/target/", "/gems/",
+    "/.rsconstruct/", "/node_modules/", "/target/", "/gems/",
 ];
 
 const PYTHON_EXCLUDE_DIRS: &[&str] = &[
@@ -146,7 +146,7 @@ const MARKDOWN_EXCLUDE_DIRS: &[&str] = BUILD_TOOL_EXCLUDES;
 /// MAKE and Cargo exclude node_modules-free build tool dirs.
 const MAKE_CARGO_EXCLUDES: &[&str] = &[
     "/.git/", "/out/", "/build/", "/dist/",
-    "/.rsbuild/", "/target/",
+    "/.rsconstruct/", "/target/",
 ];
 
 const DEFAULT_PLUGINS_DIR: &str = "plugins";
@@ -916,9 +916,9 @@ impl Config {
     pub(crate) fn require_config() -> Result<()> {
         let config_path = Path::new(CONFIG_FILE);
         if !config_path.exists() {
-            return Err(crate::exit_code::RsbuildError::new(
-                crate::exit_code::RsbuildExitCode::ConfigError,
-                "No rsbuild.toml found. Run 'rsbuild init' to create one.",
+            return Err(crate::exit_code::RsconstructError::new(
+                crate::exit_code::RsconstructExitCode::ConfigError,
+                "No rsconstruct.toml found. Run 'rsconstruct init' to create one.",
             ).into());
         }
         Ok(())

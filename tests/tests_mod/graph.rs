@@ -1,5 +1,5 @@
 use std::fs;
-use crate::common::{setup_test_project, run_rsbuild_with_env};
+use crate::common::{setup_test_project, run_rsconstruct_with_env};
 
 fn setup_project_with_template() -> tempfile::TempDir {
     let temp_dir = setup_test_project();
@@ -22,7 +22,7 @@ fn graph_dot_format() {
     let temp_dir = setup_project_with_template();
     let project_path = temp_dir.path();
 
-    let output = run_rsbuild_with_env(project_path, &["graph", "show", "--format", "dot"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["graph", "show", "--format", "dot"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "graph --format dot failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -34,7 +34,7 @@ fn graph_mermaid_format() {
     let temp_dir = setup_project_with_template();
     let project_path = temp_dir.path();
 
-    let output = run_rsbuild_with_env(project_path, &["graph", "show", "--format", "mermaid"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["graph", "show", "--format", "mermaid"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "graph --format mermaid failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -47,7 +47,7 @@ fn graph_json_format() {
     let temp_dir = setup_project_with_template();
     let project_path = temp_dir.path();
 
-    let output = run_rsbuild_with_env(project_path, &["graph", "show", "--format", "json"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["graph", "show", "--format", "json"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "graph --format json failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -61,7 +61,7 @@ fn graph_text_format() {
     let temp_dir = setup_project_with_template();
     let project_path = temp_dir.path();
 
-    let output = run_rsbuild_with_env(project_path, &["graph", "show", "--format", "text"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["graph", "show", "--format", "text"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "graph --format text failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -74,7 +74,7 @@ fn graph_empty_project() {
     let project_path = temp_dir.path();
 
     // No template files, so the graph should be empty but command should succeed
-    let output = run_rsbuild_with_env(project_path, &["graph", "show", "--format", "json"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["graph", "show", "--format", "json"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "graph on empty project failed: {}", String::from_utf8_lossy(&output.stderr));
 }
 
@@ -83,7 +83,7 @@ fn graph_stats() {
     let temp_dir = setup_project_with_template();
     let project_path = temp_dir.path();
 
-    let output = run_rsbuild_with_env(project_path, &["graph", "stats"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["graph", "stats"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "graph stats failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -95,7 +95,7 @@ fn graph_stats_json() {
     let temp_dir = setup_project_with_template();
     let project_path = temp_dir.path();
 
-    let output = run_rsbuild_with_env(project_path, &["--json", "graph", "stats"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["--json", "graph", "stats"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "graph stats --json failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);

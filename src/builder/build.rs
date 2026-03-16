@@ -96,8 +96,8 @@ impl Builder {
             for name in filter {
                 if !processors.contains_key(name) {
                     let available: Vec<_> = processors.keys().collect();
-                    return Err(crate::exit_code::RsbuildError::new(
-                        crate::exit_code::RsbuildExitCode::ConfigError,
+                    return Err(crate::exit_code::RsconstructError::new(
+                        crate::exit_code::RsconstructExitCode::ConfigError,
                         format!("Unknown processor '{}'. Available: {:?}", name, available),
                     ).into());
                 }
@@ -168,8 +168,8 @@ impl Builder {
 
         // Exit if interrupted
         if interrupted.load(std::sync::atomic::Ordering::SeqCst) {
-            return Err(crate::exit_code::RsbuildError::new(
-                crate::exit_code::RsbuildExitCode::Interrupted,
+            return Err(crate::exit_code::RsconstructError::new(
+                crate::exit_code::RsconstructExitCode::Interrupted,
                 "Build interrupted",
             ).into());
         }
@@ -190,8 +190,8 @@ impl Builder {
 
         // Return error if there were failures in keep-going mode
         if stats.failed_count > 0 {
-            return Err(crate::exit_code::RsbuildError::new(
-                crate::exit_code::RsbuildExitCode::BuildError,
+            return Err(crate::exit_code::RsconstructError::new(
+                crate::exit_code::RsconstructExitCode::BuildError,
                 format!("Build completed with {} error(s)", stats.failed_count),
             ).into());
         }

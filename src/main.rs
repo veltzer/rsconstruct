@@ -29,7 +29,7 @@ use clap::Parser;
 use cli::{BuildPhase, CacheAction, CleanAction, Cli, Commands, parse_shell, print_completions};
 use config::Config;
 use builder::Builder;
-use exit_code::{RsbuildExitCode, RsbuildError, classify_error};
+use exit_code::{RsconstructExitCode, RsconstructError, classify_error};
 use std::env;
 use std::fs;
 use std::sync::Arc;
@@ -40,7 +40,7 @@ fn main() -> std::process::ExitCode {
     platform::reset_sigpipe();
 
     match run() {
-        Ok(()) => std::process::ExitCode::from(RsbuildExitCode::Success.code()),
+        Ok(()) => std::process::ExitCode::from(RsconstructExitCode::Success.code()),
         Err(err) => {
             let exit_code = classify_error(&err);
             if json_output::is_json_mode() {
@@ -123,11 +123,11 @@ fn run() -> Result<()> {
         Commands::Cache { action } => {
             match action {
                 CacheAction::Clear => {
-                    // Delete .rsbuild directory directly — must work even if the
+                    // Delete .rsconstruct directory directly — must work even if the
                     // database is corrupted and Builder::new() would fail.
-                    let rsbuild_dir = std::path::Path::new(".rsbuild");
-                    if rsbuild_dir.exists() {
-                        fs::remove_dir_all(rsbuild_dir)?;
+                    let rsconstruct_dir = std::path::Path::new(".rsconstruct");
+                    if rsconstruct_dir.exists() {
+                        fs::remove_dir_all(rsconstruct_dir)?;
                     }
                     println!("Cache cleared.");
                 }
@@ -358,7 +358,7 @@ fn run() -> Result<()> {
             builder.tools(action, cli.verbose)?;
         }
         Commands::Version => {
-            println!("rsbuild {} by {}", env!("CARGO_PKG_VERSION"), env!("CARGO_PKG_AUTHORS"));
+            println!("rsconstruct {} by {}", env!("CARGO_PKG_VERSION"), env!("CARGO_PKG_AUTHORS"));
             println!("GIT_DESCRIBE: {}", env!("GIT_DESCRIBE"));
             println!("GIT_SHA: {}", env!("GIT_SHA"));
             println!("GIT_BRANCH: {}", env!("GIT_BRANCH"));
@@ -376,20 +376,20 @@ fn run() -> Result<()> {
     Ok(())
 }
 
-/// Initialize a new rsbuild project in the current directory
+/// Initialize a new rsconstruct project in the current directory
 fn init_project() -> Result<()> {
     let cwd = env::current_dir()?;
-    let config_path = cwd.join("rsbuild.toml");
+    let config_path = cwd.join("rsconstruct.toml");
 
     if config_path.exists() {
-        return Err(RsbuildError::new(
-            RsbuildExitCode::ConfigError,
-            "rsbuild.toml already exists in the current directory",
+        return Err(RsconstructError::new(
+            RsconstructExitCode::ConfigError,
+            "rsconstruct.toml already exists in the current directory",
         ).into());
     }
 
-    // Create rsbuild.toml with commented defaults
-    let config_content = r#"# RSBuild Build Tool Configuration
+    // Create rsconstruct.toml with commented defaults
+    let config_content = r#"# RSConstruct Build Tool Configuration
 
 [build]
 # Number of parallel jobs (1 = sequential, 0 = auto-detect CPU cores)
@@ -524,10 +524,10 @@ fn init_project() -> Result<()> {
     fs::write(&config_path, config_content)?;
     println!("Created {}", config_path.display());
 
-    // Create .rsbuildignore if it doesn't exist
-    let rsbuildignore_path = cwd.join(".rsbuildignore");
-    if !rsbuildignore_path.exists() {
-        let rsbuildignore_content = r#"# .rsbuildignore - Exclude files from rsbuild processing
+    // Create .rsconstructignore if it doesn't exist
+    let rsconstructignore_path = cwd.join(".rsconstructignore");
+    if !rsconstructignore_path.exists() {
+        let rsconstructignore_content = r#"# .rsconstructignore - Exclude files from rsconstruct processing
 # Uses .gitignore syntax (glob patterns, one per line)
 # Lines starting with # are comments
 #
@@ -538,12 +538,12 @@ fn init_project() -> Result<()> {
 # /experiments/     # Exclude experimental code
 # *.bak             # Exclude backup files
 "#;
-        fs::write(&rsbuildignore_path, rsbuildignore_content)?;
-        println!("Created .rsbuildignore");
+        fs::write(&rsconstructignore_path, rsconstructignore_content)?;
+        println!("Created .rsconstructignore");
     }
 
     println!("{}", color::green("Project initialized successfully!"));
-    println!("{}", color::dim("Hint: edit .rsbuildignore to exclude files from processing"));
+    println!("{}", color::dim("Hint: edit .rsconstructignore to exclude files from processing"));
     Ok(())
 }
 

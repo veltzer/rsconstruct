@@ -116,7 +116,7 @@ This provides incremental rebuilds — only changed sources are recompiled.
 
 ### Single Invocation
 
-When `single_invocation = true` in `rsbuild.toml`, programs are built by passing
+When `single_invocation = true` in `rsconstruct.toml`, programs are built by passing
 all sources directly to the compiler in one command. Libraries still use
 compile+link since `ar` requires object files.
 
@@ -136,7 +136,7 @@ extra_inputs = []         # Extra files that trigger rebuilds
 cache_output_dir = true   # Cache entire output directory (default: true)
 ```
 
-Note: The `cc.yaml` manifest settings override the `rsbuild.toml` defaults for
+Note: The `cc.yaml` manifest settings override the `rsconstruct.toml` defaults for
 compiler and flags.
 
 ### Configuration Reference
@@ -162,7 +162,7 @@ Given this project layout:
 
 ```
 myproject/
-  rsbuild.toml
+  rsconstruct.toml
   exercises/
     math/
       cc.yaml
@@ -188,7 +188,7 @@ programs:
     link: [math]
 ```
 
-Running `rsbuild build` produces:
+Running `rsconstruct build` produces:
 
 ```
 out/cc/exercises/math/obj/math/math.o

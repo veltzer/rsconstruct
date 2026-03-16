@@ -179,8 +179,8 @@ impl BuildGraph {
         for output in &outputs {
             if let Some(&existing_id) = self.output_to_product.get(output) {
                 let existing = self.products.get(existing_id).expect(crate::errors::INVALID_PRODUCT_ID);
-                return Err(crate::exit_code::RsbuildError::new(
-                    crate::exit_code::RsbuildExitCode::GraphError,
+                return Err(crate::exit_code::RsconstructError::new(
+                    crate::exit_code::RsconstructExitCode::GraphError,
                     format!(
                         "Output conflict: {} is produced by both [{}] and [{}]",
                         output.display(),
@@ -284,8 +284,8 @@ impl BuildGraph {
         }
 
         if result.len() != self.products.len() {
-            return Err(crate::exit_code::RsbuildError::new(
-                crate::exit_code::RsbuildExitCode::GraphError,
+            return Err(crate::exit_code::RsconstructError::new(
+                crate::exit_code::RsconstructExitCode::GraphError,
                 "Cycle detected in build graph",
             ).into());
         }
@@ -657,7 +657,7 @@ impl BuildGraph {
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>RSBuild Build Graph</title>
+    <title>RSConstruct Build Graph</title>
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <style>
         body {{
@@ -677,7 +677,7 @@ impl BuildGraph {
     </style>
 </head>
 <body>
-    <h1>RSBuild Build Graph</h1>
+    <h1>RSConstruct Build Graph</h1>
     <div class="mermaid">
 {mermaid_content}
     </div>

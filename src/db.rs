@@ -7,11 +7,11 @@ use std::path::Path;
 /// Open or create a redb database.
 ///
 /// If the database file is corrupted, return an error telling the user
-/// to run `rsbuild cache clear` to recreate it.
+/// to run `rsconstruct cache clear` to recreate it.
 pub fn open_or_recreate(db_path: &Path, label: &str) -> Result<Database> {
     Database::create(db_path).with_context(|| {
         format!(
-            "{} is corrupted: {}\nRun `rsbuild cache clear` to delete it and rebuild.",
+            "{} is corrupted: {}\nRun `rsconstruct cache clear` to delete it and rebuild.",
             label,
             db_path.display()
         )

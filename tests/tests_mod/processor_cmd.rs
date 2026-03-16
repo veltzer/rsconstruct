@@ -1,13 +1,13 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{setup_test_project, run_rsbuild_with_env, run_rsbuild_json_with_env};
+use crate::common::{setup_test_project, run_rsconstruct_with_env, run_rsconstruct_json_with_env};
 
 #[test]
 fn processors_list_shows_enabled() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output = run_rsbuild_with_env(project_path, &["processors", "list"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["processors", "list"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "processors list failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -20,7 +20,7 @@ fn processors_list_shows_disabled() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output = run_rsbuild_with_env(project_path, &["processors", "list"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["processors", "list"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -39,7 +39,7 @@ fn processors_auto_detects_tera() {
         "hello"
     ).expect("Failed to write template");
 
-    let output = run_rsbuild_with_env(project_path, &["processors", "list"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["processors", "list"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "processors list failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -62,7 +62,7 @@ fn processors_files_shows_products() {
         "{% set c = load_python(path='config/test.py') %}{{ c.value }}"
     ).expect("Failed to write template");
 
-    let output = run_rsbuild_with_env(project_path, &["processors", "files"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["processors", "files"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "processors files failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -76,7 +76,7 @@ fn processors_files_no_files_message() {
     let project_path = temp_dir.path();
 
     // No template files written, so no products
-    let output = run_rsbuild_with_env(project_path, &["processors", "files"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["processors", "files"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -89,7 +89,7 @@ fn processors_files_unknown_processor_fails() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output = run_rsbuild_with_env(project_path, &["processors", "files", "nonexistent"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["processors", "files", "nonexistent"], &[("NO_COLOR", "1")]);
     assert!(!output.status.success(), "Expected failure for unknown processor");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -101,7 +101,7 @@ fn processors_list_shows_descriptions() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output = run_rsbuild_with_env(project_path, &["processors", "list"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["processors", "list"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "processors list failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -125,7 +125,7 @@ fn processors_files_json_output() {
         "{% set c = load_python(path='config/test.py') %}{{ c.value }}"
     ).expect("Failed to write template");
 
-    let output = run_rsbuild_with_env(project_path, &["--json", "processors", "files"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["--json", "processors", "files"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "processors files --json failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -148,7 +148,7 @@ fn processors_files_json_empty() {
     let project_path = temp_dir.path();
 
     // No template files written, so no products
-    let output = run_rsbuild_with_env(project_path, &["--json", "processors", "files"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["--json", "processors", "files"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -159,11 +159,11 @@ fn processors_files_json_empty() {
 
 #[test]
 fn processors_list_works_without_config() {
-    // Run from a temp dir with no rsbuild.toml
+    // Run from a temp dir with no rsconstruct.toml
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
 
-    let output = run_rsbuild_with_env(temp_dir.path(), &["processors", "list"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "processors list should work without rsbuild.toml: {}", String::from_utf8_lossy(&output.stderr));
+    let output = run_rsconstruct_with_env(temp_dir.path(), &["processors", "list"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(), "processors list should work without rsconstruct.toml: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("tera"), "Expected tera processor in output");
@@ -182,19 +182,19 @@ fn per_processor_enabled_false_disables_processor() {
 
     // Enable sleep in the enabled list but disable it via per-processor config
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"sleep\"]\n\n[processor.sleep]\nenabled = false\n"
     ).unwrap();
 
     // processors list --all should show sleep as disabled (sleep is hidden, needs --all)
-    let output = run_rsbuild_with_env(project_path, &["processors", "list", "--all"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["processors", "list", "--all"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("sleep"), "Expected sleep in processor list");
     assert!(stdout.contains("disabled"), "Expected sleep to show as disabled");
 
     // Build should produce zero products (sleep is disabled)
-    let result = run_rsbuild_json_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let result = run_rsconstruct_json_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(result.exit_success, "Build should succeed");
     assert_eq!(result.total_products, 0, "Expected 0 products when processor is disabled");
 }
@@ -210,12 +210,12 @@ fn per_processor_enabled_true_is_default() {
 
     // Enable sleep in the enabled list without setting per-processor enabled
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
     // Build should produce one product (sleep defaults to enabled = true)
-    let result = run_rsbuild_json_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let result = run_rsconstruct_json_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(result.exit_success, "Build should succeed");
     assert_eq!(result.total_products, 1, "Expected 1 product when processor defaults to enabled");
 }
@@ -225,7 +225,7 @@ fn processors_list_json() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output = run_rsbuild_with_env(project_path, &["--json", "processors", "list"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["--json", "processors", "list"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "processors list --json failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -253,7 +253,7 @@ fn processors_list_json() {
 fn processors_list_all_json_without_config() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
 
-    let output = run_rsbuild_with_env(temp_dir.path(), &["--json", "processors", "list", "--all"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(temp_dir.path(), &["--json", "processors", "list", "--all"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "processors list --all --json failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -288,19 +288,19 @@ fn per_processor_enabled_false_non_hidden_processor() {
 
     // Enable tera in the enabled list but disable it via per-processor config
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"tera\"]\n\n[processor.tera]\nenabled = false\n"
     ).unwrap();
 
     // processors list (no --all needed, tera is not hidden) should show tera as disabled
-    let output = run_rsbuild_with_env(project_path, &["processors", "list"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["processors", "list"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     let tera_line = stdout.lines().find(|l| l.contains("tera")).expect("Expected tera in processor list");
     assert!(tera_line.contains("disabled"), "Expected tera to show as disabled, got: {}", tera_line);
 
     // Build should produce zero products (tera is disabled despite being in enabled list)
-    let result = run_rsbuild_json_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let result = run_rsconstruct_json_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(result.exit_success, "Build should succeed");
     assert_eq!(result.total_products, 0, "Expected 0 products when tera is disabled via per-processor config");
 }

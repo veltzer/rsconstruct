@@ -1,5 +1,5 @@
 use std::fs;
-use crate::common::{setup_test_project, run_rsbuild_with_env, run_rsbuild};
+use crate::common::{setup_test_project, run_rsconstruct_with_env, run_rsconstruct};
 
 #[test]
 fn explain_first_build() {
@@ -9,11 +9,11 @@ fn explain_first_build() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/explain_first.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build", "--explain"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build", "--explain"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "build failed: {}", String::from_utf8_lossy(&output.stderr));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("BUILD"), "Expected BUILD in explain output, got: {}", stdout);
@@ -28,16 +28,16 @@ fn explain_incremental_skip() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/explain_skip.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
     // First build
-    let output = run_rsbuild(project_path, &["build"]);
+    let output = run_rsconstruct(project_path, &["build"]);
     assert!(output.status.success());
 
     // Second build with explain
-    let output = run_rsbuild_with_env(project_path, &["build", "--explain"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build", "--explain"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("SKIP"), "Expected SKIP in explain output, got: {}", stdout);
@@ -52,19 +52,19 @@ fn explain_input_change() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/explain_change.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
     // First build
-    let output = run_rsbuild(project_path, &["build"]);
+    let output = run_rsconstruct(project_path, &["build"]);
     assert!(output.status.success());
 
     // Modify the input
     fs::write(project_path.join("sleep/explain_change.sleep"), "0.02").unwrap();
 
     // Second build with explain
-    let output = run_rsbuild_with_env(project_path, &["build", "--explain"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build", "--explain"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("BUILD"), "Expected BUILD in explain output, got: {}", stdout);
@@ -79,16 +79,16 @@ fn explain_force() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/explain_force.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
     // First build
-    let output = run_rsbuild(project_path, &["build"]);
+    let output = run_rsconstruct(project_path, &["build"]);
     assert!(output.status.success());
 
     // Force build with explain
-    let output = run_rsbuild_with_env(project_path, &["build", "--force", "--explain"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build", "--force", "--explain"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("BUILD"), "Expected BUILD in explain output, got: {}", stdout);
@@ -107,15 +107,15 @@ fn explain_after_clean() {
     ).unwrap();
 
     // First build
-    let output = run_rsbuild(project_path, &["build"]);
+    let output = run_rsconstruct(project_path, &["build"]);
     assert!(output.status.success());
 
     // Clean outputs
-    let output = run_rsbuild(project_path, &["clean"]);
+    let output = run_rsconstruct(project_path, &["clean"]);
     assert!(output.status.success());
 
     // Build with explain — should show RESTORE
-    let output = run_rsbuild_with_env(project_path, &["build", "--explain"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build", "--explain"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("RESTORE"), "Expected RESTORE in explain output, got: {}", stdout);
@@ -130,12 +130,12 @@ fn explain_dry_run() {
     fs::create_dir_all(project_path.join("sleep")).unwrap();
     fs::write(project_path.join("sleep/explain_dry.sleep"), "0.01").unwrap();
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"sleep\"]\n"
     ).unwrap();
 
     // Dry run with explain on first build
-    let output = run_rsbuild_with_env(project_path, &["build", "--dry-run", "--explain"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build", "--dry-run", "--explain"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("BUILD"), "Expected BUILD in explain dry-run output, got: {}", stdout);

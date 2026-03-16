@@ -1,12 +1,12 @@
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsbuild_with_env, run_rsbuild_json};
+use crate::common::{run_rsconstruct_with_env, run_rsconstruct_json};
 
 /// Helper: set up a project with the cc processor enabled and a cc.yaml file.
 fn setup_cc_project(project_path: &std::path::Path, cc_yaml: &str) {
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"cc\"]\n",
     ).unwrap();
     fs::write(project_path.join("cc.yaml"), cc_yaml).unwrap();
@@ -19,11 +19,11 @@ fn cc_no_project_discovered() {
 
     // Enable cc processor but don't create cc.yaml
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"cc\"]\n",
     ).unwrap();
 
-    let result = run_rsbuild_json(project_path, &["build"]);
+    let result = run_rsconstruct_json(project_path, &["build"]);
     assert!(result.exit_success, "Build should succeed with no cc.yaml");
     assert_eq!(result.total_products, 0, "No products should be discovered");
 }
@@ -45,7 +45,7 @@ libraries:
         "int add(int a, int b) { return a + b; }\n",
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -72,7 +72,7 @@ libraries:
         "int add(int a, int b) { return a + b; }\n",
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -111,7 +111,7 @@ int main() { return add(1, 2) - 3; }
 "#,
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -147,13 +147,13 @@ programs:
     ).unwrap();
 
     // First build
-    let output1 = run_rsbuild_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let output1 = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(stdout1.contains("Processing:"), "First build should process: {}", stdout1);
 
     // Second build - should skip
-    let output2 = run_rsbuild_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("[cc] Skipping (unchanged):"), "Second build should skip: {}", stdout2);
@@ -166,7 +166,7 @@ fn cc_single_invocation_mode() {
 
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
-        project_path.join("rsbuild.toml"),
+        project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"cc\"]\n\n[processor.cc]\nsingle_invocation = true\n",
     ).unwrap();
     fs::write(
@@ -182,7 +182,7 @@ programs:
         "#include <stdio.h>\nint main() { printf(\"hello\\n\"); return 0; }\n",
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build with single_invocation failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -209,7 +209,7 @@ libraries:
         "int helper() { return 42; }\n",
     ).unwrap();
 
-    let output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "Build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
@@ -238,12 +238,12 @@ programs:
     ).unwrap();
 
     // Build
-    let build_output = run_rsbuild_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let build_output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(build_output.status.success());
     assert!(project_path.join("out/cc/bin/hello").exists());
 
     // Clean
-    let clean_output = run_rsbuild_with_env(project_path, &["clean", "outputs"], &[("NO_COLOR", "1")]);
+    let clean_output = run_rsconstruct_with_env(project_path, &["clean", "outputs"], &[("NO_COLOR", "1")]);
     assert!(clean_output.status.success());
     assert!(!project_path.join("out/cc/bin/hello").exists(),
         "Output should be removed after clean");
