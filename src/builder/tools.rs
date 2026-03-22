@@ -28,84 +28,14 @@ fn tool_runtime(tool: &str) -> &'static str {
     }
 }
 
-/// Install a specific tool by name (works without rsconstruct.toml).
-pub fn install_tool_no_config(name: &str, yes: bool) -> Result<()> {
-    let cmd = match crate::processors::tool_install_command(name) {
-        Some(cmd) => cmd,
-        None => {
-            eprintln!("{}: Installation procedure still not setup for '{}'", color::red("Error"), name);
-            return Err(crate::exit_code::RsconstructError::new(
-                crate::exit_code::RsconstructExitCode::ToolError,
-                format!("No install command known for tool '{}'", name),
-            ).into());
-        }
-    };
-
-    println!("The following tools will be installed:");
-    println!("  {} \u{2014} {}", color::bold(name), color::dim(cmd));
-
-    if !yes {
-        print!("Proceed? [y/N] ");
-        std::io::Write::flush(&mut std::io::stdout())?;
-        let mut answer = String::new();
-        std::io::stdin().read_line(&mut answer)?;
-        let answer = answer.trim().to_lowercase();
-        if answer != "y" && answer != "yes" {
-            println!("Aborted.");
-            return Ok(());
-        }
-    }
-
-    println!("Installing {} \u{2014} running: {}", color::bold(name), color::dim(cmd));
-    let status = Command::new("sh")
-        .arg("-c")
-        .arg(cmd)
-        .status()?;
-    if status.success() {
-        println!("{} {}", name, color::green("installed"));
-    } else {
-        return Err(crate::exit_code::RsconstructError::new(
-            crate::exit_code::RsconstructExitCode::ToolError,
-            format!("Failed to install '{}'", name),
-        ).into());
-    }
-    Ok(())
-}
-
-/// List all required external tools (works without rsconstruct.toml).
-pub fn list_tools_no_config(all: bool) -> Result<()> {
+/// Handle `rsconstruct tools` subcommands without a project config.
+/// Uses default processor configs so List, Stats, Install, and Graph work
+/// even outside a project directory.
+pub fn tools_no_config(action: ToolsAction, verbose: bool) -> Result<()> {
     let mut cfg = crate::config::ProcessorConfig::default();
     cfg.resolve_scan_defaults();
     let processors = super::create_builtin_processors(&cfg);
-
-    let mut tool_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for name in sorted_keys(&processors) {
-        if !all && !cfg.is_enabled(name) {
-            continue;
-        }
-        for tool in processors[name].required_tools() {
-            let procs = tool_map.entry(tool).or_default();
-            if !procs.contains(name) {
-                procs.push(name.clone());
-            }
-        }
-    }
-
-    if crate::json_output::is_json_mode() {
-        let entries: Vec<json_output::ToolListEntry> = tool_map.iter()
-            .map(|(tool, procs)| json_output::ToolListEntry {
-                tool: tool.clone(),
-                processors: procs.clone(),
-            })
-            .collect();
-        println!("{}", serde_json::to_string_pretty(&entries)?);
-        return Ok(());
-    }
-
-    for (tool, procs) in &tool_map {
-        println!("{} ({})", tool, procs.join(", "));
-    }
-    Ok(())
+    run_tools_command(&processors, &|name| cfg.is_enabled(name), action, verbose, None)
 }
 
 impl Builder {
@@ -127,281 +57,290 @@ impl Builder {
     /// Handle `rsconstruct tools` subcommands
     pub fn tools(&self, action: ToolsAction, verbose: bool) -> Result<()> {
         let processors = self.create_processors()?;
+        let config = &self.config;
+        run_tools_command(
+            &processors,
+            &|name| config.processor.is_enabled(name),
+            action,
+            verbose,
+            Some(self),
+        )
+    }
+}
 
-        let show_all = matches!(&action, ToolsAction::List { all: true });
-        let install_yes = matches!(&action, ToolsAction::Install { yes: true, .. });
+/// Core implementation for `tools` subcommands, shared by `Builder::tools()` and `tools_no_config()`.
+/// `builder` is `Some` when running with a project config (needed for `open_file`, `Check`, `Lock`).
+fn run_tools_command(
+    processors: &crate::processors::ProcessorMap,
+    is_enabled: &dyn Fn(&str) -> bool,
+    action: ToolsAction,
+    verbose: bool,
+    builder: Option<&Builder>,
+) -> Result<()> {
+    let show_all = matches!(&action, ToolsAction::List { all: true });
+    let install_yes = matches!(&action, ToolsAction::Install { yes: true, .. });
 
-        let mut tool_map: std::collections::BTreeMap<String, Vec<String>> = std::collections::BTreeMap::new();
-        for name in sorted_keys(&processors) {
-            if !show_all && !self.config.processor.is_enabled(name) {
-                continue;
-            }
-            for tool in processors[name].required_tools() {
-                let procs = tool_map.entry(tool).or_default();
-                if !procs.contains(name) {
-                    procs.push(name.clone());
-                }
+    let mut tool_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for name in sorted_keys(processors) {
+        if !show_all && !is_enabled(name) {
+            continue;
+        }
+        for tool in processors[name].required_tools() {
+            let procs = tool_map.entry(tool).or_default();
+            if !procs.contains(name) {
+                procs.push(name.clone());
             }
         }
+    }
 
-        // Build install map from the central tool_install_command registry
-        let install_map: std::collections::BTreeMap<String, Option<String>> = tool_map.keys()
-            .map(|tool| {
-                let cmd = crate::processors::tool_install_command(tool)
-                    .map(|s| s.to_string());
-                (tool.clone(), cmd)
-            })
-            .collect();
+    let install_map: BTreeMap<String, Option<String>> = tool_map.keys()
+        .map(|tool| {
+            let cmd = crate::processors::tool_install_command(tool)
+                .map(|s| s.to_string());
+            (tool.clone(), cmd)
+        })
+        .collect();
 
-        match action {
-            ToolsAction::List { .. } => {
-                if crate::json_output::is_json_mode() {
-                    let entries: Vec<crate::json_output::ToolListEntry> = tool_map.iter()
-                        .map(|(tool, procs)| crate::json_output::ToolListEntry {
-                            tool: tool.clone(),
-                            processors: procs.clone(),
-                        })
-                        .collect();
-                    println!("{}", serde_json::to_string_pretty(&entries)?);
-                    return Ok(());
-                }
-
-                for (tool, procs) in &tool_map {
-                    println!("{} ({})", tool, procs.join(", "));
-                }
-            }
-            ToolsAction::Check => {
-                let config = &self.config;
-                let tool_commands = tool_lock::collect_tool_commands(
-                    &processors,
-                    &|name| config.processor.is_enabled(name),
-                );
-                tool_lock::verify_lock_file(&tool_commands)?;
-                if verbose {
-                    let lock = tool_lock::read_lock_file()?;
-                    if let Some(lock) = lock {
-                        for (name, info) in &lock.tools {
-                            let version = tool_lock::extract_semver(&info.version_output).unwrap_or("?");
-                            println!("{} {} {}", name, color::green("ok"), color::dim(version));
-                        }
-                    }
-                }
-                println!("{}", color::green("Tool versions match lock file."));
-            }
-            ToolsAction::Lock => {
-                let config = &self.config;
-                let tool_commands = tool_lock::collect_tool_commands(
-                    &processors,
-                    &|name| config.processor.is_enabled(name),
-                );
-                let lock = tool_lock::create_lock(&tool_commands)?;
-                for (name, info) in &lock.tools {
-                    let version = tool_lock::extract_semver(&info.version_output).unwrap_or("?");
-                    println!("{} {} {}", name, color::green("locked"), color::dim(version));
-                }
-                tool_lock::write_lock_file(&lock)?;
-                println!("Wrote {}", color::bold(".tools.versions"));
-            }
-            ToolsAction::Graph { format, view } => {
-                if view {
-                    let html_content = tools_graph_html(&tool_map);
-                    let html_path = std::env::temp_dir().join("rsconstruct_tools_graph.html");
-                    std::fs::write(&html_path, html_content)
-                        .map_err(|e| anyhow::anyhow!("Failed to write HTML file: {}", e))?;
-                    self.open_file(&html_path)?;
-                    println!("Opened tools graph in browser: {}", html_path.display());
-                } else {
-                    let output = match format {
-                        GraphFormat::Dot => tools_graph_dot(&tool_map),
-                        GraphFormat::Mermaid => tools_graph_mermaid(&tool_map),
-                        GraphFormat::Text => tools_graph_text(&tool_map),
-                        GraphFormat::Json => tools_graph_json(&tool_map)?,
-                        GraphFormat::Svg => tools_graph_svg(&tool_map)?,
-                    };
-                    println!("{}", output);
-                }
-            }
-            ToolsAction::Stats => {
-                // Collect per-tool info
-                let mut tool_stats: Vec<json_output::ToolStat> = Vec::new();
-                for (tool, procs) in &tool_map {
-                    let installed = which::which(tool).is_ok();
-                    let runtime = tool_runtime(tool).to_string();
-                    let install_command = crate::processors::tool_install_command(tool)
-                        .map(|s| s.to_string());
-                    tool_stats.push(json_output::ToolStat {
-                        name: tool.clone(),
-                        installed,
-                        runtime,
+    match action {
+        ToolsAction::List { .. } => {
+            if crate::json_output::is_json_mode() {
+                let entries: Vec<json_output::ToolListEntry> = tool_map.iter()
+                    .map(|(tool, procs)| json_output::ToolListEntry {
+                        tool: tool.clone(),
                         processors: procs.clone(),
-                        install_command,
-                    });
-                }
-
-                // Build runtime summary
-                let mut runtime_map: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
-                for stat in &tool_stats {
-                    let entry = runtime_map.entry(tool_runtime(&stat.name)).or_insert((0, 0));
-                    entry.0 += 1;
-                    if stat.installed {
-                        entry.1 += 1;
-                    }
-                }
-                let runtime_stats: Vec<json_output::RuntimeStat> = runtime_map
-                    .iter()
-                    .map(|(runtime, (total, installed))| json_output::RuntimeStat {
-                        runtime: runtime.to_string(),
-                        total: *total,
-                        installed: *installed,
-                        missing: total - installed,
                     })
                     .collect();
+                println!("{}", serde_json::to_string_pretty(&entries)?);
+                return Ok(());
+            }
 
-                let total_tools = tool_stats.len();
-                let installed_count = tool_stats.iter().filter(|t| t.installed).count();
-                let missing_count = total_tools - installed_count;
-
-                if crate::json_output::is_json_mode() {
-                    let output = json_output::ToolStatsOutput {
-                        tools: tool_stats,
-                        runtimes: runtime_stats,
-                        summary: json_output::StatsSummary {
-                            total_tools,
-                            installed: installed_count,
-                            missing: missing_count,
-                        },
-                    };
-                    println!("{}", serde_json::to_string_pretty(&output)?);
-                } else {
-                    // Human-readable output
-                    println!("Tools:");
-                    let max_name = tool_stats.iter().map(|t| t.name.len()).max().unwrap_or(0);
-                    for stat in &tool_stats {
-                        let status = if stat.installed {
-                            color::green("\u{2713}")
-                        } else {
-                            color::red("\u{2717}")
-                        };
-                        let procs = stat.processors.join(", ");
-                        let install = stat.install_command.as_deref()
-                            .map(|c| format!("  ({})", color::dim(c)))
-                            .unwrap_or_default();
-                        println!("  {:width$}  {}  {}{}", stat.name, status, procs, install, width = max_name);
-                    }
-
-                    // Runtime summary
-                    println!();
-                    println!("Runtime summary:");
-                    let runtime_display: &[(&str, &str)] = &[
-                        ("python", "Python"),
-                        ("node", "Node.js"),
-                        ("ruby", "Ruby"),
-                        ("rust", "Rust"),
-                        ("perl", "Perl"),
-                        ("system", "System"),
-                    ];
-                    for (key, label) in runtime_display {
-                        if let Some(rs) = runtime_stats.iter().find(|r| r.runtime == *key) {
-                            let line = format!("  {:10}{}/{} installed", label, rs.installed, rs.total);
-                            if rs.missing > 0 {
-                                println!("{}", color::yellow(&line));
-                            } else {
-                                println!("{}", color::green(&line));
-                            }
-                        }
-                    }
-
-                    println!();
-                    let total_line = format!("Total: {}/{} tools installed", installed_count, total_tools);
-                    if missing_count > 0 {
-                        println!("{}", color::yellow(&total_line));
-                    } else {
-                        println!("{}", color::green(&total_line));
+            for (tool, procs) in &tool_map {
+                println!("{} ({})", tool, procs.join(", "));
+            }
+        }
+        ToolsAction::Check => {
+            let tool_commands = tool_lock::collect_tool_commands(processors, is_enabled);
+            tool_lock::verify_lock_file(&tool_commands)?;
+            if verbose {
+                let lock = tool_lock::read_lock_file()?;
+                if let Some(lock) = lock {
+                    for (name, info) in &lock.tools {
+                        let version = tool_lock::extract_semver(&info.version_output).unwrap_or("?");
+                        println!("{} {} {}", name, color::green("ok"), color::dim(version));
                     }
                 }
             }
-            ToolsAction::Install { name, .. } => {
-                let to_install: Vec<(String, String)> = if let Some(ref name) = name {
-                    match crate::processors::tool_install_command(name) {
-                        Some(cmd) => vec![(name.clone(), cmd.to_string())],
-                        None => {
-                            eprintln!("{}: Installation procedure still not setup for '{}'", color::red("Error"), name);
-                            return Err(crate::exit_code::RsconstructError::new(
-                                crate::exit_code::RsconstructExitCode::ToolError,
-                                format!("No install command known for tool '{}'", name),
-                            ).into());
-                        }
-                    }
+            println!("{}", color::green("Tool versions match lock file."));
+        }
+        ToolsAction::Lock => {
+            let tool_commands = tool_lock::collect_tool_commands(processors, is_enabled);
+            let lock = tool_lock::create_lock(&tool_commands)?;
+            for (name, info) in &lock.tools {
+                let version = tool_lock::extract_semver(&info.version_output).unwrap_or("?");
+                println!("{} {} {}", name, color::green("locked"), color::dim(version));
+            }
+            tool_lock::write_lock_file(&lock)?;
+            println!("Wrote {}", color::bold(".tools.versions"));
+        }
+        ToolsAction::Graph { format, view } => {
+            if view {
+                let html_content = tools_graph_html(&tool_map);
+                let html_path = std::env::temp_dir().join("rsconstruct_tools_graph.html");
+                std::fs::write(&html_path, &html_content)
+                    .map_err(|e| anyhow::anyhow!("Failed to write HTML file: {}", e))?;
+                if let Some(b) = builder {
+                    b.open_file(&html_path)?;
+                    println!("Opened tools graph in browser: {}", html_path.display());
                 } else {
-                    let mut missing = Vec::new();
-                    let mut any_unknown = false;
-                    for tool in tool_map.keys() {
-                        if which::which(tool).is_err() {
-                            match install_map.get(tool).and_then(|c| c.as_ref()) {
-                                Some(cmd) => missing.push((tool.clone(), cmd.clone())),
-                                None => {
-                                    eprintln!("{}: Installation procedure still not setup for '{}'", color::red("Error"), tool);
-                                    any_unknown = true;
-                                }
-                            }
+                    println!("Wrote tools graph to: {}", html_path.display());
+                }
+            } else {
+                let output = match format {
+                    GraphFormat::Dot => tools_graph_dot(&tool_map),
+                    GraphFormat::Mermaid => tools_graph_mermaid(&tool_map),
+                    GraphFormat::Text => tools_graph_text(&tool_map),
+                    GraphFormat::Json => tools_graph_json(&tool_map)?,
+                    GraphFormat::Svg => tools_graph_svg(&tool_map)?,
+                };
+                println!("{}", output);
+            }
+        }
+        ToolsAction::Stats => {
+            let mut tool_stats: Vec<json_output::ToolStat> = Vec::new();
+            for (tool, procs) in &tool_map {
+                let installed = which::which(tool).is_ok();
+                let runtime = tool_runtime(tool).to_string();
+                let install_command = crate::processors::tool_install_command(tool)
+                    .map(|s| s.to_string());
+                tool_stats.push(json_output::ToolStat {
+                    name: tool.clone(),
+                    installed,
+                    runtime,
+                    processors: procs.clone(),
+                    install_command,
+                });
+            }
+
+            let mut runtime_map: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
+            for stat in &tool_stats {
+                let entry = runtime_map.entry(tool_runtime(&stat.name)).or_insert((0, 0));
+                entry.0 += 1;
+                if stat.installed {
+                    entry.1 += 1;
+                }
+            }
+            let runtime_stats: Vec<json_output::RuntimeStat> = runtime_map
+                .iter()
+                .map(|(runtime, (total, installed))| json_output::RuntimeStat {
+                    runtime: runtime.to_string(),
+                    total: *total,
+                    installed: *installed,
+                    missing: total - installed,
+                })
+                .collect();
+
+            let total_tools = tool_stats.len();
+            let installed_count = tool_stats.iter().filter(|t| t.installed).count();
+            let missing_count = total_tools - installed_count;
+
+            if crate::json_output::is_json_mode() {
+                let output = json_output::ToolStatsOutput {
+                    tools: tool_stats,
+                    runtimes: runtime_stats,
+                    summary: json_output::StatsSummary {
+                        total_tools,
+                        installed: installed_count,
+                        missing: missing_count,
+                    },
+                };
+                println!("{}", serde_json::to_string_pretty(&output)?);
+            } else {
+                println!("Tools:");
+                let max_name = tool_stats.iter().map(|t| t.name.len()).max().unwrap_or(0);
+                for stat in &tool_stats {
+                    let status = if stat.installed {
+                        color::green("\u{2713}")
+                    } else {
+                        color::red("\u{2717}")
+                    };
+                    let procs = stat.processors.join(", ");
+                    let install = stat.install_command.as_deref()
+                        .map(|c| format!("  ({})", color::dim(c)))
+                        .unwrap_or_default();
+                    println!("  {:width$}  {}  {}{}", stat.name, status, procs, install, width = max_name);
+                }
+
+                println!();
+                println!("Runtime summary:");
+                let runtime_display: &[(&str, &str)] = &[
+                    ("python", "Python"),
+                    ("node", "Node.js"),
+                    ("ruby", "Ruby"),
+                    ("rust", "Rust"),
+                    ("perl", "Perl"),
+                    ("system", "System"),
+                ];
+                for (key, label) in runtime_display {
+                    if let Some(rs) = runtime_stats.iter().find(|r| r.runtime == *key) {
+                        let line = format!("  {:10}{}/{} installed", label, rs.installed, rs.total);
+                        if rs.missing > 0 {
+                            println!("{}", color::yellow(&line));
+                        } else {
+                            println!("{}", color::green(&line));
                         }
                     }
-                    if any_unknown {
-                        return Err(crate::exit_code::RsconstructError::new(
-                            crate::exit_code::RsconstructExitCode::ToolError,
-                            "Some tools have no known install procedure",
-                        ).into());
-                    }
-                    if missing.is_empty() {
-                        println!("{}", color::green("All tools are already installed."));
-                        return Ok(());
-                    }
-                    missing
-                };
-
-                println!("The following tools will be installed:");
-                for (tool, cmd) in &to_install {
-                    println!("  {} \u{2014} {}", color::bold(tool), color::dim(cmd));
                 }
 
-                if !install_yes {
-                    print!("Proceed? [y/N] ");
-                    std::io::stdout().flush()?;
-                    let mut answer = String::new();
-                    std::io::stdin().read_line(&mut answer)?;
-                    let answer = answer.trim().to_lowercase();
-                    if answer != "y" && answer != "yes" {
-                        println!("Aborted.");
-                        return Ok(());
-                    }
-                }
-
-                let mut any_failed = false;
-                for (tool, cmd) in &to_install {
-                    println!("Installing {} \u{2014} running: {}", color::bold(tool), color::dim(cmd));
-                    let status = Command::new("sh")
-                        .arg("-c")
-                        .arg(cmd)
-                        .status()?;
-                    if status.success() {
-                        println!("{} {}", tool, color::green("installed"));
-                    } else {
-                        println!("{} {} (exit code {})", tool, color::red("failed"),
-                            status.code().map_or("unknown".to_string(), |c| c.to_string()));
-                        any_failed = true;
-                    }
-                }
-                if any_failed {
-                    return Err(crate::exit_code::RsconstructError::new(
-                        crate::exit_code::RsconstructExitCode::ToolError,
-                        "Some tools failed to install",
-                    ).into());
+                println!();
+                let total_line = format!("Total: {}/{} tools installed", installed_count, total_tools);
+                if missing_count > 0 {
+                    println!("{}", color::yellow(&total_line));
+                } else {
+                    println!("{}", color::green(&total_line));
                 }
             }
         }
+        ToolsAction::Install { name, .. } => {
+            let to_install: Vec<(String, String)> = if let Some(ref name) = name {
+                match crate::processors::tool_install_command(name) {
+                    Some(cmd) => vec![(name.clone(), cmd.to_string())],
+                    None => {
+                        eprintln!("{}: Installation procedure still not setup for '{}'", color::red("Error"), name);
+                        return Err(crate::exit_code::RsconstructError::new(
+                            crate::exit_code::RsconstructExitCode::ToolError,
+                            format!("No install command known for tool '{}'", name),
+                        ).into());
+                    }
+                }
+            } else {
+                let mut missing = Vec::new();
+                let mut any_unknown = false;
+                for tool in tool_map.keys() {
+                    if which::which(tool).is_err() {
+                        match install_map.get(tool).and_then(|c| c.as_ref()) {
+                            Some(cmd) => missing.push((tool.clone(), cmd.clone())),
+                            None => {
+                                eprintln!("{}: Installation procedure still not setup for '{}'", color::red("Error"), tool);
+                                any_unknown = true;
+                            }
+                        }
+                    }
+                }
+                if any_unknown {
+                    return Err(crate::exit_code::RsconstructError::new(
+                        crate::exit_code::RsconstructExitCode::ToolError,
+                        "Some tools have no known install procedure",
+                    ).into());
+                }
+                if missing.is_empty() {
+                    println!("{}", color::green("All tools are already installed."));
+                    return Ok(());
+                }
+                missing
+            };
 
-        Ok(())
+            println!("The following tools will be installed:");
+            for (tool, cmd) in &to_install {
+                println!("  {} \u{2014} {}", color::bold(tool), color::dim(cmd));
+            }
+
+            if !install_yes {
+                print!("Proceed? [y/N] ");
+                std::io::stdout().flush()?;
+                let mut answer = String::new();
+                std::io::stdin().read_line(&mut answer)?;
+                let answer = answer.trim().to_lowercase();
+                if answer != "y" && answer != "yes" {
+                    println!("Aborted.");
+                    return Ok(());
+                }
+            }
+
+            let mut any_failed = false;
+            for (tool, cmd) in &to_install {
+                println!("Installing {} \u{2014} running: {}", color::bold(tool), color::dim(cmd));
+                let status = Command::new("sh")
+                    .arg("-c")
+                    .arg(cmd)
+                    .status()?;
+                if status.success() {
+                    println!("{} {}", tool, color::green("installed"));
+                } else {
+                    println!("{} {} (exit code {})", tool, color::red("failed"),
+                        status.code().map_or("unknown".to_string(), |c| c.to_string()));
+                    any_failed = true;
+                }
+            }
+            if any_failed {
+                return Err(crate::exit_code::RsconstructError::new(
+                    crate::exit_code::RsconstructExitCode::ToolError,
+                    "Some tools failed to install",
+                ).into());
+            }
+        }
     }
+
+    Ok(())
 }
 
 /// Sanitize a name for use as a DOT node identifier

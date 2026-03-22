@@ -357,25 +357,13 @@ fn run() -> Result<()> {
             }
         }
         Commands::Tools { action } => {
-            match action {
-                cli::ToolsAction::List { all } => {
-                    match Builder::new() {
-                        Ok(builder) => builder.tools(cli::ToolsAction::List { all }, cli.verbose)?,
-                        Err(_) => builder::tools::list_tools_no_config(all)?,
-                    }
-                }
-                cli::ToolsAction::Install { name: Some(ref name), yes } => {
-                    // Installing a specific tool by name works without a project config
-                    // since install commands come from the global registry.
-                    match Builder::new() {
-                        Ok(builder) => builder.tools(cli::ToolsAction::Install { name: Some(name.clone()), yes }, cli.verbose)?,
-                        Err(_) => builder::tools::install_tool_no_config(name, yes)?,
-                    }
-                }
-                action => {
-                    let builder = Builder::new()?;
-                    builder.tools(action, cli.verbose)?;
-                }
+            // Check, Lock require a project config (they use lock files).
+            // All other subcommands can fall back to default config.
+            let needs_project = matches!(action, cli::ToolsAction::Check | cli::ToolsAction::Lock);
+            match Builder::new() {
+                Ok(builder) => builder.tools(action, cli.verbose)?,
+                Err(e) if needs_project => return Err(e),
+                Err(_) => builder::tools::tools_no_config(action, cli.verbose)?,
             }
         }
         Commands::Version => {
