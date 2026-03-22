@@ -28,6 +28,50 @@ fn tool_runtime(tool: &str) -> &'static str {
     }
 }
 
+/// Install a specific tool by name (works without rsconstruct.toml).
+pub fn install_tool_no_config(name: &str, yes: bool) -> Result<()> {
+    let cmd = match crate::processors::tool_install_command(name) {
+        Some(cmd) => cmd,
+        None => {
+            eprintln!("{}: Installation procedure still not setup for '{}'", color::red("Error"), name);
+            return Err(crate::exit_code::RsconstructError::new(
+                crate::exit_code::RsconstructExitCode::ToolError,
+                format!("No install command known for tool '{}'", name),
+            ).into());
+        }
+    };
+
+    println!("The following tools will be installed:");
+    println!("  {} \u{2014} {}", color::bold(name), color::dim(cmd));
+
+    if !yes {
+        print!("Proceed? [y/N] ");
+        std::io::Write::flush(&mut std::io::stdout())?;
+        let mut answer = String::new();
+        std::io::stdin().read_line(&mut answer)?;
+        let answer = answer.trim().to_lowercase();
+        if answer != "y" && answer != "yes" {
+            println!("Aborted.");
+            return Ok(());
+        }
+    }
+
+    println!("Installing {} \u{2014} running: {}", color::bold(name), color::dim(cmd));
+    let status = Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .status()?;
+    if status.success() {
+        println!("{} {}", name, color::green("installed"));
+    } else {
+        return Err(crate::exit_code::RsconstructError::new(
+            crate::exit_code::RsconstructExitCode::ToolError,
+            format!("Failed to install '{}'", name),
+        ).into());
+    }
+    Ok(())
+}
+
 /// List all required external tools (works without rsconstruct.toml).
 pub fn list_tools_no_config(all: bool) -> Result<()> {
     let mut cfg = crate::config::ProcessorConfig::default();
@@ -278,8 +322,8 @@ impl Builder {
             }
             ToolsAction::Install { name, .. } => {
                 let to_install: Vec<(String, String)> = if let Some(ref name) = name {
-                    match install_map.get(name).and_then(|c| c.as_ref()) {
-                        Some(cmd) => vec![(name.clone(), cmd.clone())],
+                    match crate::processors::tool_install_command(name) {
+                        Some(cmd) => vec![(name.clone(), cmd.to_string())],
                         None => {
                             eprintln!("{}: Installation procedure still not setup for '{}'", color::red("Error"), name);
                             return Err(crate::exit_code::RsconstructError::new(

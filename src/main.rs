@@ -364,6 +364,14 @@ fn run() -> Result<()> {
                         Err(_) => builder::tools::list_tools_no_config(all)?,
                     }
                 }
+                cli::ToolsAction::Install { name: Some(ref name), yes } => {
+                    // Installing a specific tool by name works without a project config
+                    // since install commands come from the global registry.
+                    match Builder::new() {
+                        Ok(builder) => builder.tools(cli::ToolsAction::Install { name: Some(name.clone()), yes }, cli.verbose)?,
+                        Err(_) => builder::tools::install_tool_no_config(name, yes)?,
+                    }
+                }
                 action => {
                     let builder = Builder::new()?;
                     builder.tools(action, cli.verbose)?;
