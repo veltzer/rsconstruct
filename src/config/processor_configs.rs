@@ -2386,3 +2386,59 @@ impl KnownFields for ObjdumpConfig {
         ]
     }
 }
+
+fn default_eslint_linter() -> String {
+    "eslint".into()
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct EslintConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_eslint_linter")]
+    pub linter: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(default = "default_eslint_auto_inputs")]
+    pub auto_inputs: Vec<String>,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+fn default_eslint_auto_inputs() -> Vec<String> {
+    vec![
+        ".eslintrc".into(),
+        ".eslintrc.json".into(),
+        ".eslintrc.js".into(),
+        ".eslintrc.yml".into(),
+        ".eslintrc.yaml".into(),
+        ".eslintrc.cjs".into(),
+        "eslint.config.js".into(),
+        "eslint.config.mjs".into(),
+        "eslint.config.cjs".into(),
+    ]
+}
+
+impl Default for EslintConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            linter: "eslint".into(),
+            args: Vec::new(),
+            extra_inputs: Vec::new(),
+            auto_inputs: default_eslint_auto_inputs(),
+            scan: default_scan!(extensions: [".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"]),
+        }
+    }
+}
+
+impl KnownFields for EslintConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "enabled", "linter", "args", "extra_inputs", "auto_inputs",
+            "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+        ]
+    }
+}

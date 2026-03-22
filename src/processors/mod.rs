@@ -72,6 +72,7 @@ pub mod names {
     pub const CPPLINT: &str = "cpplint";
     pub const CHECKPATCH: &str = "checkpatch";
     pub const OBJDUMP: &str = "objdump";
+    pub const ESLINT: &str = "eslint";
 }
 
 /// Global flag: set to true on Ctrl+C so subprocesses can be killed promptly.
@@ -622,7 +623,7 @@ where
 pub use checkers::{
     AsciiCheckProcessor, AspellProcessor,
     CheckpatchProcessor, ClippyProcessor, ClangTidyProcessor, CppcheckProcessor, CpplintProcessor,
-    JqProcessor, JsonlintProcessor, JsonSchemaProcessor,
+    EslintProcessor, JqProcessor, JsonlintProcessor, JsonSchemaProcessor,
     LuacheckProcessor, MakeProcessor, MarkdownlintProcessor, MdlProcessor, MypyProcessor,
     PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor,
     ScriptCheckProcessor, ShellcheckProcessor, SleepProcessor, SpellcheckProcessor,
@@ -854,6 +855,7 @@ pub fn tool_install_command(tool: &str) -> Option<&'static str> {
         "marp" => Some("npm install -g @marp-team/marp-cli"),
         "mmdc" => Some("npm install -g @mermaid-js/mermaid-cli"),
         "node_modules/.bin/markdownlint" => Some("npm install markdownlint-cli"),
+        "eslint" => Some("npm install -g eslint"),
         "npm" => Some("apt install npm"),
         "node" => Some("apt install nodejs"),
         // Ruby tools

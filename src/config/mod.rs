@@ -398,6 +398,8 @@ pub(crate) struct ProcessorConfig {
     pub checkpatch: CheckpatchConfig,
     #[serde(default)]
     pub objdump: ObjdumpConfig,
+    #[serde(default)]
+    pub eslint: EslintConfig,
     /// Captures unknown [processor.PLUGIN_NAME] sections for Lua plugins
     #[serde(flatten)]
     pub extra: HashMap<String, toml::Value>,
@@ -455,6 +457,7 @@ impl Default for ProcessorConfig {
             cpplint: CpplintConfig::default(),
             checkpatch: CheckpatchConfig::default(),
             objdump: ObjdumpConfig::default(),
+            eslint: EslintConfig::default(),
             extra: HashMap::new(),
         }
     }
@@ -510,6 +513,7 @@ impl ProcessorConfig {
             "cpplint" => self.cpplint.enabled,
             "checkpatch" => self.checkpatch.enabled,
             "objdump" => self.objdump.enabled,
+            "eslint" => self.eslint.enabled,
             _ => true, // unknown processors (plugins) default to enabled
         }
     }
@@ -536,6 +540,7 @@ impl ProcessorConfig {
             &self.mermaid.scan, &self.drawio.scan, &self.libreoffice.scan,
             &self.script_check.scan, &self.linux_module.scan,
             &self.cpplint.scan, &self.checkpatch.scan, &self.objdump.scan,
+            &self.eslint.scan,
         ];
         let mut dirs: Vec<String> = scans.iter()
             .filter_map(|s| s.scan_dir.as_deref())
@@ -597,6 +602,7 @@ impl ProcessorConfig {
         self.cpplint.scan.resolve("src", &[".c", ".cc", ".h", ".hh"], CC_EXCLUDE_DIRS);
         self.checkpatch.scan.resolve("src", &[".c", ".h"], CC_EXCLUDE_DIRS);
         self.objdump.scan.resolve("out/cc_single_file", &[".elf"], &[]);
+        self.eslint.scan.resolve("", &[".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"], BUILD_TOOL_EXCLUDES);
     }
 }
 
@@ -879,6 +885,7 @@ fn validate_processor_fields(raw: &toml::Value) -> Result<()> {
             processor_names::CPPLINT => CpplintConfig::known_fields(),
             processor_names::CHECKPATCH => CheckpatchConfig::known_fields(),
             processor_names::OBJDUMP => ObjdumpConfig::known_fields(),
+            processor_names::ESLINT => EslintConfig::known_fields(),
             _ => continue, // unknown processor name = Lua plugin, skip
         };
 

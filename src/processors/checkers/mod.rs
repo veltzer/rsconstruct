@@ -338,6 +338,7 @@ mod taplo;
 mod jq;
 mod json_schema;
 mod luacheck;
+mod eslint;
 
 pub use aspell::AspellProcessor;
 pub use ascii_check::AsciiCheckProcessor;
@@ -367,3 +368,4 @@ pub use jsonlint::JsonlintProcessor;
 pub use luacheck::LuacheckProcessor;
 pub use taplo::TaploProcessor;
 pub use json_schema::JsonSchemaProcessor;
+pub use eslint::EslintProcessor;

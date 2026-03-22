@@ -23,7 +23,7 @@ use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
 use crate::object_store::{ObjectStore, ObjectStoreOptions};
-use crate::processors::{A2xProcessor, AsciiCheckProcessor, AspellProcessor, CargoProcessor, CcProcessor, CcSingleFileProcessor, CheckpatchProcessor, ClangTidyProcessor, ClippyProcessor, CppcheckProcessor, CpplintProcessor, DrawioProcessor, GemProcessor, JqProcessor, JsonlintProcessor, JsonSchemaProcessor, LibreofficeProcessor, LinuxModuleProcessor, LuaProcessor, LuacheckProcessor, MakoProcessor, MakeProcessor, MarpProcessor, MarkdownProcessor, MarkdownlintProcessor, MdbookProcessor, MdlProcessor, MermaidProcessor, MypyProcessor, NpmProcessor, ObjdumpProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, PipProcessor, ProcessorMap, PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor, ScriptCheckProcessor, ShellcheckProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, SphinxProcessor, TagsProcessor, TaploProcessor, TeraProcessor, YamllintProcessor, names as proc_names};
+use crate::processors::{A2xProcessor, AsciiCheckProcessor, AspellProcessor, CargoProcessor, CcProcessor, CcSingleFileProcessor, CheckpatchProcessor, ClangTidyProcessor, ClippyProcessor, CppcheckProcessor, CpplintProcessor, DrawioProcessor, EslintProcessor, GemProcessor, JqProcessor, JsonlintProcessor, JsonSchemaProcessor, LibreofficeProcessor, LinuxModuleProcessor, LuaProcessor, LuacheckProcessor, MakoProcessor, MakeProcessor, MarpProcessor, MarkdownProcessor, MarkdownlintProcessor, MdbookProcessor, MdlProcessor, MermaidProcessor, MypyProcessor, NpmProcessor, ObjdumpProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, PipProcessor, ProcessorMap, PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor, ScriptCheckProcessor, ShellcheckProcessor, ProductDiscovery, SleepProcessor, SpellcheckProcessor, SphinxProcessor, TagsProcessor, TaploProcessor, TeraProcessor, YamllintProcessor, names as proc_names};
 use crate::remote_cache;
 use crate::tool_lock;
 
@@ -122,6 +122,7 @@ pub(crate) fn create_builtin_processors(cfg: &ProcessorConfig) -> ProcessorMap {
     Builder::register(&mut processors, proc_names::CPPLINT, CpplintProcessor::new(cfg.cpplint.clone()));
     Builder::register(&mut processors, proc_names::CHECKPATCH, CheckpatchProcessor::new(cfg.checkpatch.clone()));
     Builder::register(&mut processors, proc_names::OBJDUMP, ObjdumpProcessor::new(cfg.objdump.clone()));
+    Builder::register(&mut processors, proc_names::ESLINT, EslintProcessor::new(cfg.eslint.clone()));
 
     processors
 }

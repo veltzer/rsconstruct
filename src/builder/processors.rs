@@ -9,7 +9,7 @@ use crate::config::{
     RumdlConfig, MypyConfig, PyreflyConfig, YamllintConfig, JqConfig, JsonlintConfig, TaploConfig,
     JsonSchemaConfig, TagsConfig, PipConfig, SphinxConfig, NpmConfig, GemConfig, MdlConfig,
     MarkdownlintConfig, AspellConfig, PandocConfig, MarkdownConfig, PdflatexConfig,
-    A2xConfig, AsciiCheckConfig,
+    A2xConfig, AsciiCheckConfig, EslintConfig,
 };
 use crate::processors::names;
 use super::{Builder, create_builtin_processors, sorted_keys};
@@ -102,6 +102,7 @@ fn defconfig_json(name: &str) -> Option<String> {
         names::PDFLATEX => serde_json::to_value(PdflatexConfig::default()).ok()?,
         names::A2X => serde_json::to_value(A2xConfig::default()).ok()?,
         names::ASCII_CHECK => serde_json::to_value(AsciiCheckConfig::default()).ok()?,
+        names::ESLINT => serde_json::to_value(EslintConfig::default()).ok()?,
         _ => return None,
     };
     serde_json::to_string_pretty(&json).ok()
