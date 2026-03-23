@@ -14,7 +14,7 @@ fn checkstyle_valid_java() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"checkstyle\"]\n",
+        "[processor]\nenabled = [\"checkstyle\"]\n\n[processor.checkstyle]\nargs = [\"-c\", \"/google_checks.xml\"]\n",
     )
     .unwrap();
 
@@ -45,7 +45,7 @@ fn checkstyle_incremental_skip() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"checkstyle\"]\n",
+        "[processor]\nenabled = [\"checkstyle\"]\n\n[processor.checkstyle]\nargs = [\"-c\", \"/google_checks.xml\"]\n",
     )
     .unwrap();
 

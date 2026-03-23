@@ -19,14 +19,14 @@ fn eslint_valid_js() {
     .unwrap();
 
     fs::write(
-        project_path.join("eslint.config.mjs"),
-        "export default [];\n",
+        project_path.join(".eslintrc.json"),
+        "{\"rules\": {}}\n",
     )
     .unwrap();
 
     fs::write(
         project_path.join("test.js"),
-        "const x = 1;\n",
+        "var x = 1;\n",
     )
     .unwrap();
 
@@ -56,12 +56,12 @@ fn eslint_incremental_skip() {
     .unwrap();
 
     fs::write(
-        project_path.join("eslint.config.mjs"),
-        "export default [];\n",
+        project_path.join(".eslintrc.json"),
+        "{\"rules\": {}}\n",
     )
     .unwrap();
 
-    fs::write(project_path.join("test.js"), "const x = 1;\n").unwrap();
+    fs::write(project_path.join("test.js"), "var x = 1;\n").unwrap();
 
     let output1 = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
