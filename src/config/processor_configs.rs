@@ -1928,6 +1928,10 @@ fn default_pdfunite_output_dir() -> String {
     "out/pdfunite".into()
 }
 
+fn default_marp_bin_for_pdfunite() -> String {
+    "marp".into()
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PdfuniteConfig {
     #[serde(default = "default_true")]
@@ -1948,6 +1952,10 @@ pub struct PdfuniteConfig {
     pub auto_inputs: Vec<String>,
     #[serde(default = "default_pdfunite_output_dir")]
     pub output_dir: String,
+    #[serde(default = "default_true")]
+    pub title_page: bool,
+    #[serde(default = "default_marp_bin_for_pdfunite")]
+    pub marp_bin: String,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1964,6 +1972,8 @@ impl Default for PdfuniteConfig {
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
             output_dir: "out/pdfunite".into(),
+            title_page: true,
+            marp_bin: "marp".into(),
             scan: default_scan!(extensions: ["course.yaml"]),
         }
     }
@@ -1973,7 +1983,7 @@ impl KnownFields for PdfuniteConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
             "enabled", "pdfunite_bin", "source_dir", "source_ext", "source_output_dir",
-            "args", "extra_inputs", "auto_inputs", "output_dir",
+            "args", "extra_inputs", "auto_inputs", "output_dir", "title_page", "marp_bin",
             "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
         ]
     }
