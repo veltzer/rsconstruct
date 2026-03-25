@@ -124,7 +124,7 @@ pub(super) fn discover_multi_format(
             let stem = source.file_stem().unwrap_or_default();
             let parent = source.parent().unwrap_or(Path::new(""));
             let output_name = format!("{}.{}", stem.to_string_lossy(), format);
-            let output = Path::new(params.output_dir).join(format.as_str()).join(parent).join(output_name);
+            let output = Path::new(params.output_dir).join(parent).join(output_name);
 
             let mut inputs = Vec::with_capacity(1 + extra.len());
             inputs.push(source.clone());
