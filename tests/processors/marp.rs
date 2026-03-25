@@ -18,8 +18,9 @@ fn marp_valid_file() {
     )
     .unwrap();
 
+    fs::create_dir_all(project_path.join("marp")).unwrap();
     fs::write(
-        project_path.join("slides.md"),
+        project_path.join("marp/slides.md"),
         "---\nmarp: true\n---\n\n# Slide 1\n\nHello World\n\n---\n\n# Slide 2\n\nGoodbye\n",
     )
     .unwrap();

@@ -45,7 +45,7 @@ macro_rules! for_each_processor {
             MDL,            mdl,            MdlConfig,             MdlProcessor,             ("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
             MARKDOWNLINT,   markdownlint,   MarkdownlintConfig,    MarkdownlintProcessor,    ("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
             ASPELL,         aspell,         AspellConfig,          AspellProcessor,          ("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
-            MARP,           marp,           MarpConfig,            MarpProcessor,            ("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
+            MARP,           marp,           MarpConfig,            MarpProcessor,            ("marp", &[".md"], MARKDOWN_EXCLUDE_DIRS);
             PANDOC,         pandoc,         PandocConfig,          PandocProcessor,          ("pandoc", &[".md"], MARKDOWN_EXCLUDE_DIRS);
             MARKDOWN,       markdown,       MarkdownConfig,        MarkdownProcessor,        ("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
             PDFLATEX,       pdflatex,       PdflatexConfig,        PdflatexProcessor,        ("", &[".tex"], BUILD_TOOL_EXCLUDES);
