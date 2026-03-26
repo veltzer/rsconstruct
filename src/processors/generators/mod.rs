@@ -159,28 +159,6 @@ pub(super) fn discover_single_format(
     params: &DiscoverParams<'_, impl Serialize>,
     extension: &str,
 ) -> Result<()> {
-    if !scan_root_valid(params.scan) {
-        return Ok(());
-    }
-
-    let files = file_index.scan(params.scan, true);
-    if files.is_empty() {
-        return Ok(());
-    }
-
-    let hash = Some(config_hash(params.config));
-    let extra = resolve_extra_inputs(params.extra_inputs)?;
-    let scan_dir = params.scan.scan_dir();
-
-    for source in files {
-        let output = output_path(&source, scan_dir, params.output_dir, extension);
-
-        let mut inputs = Vec::with_capacity(1 + extra.len());
-        inputs.push(source);
-        inputs.extend_from_slice(&extra);
-
-        graph.add_product(inputs, vec![output], params.processor_name, hash.clone())?;
-    }
-
-    Ok(())
+    let format = extension.to_owned();
+    discover_multi_format(graph, file_index, params, &[format])
 }

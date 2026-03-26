@@ -148,6 +148,138 @@ macro_rules! default_scan {
     };
 }
 
+/// Generate a generator config struct with standard fields plus a tool binary and output directory.
+///
+/// Variants:
+/// - `generator_config!(Name, tool: "bin_name" "field_name", output_dir: "out/x", scan)` — single output
+/// - `generator_config!(Name, tool: "bin_name" "field_name", formats: ["pdf"], output_dir: "out/x", scan)` — multi-format
+/// - Add `args: ["--flag"]` for non-empty default args
+/// - Add `auto_inputs: [".config"]` for auto input files
+macro_rules! generator_config {
+    // Multi-format variant
+    ($name:ident, tool: $tool_default:expr, $tool_field:ident,
+     formats: [$($fmt:expr),+ $(,)?], output_dir: $output_dir:expr,
+     $scan:expr $(, args: [$($arg:expr),+ $(,)?])? $(, auto_inputs: [$($ai:expr),+ $(,)?])? $(,)?
+    ) => {
+        paste::paste! {
+            fn [<default_ $name:lower _tool>]() -> String { $tool_default.into() }
+            fn [<default_ $name:lower _formats>]() -> Vec<String> { vec![$($fmt.into()),+] }
+            fn [<default_ $name:lower _output_dir>]() -> String { $output_dir.into() }
+            $(fn [<default_ $name:lower _args>]() -> Vec<String> { vec![$($arg.into()),+] })?
+        }
+
+        paste::paste! {
+            #[derive(Debug, Deserialize, Serialize, Clone)]
+            pub struct $name {
+                #[serde(default = "default_true")]
+                pub enabled: bool,
+                #[serde(default = "" [<default_ $name:lower _tool>] "")]
+                pub $tool_field: String,
+                #[serde(default = "" [<default_ $name:lower _formats>] "")]
+                pub formats: Vec<String>,
+                #[serde(default $( = "" [<default_ $name:lower _args>] "")?)]
+                pub args: Vec<String>,
+                #[serde(default)]
+                pub extra_inputs: Vec<String>,
+                #[serde(default)]
+                pub auto_inputs: Vec<String>,
+                #[serde(default = "" [<default_ $name:lower _output_dir>] "")]
+                pub output_dir: String,
+                #[serde(default = "default_true")]
+                pub batch: bool,
+                #[serde(flatten)]
+                pub scan: ScanConfig,
+            }
+        }
+
+        impl Default for $name {
+            fn default() -> Self {
+                Self {
+                    enabled: true,
+                    $tool_field: $tool_default.into(),
+                    formats: vec![$($fmt.into()),+],
+                    args: generator_config!(@default_args $($($arg),+)?),
+                    extra_inputs: Vec::new(),
+                    auto_inputs: generator_config!(@default_auto_inputs $($($ai),+)?),
+                    output_dir: $output_dir.into(),
+                    batch: true,
+                    scan: $scan,
+                }
+            }
+        }
+
+        impl KnownFields for $name {
+            fn known_fields() -> &'static [&'static str] {
+                &["enabled", stringify!($tool_field), "formats", "args",
+                  "extra_inputs", "auto_inputs", "output_dir", "batch"]
+            }
+        }
+    };
+
+    // Single-output variant (no formats field)
+    ($name:ident, tool: $tool_default:expr, $tool_field:ident,
+     output_dir: $output_dir:expr,
+     $scan:expr $(, auto_inputs: [$($ai:expr),+ $(,)?])? $(,)?
+    ) => {
+        paste::paste! {
+            fn [<default_ $name:lower _tool>]() -> String { $tool_default.into() }
+            fn [<default_ $name:lower _output_dir>]() -> String { $output_dir.into() }
+        }
+
+        paste::paste! {
+            #[derive(Debug, Deserialize, Serialize, Clone)]
+            pub struct $name {
+                #[serde(default = "default_true")]
+                pub enabled: bool,
+                #[serde(default = "" [<default_ $name:lower _tool>] "")]
+                pub $tool_field: String,
+                #[serde(default)]
+                pub args: Vec<String>,
+                #[serde(default)]
+                pub extra_inputs: Vec<String>,
+                #[serde(default)]
+                pub auto_inputs: Vec<String>,
+                #[serde(default = "" [<default_ $name:lower _output_dir>] "")]
+                pub output_dir: String,
+                #[serde(default = "default_true")]
+                pub batch: bool,
+                #[serde(flatten)]
+                pub scan: ScanConfig,
+            }
+        }
+
+        impl Default for $name {
+            fn default() -> Self {
+                Self {
+                    enabled: true,
+                    $tool_field: $tool_default.into(),
+                    args: Vec::new(),
+                    extra_inputs: Vec::new(),
+                    auto_inputs: generator_config!(@default_auto_inputs $($($ai),+)?),
+                    output_dir: $output_dir.into(),
+                    batch: true,
+                    scan: $scan,
+                }
+            }
+        }
+
+        impl KnownFields for $name {
+            fn known_fields() -> &'static [&'static str] {
+                &["enabled", stringify!($tool_field), "args",
+                  "extra_inputs", "auto_inputs", "output_dir", "batch"]
+            }
+        }
+    };
+
+    // Helper: default args (empty or provided)
+    (@default_args) => { Vec::new() };
+    (@default_args $($arg:expr),+) => { vec![$($arg.into()),+] };
+
+    // Helper: default auto_inputs (empty or provided)
+    (@default_auto_inputs) => { Vec::new() };
+    (@default_auto_inputs $($ai:expr),+) => { vec![$($ai.into()),+] };
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TeraConfig {
     #[serde(default = "default_true")]
