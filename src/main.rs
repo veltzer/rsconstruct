@@ -224,9 +224,9 @@ fn run() -> Result<()> {
                     let builder = Builder::new()?;
                     builder.hardclean()?;
                 }
-                CleanAction::Unknown { force } => {
+                CleanAction::Unknown { dry_run } => {
                     let builder = Builder::new()?;
-                    builder.clean_unknown(force, cli.verbose)?;
+                    builder.clean_unknown(!dry_run, cli.verbose)?;
                 }
             }
         }

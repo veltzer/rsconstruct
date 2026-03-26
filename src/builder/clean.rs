@@ -229,30 +229,43 @@ impl Builder {
                 }
             }
 
-            // Clean up empty parent directories (bottom-up)
+            // Clean up empty parent directories (bottom-up).
+            // Walk the full parent chain of each removed file so that
+            // nested empty directories are cleaned up too.
             let mut dirs_to_check: HashSet<PathBuf> = HashSet::new();
             for path in &unknown_files {
-                if let Some(parent) = path.parent()
-                    && parent != std::path::Path::new("") {
-                    dirs_to_check.insert(parent.to_path_buf());
+                let mut current = path.parent();
+                while let Some(dir) = current {
+                    if dir == std::path::Path::new("") {
+                        break;
+                    }
+                    dirs_to_check.insert(dir.to_path_buf());
+                    current = dir.parent();
                 }
             }
             let mut sorted_dirs: Vec<PathBuf> = dirs_to_check.into_iter().collect();
             // Sort by depth descending so we remove leaf dirs first
             sorted_dirs.sort_by_key(|b| std::cmp::Reverse(b.components().count()));
+            let mut dirs_removed = 0usize;
             for dir in &sorted_dirs {
                 // Try to remove — only succeeds if empty
-                let _ = fs::remove_dir(dir);
+                if fs::remove_dir(dir).is_ok() {
+                    dirs_removed += 1;
+                }
             }
 
-            println!("{}", color::green(&format!("Removed {} unknown file(s).", removed)));
+            let mut summary = format!("Removed {} unknown file(s)", removed);
+            if dirs_removed > 0 {
+                summary.push_str(&format!(", {} empty dir(s)", dirs_removed));
+            }
+            println!("{}", color::green(&summary));
         } else {
             println!("{}", color::bold(&format!("Found {} unknown file(s):", unknown_files.len())));
             for path in &unknown_files {
                 println!("  {}", path.display());
             }
             println!();
-            println!("{}", color::dim("Use --force to delete them."));
+            println!("{}", color::dim("This is a dry run. Run without --dry-run to delete them."));
         }
 
         Ok(())

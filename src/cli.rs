@@ -320,11 +320,11 @@ pub enum CleanAction {
     All,
     /// Hard clean using git clean (requires git repository)
     Git,
-    /// Remove files not tracked by git and not known as RSConstruct build outputs (dry-run by default)
+    /// Remove files not tracked by git and not known as RSConstruct build outputs
     Unknown {
-        /// Actually delete the files (default is dry-run)
+        /// Show what would be removed without actually deleting
         #[arg(long)]
-        force: bool,
+        dry_run: bool,
     },
 }
 
