@@ -353,6 +353,10 @@ macro_rules! gen_processor_config {
 }
 for_each_processor!(gen_processor_config);
 
+pub(crate) fn default_script_check_linter() -> String {
+    "true".into()
+}
+
 pub(crate) fn default_cc_compiler() -> String {
     "gcc".into()
 }

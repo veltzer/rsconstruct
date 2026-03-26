@@ -909,6 +909,8 @@ pub static TOOLS: &[(&str, &str, &str)] = &[
     ("perlcritic",      "perl", "apt install libperl-critic-perl"),
     // Ruby tools (additional)
     ("jekyll",          "ruby", "gem install jekyll"),
+    // Built-in / coreutils
+    ("true",            "system", "coreutils"),
 ];
 
 /// Return the install command for a tool, if known.
@@ -1105,7 +1107,7 @@ mod tests {
         for (proc_name, proc) in &processors {
             for tool in proc.required_tools() {
                 if tool.is_empty() {
-                    continue; // script_check defaults to empty tool name
+                    continue;
                 }
                 assert!(
                     tool_install_command(&tool).is_some(),

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{default_true, default_cc_compiler, default_cxx_compiler, default_output_suffix, KnownFields, ScanConfig};
+use super::{default_true, default_script_check_linter, default_cc_compiler, default_cxx_compiler, default_output_suffix, KnownFields, ScanConfig};
 
 /// Generate a checker config struct with standard fields.
 ///
@@ -985,9 +985,9 @@ checker_config!(LuacheckConfig, extensions: [".lua"], linter: "luacheck", auto_i
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ScriptCheckConfig {
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub enabled: bool,
-    #[serde(default)]
+    #[serde(default = "default_script_check_linter")]
     pub linter: String,
     #[serde(default)]
     pub args: Vec<String>,
@@ -1002,8 +1002,8 @@ pub struct ScriptCheckConfig {
 impl Default for ScriptCheckConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
-            linter: String::new(),
+            enabled: true,
+            linter: "true".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
