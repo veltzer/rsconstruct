@@ -57,7 +57,7 @@ macro_rules! impl_checker {
 
             impl_checker!(@config_json self, $config_field, $cj);
 
-            impl_checker!(@batch self, [$($batch)?]);
+            impl_checker!(@batch self, $config_field, [$($batch)?]);
         }
     };
 
@@ -127,8 +127,8 @@ macro_rules! impl_checker {
     (@config_json $self:ident, $cfg:ident, false) => {};
 
     // --- batch ---
-    (@batch $self:ident, [$batch:ident]) => {
-        fn supports_batch(&self) -> bool { true }
+    (@batch $self:ident, $cfg:ident, [$batch:ident]) => {
+        fn supports_batch(&self) -> bool { self.$cfg.batch }
 
         fn execute_batch(&self, products: &[&$crate::graph::Product]) -> Vec<anyhow::Result<()>> {
             $crate::processors::execute_checker_batch(
@@ -137,7 +137,7 @@ macro_rules! impl_checker {
             )
         }
     };
-    (@batch $self:ident, []) => {};
+    (@batch $self:ident, $cfg:ident, []) => {};
 
     // --- Entry point: parse options using TT muncher ---
     ($processor:ty,

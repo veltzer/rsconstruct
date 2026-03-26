@@ -77,6 +77,8 @@ macro_rules! checker_config {
             pub extra_inputs: Vec<String>,
             #[serde(default)]
             pub auto_inputs: Vec<String>,
+            #[serde(default = "default_true")]
+            pub batch: bool,
             #[serde(flatten)]
             pub scan: ScanConfig,
         }
@@ -88,6 +90,7 @@ macro_rules! checker_config {
                     args: Vec::new(),
                     extra_inputs: Vec::new(),
                     auto_inputs: Vec::new(),
+                    batch: true,
                     scan: $scan,
                 }
             }
@@ -95,7 +98,7 @@ macro_rules! checker_config {
 
         impl KnownFields for $name {
             fn known_fields() -> &'static [&'static str] {
-                &["enabled", "args", "extra_inputs", "auto_inputs",
+                &["enabled", "args", "extra_inputs", "auto_inputs", "batch",
                   "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths"]
             }
         }
@@ -113,6 +116,8 @@ macro_rules! checker_config {
             pub extra_inputs: Vec<String>,
             #[serde(default)]
             pub auto_inputs: Vec<String>,
+            #[serde(default = "default_true")]
+            pub batch: bool,
             #[serde(flatten)]
             pub scan: ScanConfig,
         }
@@ -124,6 +129,7 @@ macro_rules! checker_config {
                     args: Vec::new(),
                     extra_inputs: Vec::new(),
                     auto_inputs: vec![$($ai.into()),+],
+                    batch: true,
                     scan: $scan,
                 }
             }
@@ -131,7 +137,7 @@ macro_rules! checker_config {
 
         impl KnownFields for $name {
             fn known_fields() -> &'static [&'static str] {
-                &["enabled", "args", "extra_inputs", "auto_inputs",
+                &["enabled", "args", "extra_inputs", "auto_inputs", "batch",
                   "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths"]
             }
         }
@@ -160,6 +166,8 @@ macro_rules! checker_config {
                 pub extra_inputs: Vec<String>,
                 #[serde(default)]
                 pub auto_inputs: Vec<String>,
+                #[serde(default = "default_true")]
+                pub batch: bool,
                 #[serde(flatten)]
                 pub scan: ScanConfig,
             }
@@ -173,6 +181,7 @@ macro_rules! checker_config {
                     args: Vec::new(),
                     extra_inputs: Vec::new(),
                     auto_inputs: vec![$($ai.into()),*],
+                    batch: true,
                     scan: $scan,
                 }
             }
@@ -180,7 +189,7 @@ macro_rules! checker_config {
 
         impl KnownFields for $name {
             fn known_fields() -> &'static [&'static str] {
-                &["enabled", "linter", "args", "extra_inputs", "auto_inputs",
+                &["enabled", "linter", "args", "extra_inputs", "auto_inputs", "batch",
                   "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths"]
             }
         }
@@ -995,6 +1004,8 @@ pub struct ScriptCheckConfig {
     pub extra_inputs: Vec<String>,
     #[serde(default)]
     pub auto_inputs: Vec<String>,
+    #[serde(default = "default_true")]
+    pub batch: bool,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1007,6 +1018,7 @@ impl Default for ScriptCheckConfig {
             args: Vec::new(),
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
+            batch: true,
             scan: ScanConfig {
                 scan_dir: None,
                 extensions: None,
@@ -1021,7 +1033,7 @@ impl Default for ScriptCheckConfig {
 impl KnownFields for ScriptCheckConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "linter", "args", "extra_inputs", "auto_inputs",
+            "enabled", "linter", "args", "extra_inputs", "auto_inputs", "batch",
             "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
         ]
     }

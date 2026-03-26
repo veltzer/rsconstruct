@@ -19,7 +19,11 @@ impl ScriptCheckProcessor {
     }
 
     fn execute_product(&self, product: &Product) -> Result<()> {
-        run_checker(&self.config.linter, None, &self.config.args, &[product.primary_input()])
+        self.check_files(&[product.primary_input()])
+    }
+
+    fn check_files(&self, files: &[&Path]) -> Result<()> {
+        run_checker(&self.config.linter, None, &self.config.args, files)
     }
 }
 
@@ -31,4 +35,5 @@ impl_checker!(ScriptCheckProcessor,
     guard: should_process,
     tool_field: linter,
     config_json: true,
+    batch: check_files,
 );
