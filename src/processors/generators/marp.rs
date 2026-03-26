@@ -24,7 +24,7 @@ use super::DiscoverParams;
 ///
 /// See: https://github.com/marp-team/marp-cli/issues/678
 /// See: https://github.com/puppeteer/puppeteer/issues/6414
-pub(super) fn cleanup_marp_tmp_dirs() {
+fn cleanup_marp_tmp_dirs() {
     let Ok(entries) = fs::read_dir("/tmp") else { return };
     for entry in entries.filter_map(|e| e.ok()) {
         if entry.file_name().to_string_lossy().starts_with("marp-cli-") {

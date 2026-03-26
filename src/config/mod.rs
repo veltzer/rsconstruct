@@ -572,8 +572,7 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
         ("libreoffice", "libreoffice_bin" | "output_dir") => Some(FieldType::String),
         ("libreoffice", "formats") => Some(FieldType::StringArray),
         // pdfunite
-        ("pdfunite", "pdfunite_bin" | "source_dir" | "source_ext" | "source_output_dir" | "output_dir" | "marp_bin") => Some(FieldType::String),
-        ("pdfunite", "title_page") => Some(FieldType::Bool),
+        ("pdfunite", "pdfunite_bin" | "source_dir" | "source_ext" | "source_output_dir" | "output_dir") => Some(FieldType::String),
         // objdump
         ("objdump", "output_dir") => Some(FieldType::String),
         // cache_output_dir — shared by mass generators
