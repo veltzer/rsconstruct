@@ -7,44 +7,6 @@ Grades:
 - **Urgency**: `high` (users need this), `medium` (nice to have), `low` (speculative/future)
 - **Complexity**: `low` (hours), `medium` (days), `high` (weeks+)
 
-## Code Consolidation
-
-### Collapse `checker_config!` macro variants
-- The `@basic`, `@with_auto_inputs`, and `@with_linter` internal variants are 85-95% identical.
-- Merge them into a single variant where `linter` and `auto_inputs` are optional parameters.
-- **Urgency**: medium | **Complexity**: low
-
-### Add `batch` field to all manually-defined processor configs
-- Only `ScriptCheckConfig` and `checker_config!`-generated configs have the `batch` field.
-- Other manually-defined configs (e.g., `AsciiCheckConfig`) that use `batch:` in `impl_checker!` are missing it and will break if `supports_batch` tries to read `self.config.batch`.
-- **Urgency**: high | **Complexity**: low
-
-### Replace trivial checker files with a generic checker struct
-- 19 checker processors follow the exact same pattern: `new(config)`, `execute_product` calling `run_checker`, `lint_files`/`check_files` calling `run_checker`, plus `impl_checker!`.
-- Replace them with a generic `GenericChecker<C: CheckerConfig>` struct parameterized by a `CheckerConfig` trait that provides tool name, subcommand, args, etc.
-- Eliminates ~19 nearly identical files.
-- **Urgency**: medium | **Complexity**: medium
-
-### Unify `lint_files` / `check_files` naming
-- Some processors call their batch method `lint_files`, others `check_files`. They do the same thing.
-- Pick one name for consistency.
-- **Urgency**: low | **Complexity**: low
-
-### Move `should_process` guard logic into the macro/config
-- 7 processors define `should_process` as `scan_root_valid(&self.config.scan) && !self.config.linter.is_empty()` (or similar).
-- The `scan_root_valid` check could be automatic when a guard is specified, and the "linter not empty" check could be part of the config trait.
-- **Urgency**: low | **Complexity**: low
-
-### Derive `KnownFields` instead of hand-maintaining field lists
-- Every `KnownFields` impl is a hand-maintained list of field names that must match the actual struct fields.
-- A derive macro or a convention (like always appending the scan fields) would eliminate this error-prone boilerplate.
-- **Urgency**: medium | **Complexity**: medium
-
-### Extract shared word-file management for `spellcheck` / `aspell`
-- Both implement word-file management, `OnceLock` caching, `auto_add_words`, and conditional batch support.
-- A shared trait or helper struct could extract the common logic.
-- **Urgency**: low | **Complexity**: medium
-
 ## Test Coverage
 
 ### Add tests for untested generators

@@ -17,6 +17,16 @@ Items from `suggestions.md` that have been implemented.
 - **mypy processor** — Python type checking with mypy. Batch-capable. Auto-detects `mypy.ini` as extra input.
 - **Explain commands** — `--explain` flag shows skip/restore/rebuild reasons for each product during build.
 
+## Completed Code Consolidation
+
+- **Collapsed `checker_config!` macro variants** — Merged `@basic`, `@with_auto_inputs`, and `@with_linter` into two internal variants (`@no_linter` and `@with_linter`).
+- **Added `batch` field to all manually-defined processor configs** — All processor configs now support `batch = false` to disable batching per-project.
+- **Replaced trivial checker files with `simple_checker!` macro** — 25 trivial checkers reduced from ~35 lines each to 3-5 lines (~800 lines eliminated).
+- **Unified `lint_files`/`check_files` naming** — All checkers now use `check_files` consistently.
+- **Moved `should_process` guard into macro** — Added `guard: scan_root` built-in to `impl_checker!`, removed boilerplate `should_process()` from 7 processors.
+- **Simplified `KnownFields`** — Scan config fields auto-appended by validation layer via `SCAN_CONFIG_FIELDS` constant; `KnownFields` impls only list their own fields.
+- **Extracted `WordManager` for spellcheck/aspell** — Shared word-file management (loading, collecting, flushing, execute/batch patterns) in `word_manager.rs`.
+
 ## Completed New Processors
 
 - **mypy** — Python type checking using `mypy`. Batch-capable. Config: `checker`, `args`, `extra_inputs`, `scan`.
