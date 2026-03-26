@@ -7,7 +7,7 @@ fn explain_first_build() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("templates.tera/explain_first.txt.tera"),
+        project_path.join("tera.templates/explain_first.txt.tera"),
         "hello"
     ).unwrap();
 
@@ -24,7 +24,7 @@ fn explain_incremental_skip() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("templates.tera/explain_skip.txt.tera"),
+        project_path.join("tera.templates/explain_skip.txt.tera"),
         "hello"
     ).unwrap();
 
@@ -46,7 +46,7 @@ fn explain_input_change() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("templates.tera/explain_change.txt.tera"),
+        project_path.join("tera.templates/explain_change.txt.tera"),
         "hello"
     ).unwrap();
 
@@ -56,7 +56,7 @@ fn explain_input_change() {
 
     // Modify the input
     std::thread::sleep(std::time::Duration::from_millis(100));
-    fs::write(project_path.join("templates.tera/explain_change.txt.tera"), "changed").unwrap();
+    fs::write(project_path.join("tera.templates/explain_change.txt.tera"), "changed").unwrap();
 
     // Second build with explain
     let output = run_rsconstruct_with_env(project_path, &["build", "--explain"], &[("NO_COLOR", "1")]);
@@ -72,7 +72,7 @@ fn explain_force() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("templates.tera/explain_force.txt.tera"),
+        project_path.join("tera.templates/explain_force.txt.tera"),
         "hello"
     ).unwrap();
 
@@ -95,7 +95,7 @@ fn explain_after_clean() {
 
     // Use tera processor which is a generator (produces output files)
     fs::write(
-        project_path.join("templates.tera/explain_clean.txt.tera"),
+        project_path.join("tera.templates/explain_clean.txt.tera"),
         "hello"
     ).unwrap();
 
@@ -121,7 +121,7 @@ fn explain_dry_run() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("templates.tera/explain_dry.txt.tera"),
+        project_path.join("tera.templates/explain_dry.txt.tera"),
         "hello"
     ).unwrap();
 

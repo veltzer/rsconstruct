@@ -8,7 +8,7 @@ fn status_command() {
 
     // Create a template
     fs::write(
-        project_path.join("templates.tera/status_test.txt.tera"),
+        project_path.join("tera.templates/status_test.txt.tera"),
         "hello"
     ).unwrap();
 

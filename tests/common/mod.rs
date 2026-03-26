@@ -21,7 +21,7 @@ pub fn setup_test_project() -> TempDir {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
 
     // Create directories
-    fs::create_dir_all(temp_dir.path().join("templates.tera")).expect("Failed to create templates.tera dir");
+    fs::create_dir_all(temp_dir.path().join("tera.templates")).expect("Failed to create tera.templates dir");
     fs::create_dir_all(temp_dir.path().join("config")).expect("Failed to create config dir");
 
     // Only enable the tera processor so config/*.py files aren't picked up by linters

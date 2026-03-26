@@ -362,7 +362,7 @@ impl Default for TeraConfig {
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
             batch: true,
-            scan: default_scan!(scan_dir: "templates.tera", extensions: [".tera"]),
+            scan: default_scan!(scan_dir: "tera.templates", extensions: [".tera"]),
         }
     }
 }

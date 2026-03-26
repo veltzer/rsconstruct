@@ -8,7 +8,7 @@ fn dry_run_shows_build_actions() {
 
     // Create a template
     fs::write(
-        project_path.join("templates.tera/dry.txt.tera"),
+        project_path.join("tera.templates/dry.txt.tera"),
         "hello"
     ).unwrap();
 
@@ -39,7 +39,7 @@ fn dry_run_short_flag() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("templates.tera/short.txt.tera"),
+        project_path.join("tera.templates/short.txt.tera"),
         "hello"
     ).unwrap();
 
@@ -57,7 +57,7 @@ fn dry_run_with_force() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("templates.tera/force_dry.txt.tera"),
+        project_path.join("tera.templates/force_dry.txt.tera"),
         "hello"
     ).unwrap();
 

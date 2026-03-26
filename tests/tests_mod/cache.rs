@@ -13,7 +13,7 @@ fn cache_operations() {
     ).unwrap();
 
     fs::write(
-        project_path.join("templates.tera/cached.txt.tera"),
+        project_path.join("tera.templates/cached.txt.tera"),
         "{% set c = load_python(path='config/cache_test.py') %}{{ c.value }}"
     ).unwrap();
 
@@ -73,7 +73,7 @@ fn cache_list_shows_entries() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("templates.tera/list_test.txt.tera"),
+        project_path.join("tera.templates/list_test.txt.tera"),
         "hello"
     ).unwrap();
 
@@ -136,7 +136,7 @@ fn cache_stats_after_build() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("templates.tera/stats_test.txt.tera"),
+        project_path.join("tera.templates/stats_test.txt.tera"),
         "hello"
     ).unwrap();
 
@@ -158,7 +158,7 @@ fn cache_stats_json() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("templates.tera/json_test.txt.tera"),
+        project_path.join("tera.templates/json_test.txt.tera"),
         "hello"
     ).unwrap();
 

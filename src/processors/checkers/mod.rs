@@ -97,11 +97,8 @@ macro_rules! impl_checker {
     };
 
     // --- discover ---
-    // With scan_root guard (built-in)
-    (@discover $self:ident, $graph:ident, $fi:ident, $cfg:ident, $name:expr, [scan_root]) => {{
-        if !$crate::processors::scan_root_valid(&$self.$cfg.scan) {
-            return Ok(());
-        }
+    // Shared body: build extra_inputs and call discover_checker_products
+    (@discover_body $self:ident, $graph:ident, $fi:ident, $cfg:ident, $name:expr) => {{
         let mut extra_inputs = $self.$cfg.extra_inputs.clone();
         for ai in &$self.$cfg.auto_inputs {
             extra_inputs.extend($crate::processors::config_file_inputs(ai));
@@ -109,29 +106,24 @@ macro_rules! impl_checker {
         $crate::processors::discover_checker_products(
             $graph, &$self.$cfg.scan, $fi, &extra_inputs, &$self.$cfg, $name,
         )
+    }};
+    // With scan_root guard (built-in)
+    (@discover $self:ident, $graph:ident, $fi:ident, $cfg:ident, $name:expr, [scan_root]) => {{
+        if !$crate::processors::scan_root_valid(&$self.$cfg.scan) {
+            return Ok(());
+        }
+        impl_checker!(@discover_body $self, $graph, $fi, $cfg, $name)
     }};
     // With custom guard method
     (@discover $self:ident, $graph:ident, $fi:ident, $cfg:ident, $name:expr, [$guard:ident]) => {{
         if !$self.$guard() {
             return Ok(());
         }
-        let mut extra_inputs = $self.$cfg.extra_inputs.clone();
-        for ai in &$self.$cfg.auto_inputs {
-            extra_inputs.extend($crate::processors::config_file_inputs(ai));
-        }
-        $crate::processors::discover_checker_products(
-            $graph, &$self.$cfg.scan, $fi, &extra_inputs, &$self.$cfg, $name,
-        )
+        impl_checker!(@discover_body $self, $graph, $fi, $cfg, $name)
     }};
     // No guard
     (@discover $self:ident, $graph:ident, $fi:ident, $cfg:ident, $name:expr, []) => {{
-        let mut extra_inputs = $self.$cfg.extra_inputs.clone();
-        for ai in &$self.$cfg.auto_inputs {
-            extra_inputs.extend($crate::processors::config_file_inputs(ai));
-        }
-        $crate::processors::discover_checker_products(
-            $graph, &$self.$cfg.scan, $fi, &extra_inputs, &$self.$cfg, $name,
-        )
+        impl_checker!(@discover_body $self, $graph, $fi, $cfg, $name)
     }};
 
     // --- config_json ---

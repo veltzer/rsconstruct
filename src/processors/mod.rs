@@ -63,6 +63,16 @@ fn get_interrupt_receiver() -> watch::Receiver<bool> {
     get_interrupt_sender().subscribe()
 }
 
+/// Resolve a relative path against an anchor directory.
+/// If the anchor directory is empty, the relative path is returned as-is.
+pub(crate) fn resolve_anchor_path(anchor_dir: &Path, rel: &str) -> PathBuf {
+    if anchor_dir.as_os_str().is_empty() {
+        PathBuf::from(rel)
+    } else {
+        anchor_dir.join(rel)
+    }
+}
+
 /// Mark the global interrupted flag and notify all waiting tasks.
 pub(crate) fn set_interrupted() {
     INTERRUPTED.store(true, Ordering::SeqCst);

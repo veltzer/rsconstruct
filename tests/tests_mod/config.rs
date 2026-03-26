@@ -197,7 +197,7 @@ fn config_validate_ok() {
 
     // Create a template file so tera has matching files
     fs::write(
-        project_path.join("templates.tera/test.txt.tera"),
+        project_path.join("tera.templates/test.txt.tera"),
         "hello"
     ).unwrap();
 

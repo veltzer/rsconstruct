@@ -13,7 +13,7 @@ fn clean_command() {
     ).expect("Failed to write config");
 
     fs::write(
-        project_path.join("templates.tera/cleanme.txt.tera"),
+        project_path.join("tera.templates/cleanme.txt.tera"),
         "{% set c = load_python(path='config/clean_test.py') %}{{ c.test }}"
     ).expect("Failed to write template");
 
@@ -46,7 +46,7 @@ fn force_rebuild() {
     ).expect("Failed to write config");
 
     fs::write(
-        project_path.join("templates.tera/force.txt.tera"),
+        project_path.join("tera.templates/force.txt.tera"),
         "{% set c = load_python(path='config/force.py') %}Mode: {{ c.mode }}"
     ).expect("Failed to write template");
 
@@ -68,7 +68,7 @@ fn no_color_env() {
 
     // Create a template so there's something to process
     fs::write(
-        project_path.join("templates.tera/color_test.txt.tera"),
+        project_path.join("tera.templates/color_test.txt.tera"),
         "hello"
     ).unwrap();
 
@@ -88,7 +88,7 @@ fn timings_flag() {
 
     // Create a template
     fs::write(
-        project_path.join("templates.tera/timing_test.txt.tera"),
+        project_path.join("tera.templates/timing_test.txt.tera"),
         "hello"
     ).unwrap();
 
@@ -109,7 +109,7 @@ fn no_timings_by_default() {
 
     // Create a template
     fs::write(
-        project_path.join("templates.tera/no_timing.txt.tera"),
+        project_path.join("tera.templates/no_timing.txt.tera"),
         "hello"
     ).unwrap();
 
@@ -129,8 +129,8 @@ fn keep_going_continues_after_failure() {
     let project_path = temp_dir.path();
 
     // Create one bad template and one good template
-    fs::write(project_path.join("templates.tera/bad.txt.tera"), "{{ invalid").unwrap();
-    fs::write(project_path.join("templates.tera/good.txt.tera"), "hello").unwrap();
+    fs::write(project_path.join("tera.templates/bad.txt.tera"), "{{ invalid").unwrap();
+    fs::write(project_path.join("tera.templates/good.txt.tera"), "hello").unwrap();
 
     // Run with --keep-going
     let output = run_rsconstruct_with_env(project_path, &["build", "-v", "--keep-going"], &[("NO_COLOR", "1")]);
@@ -150,7 +150,7 @@ fn keep_going_short_flag() {
     let project_path = temp_dir.path();
 
     // Create one bad template
-    fs::write(project_path.join("templates.tera/bad_k.txt.tera"), "{{ invalid").unwrap();
+    fs::write(project_path.join("tera.templates/bad_k.txt.tera"), "{{ invalid").unwrap();
 
     // Run with -k (short form)
     let output = run_rsconstruct_with_env(project_path, &["build", "-k"], &[("NO_COLOR", "1")]);
@@ -173,8 +173,8 @@ fn build_stops_on_first_error() {
     let project_path = temp_dir.path();
 
     // "aaa" sorts before "zzz" alphabetically, so it will be processed first
-    fs::write(project_path.join("templates.tera/aaa.txt.tera"), "{{ invalid").unwrap();
-    fs::write(project_path.join("templates.tera/zzz.txt.tera"), "hello").unwrap();
+    fs::write(project_path.join("tera.templates/aaa.txt.tera"), "{{ invalid").unwrap();
+    fs::write(project_path.join("tera.templates/zzz.txt.tera"), "hello").unwrap();
 
     // Build should fail on aaa.txt.tera and stop
     let result = run_rsconstruct_json(project_path, &["build"]);
@@ -193,8 +193,8 @@ fn keep_going_continues_after_error() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    fs::write(project_path.join("templates.tera/bad.txt.tera"), "{{ undefined_var }}").unwrap();
-    fs::write(project_path.join("templates.tera/good.txt.tera"), "hello").unwrap();
+    fs::write(project_path.join("tera.templates/bad.txt.tera"), "{{ undefined_var }}").unwrap();
+    fs::write(project_path.join("tera.templates/good.txt.tera"), "hello").unwrap();
 
     // First build with --keep-going — should fail but process all files
     let result1 = run_rsconstruct_json(project_path, &["build", "--keep-going"]);
@@ -205,7 +205,7 @@ fn keep_going_continues_after_error() {
         "Good template should be processed with --keep-going");
 
     // Fix the bad file
-    fs::write(project_path.join("templates.tera/bad.txt.tera"), "fixed").unwrap();
+    fs::write(project_path.join("tera.templates/bad.txt.tera"), "fixed").unwrap();
 
     // Second build — good.txt should be skipped (cached)
     let result2 = run_rsconstruct_json(project_path, &["build"]);
@@ -222,7 +222,7 @@ fn parallel_build_with_j_flag() {
 
     for name in &["alpha", "beta", "gamma", "delta"] {
         fs::write(
-            project_path.join(format!("templates.tera/{}.txt.tera", name)),
+            project_path.join(format!("tera.templates/{}.txt.tera", name)),
             "hello"
         ).unwrap();
     }
@@ -242,10 +242,10 @@ fn parallel_keep_going_continues_after_failure() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    fs::write(project_path.join("templates.tera/aaa_bad.txt.tera"), "{{ undefined_var }}").unwrap();
-    fs::write(project_path.join("templates.tera/good1.txt.tera"), "hello1").unwrap();
-    fs::write(project_path.join("templates.tera/good2.txt.tera"), "hello2").unwrap();
-    fs::write(project_path.join("templates.tera/good3.txt.tera"), "hello3").unwrap();
+    fs::write(project_path.join("tera.templates/aaa_bad.txt.tera"), "{{ undefined_var }}").unwrap();
+    fs::write(project_path.join("tera.templates/good1.txt.tera"), "hello1").unwrap();
+    fs::write(project_path.join("tera.templates/good2.txt.tera"), "hello2").unwrap();
+    fs::write(project_path.join("tera.templates/good3.txt.tera"), "hello3").unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[processor]\nenabled = [\"tera\"]\n\n[build]\nparallel = 2\n"
@@ -267,7 +267,7 @@ fn parallel_builds_all_independent_products() {
 
     for i in 0..8 {
         fs::write(
-            project_path.join(format!("templates.tera/task_{:02}.txt.tera", i)),
+            project_path.join(format!("tera.templates/task_{:02}.txt.tera", i)),
             "hello"
         ).unwrap();
     }
@@ -295,7 +295,7 @@ fn parallel_timings_flag() {
 
     for name in &["one", "two", "three"] {
         fs::write(
-            project_path.join(format!("templates.tera/{}.txt.tera", name)),
+            project_path.join(format!("tera.templates/{}.txt.tera", name)),
             "hello"
         ).unwrap();
     }
@@ -335,7 +335,7 @@ fn deterministic_build_order() {
         // Create several template files with distinct names
         for name in &["zebra", "alpha", "mango", "banana", "cherry"] {
             fs::write(
-                project_path.join(format!("templates.tera/{}.txt.tera", name)),
+                project_path.join(format!("tera.templates/{}.txt.tera", name)),
                 "hello"
             ).unwrap();
         }
@@ -378,7 +378,7 @@ fn classify_propagates_through_dependencies() {
         "val = 1"
     ).unwrap();
     fs::write(
-        project_path.join("templates.tera/step1.txt.tera"),
+        project_path.join("tera.templates/step1.txt.tera"),
         "{% set c = load_python(path='config/gen.py') %}step1={{ c.val }}"
     ).unwrap();
 
@@ -395,7 +395,7 @@ fn classify_propagates_through_dependencies() {
         "[processor]\nenabled = [\"tera\"]\n\n[processor.tera]\nextra_inputs = [\"step1.txt\"]\n"
     ).unwrap();
     fs::write(
-        project_path.join("templates.tera/step2.txt.tera"),
+        project_path.join("tera.templates/step2.txt.tera"),
         "step2"
     ).unwrap();
 
@@ -420,7 +420,7 @@ fn classify_propagates_through_dependencies() {
 
     // Modify the first tera template
     fs::write(
-        project_path.join("templates.tera/step1.txt.tera"),
+        project_path.join("tera.templates/step1.txt.tera"),
         "{% set c = load_python(path='config/gen.py') %}modified={{ c.val }}"
     ).unwrap();
 

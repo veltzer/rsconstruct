@@ -9,7 +9,7 @@ fn watch_does_initial_build() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("templates.tera/watch_init.txt.tera"),
+        project_path.join("tera.templates/watch_init.txt.tera"),
         "hello"
     ).unwrap();
 
@@ -42,7 +42,7 @@ fn watch_rebuilds_on_change() {
     let project_path = temp_dir.path();
 
     fs::write(
-        project_path.join("templates.tera/watch_change.txt.tera"),
+        project_path.join("tera.templates/watch_change.txt.tera"),
         "hello"
     ).unwrap();
 
@@ -60,7 +60,7 @@ fn watch_rebuilds_on_change() {
     std::thread::sleep(Duration::from_secs(2));
 
     // Modify the template file to trigger rebuild
-    fs::write(project_path.join("templates.tera/watch_change.txt.tera"), "changed").unwrap();
+    fs::write(project_path.join("tera.templates/watch_change.txt.tera"), "changed").unwrap();
 
     // Wait for rebuild
     std::thread::sleep(Duration::from_secs(2));

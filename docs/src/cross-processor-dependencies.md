@@ -8,7 +8,7 @@ input by another processor, and the design options for solving it.
 Consider a template that generates a Python file:
 
 ```
-templates.tera/config.py.tera  →  (template processor)  →  config.py
+tera.templates/config.py.tera  →  (template processor)  →  config.py
 ```
 
 Ideally, ruff should then lint the generated `config.py`. Or a template might

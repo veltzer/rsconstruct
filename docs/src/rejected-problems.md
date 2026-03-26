@@ -49,7 +49,7 @@ Agent claimed not unwrapping `failed_processors` Arc prevents other `Arc::try_un
 **File:** `src/processors/generators/tera.rs` (lines 100-106)
 **Flagged in:** round 10
 
-Templates in subdirectories produce output at project root (e.g., `templates.tera/sub/README.md.tera` → `README.md`). This is intentional — the comment on line 105 explicitly says "Output is at project root with the .tera extension stripped." By design.
+Templates in subdirectories produce output at project root (e.g., `tera.templates/sub/README.md.tera` → `README.md`). This is intentional — the comment on line 105 explicitly says "Output is at project root with the .tera extension stripped." By design.
 
 ## Lua stub_path uses suffix as directory name
 

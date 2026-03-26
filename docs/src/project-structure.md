@@ -9,7 +9,7 @@ project/
 ├── rsconstruct.toml          # Configuration file
 ├── .rsconstructignore        # Glob patterns for files to exclude
 ├── config/           # Python config files (loaded by templates)
-├── templates.tera/   # .tera template files
+├── tera.templates/   # .tera template files
 ├── templates.mako/   # .mako template files
 ├── src/              # C/C++ source files
 ├── plugins/          # Lua processor plugins (.lua files)
@@ -30,10 +30,10 @@ project/
 
 ### Templates
 
-Files in `templates.tera/` with configured extensions (default `.tera`) are rendered to the project root:
+Files in `tera.templates/` with configured extensions (default `.tera`) are rendered to the project root:
 
-- `templates.tera/Makefile.tera` produces `Makefile`
-- `templates.tera/config.toml.tera` produces `config.toml`
+- `tera.templates/Makefile.tera` produces `Makefile`
+- `tera.templates/config.toml.tera` produces `config.toml`
 
 Similarly, files in `templates.mako/` with `.mako` extensions are rendered via the Mako processor:
 

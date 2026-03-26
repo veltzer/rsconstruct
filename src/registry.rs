@@ -14,7 +14,7 @@
 macro_rules! for_each_processor {
     ($callback:ident) => {
         $callback! {
-            TERA,           tera,           TeraConfig,            TeraProcessor,            ("templates.tera", &[".tera"], &[]);
+            TERA,           tera,           TeraConfig,            TeraProcessor,            ("tera.templates", &[".tera"], &[]);
             RUFF,           ruff,           RuffConfig,            RuffProcessor,            ("", &[".py"], PYTHON_EXCLUDE_DIRS);
             PYLINT,         pylint,         PylintConfig,          PylintProcessor,          ("", &[".py"], PYTHON_EXCLUDE_DIRS);
             MYPY,           mypy,           MypyConfig,            MypyProcessor,            ("", &[".py"], PYTHON_EXCLUDE_DIRS);

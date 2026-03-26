@@ -35,7 +35,7 @@ fn processors_auto_detects_tera() {
 
     // Write a template file so the tera processor is detected
     fs::write(
-        project_path.join("templates.tera/test.txt.tera"),
+        project_path.join("tera.templates/test.txt.tera"),
         "hello"
     ).expect("Failed to write template");
 
@@ -58,7 +58,7 @@ fn processors_files_shows_products() {
         "value = 42"
     ).expect("Failed to write config");
     fs::write(
-        project_path.join("templates.tera/output.txt.tera"),
+        project_path.join("tera.templates/output.txt.tera"),
         "{% set c = load_python(path='config/test.py') %}{{ c.value }}"
     ).expect("Failed to write template");
 
@@ -121,7 +121,7 @@ fn processors_files_json_output() {
         "value = 42"
     ).expect("Failed to write config");
     fs::write(
-        project_path.join("templates.tera/output.txt.tera"),
+        project_path.join("tera.templates/output.txt.tera"),
         "{% set c = load_python(path='config/test.py') %}{{ c.value }}"
     ).expect("Failed to write template");
 
@@ -177,8 +177,8 @@ fn per_processor_enabled_false_disables_processor() {
     let project_path = temp_dir.path();
 
     // Create tera template directory and file
-    fs::create_dir_all(project_path.join("templates.tera")).unwrap();
-    fs::write(project_path.join("templates.tera/quick.txt.tera"), "hello").unwrap();
+    fs::create_dir_all(project_path.join("tera.templates")).unwrap();
+    fs::write(project_path.join("tera.templates/quick.txt.tera"), "hello").unwrap();
 
     // Enable tera in the enabled list but disable it via per-processor config
     fs::write(
@@ -205,8 +205,8 @@ fn per_processor_enabled_true_is_default() {
     let project_path = temp_dir.path();
 
     // Create tera template directory and file
-    fs::create_dir_all(project_path.join("templates.tera")).unwrap();
-    fs::write(project_path.join("templates.tera/quick.txt.tera"), "hello").unwrap();
+    fs::create_dir_all(project_path.join("tera.templates")).unwrap();
+    fs::write(project_path.join("tera.templates/quick.txt.tera"), "hello").unwrap();
 
     // Enable tera in the enabled list without setting per-processor enabled
     fs::write(
@@ -282,7 +282,7 @@ fn per_processor_enabled_false_non_hidden_processor() {
 
     // Write a template file so tera would normally discover a product
     fs::write(
-        project_path.join("templates.tera/output.txt.tera"),
+        project_path.join("tera.templates/output.txt.tera"),
         "hello",
     ).unwrap();
 

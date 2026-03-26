@@ -10,7 +10,7 @@ fn setup_project_with_template() -> tempfile::TempDir {
         "value = 1"
     ).expect("Failed to write config");
     fs::write(
-        project_path.join("templates.tera/out.txt.tera"),
+        project_path.join("tera.templates/out.txt.tera"),
         "{% set c = load_python(path='config/test.py') %}{{ c.value }}"
     ).expect("Failed to write template");
 

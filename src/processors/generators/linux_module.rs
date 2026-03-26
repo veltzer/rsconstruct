@@ -26,15 +26,6 @@ impl LinuxModuleProcessor {
         Ok(manifest)
     }
 
-    /// Resolve a manifest-relative path to a project-root-relative path.
-    fn resolve_path(anchor_dir: &Path, rel: &str) -> PathBuf {
-        if anchor_dir.as_os_str().is_empty() {
-            PathBuf::from(rel)
-        } else {
-            anchor_dir.join(rel)
-        }
-    }
-
     /// Compute the output directory for a linux-module.yaml file.
     fn output_dir_for(yaml_path: &Path) -> PathBuf {
         let anchor_dir = yaml_path.parent().unwrap_or(Path::new(""));
@@ -193,7 +184,7 @@ impl ProductDiscovery for LinuxModuleProcessor {
 
             for module in &manifest.modules {
                 for source in &module.sources {
-                    inputs.push(Self::resolve_path(anchor_dir, source));
+                    inputs.push(crate::processors::resolve_anchor_path(anchor_dir, source));
                 }
                 outputs.push(output_dir.join(format!("{}.ko", module.name)));
             }

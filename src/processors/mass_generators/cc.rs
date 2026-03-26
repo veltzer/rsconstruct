@@ -52,16 +52,6 @@ impl CcProcessor {
         Ok(manifest)
     }
 
-    /// Resolve a manifest-relative path to a project-root-relative path.
-    /// Paths in cc.yaml are relative to the cc.yaml's directory.
-    fn resolve_path(anchor_dir: &Path, rel: &str) -> PathBuf {
-        if anchor_dir.as_os_str().is_empty() {
-            PathBuf::from(rel)
-        } else {
-            anchor_dir.join(rel)
-        }
-    }
-
     /// Compile a single source file to an object file.
     /// All paths are relative to the project root.
     fn compile_object(manifest: &CcManifest, source: &Path, obj: &Path, extra_cflags: &[String]) -> Result<()> {
@@ -210,7 +200,7 @@ impl CcProcessor {
             let target_obj_dir = obj_dir.join(&lib.name);
             let mut objects = Vec::new();
             for source_str in &lib.sources {
-                let source = Self::resolve_path(anchor_dir, source_str);
+                let source = crate::processors::resolve_anchor_path(anchor_dir, source_str);
                 let obj_name = format!("{}.o", source.file_stem().context("source has no stem")?.to_string_lossy());
                 let obj = target_obj_dir.join(&obj_name);
                 Self::compile_object(&manifest, &source, &obj, &extra_cflags)?;
@@ -233,7 +223,7 @@ impl CcProcessor {
 
             // Resolve source paths
             let sources: Vec<PathBuf> = prog.sources.iter()
-                .map(|s| Self::resolve_path(anchor_dir, s))
+                .map(|s| crate::processors::resolve_anchor_path(anchor_dir, s))
                 .collect();
 
             if self.config.single_invocation {
@@ -303,12 +293,12 @@ impl ProductDiscovery for CcProcessor {
 
             for lib in &manifest.libraries {
                 for source in &lib.sources {
-                    inputs.push(Self::resolve_path(anchor_dir, source));
+                    inputs.push(crate::processors::resolve_anchor_path(anchor_dir, source));
                 }
             }
             for prog in &manifest.programs {
                 for source in &prog.sources {
-                    inputs.push(Self::resolve_path(anchor_dir, source));
+                    inputs.push(crate::processors::resolve_anchor_path(anchor_dir, source));
                 }
             }
 

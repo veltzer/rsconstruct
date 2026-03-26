@@ -7,12 +7,12 @@ configuration variables from Python or Lua files.
 
 ## How It Works
 
-Files matching configured extensions in `templates.tera/` are rendered and written
+Files matching configured extensions in `tera.templates/` are rendered and written
 to the project root with the extension stripped:
 
 ```
-templates.tera/app.config.tera  →  app.config
-templates.tera/sub/readme.txt.tera  →  sub/readme.txt
+tera.templates/app.config.tera  →  app.config
+tera.templates/sub/readme.txt.tera  →  sub/readme.txt
 ```
 
 Templates use the [Tera](https://keats.github.io/tera/) templating engine and can call
@@ -43,7 +43,7 @@ version = "{{ config.version }}"
 
 ## Source Files
 
-- Input: `templates.tera/**/*{extensions}`
+- Input: `tera.templates/**/*{extensions}`
 - Output: project root, mirroring the template path with the extension removed
 
 ## Configuration

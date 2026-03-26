@@ -8,13 +8,13 @@ fn rsconstructignore_excludes_tera_files() {
     let project_path = temp_dir.path();
 
     // Create two template files
-    fs::write(project_path.join("templates.tera/included.txt.tera"), "hello").unwrap();
-    fs::write(project_path.join("templates.tera/excluded.txt.tera"), "world").unwrap();
+    fs::write(project_path.join("tera.templates/included.txt.tera"), "hello").unwrap();
+    fs::write(project_path.join("tera.templates/excluded.txt.tera"), "world").unwrap();
 
     // Create .rsconstructignore that excludes one file
     fs::write(
         project_path.join(".rsconstructignore"),
-        "templates.tera/excluded.txt.tera\n"
+        "tera.templates/excluded.txt.tera\n"
     ).unwrap();
 
     // Build
@@ -33,15 +33,15 @@ fn rsconstructignore_glob_pattern() {
     let project_path = temp_dir.path();
 
     // Create templates directory with subdirectory
-    fs::create_dir_all(project_path.join("templates.tera/subdir")).unwrap();
-    fs::write(project_path.join("templates.tera/keep.txt.tera"), "hello").unwrap();
-    fs::write(project_path.join("templates.tera/subdir/skip1.txt.tera"), "world1").unwrap();
-    fs::write(project_path.join("templates.tera/subdir/skip2.txt.tera"), "world2").unwrap();
+    fs::create_dir_all(project_path.join("tera.templates/subdir")).unwrap();
+    fs::write(project_path.join("tera.templates/keep.txt.tera"), "hello").unwrap();
+    fs::write(project_path.join("tera.templates/subdir/skip1.txt.tera"), "world1").unwrap();
+    fs::write(project_path.join("tera.templates/subdir/skip2.txt.tera"), "world2").unwrap();
 
     // Use a glob pattern to exclude the entire subdirectory
     fs::write(
         project_path.join(".rsconstructignore"),
-        "# Exclude all files in subdir\ntemplates.tera/subdir/**\n"
+        "# Exclude all files in subdir\ntera.templates/subdir/**\n"
     ).unwrap();
 
     // Build
@@ -61,7 +61,7 @@ fn rsconstructignore_no_file() {
     let project_path = temp_dir.path();
 
     // Create a template — no .rsconstructignore
-    fs::write(project_path.join("templates.tera/normal.txt.tera"), "hello").unwrap();
+    fs::write(project_path.join("tera.templates/normal.txt.tera"), "hello").unwrap();
 
     // Build should work fine without .rsconstructignore
     let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
@@ -79,13 +79,13 @@ fn rsconstructignore_comments_and_blank_lines() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    fs::write(project_path.join("templates.tera/a.txt.tera"), "hello").unwrap();
-    fs::write(project_path.join("templates.tera/b.txt.tera"), "world").unwrap();
+    fs::write(project_path.join("tera.templates/a.txt.tera"), "hello").unwrap();
+    fs::write(project_path.join("tera.templates/b.txt.tera"), "world").unwrap();
 
     // .rsconstructignore with comments, blank lines, and one real pattern
     fs::write(
         project_path.join(".rsconstructignore"),
-        "# This is a comment\n\n   \n# Another comment\ntemplates.tera/b.txt.tera\n\n"
+        "# This is a comment\n\n   \n# Another comment\ntera.templates/b.txt.tera\n\n"
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
