@@ -440,9 +440,23 @@ fn tools_graph_text(tool_map: &BTreeMap<String, Vec<String>>) -> String {
 fn tools_graph_json(tool_map: &BTreeMap<String, Vec<String>>) -> Result<String> {
     let entries: Vec<crate::json_output::ToolListEntry> = tool_map
         .iter()
-        .map(|(tool, procs)| crate::json_output::ToolListEntry {
-            tool: tool.clone(),
-            processors: procs.clone(),
+        .map(|(tool, procs)| {
+            let info = crate::processors::tool_info(tool);
+            let install_methods = info
+                .map(|i| i.install_methods.iter().map(|m| {
+                    crate::json_output::ToolInstallMethodEntry {
+                        method: m.method.to_string(),
+                        command: m.command.to_string(),
+                    }
+                }).collect())
+                .unwrap_or_default();
+            crate::json_output::ToolListEntry {
+                tool: tool.clone(),
+                installed: which::which(tool).is_ok(),
+                runtime: info.map(|i| i.runtime).unwrap_or("unknown").to_string(),
+                processors: procs.clone(),
+                install_methods,
+            }
         })
         .collect();
     Ok(serde_json::to_string_pretty(&entries)?)
