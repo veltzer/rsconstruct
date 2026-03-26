@@ -44,8 +44,6 @@ derived names.
 Test functions for a processor must be prefixed with the processor name.
 For example, tests for the `cc_single_file` processor must be named
 `cc_single_file_compile`, `cc_single_file_incremental_skip`, etc.
-Tests for the `sleep` processor must be named `sleep_processor`,
-`sleep_extra_inputs_valid`, etc.
 
 ## No indented output
 

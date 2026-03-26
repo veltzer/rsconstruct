@@ -19,7 +19,6 @@ project/
 │   ├── pylint/       # Pylint lint stub files
 │   ├── cppcheck/      # C/C++ lint stub files
 │   ├── spellcheck/   # Spellcheck stub files
-│   ├── sleep/        # Sleep stub files
 │   └── make/         # Make stub files
 └── .rsconstruct/             # Cache directory
     ├── index.json    # Cache index

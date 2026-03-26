@@ -245,7 +245,7 @@ The plugin name is derived from the `.lua` filename (without extension). This na
 - The `out/NAME/` stub directory
 - Display in `rsconstruct processors list` and build output
 
-A plugin name must not conflict with a built-in processor name (`tera`, `ruff`, `pylint`, `cc_single_file`, `cppcheck`, `shellcheck`, `spellcheck`, `sleep`, `make`). RSConstruct will error if a conflict is detected.
+A plugin name must not conflict with a built-in processor name (`tera`, `ruff`, `pylint`, `cc_single_file`, `cppcheck`, `shellcheck`, `spellcheck`, `make`). RSConstruct will error if a conflict is detected.
 
 ## Incremental Builds
 

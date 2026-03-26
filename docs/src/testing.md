@@ -31,7 +31,6 @@ tests/
 ├── processors.rs               # Module root for processor tests
 └── processors/
     ├── cc_single_file.rs       # C/C++ compilation tests
-    ├── sleep.rs                # Sleep processor tests
     ├── spellcheck.rs           # Spellcheck processor tests
     └── template.rs             # Template processor tests
 ```
@@ -42,7 +41,6 @@ Each top-level `.rs` file in `tests/` is compiled as a separate test binary by C
 mod common;
 mod processors {
     pub mod cc_single_file;
-    pub mod sleep;
     pub mod spellcheck;
     pub mod template;
 }
@@ -118,7 +116,6 @@ assert!(!stdout.contains("error"));
 
 ```rust
 assert!(path.join("out/cc_single_file/main.elf").exists());
-assert!(!path.join("out/sleep/excluded.done").exists());
 ```
 
 **Incremental builds:**
@@ -158,7 +155,6 @@ If adding a new processor test module, declare it in `tests/processors.rs`:
 ```rust
 mod processors {
     pub mod cc_single_file;
-    pub mod sleep;
     pub mod spellcheck;
     pub mod template;
     pub mod my_new_processor;  // add here
@@ -183,5 +179,4 @@ mod processors {
 | Ignore | `rsconstructignore.rs` | Exact match, globs, leading slash, trailing slash, comments, cross-processor |
 | Template | `processors/template.rs` | Rendering, incremental, extra_inputs |
 | CC | `processors/cc_single_file.rs` | Compilation, headers, per-file flags, mixed C/C++, config change detection |
-| Sleep | `processors/sleep.rs` | Basic execution, extra_inputs |
 | Spellcheck | `processors/spellcheck.rs` | Correct/misspelled words, code block filtering, custom words, incremental |

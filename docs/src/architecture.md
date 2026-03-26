@@ -49,7 +49,6 @@ Detection heuristics per processor:
 | `rumdl` | Checker | Project contains `.md` files |
 | `mdl` | Checker | Project contains `.md` files |
 | `markdownlint` | Checker | Project contains `.md` files |
-| `sleep` | Checker | `sleep/` directory contains `.sleep` files |
 | `make` | Checker | Project contains `Makefile` files |
 | `cargo` | Mass Generator | Project contains `Cargo.toml` files |
 | `sphinx` | Mass Generator | Project contains `conf.py` files |
@@ -105,7 +104,7 @@ All external subprocess execution goes through `run_command()` in `src/processor
 3. Between polls, check the global `INTERRUPTED` flag (set by the Ctrl+C handler)
 4. If interrupted, kill the child process immediately and return an error
 
-This ensures that pressing Ctrl+C terminates running subprocesses within 50ms, even for long-running compilations or linter invocations. The sleep processor uses the same pattern — its sleep interval is broken into 50ms chunks with interrupt checks between them.
+This ensures that pressing Ctrl+C terminates running subprocesses within 50ms, even for long-running compilations or linter invocations.
 
 The global `INTERRUPTED` flag is an `AtomicBool` set once by the `ctrlc` handler in `main.rs` and checked by all threads.
 

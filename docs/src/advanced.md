@@ -149,6 +149,5 @@ All processors support `extra_inputs`.
 Pressing Ctrl+C during a build stops execution promptly:
 
 - **Subprocess termination** — All external processes (compilers, linters, etc.) are spawned with a poll loop that checks for interrupts every 50ms. When Ctrl+C is detected, the running child process is killed immediately rather than waiting for it to finish. This keeps response time under 50ms regardless of how long the subprocess would otherwise run.
-- **Sleep processor** — The sleep processor also checks for interrupts every 50ms during its sleep interval.
 - **Progress preservation** — Products that completed successfully before the interrupt are cached. The next build resumes from where it left off rather than starting over.
 - **Parallel builds** — In parallel mode, all in-flight subprocesses are killed when Ctrl+C is detected. Each thread's poll loop independently checks the global interrupt flag.

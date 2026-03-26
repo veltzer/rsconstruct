@@ -54,7 +54,6 @@ Use `rsconstruct processors files` to see which files each processor discovers.
 - [Shellcheck](processors/shellcheck.md) — lints shell scripts using shellcheck
 - [Spellcheck](processors/spellcheck.md) — checks documentation files for spelling errors
 - [Rumdl](processors/rumdl.md) — lints Markdown files with rumdl
-- [Sleep](processors/sleep.md) — sleeps for a duration (for testing)
 - [Make](processors/make.md) — runs make in directories containing Makefiles
 - [Cargo](processors/cargo.md) — builds Rust projects using Cargo
 - [Yamllint](processors/yamllint.md) — lints YAML files with yamllint
