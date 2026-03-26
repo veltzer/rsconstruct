@@ -187,11 +187,13 @@ fn build_stops_on_first_error() {
 
 #[test]
 fn keep_going_continues_after_error() {
-    // With --keep-going, independent products should still be processed
+    // With --keep-going, independent products should still be processed.
+    // Use an undefined variable (runtime error) rather than a parse error,
+    // because Tera loads all templates at once and a parse error poisons them all.
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    fs::write(project_path.join("templates.tera/bad.txt.tera"), "{{ invalid").unwrap();
+    fs::write(project_path.join("templates.tera/bad.txt.tera"), "{{ undefined_var }}").unwrap();
     fs::write(project_path.join("templates.tera/good.txt.tera"), "hello").unwrap();
 
     // First build with --keep-going — should fail but process all files
@@ -234,11 +236,13 @@ fn parallel_build_with_j_flag() {
 #[test]
 fn parallel_keep_going_continues_after_failure() {
     // Verify --keep-going processes all independent products even when one fails
-    // under parallel execution
+    // under parallel execution.
+    // Use an undefined variable (runtime error) rather than a parse error,
+    // because Tera loads all templates at once and a parse error poisons them all.
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    fs::write(project_path.join("templates.tera/aaa_bad.txt.tera"), "{{ invalid").unwrap();
+    fs::write(project_path.join("templates.tera/aaa_bad.txt.tera"), "{{ undefined_var }}").unwrap();
     fs::write(project_path.join("templates.tera/good1.txt.tera"), "hello1").unwrap();
     fs::write(project_path.join("templates.tera/good2.txt.tera"), "hello2").unwrap();
     fs::write(project_path.join("templates.tera/good3.txt.tera"), "hello3").unwrap();
