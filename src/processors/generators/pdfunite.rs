@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -115,10 +115,7 @@ impl ProductDiscovery for PdfuniteProcessor {
     fn execute(&self, product: &Product) -> Result<()> {
         let output = product.primary_output();
 
-        if let Some(parent) = output.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create pdfunite output directory: {}", parent.display()))?;
-        }
+        crate::processors::ensure_output_dir(output)?;
 
         let mut cmd = Command::new(&self.config.pdfunite_bin);
         for arg in &self.config.args {

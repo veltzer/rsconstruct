@@ -19,11 +19,7 @@ use super::TemplateItem;
 /// Render a template item and write to output
 fn render_template(item: &TemplateItem, config: &TeraConfig) -> Result<()> {
     // Ensure parent directory of output exists
-    if let Some(parent) = item.output_path.parent()
-        && !parent.as_os_str().is_empty() && !parent.exists()
-    {
-        fs::create_dir_all(parent)?;
-    }
+    crate::processors::ensure_output_dir(&item.output_path)?;
 
     // Read template content
     let template_content = fs::read_to_string(&item.source_path)?;

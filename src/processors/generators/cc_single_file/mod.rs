@@ -1,7 +1,6 @@
 mod source_flags;
 
-use anyhow::{Context, Result};
-use std::fs;
+use anyhow::Result;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -95,10 +94,7 @@ impl CcSingleFileProcessor {
         let source_flags = parse_source_flags(source, &profile.name)?;
 
         // Ensure output directory exists
-        if let Some(parent) = executable.parent() {
-            fs::create_dir_all(parent)
-                .context("Failed to create output directory")?;
-        }
+        crate::processors::ensure_output_dir(executable)?;
 
         let mut cmd = Command::new(compiler);
         self.add_compile_flags(&mut cmd, profile, is_cpp, &source_flags);

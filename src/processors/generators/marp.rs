@@ -79,10 +79,7 @@ impl ProductDiscovery for MarpProcessor {
             .context("marp output has no extension")?
             .to_string_lossy();
 
-        if let Some(parent) = output.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create marp output directory: {}", parent.display()))?;
-        }
+        crate::processors::ensure_output_dir(output)?;
 
         let mut cmd = Command::new(&self.config.marp_bin);
         // HTML is marp's default output, so no format flag needed for it

@@ -68,12 +68,7 @@ impl ProductDiscovery for TagsProcessor {
         let output_path = product.primary_output();
 
         // Ensure output directory exists
-        if let Some(parent) = output_path.parent()
-            && !parent.exists()
-        {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create tags output directory: {}", parent.display()))?;
-        }
+        crate::processors::ensure_output_dir(output_path)?;
 
         // Collect frontmatter from all input .md files
         let mut all_frontmatter: HashMap<String, serde_json::Value> = HashMap::new();

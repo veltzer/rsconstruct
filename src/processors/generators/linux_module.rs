@@ -169,13 +169,9 @@ impl ProductDiscovery for LinuxModuleProcessor {
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
-        if !scan_root_valid(&self.config.scan) {
+        let Some(files) = crate::processors::scan_or_skip(&self.config.scan, file_index) else {
             return Ok(());
-        }
-        let files = file_index.scan(&self.config.scan, true);
-        if files.is_empty() {
-            return Ok(());
-        }
+        };
         let hash = Some(config_hash(&self.config));
         let extra = resolve_extra_inputs(&self.config.extra_inputs)?;
 

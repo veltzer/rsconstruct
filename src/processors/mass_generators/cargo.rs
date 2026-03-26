@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -48,14 +47,9 @@ impl ProductDiscovery for CargoProcessor {
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
-        if !scan_root_valid(&self.config.scan) {
+        let Some(files) = crate::processors::scan_or_skip(&self.config.scan, file_index) else {
             return Ok(());
-        }
-
-        let files = file_index.scan(&self.config.scan, true);
-        if files.is_empty() {
-            return Ok(());
-        }
+        };
 
         let siblings = SiblingFilter {
             extensions: &[".rs", ".toml"],
@@ -75,14 +69,7 @@ impl ProductDiscovery for CargoProcessor {
                 &[],
             );
 
-            let mut base_inputs: Vec<PathBuf> = Vec::with_capacity(1 + sibling_files.len() + extra.len());
-            base_inputs.push(anchor.clone());
-            for file in &sibling_files {
-                if *file != anchor {
-                    base_inputs.push(file.clone());
-                }
-            }
-            base_inputs.extend_from_slice(&extra);
+            let base_inputs = crate::processors::build_anchor_inputs(&anchor, &sibling_files, &extra);
 
             for profile in &self.config.profiles {
                 let inputs = base_inputs.clone();
@@ -121,16 +108,7 @@ impl ProductDiscovery for CargoProcessor {
     }
 
     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
-        if let Some(ref output_dir) = product.output_dir
-            && output_dir.exists()
-        {
-            if verbose {
-                println!("Removing cargo output directory: {}", output_dir.display());
-            }
-            fs::remove_dir_all(output_dir.as_ref())?;
-            return Ok(1);
-        }
-        Ok(0)
+        crate::processors::clean_output_dir(product, crate::processors::names::CARGO, verbose)
     }
 
     fn config_json(&self) -> Option<String> {

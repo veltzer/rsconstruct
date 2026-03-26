@@ -1,3 +1,155 @@
+/// Generate boilerplate for a simple generator processor.
+///
+/// Generates the struct, `new()` constructor, and the boilerplate `ProductDiscovery` methods
+/// (`description`, `processor_type`, `auto_detect`, `required_tools`, `discover`, `clean`,
+/// `config_json`). The `execute()` method must be provided via `execute_product()` in a
+/// separate `impl` block.
+///
+/// # Variants
+/// - Multi-format: `discover: multi_format, formats_field: formats, ...`
+/// - Single-format: `discover: single_format, extension: "pdf", ...`
+///
+/// # Tool specification
+/// - `tool_field: field_name` — tool name from config field
+/// - `tool_field_extra: field_name ["extra".to_string()]` — config field + extra tools
+/// - `tools: ["tool".to_string()]` — static tool list
+macro_rules! impl_generator {
+    // Multi-format variant
+    ($processor:ident, $config:ty,
+     description: $desc:expr,
+     name: $name:expr,
+     discover: multi_format, formats_field: $formats:ident,
+     $($tool_spec:tt)*
+    ) => {
+        pub struct $processor {
+            config: $config,
+        }
+
+        impl $processor {
+            pub fn new(config: $config) -> Self {
+                Self { config }
+            }
+        }
+
+        impl $crate::processors::ProductDiscovery for $processor {
+            fn description(&self) -> &str { $desc }
+
+            fn processor_type(&self) -> $crate::processors::ProcessorType {
+                $crate::processors::ProcessorType::Generator
+            }
+
+            fn auto_detect(&self, file_index: &$crate::file_index::FileIndex) -> bool {
+                $crate::processors::scan_root_valid(&self.config.scan)
+                    && !file_index.scan(&self.config.scan, true).is_empty()
+            }
+
+            fn required_tools(&self) -> Vec<String> {
+                impl_generator!(@tools self, $($tool_spec)*)
+            }
+
+            fn discover(
+                &self,
+                graph: &mut $crate::graph::BuildGraph,
+                file_index: &$crate::file_index::FileIndex,
+            ) -> anyhow::Result<()> {
+                let params = super::DiscoverParams {
+                    scan: &self.config.scan,
+                    extra_inputs: &self.config.extra_inputs,
+                    config: &self.config,
+                    output_dir: &self.config.output_dir,
+                    processor_name: $name,
+                };
+                super::discover_multi_format(graph, file_index, &params, &self.config.$formats)
+            }
+
+            fn execute(&self, product: &$crate::graph::Product) -> anyhow::Result<()> {
+                self.execute_product(product)
+            }
+
+            fn clean(&self, product: &$crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
+                $crate::processors::clean_outputs(product, $name, verbose)
+            }
+
+            fn config_json(&self) -> Option<String> {
+                serde_json::to_string(&self.config).ok()
+            }
+        }
+    };
+
+    // Single-format variant
+    ($processor:ident, $config:ty,
+     description: $desc:expr,
+     name: $name:expr,
+     discover: single_format, extension: $ext:expr,
+     $($tool_spec:tt)*
+    ) => {
+        pub struct $processor {
+            config: $config,
+        }
+
+        impl $processor {
+            pub fn new(config: $config) -> Self {
+                Self { config }
+            }
+        }
+
+        impl $crate::processors::ProductDiscovery for $processor {
+            fn description(&self) -> &str { $desc }
+
+            fn processor_type(&self) -> $crate::processors::ProcessorType {
+                $crate::processors::ProcessorType::Generator
+            }
+
+            fn auto_detect(&self, file_index: &$crate::file_index::FileIndex) -> bool {
+                $crate::processors::scan_root_valid(&self.config.scan)
+                    && !file_index.scan(&self.config.scan, true).is_empty()
+            }
+
+            fn required_tools(&self) -> Vec<String> {
+                impl_generator!(@tools self, $($tool_spec)*)
+            }
+
+            fn discover(
+                &self,
+                graph: &mut $crate::graph::BuildGraph,
+                file_index: &$crate::file_index::FileIndex,
+            ) -> anyhow::Result<()> {
+                let params = super::DiscoverParams {
+                    scan: &self.config.scan,
+                    extra_inputs: &self.config.extra_inputs,
+                    config: &self.config,
+                    output_dir: &self.config.output_dir,
+                    processor_name: $name,
+                };
+                super::discover_single_format(graph, file_index, &params, $ext)
+            }
+
+            fn execute(&self, product: &$crate::graph::Product) -> anyhow::Result<()> {
+                self.execute_product(product)
+            }
+
+            fn clean(&self, product: &$crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
+                $crate::processors::clean_outputs(product, $name, verbose)
+            }
+
+            fn config_json(&self) -> Option<String> {
+                serde_json::to_string(&self.config).ok()
+            }
+        }
+    };
+
+    // --- Tool specification dispatch ---
+    (@tools $self:ident, tool_field: $field:ident) => {
+        vec![$self.config.$field.clone()]
+    };
+    (@tools $self:ident, tool_field_extra: $field:ident [$($extra:expr),+]) => {
+        vec![$self.config.$field.clone(), $($extra),+]
+    };
+    (@tools $self:ident, tools: [$($tool:expr),+]) => {
+        vec![$($tool),+]
+    };
+}
+
 mod a2x;
 mod cc_single_file;
 mod chromium;
@@ -39,7 +191,6 @@ use serde::Serialize;
 use crate::config::{ScanConfig, config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
-use crate::processors::scan_root_valid;
 
 /// Represents a single template file to be processed (shared by tera and mako).
 pub(super) struct TemplateItem {
@@ -123,14 +274,9 @@ pub(super) fn discover_multi_format(
     params: &DiscoverParams<'_, impl Serialize>,
     formats: &[String],
 ) -> Result<()> {
-    if !scan_root_valid(params.scan) {
+    let Some(files) = crate::processors::scan_or_skip(params.scan, file_index) else {
         return Ok(());
-    }
-
-    let files = file_index.scan(params.scan, true);
-    if files.is_empty() {
-        return Ok(());
-    }
+    };
 
     let hash = Some(config_hash(params.config));
     let extra = resolve_extra_inputs(params.extra_inputs)?;

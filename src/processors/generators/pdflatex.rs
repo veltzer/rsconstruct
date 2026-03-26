@@ -74,10 +74,7 @@ impl ProductDiscovery for PdflatexProcessor {
             .to_string_lossy();
 
         // Ensure output directory exists
-        if let Some(parent) = final_output.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create pdflatex output directory: {}", parent.display()))?;
-        }
+        crate::processors::ensure_output_dir(final_output)?;
 
         // Use the output directory as pdflatex's output-directory
         let build_dir = final_output.parent().unwrap_or(Path::new("."));

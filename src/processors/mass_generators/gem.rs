@@ -48,14 +48,9 @@ impl ProductDiscovery for GemProcessor {
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
-        if !scan_root_valid(&self.config.scan) {
+        let Some(files) = crate::processors::scan_or_skip(&self.config.scan, file_index) else {
             return Ok(());
-        }
-
-        let files = file_index.scan(&self.config.scan, true);
-        if files.is_empty() {
-            return Ok(());
-        }
+        };
 
         let hash = Some(config_hash(&self.config));
         let extra = resolve_extra_inputs(&self.config.extra_inputs)?;
@@ -76,14 +71,7 @@ impl ProductDiscovery for GemProcessor {
                 &[],
             );
 
-            let mut inputs: Vec<PathBuf> = Vec::with_capacity(1 + sibling_files.len() + extra.len());
-            inputs.push(anchor.clone());
-            for file in &sibling_files {
-                if *file != anchor {
-                    inputs.push(file.clone());
-                }
-            }
-            inputs.extend_from_slice(&extra);
+            let inputs = crate::processors::build_anchor_inputs(&anchor, &sibling_files, &extra);
 
             if self.config.cache_output_dir {
                 let output_dir = if anchor_dir.as_os_str().is_empty() {
@@ -105,16 +93,7 @@ impl ProductDiscovery for GemProcessor {
     }
 
     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
-        if let Some(ref output_dir) = product.output_dir
-            && output_dir.exists()
-        {
-            if verbose {
-                println!("Removing gem output directory: {}", output_dir.display());
-            }
-            std::fs::remove_dir_all(output_dir.as_ref())?;
-            return Ok(1);
-        }
-        Ok(0)
+        crate::processors::clean_output_dir(product, crate::processors::names::GEM, verbose)
     }
 
     fn config_json(&self) -> Option<String> {

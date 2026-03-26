@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std::fs;
 use std::path::Path;
 use std::process::Command;
 
@@ -75,16 +74,7 @@ impl ProductDiscovery for MdbookProcessor {
     }
 
     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
-        if let Some(ref output_dir) = product.output_dir
-            && output_dir.exists()
-        {
-            if verbose {
-                println!("Removing mdbook output directory: {}", output_dir.display());
-            }
-            fs::remove_dir_all(output_dir.as_ref())?;
-            return Ok(1);
-        }
-        Ok(0)
+        crate::processors::clean_output_dir(product, crate::processors::names::MDBOOK, verbose)
     }
 
     fn config_json(&self) -> Option<String> {

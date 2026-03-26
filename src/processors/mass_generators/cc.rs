@@ -65,10 +65,7 @@ impl CcProcessor {
     /// Compile a single source file to an object file.
     /// All paths are relative to the project root.
     fn compile_object(manifest: &CcManifest, source: &Path, obj: &Path, extra_cflags: &[String]) -> Result<()> {
-        if let Some(parent) = obj.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create object directory: {}", parent.display()))?;
-        }
+        crate::processors::ensure_output_dir(obj)?;
         let compiler = Self::compiler_for(manifest, source);
         let mut cmd = Command::new(&compiler);
         cmd.arg("-c");
@@ -85,9 +82,7 @@ impl CcProcessor {
 
     /// Build a static library from object files.
     fn build_static_lib(lib_path: &Path, objects: &[PathBuf]) -> Result<()> {
-        if let Some(parent) = lib_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
+        crate::processors::ensure_output_dir(lib_path)?;
         let mut cmd = Command::new("ar");
         cmd.arg("rcs").arg(lib_path);
         for obj in objects {
@@ -99,9 +94,7 @@ impl CcProcessor {
 
     /// Build a shared library from object files.
     fn build_shared_lib(manifest: &CcManifest, lib_path: &Path, objects: &[PathBuf], ldflags: &[String]) -> Result<()> {
-        if let Some(parent) = lib_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
+        crate::processors::ensure_output_dir(lib_path)?;
         let compiler = &manifest.cc;
         let mut cmd = Command::new(compiler);
         cmd.arg("-shared").arg("-o").arg(lib_path);
@@ -120,9 +113,7 @@ impl CcProcessor {
 
     /// Link object files into an executable.
     fn link_program(manifest: &CcManifest, exe_path: &Path, objects: &[PathBuf], lib_dir: &Path, link_libs: &[String], ldflags: &[String]) -> Result<()> {
-        if let Some(parent) = exe_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
+        crate::processors::ensure_output_dir(exe_path)?;
         let compiler = &manifest.cc;
         let mut cmd = Command::new(compiler);
         cmd.arg("-o").arg(exe_path);
@@ -147,9 +138,7 @@ impl CcProcessor {
 
     /// Single-invocation build for a program (all sources in one command).
     fn single_invocation_program(manifest: &CcManifest, exe_path: &Path, sources: &[PathBuf], lib_dir: &Path, link_libs: &[String], ldflags: &[String]) -> Result<()> {
-        if let Some(parent) = exe_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
+        crate::processors::ensure_output_dir(exe_path)?;
         let has_cxx = sources.iter().any(|s| Self::is_cxx(s));
         let compiler = if has_cxx { &manifest.cxx } else { &manifest.cc };
         let mut cmd = Command::new(compiler);
@@ -291,13 +280,9 @@ impl ProductDiscovery for CcProcessor {
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
-        if !scan_root_valid(&self.config.scan) {
+        let Some(files) = crate::processors::scan_or_skip(&self.config.scan, file_index) else {
             return Ok(());
-        }
-        let files = file_index.scan(&self.config.scan, true);
-        if files.is_empty() {
-            return Ok(());
-        }
+        };
         let hash = Some(config_hash(&self.config));
         let extra = resolve_extra_inputs(&self.config.extra_inputs)?;
 
@@ -349,16 +334,7 @@ impl ProductDiscovery for CcProcessor {
     }
 
     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
-        if let Some(ref output_dir) = product.output_dir
-            && output_dir.exists()
-        {
-            if verbose {
-                println!("Removing cc output directory: {}", output_dir.display());
-            }
-            fs::remove_dir_all(output_dir.as_ref())?;
-            return Ok(1);
-        }
-        Ok(0)
+        crate::processors::clean_output_dir(product, crate::processors::names::CC, verbose)
     }
 
     fn config_json(&self) -> Option<String> {

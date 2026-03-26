@@ -378,6 +378,59 @@ pub(crate) fn config_file_inputs(path: &str) -> Vec<String> {
     }
 }
 
+/// Create the parent directory of an output path if it doesn't exist.
+/// Used by generator processors before writing output files.
+pub(crate) fn ensure_output_dir(output: &Path) -> Result<()> {
+    if let Some(parent) = output.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create output directory: {}", parent.display()))?;
+    }
+    Ok(())
+}
+
+/// Remove the output_dir of a product. Used by mass generator clean() methods.
+/// Returns 1 if the directory was removed, 0 otherwise.
+pub(crate) fn clean_output_dir(product: &Product, processor_name: &str, verbose: bool) -> Result<usize> {
+    if let Some(ref output_dir) = product.output_dir
+        && output_dir.exists()
+    {
+        if verbose {
+            println!("Removing {} output directory: {}", processor_name, output_dir.display());
+        }
+        fs::remove_dir_all(output_dir.as_ref())?;
+        return Ok(1);
+    }
+    Ok(0)
+}
+
+/// Build the input list for mass generators: anchor first, then sibling files
+/// (excluding the anchor to avoid duplicates), then extra inputs.
+pub(crate) fn build_anchor_inputs(anchor: &Path, sibling_files: &[PathBuf], extra: &[PathBuf]) -> Vec<PathBuf> {
+    let mut inputs: Vec<PathBuf> = Vec::with_capacity(1 + sibling_files.len() + extra.len());
+    inputs.push(anchor.to_path_buf());
+    for file in sibling_files {
+        if *file != anchor {
+            inputs.push(file.clone());
+        }
+    }
+    inputs.extend_from_slice(extra);
+    inputs
+}
+
+/// Combine the scan_root_valid check, scan, and empty check that mass generators
+/// repeat in their discover() methods. Returns None if the scan root is invalid
+/// or no files were found, otherwise returns the list of files.
+pub(crate) fn scan_or_skip(scan: &crate::config::ScanConfig, file_index: &FileIndex) -> Option<Vec<PathBuf>> {
+    if !scan_root_valid(scan) {
+        return None;
+    }
+    let files = file_index.scan(scan, true);
+    if files.is_empty() {
+        return None;
+    }
+    Some(files)
+}
+
 /// Clean outputs for a product: remove each output file.
 /// When `verbose` is true, prints a message for each removed file.
 /// Returns the number of files removed.
@@ -450,15 +503,7 @@ pub(crate) fn discover_directory_products(
             &[],
         );
 
-        let mut inputs: Vec<PathBuf> = Vec::with_capacity(1 + sibling_files.len() + extra.len());
-        // Anchor file first so product display shows it
-        inputs.push(anchor.clone());
-        for file in &sibling_files {
-            if *file != anchor {
-                inputs.push(file.clone());
-            }
-        }
-        inputs.extend_from_slice(&extra);
+        let inputs = build_anchor_inputs(&anchor, &sibling_files, &extra);
 
         if let Some(dir_name) = output_dir_name {
             let output_dir = if anchor_dir.as_os_str().is_empty() {

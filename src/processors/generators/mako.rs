@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std::fs;
 use std::process::Command;
 
 use crate::config::{MakoConfig, config_hash, resolve_extra_inputs};
@@ -12,11 +11,7 @@ use super::TemplateItem;
 /// Render a Mako template via python3 and write to output
 fn render_mako(item: &TemplateItem) -> Result<()> {
     // Ensure parent directory of output exists
-    if let Some(parent) = item.output_path.parent()
-        && !parent.as_os_str().is_empty() && !parent.exists()
-    {
-        fs::create_dir_all(parent)?;
-    }
+    crate::processors::ensure_output_dir(&item.output_path)?;
 
     let source = item.source_path.display().to_string()
         .replace('\\', "\\\\").replace('\'', "\\'");
