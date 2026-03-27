@@ -141,6 +141,45 @@ This ensures that the same project always builds in the same order, regardless o
 
 Processor configuration (compiler flags, linter arguments, etc.) is hashed into cache keys. This means changing a config value like `cflags` will trigger rebuilds of affected products, even if the source files haven't changed.
 
+## Cache keys
+
+Each product has a unique cache key used to store and look up its cached state.
+The cache key is computed from:
+
+```
+{processor}:{config_hash}:{inputs}>{outputs}
+```
+
+For example, pandoc producing three formats from the same source file generates three
+products with distinct cache keys:
+
+```
+pandoc:a1b2c3:syllabi/intro.md>out/pandoc/intro.pdf
+pandoc:a1b2c3:syllabi/intro.md>out/pandoc/intro.html
+pandoc:a1b2c3:syllabi/intro.md>out/pandoc/intro.docx
+```
+
+For checkers (which have no output files), the key omits the output part:
+
+```
+ruff:d4e5f6:src/main.py
+```
+
+### Why outputs are included in the key
+
+Including outputs in the cache key is critical for multi-format processors.
+Without it, all three pandoc products above would share the key `pandoc:a1b2c3:syllabi/intro.md`,
+and each execution would overwrite the previous format's cache entry. This caused a bug where:
+
+1. First build: PDF, HTML, and DOCX all built correctly, but only the last format's cache entry survived
+2. Source file modified
+3. Second build: only the last format detected the change and rebuilt; the other two skipped because the cache entry (from the last format) happened to match
+
+The fix (including outputs in the key) ensures each format gets its own independent cache entry.
+
+**Note:** changing the cache key format invalidates all existing caches. The first build
+after upgrading will be a full rebuild.
+
 ## Cache storage
 
 The cache lives in `.rsconstruct/` and consists of:
