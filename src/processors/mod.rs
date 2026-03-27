@@ -882,12 +882,40 @@ pub trait ProductDiscovery: Sync + Send {
 /// Runtime categories: "python", "node", "ruby", "rust", "perl", "system"
 
 /// A single way to install a tool.
-#[allow(dead_code)]
 pub struct InstallMethod {
     /// Package manager or method name (e.g., "pip", "apt", "npm", "snap", "cargo", "binary")
     pub method: &'static str,
-    /// The command to run (e.g., "pip install yq", "snap install yq")
-    pub command: &'static str,
+    /// Package name for the package manager (e.g., "taplo-cli" for cargo, "texlive-latex-base" for apt)
+    pub package: &'static str,
+}
+
+impl InstallMethod {
+    /// Return the full install command (e.g., "pip install ruff", "sudo apt install -y shellcheck")
+    pub fn command(&self) -> String {
+        match self.method {
+            "apt" => format!("sudo apt install -y {}", self.package),
+            "snap" => format!("sudo snap install {}", self.package),
+            "pip" => format!("pip install {}", self.package),
+            "npm" => format!("npm install -g {}", self.package),
+            "cargo" => format!("cargo install {}", self.package),
+            "gem" => format!("gem install {}", self.package),
+            _ => self.package.to_string(),
+        }
+    }
+
+    /// Return the install command for multiple packages at once (batch install)
+    #[allow(dead_code)]
+    pub fn batch_command(method: &str, packages: &[&str]) -> String {
+        match method {
+            "apt" => format!("sudo apt install -y {}", packages.join(" ")),
+            "snap" => format!("sudo snap install {}", packages.join(" ")),
+            "pip" => format!("pip install {}", packages.join(" ")),
+            "npm" => format!("npm install -g {}", packages.join(" ")),
+            "cargo" => format!("cargo install {}", packages.join(" ")),
+            "gem" => format!("gem install {}", packages.join(" ")),
+            _ => packages.iter().map(|p| p.to_string()).collect::<Vec<_>>().join("; "),
+        }
+    }
 }
 
 /// Information about an external tool: its name, runtime category, and install methods.
@@ -900,110 +928,119 @@ pub struct ToolInfo {
     pub install_methods: &'static [InstallMethod],
 }
 
-/// Helper to define a tool with a single install method (the common case).
+/// Helper to define a tool with a single install method.
+/// If package name differs from tool name, use: `tool!("bin", "runtime", "method", "package")`
+/// If package name equals tool name: `tool!("name", "runtime", "method")`
 macro_rules! tool {
-    ($name:expr, $runtime:expr, $method:expr, $cmd:expr) => {
+    ($name:expr, $runtime:expr, $method:expr, $package:expr) => {
         ToolInfo {
             name: $name,
             runtime: $runtime,
-            install_methods: &[InstallMethod { method: $method, command: $cmd }],
+            install_methods: &[InstallMethod { method: $method, package: $package }],
+        }
+    };
+    ($name:expr, $runtime:expr, $method:expr) => {
+        ToolInfo {
+            name: $name,
+            runtime: $runtime,
+            install_methods: &[InstallMethod { method: $method, package: $name }],
         }
     };
 }
 
 /// Helper to define a tool with multiple install methods (first is default).
 macro_rules! tool_multi {
-    ($name:expr, $runtime:expr, $( ($method:expr, $cmd:expr) ),+ $(,)?) => {
+    ($name:expr, $runtime:expr, $( ($method:expr, $package:expr) ),+ $(,)?) => {
         ToolInfo {
             name: $name,
             runtime: $runtime,
-            install_methods: &[ $( InstallMethod { method: $method, command: $cmd } ),+ ],
+            install_methods: &[ $( InstallMethod { method: $method, package: $package } ),+ ],
         }
     };
 }
 
 pub static TOOLS: &[ToolInfo] = &[
     // Python tools
-    tool!("ruff",            "python", "pip", "pip install ruff"),
-    tool!("pylint",          "python", "pip", "pip install pylint"),
-    tool!("mypy",            "python", "pip", "pip install mypy"),
-    tool!("pyrefly",         "python", "pip", "pip install pyrefly"),
-    tool!("yamllint",        "python", "pip", "pip install yamllint"),
-    tool!("sphinx-build",    "python", "pip", "pip install sphinx"),
+    tool!("ruff",            "python", "pip"),
+    tool!("pylint",          "python", "pip"),
+    tool!("mypy",            "python", "pip"),
+    tool!("pyrefly",         "python", "pip"),
+    tool!("yamllint",        "python", "pip"),
+    tool!("sphinx-build",    "python", "pip", "sphinx"),
     tool!("pip",             "python", "system", "python3 -m ensurepip"),
-    tool!("jsonlint",        "python", "pip", "pip install jsonlint"),
-    tool!("cpplint",         "python", "pip", "pip install cpplint"),
-    tool!("a2x",             "python", "apt", "apt install asciidoc"),
-    tool!("python3",         "python", "apt", "apt install python3"),
+    tool!("jsonlint",        "python", "pip"),
+    tool!("cpplint",         "python", "pip"),
+    tool!("a2x",             "python", "apt", "asciidoc"),
+    tool!("python3",         "python", "apt"),
     // Node tools
-    tool!("marp",                         "node", "npm", "npm install -g @marp-team/marp-cli"),
-    tool!("mmdc",                         "node", "npm", "npm install -g @mermaid-js/mermaid-cli"),
-    tool!("node_modules/.bin/markdownlint", "node", "npm", "npm install markdownlint-cli"),
-    tool!("markdownlint",                 "node", "npm", "npm install -g markdownlint-cli"),
-    tool!("eslint",                       "node", "npm", "npm install -g eslint"),
-    tool!("htmlhint",                     "node", "npm", "npm install -g htmlhint"),
-    tool!("jshint",                       "node", "npm", "npm install -g jshint"),
-    tool!("npm",                          "node", "apt", "apt install npm"),
-    tool!("node",                         "node", "apt", "apt install nodejs"),
+    tool!("marp",            "node", "npm", "@marp-team/marp-cli"),
+    tool!("mmdc",            "node", "npm", "@mermaid-js/mermaid-cli"),
+    tool!("node_modules/.bin/markdownlint", "node", "npm", "markdownlint-cli"),
+    tool!("markdownlint",    "node", "npm", "markdownlint-cli"),
+    tool!("eslint",          "node", "npm"),
+    tool!("htmlhint",        "node", "npm"),
+    tool!("jshint",          "node", "npm"),
+    tool!("npm",             "node", "apt"),
+    tool!("node",            "node", "apt", "nodejs"),
     // Ruby tools
-    tool!("gems/bin/mdl",    "ruby", "gem", "gem install mdl"),
-    tool!("mdl",             "ruby", "gem", "gem install mdl"),
-    tool!("bundle",          "ruby", "gem", "gem install bundler"),
-    tool!("ruby",            "ruby", "apt", "apt install ruby"),
+    tool!("gems/bin/mdl",    "ruby", "gem", "mdl"),
+    tool!("mdl",             "ruby", "gem"),
+    tool!("bundle",          "ruby", "gem", "bundler"),
+    tool!("ruby",            "ruby", "apt"),
     // Rust tools
-    tool!("mdbook",          "rust", "cargo", "cargo install mdbook"),
-    tool!("rumdl",           "rust", "cargo", "cargo install rumdl"),
-    tool!("taplo",           "rust", "cargo", "cargo install taplo-cli"),
+    tool!("mdbook",          "rust", "cargo"),
+    tool!("rumdl",           "rust", "cargo"),
+    tool!("taplo",           "rust", "cargo", "taplo-cli"),
     tool!("cargo",           "rust", "binary", "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"),
     tool!("rustc",           "rust", "binary", "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"),
     // Perl tools
-    tool!("perl",            "perl", "apt", "apt install perl"),
-    tool!("markdown",        "perl", "apt", "apt install markdown"),
+    tool!("perl",            "perl", "apt"),
+    tool!("markdown",        "perl", "apt"),
     tool!("checkpatch.pl",   "perl", "manual", "install from Linux kernel source: scripts/checkpatch.pl"),
     // System tools
-    tool!("shellcheck",      "system", "apt", "apt install shellcheck"),
-    tool!("luacheck",        "system", "apt", "apt install lua-check"),
-    tool!("cppcheck",        "system", "apt", "apt install cppcheck"),
-    tool!("clang-tidy",      "system", "apt", "apt install clang-tidy"),
-    tool!("gcc",             "system", "apt", "apt install gcc"),
-    tool!("g++",             "system", "apt", "apt install g++"),
-    tool!("clang",           "system", "apt", "apt install clang"),
-    tool!("clang++",         "system", "apt", "apt install clang"),
-    tool!("ar",              "system", "apt", "apt install binutils"),
-    tool!("make",            "system", "apt", "apt install make"),
-    tool!("jq",              "system", "apt", "apt install jq"),
-    tool!("aspell",          "system", "apt", "apt install aspell"),
-    tool!("pandoc",          "system", "apt", "apt install pandoc"),
-    tool!("pdflatex",        "system", "apt", "apt install texlive-latex-base"),
-    tool!("qpdf",            "system", "apt", "apt install qpdf"),
-    tool!("dot",             "system", "apt", "apt install graphviz"),
-    tool!("drawio",          "system", "snap", "snap install drawio"),
-    tool!("libreoffice",     "system", "apt", "apt install libreoffice"),
-    tool!("flock",           "system", "apt", "apt install util-linux"),
-    tool!("pdfunite",        "system", "apt", "apt install poppler-utils"),
-    tool!("google-chrome",   "system", "apt", "apt install google-chrome-stable"),
-    tool!("objdump",         "system", "apt", "apt install binutils"),
-    tool!("tidy",            "system", "apt", "apt install tidy"),
-    tool!("xmllint",         "system", "apt", "apt install libxml2-utils"),
-    tool!("cmake",           "system", "apt", "apt install cmake"),
-    tool!("hadolint",        "system", "apt", "apt install hadolint"),
-    tool!("php",             "system", "apt", "apt install php-cli"),
-    tool!("checkstyle",      "system", "apt", "apt install checkstyle"),
+    tool!("shellcheck",      "system", "apt"),
+    tool!("luacheck",        "system", "apt", "lua-check"),
+    tool!("cppcheck",        "system", "apt"),
+    tool!("clang-tidy",      "system", "apt"),
+    tool!("gcc",             "system", "apt"),
+    tool!("g++",             "system", "apt"),
+    tool!("clang",           "system", "apt"),
+    tool!("clang++",         "system", "apt", "clang"),
+    tool!("ar",              "system", "apt", "binutils"),
+    tool!("make",            "system", "apt"),
+    tool!("jq",              "system", "apt"),
+    tool!("aspell",          "system", "apt"),
+    tool!("pandoc",          "system", "apt"),
+    tool!("pdflatex",        "system", "apt", "texlive-latex-base"),
+    tool!("qpdf",            "system", "apt"),
+    tool!("dot",             "system", "apt", "graphviz"),
+    tool!("drawio",          "system", "snap"),
+    tool!("libreoffice",     "system", "apt"),
+    tool!("flock",           "system", "apt", "util-linux"),
+    tool!("pdfunite",        "system", "apt", "poppler-utils"),
+    tool!("google-chrome",   "system", "apt", "google-chrome-stable"),
+    tool!("objdump",         "system", "apt", "binutils"),
+    tool!("tidy",            "system", "apt"),
+    tool!("xmllint",         "system", "apt", "libxml2-utils"),
+    tool!("cmake",           "system", "apt"),
+    tool!("hadolint",        "system", "apt"),
+    tool!("php",             "system", "apt", "php-cli"),
+    tool!("checkstyle",      "system", "apt"),
     tool_multi!("yq",        "system",
-        ("pip",  "pip install yq"),
-        ("snap", "snap install yq"),
-        ("apt",  "apt install yq"),
+        ("pip",  "yq"),
+        ("snap", "yq"),
+        ("apt",  "yq"),
     ),
     // Node tools (additional)
-    tool!("stylelint",       "node", "npm", "npm install -g stylelint"),
-    tool!("jslint",          "node", "npm", "npm install -g jslint"),
-    tool!("standard",        "node", "npm", "npm install -g standard"),
-    tool!("htmllint",        "node", "npm", "npm install -g htmllint-cli"),
-    tool!("slidev",          "node", "npm", "npm install -g @slidev/cli"),
+    tool!("stylelint",       "node", "npm"),
+    tool!("jslint",          "node", "npm"),
+    tool!("standard",        "node", "npm"),
+    tool!("htmllint",        "node", "npm", "htmllint-cli"),
+    tool!("slidev",          "node", "npm", "@slidev/cli"),
     // Perl tools (additional)
-    tool!("perlcritic",      "perl", "apt", "apt install libperl-critic-perl"),
+    tool!("perlcritic",      "perl", "apt", "libperl-critic-perl"),
     // Ruby tools (additional)
-    tool!("jekyll",          "ruby", "gem", "gem install jekyll"),
+    tool!("jekyll",          "ruby", "gem"),
     // Built-in / coreutils
     tool!("true",            "system", "system", "coreutils"),
 ];
@@ -1014,8 +1051,8 @@ pub fn tool_info(tool: &str) -> Option<&'static ToolInfo> {
 }
 
 /// Return the default install command for a tool, if known.
-pub fn tool_install_command(tool: &str) -> Option<&'static str> {
-    tool_info(tool).and_then(|t| t.install_methods.first().map(|m| m.command))
+pub fn tool_install_command(tool: &str) -> Option<String> {
+    tool_info(tool).and_then(|t| t.install_methods.first().map(|m| m.command()))
 }
 
 /// Return the runtime category for a tool, if known.

@@ -83,14 +83,6 @@ fn run_tools_command(
         }
     }
 
-    let install_map: BTreeMap<String, Option<String>> = tool_map.keys()
-        .map(|tool| {
-            let cmd = crate::processors::tool_install_command(tool)
-                .map(|s| s.to_string());
-            (tool.clone(), cmd)
-        })
-        .collect();
-
     match action {
         ToolsAction::List { .. } => {
             if crate::json_output::is_json_mode() {
@@ -101,7 +93,7 @@ fn run_tools_command(
                             .map(|i| i.install_methods.iter().map(|m| {
                                 json_output::ToolInstallMethodEntry {
                                     method: m.method.to_string(),
-                                    command: m.command.to_string(),
+                                    command: m.command(),
                                 }
                             }).collect())
                             .unwrap_or_default();
@@ -129,13 +121,13 @@ fn run_tools_command(
                 let install_str = if show_methods {
                     let methods: Vec<String> = info
                         .map(|i| i.install_methods.iter()
-                            .map(|m| format!("{}: {}", m.method, m.command))
+                            .map(|m| format!("{}: {}", m.method, m.command()))
                             .collect())
                         .unwrap_or_default();
                     if methods.is_empty() { "?".to_string() } else { methods.join(" | ") }
                 } else {
                     info.and_then(|i| i.install_methods.first())
-                        .map(|m| m.command.to_string())
+                        .map(|m| m.command())
                         .unwrap_or_else(|| "?".to_string())
                 };
                 println!("{} [{}] [{}] ({}) — {}",
@@ -285,28 +277,44 @@ fn run_tools_command(
             }
         }
         ToolsAction::Install { name, .. } => {
-            let to_install: Vec<(String, String)> = if let Some(ref name) = name {
-                match crate::processors::tool_install_command(name) {
-                    Some(cmd) => vec![(name.clone(), cmd.to_string())],
+            // Collect missing tools with their install info
+            let missing_tools: Vec<(&str, &crate::processors::InstallMethod)> = if let Some(ref name) = name {
+                // Install a specific tool
+                match crate::processors::tool_info(name) {
+                    Some(info) => {
+                        if let Some(method) = info.install_methods.first() {
+                            vec![(info.name, method)]
+                        } else {
+                            eprintln!("{}: No install method for '{}'", color::red("Error"), name);
+                            return Err(crate::exit_code::RsconstructError::new(
+                                crate::exit_code::RsconstructExitCode::ToolError,
+                                format!("No install method known for tool '{}'", name),
+                            ).into());
+                        }
+                    }
                     None => {
-                        eprintln!("{}: Installation procedure still not setup for '{}'", color::red("Error"), name);
+                        eprintln!("{}: Unknown tool '{}'", color::red("Error"), name);
                         return Err(crate::exit_code::RsconstructError::new(
                             crate::exit_code::RsconstructExitCode::ToolError,
-                            format!("No install command known for tool '{}'", name),
+                            format!("Unknown tool '{}'", name),
                         ).into());
                     }
                 }
             } else {
+                // Install all missing tools
                 let mut missing = Vec::new();
                 let mut any_unknown = false;
-                for tool in tool_map.keys() {
-                    if which::which(tool).is_err() {
-                        match install_map.get(tool).and_then(|c| c.as_ref()) {
-                            Some(cmd) => missing.push((tool.clone(), cmd.clone())),
-                            None => {
-                                eprintln!("{}: Installation procedure still not setup for '{}'", color::red("Error"), tool);
-                                any_unknown = true;
-                            }
+                for tool_name in tool_map.keys() {
+                    if which::which(tool_name).is_ok() {
+                        continue;
+                    }
+                    match crate::processors::tool_info(tool_name) {
+                        Some(info) if !info.install_methods.is_empty() => {
+                            missing.push((info.name, &info.install_methods[0]));
+                        }
+                        _ => {
+                            eprintln!("{}: No install method for '{}'", color::red("Error"), tool_name);
+                            any_unknown = true;
                         }
                     }
                 }
@@ -323,10 +331,41 @@ fn run_tools_command(
                 missing
             };
 
-            println!("The following tools will be installed:");
-            for (tool, cmd) in &to_install {
-                println!("  {} \u{2014} {}", color::bold(tool), color::dim(cmd));
+            // Group by install method for batch installation
+            let mut by_method: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+            let mut ungroupable: Vec<(&str, String)> = Vec::new();
+            for (tool_name, method) in &missing_tools {
+                match method.method {
+                    "pip" | "apt" | "npm" | "cargo" | "gem" | "snap" => {
+                        by_method.entry(method.method).or_default().push(method.package);
+                    }
+                    _ => {
+                        ungroupable.push((tool_name, method.command()));
+                    }
+                }
             }
+
+            // Display the install plan
+            println!("Missing {} tool(s), grouped by package manager:", missing_tools.len());
+            println!();
+
+            // Method display order and labels
+            let method_order = &["pip", "apt", "npm", "cargo", "gem", "snap"];
+            let mut commands: Vec<String> = Vec::new();
+            for method in method_order {
+                if let Some(packages) = by_method.get(method) {
+                    let cmd = crate::processors::InstallMethod::batch_command(method, packages);
+                    println!("  {} {}", color::bold(&format!("[{}]", method)),
+                        packages.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", "));
+                    println!("       {}", color::dim(&cmd));
+                    commands.push(cmd);
+                }
+            }
+            for (tool_name, cmd) in &ungroupable {
+                println!("  {} {}", color::bold(&format!("[{}]", tool_name)), color::dim(cmd));
+                commands.push(cmd.clone());
+            }
+            println!();
 
             if !install_yes {
                 print!("Proceed? [y/N] ");
@@ -340,26 +379,30 @@ fn run_tools_command(
                 }
             }
 
+            // Execute batch commands
             let mut any_failed = false;
-            for (tool, cmd) in &to_install {
-                println!("Installing {} \u{2014} running: {}", color::bold(tool), color::dim(cmd));
+            for cmd in &commands {
+                println!("Running: {}", color::dim(cmd));
                 let status = Command::new("sh")
                     .arg("-c")
                     .arg(cmd)
                     .status()?;
                 if status.success() {
-                    println!("{} {}", tool, color::green("installed"));
+                    println!("{}", color::green("OK"));
                 } else {
-                    println!("{} {} (exit code {})", tool, color::red("failed"),
+                    println!("{} (exit code {})", color::red("FAILED"),
                         status.code().map_or("unknown".to_string(), |c| c.to_string()));
                     any_failed = true;
                 }
             }
+
             if any_failed {
                 return Err(crate::exit_code::RsconstructError::new(
                     crate::exit_code::RsconstructExitCode::ToolError,
-                    "Some tools failed to install",
+                    "Some install commands failed",
                 ).into());
+            } else {
+                println!("{}", color::green("All tools installed successfully."));
             }
         }
     }
@@ -455,7 +498,7 @@ fn tools_graph_json(tool_map: &BTreeMap<String, Vec<String>>) -> Result<String> 
                 .map(|i| i.install_methods.iter().map(|m| {
                     crate::json_output::ToolInstallMethodEntry {
                         method: m.method.to_string(),
-                        command: m.command.to_string(),
+                        command: m.command(),
                     }
                 }).collect())
                 .unwrap_or_default();
