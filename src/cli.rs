@@ -233,7 +233,7 @@ pub enum Commands {
         #[arg(long, hide_short_help = true)]
         cocomo: bool,
         /// Annual salary for COCOMO cost estimation (default: 56286)
-        #[arg(long, default_value = "56286")]
+        #[arg(long, default_value = "56286", hide_short_help = true)]
         salary: u64,
     },
     /// Smart config manipulation commands
@@ -299,13 +299,13 @@ pub enum GraphAction {
     /// Print the dependency graph to stdout
     Show {
         /// Output format
-        #[arg(short, long, value_enum, default_value = "svg")]
+        #[arg(short, long, value_enum, default_value = "svg", hide_short_help = true)]
         format: GraphFormat,
     },
     /// Open the dependency graph in a viewer
     View {
         /// Viewer to use
-        #[arg(long, value_enum, default_value = "svg")]
+        #[arg(long, value_enum, default_value = "svg", hide_short_help = true)]
         viewer: GraphViewer,
     },
     /// Show graph statistics (products, processors, dependencies)
@@ -323,7 +323,7 @@ pub enum CleanAction {
     /// Remove files not tracked by git and not known as RSConstruct build outputs
     Unknown {
         /// Show what would be removed without actually deleting
-        #[arg(long)]
+        #[arg(long, hide_short_help = true)]
         dry_run: bool,
     },
 }
@@ -361,7 +361,7 @@ pub enum ProcessorAction {
     /// List available processors with status and descriptions
     List {
         /// Include hidden processors
-        #[arg(short, long)]
+        #[arg(short, long, hide_short_help = true)]
         all: bool,
     },
     /// Show source and target files for each processor
@@ -369,7 +369,7 @@ pub enum ProcessorAction {
         /// Processor name (omit to show all enabled processors)
         name: Option<String>,
         /// Include disabled and hidden processors
-        #[arg(short, long)]
+        #[arg(short, long, hide_short_help = true)]
         all: bool,
     },
     /// Show resolved configuration for a processor
