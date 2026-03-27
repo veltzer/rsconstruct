@@ -197,7 +197,7 @@ fn tags_count_and_tree() {
     let tree = run_rsconstruct_with_env(p, &["tags", "tree"], &[("NO_COLOR", "1")]);
     assert!(tree.status.success());
     let tree_stdout = String::from_utf8_lossy(&tree.stdout);
-    assert!(tree_stdout.contains("level:"), "tree should show level: group: {}", tree_stdout);
+    assert!(tree_stdout.contains("level="), "tree should show level= group: {}", tree_stdout);
     assert!(tree_stdout.contains("beginner"), "tree should show beginner value: {}", tree_stdout);
     assert!(tree_stdout.contains("advanced"), "tree should show advanced value: {}", tree_stdout);
     assert!(tree_stdout.contains("(bare tags)"), "tree should show bare tags section: {}", tree_stdout);
@@ -327,7 +327,7 @@ fn tags_sync_respects_wildcards() {
         &[
             ("a.md", "---\ndifficulty: 3\ntags:\n  - python\n---\n"),
         ],
-        Some("python\ndifficulty=*\n"),
+        Some("python\ndifficulty:*\n"),
     );
     let p = temp_dir.path();
     build_project(p);
@@ -336,8 +336,8 @@ fn tags_sync_respects_wildcards() {
     let sync = run_rsconstruct_with_env(p, &["tags", "sync"], &[("NO_COLOR", "1")]);
     assert!(sync.status.success());
     let tags_content = fs::read_to_string(p.join(".tags")).unwrap();
-    assert!(tags_content.contains("difficulty=*"), "wildcard should be preserved: {}", tags_content);
-    assert!(!tags_content.contains("difficulty=3"), "concrete value should NOT be added when wildcard exists: {}", tags_content);
+    assert!(tags_content.contains("difficulty:*"), "wildcard should be preserved: {}", tags_content);
+    assert!(!tags_content.contains("difficulty:3"), "concrete value should NOT be added when wildcard exists: {}", tags_content);
 }
 
 #[test]
@@ -380,8 +380,8 @@ fn tags_colon_in_yaml_value() {
     let list = run_rsconstruct_with_env(p, &["tags", "list"], &[("NO_COLOR", "1")]);
     assert!(list.status.success());
     let list_stdout = String::from_utf8_lossy(&list.stdout);
-    assert!(list_stdout.contains("url=https://example.com/path"), "URL should be indexed correctly: {}", list_stdout);
-    assert!(list_stdout.contains("time=10:30"), "time should be indexed correctly: {}", list_stdout);
+    assert!(list_stdout.contains("url:https://example.com/path"), "URL should be indexed correctly: {}", list_stdout);
+    assert!(list_stdout.contains("time:10:30"), "time should be indexed correctly: {}", list_stdout);
 }
 
 #[test]
@@ -442,8 +442,8 @@ fn tags_numeric_and_boolean_values() {
     assert!(list.status.success());
     let stdout = String::from_utf8_lossy(&list.stdout);
     // Our simple YAML parser returns everything as strings, so these are string values
-    assert!(stdout.contains("difficulty=3"), "numeric value should be indexed: {}", stdout);
-    assert!(stdout.contains("published=true"), "boolean value should be indexed: {}", stdout);
+    assert!(stdout.contains("difficulty:3"), "numeric value should be indexed: {}", stdout);
+    assert!(stdout.contains("published:true"), "boolean value should be indexed: {}", stdout);
 }
 
 #[test]
