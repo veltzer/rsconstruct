@@ -66,7 +66,8 @@ fn run_tools_command(
     verbose: bool,
     builder: Option<&Builder>,
 ) -> Result<()> {
-    let show_all = matches!(&action, ToolsAction::List { all: true });
+    let show_all = matches!(&action, ToolsAction::List { all: true, .. });
+    let show_methods = matches!(&action, ToolsAction::List { methods: true, .. });
     let install_yes = matches!(&action, ToolsAction::Install { yes: true, .. });
 
     let mut tool_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
@@ -125,15 +126,17 @@ fn run_tools_command(
                 };
                 let info = crate::processors::tool_info(tool);
                 let runtime = info.map(|i| i.runtime).unwrap_or("unknown");
-                let methods: Vec<String> = info
-                    .map(|i| i.install_methods.iter()
-                        .map(|m| format!("{}: {}", m.method, m.command))
-                        .collect())
-                    .unwrap_or_default();
-                let install_str = if methods.is_empty() {
-                    "?".to_string()
+                let install_str = if show_methods {
+                    let methods: Vec<String> = info
+                        .map(|i| i.install_methods.iter()
+                            .map(|m| format!("{}: {}", m.method, m.command))
+                            .collect())
+                        .unwrap_or_default();
+                    if methods.is_empty() { "?".to_string() } else { methods.join(" | ") }
                 } else {
-                    methods.join(" | ")
+                    info.and_then(|i| i.install_methods.first())
+                        .map(|m| m.command.to_string())
+                        .unwrap_or_else(|| "?".to_string())
                 };
                 println!("{} [{}] [{}] ({}) — {}",
                     tool, installed, runtime, procs.join(", "), color::dim(&install_str));

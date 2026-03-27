@@ -169,15 +169,15 @@ pub enum Commands {
     /// Execute an incremental build
     Build {
         /// Force rebuild even if files haven't changed
-        #[arg(short, long)]
+        #[arg(short, long, hide_short_help = true)]
         force: bool,
 
         /// Show what would be built without executing anything
-        #[arg(short = 'n', long)]
+        #[arg(short = 'n', long, hide_short_help = true)]
         dry_run: bool,
 
         /// Verify tool versions against .tools.versions before building
-        #[arg(long)]
+        #[arg(long, hide_short_help = true)]
         verify_tool_versions: bool,
 
         /// Stop after a specific build phase
@@ -402,6 +402,9 @@ pub enum ToolsAction {
         /// Include tools from disabled processors too
         #[arg(short, long)]
         all: bool,
+        /// Show all available installation methods for each tool
+        #[arg(short = 'M', long)]
+        methods: bool,
     },
     /// Verify tool versions against .tools.versions lock file
     Check,
