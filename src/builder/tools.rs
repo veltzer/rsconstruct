@@ -24,7 +24,9 @@ pub fn tools_no_config(action: ToolsAction, verbose: bool) -> Result<()> {
     let mut cfg = crate::config::ProcessorConfig::default();
     cfg.resolve_scan_defaults();
     let processors = super::create_builtin_processors(&cfg);
-    run_tools_command(&processors, &|name| cfg.is_enabled(name), action, verbose, None)
+    // Build file index for auto-detection (best-effort, ignore errors)
+    let file_index = crate::file_index::FileIndex::build().ok();
+    run_tools_command(&processors, &|name| cfg.is_enabled(name), action, verbose, None, file_index.as_ref())
 }
 
 impl Builder {
@@ -53,22 +55,26 @@ impl Builder {
             action,
             verbose,
             Some(self),
+            Some(&self.file_index),
         )
     }
 }
 
 /// Core implementation for `tools` subcommands, shared by `Builder::tools()` and `tools_no_config()`.
 /// `builder` is `Some` when running with a project config (needed for `open_file`, `Check`, `Lock`).
+/// `file_index` is `Some` when running inside a project (needed for auto-detection filtering).
 fn run_tools_command(
     processors: &crate::processors::ProcessorMap,
     is_enabled: &dyn Fn(&str) -> bool,
     action: ToolsAction,
     verbose: bool,
     builder: Option<&Builder>,
+    file_index: Option<&crate::file_index::FileIndex>,
 ) -> Result<()> {
     let show_all = matches!(&action, ToolsAction::List { all: true, .. });
     let show_methods = matches!(&action, ToolsAction::List { methods: true, .. });
     let install_yes = matches!(&action, ToolsAction::Install { yes: true, .. });
+    let install_all = matches!(&action, ToolsAction::Install { all: true, .. });
 
     let mut tool_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for name in sorted_keys(processors) {
@@ -301,10 +307,32 @@ fn run_tools_command(
                     }
                 }
             } else {
-                // Install all missing tools
+                // Build tool list: filter by detected processors unless --all
+                let mut install_tools: BTreeMap<String, Vec<String>> = BTreeMap::new();
+                for name in sorted_keys(processors) {
+                    if !is_enabled(name) {
+                        continue;
+                    }
+                    // Skip undetected processors unless --all
+                    if !install_all {
+                        if let Some(fi) = file_index {
+                            if !processors[name].auto_detect(fi) {
+                                continue;
+                            }
+                        }
+                    }
+                    for tool in processors[name].required_tools() {
+                        let procs = install_tools.entry(tool).or_default();
+                        if !procs.contains(name) {
+                            procs.push(name.clone());
+                        }
+                    }
+                }
+
+                // Collect missing tools
                 let mut missing = Vec::new();
                 let mut any_unknown = false;
-                for tool_name in tool_map.keys() {
+                for tool_name in install_tools.keys() {
                     if which::which(tool_name).is_ok() {
                         continue;
                     }
