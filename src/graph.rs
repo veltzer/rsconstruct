@@ -135,14 +135,25 @@ impl Product {
         }
     }
 
-    /// Cache key for checksum tracking
+    /// Cache key for checksum tracking.
+    /// Includes processor name, config hash, inputs, AND outputs to ensure
+    /// products with the same inputs but different outputs (e.g., pandoc producing
+    /// pdf, html, docx from the same source) get separate cache entries.
     pub fn cache_key(&self) -> String {
         let inputs: Vec<_> = self.inputs.iter()
             .map(|p| p.display().to_string())
             .collect();
+        let outputs: Vec<_> = self.outputs.iter()
+            .map(|p| p.display().to_string())
+            .collect();
+        let io_part = if outputs.is_empty() {
+            inputs.join(":")
+        } else {
+            format!("{}>{}", inputs.join(":"), outputs.join(":"))
+        };
         match &self.config_hash {
-            Some(hash) => format!("{}:{}:{}", self.processor, hash, inputs.join(":")),
-            None => format!("{}:{}", self.processor, inputs.join(":")),
+            Some(hash) => format!("{}:{}:{}", self.processor, hash, io_part),
+            None => format!("{}:{}", self.processor, io_part),
         }
     }
 }
@@ -778,6 +789,27 @@ mod tests {
         assert_eq!(g.get_dependencies(1), &[0]);
         // Product 0 has no dependencies
         assert!(g.get_dependencies(0).is_empty());
+    }
+
+    #[test]
+    fn cache_key_differs_for_different_outputs() {
+        // Regression test: products with same inputs but different outputs
+        // (e.g., pandoc producing pdf, html, docx from the same .md file)
+        // must have different cache keys. Otherwise they overwrite each other's
+        // cache entries and cause stale output bugs.
+        let p_pdf = Product::new(
+            vec!["doc.md".into()], vec!["out/doc.pdf".into()], "pandoc", 0, Some("h".into()));
+        let p_html = Product::new(
+            vec!["doc.md".into()], vec!["out/doc.html".into()], "pandoc", 0, Some("h".into()));
+        let p_docx = Product::new(
+            vec!["doc.md".into()], vec!["out/doc.docx".into()], "pandoc", 0, Some("h".into()));
+
+        assert_ne!(p_pdf.cache_key(), p_html.cache_key(),
+            "PDF and HTML products must have different cache keys");
+        assert_ne!(p_html.cache_key(), p_docx.cache_key(),
+            "HTML and DOCX products must have different cache keys");
+        assert_ne!(p_pdf.cache_key(), p_docx.cache_key(),
+            "PDF and DOCX products must have different cache keys");
     }
 
     #[test]

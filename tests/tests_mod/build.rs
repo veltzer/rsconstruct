@@ -433,3 +433,74 @@ fn classify_propagates_through_dependencies() {
     assert!(stdout4.contains("0 up-to-date"),
         "No products should be up-to-date when root dependency changed: {}", stdout4);
 }
+
+#[test]
+fn checker_and_generator_both_rebuild_on_shared_input_change() {
+    // Regression test: when a checker and generator share the same input file,
+    // modifying the input must cause BOTH to rebuild, not just the checker.
+    // Bug scenario: checker runs first, updates the input hash in cache,
+    // then generator sees matching hash and skips even though its output is stale.
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Enable both tera (generator) and script_check (checker) on .tera files
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        concat!(
+            "[processor]\n",
+            "enabled = [\"tera\", \"script_check\"]\n",
+            "\n",
+            "[processor.script_check]\n",
+            "scan_dir = \"tera.templates\"\n",
+            "extensions = [\".tera\"]\n",
+            "linter = \"true\"\n",
+        ),
+    ).unwrap();
+
+    // Create a template
+    fs::write(
+        project_path.join("tera.templates/shared.txt.tera"),
+        "version1",
+    ).unwrap();
+
+    // First build: both checker and generator should run
+    let result1 = run_rsconstruct_json(project_path, &["build"]);
+    assert!(result1.exit_success, "First build should succeed");
+    assert!(result1.has_product("shared.txt", "success"),
+        "Tera should process: {:?}", result1.products);
+    assert_eq!(result1.failed, 0, "No failures expected");
+
+    // Verify the output was created
+    assert!(project_path.join("shared.txt").exists(),
+        "Tera output should exist after first build");
+    let content1 = fs::read_to_string(project_path.join("shared.txt")).unwrap();
+    assert_eq!(content1, "version1");
+
+    // Second build: everything should be skipped (no changes)
+    let result2 = run_rsconstruct_json(project_path, &["build"]);
+    assert!(result2.exit_success);
+    assert_eq!(result2.skipped, result2.total_products,
+        "All products should be skipped on second build (no changes)");
+
+    // Wait for mtime to differ
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // Modify the shared input file
+    fs::write(
+        project_path.join("tera.templates/shared.txt.tera"),
+        "version2",
+    ).unwrap();
+
+    // Third build: BOTH checker and generator must rebuild
+    let result3 = run_rsconstruct_json(project_path, &["build"]);
+    assert!(result3.exit_success, "Third build should succeed: {:?}", result3.errors);
+    assert_eq!(result3.skipped, 0,
+        "No products should be skipped after input change, got: {:?}", result3.products);
+    assert!(result3.has_product("shared.txt", "success"),
+        "Tera generator MUST rebuild after input change: {:?}", result3.products);
+
+    // Verify the output was updated
+    let content3 = fs::read_to_string(project_path.join("shared.txt")).unwrap();
+    assert_eq!(content3, "version2",
+        "Output should contain new content after rebuild");
+}
