@@ -269,18 +269,22 @@ fn run() -> Result<()> {
             init_project()?;
         }
         Commands::Processors { action } => {
+            let has_config = std::path::Path::new("rsconstruct.toml").exists();
             match action {
                 cli::ProcessorAction::List { all } => {
-                    // Try with project config; fall back to no-config listing
-                    match Builder::new() {
-                        Ok(builder) => builder.processor(cli::ProcessorAction::List { all })?,
-                        Err(_) => builder::processors::list_processors_no_config(all)?,
+                    if has_config {
+                        let builder = Builder::new()?;
+                        builder.processor(cli::ProcessorAction::List { all })?;
+                    } else {
+                        builder::processors::list_processors_no_config(all)?;
                     }
                 }
                 cli::ProcessorAction::Defconfig { ref name } => {
-                    match Builder::new() {
-                        Ok(builder) => builder.processor(action)?,
-                        Err(_) => builder::processors::processor_defconfig(name)?,
+                    if has_config {
+                        let builder = Builder::new()?;
+                        builder.processor(action)?;
+                    } else {
+                        builder::processors::processor_defconfig(name)?;
                     }
                 }
                 action => {
@@ -356,13 +360,13 @@ fn run() -> Result<()> {
             }
         }
         Commands::Tools { action } => {
-            // Check, Lock require a project config (they use lock files).
-            // All other subcommands can fall back to default config.
-            let needs_project = matches!(action, cli::ToolsAction::Check | cli::ToolsAction::Lock);
-            match Builder::new() {
-                Ok(builder) => builder.tools(action, cli.verbose)?,
-                Err(e) if needs_project => return Err(e),
-                Err(_) => builder::tools::tools_no_config(action, cli.verbose)?,
+            // Fall back to default config only if no config file exists.
+            // If config exists but is broken, fail — don't silently use defaults.
+            if std::path::Path::new("rsconstruct.toml").exists() {
+                let builder = Builder::new()?;
+                builder.tools(action, cli.verbose)?;
+            } else {
+                builder::tools::tools_no_config(action, cli.verbose)?;
             }
         }
         Commands::Version => {
