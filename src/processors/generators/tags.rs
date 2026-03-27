@@ -87,7 +87,7 @@ impl ProductDiscovery for TagsProcessor {
 
                 // Index all frontmatter fields:
                 // - list fields: each item becomes a tag (e.g. "docker" from tags: [docker])
-                // - scalar fields: indexed as "key=value" (e.g. "level=intermediate")
+                // - scalar fields: indexed as "key:value" (e.g. "level:intermediate")
                 if let Some(obj) = fm.as_object() {
                     for (key, value) in obj {
                         match value {
@@ -101,7 +101,7 @@ impl ProductDiscovery for TagsProcessor {
                                 }
                             }
                             serde_json::Value::String(s) => {
-                                let tag = format!("{}={}", key, s);
+                                let tag = format!("{}:{}", key, s);
                                 tag_to_files.entry(tag)
                                     .or_default()
                                     .insert(file_key.clone());
@@ -415,12 +415,12 @@ pub fn count_tags(db_path: &str) -> Result<()> {
 pub fn tree_tags(db_path: &str) -> Result<()> {
     let tag_counts = load_tag_counts(db_path)?;
 
-    // Split into key=value groups and bare tags
+    // Split into key:value groups and bare tags
     let mut groups: BTreeMap<String, Vec<(String, usize)>> = BTreeMap::new();
     let mut bare: Vec<(String, usize)> = Vec::new();
 
     for (tag, count) in &tag_counts {
-        if let Some((key, value)) = tag.split_once('=') {
+        if let Some((key, value)) = tag.split_once(':') {
             groups.entry(key.to_string())
                 .or_default()
                 .push((value.to_string(), *count));
@@ -484,7 +484,7 @@ pub fn stats_tags(db_path: &str) -> Result<()> {
     let iter = tag_table.iter().context("Failed to iterate tag_index")?;
     for entry in iter {
         let (key, value) = entry.context("Failed to read tag entry")?;
-        if key.value().contains('=') {
+        if key.value().contains(':') {
             kv_count += 1;
         } else {
             bare_count += 1;
@@ -916,7 +916,7 @@ fn load_tags_file_sorted(path: &Path) -> Result<Vec<String>> {
 
 /// Write a sorted list of tags to a .tags file, one per line with a header comment.
 fn write_tags_file(path: &Path, tags: &[String]) -> Result<()> {
-    let mut content = String::from("# Allowed tags for rsconstruct frontmatter validation\n# One tag per line. Wildcards supported (e.g. duration_days=*)\n");
+    let mut content = String::from("# Allowed tags for rsconstruct frontmatter validation\n# One tag per line. Wildcards supported (e.g. duration_days:*)\n");
     for tag in tags {
         content.push_str(tag);
         content.push('\n');
@@ -926,7 +926,7 @@ fn write_tags_file(path: &Path, tags: &[String]) -> Result<()> {
 }
 
 /// Check if a tag matches the allowed set, supporting wildcard patterns.
-/// Patterns like `duration_days=*` match any tag starting with `duration_days=`.
+/// Patterns like `duration_days:*` match any tag starting with `duration_days:`.
 fn tag_matches_allowed(tag: &str, allowed: &HashSet<String>) -> bool {
     if allowed.contains(tag) {
         return true;
@@ -944,7 +944,7 @@ fn tag_matches_allowed(tag: &str, allowed: &HashSet<String>) -> bool {
 
 /// Check if a pattern from .tags matches any actual tag in the database.
 /// For literal tags, checks direct membership.
-/// For wildcard patterns like `duration_days=*`, checks if any db tag has that prefix.
+/// For wildcard patterns like `duration_days:*`, checks if any db tag has that prefix.
 fn pattern_matches_any_tag(pattern: &str, db_tags: &HashSet<String>) -> bool {
     if let Some(prefix) = pattern.strip_suffix('*') {
         db_tags.iter().any(|t| t.starts_with(prefix))
@@ -1216,10 +1216,10 @@ mod tests {
 
     #[test]
     fn tag_allowed_wildcard() {
-        let allowed: HashSet<String> = ["level=*", "docker"].iter().map(|s| s.to_string()).collect();
-        assert!(tag_matches_allowed("level=beginner", &allowed));
-        assert!(tag_matches_allowed("level=advanced", &allowed));
-        assert!(!tag_matches_allowed("difficulty=3", &allowed));
+        let allowed: HashSet<String> = ["level:*", "docker"].iter().map(|s| s.to_string()).collect();
+        assert!(tag_matches_allowed("level:beginner", &allowed));
+        assert!(tag_matches_allowed("level:advanced", &allowed));
+        assert!(!tag_matches_allowed("difficulty:3", &allowed));
     }
 
     // --- pattern_matches_any_tag ---
@@ -1233,8 +1233,8 @@ mod tests {
 
     #[test]
     fn pattern_wildcard_match() {
-        let db: HashSet<String> = ["level=beginner", "level=advanced"].iter().map(|s| s.to_string()).collect();
-        assert!(pattern_matches_any_tag("level=*", &db));
-        assert!(!pattern_matches_any_tag("difficulty=*", &db));
+        let db: HashSet<String> = ["level:beginner", "level:advanced"].iter().map(|s| s.to_string()).collect();
+        assert!(pattern_matches_any_tag("level:*", &db));
+        assert!(!pattern_matches_any_tag("difficulty:*", &db));
     }
 }

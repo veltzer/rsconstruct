@@ -55,8 +55,8 @@ fn tags_basic_build_and_query() {
     assert!(tags.contains(&"docker"));
     assert!(tags.contains(&"python"));
     assert!(tags.contains(&"rust"));
-    assert!(tags.contains(&"level=beginner"));
-    assert!(tags.contains(&"level=advanced"));
+    assert!(tags.contains(&"level:beginner"));
+    assert!(tags.contains(&"level:advanced"));
 
     // `rsconstruct tags files docker` should return both files
     let files_output = run_rsconstruct_with_env(p, &["tags", "files", "docker"], &[("NO_COLOR", "1")]);
@@ -86,7 +86,7 @@ fn tags_validation_rejects_unknown_tags() {
         &[
             ("course.md", "---\nlevel: beginner\ntags:\n  - python\n  - dockker\n---\n# Course\n"),
         ],
-        Some("python\ndocker\nlevel=beginner\n"),
+        Some("python\ndocker\nlevel:beginner\n"),
     );
     let p = temp_dir.path();
 
@@ -106,12 +106,12 @@ fn tags_validation_allows_wildcard_patterns() {
         &[
             ("course.md", "---\nlevel: beginner\nduration_days: 5\ntags:\n  - python\n---\n# Course\n"),
         ],
-        // Wildcard pattern for duration_days=*
-        Some("python\nlevel=beginner\nduration_days=*\n"),
+        // Wildcard pattern for duration_days:*
+        Some("python\nlevel:beginner\nduration_days:*\n"),
     );
     let p = temp_dir.path();
 
-    // Build should succeed because duration_days=5 matches duration_days=*
+    // Build should succeed because duration_days:5 matches duration_days:*
     let output = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "build should succeed with wildcard pattern: stdout={}, stderr={}",
@@ -197,7 +197,7 @@ fn tags_count_and_tree() {
     let tree = run_rsconstruct_with_env(p, &["tags", "tree"], &[("NO_COLOR", "1")]);
     assert!(tree.status.success());
     let tree_stdout = String::from_utf8_lossy(&tree.stdout);
-    assert!(tree_stdout.contains("level="), "tree should show level= group: {}", tree_stdout);
+    assert!(tree_stdout.contains("level:"), "tree should show level: group: {}", tree_stdout);
     assert!(tree_stdout.contains("beginner"), "tree should show beginner value: {}", tree_stdout);
     assert!(tree_stdout.contains("advanced"), "tree should show advanced value: {}", tree_stdout);
     assert!(tree_stdout.contains("(bare tags)"), "tree should show bare tags section: {}", tree_stdout);
@@ -490,8 +490,8 @@ fn tags_empty_inline_list() {
     let list = run_rsconstruct_with_env(p, &["tags", "list"], &[("NO_COLOR", "1")]);
     assert!(list.status.success());
     let stdout = String::from_utf8_lossy(&list.stdout);
-    // Should only have level=beginner, no empty tags
-    assert!(stdout.contains("level=beginner"), "should have level=beginner: {}", stdout);
+    // Should only have level:beginner, no empty tags
+    assert!(stdout.contains("level:beginner"), "should have level:beginner: {}", stdout);
     let tags: Vec<&str> = stdout.lines().collect();
-    assert_eq!(tags.len(), 1, "should have exactly 1 tag (level=beginner), got: {:?}", tags);
+    assert_eq!(tags.len(), 1, "should have exactly 1 tag (level:beginner), got: {:?}", tags);
 }

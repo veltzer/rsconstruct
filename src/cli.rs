@@ -482,7 +482,7 @@ pub enum DepsShowFilter {
 pub enum TagsAction {
     /// List files matching given tags (AND by default, --or for OR)
     Files {
-        /// Tags: bare values (e.g. "docker") or key=value (e.g. "level=advanced")
+        /// Tags: bare values (e.g. "docker") or key:value (e.g. "level:advanced")
         #[arg(required = true)]
         tags: Vec<String>,
         /// Use OR semantics (match files with any of the given tags)
