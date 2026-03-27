@@ -1,16 +1,2 @@
 [env]
 RUST_TEST_THREADS = "4"
-
-[alias]
-# Test shortcuts
-nt = "nextest run"
-ntr = "nextest run --release"
-
-# Build all (debug + release + tests)
-all = "!cargo build && cargo build --release && cargo nextest run && cargo nextest run --release"
-
-# Publish to crates.io
-pub = "publish"
-
-# Show GitHub release artifacts
-artifacts = "!gh release view --json assets --jq '.assets[] | \"\\(.name)\\t\\(.size)\\t\\(.downloadCount)\"' | column -t -N NAME,SIZE,DOWNLOADS"
