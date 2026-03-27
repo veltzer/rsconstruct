@@ -125,12 +125,18 @@ fn run_tools_command(
                 };
                 let info = crate::processors::tool_info(tool);
                 let runtime = info.map(|i| i.runtime).unwrap_or("unknown");
-                let install = info
-                    .and_then(|i| i.install_methods.first())
-                    .map(|m| m.command)
-                    .unwrap_or("?");
+                let methods: Vec<String> = info
+                    .map(|i| i.install_methods.iter()
+                        .map(|m| format!("{}: {}", m.method, m.command))
+                        .collect())
+                    .unwrap_or_default();
+                let install_str = if methods.is_empty() {
+                    "?".to_string()
+                } else {
+                    methods.join(" | ")
+                };
                 println!("{} [{}] [{}] ({}) — {}",
-                    tool, installed, runtime, procs.join(", "), color::dim(install));
+                    tool, installed, runtime, procs.join(", "), color::dim(&install_str));
             }
         }
         ToolsAction::Check => {
