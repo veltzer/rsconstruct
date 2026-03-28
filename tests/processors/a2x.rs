@@ -14,7 +14,7 @@ fn a2x_valid_file() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"a2x\"]\n",
+        "[processor.a2x]\n",
     )
     .unwrap();
 
@@ -48,7 +48,7 @@ fn a2x_no_project_discovered() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"a2x\"]\n",
+        "[processor.a2x]\n",
     )
     .unwrap();
 

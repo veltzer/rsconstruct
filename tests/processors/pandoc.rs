@@ -15,7 +15,7 @@ fn pandoc_valid_file() {
     // Use HTML format to avoid requiring LaTeX for PDF
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"pandoc\"]\n\n[processor.pandoc]\nformats = [\"html\"]\nscan_dir = \"\"\n",
+        "[processor.pandoc]\nformats = [\"html\"]\nscan_dir = \"\"\n",
     )
     .unwrap();
 
@@ -53,7 +53,7 @@ fn pandoc_incremental_skip() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"pandoc\"]\n\n[processor.pandoc]\nformats = [\"html\"]\nscan_dir = \"\"\n",
+        "[processor.pandoc]\nformats = [\"html\"]\nscan_dir = \"\"\n",
     )
     .unwrap();
 
@@ -85,7 +85,7 @@ fn pandoc_no_project_discovered() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"pandoc\"]\n",
+        "[processor.pandoc]\n",
     )
     .unwrap();
 

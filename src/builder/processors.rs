@@ -3,14 +3,12 @@ use anyhow::{Result, bail};
 use crate::cli::ProcessorAction;
 use crate::color;
 use crate::config::ProcessorConfig;
-use super::{Builder, create_builtin_processors, sorted_keys};
+use super::{Builder, create_all_default_processors, sorted_keys};
 
 /// List all built-in processors (works without rsconstruct.toml).
 /// Used when no project config is available.
 pub fn list_processors_no_config(all: bool) -> Result<()> {
-    let mut cfg = ProcessorConfig::default();
-    cfg.resolve_scan_defaults();
-    let processors = create_builtin_processors(&cfg);
+    let processors = create_all_default_processors();
     let proc_names = sorted_keys(&processors);
 
     if crate::json_output::is_json_mode() {
@@ -104,8 +102,8 @@ impl Builder {
                             crate::json_output::ProcessorListEntry {
                                 name: name.to_string(),
                                 processor_type: proc.processor_type().as_str().to_string(),
-                                enabled: self.config.processor.is_enabled(name),
-                                detected: proc.auto_detect(&self.file_index),
+                                enabled: true,
+                                detected: true,
                                 hidden: proc.hidden(),
                                 batch: proc.supports_batch(),
                                 description: proc.description().to_string(),
@@ -121,14 +119,6 @@ impl Builder {
                     if proc.hidden() && !all {
                         continue;
                     }
-                    let enabled = self.config.processor.is_enabled(name);
-                    let detected = proc.auto_detect(&self.file_index);
-                    let status = match (enabled, detected) {
-                        (true, true) => color::green("enabled, detected"),
-                        (true, false) => color::yellow("enabled, not detected"),
-                        (false, true) => color::yellow("disabled, detected"),
-                        (false, false) => color::dim("disabled"),
-                    };
                     let hidden_tag = if proc.hidden() {
                         format!(" {}", color::dim("(hidden)"))
                     } else {
@@ -141,7 +131,7 @@ impl Builder {
                     } else {
                         String::new()
                     };
-                    println!("{} {}{} {}{} \u{2014} {}", name, proc_type, batch, status, hidden_tag, color::dim(proc.description()));
+                    println!("{} {}{}{} \u{2014} {}", name, proc_type, batch, hidden_tag, color::dim(proc.description()));
                 }
             }
             ProcessorAction::Config { ref name, diff } => {
@@ -153,7 +143,6 @@ impl Builder {
                 } else {
                     proc_names.iter()
                         .map(|s| s.as_str())
-                        .filter(|n| self.config.processor.is_enabled(n))
                         .collect()
                 };
 
@@ -202,7 +191,6 @@ impl Builder {
             ProcessorAction::Allowlist => {
                 let enabled: Vec<&str> = proc_names.iter()
                     .map(|s| s.as_str())
-                    .filter(|n| self.config.processor.is_enabled(n) && processors[*n].auto_detect(&self.file_index))
                     .collect();
                 if crate::json_output::is_json_mode() {
                     println!("{}", serde_json::to_string_pretty(&enabled)?);

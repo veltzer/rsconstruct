@@ -14,7 +14,7 @@ fn clippy_valid_project() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"clippy\"]\n",
+        "[processor.clippy]\n",
     )
     .unwrap();
 
@@ -61,7 +61,7 @@ fn clippy_incremental_skip() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"clippy\"]\n",
+        "[processor.clippy]\n",
     )
     .unwrap();
 
@@ -101,7 +101,7 @@ fn clippy_no_project_discovered() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"clippy\"]\n",
+        "[processor.clippy]\n",
     )
     .unwrap();
 
@@ -135,7 +135,7 @@ fn clippy_lint_failure() {
     // Use -D warnings so clippy warnings become errors
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"clippy\"]\n\n[processor.clippy]\nargs = [\"--\", \"-D\", \"warnings\"]\n",
+        "[processor.clippy]\nargs = [\"--\", \"-D\", \"warnings\"]\n",
     )
     .unwrap();
 

@@ -266,86 +266,92 @@ pub(crate) fn default_true() -> bool {
     true
 }
 
-/// Auto-generate `ProcessorConfig` struct, `Default`, and all per-processor wiring
+/// A single processor instance parsed from the TOML config.
+/// `[processor.pylint]` produces one instance with type_name="pylint", instance_name="pylint".
+/// `[processor.pylint.core]` produces one with type_name="pylint", instance_name="pylint.core".
+#[derive(Debug, Clone)]
+pub(crate) struct ProcessorInstance {
+    /// Instance name: "pylint" for single, "pylint.core" for named
+    pub instance_name: String,
+    /// Processor type name: always "pylint"
+    pub type_name: String,
+    /// The raw TOML config for this instance (deserialized lazily per processor type)
+    pub config_toml: toml::Value,
+}
+
+/// Auto-generate `ProcessorConfig` and all per-processor wiring
 /// from the central registry in `src/registry.rs`.
 macro_rules! gen_processor_config {
     ( $( $const_name:ident, $field:ident, $config_type:ty, $proc_type:ty,
          ($scan_dir:expr, $exts:expr, $excl:expr); )* ) => {
 
-        pub(crate) fn default_processors() -> Vec<String> {
-            vec![ $( crate::processors::names::$const_name.into(), )* ]
+        /// Return all known builtin processor type names.
+        pub(crate) fn all_type_names() -> Vec<&'static str> {
+            vec![ $( stringify!($field), )* ]
         }
 
-        #[derive(Debug, Deserialize, Serialize)]
-        pub(crate) struct ProcessorConfig {
-            #[serde(default = "default_true")]
-            pub auto_detect: bool,
-            #[serde(default = "default_processors")]
-            pub enabled: Vec<String>,
-            $(
-                #[serde(default)]
-                pub $field: $config_type,
-            )*
-            /// Captures unknown [processor.PLUGIN_NAME] sections for Lua plugins
-            #[serde(flatten)]
-            pub extra: HashMap<String, toml::Value>,
+        /// Check if a name is a known builtin processor type.
+        pub(crate) fn is_builtin_type(name: &str) -> bool {
+            matches!(name, $( stringify!($field) )|*)
         }
 
-        impl Default for ProcessorConfig {
-            fn default() -> Self {
-                Self {
-                    auto_detect: true,
-                    enabled: default_processors(),
-                    $( $field: <$config_type>::default(), )*
-                    extra: HashMap::new(),
-                }
+        /// Deserialize a TOML value into a typed config for the given processor type.
+        /// Returns the config with scan defaults resolved, serialized back to toml::Value.
+        #[allow(dead_code)]
+        pub(crate) fn deserialize_instance_config(type_name: &str, value: &toml::Value) -> anyhow::Result<toml::Value> {
+            match type_name {
+                $(
+                    stringify!($field) => {
+                        let cfg: $config_type = toml::from_str(&toml::to_string(value)?)?;
+                        Ok(toml::Value::try_from(&cfg)?)
+                    }
+                )*
+                _ => anyhow::bail!("Unknown processor type: {}", type_name),
+            }
+        }
+
+        /// Resolve scan defaults for an instance config in-place.
+        pub(crate) fn resolve_instance_scan_defaults(type_name: &str, value: &mut toml::Value) -> anyhow::Result<()> {
+            match type_name {
+                $(
+                    stringify!($field) => {
+                        let mut cfg: $config_type = toml::from_str(&toml::to_string(value)?)?;
+                        cfg.scan.resolve($scan_dir, $exts, $excl);
+                        *value = toml::Value::try_from(&cfg)?;
+                        Ok(())
+                    }
+                )*
+                _ => Ok(()), // Lua plugins handle their own defaults
             }
         }
 
         impl ProcessorConfig {
-            fn processor_enabled_field(&self, name: &str) -> bool {
-                match name {
-                    $( stringify!($field) => self.$field.enabled, )*
-                    _ => true, // unknown processors (plugins) default to enabled
-                }
-            }
-
-            pub(crate) fn is_enabled(&self, name: &str) -> bool {
-                self.enabled.iter().any(|p| p == name) && self.processor_enabled_field(name)
-            }
-
-            /// Collect unique scan directories from all processor configs.
-            /// Returns non-empty directory names (empty means project root, handled separately).
+            /// Collect unique scan directories from all declared instances.
             pub(crate) fn scan_dirs(&self) -> Vec<String> {
-                let scans: &[&ScanConfig] = &[ $( &self.$field.scan, )* ];
-                let mut dirs: Vec<String> = scans.iter()
-                    .filter_map(|s| s.scan_dir.as_deref())
-                    .filter(|d| !d.is_empty())
-                    .map(|d| d.to_string())
+                let mut dirs: Vec<String> = self.instances.iter()
+                    .filter_map(|inst| {
+                        inst.config_toml.get("scan_dir")
+                            .and_then(|v| v.as_str())
+                            .filter(|d| !d.is_empty())
+                            .map(|d| d.to_string())
+                    })
                     .collect();
                 dirs.sort();
                 dirs.dedup();
                 dirs
             }
 
-            /// Fill in None scan fields with per-processor defaults.
-            /// Called after loading from TOML so that `config show` displays resolved values
-            /// and processors can access fields without fallbacks.
-            pub(crate) fn resolve_scan_defaults(&mut self) {
-                $( self.$field.scan.resolve($scan_dir, $exts, $excl); )*
-            }
-
-            /// Return known fields for a builtin processor, or None for Lua plugins.
-            pub(crate) fn known_fields_for(name: &str) -> Option<&'static [&'static str]> {
-                match name {
+            /// Return known fields for a builtin processor type, or None for Lua plugins.
+            pub(crate) fn known_fields_for(type_name: &str) -> Option<&'static [&'static str]> {
+                match type_name {
                     $( stringify!($field) => Some(<$config_type as KnownFields>::known_fields()), )*
                     _ => None,
                 }
             }
 
-            /// Return the default config for a processor as pretty JSON, or None if unknown.
-            pub(crate) fn defconfig_json(name: &str) -> Option<String> {
-                let json: serde_json::Value = match name {
+            /// Return the default config for a processor type as pretty JSON, or None if unknown.
+            pub(crate) fn defconfig_json(type_name: &str) -> Option<String> {
+                let json: serde_json::Value = match type_name {
                     $( stringify!($field) => {
                         let mut cfg = <$config_type>::default();
                         cfg.scan.resolve($scan_dir, $exts, $excl);
@@ -359,6 +365,189 @@ macro_rules! gen_processor_config {
     };
 }
 for_each_processor!(gen_processor_config);
+
+/// Processor configuration: a collection of declared processor instances.
+/// Each `[processor.TYPE]` or `[processor.TYPE.NAME]` section in rsconstruct.toml
+/// creates a ProcessorInstance. No instances exist by default — only what's declared.
+#[derive(Debug)]
+pub(crate) struct ProcessorConfig {
+    /// All declared processor instances
+    pub instances: Vec<ProcessorInstance>,
+    /// Lua plugin configs (processor types not in the builtin registry)
+    pub extra: HashMap<String, toml::Value>,
+}
+
+impl Default for ProcessorConfig {
+    fn default() -> Self {
+        Self {
+            instances: Vec::new(),
+            extra: HashMap::new(),
+        }
+    }
+}
+
+impl Serialize for ProcessorConfig {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(None)?;
+        for inst in &self.instances {
+            // For named instances (type.name), we need to nest
+            if inst.instance_name.contains('.') {
+                // Handled as part of the parent type table
+            } else {
+                map.serialize_entry(&inst.instance_name, &inst.config_toml)?;
+            }
+        }
+        // Group named instances by type
+        let mut types: HashMap<&str, Vec<&ProcessorInstance>> = HashMap::new();
+        for inst in &self.instances {
+            if let Some(dot) = inst.instance_name.find('.') {
+                let type_name = &inst.instance_name[..dot];
+                types.entry(type_name).or_default().push(inst);
+            }
+        }
+        for (type_name, insts) in &types {
+            let mut table = toml::map::Map::new();
+            for inst in insts {
+                let name = &inst.instance_name[type_name.len() + 1..];
+                table.insert(name.to_string(), inst.config_toml.clone());
+            }
+            map.serialize_entry(type_name, &toml::Value::Table(table))?;
+        }
+        for (name, value) in &self.extra {
+            map.serialize_entry(name, value)?;
+        }
+        map.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for ProcessorConfig {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+        let table = toml::Value::deserialize(deserializer)?;
+        ProcessorConfig::from_toml(&table).map_err(serde::de::Error::custom)
+    }
+}
+
+impl ProcessorConfig {
+    /// Parse the `[processor]` table from TOML into instances.
+    pub(crate) fn from_toml(value: &toml::Value) -> Result<Self> {
+        let table = match value.as_table() {
+            Some(t) => t,
+            None => return Ok(Self::default()),
+        };
+
+        let mut instances = Vec::new();
+        let mut extra = HashMap::new();
+
+        for (key, val) in table {
+            let sub_table = match val.as_table() {
+                Some(t) => t,
+                None => continue, // skip non-table entries
+            };
+
+            if is_builtin_type(key) {
+                // Check if this is single-instance or multi-instance
+                if Self::is_multi_instance(key, sub_table) {
+                    // Multi-instance: [processor.pylint.core], [processor.pylint.tests]
+                    for (name, inst_val) in sub_table {
+                        let instance_name = format!("{}.{}", key, name);
+                        let mut config = inst_val.clone();
+                        resolve_instance_scan_defaults(key, &mut config).ok();
+                        instances.push(ProcessorInstance {
+                            instance_name,
+                            type_name: key.clone(),
+                            config_toml: config,
+                        });
+                    }
+                } else {
+                    // Single instance: [processor.pylint]
+                    let mut config = val.clone();
+                    resolve_instance_scan_defaults(key, &mut config).ok();
+                    instances.push(ProcessorInstance {
+                        instance_name: key.clone(),
+                        type_name: key.clone(),
+                        config_toml: config,
+                    });
+                }
+            } else {
+                // Unknown type — Lua plugin
+                extra.insert(key.clone(), val.clone());
+            }
+        }
+
+        Ok(Self { instances, extra })
+    }
+
+    /// Determine if a processor section contains named sub-instances (multi-instance)
+    /// or direct config fields (single-instance).
+    ///
+    /// Heuristic: if ALL values are tables AND none of the keys match known config
+    /// field names for this processor type, it's multi-instance.
+    fn is_multi_instance(type_name: &str, table: &toml::map::Map<String, toml::Value>) -> bool {
+        if table.is_empty() {
+            return false;
+        }
+
+        let known = Self::known_fields_for(type_name);
+        let known_fields: Vec<&str> = match known {
+            Some(fields) => fields.iter()
+                .chain(SCAN_CONFIG_FIELDS.iter())
+                .copied()
+                .collect(),
+            None => return false,
+        };
+
+        // If ANY key is a known config field, it's single-instance
+        for key in table.keys() {
+            if known_fields.contains(&key.as_str()) {
+                return false;
+            }
+        }
+
+        // If ALL values are tables, it's multi-instance
+        table.values().all(|v| v.is_table())
+    }
+
+    /// Resolve scan defaults for all instances.
+    pub(crate) fn resolve_scan_defaults(&mut self) {
+        for inst in &mut self.instances {
+            resolve_instance_scan_defaults(&inst.type_name, &mut inst.config_toml).ok();
+        }
+    }
+
+    /// Check if a processor instance name is declared.
+    #[allow(dead_code)]
+    pub(crate) fn is_declared(&self, instance_name: &str) -> bool {
+        self.instances.iter().any(|i| i.instance_name == instance_name)
+    }
+
+    /// Get all instance names for a given type.
+    #[allow(dead_code)]
+    pub(crate) fn instances_of_type(&self, type_name: &str) -> Vec<&ProcessorInstance> {
+        self.instances.iter().filter(|i| i.type_name == type_name).collect()
+    }
+
+    /// Get the first instance of a given type (for single-instance access).
+    /// Returns None if no instance of that type is declared.
+    pub(crate) fn first_instance_of_type(&self, type_name: &str) -> Option<&ProcessorInstance> {
+        self.instances.iter().find(|i| i.type_name == type_name)
+    }
+
+    /// Get mutable reference to first instance of a given type.
+    #[allow(dead_code)]
+    pub(crate) fn first_instance_of_type_mut(&mut self, type_name: &str) -> Option<&mut ProcessorInstance> {
+        self.instances.iter_mut().find(|i| i.type_name == type_name)
+    }
+
+    /// Get a typed config value from an instance's TOML config.
+    /// Returns the default if the instance is not declared or the field is missing.
+    pub(crate) fn instance_field_str(&self, type_name: &str, field: &str) -> Option<String> {
+        self.first_instance_of_type(type_name)
+            .and_then(|inst| inst.config_toml.get(field))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    }
+}
 
 pub(crate) fn default_script_check_linter() -> String {
     "true".into()
@@ -499,7 +688,6 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
         "exclude_files" => return Some(FieldType::StringArray),
         "exclude_paths" => return Some(FieldType::StringArray),
         // Common processor fields
-        "enabled" => return Some(FieldType::Bool),
         "args" => return Some(FieldType::StringArray),
         "extra_inputs" => return Some(FieldType::StringArray),
         "auto_inputs" => return Some(FieldType::StringArray),
@@ -592,10 +780,46 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
     }
 }
 
+/// Validate fields in a single processor config table.
+fn validate_single_processor(
+    type_name: &str,
+    section_label: &str,
+    table: &toml::map::Map<String, toml::Value>,
+    errors: &mut Vec<String>,
+) {
+    let own_fields: &[&str] = match ProcessorConfig::known_fields_for(type_name) {
+        Some(fields) => fields,
+        None => return, // unknown = Lua plugin, skip
+    };
+
+    for (key, field_value) in table {
+        if !own_fields.contains(&key.as_str()) && !SCAN_CONFIG_FIELDS.contains(&key.as_str()) {
+            let all_fields: Vec<&str> = own_fields.iter()
+                .chain(SCAN_CONFIG_FIELDS.iter())
+                .copied()
+                .collect();
+            errors.push(format!(
+                "[{}]: unknown field '{}' (valid fields: {})",
+                section_label, key, all_fields.join(", ")
+            ));
+            continue;
+        }
+
+        if let Some(expected) = expected_field_type(type_name, key)
+            && !expected.matches(field_value)
+        {
+            errors.push(format!(
+                "[{}]: field '{}' must be {}, got {} ({})",
+                section_label, key, expected.label(),
+                FieldType::describe_value(field_value),
+                field_value,
+            ));
+        }
+    }
+}
+
 /// Validate that all fields in `[processor.X]` sections are known fields for that processor
-/// and have the correct TOML types.
-/// Returns an error listing unknown fields and type mismatches. Skips non-table entries
-/// (like `auto_detect`) and unknown processor names (those are Lua plugin sections).
+/// and have the correct TOML types. Supports both single-instance and multi-instance formats.
 fn validate_processor_fields(raw: &toml::Value) -> Result<()> {
     let processor_table = match raw.get("processor").and_then(|v| v.as_table()) {
         Some(t) => t,
@@ -607,38 +831,24 @@ fn validate_processor_fields(raw: &toml::Value) -> Result<()> {
     for (name, value) in processor_table {
         let table = match value.as_table() {
             Some(t) => t,
-            None => continue, // skip scalar fields like auto_detect, enabled
+            None => continue, // skip non-table entries
         };
 
-        let own_fields: &[&str] = match ProcessorConfig::known_fields_for(name.as_str()) {
-            Some(fields) => fields,
-            None => continue, // unknown processor name = Lua plugin, skip
-        };
+        if !is_builtin_type(name) {
+            continue; // Lua plugin, skip
+        }
 
-        for (key, field_value) in table {
-            if !own_fields.contains(&key.as_str()) && !SCAN_CONFIG_FIELDS.contains(&key.as_str()) {
-                let all_fields: Vec<&str> = own_fields.iter()
-                    .chain(SCAN_CONFIG_FIELDS.iter())
-                    .copied()
-                    .collect();
-                errors.push(format!(
-                    "[processor.{}]: unknown field '{}' (valid fields: {})",
-                    name, key, all_fields.join(", ")
-                ));
-                continue;
+        // Check if multi-instance
+        if ProcessorConfig::is_multi_instance(name, table) {
+            for (inst_name, inst_value) in table {
+                if let Some(inst_table) = inst_value.as_table() {
+                    let section = format!("processor.{}.{}", name, inst_name);
+                    validate_single_processor(name, &section, inst_table, &mut errors);
+                }
             }
-
-            // Check field type if we know the expected type
-            if let Some(expected) = expected_field_type(name, key)
-                && !expected.matches(field_value)
-            {
-                errors.push(format!(
-                    "[processor.{}]: field '{}' must be {}, got {} ({})",
-                    name, key, expected.label(),
-                    FieldType::describe_value(field_value),
-                    field_value,
-                ));
-            }
+        } else {
+            let section = format!("processor.{}", name);
+            validate_single_processor(name, &section, table, &mut errors);
         }
     }
 

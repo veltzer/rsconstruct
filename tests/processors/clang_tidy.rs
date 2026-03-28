@@ -16,7 +16,7 @@ fn clang_tidy_valid_c_file() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"clang_tidy\"]\n",
+        "[processor.clang_tidy]\n",
     )
     .unwrap();
 
@@ -56,7 +56,7 @@ fn clang_tidy_incremental_skip() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"clang_tidy\"]\n",
+        "[processor.clang_tidy]\n",
     )
     .unwrap();
 

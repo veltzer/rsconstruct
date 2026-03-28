@@ -3,7 +3,7 @@ use tempfile::TempDir;
 use crate::common::{run_rsconstruct_with_env, tool_available};
 
 /// Config that builds only the dev profile for faster tests
-const SINGLE_PROFILE_CONFIG: &str = "[processor]\nenabled = [\"cargo\"]\n\n[processor.cargo]\nprofiles = [\"dev\"]\n";
+const SINGLE_PROFILE_CONFIG: &str = "[processor.cargo]\nprofiles = [\"dev\"]\n";
 
 #[test]
 fn cargo_valid_project() {
@@ -156,7 +156,7 @@ fn cargo_no_project_discovered() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"cargo\"]\n",
+        "[processor.cargo]\n",
     )
     .unwrap();
 
@@ -228,7 +228,7 @@ fn cargo_check_command() {
     // Use "cargo check" instead of "cargo build", single profile for speed
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"cargo\"]\n\n[processor.cargo]\ncommand = \"check\"\nprofiles = [\"dev\"]\n",
+        "[processor.cargo]\ncommand = \"check\"\nprofiles = [\"dev\"]\n",
     )
     .unwrap();
 
@@ -275,7 +275,7 @@ fn cargo_multi_profile() {
     // Default profiles: dev + release
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"cargo\"]\n",
+        "[processor.cargo]\n",
     )
     .unwrap();
 

@@ -916,7 +916,7 @@ fn load_tags_file_sorted(path: &Path) -> Result<Vec<String>> {
 
 /// Write a sorted list of tags to a .tags file, one per line with a header comment.
 fn write_tags_file(path: &Path, tags: &[String]) -> Result<()> {
-    let mut content = String::from("# Allowed tags for rsconstruct frontmatter validation\n# One tag per line. Wildcards supported (e.g. duration_days:*)\n");
+    let mut content = String::from("# Allowed tags for rsconstruct frontmatter validation\n# One tag per line. Wildcards supported (e.g. duration_hours:*)\n");
     for tag in tags {
         content.push_str(tag);
         content.push('\n');
@@ -926,7 +926,7 @@ fn write_tags_file(path: &Path, tags: &[String]) -> Result<()> {
 }
 
 /// Check if a tag matches the allowed set, supporting wildcard patterns.
-/// Patterns like `duration_days:*` match any tag starting with `duration_days:`.
+/// Patterns like `duration_hours:*` match any tag starting with `duration_hours:`.
 fn tag_matches_allowed(tag: &str, allowed: &HashSet<String>) -> bool {
     if allowed.contains(tag) {
         return true;
@@ -944,7 +944,7 @@ fn tag_matches_allowed(tag: &str, allowed: &HashSet<String>) -> bool {
 
 /// Check if a pattern from .tags matches any actual tag in the database.
 /// For literal tags, checks direct membership.
-/// For wildcard patterns like `duration_days:*`, checks if any db tag has that prefix.
+/// For wildcard patterns like `duration_hours:*`, checks if any db tag has that prefix.
 fn pattern_matches_any_tag(pattern: &str, db_tags: &HashSet<String>) -> bool {
     if let Some(prefix) = pattern.strip_suffix('*') {
         db_tags.iter().any(|t| t.starts_with(prefix))

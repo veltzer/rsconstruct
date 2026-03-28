@@ -2,7 +2,7 @@ use anyhow::Result;
 use crate::cli::ConfigAction;
 use crate::color;
 use crate::config::Config;
-use super::{Builder, ValidationSeverity, ValidationIssue};
+use super::{Builder, ValidationSeverity, ValidationIssue, sorted_keys};
 
 impl Builder {
     /// Handle `rsconstruct config` subcommands
@@ -73,7 +73,6 @@ impl Builder {
     pub(super) fn validate_config(&self) -> Vec<ValidationIssue> {
         let mut issues = Vec::new();
 
-        // Check 1: Enabled processor names are valid
         let processors = match self.create_processors() {
             Ok(p) => p,
             Err(e) => {
@@ -85,37 +84,38 @@ impl Builder {
             }
         };
 
-        for name in &self.config.processor.enabled {
-            if !processors.contains_key(name) {
+        // Check: Unknown processor types (not builtin, not a Lua plugin)
+        for name in self.config.processor.extra.keys() {
+            let plugin_path = std::path::Path::new(&self.config.plugins.dir)
+                .join(format!("{}.lua", name));
+            if !plugin_path.exists() {
                 issues.push(ValidationIssue {
                     severity: ValidationSeverity::Error,
-                    message: format!("Unknown processor '{}' in enabled list", name),
+                    message: format!("Unknown processor type '{}' (not a builtin processor or Lua plugin)", name),
                 });
             }
         }
 
-        // Check 2: Required tools on PATH for enabled processors
-        for name in &self.config.processor.enabled {
-            if let Some(processor) = processors.get(name) {
-                for tool in processor.required_tools() {
-                    if which::which(&tool).is_err() {
-                        issues.push(ValidationIssue {
-                            severity: ValidationSeverity::Warning,
-                            message: format!("Tool '{}' required by processor '{}' not found on PATH", tool, name),
-                        });
-                    }
+        // Check: Required tools on PATH for declared processors
+        for name in sorted_keys(&processors) {
+            let processor = &processors[name];
+            for tool in processor.required_tools() {
+                if which::which(&tool).is_err() {
+                    issues.push(ValidationIssue {
+                        severity: ValidationSeverity::Warning,
+                        message: format!("Tool '{}' required by processor '{}' not found on PATH", tool, name),
+                    });
                 }
             }
         }
 
-        // Check 3: Auto-detect mismatch (processor enabled but no matching files)
-        for name in &self.config.processor.enabled {
-            if let Some(processor) = processors.get(name)
-                && !processor.auto_detect(&self.file_index)
-            {
+        // Check: No matching files detected for declared processor
+        for name in sorted_keys(&processors) {
+            let processor = &processors[name];
+            if !processor.auto_detect(&self.file_index) {
                 issues.push(ValidationIssue {
                     severity: ValidationSeverity::Warning,
-                    message: format!("Processor '{}' is enabled but no matching files detected", name),
+                    message: format!("Processor '{}' is declared but no matching files detected", name),
                 });
             }
         }

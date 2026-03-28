@@ -340,23 +340,25 @@ fn run() -> Result<()> {
         }
         Commands::Tags { action } => {
             let config = Config::load()?;
-            let db_path = &config.processor.tags.output;
-            let tags_file = &config.processor.tags.tags_file;
+            let db_path = config.processor.instance_field_str("tags", "output")
+                .unwrap_or_else(|| "out/tags/tags.db".into());
+            let tags_file = config.processor.instance_field_str("tags", "tags_file")
+                .unwrap_or_else(|| ".tags".into());
             match action {
-                cli::TagsAction::Files { tags, or } => processors::tags_cmd::files_for_tags(db_path, &tags, or)?,
-                cli::TagsAction::Grep { text, ignore_case } => processors::tags_cmd::grep_tags(db_path, &text, ignore_case)?,
-                cli::TagsAction::List => processors::tags_cmd::list_tags(db_path)?,
-                cli::TagsAction::Count => processors::tags_cmd::count_tags(db_path)?,
-                cli::TagsAction::Tree => processors::tags_cmd::tree_tags(db_path)?,
-                cli::TagsAction::Stats => processors::tags_cmd::stats_tags(db_path)?,
-                cli::TagsAction::ForFile { path } => processors::tags_cmd::tags_for_file(db_path, &path)?,
-                cli::TagsAction::Frontmatter { path } => processors::tags_cmd::frontmatter_for_file(db_path, &path)?,
-                cli::TagsAction::Unused { strict } => processors::tags_cmd::unused_tags(db_path, tags_file, strict)?,
-                cli::TagsAction::Validate => processors::tags_cmd::validate_tags(db_path, tags_file)?,
-                cli::TagsAction::Init => processors::tags_cmd::init_tags(db_path, tags_file)?,
-                cli::TagsAction::Add { tag } => processors::tags_cmd::add_tag(tags_file, &tag)?,
-                cli::TagsAction::Remove { tag } => processors::tags_cmd::remove_tag(tags_file, &tag)?,
-                cli::TagsAction::Sync { prune } => processors::tags_cmd::sync_tags(db_path, tags_file, prune, cli.verbose)?,
+                cli::TagsAction::Files { tags, or } => processors::tags_cmd::files_for_tags(&db_path, &tags, or)?,
+                cli::TagsAction::Grep { text, ignore_case } => processors::tags_cmd::grep_tags(&db_path, &text, ignore_case)?,
+                cli::TagsAction::List => processors::tags_cmd::list_tags(&db_path)?,
+                cli::TagsAction::Count => processors::tags_cmd::count_tags(&db_path)?,
+                cli::TagsAction::Tree => processors::tags_cmd::tree_tags(&db_path)?,
+                cli::TagsAction::Stats => processors::tags_cmd::stats_tags(&db_path)?,
+                cli::TagsAction::ForFile { path } => processors::tags_cmd::tags_for_file(&db_path, &path)?,
+                cli::TagsAction::Frontmatter { path } => processors::tags_cmd::frontmatter_for_file(&db_path, &path)?,
+                cli::TagsAction::Unused { strict } => processors::tags_cmd::unused_tags(&db_path, &tags_file, strict)?,
+                cli::TagsAction::Validate => processors::tags_cmd::validate_tags(&db_path, &tags_file)?,
+                cli::TagsAction::Init => processors::tags_cmd::init_tags(&db_path, &tags_file)?,
+                cli::TagsAction::Add { tag } => processors::tags_cmd::add_tag(&tags_file, &tag)?,
+                cli::TagsAction::Remove { tag } => processors::tags_cmd::remove_tag(&tags_file, &tag)?,
+                cli::TagsAction::Sync { prune } => processors::tags_cmd::sync_tags(&db_path, &tags_file, prune, cli.verbose)?,
             }
         }
         Commands::Tools { action } => {
@@ -402,6 +404,9 @@ fn init_project() -> Result<()> {
 
     // Create rsconstruct.toml with commented defaults
     let config_content = r#"# RSConstruct Build Tool Configuration
+# Uncomment [processor.NAME] sections to enable processors.
+# Each section declares a processor instance; removing it disables the processor.
+# For multiple instances: [processor.pylint.core] and [processor.pylint.tests]
 
 [build]
 # Number of parallel jobs (1 = sequential, 0 = auto-detect CPU cores)
@@ -409,120 +414,40 @@ fn init_project() -> Result<()> {
 # Max files per batch for batch-capable processors (0 = no limit, omit to disable batching)
 # batch_size = 0
 
-[processor]
-# auto_detect = true
-# enabled = ["tera", "ruff", "pylint", "cc_single_file", "cppcheck", "shellcheck", "spellcheck", "make"]
-
 [cache]
 # restore_method = "hardlink"  # or "copy"
 
-[processor.tera]
+# Uncomment processors you want to use:
+
+# [processor.tera]
 # strict = true
 # scan_dir = "tera.templates"
 # extensions = [".tera"]
-# trim_blocks = false
 
-[processor.ruff]
+# [processor.ruff]
 # linter = "ruff"
 # args = []
-# scan_dir = ""
-# extensions = [".py"]
 
-[processor.pylint]
+# [processor.pylint]
 # args = []
-# scan_dir = ""
-# extensions = [".py"]
 
-[processor.cc_single_file]
+# [processor.cc_single_file]
 # cc = "gcc"
 # cxx = "g++"
-# cflags = []
-# cxxflags = []
-# ldflags = []
-# include_paths = []
 # scan_dir = "src"
 # extensions = [".c", ".cc"]
-# output_suffix = ".elf"
 
-[processor.cppcheck]
+# [processor.cppcheck]
 # args = ["--error-exitcode=1", "--enable=warning,style,performance,portability"]
-# scan_dir = "src"
-# extensions = [".c", ".cc"]
 
-[processor.shellcheck]
-# checker = "shellcheck"
+# [processor.shellcheck]
 # args = []
-# scan_dir = ""
-# extensions = [".sh", ".bash"]
 
-[processor.make]
+# [processor.make]
 # make = "make"
-# args = []
-# target = ""
-# scan_dir = ""
-# extensions = ["Makefile"]
-# exclude_paths = []
 
-[processor.gem]
-# bundler = "bundle"
-# command = "install"
-# gem_home = "gems"
-
-[processor.mdl]
-# gem_home = "gems"
-# mdl_bin = "gems/bin/mdl"
-# args = []
-# extra_inputs = []
-# gem_stamp = "out/gem/root.stamp"
-# extensions = [".md"]
-
-[processor.markdownlint]
-# markdownlint_bin = "node_modules/.bin/markdownlint"
-# args = []
-# extra_inputs = []
-# npm_stamp = "out/npm/root.stamp"
-# extensions = [".md"]
-
-[processor.aspell]
-# aspell = "aspell"
-# conf_dir = "."
-# conf = ".aspell.conf"
-# args = []
-# extra_inputs = []
-# extensions = [".md"]
-
-[processor.pandoc]
-# pandoc = "pandoc"
-# from = "markdown"
-# formats = ["pdf"]
-# args = []
-# output_dir = "out/pandoc"
-# extensions = [".md"]
-
-[processor.markdown]
-# markdown_bin = "markdown"
-# args = []
-# output_dir = "out/markdown"
-# extensions = [".md"]
-
-[processor.pdflatex]
-# pdflatex = "pdflatex"
-# args = []
-# runs = 2
-# qpdf = true
-# output_dir = "out/pdflatex"
-# extensions = [".tex"]
-
-[processor.a2x]
-# a2x = "a2x"
-# format = "pdf"
-# args = []
-# output_dir = "out/a2x"
-# extensions = [".txt"]
-
-[processor.ascii_check]
-# args = []
-# extensions = [".md"]
+# [processor.cargo]
+# cargo = "cargo"
 
 [graph]
 # viewer = "google-chrome"

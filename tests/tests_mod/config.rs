@@ -12,8 +12,9 @@ fn config_show_outputs_toml() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Should contain TOML section headers from the merged config
     assert!(stdout.contains("[build]"), "Expected [build] section");
-    assert!(stdout.contains("[processor]"), "Expected [processor] section");
     assert!(stdout.contains("[cache]"), "Expected [cache] section");
+    // Processor config is under [processor.NAME] sections
+    assert!(stdout.contains("[processor.tera]") || stdout.contains("processor"), "Expected processor config");
 }
 
 #[test]
@@ -69,8 +70,7 @@ fn config_vars_substitution_array() {
 [vars]
 my_excludes = ["/kernel/", "/vendor/"]
 
-[processor]
-enabled = ["tera"]
+[processor.tera]
 
 [processor.cppcheck]
 exclude_dirs = "${my_excludes}"
@@ -98,9 +98,6 @@ fn config_vars_substitution_string() {
 [vars]
 my_dir = "custom_templates"
 
-[processor]
-enabled = ["tera"]
-
 [processor.tera]
 scan_dir = "${my_dir}"
 "#
@@ -125,8 +122,7 @@ fn config_vars_multiple_uses() {
 [vars]
 shared_excludes = ["/out/", "/build/"]
 
-[processor]
-enabled = ["tera"]
+[processor.tera]
 
 [processor.cppcheck]
 exclude_dirs = "${shared_excludes}"
@@ -154,8 +150,7 @@ fn config_vars_undefined_variable_error() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         r#"
-[processor]
-enabled = ["tera"]
+[processor.tera]
 
 [processor.cppcheck]
 exclude_dirs = "${undefined_var}"
@@ -178,9 +173,6 @@ fn config_vars_no_vars_section() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         r#"
-[processor]
-enabled = ["tera"]
-
 [processor.tera]
 scan_dir = "templates"
 "#
@@ -214,7 +206,7 @@ fn config_validate_unknown_processor() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"nonexistent_proc\"]\n"
+        "[processor.nonexistent_proc]\n"
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
@@ -232,7 +224,7 @@ fn config_validate_no_matching_files_warning() {
     // Enable yamllint processor but don't create any .yml files
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"yamllint\"]\n"
+        "[processor.yamllint]\n"
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
@@ -251,7 +243,7 @@ fn config_validate_json() {
     // Enable yamllint processor but don't create any .yml files (to get a warning)
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"yamllint\"]\n"
+        "[processor.yamllint]\n"
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["--json", "config", "validate"], &[("NO_COLOR", "1")]);

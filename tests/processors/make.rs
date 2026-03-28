@@ -19,7 +19,7 @@ fn make_valid_makefile() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"make\"]\n",
+        "[processor.make]\n",
     )
     .unwrap();
 
@@ -59,7 +59,7 @@ fn make_incremental_skip() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"make\"]\n",
+        "[processor.make]\n",
     )
     .unwrap();
 

@@ -14,7 +14,7 @@ fn mermaid_discovery() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"mermaid\"]\n",
+        "[processor.mermaid]\n",
     )
     .unwrap();
 
@@ -48,7 +48,7 @@ fn mermaid_no_project_discovered() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"mermaid\"]\n",
+        "[processor.mermaid]\n",
     )
     .unwrap();
 

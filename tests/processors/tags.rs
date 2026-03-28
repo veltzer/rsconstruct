@@ -7,7 +7,7 @@ fn setup_tags_project(md_files: &[(&str, &str)], tags_file: Option<&str>) -> Tem
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let p = temp_dir.path();
 
-    let config = "[processor]\nenabled = [\"tags\"]\n";
+    let config = "[processor.tags]\n";
     fs::write(p.join("rsconstruct.toml"), config).unwrap();
 
     for (name, content) in md_files {
@@ -104,14 +104,14 @@ fn tags_validation_rejects_unknown_tags() {
 fn tags_validation_allows_wildcard_patterns() {
     let temp_dir = setup_tags_project(
         &[
-            ("course.md", "---\nlevel: beginner\nduration_days: 5\ntags:\n  - python\n---\n# Course\n"),
+            ("course.md", "---\nlevel: beginner\nduration_hours: 5\ntags:\n  - python\n---\n# Course\n"),
         ],
-        // Wildcard pattern for duration_days:*
-        Some("python\nlevel:beginner\nduration_days:*\n"),
+        // Wildcard pattern for duration_hours:*
+        Some("python\nlevel:beginner\nduration_hours:*\n"),
     );
     let p = temp_dir.path();
 
-    // Build should succeed because duration_days:5 matches duration_days:*
+    // Build should succeed because duration_hours:5 matches duration_hours:*
     let output = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(),
         "build should succeed with wildcard pattern: stdout={}, stderr={}",

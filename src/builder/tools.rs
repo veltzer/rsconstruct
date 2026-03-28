@@ -21,12 +21,9 @@ fn tool_runtime(tool: &str) -> &'static str {
 /// Uses default processor configs so List, Stats, Install, and Graph work
 /// even outside a project directory.
 pub fn tools_no_config(action: ToolsAction, verbose: bool) -> Result<()> {
-    let mut cfg = crate::config::ProcessorConfig::default();
-    cfg.resolve_scan_defaults();
-    let processors = super::create_builtin_processors(&cfg);
-    // Build file index for auto-detection (best-effort, ignore errors)
+    let processors = super::create_all_default_processors();
     let file_index = crate::file_index::FileIndex::build().ok();
-    run_tools_command(&processors, &|name| cfg.is_enabled(name), action, verbose, None, file_index.as_ref())
+    run_tools_command(&processors, &|_name| true, action, verbose, None, file_index.as_ref())
 }
 
 impl Builder {
@@ -34,10 +31,9 @@ impl Builder {
     /// Called at the start of build unless --ignore-tool-versions is passed.
     pub fn verify_tool_versions(&self) -> Result<()> {
         let processors = self.create_processors()?;
-        let config = &self.config;
         let tool_commands = tool_lock::collect_tool_commands(
             &processors,
-            &|name| config.processor.is_enabled(name),
+            &|_name| true,
         );
         if tool_commands.is_empty() {
             return Ok(());
@@ -48,10 +44,9 @@ impl Builder {
     /// Handle `rsconstruct tools` subcommands
     pub fn tools(&self, action: ToolsAction, verbose: bool) -> Result<()> {
         let processors = self.create_processors()?;
-        let config = &self.config;
         run_tools_command(
             &processors,
-            &|name| config.processor.is_enabled(name),
+            &|_name| true,
             action,
             verbose,
             Some(self),

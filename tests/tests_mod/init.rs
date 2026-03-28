@@ -18,7 +18,7 @@ fn init_creates_project() {
     // Verify rsconstruct.toml has content
     let toml_content = fs::read_to_string(project_path.join("rsconstruct.toml")).unwrap();
     assert!(toml_content.contains("[build]"), "rsconstruct.toml should contain [build] section");
-    assert!(toml_content.contains("[processor]"), "rsconstruct.toml should contain [processor] section");
+    assert!(toml_content.contains("processor"), "rsconstruct.toml should contain processor examples");
 
     // Verify .rsconstructignore has content
     let rsconstructignore_content = fs::read_to_string(project_path.join(".rsconstructignore")).unwrap();

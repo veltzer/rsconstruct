@@ -27,7 +27,7 @@ pub fn setup_test_project() -> TempDir {
     // Only enable the tera processor so config/*.py files aren't picked up by linters
     fs::write(
         temp_dir.path().join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"tera\"]\n"
+        "[processor.tera]\n"
     ).expect("Failed to write rsconstruct.toml");
 
     temp_dir
@@ -59,7 +59,7 @@ pub fn setup_cc_project(project_path: &Path) {
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"cc_single_file\"]\n"
+        "[processor.cc_single_file]\n"
     ).unwrap();
 }
 
@@ -219,7 +219,7 @@ macro_rules! test_checker {
 
                 std::fs::write(
                     project_path.join("rsconstruct.toml"),
-                    format!("[processor]\nenabled = [\"{}\"]\n", $proc),
+                    format!("[processor.{}]\n", $proc),
                 ).unwrap();
 
                 $( std::fs::write(project_path.join($fname), $content).unwrap(); )+
@@ -246,7 +246,7 @@ macro_rules! test_checker {
 
                 std::fs::write(
                     project_path.join("rsconstruct.toml"),
-                    format!("[processor]\nenabled = [\"{}\"]\n", $proc),
+                    format!("[processor.{}]\n", $proc),
                 ).unwrap();
 
                 $( std::fs::write(project_path.join($fname), $content).unwrap(); )+
@@ -282,7 +282,7 @@ macro_rules! test_checker {
 
                 std::fs::write(
                     project_path.join("rsconstruct.toml"),
-                    format!("[processor]\nenabled = [\"{}\"]\n", $proc),
+                    format!("[processor.{}]\n", $proc),
                 ).unwrap();
 
                 let output = crate::common::run_rsconstruct_with_env(

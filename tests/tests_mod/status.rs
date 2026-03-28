@@ -40,7 +40,7 @@ fn status_empty_project() {
     // No templates to process — disable all processors
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = []\n"
+        "\n"
     ).unwrap();
 
     let output = run_rsconstruct(project_path, &["status"]);

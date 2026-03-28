@@ -14,7 +14,7 @@ fn markdown_valid_file() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"markdown\"]\n",
+        "[processor.markdown]\n",
     )
     .unwrap();
 
@@ -52,7 +52,7 @@ fn markdown_incremental_skip() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"markdown\"]\n",
+        "[processor.markdown]\n",
     )
     .unwrap();
 
@@ -84,7 +84,7 @@ fn markdown_no_project_discovered() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"markdown\"]\n\n[processor.markdown]\nscan_dir = \"markdown_docs\"\n",
+        "[processor.markdown]\nscan_dir = \"markdown_docs\"\n",
     )
     .unwrap();
 

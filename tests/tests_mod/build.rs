@@ -248,7 +248,7 @@ fn parallel_keep_going_continues_after_failure() {
     fs::write(project_path.join("tera.templates/good3.txt.tera"), "hello3").unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"tera\"]\n\n[build]\nparallel = 2\n"
+        "[processor.tera]\n\n[build]\nparallel = 2\n"
     ).unwrap();
 
     let result = run_rsconstruct_json(project_path, &["build", "--keep-going"]);
@@ -273,7 +273,7 @@ fn parallel_builds_all_independent_products() {
     }
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"tera\"]\n\n[build]\nparallel = 4\n"
+        "[processor.tera]\n\n[build]\nparallel = 4\n"
     ).unwrap();
 
     let result = run_rsconstruct_json(project_path, &["build"]);
@@ -301,7 +301,7 @@ fn parallel_timings_flag() {
     }
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"tera\"]\n\n[build]\nparallel = 2\n"
+        "[processor.tera]\n\n[build]\nparallel = 2\n"
     ).unwrap();
 
     let output = run_rsconstruct_with_env(
@@ -392,7 +392,7 @@ fn classify_propagates_through_dependencies() {
     // Phase 2: add a second template with extra_inputs pointing to the first tera output
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"tera\"]\n\n[processor.tera]\nextra_inputs = [\"step1.txt\"]\n"
+        "[processor.tera]\nextra_inputs = [\"step1.txt\"]\n"
     ).unwrap();
     fs::write(
         project_path.join("tera.templates/step2.txt.tera"),
@@ -447,8 +447,7 @@ fn checker_and_generator_both_rebuild_on_shared_input_change() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         concat!(
-            "[processor]\n",
-            "enabled = [\"tera\", \"script_check\"]\n",
+            "[processor.tera]\n",
             "\n",
             "[processor.script_check]\n",
             "scan_dir = \"tera.templates\"\n",

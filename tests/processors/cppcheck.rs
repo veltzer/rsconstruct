@@ -16,7 +16,7 @@ fn cppcheck_valid_c_file() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"cppcheck\"]\n",
+        "[processor.cppcheck]\n",
     )
     .unwrap();
 
@@ -56,7 +56,7 @@ fn cppcheck_incremental_skip() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"cppcheck\"]\n",
+        "[processor.cppcheck]\n",
     )
     .unwrap();
 

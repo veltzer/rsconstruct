@@ -258,7 +258,7 @@ rsconstruct tags tree                        # Show tags grouped by prefix/categ
 rsconstruct tags stats                       # Show statistics about the tags database
 rsconstruct tags files docker                # List files matching a tag (AND semantics)
 rsconstruct tags files docker --or k8s       # List files matching any tag (OR semantics)
-rsconstruct tags files level=advanced        # Match key=value tags
+rsconstruct tags files level:advanced        # Match key:value tags
 rsconstruct tags grep deploy                 # Search for tags containing a substring
 rsconstruct tags grep deploy -i              # Case-insensitive tag search
 rsconstruct tags for-file src/main.md        # List all tags for a specific file

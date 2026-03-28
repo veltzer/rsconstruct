@@ -101,7 +101,7 @@ fn cache_list_empty() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = []\n"
+        "\n"
     ).unwrap();
 
     // Empty cache should produce an empty JSON array
@@ -121,7 +121,7 @@ fn cache_stats_empty() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = []\n"
+        "\n"
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["cache", "stats"], &[("NO_COLOR", "1")]);

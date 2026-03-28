@@ -41,8 +41,6 @@ macro_rules! checker_config {
     (@no_linter $name:ident, $scan:expr, [$($ai:expr),*]) => {
         #[derive(Debug, Deserialize, Serialize, Clone)]
         pub struct $name {
-            #[serde(default = "default_true")]
-            pub enabled: bool,
             #[serde(default)]
             pub args: Vec<String>,
             #[serde(default)]
@@ -58,7 +56,6 @@ macro_rules! checker_config {
         impl Default for $name {
             fn default() -> Self {
                 Self {
-                    enabled: true,
                     args: Vec::new(),
                     extra_inputs: Vec::new(),
                     auto_inputs: vec![$($ai.into()),*],
@@ -70,7 +67,7 @@ macro_rules! checker_config {
 
         impl KnownFields for $name {
             fn known_fields() -> &'static [&'static str] {
-                &["enabled", "args", "extra_inputs", "auto_inputs", "batch"]
+                &["args", "extra_inputs", "auto_inputs", "batch"]
             }
         }
     };
@@ -86,8 +83,6 @@ macro_rules! checker_config {
         paste::paste! {
             #[derive(Debug, Deserialize, Serialize, Clone)]
             pub struct $name {
-                #[serde(default = "default_true")]
-                pub enabled: bool,
                 #[serde(default = "" [<default_ $name:lower _linter>] "")]
                 pub linter: String,
                 #[serde(default)]
@@ -106,7 +101,6 @@ macro_rules! checker_config {
         impl Default for $name {
             fn default() -> Self {
                 Self {
-                    enabled: true,
                     linter: $linter.into(),
                     args: Vec::new(),
                     extra_inputs: Vec::new(),
@@ -119,7 +113,7 @@ macro_rules! checker_config {
 
         impl KnownFields for $name {
             fn known_fields() -> &'static [&'static str] {
-                &["enabled", "linter", "args", "extra_inputs", "auto_inputs", "batch"]
+                &["linter", "args", "extra_inputs", "auto_inputs", "batch"]
             }
         }
     };
@@ -171,8 +165,6 @@ macro_rules! generator_config {
         paste::paste! {
             #[derive(Debug, Deserialize, Serialize, Clone)]
             pub struct $name {
-                #[serde(default = "default_true")]
-                pub enabled: bool,
                 #[serde(default = "" [<default_ $name:lower _tool>] "")]
                 pub $tool_field: String,
                 #[serde(default = "" [<default_ $name:lower _formats>] "")]
@@ -195,7 +187,6 @@ macro_rules! generator_config {
         impl Default for $name {
             fn default() -> Self {
                 Self {
-                    enabled: true,
                     $tool_field: $tool_default.into(),
                     formats: vec![$($fmt.into()),+],
                     args: vec![$($arg.into()),+],
@@ -210,7 +201,7 @@ macro_rules! generator_config {
 
         impl KnownFields for $name {
             fn known_fields() -> &'static [&'static str] {
-                &["enabled", stringify!($tool_field), "formats", "args",
+                &[stringify!($tool_field), "formats", "args",
                   "extra_inputs", "auto_inputs", "output_dir", "batch"]
             }
         }
@@ -230,8 +221,6 @@ macro_rules! generator_config {
         paste::paste! {
             #[derive(Debug, Deserialize, Serialize, Clone)]
             pub struct $name {
-                #[serde(default = "default_true")]
-                pub enabled: bool,
                 #[serde(default = "" [<default_ $name:lower _tool>] "")]
                 pub $tool_field: String,
                 #[serde(default = "" [<default_ $name:lower _formats>] "")]
@@ -254,7 +243,6 @@ macro_rules! generator_config {
         impl Default for $name {
             fn default() -> Self {
                 Self {
-                    enabled: true,
                     $tool_field: $tool_default.into(),
                     formats: vec![$($fmt.into()),+],
                     args: Vec::new(),
@@ -269,7 +257,7 @@ macro_rules! generator_config {
 
         impl KnownFields for $name {
             fn known_fields() -> &'static [&'static str] {
-                &["enabled", stringify!($tool_field), "formats", "args",
+                &[stringify!($tool_field), "formats", "args",
                   "extra_inputs", "auto_inputs", "output_dir", "batch"]
             }
         }
@@ -288,8 +276,6 @@ macro_rules! generator_config {
         paste::paste! {
             #[derive(Debug, Deserialize, Serialize, Clone)]
             pub struct $name {
-                #[serde(default = "default_true")]
-                pub enabled: bool,
                 #[serde(default = "" [<default_ $name:lower _tool>] "")]
                 pub $tool_field: String,
                 #[serde(default)]
@@ -310,7 +296,6 @@ macro_rules! generator_config {
         impl Default for $name {
             fn default() -> Self {
                 Self {
-                    enabled: true,
                     $tool_field: $tool_default.into(),
                     args: Vec::new(),
                     extra_inputs: Vec::new(),
@@ -324,7 +309,7 @@ macro_rules! generator_config {
 
         impl KnownFields for $name {
             fn known_fields() -> &'static [&'static str] {
-                &["enabled", stringify!($tool_field), "args",
+                &[stringify!($tool_field), "args",
                   "extra_inputs", "auto_inputs", "output_dir", "batch"]
             }
         }
@@ -337,8 +322,6 @@ macro_rules! generator_config {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TeraConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default = "default_true")]
     pub strict: bool,
     #[serde(default)]
@@ -356,7 +339,6 @@ pub struct TeraConfig {
 impl Default for TeraConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             strict: true,
             trim_blocks: false,
             extra_inputs: Vec::new(),
@@ -370,15 +352,13 @@ impl Default for TeraConfig {
 impl KnownFields for TeraConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "strict", "trim_blocks", "extra_inputs", "auto_inputs", "batch",
+            "strict", "trim_blocks", "extra_inputs", "auto_inputs", "batch",
         ]
     }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct MakoConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default)]
     pub extra_inputs: Vec<String>,
     #[serde(default)]
@@ -392,7 +372,6 @@ pub struct MakoConfig {
 impl Default for MakoConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
             batch: true,
@@ -404,7 +383,7 @@ impl Default for MakoConfig {
 impl KnownFields for MakoConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "extra_inputs", "auto_inputs", "batch",
+            "extra_inputs", "auto_inputs", "batch",
         ]
     }
 }
@@ -426,8 +405,6 @@ fn default_cppcheck_auto_inputs() -> Vec<String> {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CppcheckConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default = "default_cppcheck_args")]
     pub args: Vec<String>,
     #[serde(default)]
@@ -443,7 +420,6 @@ pub struct CppcheckConfig {
 impl Default for CppcheckConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             args: default_cppcheck_args(),
             extra_inputs: Vec::new(),
             auto_inputs: default_cppcheck_auto_inputs(),
@@ -456,15 +432,13 @@ impl Default for CppcheckConfig {
 impl KnownFields for CppcheckConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "args", "extra_inputs", "auto_inputs", "batch",
+            "args", "extra_inputs", "auto_inputs", "batch",
         ]
     }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ClangTidyConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default)]
     pub args: Vec<String>,
     #[serde(default)]
@@ -486,7 +460,6 @@ fn default_clang_tidy_auto_inputs() -> Vec<String> {
 impl Default for ClangTidyConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             args: Vec::new(),
             compiler_args: Vec::new(),
             extra_inputs: Vec::new(),
@@ -500,7 +473,7 @@ impl Default for ClangTidyConfig {
 impl KnownFields for ClangTidyConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "args", "compiler_args", "extra_inputs", "auto_inputs", "batch",
+            "args", "compiler_args", "extra_inputs", "auto_inputs", "batch",
         ]
     }
 }
@@ -541,8 +514,6 @@ pub struct CompilerProfile {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CcSingleFileConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     /// Legacy single-compiler fields (used when `compilers` is empty)
     #[serde(default = "default_cc_compiler")]
     pub cc: String,
@@ -603,7 +574,6 @@ impl CcSingleFileConfig {
 impl Default for CcSingleFileConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             cc: "gcc".into(),
             cxx: "g++".into(),
             cflags: Vec::new(),
@@ -624,7 +594,7 @@ impl Default for CcSingleFileConfig {
 impl KnownFields for CcSingleFileConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "cc", "cxx", "cflags", "cxxflags", "ldflags", "output_suffix",
+            "cc", "cxx", "cflags", "cxxflags", "ldflags", "output_suffix",
             "compilers", "include_paths", "extra_inputs", "auto_inputs", "include_scanner", "batch",
         ]
     }
@@ -691,8 +661,6 @@ pub struct CcManifest {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CcConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default = "default_cc_compiler")]
     pub cc: String,
     #[serde(default = "default_cxx_compiler")]
@@ -720,7 +688,6 @@ pub struct CcConfig {
 impl Default for CcConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             cc: "gcc".into(),
             cxx: "g++".into(),
             cflags: Vec::new(),
@@ -739,7 +706,7 @@ impl Default for CcConfig {
 impl KnownFields for CcConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "cc", "cxx", "cflags", "cxxflags", "ldflags",
+            "cc", "cxx", "cflags", "cxxflags", "ldflags",
             "include_dirs", "single_invocation",
             "extra_inputs", "cache_output_dir", "batch",
         ]
@@ -789,8 +756,6 @@ fn default_linux_module_w() -> u32 {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct LinuxModuleConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default)]
     pub extra_inputs: Vec<String>,
     #[serde(default = "default_true")]
@@ -802,7 +767,6 @@ pub struct LinuxModuleConfig {
 impl Default for LinuxModuleConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             extra_inputs: Vec::new(),
             batch: true,
             scan: default_scan!(extensions: ["linux-module.yaml"]),
@@ -813,7 +777,7 @@ impl Default for LinuxModuleConfig {
 impl KnownFields for LinuxModuleConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "extra_inputs", "batch",
+            "extra_inputs", "batch",
         ]
     }
 }
@@ -828,8 +792,6 @@ fn default_spellcheck_words_file() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SpellcheckConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default = "default_spellcheck_language")]
     pub language: String,
     #[serde(default = "default_spellcheck_words_file")]
@@ -854,7 +816,6 @@ fn default_spellcheck_auto_inputs() -> Vec<String> {
 impl Default for SpellcheckConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             language: "en_US".into(),
             words_file: ".spellcheck-words".into(),
 
@@ -870,7 +831,7 @@ impl Default for SpellcheckConfig {
 impl KnownFields for SpellcheckConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "language", "words_file", "auto_add_words", "extra_inputs", "auto_inputs", "batch",
+            "language", "words_file", "auto_add_words", "extra_inputs", "auto_inputs", "batch",
         ]
     }
 }
@@ -893,8 +854,6 @@ fn default_cargo_profiles() -> Vec<String> {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CargoConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default = "default_cargo")]
     pub cargo: String,
     #[serde(default = "default_cargo_command")]
@@ -916,7 +875,6 @@ pub struct CargoConfig {
 impl Default for CargoConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             cargo: "cargo".into(),
             command: "build".into(),
             args: Vec::new(),
@@ -932,7 +890,7 @@ impl Default for CargoConfig {
 impl KnownFields for CargoConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "cargo", "command", "args", "extra_inputs", "profiles",
+            "cargo", "command", "args", "extra_inputs", "profiles",
             "cache_output_dir", "batch", "scan_dir", "extensions", "exclude_dirs", "exclude_files",
             "exclude_paths",
         ]
@@ -945,8 +903,6 @@ fn default_clippy_command() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ClippyConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default = "default_cargo")]
     pub cargo: String,
     #[serde(default = "default_clippy_command")]
@@ -966,7 +922,6 @@ pub struct ClippyConfig {
 impl Default for ClippyConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             cargo: "cargo".into(),
             command: "clippy".into(),
             args: Vec::new(),
@@ -981,15 +936,13 @@ impl Default for ClippyConfig {
 impl KnownFields for ClippyConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "cargo", "command", "args", "extra_inputs", "auto_inputs", "batch",
+            "cargo", "command", "args", "extra_inputs", "auto_inputs", "batch",
         ]
     }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct MakeConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default = "default_make")]
     pub make: String,
     #[serde(default)]
@@ -1009,7 +962,6 @@ pub struct MakeConfig {
 impl Default for MakeConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             make: "make".into(),
             args: Vec::new(),
             target: String::new(),
@@ -1024,7 +976,7 @@ impl Default for MakeConfig {
 impl KnownFields for MakeConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "make", "args", "target", "extra_inputs", "auto_inputs", "batch",
+            "make", "args", "target", "extra_inputs", "auto_inputs", "batch",
         ]
     }
 }
@@ -1055,8 +1007,6 @@ fn default_tags_file() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TagsConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default = "default_tags_output")]
     pub output: String,
     #[serde(default = "default_tags_file")]
@@ -1077,7 +1027,6 @@ pub struct TagsConfig {
 impl Default for TagsConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             output: "out/tags/tags.db".into(),
             tags_file: ".tags".into(),
             tags_file_strict: false,
@@ -1092,7 +1041,7 @@ impl Default for TagsConfig {
 impl KnownFields for TagsConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "output", "tags_file", "tags_file_strict", "extra_inputs", "auto_inputs", "batch",
+            "output", "tags_file", "tags_file_strict", "extra_inputs", "auto_inputs", "batch",
         ]
     }
 }
@@ -1103,8 +1052,6 @@ checker_config!(LuacheckConfig, extensions: [".lua"], linter: "luacheck", auto_i
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ScriptCheckConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default = "default_script_check_linter")]
     pub linter: String,
     #[serde(default)]
@@ -1122,7 +1069,6 @@ pub struct ScriptCheckConfig {
 impl Default for ScriptCheckConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             linter: "true".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
@@ -1142,7 +1088,7 @@ impl Default for ScriptCheckConfig {
 impl KnownFields for ScriptCheckConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "linter", "args", "extra_inputs", "auto_inputs", "batch",
+            "linter", "args", "extra_inputs", "auto_inputs", "batch",
         ]
     }
 }
@@ -1153,8 +1099,6 @@ fn default_pip() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PipConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default = "default_pip")]
     pub pip: String,
     #[serde(default)]
@@ -1170,7 +1114,6 @@ pub struct PipConfig {
 impl Default for PipConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             pip: "pip".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
@@ -1183,7 +1126,7 @@ impl Default for PipConfig {
 impl KnownFields for PipConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "pip", "args", "extra_inputs", "batch",
+            "pip", "args", "extra_inputs", "batch",
         ]
     }
 }
@@ -1198,8 +1141,6 @@ fn default_sphinx_output_dir() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SphinxConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default = "default_sphinx_build")]
     pub sphinx_build: String,
     #[serde(default = "default_sphinx_output_dir")]
@@ -1221,7 +1162,6 @@ pub struct SphinxConfig {
 impl Default for SphinxConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             sphinx_build: "sphinx-build".into(),
             output_dir: "docs".into(),
             working_dir: None,
@@ -1237,7 +1177,7 @@ impl Default for SphinxConfig {
 impl KnownFields for SphinxConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "sphinx_build", "output_dir", "working_dir", "args", "extra_inputs", "cache_output_dir", "batch",
+            "sphinx_build", "output_dir", "working_dir", "args", "extra_inputs", "cache_output_dir", "batch",
         ]
     }
 }
@@ -1252,8 +1192,6 @@ fn default_mdbook_output_dir() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct MdbookConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default = "default_mdbook")]
     pub mdbook: String,
     #[serde(default = "default_mdbook_output_dir")]
@@ -1273,7 +1211,6 @@ pub struct MdbookConfig {
 impl Default for MdbookConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             mdbook: "mdbook".into(),
             output_dir: "book".into(),
             args: Vec::new(),
@@ -1288,7 +1225,7 @@ impl Default for MdbookConfig {
 impl KnownFields for MdbookConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "mdbook", "output_dir", "args", "extra_inputs", "cache_output_dir", "batch",
+            "mdbook", "output_dir", "args", "extra_inputs", "cache_output_dir", "batch",
         ]
     }
 }
@@ -1303,8 +1240,6 @@ fn default_npm_command() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct NpmConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default = "default_npm")]
     pub npm: String,
     #[serde(default = "default_npm_command")]
@@ -1324,7 +1259,6 @@ pub struct NpmConfig {
 impl Default for NpmConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             npm: "npm".into(),
             command: "install".into(),
             args: Vec::new(),
@@ -1339,7 +1273,7 @@ impl Default for NpmConfig {
 impl KnownFields for NpmConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "npm", "command", "args", "extra_inputs", "cache_output_dir", "batch",
+            "npm", "command", "args", "extra_inputs", "cache_output_dir", "batch",
         ]
     }
 }
@@ -1362,8 +1296,6 @@ fn default_mdl_auto_inputs() -> Vec<String> {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct MdlConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default)]
     pub local_repo: bool,
     #[serde(default = "default_gem_home")]
@@ -1387,7 +1319,6 @@ pub struct MdlConfig {
 impl Default for MdlConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             local_repo: false,
             gem_home: "gems".into(),
             mdl_bin: "mdl".into(),
@@ -1404,7 +1335,7 @@ impl Default for MdlConfig {
 impl KnownFields for MdlConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "local_repo", "gem_home", "mdl_bin", "args", "extra_inputs", "auto_inputs", "gem_stamp", "batch",
+            "local_repo", "gem_home", "mdl_bin", "args", "extra_inputs", "auto_inputs", "gem_stamp", "batch",
         ]
     }
 }
@@ -1423,8 +1354,6 @@ fn default_markdownlint_auto_inputs() -> Vec<String> {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct MarkdownlintConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default)]
     pub local_repo: bool,
     #[serde(default = "default_markdownlint_bin")]
@@ -1446,7 +1375,6 @@ pub struct MarkdownlintConfig {
 impl Default for MarkdownlintConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             local_repo: false,
             markdownlint_bin: "markdownlint".into(),
             args: Vec::new(),
@@ -1462,7 +1390,7 @@ impl Default for MarkdownlintConfig {
 impl KnownFields for MarkdownlintConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "local_repo", "markdownlint_bin", "args", "extra_inputs", "auto_inputs", "npm_stamp", "batch",
+            "local_repo", "markdownlint_bin", "args", "extra_inputs", "auto_inputs", "npm_stamp", "batch",
         ]
     }
 }
@@ -1489,8 +1417,6 @@ fn default_aspell_auto_inputs() -> Vec<String> {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AspellConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default = "default_aspell")]
     pub aspell: String,
     #[serde(default)]
@@ -1516,7 +1442,6 @@ pub struct AspellConfig {
 impl Default for AspellConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             aspell: "aspell".into(),
             args: Vec::new(),
             conf_dir: ".".into(),
@@ -1534,7 +1459,7 @@ impl Default for AspellConfig {
 impl KnownFields for AspellConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "aspell", "args", "conf_dir", "conf", "auto_add_words", "words_file", "extra_inputs", "auto_inputs", "batch",
+            "aspell", "args", "conf_dir", "conf", "auto_add_words", "words_file", "extra_inputs", "auto_inputs", "batch",
         ]
     }
 }
@@ -1559,8 +1484,6 @@ fn default_pandoc_output_dir() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PandocConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default = "default_pandoc")]
     pub pandoc: String,
     #[serde(default = "default_pandoc_from")]
@@ -1584,7 +1507,6 @@ pub struct PandocConfig {
 impl Default for PandocConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             pandoc: "pandoc".into(),
             from: "markdown".into(),
             formats: vec!["pdf".into(), "html".into(), "docx".into()],
@@ -1601,7 +1523,7 @@ impl Default for PandocConfig {
 impl KnownFields for PandocConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "pandoc", "from", "formats", "args", "extra_inputs", "auto_inputs", "output_dir", "batch",
+            "pandoc", "from", "formats", "args", "extra_inputs", "auto_inputs", "output_dir", "batch",
         ]
     }
 }
@@ -1631,8 +1553,6 @@ fn default_pdflatex_output_dir() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PdflatexConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default = "default_pdflatex")]
     pub pdflatex: String,
     #[serde(default)]
@@ -1656,7 +1576,6 @@ pub struct PdflatexConfig {
 impl Default for PdflatexConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             pdflatex: "pdflatex".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
@@ -1673,7 +1592,7 @@ impl Default for PdflatexConfig {
 impl KnownFields for PdflatexConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "pdflatex", "args", "extra_inputs", "auto_inputs", "runs", "qpdf", "output_dir", "batch",
+            "pdflatex", "args", "extra_inputs", "auto_inputs", "runs", "qpdf", "output_dir", "batch",
         ]
     }
 }
@@ -1692,8 +1611,6 @@ fn default_a2x_output_dir() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct A2xConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default = "default_a2x")]
     pub a2x: String,
     #[serde(default = "default_a2x_format")]
@@ -1715,7 +1632,6 @@ pub struct A2xConfig {
 impl Default for A2xConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             a2x: "a2x".into(),
             format: "pdf".into(),
             args: Vec::new(),
@@ -1731,7 +1647,7 @@ impl Default for A2xConfig {
 impl KnownFields for A2xConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "a2x", "format", "args", "extra_inputs", "auto_inputs", "output_dir", "batch",
+            "a2x", "format", "args", "extra_inputs", "auto_inputs", "output_dir", "batch",
         ]
     }
 }
@@ -1751,8 +1667,6 @@ fn default_bundler_command() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct GemConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default = "default_bundler")]
     pub bundler: String,
     #[serde(default = "default_bundler_command")]
@@ -1774,7 +1688,6 @@ pub struct GemConfig {
 impl Default for GemConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             bundler: "bundle".into(),
             command: "install".into(),
             gem_home: "gems".into(),
@@ -1790,7 +1703,7 @@ impl Default for GemConfig {
 impl KnownFields for GemConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "bundler", "command", "gem_home", "args", "extra_inputs", "cache_output_dir", "batch",
+            "bundler", "command", "gem_home", "args", "extra_inputs", "cache_output_dir", "batch",
         ]
     }
 }
@@ -1832,8 +1745,6 @@ fn default_pdfunite_output_dir() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PdfuniteConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default = "default_pdfunite_bin")]
     pub pdfunite_bin: String,
     #[serde(default = "default_pdfunite_source_dir")]
@@ -1859,7 +1770,6 @@ pub struct PdfuniteConfig {
 impl Default for PdfuniteConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             pdfunite_bin: "pdfunite".into(),
             source_dir: "marp/courses".into(),
             source_ext: ".md".into(),
@@ -1877,7 +1787,7 @@ impl Default for PdfuniteConfig {
 impl KnownFields for PdfuniteConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "pdfunite_bin", "source_dir", "source_ext", "source_output_dir",
+            "pdfunite_bin", "source_dir", "source_ext", "source_output_dir",
             "args", "extra_inputs", "auto_inputs", "output_dir", "batch",
         ]
     }
@@ -1889,8 +1799,6 @@ checker_config!(CheckpatchConfig, scan_dir: "src", extensions: [".c", ".h"]);
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ObjdumpConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default)]
     pub args: Vec<String>,
     #[serde(default)]
@@ -1910,7 +1818,6 @@ fn default_objdump_output_dir() -> String {
 impl Default for ObjdumpConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             args: Vec::new(),
             extra_inputs: Vec::new(),
             output_dir: default_objdump_output_dir(),
@@ -1923,7 +1830,7 @@ impl Default for ObjdumpConfig {
 impl KnownFields for ObjdumpConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "enabled", "args", "extra_inputs", "output_dir", "batch",
+            "args", "extra_inputs", "output_dir", "batch",
         ]
     }
 }

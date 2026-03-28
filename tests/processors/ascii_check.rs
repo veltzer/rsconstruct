@@ -9,7 +9,7 @@ fn ascii_check_valid_file() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"ascii_check\"]\n",
+        "[processor.ascii_check]\n",
     )
     .unwrap();
 
@@ -42,7 +42,7 @@ fn ascii_check_incremental_skip() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"ascii_check\"]\n",
+        "[processor.ascii_check]\n",
     )
     .unwrap();
 
@@ -74,7 +74,7 @@ fn ascii_check_non_ascii_fails() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"ascii_check\"]\n",
+        "[processor.ascii_check]\n",
     )
     .unwrap();
 

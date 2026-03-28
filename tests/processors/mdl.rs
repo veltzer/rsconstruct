@@ -15,7 +15,7 @@ fn mdl_valid_file() {
     // Point mdl_bin to the system mdl, skip gem dependency
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"mdl\"]\n\n[processor.mdl]\nmdl_bin = \"mdl\"\n",
+        "[processor.mdl]\nmdl_bin = \"mdl\"\n",
     )
     .unwrap();
 
@@ -45,7 +45,7 @@ fn mdl_no_project_discovered() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"mdl\"]\n\n[processor.mdl]\nscan_dir = \"mdl_docs\"\n",
+        "[processor.mdl]\nscan_dir = \"mdl_docs\"\n",
     )
     .unwrap();
 

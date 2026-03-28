@@ -9,7 +9,7 @@ fn json_schema_valid() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"json_schema\"]\n",
+        "[processor.json_schema]\n",
     )
     .unwrap();
 
@@ -49,7 +49,7 @@ fn json_schema_mismatch() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"json_schema\"]\n",
+        "[processor.json_schema]\n",
     )
     .unwrap();
 
@@ -80,7 +80,7 @@ fn json_schema_incremental_skip() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"json_schema\"]\n",
+        "[processor.json_schema]\n",
     )
     .unwrap();
 
@@ -118,7 +118,7 @@ fn json_schema_nested_valid() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"json_schema\"]\n",
+        "[processor.json_schema]\n",
     )
     .unwrap();
 
@@ -158,7 +158,7 @@ fn json_schema_nested_mismatch() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"json_schema\"]\n",
+        "[processor.json_schema]\n",
     )
     .unwrap();
 
@@ -198,7 +198,7 @@ fn json_schema_no_property_ordering_passes() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"json_schema\"]\n",
+        "[processor.json_schema]\n",
     )
     .unwrap();
 

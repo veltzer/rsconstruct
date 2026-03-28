@@ -1241,17 +1241,14 @@ impl BuildStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::ProcessorConfig;
-    use crate::builder::create_builtin_processors;
+    use crate::builder::create_all_default_processors;
 
     /// Verify that every tool declared by any processor's `required_tools()` has
     /// an entry in the central TOOLS registry (install command + runtime category).
     /// This prevents silent gaps like the missing `ar` tool.
     #[test]
     fn all_required_tools_have_registry_entries() {
-        let mut cfg = ProcessorConfig::default();
-        cfg.resolve_scan_defaults();
-        let processors = create_builtin_processors(&cfg);
+        let processors = create_all_default_processors();
         for (proc_name, proc) in &processors {
             for tool in proc.required_tools() {
                 if tool.is_empty() {

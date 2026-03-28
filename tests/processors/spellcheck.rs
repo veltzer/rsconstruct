@@ -14,7 +14,7 @@ fn spellcheck_correct_spelling() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"spellcheck\"]\n"
+        "[processor.spellcheck]\n"
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
@@ -42,7 +42,7 @@ fn spellcheck_misspelled_word() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"spellcheck\"]\n"
+        "[processor.spellcheck]\n"
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
@@ -75,7 +75,7 @@ fn spellcheck_custom_words_file() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"spellcheck\"]\n"
+        "[processor.spellcheck]\n"
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
@@ -97,7 +97,7 @@ fn spellcheck_incremental_skip() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"spellcheck\"]\n"
+        "[processor.spellcheck]\n"
     ).unwrap();
 
     // First build
@@ -127,7 +127,7 @@ fn spellcheck_clean() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"spellcheck\"]\n"
+        "[processor.spellcheck]\n"
     ).unwrap();
 
     // Build
@@ -159,7 +159,7 @@ fn spellcheck_stops_after_first_error() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"spellcheck\"]\n"
+        "[processor.spellcheck]\n"
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
@@ -191,7 +191,7 @@ fn spellcheck_ignores_code_blocks() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"spellcheck\"]\n"
+        "[processor.spellcheck]\n"
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
@@ -214,7 +214,7 @@ fn spellcheck_auto_add_words() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"spellcheck\"]\n\n[processor.spellcheck]\nauto_add_words = true\n"
+        "[processor.spellcheck]\nauto_add_words = true\n"
     ).unwrap();
 
     // Build should succeed and add words to .spellcheck-words

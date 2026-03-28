@@ -200,7 +200,7 @@ fn cc_single_file_config_change_triggers_rebuild() {
     // Change cflags in rsconstruct.toml
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"cc_single_file\"]\n\n[processor.cc_single_file]\ncflags = [\"-O2\"]\n"
+        "[processor.cc_single_file]\ncflags = [\"-O2\"]\n"
     ).unwrap();
 
     // Third build — should rebuild because config changed
@@ -777,10 +777,7 @@ fn cc_single_file_angle_bracket_include_dependency() {
     fs::create_dir_all(project_path.join("include")).unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        r#"[processor]
-enabled = ["cc_single_file"]
-
-[processor.cc_single_file]
+        r#"[processor.cc_single_file]
 scan_dir = "src"
 include_paths = ["include"]
 
@@ -841,10 +838,7 @@ fn cc_single_file_multiple_compiler_profiles() {
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        r#"[processor]
-enabled = ["cc_single_file"]
-
-[processor.cc_single_file]
+        r#"[processor.cc_single_file]
 scan_dir = "src"
 
 [[processor.cc_single_file.compilers]]
@@ -899,10 +893,7 @@ fn cc_single_file_missing_include_errors() {
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        r#"[processor]
-enabled = ["cc_single_file"]
-
-[processor.cc_single_file]
+        r#"[processor.cc_single_file]
 scan_dir = "src"
 "#
     ).unwrap();
@@ -933,10 +924,7 @@ fn cc_single_file_profile_specific_flags() {
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        r#"[processor]
-enabled = ["cc_single_file"]
-
-[processor.cc_single_file]
+        r#"[processor.cc_single_file]
 scan_dir = "src"
 
 [[processor.cc_single_file.compilers]]
@@ -1013,10 +1001,7 @@ fn cc_single_file_exclude_profile() {
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        r#"[processor]
-enabled = ["cc_single_file"]
-
-[processor.cc_single_file]
+        r#"[processor.cc_single_file]
 scan_dir = "src"
 
 [[processor.cc_single_file.compilers]]

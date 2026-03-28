@@ -17,14 +17,15 @@ use anyhow::Result;
 use crate::analyzers::{CppDepAnalyzer, DepAnalyzer, PythonDepAnalyzer};
 use crate::cli::BuildPhase;
 use crate::color;
-use crate::config::{Config, ProcessorConfig};
+#[allow(unused_imports)]
+use crate::config::*;
 use crate::deps_cache::DepsCache;
 use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
 use crate::object_store::{ObjectStore, ObjectStoreOptions};
 use crate::processors as proc_mod;
-use crate::processors::{LuaProcessor, ProcessorMap, ProductDiscovery, SpellcheckProcessor, names as proc_names};
+use crate::processors::{LuaProcessor, ProcessorMap, ProductDiscovery, names as proc_names};
 use crate::remote_cache;
 use crate::tool_lock;
 
@@ -71,35 +72,58 @@ struct ProductStatusLabels<'a> {
     stale: (Cow<'a, str>, &'static str),
 }
 
-/// Auto-generate `create_builtin_processors` from the central registry.
-/// SpellcheckProcessor is skipped here because its `new()` is fallible;
-/// it is registered separately in `Builder::create_processors()`.
-macro_rules! gen_builtin_processors {
+/// Auto-generate `create_processor_for_instance` dispatch function from the central registry.
+/// Given a type name and TOML config, constructs the appropriate processor.
+macro_rules! gen_processor_dispatch {
     ( $( $const_name:ident, $field:ident, $config_type:ty, $proc_type:ident,
          ($($scan_args:tt)*); )* ) => {
-        pub(crate) fn create_builtin_processors(cfg: &ProcessorConfig) -> ProcessorMap {
+        /// Create a processor from a type name and TOML config value.
+        /// Returns None for unknown types (Lua plugins handled separately).
+        /// SpellcheckProcessor returns Result because its new() is fallible.
+        pub(crate) fn create_processor_for_instance(
+            type_name: &str,
+            config_toml: &toml::Value,
+        ) -> anyhow::Result<Option<Box<dyn ProductDiscovery>>> {
+            match type_name {
+                $(
+                    stringify!($field) => {
+                        let cfg: $config_type = toml::from_str(&toml::to_string(config_toml)?)?;
+                        gen_processor_dispatch!(@construct $proc_type, cfg)
+                    }
+                )*
+                _ => Ok(None), // Unknown type, not a builtin
+            }
+        }
+
+        /// Create all builtin processors with default configs (used by tools_no_config, list_processors_no_config).
+        pub(crate) fn create_all_default_processors() -> ProcessorMap {
             let mut processors: ProcessorMap = HashMap::new();
             $(
-                gen_builtin_processors!(@register processors, cfg,
-                    $const_name, $field, $proc_type);
+                gen_processor_dispatch!(@register_default processors, $const_name, $field, $config_type, $proc_type);
             )*
             processors
         }
     };
-    // Skip SpellcheckProcessor (fallible new())
-    (@register $processors:ident, $cfg:ident, SPELLCHECK, $field:ident, $proc_type:ident) => {
-        // Registered separately in Builder::create_processors() with error handling
+    // SpellcheckProcessor has fallible new()
+    (@construct SpellcheckProcessor, $cfg:ident) => {
+        Ok(Some(Box::new(proc_mod::SpellcheckProcessor::new($cfg)?)))
     };
-    // Normal case
-    (@register $processors:ident, $cfg:ident, $const_name:ident, $field:ident, $proc_type:ident) => {
+    (@construct $proc_type:ident, $cfg:ident) => {
+        Ok(Some(Box::new(proc_mod::$proc_type::new($cfg))))
+    };
+    // Default registration: skip SpellcheckProcessor (fallible)
+    (@register_default $processors:ident, SPELLCHECK, $field:ident, $config_type:ty, $proc_type:ident) => {
+        // Skip: SpellcheckProcessor::new() is fallible
+    };
+    (@register_default $processors:ident, $const_name:ident, $field:ident, $config_type:ty, $proc_type:ident) => {
         Builder::register(
             &mut $processors,
             proc_names::$const_name,
-            proc_mod::$proc_type::new($cfg.$field.clone()),
+            proc_mod::$proc_type::new(<$config_type>::default()),
         );
     };
 }
-for_each_processor!(gen_builtin_processors);
+for_each_processor!(gen_processor_dispatch);
 
 pub struct Builder {
     object_store: ObjectStore,
@@ -146,16 +170,26 @@ impl Builder {
         processors.insert(name.to_string(), Box::new(proc));
     }
 
-    /// Create all available processors
+    /// Create processors from declared instances in the config.
+    /// Only processors declared in `[processor.TYPE]` or `[processor.TYPE.NAME]` are created.
     pub fn create_processors(&self) -> Result<ProcessorMap> {
         let cfg = &self.config.processor;
-        let mut processors = create_builtin_processors(cfg);
+        let mut processors: ProcessorMap = HashMap::new();
 
-        // Spellcheck processor (fallible init — propagate error only if enabled)
-        match SpellcheckProcessor::new(cfg.spellcheck.clone()) {
-            Ok(proc) => Self::register(&mut processors, proc_names::SPELLCHECK, proc),
-            Err(e) if self.config.processor.is_enabled(proc_names::SPELLCHECK) => return Err(e),
-            Err(_) => {}
+        for inst in &cfg.instances {
+            match create_processor_for_instance(&inst.type_name, &inst.config_toml) {
+                Ok(Some(proc)) => {
+                    processors.insert(inst.instance_name.clone(), proc);
+                }
+                Ok(None) => {
+                    anyhow::bail!("Unknown processor type: '{}'", inst.type_name);
+                }
+                Err(e) => {
+                    return Err(e.context(format!(
+                        "Failed to create processor instance '{}'", inst.instance_name
+                    )));
+                }
+            }
         }
 
         // Lua plugin processors
@@ -165,7 +199,7 @@ impl Builder {
         )?;
         for (name, proc) in lua_plugins {
             if processors.contains_key(&name) {
-                anyhow::bail!("Lua plugin '{}' conflicts with built-in processor", name);
+                anyhow::bail!("Lua plugin '{}' conflicts with processor instance", name);
             }
             processors.insert(name, Box::new(proc));
         }
@@ -261,10 +295,10 @@ impl Builder {
         Ok(graph)
     }
 
-    /// Return the set of processor names whose files are detected in the project.
-    /// Checks auto_detect regardless of enabled status.
+    /// Return the set of processor type names whose files are detected in the project.
+    /// Uses default configs for all builtin processors to check auto_detect.
     pub fn detected_processors(&self) -> Result<std::collections::HashSet<String>> {
-        let processors = self.create_processors()?;
+        let processors = create_all_default_processors();
         let mut detected = std::collections::HashSet::new();
         for (name, proc) in &processors {
             if !proc.hidden() && proc.auto_detect(&self.file_index) {
@@ -274,10 +308,10 @@ impl Builder {
         Ok(detected)
     }
 
-    /// Return the set of processor names whose files are detected AND whose
+    /// Return the set of processor type names whose files are detected AND whose
     /// required tools are all installed.
     pub fn detected_and_available_processors(&self) -> Result<std::collections::HashSet<String>> {
-        let processors = self.create_processors()?;
+        let processors = create_all_default_processors();
         let mut available = std::collections::HashSet::new();
         for (name, proc) in &processors {
             if proc.hidden() || !proc.auto_detect(&self.file_index) {
@@ -291,12 +325,10 @@ impl Builder {
         Ok(available)
     }
 
-    /// Check whether a processor should run based on enabled list and auto-detect.
-    fn is_processor_active(&self, name: &str, processor: &dyn ProductDiscovery) -> bool {
-        if !self.config.processor.is_enabled(name) {
-            return false;
-        }
-        !self.config.processor.auto_detect || processor.auto_detect(&self.file_index)
+    /// Check whether a processor should run. In the instance-based model,
+    /// all declared processors are active (existence in config = enabled).
+    fn is_processor_active(&self, _name: &str, _processor: &dyn ProductDiscovery) -> bool {
+        true
     }
 
     /// Build the dependency graph using provided processors
@@ -356,10 +388,9 @@ impl Builder {
             eprintln!("{}", color::dim("  Phase: apply_tool_version_hashes"));
         }
         let t = Instant::now();
-        let config = &self.config;
         let tool_hashes = tool_lock::processor_tool_hashes(
             processors,
-            &|name| config.processor.is_enabled(name),
+            &|_name| true, // All declared processors are active
         )?;
         if !tool_hashes.is_empty() {
             graph.apply_tool_version_hashes(&tool_hashes);

@@ -31,9 +31,6 @@ impl Builder {
         let mut checked_tools = std::collections::HashSet::new();
 
         for name in sorted_keys(&processors) {
-            if !self.config.processor.is_enabled(name) {
-                continue;
-            }
             let processor = &processors[name];
             for tool in processor.required_tools() {
                 if !checked_tools.insert(tool.clone()) {

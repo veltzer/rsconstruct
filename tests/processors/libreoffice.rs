@@ -18,7 +18,7 @@ fn libreoffice_valid_file() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"libreoffice\"]\n",
+        "[processor.libreoffice]\n",
     )
     .unwrap();
 
@@ -48,7 +48,7 @@ fn libreoffice_no_project_discovered() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"libreoffice\"]\n",
+        "[processor.libreoffice]\n",
     )
     .unwrap();
 

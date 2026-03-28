@@ -2,8 +2,7 @@ use anyhow::{Context, Result, bail};
 use std::collections::HashSet;
 use std::fs;
 
-use crate::color;
-use crate::config::default_processors;
+use crate::config::all_type_names;
 
 const CONFIG_FILE: &str = "rsconstruct.toml";
 
@@ -29,10 +28,10 @@ fn processor_table(doc: &mut toml_edit::DocumentMut) -> Result<&mut toml_edit::T
         .context("[processor] must be a table")
 }
 
-/// Validate that a processor name is known.
+/// Validate that a processor name is a known builtin type.
 fn validate_name(name: &str) -> Result<()> {
-    let all = default_processors();
-    if !all.iter().any(|n| n == name) {
+    let all = all_type_names();
+    if !all.iter().any(|n| *n == name) {
         bail!(
             "Unknown processor '{}'. Run 'rsconstruct processors list --all' to see available processors.",
             name
@@ -41,164 +40,98 @@ fn validate_name(name: &str) -> Result<()> {
     Ok(())
 }
 
-/// Disable all processors by setting `enabled = false` in each `[processor.NAME]` section.
+/// Disable all processors by removing all [processor.*] sections.
 pub(crate) fn disable_all() -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
-    let all_names = default_processors();
+    let keys: Vec<String> = table.iter().map(|(k, _)| k.to_string()).collect();
     let mut count = 0;
 
-    for name in &all_names {
-        let section = table.entry(name.as_str())
-            .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()))
-            .as_table_mut();
-        let section = match section {
-            Some(t) => t,
-            None => continue,
-        };
-
-        let already_disabled = section.get("enabled")
-            .and_then(|v| v.as_bool())
-            .is_some_and(|b| !b);
-        if !already_disabled {
-            section.insert("enabled", toml_edit::value(false));
+    for key in &keys {
+        if table.remove(key).is_some() {
             count += 1;
         }
     }
 
     save_doc(&doc)?;
-    println!("Disabled {} processors in {}.", count, CONFIG_FILE);
-    println!("{}", color::dim("Hint: enable processors one by one with [processor.NAME] enabled = true"));
+    println!("Removed {} processor sections from {}.", count, CONFIG_FILE);
     Ok(())
 }
 
-/// Enable all processors by removing `enabled = false` from each `[processor.NAME]` section.
+/// Enable all processors by adding [processor.NAME] sections for all builtin types.
 pub(crate) fn enable_all() -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
-    let all_names = default_processors();
+    let all_names = all_type_names();
     let mut count = 0;
 
     for name in &all_names {
-        let section = match table.get_mut(name.as_str()).and_then(|v| v.as_table_mut()) {
-            Some(t) => t,
-            None => continue,
-        };
-
-        let is_disabled = section.get("enabled")
-            .and_then(|v| v.as_bool())
-            .is_some_and(|b| !b);
-        if is_disabled {
-            section.remove("enabled");
+        if table.get(name).is_none() {
+            table.insert(name, toml_edit::Item::Table(toml_edit::Table::new()));
             count += 1;
         }
     }
 
     save_doc(&doc)?;
-    println!("Enabled {} processors in {}.", count, CONFIG_FILE);
+    println!("Added {} processor sections to {}.", count, CONFIG_FILE);
     Ok(())
 }
 
-/// Disable a single processor by setting `enabled = false`.
+/// Disable a single processor by removing its [processor.NAME] section.
 pub(crate) fn disable(name: &str) -> Result<()> {
     validate_name(name)?;
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
 
-    let section = table.entry(name)
-        .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()))
-        .as_table_mut()
-        .with_context(|| format!("[processor.{}] must be a table", name))?;
-
-    let already_disabled = section.get("enabled")
-        .and_then(|v| v.as_bool())
-        .is_some_and(|b| !b);
-    if already_disabled {
-        println!("Processor '{}' is already disabled.", name);
-    } else {
-        section.insert("enabled", toml_edit::value(false));
+    if table.remove(name).is_some() {
         save_doc(&doc)?;
-        println!("Disabled processor '{}'.", name);
+        println!("Removed processor '{}'.", name);
+    } else {
+        println!("Processor '{}' is not declared.", name);
     }
     Ok(())
 }
 
-/// Enable a single processor by removing `enabled = false`.
+/// Enable a single processor by adding an empty [processor.NAME] section.
 pub(crate) fn enable(name: &str) -> Result<()> {
     validate_name(name)?;
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
 
-    let section = match table.get_mut(name).and_then(|v| v.as_table_mut()) {
-        Some(t) => t,
-        None => {
-            println!("Processor '{}' is already enabled (no override in {}).", name, CONFIG_FILE);
-            return Ok(());
-        }
-    };
-
-    let is_disabled = section.get("enabled")
-        .and_then(|v| v.as_bool())
-        .is_some_and(|b| !b);
-    if is_disabled {
-        section.remove("enabled");
-        save_doc(&doc)?;
-        println!("Enabled processor '{}'.", name);
+    if table.get(name).is_some() {
+        println!("Processor '{}' is already declared.", name);
     } else {
-        println!("Processor '{}' is already enabled.", name);
+        table.insert(name, toml_edit::Item::Table(toml_edit::Table::new()));
+        save_doc(&doc)?;
+        println!("Added processor '{}'.", name);
     }
     Ok(())
 }
 
 /// Enable only processors whose files are detected in the project.
-/// Requires a Builder to run auto-detection.
 pub(crate) fn enable_detected(detected: &HashSet<String>) -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
-    let all_names = default_processors();
-    let mut enabled_count = 0;
-
-    for name in &all_names {
-        let section = match table.get_mut(name.as_str()).and_then(|v| v.as_table_mut()) {
-            Some(t) => t,
-            None => continue,
-        };
-
-        if detected.contains(name.as_str()) {
-            let is_disabled = section.get("enabled")
-                .and_then(|v| v.as_bool())
-                .is_some_and(|b| !b);
-            if is_disabled {
-                section.remove("enabled");
-                enabled_count += 1;
-            }
-        }
-    }
-
-    save_doc(&doc)?;
-    println!("Enabled {} detected processors in {}.", enabled_count, CONFIG_FILE);
-    Ok(())
-}
-
-/// Remove all [processor.*] sections from rsconstruct.toml, returning to pure defaults.
-pub(crate) fn reset() -> Result<()> {
-    let mut doc = load_doc()?;
-    let table = processor_table(&mut doc)?;
-    let all_names = default_processors();
     let mut count = 0;
 
-    for name in &all_names {
-        if table.remove(name.as_str()).is_some() {
+    for name in detected {
+        if table.get(name.as_str()).is_none() {
+            table.insert(name.as_str(), toml_edit::Item::Table(toml_edit::Table::new()));
             count += 1;
         }
     }
 
     save_doc(&doc)?;
-    println!("Reset {} processor sections in {}.", count, CONFIG_FILE);
+    println!("Added {} detected processor sections to {}.", count, CONFIG_FILE);
     Ok(())
 }
 
-/// Disable all, then enable only the listed processors.
+/// Remove all processor sections, returning to empty config.
+pub(crate) fn reset() -> Result<()> {
+    disable_all()
+}
+
+/// Remove all processor sections, then add only the listed ones.
 pub(crate) fn only(names: &[String]) -> Result<()> {
     for name in names {
         validate_name(name)?;
@@ -206,118 +139,51 @@ pub(crate) fn only(names: &[String]) -> Result<()> {
 
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
-    let all_names = default_processors();
-    let selected: HashSet<&str> = names.iter().map(|s| s.as_str()).collect();
-    let mut disabled_count = 0;
-    let mut enabled_count = 0;
 
-    for name in &all_names {
-        let section = table.entry(name.as_str())
-            .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()))
-            .as_table_mut();
-        let section = match section {
-            Some(t) => t,
-            None => continue,
-        };
+    // Remove all existing processor sections
+    let keys: Vec<String> = table.iter().map(|(k, _)| k.to_string()).collect();
+    for key in &keys {
+        table.remove(key);
+    }
 
-        if selected.contains(name.as_str()) {
-            let is_disabled = section.get("enabled")
-                .and_then(|v| v.as_bool())
-                .is_some_and(|b| !b);
-            if is_disabled {
-                section.remove("enabled");
-                enabled_count += 1;
-            }
-        } else {
-            let already_disabled = section.get("enabled")
-                .and_then(|v| v.as_bool())
-                .is_some_and(|b| !b);
-            if !already_disabled {
-                section.insert("enabled", toml_edit::value(false));
-                disabled_count += 1;
-            }
-        }
+    // Add only the requested ones
+    for name in names {
+        table.insert(name.as_str(), toml_edit::Item::Table(toml_edit::Table::new()));
     }
 
     save_doc(&doc)?;
-    println!("Only: enabled {}, disabled {} others.", enabled_count, disabled_count);
-    println!("{}", color::dim(&format!("Active processors: {}", names.join(", "))));
+    println!("Active processors: {}", names.join(", "));
     Ok(())
 }
 
-/// Disable all processors, then enable only detected ones.
+/// Remove all processor sections, then add only detected ones.
 pub(crate) fn minimal(detected: &HashSet<String>) -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
-    let all_names = default_processors();
-    let mut disabled_count = 0;
-    let mut enabled_count = 0;
 
-    for name in &all_names {
-        let section = table.entry(name.as_str())
-            .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()))
-            .as_table_mut();
-        let section = match section {
-            Some(t) => t,
-            None => continue,
-        };
+    // Remove all
+    let keys: Vec<String> = table.iter().map(|(k, _)| k.to_string()).collect();
+    for key in &keys {
+        table.remove(key);
+    }
 
-        if detected.contains(name.as_str()) {
-            // Enable: remove enabled = false if present
-            let is_disabled = section.get("enabled")
-                .and_then(|v| v.as_bool())
-                .is_some_and(|b| !b);
-            if is_disabled {
-                section.remove("enabled");
-                enabled_count += 1;
-            }
-        } else {
-            // Disable: set enabled = false if not already
-            let already_disabled = section.get("enabled")
-                .and_then(|v| v.as_bool())
-                .is_some_and(|b| !b);
-            if !already_disabled {
-                section.insert("enabled", toml_edit::value(false));
-                disabled_count += 1;
-            }
-        }
+    // Add detected
+    for name in detected {
+        table.insert(name.as_str(), toml_edit::Item::Table(toml_edit::Table::new()));
     }
 
     save_doc(&doc)?;
-    println!("Minimal config: enabled {} detected, disabled {} others.", enabled_count, disabled_count);
     if !detected.is_empty() {
         let mut names: Vec<&String> = detected.iter().collect();
         names.sort();
-        println!("{}", color::dim(&format!("Active processors: {}", names.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "))));
+        println!("Minimal config: {}", names.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "));
+    } else {
+        println!("No processors detected.");
     }
     Ok(())
 }
 
-/// Enable only processors whose files are detected AND tools are installed.
+/// Add sections for processors whose files are detected AND tools are installed.
 pub(crate) fn enable_if_available(available: &HashSet<String>) -> Result<()> {
-    let mut doc = load_doc()?;
-    let table = processor_table(&mut doc)?;
-    let all_names = default_processors();
-    let mut enabled_count = 0;
-
-    for name in &all_names {
-        let section = match table.get_mut(name.as_str()).and_then(|v| v.as_table_mut()) {
-            Some(t) => t,
-            None => continue,
-        };
-
-        if available.contains(name.as_str()) {
-            let is_disabled = section.get("enabled")
-                .and_then(|v| v.as_bool())
-                .is_some_and(|b| !b);
-            if is_disabled {
-                section.remove("enabled");
-                enabled_count += 1;
-            }
-        }
-    }
-
-    save_doc(&doc)?;
-    println!("Enabled {} available processors in {}.", enabled_count, CONFIG_FILE);
-    Ok(())
+    enable_detected(available)
 }

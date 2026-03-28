@@ -173,7 +173,7 @@ fn extra_inputs_triggers_rebuild() {
     // Configure tera processor with extra_inputs pointing to the config file
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"tera\"]\n\n[processor.tera]\nextra_inputs = [\"config/settings.py\"]\n"
+        "[processor.tera]\nextra_inputs = [\"config/settings.py\"]\n"
     ).unwrap();
 
     // First build
@@ -235,7 +235,7 @@ fn extra_inputs_nonexistent_file_fails() {
     // Configure with a nonexistent extra_input — should cause an error
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"tera\"]\n\n[processor.tera]\nextra_inputs = [\"nonexistent_file.txt\"]\n"
+        "[processor.tera]\nextra_inputs = [\"nonexistent_file.txt\"]\n"
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);

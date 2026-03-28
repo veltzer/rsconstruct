@@ -11,11 +11,7 @@ fn script_check_valid_file() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         concat!(
-            "[processor]\n",
-            "enabled = [\"script_check\"]\n",
-            "\n",
             "[processor.script_check]\n",
-            "enabled = true\n",
             "linter = \"true\"\n",
             "extensions = [\".txt\"]\n",
         ),
@@ -52,11 +48,7 @@ fn script_check_incremental_skip() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         concat!(
-            "[processor]\n",
-            "enabled = [\"script_check\"]\n",
-            "\n",
             "[processor.script_check]\n",
-            "enabled = true\n",
             "linter = \"true\"\n",
             "extensions = [\".txt\"]\n",
         ),
@@ -92,7 +84,7 @@ fn script_check_no_project_discovered() {
     // Without configuring extensions or checker, script_check should discover nothing
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor]\nenabled = [\"script_check\"]\n",
+        "[processor.script_check]\n",
     )
     .unwrap();
 
