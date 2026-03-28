@@ -187,3 +187,29 @@ pub(crate) fn minimal(detected: &HashSet<String>) -> Result<()> {
 pub(crate) fn enable_if_available(available: &HashSet<String>) -> Result<()> {
     enable_detected(available)
 }
+
+/// Auto-detect relevant processors and add them to rsconstruct.toml.
+/// Only adds processors whose files are detected AND whose tools are installed.
+/// Does not remove existing processor sections.
+pub(crate) fn auto(available: &HashSet<String>) -> Result<()> {
+    let mut doc = load_doc()?;
+    let table = processor_table(&mut doc)?;
+    let mut added = Vec::new();
+
+    for name in available {
+        if table.get(name.as_str()).is_none() {
+            table.insert(name.as_str(), toml_edit::Item::Table(toml_edit::Table::new()));
+            added.push(name.as_str());
+        }
+    }
+
+    if added.is_empty() {
+        println!("No new processors to add (all detected processors are already declared).");
+    } else {
+        save_doc(&doc)?;
+        let mut added = added;
+        added.sort();
+        println!("Added {} processor(s): {}", added.len(), added.join(", "));
+    }
+    Ok(())
+}

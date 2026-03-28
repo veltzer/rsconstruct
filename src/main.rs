@@ -265,6 +265,11 @@ fn run() -> Result<()> {
             let builder = Builder::new()?;
             builder.graph(action)?;
         }
+        Commands::Auto => {
+            let builder = Builder::new()?;
+            let detected = builder.detected_and_available_processors()?;
+            builder::smart::auto(&detected)?;
+        }
         Commands::Init => {
             init_project()?;
         }

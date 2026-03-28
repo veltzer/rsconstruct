@@ -220,6 +220,8 @@ pub enum Commands {
         #[command(subcommand)]
         action: GraphAction,
     },
+    /// Auto-detect relevant processors and add them to rsconstruct.toml
+    Auto,
     /// Initialize a new rsconstruct project in the current directory
     Init,
     /// Manage processors
