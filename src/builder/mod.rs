@@ -76,7 +76,7 @@ struct ProductStatusLabels<'a> {
 /// Given a type name and TOML config, constructs the appropriate processor.
 macro_rules! gen_processor_dispatch {
     ( $( $const_name:ident, $field:ident, $config_type:ty, $proc_type:ident,
-         ($($scan_args:tt)*); )* ) => {
+         ($scan_dir:expr, $exts:expr, $excl:expr); )* ) => {
         /// Create a processor from a type name and TOML config value.
         /// Returns None for unknown types (Lua plugins handled separately).
         /// SpellcheckProcessor returns Result because its new() is fallible.
@@ -87,7 +87,8 @@ macro_rules! gen_processor_dispatch {
             match type_name {
                 $(
                     stringify!($field) => {
-                        let cfg: $config_type = toml::from_str(&toml::to_string(config_toml)?)?;
+                        let mut cfg: $config_type = toml::from_str(&toml::to_string(config_toml)?)?;
+                        cfg.scan.resolve($scan_dir, $exts, $excl);
                         gen_processor_dispatch!(@construct $proc_type, cfg)
                     }
                 )*
@@ -99,7 +100,8 @@ macro_rules! gen_processor_dispatch {
         pub(crate) fn create_all_default_processors() -> ProcessorMap {
             let mut processors: ProcessorMap = HashMap::new();
             $(
-                gen_processor_dispatch!(@register_default processors, $const_name, $field, $config_type, $proc_type);
+                gen_processor_dispatch!(@register_default processors, $const_name, $field, $config_type, $proc_type,
+                    $scan_dir, $exts, $excl);
             )*
             processors
         }
@@ -112,15 +114,21 @@ macro_rules! gen_processor_dispatch {
         Ok(Some(Box::new(proc_mod::$proc_type::new($cfg))))
     };
     // Default registration: skip SpellcheckProcessor (fallible)
-    (@register_default $processors:ident, SPELLCHECK, $field:ident, $config_type:ty, $proc_type:ident) => {
+    (@register_default $processors:ident, SPELLCHECK, $field:ident, $config_type:ty, $proc_type:ident,
+     $scan_dir:expr, $exts:expr, $excl:expr) => {
         // Skip: SpellcheckProcessor::new() is fallible
     };
-    (@register_default $processors:ident, $const_name:ident, $field:ident, $config_type:ty, $proc_type:ident) => {
-        Builder::register(
-            &mut $processors,
-            proc_names::$const_name,
-            proc_mod::$proc_type::new(<$config_type>::default()),
-        );
+    (@register_default $processors:ident, $const_name:ident, $field:ident, $config_type:ty, $proc_type:ident,
+     $scan_dir:expr, $exts:expr, $excl:expr) => {
+        {
+            let mut cfg = <$config_type>::default();
+            cfg.scan.resolve($scan_dir, $exts, $excl);
+            Builder::register(
+                &mut $processors,
+                proc_names::$const_name,
+                proc_mod::$proc_type::new(cfg),
+            );
+        }
     };
 }
 for_each_processor!(gen_processor_dispatch);
