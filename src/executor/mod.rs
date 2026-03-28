@@ -13,7 +13,7 @@ use crate::errors;
 use crate::color;
 use crate::graph::BuildGraph;
 use crate::object_store::{ExplainAction, ObjectStore};
-use crate::processors::{ProcessStats, ProcessorMap};
+use crate::processors::{FailedProduct, ProcessStats, ProcessorMap};
 
 /// Result of the per-item skip/restore pre-check.
 enum PreCheckResult {
@@ -77,6 +77,7 @@ struct SharedState {
     errors: Arc<Mutex<Vec<anyhow::Error>>>,
     failed_products: Arc<Mutex<HashSet<usize>>>,
     failed_messages: Arc<Mutex<Vec<String>>>,
+    failed_details: Arc<Mutex<Vec<FailedProduct>>>,
     failed_processors: Arc<Mutex<HashSet<String>>>,
     unchanged_products: Arc<Mutex<HashSet<usize>>>,
     global_current: Arc<AtomicUsize>,

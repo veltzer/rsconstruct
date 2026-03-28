@@ -1101,6 +1101,17 @@ impl ProcessStats {
     }
 }
 
+/// A single failed product with structured error info for `rsconstruct edit`.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FailedProduct {
+    /// Primary input file path
+    pub file: String,
+    /// Processor (instance) name
+    pub processor: String,
+    /// Error message from the tool
+    pub error: String,
+}
+
 /// Aggregated statistics from all processors
 #[derive(Default)]
 pub struct BuildStats {
@@ -1108,6 +1119,8 @@ pub struct BuildStats {
     pub total_duration: Duration,
     pub failed_count: usize,
     pub failed_messages: Vec<String>,
+    /// Structured failure details for `rsconstruct edit`
+    pub failed_details: Vec<FailedProduct>,
     pub phase_timings: Vec<(String, Duration)>,
 }
 
