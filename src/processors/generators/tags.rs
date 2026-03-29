@@ -142,6 +142,45 @@ impl ProductDiscovery for TagsProcessor {
             }
         }
 
+        // Check required frontmatter fields
+        if !self.config.required_fields.is_empty() {
+            let mut missing: Vec<(String, Vec<String>)> = Vec::new(); // (file, missing_fields)
+            for input in &product.inputs {
+                let ext = input.extension().and_then(|e| e.to_str()).unwrap_or("");
+                if ext != "md" {
+                    continue;
+                }
+                let file_key = input.display().to_string();
+                let fm = all_frontmatter.get(&file_key);
+                let obj = fm.and_then(|v| v.as_object());
+                let mut file_missing: Vec<String> = Vec::new();
+                for field in &self.config.required_fields {
+                    let has_field = obj.is_some_and(|o| {
+                        o.get(field).is_some_and(|v| match v {
+                            serde_json::Value::Array(a) => !a.is_empty(),
+                            serde_json::Value::String(s) => !s.is_empty(),
+                            serde_json::Value::Null => false,
+                            _ => true,
+                        })
+                    });
+                    if !has_field {
+                        file_missing.push(field.clone());
+                    }
+                }
+                if !file_missing.is_empty() {
+                    missing.push((file_key, file_missing));
+                }
+            }
+            if !missing.is_empty() {
+                missing.sort_by(|a, b| a.0.cmp(&b.0));
+                let mut msg = String::from("Missing required frontmatter fields:\n");
+                for (file, fields) in &missing {
+                    msg.push_str(&format!("  {}: {}\n", file, fields.join(", ")));
+                }
+                bail!("{}", msg.trim_end());
+            }
+        }
+
         // Check for duplicate tags within files
         if !duplicate_tags.is_empty() {
             duplicate_tags.sort();

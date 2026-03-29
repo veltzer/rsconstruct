@@ -1013,6 +1013,10 @@ pub struct TagsConfig {
     /// Each `<name>.txt` file defines allowed tags as `<name>:<line>` pairs.
     #[serde(default = "default_tags_dir")]
     pub tags_dir: String,
+    /// Frontmatter fields that every markdown file must have.
+    /// e.g. ["tags", "level", "category", "duration_hours", "audiences"]
+    #[serde(default)]
+    pub required_fields: Vec<String>,
     #[serde(default)]
     pub extra_inputs: Vec<String>,
     #[serde(default)]
@@ -1028,6 +1032,7 @@ impl Default for TagsConfig {
         Self {
             output: "out/tags/tags.db".into(),
             tags_dir: "tag_lists".into(),
+            required_fields: Vec::new(),
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
             batch: true,
@@ -1039,7 +1044,7 @@ impl Default for TagsConfig {
 impl KnownFields for TagsConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "output", "tags_dir", "extra_inputs", "auto_inputs", "batch",
+            "output", "tags_dir", "required_fields", "extra_inputs", "auto_inputs", "batch",
         ]
     }
 }

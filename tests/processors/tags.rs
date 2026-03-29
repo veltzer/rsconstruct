@@ -5,10 +5,13 @@ use tempfile::TempDir;
 /// Helper: create a tags test project with given .md files and optional tag_lists directory.
 /// `tag_lists` is a slice of (filename, content) pairs for files in tag_lists/.
 fn setup_tags_project(md_files: &[(&str, &str)], tag_lists: &[(&str, &str)]) -> TempDir {
+    setup_tags_project_with_config(md_files, tag_lists, "[processor.tags]\n")
+}
+
+fn setup_tags_project_with_config(md_files: &[(&str, &str)], tag_lists: &[(&str, &str)], config: &str) -> TempDir {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let p = temp_dir.path();
 
-    let config = "[processor.tags]\n";
     fs::write(p.join("rsconstruct.toml"), config).unwrap();
 
     for (name, content) in md_files {
@@ -444,4 +447,91 @@ fn tags_duplicate_across_tag_lists_different_categories_ok() {
     );
     let p = temp_dir.path();
     build_project(p);
+}
+
+#[test]
+fn tags_required_fields_pass() {
+    let config = r#"
+[processor.tags]
+required_fields = ["level", "tags"]
+"#;
+    let temp_dir = setup_tags_project_with_config(
+        &[
+            ("a.md", "---\nlevel: beginner\ntags:\n  - tools:docker\n---\n"),
+        ],
+        &[
+            ("level.txt", "beginner\n"),
+            ("tools.txt", "docker\n"),
+        ],
+        config,
+    );
+    build_project(temp_dir.path());
+}
+
+#[test]
+fn tags_required_fields_missing_fails() {
+    let config = r#"
+[processor.tags]
+required_fields = ["level", "tags", "category"]
+"#;
+    let temp_dir = setup_tags_project_with_config(
+        &[
+            ("a.md", "---\nlevel: beginner\ntags:\n  - tools:docker\n---\n"),
+        ],
+        &[
+            ("level.txt", "beginner\n"),
+            ("tools.txt", "docker\n"),
+        ],
+        config,
+    );
+    let p = temp_dir.path();
+    let output = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(!output.status.success(), "build should fail with missing required field");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("category"), "should mention missing field 'category': {}", stderr);
+    assert!(stderr.contains("a.md"), "should mention the file: {}", stderr);
+}
+
+#[test]
+fn tags_required_fields_empty_list_fails() {
+    let config = r#"
+[processor.tags]
+required_fields = ["tags"]
+"#;
+    let temp_dir = setup_tags_project_with_config(
+        &[
+            ("a.md", "---\ntags: []\nlevel: beginner\n---\n"),
+        ],
+        &[
+            ("level.txt", "beginner\n"),
+        ],
+        config,
+    );
+    let p = temp_dir.path();
+    let output = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(!output.status.success(), "build should fail when required list field is empty");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("tags"), "should mention missing field 'tags': {}", stderr);
+}
+
+#[test]
+fn tags_required_fields_no_frontmatter_fails() {
+    let config = r#"
+[processor.tags]
+required_fields = ["level"]
+"#;
+    let temp_dir = setup_tags_project_with_config(
+        &[
+            ("a.md", "# No frontmatter at all\nJust content.\n"),
+        ],
+        &[
+            ("level.txt", "beginner\n"),
+        ],
+        config,
+    );
+    let p = temp_dir.path();
+    let output = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(!output.status.success(), "build should fail when file has no frontmatter");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("level"), "should mention missing field 'level': {}", stderr);
 }
