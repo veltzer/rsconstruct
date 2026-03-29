@@ -108,12 +108,12 @@ Show product status — whether each product is up-to-date, stale, or restorable
 rsconstruct status
 ```
 
-## `rsconstruct auto`
+## `rsconstruct smart auto`
 
 Auto-detect relevant processors and add them to `rsconstruct.toml`. Scans the project for files matching each processor's conventions and checks that the required tools are installed. Only adds new sections — existing processor sections are preserved.
 
 ```bash
-rsconstruct auto
+rsconstruct smart auto
 ```
 
 Example output:

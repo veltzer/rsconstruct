@@ -39,7 +39,7 @@ args = ["--disable=C0114"]
 [processor.cc_single_file]
 ```
 
-Only declared processors run — no processors are enabled by default. Use `rsconstruct auto` to auto-detect and add relevant processors.
+Only declared processors run — no processors are enabled by default. Use `rsconstruct smart auto` to auto-detect and add relevant processors.
 
 Use `rsconstruct processors list` to see declared processors and descriptions.
 Use `rsconstruct processors list --all` to include hidden processors.

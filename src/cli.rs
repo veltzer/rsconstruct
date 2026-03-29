@@ -220,8 +220,6 @@ pub enum Commands {
         #[command(subcommand)]
         action: GraphAction,
     },
-    /// Auto-detect relevant processors and add them to rsconstruct.toml
-    Auto,
     /// Initialize a new rsconstruct project in the current directory
     Init,
     /// Manage processors
@@ -286,6 +284,8 @@ pub enum SmartAction {
     Minimal,
     /// Remove all [processor.*] sections, returning to pure defaults
     Reset,
+    /// Auto-detect relevant processors and add them to rsconstruct.toml
+    Auto,
     /// Enable only processors whose files are detected and tools are installed
     EnableIfAvailable,
     /// Disable all, then enable only the listed processors

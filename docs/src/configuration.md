@@ -11,7 +11,7 @@ batch_size = 0        # Max files per batch for batch-capable processors (0 = no
 
 # Declare processors by adding [processor.NAME] sections.
 # Only declared processors run — no processors are enabled by default.
-# Use `rsconstruct auto` to auto-detect and add relevant processors.
+# Use `rsconstruct smart auto` to auto-detect and add relevant processors.
 
 [processor.ruff]
 # args = []
@@ -85,7 +85,7 @@ You cannot mix single-instance and multi-instance formats for the same processor
 
 ### Auto-detection
 
-Run `rsconstruct auto` to scan the project and automatically add `[processor.NAME]` sections for all processors whose files are detected and whose tools are installed. It does not remove existing sections.
+Run `rsconstruct smart auto` to scan the project and automatically add `[processor.NAME]` sections for all processors whose files are detected and whose tools are installed. It does not remove existing sections.
 
 ## Variable substitution
 
