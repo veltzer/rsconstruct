@@ -536,6 +536,69 @@ required_fields = ["level"]
     assert!(stderr.contains("level"), "should mention missing field 'level': {}", stderr);
 }
 
+// --- required_field_groups ---
+
+#[test]
+fn tags_required_field_groups_first_group() {
+    let config = r#"
+[processor.tags]
+required_field_groups = [["duration_hours"], ["duration_hours_long", "duration_hours_short"]]
+"#;
+    let temp_dir = setup_tags_project_with_config(
+        &[("a.md", "---\nduration_hours: 24\ntags:\n  - tools:docker\n---\n")],
+        &[("tools.txt", "docker\n"), ("duration_hours.txt", "24\n")],
+        config,
+    );
+    build_project(temp_dir.path());
+}
+
+#[test]
+fn tags_required_field_groups_second_group() {
+    let config = r#"
+[processor.tags]
+required_field_groups = [["duration_hours"], ["duration_hours_long", "duration_hours_short"]]
+"#;
+    let temp_dir = setup_tags_project_with_config(
+        &[("a.md", "---\nduration_hours_long: 40\nduration_hours_short: 16\ntags:\n  - tools:docker\n---\n")],
+        &[("tools.txt", "docker\n"), ("duration_hours_long.txt", "40\n"), ("duration_hours_short.txt", "16\n")],
+        config,
+    );
+    build_project(temp_dir.path());
+}
+
+#[test]
+fn tags_required_field_groups_none_satisfied_fails() {
+    let config = r#"
+[processor.tags]
+required_field_groups = [["duration_hours"], ["duration_hours_long", "duration_hours_short"]]
+"#;
+    let temp_dir = setup_tags_project_with_config(
+        &[("a.md", "---\ntags:\n  - tools:docker\n---\n")],
+        &[("tools.txt", "docker\n")],
+        config,
+    );
+    let output = run_rsconstruct_with_env(temp_dir.path(), &["build"], &[("NO_COLOR", "1")]);
+    assert!(!output.status.success(), "build should fail when no group is satisfied");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("duration_hours"), "should mention the groups: {}", stderr);
+}
+
+#[test]
+fn tags_required_field_groups_partial_second_fails() {
+    // Only has duration_hours_long but not duration_hours_short — neither group satisfied
+    let config = r#"
+[processor.tags]
+required_field_groups = [["duration_hours"], ["duration_hours_long", "duration_hours_short"]]
+"#;
+    let temp_dir = setup_tags_project_with_config(
+        &[("a.md", "---\nduration_hours_long: 40\ntags:\n  - tools:docker\n---\n")],
+        &[("tools.txt", "docker\n"), ("duration_hours_long.txt", "40\n")],
+        config,
+    );
+    let output = run_rsconstruct_with_env(temp_dir.path(), &["build"], &[("NO_COLOR", "1")]);
+    assert!(!output.status.success(), "build should fail with partial group");
+}
+
 // --- Feature 1: required_values ---
 
 #[test]

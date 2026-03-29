@@ -1026,6 +1026,10 @@ pub struct TagsConfig {
     /// Expected types for fields: "scalar", "list", or "number".
     #[serde(default)]
     pub field_types: HashMap<String, String>,
+    /// Groups of fields where at least one group must be fully present.
+    /// Each inner Vec is a group; a file passes if all fields in any one group are present.
+    #[serde(default)]
+    pub required_field_groups: Vec<Vec<String>>,
     /// Require list-type fields to have items in sorted order.
     #[serde(default)]
     pub sorted_tags: bool,
@@ -1048,6 +1052,7 @@ impl Default for TagsConfig {
             required_values: Vec::new(),
             unique_fields: Vec::new(),
             field_types: HashMap::new(),
+            required_field_groups: Vec::new(),
             sorted_tags: false,
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
@@ -1061,7 +1066,7 @@ impl KnownFields for TagsConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
             "output", "tags_dir", "required_fields", "required_values",
-            "unique_fields", "field_types", "sorted_tags",
+            "unique_fields", "field_types", "required_field_groups", "sorted_tags",
             "extra_inputs", "auto_inputs", "batch",
         ]
     }

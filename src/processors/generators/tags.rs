@@ -197,6 +197,46 @@ impl ProductDiscovery for TagsProcessor {
             }
         }
 
+        // Check required field groups
+        if !self.config.required_field_groups.is_empty() {
+            let mut failing: Vec<(String, Vec<String>)> = Vec::new();
+            for input in &product.inputs {
+                let ext = input.extension().and_then(|e| e.to_str()).unwrap_or("");
+                if ext != "md" {
+                    continue;
+                }
+                let file_key = input.display().to_string();
+                let fm = all_frontmatter.get(&file_key);
+                let obj = fm.and_then(|v| v.as_object());
+                let satisfies_any = self.config.required_field_groups.iter().any(|group| {
+                    group.iter().all(|field| {
+                        obj.is_some_and(|o| {
+                            o.get(field).is_some_and(|v| match v {
+                                serde_json::Value::Array(a) => !a.is_empty(),
+                                serde_json::Value::String(s) => !s.is_empty(),
+                                serde_json::Value::Null => false,
+                                _ => true,
+                            })
+                        })
+                    })
+                });
+                if !satisfies_any {
+                    let group_strs: Vec<String> = self.config.required_field_groups.iter()
+                        .map(|g| format!("[{}]", g.join(", ")))
+                        .collect();
+                    failing.push((file_key, group_strs));
+                }
+            }
+            if !failing.is_empty() {
+                failing.sort_by(|a, b| a.0.cmp(&b.0));
+                let mut msg = String::from("Files missing required field groups (must satisfy at least one):\n");
+                for (file, groups) in &failing {
+                    msg.push_str(&format!("  {}: none of {}\n", file, groups.join(" or ")));
+                }
+                bail!("{}", msg.trim_end());
+            }
+        }
+
         // Check for duplicate tags within files
         if !duplicate_tags.is_empty() {
             duplicate_tags.sort();
@@ -1145,6 +1185,33 @@ pub fn check_tags(config: &crate::config::TagsConfig) -> Result<()> {
             });
             if !has_field {
                 errors.push(format!("Missing required field '{}' in {}", field, file_key));
+            }
+        }
+    }
+
+    // Required field groups
+    if !config.required_field_groups.is_empty() {
+        for input in &files {
+            let file_key = input.display().to_string();
+            let fm = all_frontmatter.get(&file_key);
+            let obj = fm.and_then(|v| v.as_object());
+            let satisfies_any = config.required_field_groups.iter().any(|group| {
+                group.iter().all(|field| {
+                    obj.is_some_and(|o| {
+                        o.get(field).is_some_and(|v| match v {
+                            serde_json::Value::Array(a) => !a.is_empty(),
+                            serde_json::Value::String(s) => !s.is_empty(),
+                            serde_json::Value::Null => false,
+                            _ => true,
+                        })
+                    })
+                })
+            });
+            if !satisfies_any {
+                let group_strs: Vec<String> = config.required_field_groups.iter()
+                    .map(|g| format!("[{}]", g.join(", ")))
+                    .collect();
+                errors.push(format!("Missing required field group in {}: none of {}", file_key, group_strs.join(" or ")));
             }
         }
     }

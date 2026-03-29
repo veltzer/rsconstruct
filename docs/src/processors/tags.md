@@ -73,6 +73,29 @@ Missing required frontmatter fields:
   syllabi/courses/advanced.md: audiences
 ```
 
+### Required Field Groups
+
+When `required_field_groups` is configured, every file must satisfy **at least
+one** group (all fields in that group present). This handles cases where files
+may have alternative sets of fields:
+
+```toml
+[processor.tags]
+required_field_groups = [
+    ["duration_hours"],
+    ["duration_hours_long", "duration_hours_short"],
+]
+```
+
+A file with `duration_hours` passes. A file with both `duration_hours_long` and
+`duration_hours_short` passes. A file with only `duration_hours_short` (partial
+group) or none of these fields fails:
+
+```
+Files missing required field groups (must satisfy at least one):
+  syllabi/courses/intro.md: none of [duration_hours] or [duration_hours_long, duration_hours_short]
+```
+
 ### Required Values
 
 When `required_values` is configured, scalar fields must contain a value that
@@ -191,7 +214,11 @@ Unused tags in tag_lists (not used by any file):
 [processor.tags]
 output = "out/tags/tags.db"                                       # Output database path
 tags_dir = "tag_lists"                                            # Directory containing tag list files
-required_fields = ["tags", "level", "category", "duration_hours"] # Fields every .md file must have
+required_fields = ["tags", "level", "category"]                   # Fields every .md file must have
+required_field_groups = [                                         # At least one group must be fully present
+    ["duration_hours"],
+    ["duration_hours_long", "duration_hours_short"],
+]
 required_values = ["level", "category"]                           # Scalar fields validated against tag_lists
 unique_fields = ["title"]                                         # Fields that must be unique across files
 sorted_tags = true                                                # Require list items in sorted order
@@ -208,6 +235,7 @@ duration_hours = "number"                                         # Must be nume
 | `output` | string | `"out/tags/tags.db"` | Path to the tags database file |
 | `tags_dir` | string | `"tag_lists"` | Directory containing `.txt` tag list files |
 | `required_fields` | string[] | `[]` | Frontmatter fields that every `.md` file must have |
+| `required_field_groups` | string[][] | `[]` | Alternative field groups; at least one group must be fully present |
 | `required_values` | string[] | `[]` | Scalar fields whose values must exist in `tag_lists/<field>.txt` |
 | `unique_fields` | string[] | `[]` | Fields whose values must be unique across all files |
 | `field_types` | map | `{}` | Expected types per field: `"list"`, `"scalar"`, or `"number"` |
