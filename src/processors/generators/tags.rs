@@ -32,8 +32,17 @@ impl ProductDiscovery for TagsProcessor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        scan_root_valid(&self.config.scan)
-            && !file_index.scan(&self.config.scan, true).is_empty()
+        if !scan_root_valid(&self.config.scan)
+            || file_index.scan(&self.config.scan, true).is_empty()
+        {
+            return false;
+        }
+        // Require a tags_dir with at least one .txt file
+        let dir = Path::new(&self.config.tags_dir);
+        dir.is_dir() && fs::read_dir(dir).ok().is_some_and(|entries| {
+            entries.filter_map(|e| e.ok())
+                .any(|e| e.path().extension().and_then(|x| x.to_str()) == Some("txt"))
+        })
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
@@ -47,24 +56,17 @@ impl ProductDiscovery for TagsProcessor {
         inputs.extend(files);
         inputs.extend_from_slice(&extra);
 
-        // Add tag allowlist files as inputs so edits trigger rebuild
-        if let Some(ref tags_dir) = self.config.tags_dir {
-            let dir = Path::new(tags_dir);
-            if dir.is_dir() {
-                for entry in fs::read_dir(dir)
-                    .with_context(|| format!("Failed to read tags_dir: {}", tags_dir))?
-                {
-                    let entry = entry?;
-                    let path = entry.path();
-                    if path.extension().and_then(|e| e.to_str()) == Some("txt") {
-                        inputs.push(path);
-                    }
+        // Add tag list files as inputs so edits trigger rebuild
+        let dir = Path::new(&self.config.tags_dir);
+        if dir.is_dir() {
+            for entry in fs::read_dir(dir)
+                .with_context(|| format!("Failed to read tags_dir: {}", self.config.tags_dir))?
+            {
+                let entry = entry?;
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("txt") {
+                    inputs.push(path);
                 }
-            }
-        } else {
-            let tags_file_path = Path::new(&self.config.tags_file);
-            if tags_file_path.exists() {
-                inputs.push(tags_file_path.to_path_buf());
             }
         }
 
@@ -132,39 +134,22 @@ impl ProductDiscovery for TagsProcessor {
             }
         }
 
-        // Validate tags against allowed set
-        let allowed = if let Some(ref tags_dir) = self.config.tags_dir {
-            let dir = Path::new(tags_dir);
-            if dir.is_dir() {
-                Some(load_tags_dir(dir)?)
-            } else {
-                bail!("tags_dir not found: {}", tags_dir);
-            }
-        } else {
-            let tags_file_path = Path::new(&self.config.tags_file);
-            if tags_file_path.exists() {
-                Some(load_tags_file(tags_file_path)?)
-            } else if self.config.tags_file_strict {
-                bail!("Tags file not found: {}. Run 'rsconstruct tags init' to create one.", self.config.tags_file);
-            } else {
-                None
-            }
-        };
-
-        if let Some(ref allowed) = allowed {
+        // Validate tags against allowed set from tags_dir
+        let dir = Path::new(&self.config.tags_dir);
+        if dir.is_dir() {
+            let allowed = load_tags_dir(dir)?;
             let mut unknown: Vec<(String, Vec<String>)> = Vec::new();
             for (tag, files) in &tag_to_files {
-                if !tag_matches_allowed(tag, allowed) {
+                if !tag_matches_allowed(tag, &allowed) {
                     unknown.push((tag.clone(), files.iter().cloned().collect()));
                 }
             }
             if !unknown.is_empty() {
                 unknown.sort_by(|a, b| a.0.cmp(&b.0));
-                let source = if self.config.tags_dir.is_some() { "tags_dir" } else { ".tags file" };
-                let mut msg = format!("Unknown tags found (not in {}):\n", source);
+                let mut msg = format!("Unknown tags found (not in {}):\n", self.config.tags_dir);
                 for (tag, files) in &unknown {
                     msg.push_str(&format!("  {}", tag));
-                    if let Some(suggestion) = find_similar_tag(tag, allowed) {
+                    if let Some(suggestion) = find_similar_tag(tag, &allowed) {
                         msg.push_str(&format!(" (did you mean '{}'?)", suggestion));
                     }
                     msg.push('\n');
@@ -639,18 +624,21 @@ pub fn frontmatter_for_file(db_path: &str, path: &str) -> Result<()> {
 
 /// List tags in the allowlist that are not used by any file.
 /// If `strict` is true, returns an error when unused tags are found (for CI).
-pub fn unused_tags(db_path: &str, tags_file: &str, tags_dir: Option<&str>, strict: bool) -> Result<()> {
-    let allowed = load_allowed_tags(tags_file, tags_dir)?;
-    let source = tags_dir.unwrap_or(tags_file);
+pub fn unused_tags(db_path: &str, tags_dir: &str, strict: bool) -> Result<()> {
+    let dir = Path::new(tags_dir);
+    if !dir.is_dir() {
+        bail!("tags_dir not found: {}", tags_dir);
+    }
+    let allowed = load_tags_dir(dir)?;
     let db_tags = load_all_tags(db_path)?;
 
     let mut unused: Vec<&String> = allowed.iter()
-        .filter(|t| !pattern_matches_any_tag(t, &db_tags))
+        .filter(|t| !db_tags.contains(*t))
         .collect();
     unused.sort();
 
     if strict && !unused.is_empty() {
-        let mut msg = format!("{} unused tag(s) in {}:\n", unused.len(), source);
+        let mut msg = format!("{} unused tag(s) in {}:\n", unused.len(), tags_dir);
         for tag in &unused {
             msg.push_str(&format!("  {}\n", tag));
         }
@@ -660,9 +648,9 @@ pub fn unused_tags(db_path: &str, tags_file: &str, tags_dir: Option<&str>, stric
     if crate::json_output::is_json_mode() {
         println!("{}", serde_json::to_string(&unused).expect(crate::errors::JSON_SERIALIZE));
     } else if unused.is_empty() {
-        println!("All tags in {} are in use.", source);
+        println!("All tags in {} are in use.", tags_dir);
     } else {
-        println!("{} unused tag(s) in {}:", unused.len(), source);
+        println!("{} unused tag(s) in {}:", unused.len(), tags_dir);
         for tag in &unused {
             println!("  {}", tag);
         }
@@ -672,8 +660,12 @@ pub fn unused_tags(db_path: &str, tags_file: &str, tags_dir: Option<&str>, stric
 }
 
 /// Validate tags against allowed set without building.
-pub fn validate_tags(db_path: &str, tags_file: &str, tags_dir: Option<&str>) -> Result<()> {
-    let allowed = load_allowed_tags(tags_file, tags_dir)?;
+pub fn validate_tags(db_path: &str, tags_dir: &str) -> Result<()> {
+    let dir = Path::new(tags_dir);
+    if !dir.is_dir() {
+        bail!("tags_dir not found: {}", tags_dir);
+    }
+    let allowed = load_tags_dir(dir)?;
     // Single db open: get both tags and counts in one pass
     let tag_counts = load_tag_counts(db_path)?;
 
@@ -701,163 +693,6 @@ pub fn validate_tags(db_path: &str, tags_file: &str, tags_dir: Option<&str>) -> 
             msg.push('\n');
         }
         bail!("{}", msg.trim_end());
-    }
-
-    Ok(())
-}
-
-/// Generate .tags file from current tag union.
-pub fn init_tags(db_path: &str, tags_file: &str, tags_dir: Option<&str>) -> Result<()> {
-    if let Some(dir) = tags_dir {
-        bail!("tags_dir is configured ({}). Edit the .txt files there directly.", dir);
-    }
-    let tags_file_path = Path::new(tags_file);
-    if tags_file_path.exists() {
-        bail!("{} already exists. Use 'rsconstruct tags sync' to update it.", tags_file);
-    }
-
-    let tags = load_all_tags_sorted(db_path)?;
-    write_tags_file(tags_file_path, &tags)?;
-    if crate::json_output::is_json_mode() {
-        println!("{}", serde_json::json!({"action": "init", "file": tags_file, "count": tags.len()}));
-    } else {
-        println!("Created {} with {} tags.", tags_file, tags.len());
-    }
-
-    Ok(())
-}
-
-/// Add a tag to the .tags file (sorted, deduplicated).
-pub fn add_tag(tags_file: &str, tag: &str, tags_dir: Option<&str>) -> Result<()> {
-    if let Some(dir) = tags_dir {
-        bail!("tags_dir is configured ({}). Edit the .txt files there directly.", dir);
-    }
-    let tags_file_path = Path::new(tags_file);
-    let mut tags = if tags_file_path.exists() {
-        load_tags_file_sorted(tags_file_path)?
-    } else {
-        Vec::new()
-    };
-
-    if tags.iter().any(|t| t == tag) {
-        if crate::json_output::is_json_mode() {
-            println!("{}", serde_json::json!({"action": "add", "tag": tag, "added": false}));
-        } else {
-            println!("Tag '{}' already in {}.", tag, tags_file);
-        }
-        return Ok(());
-    }
-
-    tags.push(tag.to_string());
-    tags.sort();
-    write_tags_file(tags_file_path, &tags)?;
-    if crate::json_output::is_json_mode() {
-        println!("{}", serde_json::json!({"action": "add", "tag": tag, "added": true}));
-    } else {
-        println!("Added '{}' to {}.", tag, tags_file);
-    }
-
-    Ok(())
-}
-
-/// Remove a tag from the .tags file.
-pub fn remove_tag(tags_file: &str, tag: &str, tags_dir: Option<&str>) -> Result<()> {
-    if let Some(dir) = tags_dir {
-        bail!("tags_dir is configured ({}). Edit the .txt files there directly.", dir);
-    }
-    let tags_file_path = Path::new(tags_file);
-    if !tags_file_path.exists() {
-        bail!("Tags file not found: {}", tags_file);
-    }
-
-    let mut tags = load_tags_file_sorted(tags_file_path)?;
-    let before_len = tags.len();
-    tags.retain(|t| t != tag);
-
-    let removed = tags.len() < before_len;
-    if removed {
-        write_tags_file(tags_file_path, &tags)?;
-    }
-    if crate::json_output::is_json_mode() {
-        println!("{}", serde_json::json!({"action": "remove", "tag": tag, "removed": removed}));
-    } else if removed {
-        println!("Removed '{}' from {}.", tag, tags_file);
-    } else {
-        println!("Tag '{}' not found in {}.", tag, tags_file);
-    }
-
-    Ok(())
-}
-
-/// Sync .tags file with current tag union.
-pub fn sync_tags(db_path: &str, tags_file: &str, tags_dir: Option<&str>, prune: bool, verbose: bool) -> Result<()> {
-    if let Some(dir) = tags_dir {
-        bail!("tags_dir is configured ({}). Edit the .txt files there directly.", dir);
-    }
-    let tags_file_path = Path::new(tags_file);
-    let db_tags: HashSet<String> = load_all_tags(db_path)?;
-
-    let existing = if tags_file_path.exists() {
-        load_tags_file(tags_file_path)?
-    } else {
-        HashSet::new()
-    };
-
-    let mut added: Vec<String> = db_tags.iter()
-        .filter(|t| !tag_matches_allowed(t, &existing))
-        .cloned()
-        .collect();
-    added.sort();
-
-    let mut removed: Vec<String> = if prune {
-        existing.iter()
-            .filter(|t| !pattern_matches_any_tag(t, &db_tags))
-            .cloned()
-            .collect()
-    } else {
-        Vec::new()
-    };
-    removed.sort();
-
-    // Build final set
-    let mut final_tags: HashSet<String> = existing;
-    for tag in &added {
-        final_tags.insert(tag.clone());
-    }
-    for tag in &removed {
-        final_tags.remove(tag);
-    }
-
-    let mut sorted: Vec<String> = final_tags.into_iter().collect();
-    sorted.sort();
-    if !added.is_empty() || !removed.is_empty() {
-        write_tags_file(tags_file_path, &sorted)?;
-    }
-
-    if crate::json_output::is_json_mode() {
-        println!("{}", serde_json::json!({
-            "action": "sync",
-            "file": tags_file,
-            "total": sorted.len(),
-            "added": added,
-            "removed": removed,
-        }));
-    } else {
-        println!("Synced {} ({} tags total, {} added{})",
-            tags_file,
-            sorted.len(),
-            added.len(),
-            if prune { format!(", {} pruned", removed.len()) } else { String::new() },
-        );
-
-        if verbose {
-            for tag in &added {
-                println!("  + {}", tag);
-            }
-            for tag in &removed {
-                println!("  - {}", tag);
-            }
-        }
     }
 
     Ok(())
@@ -926,25 +761,6 @@ fn load_tag_counts(db_path: &str) -> Result<HashMap<String, usize>> {
     Ok(counts)
 }
 
-/// Load allowed tags from either `tags_dir` (if set) or `tags_file`.
-pub(crate) fn load_allowed_tags(tags_file: &str, tags_dir: Option<&str>) -> Result<HashSet<String>> {
-    if let Some(dir) = tags_dir {
-        let dir_path = Path::new(dir);
-        if dir_path.is_dir() {
-            load_tags_dir(dir_path)
-        } else {
-            bail!("tags_dir not found: {}", dir);
-        }
-    } else {
-        let path = Path::new(tags_file);
-        if path.exists() {
-            load_tags_file(path)
-        } else {
-            bail!("Tags file not found: {}", tags_file);
-        }
-    }
-}
-
 /// Load allowed tags from a directory of `.txt` files.
 /// Each file `<name>.txt` contributes tags as `<name>:<line>`.
 pub(crate) fn load_tags_dir(dir: &Path) -> Result<HashSet<String>> {
@@ -974,62 +790,9 @@ pub(crate) fn load_tags_dir(dir: &Path) -> Result<HashSet<String>> {
     Ok(tags)
 }
 
-/// Parse a .tags file into a HashSet, skipping comments and blank lines.
-fn load_tags_file(path: &Path) -> Result<HashSet<String>> {
-    let content = fs::read_to_string(path)
-        .with_context(|| format!("Failed to read {}", path.display()))?;
-    Ok(content
-        .lines()
-        .map(|line| line.trim())
-        .filter(|line| !line.is_empty() && !line.starts_with('#'))
-        .map(|line| line.to_string())
-        .collect())
-}
-
-/// Parse a .tags file into a sorted Vec, skipping comments and blank lines.
-fn load_tags_file_sorted(path: &Path) -> Result<Vec<String>> {
-    let mut tags: Vec<String> = load_tags_file(path)?.into_iter().collect();
-    tags.sort();
-    Ok(tags)
-}
-
-/// Write a sorted list of tags to a .tags file, one per line with a header comment.
-fn write_tags_file(path: &Path, tags: &[String]) -> Result<()> {
-    let mut content = String::from("# Allowed tags for rsconstruct frontmatter validation\n# One tag per line. Wildcards supported (e.g. duration_hours:*)\n");
-    for tag in tags {
-        content.push_str(tag);
-        content.push('\n');
-    }
-    fs::write(path, content)
-        .with_context(|| format!("Failed to write {}", path.display()))
-}
-
-/// Check if a tag matches the allowed set, supporting wildcard patterns.
-/// Patterns like `duration_hours:*` match any tag starting with `duration_hours:`.
+/// Check if a tag is in the allowed set.
 fn tag_matches_allowed(tag: &str, allowed: &HashSet<String>) -> bool {
-    if allowed.contains(tag) {
-        return true;
-    }
-    // Check wildcard patterns
-    for pattern in allowed {
-        if let Some(prefix) = pattern.strip_suffix('*')
-            && tag.starts_with(prefix)
-        {
-            return true;
-        }
-    }
-    false
-}
-
-/// Check if a pattern from .tags matches any actual tag in the database.
-/// For literal tags, checks direct membership.
-/// For wildcard patterns like `duration_hours:*`, checks if any db tag has that prefix.
-fn pattern_matches_any_tag(pattern: &str, db_tags: &HashSet<String>) -> bool {
-    if let Some(prefix) = pattern.strip_suffix('*') {
-        db_tags.iter().any(|t| t.starts_with(prefix))
-    } else {
-        db_tags.contains(pattern)
-    }
+    allowed.contains(tag)
 }
 
 /// Find the most similar tag in the allowed set using Levenshtein distance.
@@ -1293,27 +1056,4 @@ mod tests {
         assert!(!tag_matches_allowed("rust", &allowed));
     }
 
-    #[test]
-    fn tag_allowed_wildcard() {
-        let allowed: HashSet<String> = ["level:*", "docker"].iter().map(|s| s.to_string()).collect();
-        assert!(tag_matches_allowed("level:beginner", &allowed));
-        assert!(tag_matches_allowed("level:advanced", &allowed));
-        assert!(!tag_matches_allowed("difficulty:3", &allowed));
-    }
-
-    // --- pattern_matches_any_tag ---
-
-    #[test]
-    fn pattern_literal_match() {
-        let db: HashSet<String> = ["docker", "python"].iter().map(|s| s.to_string()).collect();
-        assert!(pattern_matches_any_tag("docker", &db));
-        assert!(!pattern_matches_any_tag("rust", &db));
-    }
-
-    #[test]
-    fn pattern_wildcard_match() {
-        let db: HashSet<String> = ["level:beginner", "level:advanced"].iter().map(|s| s.to_string()).collect();
-        assert!(pattern_matches_any_tag("level:*", &db));
-        assert!(!pattern_matches_any_tag("difficulty:*", &db));
-    }
 }

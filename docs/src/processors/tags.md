@@ -10,7 +10,7 @@ Scans `.md` files for YAML frontmatter blocks (delimited by `---`), parses tag
 metadata, and builds a [redb](https://github.com/cberner/redb) database. The
 database enables querying files by tags via `rsconstruct tags` subcommands.
 
-Optionally validates tags against a `.tags` allowlist file.
+Validates tags against a `tags_dir` directory containing tag list files.
 
 ### Tag Indexing
 
@@ -36,22 +36,23 @@ Two kinds of frontmatter fields are indexed:
 
 Both inline YAML lists (`tags: [a, b, c]`) and multi-line lists are supported.
 
-### The `.tags` Allowlist
+### The `tags_dir` Allowlist
 
-When a `.tags` file exists in the project root, the build validates every
-indexed tag against it. Unknown tags cause a build error with typo suggestions
-(Levenshtein distance). Wildcard patterns are supported:
+The `tags_dir` directory (default: `tag_lists/`) contains `.txt` files that
+define the allowed tags. Each file `<name>.txt` contributes tags as
+`<name>:<line>` pairs. For example:
 
 ```
-# .tags
-docker
-python
-level:beginner
-level:advanced
-difficulty:*
+tag_lists/
+├── level.txt        # Contains: beginner, intermediate, advanced
+├── languages.txt    # Contains: python, rust, go, ...
+└── tools.txt        # Contains: docker, ansible, ...
 ```
 
-The pattern `difficulty:*` matches any tag starting with `difficulty:`.
+`level.txt` with content `beginner` produces the allowed tag `level:beginner`.
+
+Unknown tags cause a build error with typo suggestions (Levenshtein distance).
+The tags processor is only auto-detected when `tags_dir` contains `.txt` files.
 
 ## Source Files
 
@@ -63,16 +64,14 @@ The pattern `difficulty:*` matches any tag starting with `difficulty:`.
 ```toml
 [processor.tags]
 output = "out/tags/tags.db"            # Output database path
-tags_file = ".tags"                    # Allowlist file for tag validation
-tags_file_strict = false               # When true, missing .tags file is an error
+tags_dir = "tag_lists"                 # Directory containing tag list files
 extra_inputs = []                      # Additional files that trigger rebuilds when changed
 ```
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `output` | string | `"out/tags/tags.db"` | Path to the tags database file |
-| `tags_file` | string | `".tags"` | Path to the tag allowlist file |
-| `tags_file_strict` | bool | `false` | Fail if the `.tags` file is missing |
+| `tags_dir` | string | `"tag_lists"` | Directory containing `.txt` tag list files |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
 ## Subcommands
@@ -95,15 +94,10 @@ All support `--json` for machine-readable output.
 | `rsconstruct tags tree` | Show tags grouped by key (e.g. `level=` group) vs bare tags |
 | `rsconstruct tags stats` | Show database statistics (file count, unique tags, associations) |
 
-### `.tags` File Management
+### Validation
 
 | Command | Description |
 |---------|-------------|
-| `rsconstruct tags init` | Generate a `.tags` file from all currently indexed tags |
-| `rsconstruct tags sync` | Add missing tags to `.tags` (preserves existing entries) |
-| `rsconstruct tags sync --prune` | Sync and remove unused tags from `.tags` |
-| `rsconstruct tags add TAG` | Add a single tag to `.tags` |
-| `rsconstruct tags remove TAG` | Remove a single tag from `.tags` |
-| `rsconstruct tags unused` | List tags in `.tags` that no file uses |
+| `rsconstruct tags unused` | List tags in `tags_dir` that no file uses |
 | `rsconstruct tags unused --strict` | Same, but exit with error if any unused tags exist (for CI) |
-| `rsconstruct tags validate` | Validate indexed tags against `.tags` without rebuilding |
+| `rsconstruct tags validate` | Validate indexed tags against `tags_dir` without rebuilding |

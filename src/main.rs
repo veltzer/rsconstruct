@@ -347,10 +347,8 @@ fn run() -> Result<()> {
             let config = Config::load()?;
             let db_path = config.processor.instance_field_str("tags", "output")
                 .unwrap_or_else(|| "out/tags/tags.db".into());
-            let tags_file = config.processor.instance_field_str("tags", "tags_file")
-                .unwrap_or_else(|| ".tags".into());
-            let tags_dir = config.processor.instance_field_str("tags", "tags_dir");
-            let tags_dir_ref = tags_dir.as_deref();
+            let tags_dir = config.processor.instance_field_str("tags", "tags_dir")
+                .unwrap_or_else(|| "tag_lists".into());
             match action {
                 cli::TagsAction::Files { tags, or } => processors::tags_cmd::files_for_tags(&db_path, &tags, or)?,
                 cli::TagsAction::Grep { text, ignore_case } => processors::tags_cmd::grep_tags(&db_path, &text, ignore_case)?,
@@ -360,12 +358,8 @@ fn run() -> Result<()> {
                 cli::TagsAction::Stats => processors::tags_cmd::stats_tags(&db_path)?,
                 cli::TagsAction::ForFile { path } => processors::tags_cmd::tags_for_file(&db_path, &path)?,
                 cli::TagsAction::Frontmatter { path } => processors::tags_cmd::frontmatter_for_file(&db_path, &path)?,
-                cli::TagsAction::Unused { strict } => processors::tags_cmd::unused_tags(&db_path, &tags_file, tags_dir_ref, strict)?,
-                cli::TagsAction::Validate => processors::tags_cmd::validate_tags(&db_path, &tags_file, tags_dir_ref)?,
-                cli::TagsAction::Init => processors::tags_cmd::init_tags(&db_path, &tags_file, tags_dir_ref)?,
-                cli::TagsAction::Add { tag } => processors::tags_cmd::add_tag(&tags_file, &tag, tags_dir_ref)?,
-                cli::TagsAction::Remove { tag } => processors::tags_cmd::remove_tag(&tags_file, &tag, tags_dir_ref)?,
-                cli::TagsAction::Sync { prune } => processors::tags_cmd::sync_tags(&db_path, &tags_file, tags_dir_ref, prune, cli.verbose)?,
+                cli::TagsAction::Unused { strict } => processors::tags_cmd::unused_tags(&db_path, &tags_dir, strict)?,
+                cli::TagsAction::Validate => processors::tags_cmd::validate_tags(&db_path, &tags_dir)?,
             }
         }
         Commands::Tools { action } => {

@@ -517,32 +517,14 @@ pub enum TagsAction {
         /// Path to the file
         path: String,
     },
-    /// List tags in .tags that are not used by any file
+    /// List tags in the allowlist (tags_dir) that are not used by any file
     Unused {
         /// Exit with error if unused tags are found (useful for CI)
         #[arg(long)]
         strict: bool,
     },
-    /// Validate tags against .tags file without building
+    /// Validate tags against the allowlist (tags_dir) without building
     Validate,
-    /// Generate .tags file from current tag union (requires 'rsconstruct build' first)
-    Init,
-    /// Add a tag to the .tags file
-    Add {
-        /// Tag to add
-        tag: String,
-    },
-    /// Remove a tag from the .tags file
-    Remove {
-        /// Tag to remove
-        tag: String,
-    },
-    /// Sync .tags file with current tag union (add missing, optionally prune unused)
-    Sync {
-        /// Also remove tags from .tags that are no longer used
-        #[arg(long)]
-        prune: bool,
-    },
 }
 
 /// CLI arguments shared between Build and Watch commands.

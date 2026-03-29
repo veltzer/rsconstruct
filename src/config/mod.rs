@@ -725,8 +725,7 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
         ("rumdl" | "yamllint" | "jsonlint" | "taplo", "linter") => Some(FieldType::String),
         ("jq", "checker") => Some(FieldType::String),
         // tags
-        ("tags", "output" | "tags_file") => Some(FieldType::String),
-        ("tags", "tags_file_strict") => Some(FieldType::Bool),
+        ("tags", "output" | "tags_dir") => Some(FieldType::String),
         // pip
         ("pip", "pip") => Some(FieldType::String),
         // sphinx

@@ -293,14 +293,9 @@ rsconstruct tags grep deploy                 # Search for tags containing a subs
 rsconstruct tags grep deploy -i              # Case-insensitive tag search
 rsconstruct tags for-file src/main.md        # List all tags for a specific file
 rsconstruct tags frontmatter src/main.md     # Show raw frontmatter for a file
-rsconstruct tags validate                    # Validate tags against .tags file
-rsconstruct tags unused                      # List tags in .tags not used by any file
+rsconstruct tags validate                    # Validate tags against tags_dir allowlist
+rsconstruct tags unused                      # List tags in tags_dir not used by any file
 rsconstruct tags unused --strict             # Exit with error if unused tags found (CI)
-rsconstruct tags init                        # Generate .tags file from current tag union
-rsconstruct tags add docker                  # Add a tag to the .tags file
-rsconstruct tags remove docker               # Remove a tag from the .tags file
-rsconstruct tags sync                        # Add missing tags to .tags
-rsconstruct tags sync --prune                # Sync and remove unused tags from .tags
 ```
 
 ## `rsconstruct complete`
