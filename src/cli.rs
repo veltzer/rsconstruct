@@ -220,6 +220,11 @@ pub enum Commands {
         #[command(subcommand)]
         action: GraphAction,
     },
+    /// Show project information
+    Info {
+        #[command(subcommand)]
+        action: InfoAction,
+    },
     /// Initialize a new rsconstruct project in the current directory
     Init,
     /// Manage processors
@@ -242,7 +247,11 @@ pub enum Commands {
         action: SmartAction,
     },
     /// Show the status of each product (up-to-date, stale, or restorable)
-    Status,
+    Status {
+        /// Show source file counts by extension per processor
+        #[arg(long)]
+        breakdown: bool,
+    },
     /// Search and query frontmatter tags from markdown files
     Tags {
         #[command(subcommand)]
@@ -294,6 +303,12 @@ pub enum SmartAction {
         #[arg(required = true)]
         names: Vec<String>,
     },
+}
+
+#[derive(Subcommand)]
+pub enum InfoAction {
+    /// Show source file counts by extension
+    Source,
 }
 
 #[derive(Subcommand)]

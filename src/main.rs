@@ -265,6 +265,14 @@ fn run() -> Result<()> {
             let builder = Builder::new()?;
             builder.graph(action)?;
         }
+        Commands::Info { action } => {
+            match action {
+                cli::InfoAction::Source => {
+                    let builder = Builder::new()?;
+                    builder.info_source()?;
+                }
+            }
+        }
         Commands::Init => {
             init_project()?;
         }
@@ -339,9 +347,9 @@ fn run() -> Result<()> {
                 }
             }
         }
-        Commands::Status => {
+        Commands::Status { breakdown } => {
             let builder = Builder::new()?;
-            builder.status(cli.verbose)?;
+            builder.status(cli.verbose, breakdown)?;
         }
         Commands::Tags { action } => {
             let config = Config::load()?;

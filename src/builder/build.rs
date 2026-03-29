@@ -230,7 +230,7 @@ impl Builder {
     }
 
     /// Show the status of each product in the build graph
-    pub fn status(&self, verbose: bool) -> anyhow::Result<()> {
+    pub fn status(&self, verbose: bool, breakdown: bool) -> anyhow::Result<()> {
         let processors = self.create_processors()?;
         let graph = self.build_graph_with_processors(&processors)?;
 
@@ -248,13 +248,47 @@ impl Builder {
 
         self.print_product_status(&products, false, &labels, false, DisplayOptions::default(), verbose);
 
-        // Source file counts by extension
+        if breakdown {
+            // Collect source files per processor, then count by extension
+            let mut per_processor: BTreeMap<&str, BTreeMap<String, usize>> = BTreeMap::new();
+            for product in &products {
+                let ext_counts = per_processor.entry(&product.processor).or_default();
+                for input in &product.inputs {
+                    let ext = input.extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("(no ext)");
+                    *ext_counts.entry(ext.to_string()).or_default() += 1;
+                }
+            }
+            println!();
+            println!("{}:", color::bold("Source files by processor"));
+            let max_name = per_processor.keys().map(|n| n.len()).max().unwrap_or(0);
+            for (proc_name, ext_counts) in &per_processor {
+                let total: usize = ext_counts.values().sum();
+                let breakdown_str = ext_counts.iter()
+                    .map(|(ext, count)| format!("{} .{}", count, ext))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                println!("  {:<width$} {} files ({})", format!("{}:", proc_name), total, breakdown_str, width = max_name + 1);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Show source file counts by extension.
+    pub fn info_source(&self) -> anyhow::Result<()> {
+        let processors = self.create_processors()?;
+        let graph = self.build_graph_with_processors(&processors)?;
+
+        let products = graph.products();
         let mut all_inputs: std::collections::HashSet<&std::path::Path> = std::collections::HashSet::new();
-        for product in &products {
+        for product in products {
             for input in &product.inputs {
                 all_inputs.insert(input.as_path());
             }
         }
+
         let mut ext_counts: BTreeMap<String, usize> = BTreeMap::new();
         for path in &all_inputs {
             let ext = path.extension()
@@ -262,15 +296,20 @@ impl Builder {
                 .unwrap_or("(no ext)");
             *ext_counts.entry(ext.to_string()).or_default() += 1;
         }
-        println!("{}: {} files ({})",
-            color::bold("Source files"),
-            all_inputs.len(),
-            ext_counts.iter()
-                .map(|(ext, count)| format!("{} .{}", count, ext))
-                .collect::<Vec<_>>()
-                .join(", "),
-        );
 
+        if crate::json_output::is_json_mode() {
+            let json = serde_json::json!({
+                "total": all_inputs.len(),
+                "by_extension": ext_counts,
+            });
+            println!("{}", serde_json::to_string_pretty(&json).expect(crate::errors::JSON_SERIALIZE));
+        } else {
+            println!("{}: {}", color::bold("Total source files"), all_inputs.len());
+            let max_ext_len = ext_counts.keys().map(|e| e.len()).max().unwrap_or(0);
+            for (ext, count) in &ext_counts {
+                println!("  .{:<width$} {}", ext, count, width = max_ext_len);
+            }
+        }
         Ok(())
     }
 
