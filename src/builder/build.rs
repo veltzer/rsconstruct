@@ -249,12 +249,19 @@ impl Builder {
         self.print_product_status(&products, false, &labels, false, DisplayOptions::default(), verbose);
 
         if breakdown {
-            // Collect source files per processor, then count by extension
-            let mut per_processor: BTreeMap<&str, BTreeMap<String, usize>> = BTreeMap::new();
+            // Collect unique source files per processor, then count by extension
+            let mut per_processor_files: BTreeMap<&str, std::collections::HashSet<&std::path::Path>> = BTreeMap::new();
             for product in &products {
-                let ext_counts = per_processor.entry(&product.processor).or_default();
+                let files = per_processor_files.entry(&product.processor).or_default();
                 for input in &product.inputs {
-                    let ext = input.extension()
+                    files.insert(input.as_path());
+                }
+            }
+            let mut per_processor: BTreeMap<&str, BTreeMap<String, usize>> = BTreeMap::new();
+            for (proc_name, files) in &per_processor_files {
+                let ext_counts = per_processor.entry(proc_name).or_default();
+                for path in files {
+                    let ext = path.extension()
                         .and_then(|e| e.to_str())
                         .unwrap_or("(no ext)");
                     *ext_counts.entry(ext.to_string()).or_default() += 1;
