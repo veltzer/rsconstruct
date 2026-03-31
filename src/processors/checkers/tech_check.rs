@@ -26,47 +26,23 @@ impl TechCheckProcessor {
         if terms.is_empty() {
             return Ok(());
         }
-        let sorted_terms = sorted_terms(&terms);
-        let mut errors = Vec::new();
-        let mut all_backticked = HashSet::new();
+        let sorted = sorted_terms(&terms);
+        let mut bad_files = Vec::new();
 
         for file in files {
-            let content = fs::read_to_string(file)?;
-            let unquoted = find_unquoted_terms(&content, &sorted_terms);
-            for (line_num, term) in &unquoted {
-                errors.push(format!(
-                    "{}:{}: tech term `{}` is not backtick-quoted",
-                    file.display(), line_num, term,
-                ));
-            }
-            let backticked = find_backticked_terms(&content);
-            for t in &backticked {
-                let is_known = terms.iter().any(|term| term.eq_ignore_ascii_case(t));
-                if !is_known {
-                    errors.push(format!(
-                        "{}: `{}` is backtick-quoted but not in tech term list",
-                        file.display(), t,
-                    ));
-                }
-            }
-            all_backticked.extend(backticked);
-        }
-
-        // Check for unused terms (terms in the list but never backticked in any file)
-        for term in &terms {
-            let found = all_backticked.iter().any(|b| b.eq_ignore_ascii_case(term));
-            if !found {
-                errors.push(format!(
-                    "tech term `{}` is in {} but never backtick-quoted in any file",
-                    term, self.config.tech_files_dir,
-                ));
+            if check_file(file, &terms, &sorted)? {
+                bad_files.push(file.display().to_string());
             }
         }
 
-        if errors.is_empty() {
+        if bad_files.is_empty() {
             Ok(())
         } else {
-            bail!("Tech check failures:\n{}", errors.join("\n"))
+            bail!(
+                "{} file(s) have tech term issues (run `rsconstruct tech fix` to fix):\n{}",
+                bad_files.len(),
+                bad_files.join("\n"),
+            )
         }
     }
 }
@@ -318,39 +294,6 @@ fn find_term_occurrences(text: &str, term: &str) -> Vec<(usize, usize)> {
 
 // --- Core check/fix logic ---
 
-/// Find unquoted technical terms in a markdown file's content.
-/// Returns (line_number, term) pairs.
-pub fn find_unquoted_terms(content: &str, sorted_terms: &[&str]) -> Vec<(usize, String)> {
-    let fenced = excluded_ranges(content);
-    let backtick_spans = backtick_span_ranges(content, &fenced);
-    // Track which byte positions are already claimed by a longer term match
-    let mut claimed = Vec::new();
-    let mut results = Vec::new();
-
-    for &term in sorted_terms {
-        for (start, end) in find_term_occurrences(content, term) {
-            // Skip if inside fenced code block
-            if inside_ranges(start, end, &fenced) {
-                continue;
-            }
-            // Skip if inside a backtick span
-            if inside_ranges(start, end, &backtick_spans) {
-                continue;
-            }
-            // Skip if overlapping with an already-claimed longer term
-            if claimed.iter().any(|&(cs, ce): &(usize, usize)| {
-                start < ce && end > cs
-            }) {
-                continue;
-            }
-            claimed.push((start, end));
-            let line_num = content[..start].matches('\n').count() + 1;
-            results.push((line_num, term.to_string()));
-        }
-    }
-    results
-}
-
 /// Split a backticked string into individual terms.
 /// Handles comma-separated lists like "sed, awk" and word separators "and"/"or".
 fn split_backticked(inner: &str) -> Vec<String> {
@@ -379,25 +322,6 @@ fn looks_like_term_reference(inner: &str) -> bool {
         }
     }
     true
-}
-
-/// Extract all backtick-quoted terms from a markdown file's content,
-/// excluding content inside fenced code blocks.
-/// Handles grouped terms like `sed, awk` by splitting them.
-pub fn find_backticked_terms(content: &str) -> HashSet<String> {
-    let fenced = excluded_ranges(content);
-    let spans = backtick_span_ranges(content, &fenced);
-    let mut terms = HashSet::new();
-    for (start, end) in &spans {
-        let inner = &content[start + 1..end - 1];
-        if !looks_like_term_reference(inner) {
-            continue;
-        }
-        for term in split_backticked(inner) {
-            terms.insert(term);
-        }
-    }
-    terms
 }
 
 /// Find unquoted term positions (byte offsets) for the fix command.
@@ -460,21 +384,18 @@ fn apply_edits(content: &str, edits: &mut Vec<(usize, usize, String)>) -> String
     result
 }
 
-/// Auto-fix a single markdown file: add backticks to unquoted tech terms,
-/// remove backticks from non-tech backticked terms.
-/// Returns true if the file was modified.
-pub fn fix_file(path: &Path, terms: &HashSet<String>, sorted_terms: &[&str]) -> Result<bool> {
-    let original = fs::read_to_string(path)?;
-
+/// Apply tech term fixes to content: remove non-tech backticks, then add missing backticks.
+/// Returns the fixed content.
+fn fix_content(original: &str, terms: &HashSet<String>, sorted_terms: &[&str]) -> String {
     // Step 1: remove backticks from non-tech terms (e.g. `CI`/`CD` → CI/CD)
-    let mut removals: Vec<(usize, usize, String)> = find_non_tech_backticked_positions(&original, terms)
+    let mut removals: Vec<(usize, usize, String)> = find_non_tech_backticked_positions(original, terms)
         .into_iter()
         .map(|(s, e)| (s, e, original[s + 1..e - 1].to_string()))
         .collect();
     let cleaned = if removals.is_empty() {
-        original.clone()
+        original.to_string()
     } else {
-        apply_edits(&original, &mut removals)
+        apply_edits(original, &mut removals)
     };
 
     // Step 2: add backticks to unquoted terms (on the cleaned text, so CI/CD is now found)
@@ -482,14 +403,26 @@ pub fn fix_file(path: &Path, terms: &HashSet<String>, sorted_terms: &[&str]) -> 
         .into_iter()
         .map(|(s, e, m)| (s, e, format!("`{}`", m)))
         .collect();
-    let result = if additions.is_empty() {
+    if additions.is_empty() {
         cleaned
     } else {
         apply_edits(&cleaned, &mut additions)
-    };
+    }
+}
 
-    if result != original {
-        fs::write(path, &result)?;
+/// Check if a file would be changed by `tech fix`. Returns true if it needs fixing.
+fn check_file(path: &Path, terms: &HashSet<String>, sorted_terms: &[&str]) -> Result<bool> {
+    let original = fs::read_to_string(path)?;
+    let fixed = fix_content(&original, terms, sorted_terms);
+    Ok(fixed != original)
+}
+
+/// Auto-fix a single markdown file. Returns true if the file was modified.
+pub fn fix_file(path: &Path, terms: &HashSet<String>, sorted_terms: &[&str]) -> Result<bool> {
+    let original = fs::read_to_string(path)?;
+    let fixed = fix_content(&original, terms, sorted_terms);
+    if fixed != original {
+        fs::write(path, &fixed)?;
         Ok(true)
     } else {
         Ok(false)
