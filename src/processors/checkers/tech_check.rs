@@ -320,7 +320,11 @@ pub fn find_backticked_terms(content: &str) -> HashSet<String> {
             continue;
         }
         // Extract the content between backticks and split grouped terms
+        // Skip anything that looks like inline code rather than a term reference
         let inner = &content[start + 1..end - 1];
+        if !looks_like_term_reference(inner) {
+            continue;
+        }
         for term in split_backticked(inner) {
             terms.insert(term);
         }
@@ -347,8 +351,28 @@ fn find_unquoted_positions(content: &str, pattern: &Regex) -> Vec<(usize, usize,
     results
 }
 
+/// Check if a backticked string looks like a term reference (not arbitrary inline code).
+/// Code snippets like `ls -la`, `pip install foo`, `x = 5` should keep their backticks.
+fn looks_like_term_reference(inner: &str) -> bool {
+    let parts = split_backticked(inner);
+    // Must have at least one part
+    if parts.is_empty() {
+        return false;
+    }
+    // Each part should look like a plausible term name:
+    // no shell/code characters that indicate it's a code snippet
+    let code_chars = ['(', ')', '{', '}', '[', ']', ';', '=', '>', '<', '|', '\\', '"', '\''];
+    for part in &parts {
+        if part.contains(' ') || part.chars().any(|c| code_chars.contains(&c)) {
+            return false;
+        }
+    }
+    true
+}
+
 /// Find backtick-quoted terms that are NOT in the tech term list.
 /// Returns (start, end) byte positions of the full `term` span (including backticks).
+/// Only considers spans that look like term references, not arbitrary inline code.
 fn find_non_tech_backticked_positions(content: &str, terms: &HashSet<String>) -> Vec<(usize, usize)> {
     let fenced = fenced_code_ranges(content);
     let backtick_re = Regex::new(r"`([^`]+)`").expect("backtick regex");
@@ -367,6 +391,10 @@ fn find_non_tech_backticked_positions(content: &str, terms: &HashSet<String>) ->
             continue;
         }
         let inner = &content[start + 1..end - 1];
+        // Skip anything that looks like inline code rather than a term reference
+        if !looks_like_term_reference(inner) {
+            continue;
+        }
         // Split grouped terms and check each part
         let parts = split_backticked(inner);
         let all_non_tech = parts.iter().all(|p| {
