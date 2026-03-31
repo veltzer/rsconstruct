@@ -845,7 +845,20 @@ fn validate_processor_fields(raw: &toml::Value) -> Result<()> {
         };
 
         if !is_builtin_type(name) {
-            continue; // Lua plugin, skip
+            // Check if there's a matching Lua plugin file
+            let plugins_dir = raw.get("plugins")
+                .and_then(|p| p.get("dir"))
+                .and_then(|d| d.as_str())
+                .unwrap_or(DEFAULT_PLUGINS_DIR);
+            let plugin_path = std::path::Path::new(plugins_dir)
+                .join(format!("{}.lua", name));
+            if !plugin_path.exists() {
+                errors.push(format!(
+                    "[processor.{}]: unknown processor type '{}' (not a builtin processor or Lua plugin at {})",
+                    name, name, plugin_path.display(),
+                ));
+            }
+            continue;
         }
 
         // Check if multi-instance

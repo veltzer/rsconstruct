@@ -211,9 +211,8 @@ fn config_validate_unknown_processor() {
 
     let output = run_rsconstruct_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
     assert!(!output.status.success(), "Expected config validate to fail for unknown processor");
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("nonexistent_proc"), "Expected error about unknown processor, got: {}", stdout);
-    assert!(stdout.contains("ERROR"), "Expected ERROR label, got: {}", stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("nonexistent_proc"), "Expected error about unknown processor, got: {}", stderr);
 }
 
 #[test]
