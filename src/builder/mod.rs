@@ -106,17 +106,8 @@ macro_rules! gen_processor_dispatch {
             processors
         }
     };
-    // SpellcheckProcessor has fallible new()
-    (@construct SpellcheckProcessor, $cfg:ident) => {
-        Ok(Some(Box::new(proc_mod::SpellcheckProcessor::new($cfg)?)))
-    };
     (@construct $proc_type:ident, $cfg:ident) => {
         Ok(Some(Box::new(proc_mod::$proc_type::new($cfg))))
-    };
-    // Default registration: skip SpellcheckProcessor (fallible)
-    (@register_default $processors:ident, SPELLCHECK, $field:ident, $config_type:ty, $proc_type:ident,
-     $scan_dir:expr, $exts:expr, $excl:expr) => {
-        // Skip: SpellcheckProcessor::new() is fallible
     };
     (@register_default $processors:ident, $const_name:ident, $field:ident, $config_type:ty, $proc_type:ident,
      $scan_dir:expr, $exts:expr, $excl:expr) => {

@@ -22,11 +22,10 @@ pub struct SpellcheckProcessor {
 }
 
 impl SpellcheckProcessor {
-    pub fn new(config: SpellcheckConfig) -> Result<Self> {
+    pub fn new(config: SpellcheckConfig) -> Self {
         let words_path = Path::new(&config.words_file);
         let custom_words = if words_path.exists() {
-            Self::load_custom_words(words_path)
-                .with_context(|| format!("Failed to load custom words file: {}", words_path.display()))?
+            Self::load_custom_words(words_path).unwrap_or_default()
         } else {
             HashSet::new()
         };
@@ -35,11 +34,11 @@ impl SpellcheckProcessor {
             config.words_file.clone(),
             None,
         );
-        Ok(Self {
+        Self {
             config,
             cached_dict: OnceLock::new(),
             words,
-        })
+        }
     }
 
     /// Load custom words from the words file
