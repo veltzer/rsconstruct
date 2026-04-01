@@ -1499,7 +1499,7 @@ pub(crate) fn load_tags_dir(dir: &Path) -> Result<HashSet<String>> {
 
     if !duplicates.is_empty() {
         duplicates.sort();
-        let mut msg = String::from("Duplicate tags found across tag_lists files:\n");
+        let mut msg = String::from("Duplicate tags found across tags files:\n");
         for (tag, file1, file2) in &duplicates {
             msg.push_str(&format!("  {} in {} and {}\n", tag, file1, file2));
         }
