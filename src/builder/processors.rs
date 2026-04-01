@@ -7,7 +7,7 @@ use super::{Builder, create_all_default_processors, sorted_keys};
 
 /// List all built-in processors (works without rsconstruct.toml).
 /// Used when no project config is available.
-pub fn list_processors_no_config() -> Result<()> {
+pub fn list_processors_no_config(verbose: bool) -> Result<()> {
     let processors = create_all_default_processors();
     let proc_names = sorted_keys(&processors);
 
@@ -33,12 +33,13 @@ pub fn list_processors_no_config() -> Result<()> {
         let proc = &processors[name.as_str()];
         let type_str = format!("[{}]", proc.processor_type().as_str());
         let proc_type = color::dim(&type_str);
-        let batch = if proc.supports_batch() {
-            format!(" {}", color::dim("[batch]"))
+        let mode = if verbose {
+            let tag = if proc.supports_batch() { "batch" } else { "single" };
+            format!(" {}", color::dim(&format!("[{}]", tag)))
         } else {
             String::new()
         };
-        println!("{} {}{} \u{2014} {}", name, proc_type, batch, color::dim(proc.description()));
+        println!("{} {}{} \u{2014} {}", name, proc_type, mode, color::dim(proc.description()));
     }
 
     Ok(())
@@ -77,7 +78,7 @@ pub fn processor_defconfig(name: &str) -> Result<()> {
 
 impl Builder {
     /// Handle `rsconstruct processor` subcommands
-    pub fn processor(&self, action: ProcessorAction) -> Result<()> {
+    pub fn processor(&self, action: ProcessorAction, verbose: bool) -> Result<()> {
         let processors = self.create_processors()?;
 
         let proc_names = sorted_keys(&processors);
@@ -106,12 +107,13 @@ impl Builder {
                     let proc = &processors[name.as_str()];
                     let type_str = format!("[{}]", proc.processor_type().as_str());
                     let proc_type = color::dim(&type_str);
-                    let batch = if proc.supports_batch() {
-                        format!(" {}", color::dim("[batch]"))
+                    let mode = if verbose {
+                        let tag = if proc.supports_batch() { "batch" } else { "single" };
+                        format!(" {}", color::dim(&format!("[{}]", tag)))
                     } else {
                         String::new()
                     };
-                    println!("{} {}{} \u{2014} {}", name, proc_type, batch, color::dim(proc.description()));
+                    println!("{} {}{} \u{2014} {}", name, proc_type, mode, color::dim(proc.description()));
                 }
             }
             ProcessorAction::Config { ref name, diff } => {

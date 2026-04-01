@@ -281,23 +281,23 @@ fn run() -> Result<()> {
             match action {
                 cli::ProcessorAction::List { all } => {
                     if all || !has_config {
-                        builder::processors::list_processors_no_config()?;
+                        builder::processors::list_processors_no_config(cli.verbose)?;
                     } else {
                         let builder = Builder::new()?;
-                        builder.processor(cli::ProcessorAction::List { all: false })?;
+                        builder.processor(cli::ProcessorAction::List { all: false }, cli.verbose)?;
                     }
                 }
                 cli::ProcessorAction::Defconfig { ref name } => {
                     if has_config {
                         let builder = Builder::new()?;
-                        builder.processor(action)?;
+                        builder.processor(action, cli.verbose)?;
                     } else {
                         builder::processors::processor_defconfig(name)?;
                     }
                 }
                 action => {
                     let builder = Builder::new()?;
-                    builder.processor(action)?;
+                    builder.processor(action, cli.verbose)?;
                 }
             }
         }
