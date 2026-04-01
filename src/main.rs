@@ -361,8 +361,11 @@ fn run() -> Result<()> {
                 .unwrap_or_default();
             terms_config.scan.resolve("", &[".md"], config::MARKDOWN_EXCLUDE_DIRS);
             match action {
-                cli::TermsAction::Fix => {
-                    processors::terms::fix_all(&terms_config)?;
+                cli::TermsAction::Fix { remove_non_terms } => {
+                    processors::terms::fix_all(&terms_config, remove_non_terms)?;
+                }
+                cli::TermsAction::Merge { path } => {
+                    processors::terms::merge_terms(&terms_config, &path)?;
                 }
             }
         }

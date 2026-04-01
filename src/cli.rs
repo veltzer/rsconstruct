@@ -502,8 +502,17 @@ pub enum DepsShowFilter {
 
 #[derive(Subcommand)]
 pub enum TermsAction {
-    /// Auto-fix: add backticks to terms, remove backticks from non-terms
-    Fix,
+    /// Auto-fix: add backticks to terms (optionally remove backticks from non-terms)
+    Fix {
+        /// Also remove backticks from non-terms
+        #[arg(long, default_value_t = false)]
+        remove_non_terms: bool,
+    },
+    /// Merge terms from another project's terms directory into the current one
+    Merge {
+        /// Path to the other project's terms directory
+        path: String,
+    },
 }
 
 #[derive(Subcommand)]

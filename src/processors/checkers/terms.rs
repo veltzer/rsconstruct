@@ -404,18 +404,23 @@ fn apply_edits(content: &str, edits: &mut Vec<(usize, usize, String)>) -> String
     result
 }
 
-/// Apply term fixes to content: remove non-tech backticks, then add missing backticks.
+/// Apply term fixes to content: optionally remove non-tech backticks, then add missing backticks.
+/// When `remove_non_terms` is true, backticks around non-terms are removed first.
 /// Returns the fixed content.
-fn fix_content(original: &str, terms: &HashSet<String>, sorted_terms: &[&str]) -> String {
-    // Step 1: remove backticks from non-terms (e.g. `CI`/`CD` → CI/CD)
-    let mut removals: Vec<(usize, usize, String)> = find_non_tech_backticked_positions(original, terms)
-        .into_iter()
-        .map(|(s, e)| (s, e, original[s + 1..e - 1].to_string()))
-        .collect();
-    let cleaned = if removals.is_empty() {
-        original.to_string()
+fn fix_content(original: &str, terms: &HashSet<String>, sorted_terms: &[&str], remove_non_terms: bool) -> String {
+    // Step 1: optionally remove backticks from non-terms (e.g. `CI`/`CD` → CI/CD)
+    let cleaned = if remove_non_terms {
+        let mut removals: Vec<(usize, usize, String)> = find_non_tech_backticked_positions(original, terms)
+            .into_iter()
+            .map(|(s, e)| (s, e, original[s + 1..e - 1].to_string()))
+            .collect();
+        if removals.is_empty() {
+            original.to_string()
+        } else {
+            apply_edits(original, &mut removals)
+        }
     } else {
-        apply_edits(original, &mut removals)
+        original.to_string()
     };
 
     // Step 2: add backticks to unquoted terms (on the cleaned text, so CI/CD is now found)
@@ -433,14 +438,14 @@ fn fix_content(original: &str, terms: &HashSet<String>, sorted_terms: &[&str]) -
 /// Check if a file would be changed by `tech fix`. Returns true if it needs fixing.
 fn check_file(path: &Path, terms: &HashSet<String>, sorted_terms: &[&str]) -> Result<bool> {
     let original = fs::read_to_string(path)?;
-    let fixed = fix_content(&original, terms, sorted_terms);
+    let fixed = fix_content(&original, terms, sorted_terms, false);
     Ok(fixed != original)
 }
 
 /// Auto-fix a single markdown file. Returns true if the file was modified.
-pub fn fix_file(path: &Path, terms: &HashSet<String>, sorted_terms: &[&str]) -> Result<bool> {
+pub fn fix_file(path: &Path, terms: &HashSet<String>, sorted_terms: &[&str], remove_non_terms: bool) -> Result<bool> {
     let original = fs::read_to_string(path)?;
-    let fixed = fix_content(&original, terms, sorted_terms);
+    let fixed = fix_content(&original, terms, sorted_terms, remove_non_terms);
     if fixed != original {
         fs::write(path, &fixed)?;
         Ok(true)
@@ -451,7 +456,7 @@ pub fn fix_file(path: &Path, terms: &HashSet<String>, sorted_terms: &[&str]) -> 
 
 /// Fix all markdown files: called by `rsconstruct terms fix`.
 /// Uses the same scan config as the terms processor to find files.
-pub fn fix_all(config: &TermsConfig) -> Result<()> {
+pub fn fix_all(config: &TermsConfig, remove_non_terms: bool) -> Result<()> {
     let terms = load_terms(&config.terms_dir)?;
     if terms.is_empty() {
         println!("No technical terms found in {}", config.terms_dir);
@@ -471,12 +476,75 @@ pub fn fix_all(config: &TermsConfig) -> Result<()> {
 
     let mut modified_count = 0;
     for file in &md_files {
-        if fix_file(file, &terms, &sorted)? {
+        if fix_file(file, &terms, &sorted, remove_non_terms)? {
             modified_count += 1;
             println!("  Fixed: {}", file.display());
         }
     }
 
     println!("Done. Modified {} of {} files.", modified_count, md_files.len());
+    Ok(())
+}
+
+/// Merge terms from another project's terms directory into the current one.
+/// For each .txt file in `source_dir`:
+///   - If a file with the same name exists in `terms_dir`, merge (union) and sort the terms.
+///   - Otherwise, copy the file as-is.
+pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
+    let src = Path::new(source_dir);
+    if !src.is_dir() {
+        bail!("Source directory `{}` does not exist or is not a directory", source_dir);
+    }
+    let dest = Path::new(&config.terms_dir);
+    if !dest.is_dir() {
+        bail!("Terms directory `{}` does not exist or is not a directory", config.terms_dir);
+    }
+
+    let mut merged_count = 0;
+    let mut copied_count = 0;
+
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().is_none_or(|e| e != "txt") {
+            continue;
+        }
+        let filename = path.file_name().unwrap();
+        let dest_path = dest.join(filename);
+
+        let source_content = fs::read_to_string(&path)?;
+        let source_terms: HashSet<String> = source_content
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect();
+
+        if dest_path.exists() {
+            let dest_content = fs::read_to_string(&dest_path)?;
+            let mut all_terms: HashSet<String> = dest_content
+                .lines()
+                .map(|l| l.trim().to_string())
+                .filter(|l| !l.is_empty())
+                .collect();
+            let before = all_terms.len();
+            all_terms.extend(source_terms);
+            let added = all_terms.len() - before;
+            if added > 0 {
+                let mut sorted: Vec<String> = all_terms.into_iter().collect();
+                sorted.sort();
+                fs::write(&dest_path, sorted.join("\n") + "\n")?;
+                merged_count += 1;
+                println!("  Merged: {} ({} new terms)", filename.to_string_lossy(), added);
+            }
+        } else {
+            let mut sorted: Vec<String> = source_terms.into_iter().collect();
+            sorted.sort();
+            fs::write(&dest_path, sorted.join("\n") + "\n")?;
+            copied_count += 1;
+            println!("  Copied: {}", filename.to_string_lossy());
+        }
+    }
+
+    println!("Done. Merged {} file(s), copied {} new file(s).", merged_count, copied_count);
     Ok(())
 }
