@@ -277,7 +277,7 @@ fn tags_validate_standalone() {
     build_project(p);
 
     // Now update tag_lists to not include "dockker" but include "docker"
-    fs::write(p.join("tag_lists/tools.txt"), "python\ndocker\n").unwrap();
+    fs::write(p.join("tags/tools.txt"), "python\ndocker\n").unwrap();
 
     // validate should fail and suggest the correct tag
     let validate = run_rsconstruct_with_env(p, &["tags", "validate"], &[("NO_COLOR", "1")]);
@@ -381,7 +381,7 @@ fn tags_stale_entries_cleared_on_rebuild() {
 
     // Remove "beta" tag from the file and tag_lists, then force rebuild
     fs::write(p.join("a.md"), "---\ntags:\n  - tools:alpha\n---\n").unwrap();
-    fs::write(p.join("tag_lists/tools.txt"), "alpha\n").unwrap();
+    fs::write(p.join("tags/tools.txt"), "alpha\n").unwrap();
     let rebuild = run_rsconstruct_with_env(p, &["build", "--force"], &[("NO_COLOR", "1")]);
     assert!(rebuild.status.success(), "rebuild failed: {}", String::from_utf8_lossy(&rebuild.stderr));
 
