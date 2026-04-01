@@ -556,27 +556,31 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
 
         if dest_path.exists() {
             let dest_content = fs::read_to_string(&dest_path)?;
-            let mut all_terms: HashSet<String> = dest_content
+            let dest_terms: HashSet<String> = dest_content
                 .lines()
                 .map(|l| l.trim().to_string())
                 .filter(|l| !l.is_empty())
                 .collect();
-            let before = all_terms.len();
-            all_terms.extend(source_terms);
-            let added = all_terms.len() - before;
-            if added > 0 {
+            let mut all_terms = dest_terms.clone();
+            all_terms.extend(source_terms.clone());
+            if all_terms.len() > dest_terms.len() || all_terms.len() > source_terms.len() {
                 let mut sorted: Vec<String> = all_terms.into_iter().collect();
                 sorted.sort();
-                fs::write(&dest_path, sorted.join("\n") + "\n")?;
+                let content = sorted.join("\n") + "\n";
+                fs::write(&dest_path, &content)?;
+                fs::write(&path, &content)?;
                 merged_count += 1;
-                println!("  Merged: {} ({} new terms)", filename.to_string_lossy(), added);
+                let added_to_dest = sorted.len() - dest_terms.len();
+                let added_to_src = sorted.len() - source_terms.len();
+                println!("  Merged: {} (+{} to dest, +{} to source)",
+                    filename.to_string_lossy(), added_to_dest, added_to_src);
             }
         } else {
             let mut sorted: Vec<String> = source_terms.into_iter().collect();
             sorted.sort();
             fs::write(&dest_path, sorted.join("\n") + "\n")?;
             copied_count += 1;
-            println!("  Copied: {}", filename.to_string_lossy());
+            println!("  Copied to dest: {}", filename.to_string_lossy());
         }
     }
 
