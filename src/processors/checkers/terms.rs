@@ -563,10 +563,10 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
                 .collect();
             let mut all_terms = dest_terms.clone();
             all_terms.extend(source_terms.clone());
-            if all_terms.len() > dest_terms.len() || all_terms.len() > source_terms.len() {
-                let mut sorted: Vec<String> = all_terms.into_iter().collect();
-                sorted.sort();
-                let content = sorted.join("\n") + "\n";
+            let mut sorted: Vec<String> = all_terms.into_iter().collect();
+            sorted.sort();
+            let content = sorted.join("\n") + "\n";
+            if content != source_content || content != dest_content {
                 fs::write(&dest_path, &content)?;
                 fs::write(&path, &content)?;
                 merged_count += 1;
