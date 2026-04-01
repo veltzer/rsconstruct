@@ -354,6 +354,81 @@ Grades:
 - `rsconstruct build --verify` mode that builds each product twice and compares outputs.
 - **Urgency**: low | **Complexity**: medium
 
+## CI & Reporting
+
+### CI config generator
+- `rsconstruct ci generate` outputs a GitHub Actions or GitLab CI config that runs the build.
+- Detects enabled processors and required tools, generates install steps and build commands.
+- Supports `--format=github|gitlab|circleci`.
+- **Urgency**: medium | **Complexity**: medium
+
+### HTML build report
+- Generate a visual HTML dashboard of build times, cache hit rates, and processor statistics.
+- `rsconstruct build --report=build.html` or `rsconstruct report`.
+- Include charts for timing trends, per-processor breakdown, cache efficiency.
+- **Urgency**: low | **Complexity**: medium
+
+### PR comment bot
+- Post build results (pass/fail, timing, warnings) as a GitHub PR comment.
+- `rsconstruct ci comment` reads build output and posts via GitHub API.
+- **Urgency**: low | **Complexity**: medium
+
+## Content & Documentation
+
+### `rsconstruct init --detect`
+- Scan the project and generate a complete `rsconstruct.toml` with all detected processors enabled and configured.
+- Goes beyond `smart auto` by also setting processor-specific config (scan_dir, extensions, tool paths).
+- **Urgency**: medium | **Complexity**: medium
+
+### `rsconstruct fmt`  — Auto-format rsconstruct.toml
+- Sort `[processor.*]` sections alphabetically, align values, remove redundant defaults.
+- Distinct from the existing `rsconstruct fmt` suggestion about formatting source files.
+- **Urgency**: low | **Complexity**: low
+
+### Cross-project term sync
+- Automatically keep terms directories in sync across multiple repos.
+- Could run as a daemon or a periodic CI job.
+- `rsconstruct terms sync --repos=repo1,repo2` or config-driven.
+- **Urgency**: low | **Complexity**: medium
+
+### Glossary generator
+- `rsconstruct terms glossary` generates a markdown glossary from the terms directory.
+- Optionally pulls definitions from context in the markdown files where terms are used.
+- **Urgency**: low | **Complexity**: medium
+
+### Link checker processor
+- Validate that URLs in markdown files are not broken (HTTP HEAD requests).
+- Configurable timeout, retry, and allow/blocklist patterns.
+- Cache results to avoid re-checking unchanged URLs.
+- **Urgency**: medium | **Complexity**: medium
+
+### Image optimizer processor
+- Compress and resize images referenced in markdown files.
+- Uses tools like `optipng`, `jpegoptim`, `svgo`.
+- Config: quality levels, max dimensions, output format.
+- **Urgency**: low | **Complexity**: medium
+
+### HTML+JS compression and packaging
+- Minify and bundle HTML, CSS, and JavaScript files for deployment.
+- Could use tools like `terser` (JS), `csso` (CSS), `html-minifier` (HTML).
+- Bundle multiple JS/CSS files into single outputs, generate source maps.
+- Integrate with existing eslint/stylelint processors for a full web frontend pipeline.
+- **Urgency**: medium | **Complexity**: medium
+
+## Processor Ecosystem
+
+### WASM processor plugins
+- Beyond Lua, allow processors written in any language compiled to WebAssembly.
+- Provides sandboxing, portability, and language flexibility.
+- WASI for filesystem access within the sandbox.
+- **Urgency**: low | **Complexity**: high
+
+### Processor marketplace / registry
+- A central repository of community-contributed processor configs and Lua plugins.
+- Install with `rsconstruct plugin install prettier`.
+- Registry as a GitHub repository with a JSON index. Version pinning in `rsconstruct.toml`.
+- **Urgency**: low | **Complexity**: high
+
 ## Security
 
 ### Shell command execution from source file comments
