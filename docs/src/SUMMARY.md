@@ -28,6 +28,7 @@
     - [Drawio](processors/drawio.md)
     - [ESLint](processors/eslint.md)
     - [Gem](processors/gem.md)
+    - [Generator](processors/generator.md)
     - [Hadolint](processors/hadolint.md)
     - [HTMLHint](processors/htmlhint.md)
     - [HTMLLint](processors/htmllint.md)

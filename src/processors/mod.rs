@@ -683,9 +683,6 @@ where
 /// Passes (input, output) path pairs to `batch_fn`. On success, returns Ok for all products.
 /// On failure, the batch error is returned for all products.
 ///
-/// No built-in generator currently uses this, but it's available for custom generators
-/// (e.g., a script that takes multiple input/output pairs on the command line).
-#[allow(dead_code)]
 pub(crate) fn execute_generator_batch<F>(
     products: &[&Product],
     batch_fn: F,
@@ -719,7 +716,7 @@ pub use checkers::{
     StandardProcessor, StylelintProcessor,
     TaploProcessor, TermsProcessor, TidyProcessor, XmllintProcessor, YamllintProcessor, YqProcessor,
 };
-pub use generators::{A2xProcessor, CcSingleFileProcessor, ChromiumProcessor, DrawioProcessor, LibreofficeProcessor, LinuxModuleProcessor, MakoProcessor, MarpProcessor, MarkdownProcessor, MermaidProcessor, ObjdumpProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, TagsProcessor, TeraProcessor};
+pub use generators::{A2xProcessor, CcSingleFileProcessor, ChromiumProcessor, DrawioProcessor, GeneratorProcessor, LibreofficeProcessor, LinuxModuleProcessor, MakoProcessor, MarpProcessor, MarkdownProcessor, MermaidProcessor, ObjdumpProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, TagsProcessor, TeraProcessor};
 pub use mass_generators::{CargoProcessor, CcProcessor, GemProcessor, JekyllProcessor, MdbookProcessor, NpmProcessor, PipProcessor, SphinxProcessor};
 pub(crate) use generators::tags as tags_cmd;
 pub(crate) use checkers::terms;

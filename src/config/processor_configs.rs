@@ -1122,6 +1122,68 @@ impl KnownFields for ScriptConfig {
     }
 }
 
+fn default_generator_command() -> String {
+    "true".into()
+}
+
+fn default_generator_output_dir() -> String {
+    "out/generator".into()
+}
+
+fn default_generator_output_extension() -> String {
+    "out".into()
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct GeneratorConfig {
+    #[serde(default = "default_generator_command")]
+    pub command: String,
+    #[serde(default = "default_generator_output_dir")]
+    pub output_dir: String,
+    #[serde(default = "default_generator_output_extension")]
+    pub output_extension: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(default)]
+    pub auto_inputs: Vec<String>,
+    #[serde(default = "default_true")]
+    pub batch: bool,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for GeneratorConfig {
+    fn default() -> Self {
+        Self {
+            command: "true".into(),
+            output_dir: "out/generator".into(),
+            output_extension: "out".into(),
+            args: Vec::new(),
+            extra_inputs: Vec::new(),
+            auto_inputs: Vec::new(),
+            batch: true,
+            scan: ScanConfig {
+                scan_dirs: None,
+                extensions: None,
+                exclude_dirs: None,
+                exclude_files: None,
+                exclude_paths: None,
+            },
+        }
+    }
+}
+
+impl KnownFields for GeneratorConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "command", "output_dir", "output_extension", "args",
+            "extra_inputs", "auto_inputs", "batch",
+        ]
+    }
+}
+
 fn default_pip() -> String {
     "pip".into()
 }
