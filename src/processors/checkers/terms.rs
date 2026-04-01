@@ -100,30 +100,52 @@ impl crate::processors::ProductDiscovery for TermsProcessor {
     }
 }
 
-// --- Shared logic used by both the processor and the `tech fix` command ---
+// --- Shared logic used by both the processor and the `rsconstruct terms fix` command ---
 
 /// Load all technical terms from .txt files in the given directory.
-/// Each file has one term per line.
+/// Each file has one term per line. Errors if any term appears more than once
+/// (within the same file or across files).
 pub fn load_terms(terms_dir: &str) -> Result<HashSet<String>> {
     let dir = Path::new(terms_dir);
     if !dir.is_dir() {
         bail!("terms_dir `{}` does not exist or is not a directory", terms_dir);
     }
-    let mut terms = HashSet::new();
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
+    // Map each term to (file, line_number) where it first appeared
+    let mut seen: std::collections::HashMap<String, (String, usize)> = std::collections::HashMap::new();
+    let mut duplicates = Vec::new();
+
+    let mut entries: Vec<_> = fs::read_dir(dir)?
+        .filter_map(|e| e.ok())
+        .collect();
+    entries.sort_by_key(|e| e.path());
+
+    for entry in &entries {
         let path = entry.path();
         if path.extension().is_some_and(|e| e == "txt") {
+            let filename = path.file_name().unwrap().to_string_lossy().to_string();
             let content = fs::read_to_string(&path)?;
-            for line in content.lines() {
-                let line = line.trim();
-                if !line.is_empty() {
-                    terms.insert(line.to_string());
+            for (line_idx, line) in content.lines().enumerate() {
+                let term = line.trim();
+                if term.is_empty() {
+                    continue;
+                }
+                if let Some((prev_file, prev_line)) = seen.get(term) {
+                    duplicates.push(format!(
+                        "  `{}` in {}:{} (first seen in {}:{})",
+                        term, filename, line_idx + 1, prev_file, prev_line,
+                    ));
+                } else {
+                    seen.insert(term.to_string(), (filename.clone(), line_idx + 1));
                 }
             }
         }
     }
-    Ok(terms)
+
+    if !duplicates.is_empty() {
+        bail!("Duplicate terms in {}:\n{}", terms_dir, duplicates.join("\n"));
+    }
+
+    Ok(seen.into_keys().collect())
 }
 
 /// Sort terms longest-first for greedy matching (so "Android Studio" matches before "Android").
@@ -448,7 +470,7 @@ fn fix_content(original: &str, terms: &HashSet<String>, sorted_terms: &[&str], r
     }
 }
 
-/// Check if a file would be changed by `tech fix`. Returns true if it needs fixing.
+/// Check if a file would be changed by `terms fix`. Returns true if it needs fixing.
 fn check_file(path: &Path, terms: &HashSet<String>, sorted_terms: &[&str]) -> Result<bool> {
     let original = fs::read_to_string(path)?;
     let fixed = fix_content(&original, terms, sorted_terms, false);

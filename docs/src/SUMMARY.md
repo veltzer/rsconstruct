@@ -69,6 +69,7 @@
     - [Standard](processors/standard.md)
     - [Stylelint](processors/stylelint.md)
     - [Tags](processors/tags.md)
+    - [Terms](processors/terms.md)
     - [Taplo](processors/taplo.md)
     - [Tera](processors/tera.md)
     - [Tidy](processors/tidy.md)

@@ -66,6 +66,7 @@ Use `rsconstruct processors files` to see which files each processor discovers.
 - [Jq](processors/jq.md) — validates JSON files with jq
 - [Jsonlint](processors/jsonlint.md) — lints JSON files with jsonlint
 - [Taplo](processors/taplo.md) — checks TOML files with taplo
+- [Terms](processors/terms.md) — checks that technical terms are backtick-quoted in Markdown files
 - [Json Schema](processors/json_schema.md) — validates JSON schema propertyOrdering
 
 ## Output Directory Caching

@@ -308,6 +308,27 @@ rsconstruct complete zsh     # Generate zsh completions
 rsconstruct complete fish    # Generate fish completions
 ```
 
+## `rsconstruct terms`
+
+Manage term checking and fixing in markdown files.
+
+### `rsconstruct terms fix`
+
+Add backticks around terms from the terms directory that appear unquoted in markdown files.
+
+```bash
+rsconstruct terms fix
+rsconstruct terms fix --remove-non-terms   # also remove backticks from non-terms
+```
+
+### `rsconstruct terms merge`
+
+Merge terms from another project's terms directory. Unions matching files and copies missing files in both directions.
+
+```bash
+rsconstruct terms merge ../other-project/terms
+```
+
 ## `rsconstruct version`
 
 Print version information.
