@@ -424,6 +424,12 @@ checker_config!(RuffConfig, extensions: [".py"], linter: "ruff", auto_inputs: ["
 
 checker_config!(PylintConfig, extensions: [".py"], auto_inputs: [".pylintrc"]);
 
+checker_config!(PytestConfig, extensions: [".py"], auto_inputs: ["conftest.py", "pytest.ini", "pyproject.toml"]);
+
+checker_config!(BlackCheckConfig, extensions: [".py"], auto_inputs: ["pyproject.toml"]);
+
+checker_config!(DoctestConfig, extensions: [".py"]);
+
 fn default_cppcheck_args() -> Vec<String> {
     vec![
         "--error-exitcode=1".into(),
@@ -1879,6 +1885,16 @@ generator_config!(DrawioConfig, tool: "drawio", drawio_bin,
 generator_config!(LibreofficeConfig, tool: "libreoffice", libreoffice_bin,
     formats: ["pdf"], output_dir: "out/libreoffice",
     default_scan!(extensions: [".odp"]),
+);
+
+generator_config!(ProtobufConfig, tool: "protoc", protoc_bin,
+    output_dir: "out/protobuf",
+    default_scan!(scan_dir: "proto", extensions: [".proto"]),
+);
+
+generator_config!(SassConfig, tool: "sass", sass_bin,
+    output_dir: "out/sass",
+    default_scan!(scan_dir: "sass", extensions: [".scss", ".sass"]),
 );
 
 fn default_pdfunite_bin() -> String {

@@ -166,6 +166,8 @@ mod objdump;
 mod pandoc;
 mod pdflatex;
 mod pdfunite;
+mod protobuf;
+mod sass;
 pub mod tags;
 mod tera;
 
@@ -185,6 +187,8 @@ pub use objdump::ObjdumpProcessor;
 pub use pandoc::PandocProcessor;
 pub use pdflatex::PdflatexProcessor;
 pub use pdfunite::PdfuniteProcessor;
+pub use protobuf::ProtobufProcessor;
+pub use sass::SassProcessor;
 pub use tags::TagsProcessor;
 pub use tera::TeraProcessor;
 

@@ -19,6 +19,9 @@ macro_rules! for_each_processor {
             PYLINT,         pylint,         PylintConfig,          PylintProcessor,          ("", &[".py"], PYTHON_EXCLUDE_DIRS);
             MYPY,           mypy,           MypyConfig,            MypyProcessor,            ("", &[".py"], PYTHON_EXCLUDE_DIRS);
             PYREFLY,        pyrefly,        PyreflyConfig,         PyreflyProcessor,         ("", &[".py"], PYTHON_EXCLUDE_DIRS);
+            BLACK_CHECK,    black_check,    BlackCheckConfig,      BlackCheckProcessor,      ("", &[".py"], PYTHON_EXCLUDE_DIRS);
+            DOCTEST,        doctest,        DoctestConfig,         DoctestProcessor,         ("", &[".py"], PYTHON_EXCLUDE_DIRS);
+            PYTEST,         pytest,         PytestConfig,          PytestProcessor,          ("tests", &[".py"], PYTHON_EXCLUDE_DIRS);
             CC_SINGLE_FILE, cc_single_file, CcSingleFileConfig,    CcSingleFileProcessor,    ("src", &[".c", ".cc"], &[]);
             CC,             cc,             CcConfig,              CcProcessor,              ("", &["cc.yaml"], CC_EXCLUDE_DIRS);
             CPPCHECK,       cppcheck,       CppcheckConfig,        CppcheckProcessor,        ("src", &[".c", ".cc"], CC_EXCLUDE_DIRS);
@@ -57,6 +60,7 @@ macro_rules! for_each_processor {
             MERMAID,        mermaid,        MermaidConfig,         MermaidProcessor,         ("", &[".mmd"], BUILD_TOOL_EXCLUDES);
             DRAWIO,         drawio,         DrawioConfig,          DrawioProcessor,          ("", &[".drawio"], BUILD_TOOL_EXCLUDES);
             LIBREOFFICE,    libreoffice,    LibreofficeConfig,     LibreofficeProcessor,     ("", &[".odp"], BUILD_TOOL_EXCLUDES);
+            PROTOBUF,       protobuf,       ProtobufConfig,        ProtobufProcessor,        ("proto", &[".proto"], &[]);
             PDFUNITE,       pdfunite,       PdfuniteConfig,        PdfuniteProcessor,        ("", &["course.yaml"], BUILD_TOOL_EXCLUDES);
             SCRIPT,   script,   ScriptConfig,     ScriptProcessor,     ("", &[], &[]);
             GENERATOR,  generator,  GeneratorConfig,   GeneratorProcessor,   ("", &[], &[]);
@@ -80,6 +84,7 @@ macro_rules! for_each_processor {
             CMAKE,          cmake,          CmakeConfig,           CmakeProcessor,           ("", &["CMakeLists.txt"], BUILD_TOOL_EXCLUDES);
             HADOLINT,       hadolint,       HadolintConfig,        HadolintProcessor,        ("", &["Dockerfile"], BUILD_TOOL_EXCLUDES);
             JEKYLL,         jekyll,         JekyllConfig,          JekyllProcessor,          ("", &["_config.yml"], BUILD_TOOL_EXCLUDES);
+            SASS,           sass,           SassConfig,            SassProcessor,            ("sass", &[".scss", ".sass"], &[]);
             SLIDEV,         slidev,         SlidevConfig,          SlidevProcessor,          ("", &[".md"], BUILD_TOOL_EXCLUDES);
         }
     };

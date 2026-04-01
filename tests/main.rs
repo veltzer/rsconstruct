@@ -34,12 +34,14 @@ mod processors {
     pub mod a2x;
     pub mod ascii;
     pub mod aspell;
+    pub mod black_check;
     pub mod cargo;
     pub mod cc;
     pub mod clippy;
     pub mod cc_single_file;
     pub mod clang_tidy;
     pub mod cppcheck;
+    pub mod doctest;
     pub mod drawio;
     pub mod gem;
     pub mod jinja2;
@@ -66,6 +68,7 @@ mod processors {
     pub mod pyrefly;
     pub mod ruff;
     pub mod rumdl;
+    pub mod sass;
     pub mod script;
     pub mod shellcheck;
     pub mod zspell;

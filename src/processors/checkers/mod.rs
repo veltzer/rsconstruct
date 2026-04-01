@@ -455,15 +455,24 @@ macro_rules! simple_checker {
         simple_checker!(@gen $processor, $config, $desc, $name,
             subcommand: [$sub], prepend_args: [], tool_kind: [static_tool: $($tool),+],);
     };
+    // tools with prepend_args (no subcommand)
+    ($processor:ident, $config:ty, $desc:expr, $name:expr,
+     tools: [$($tool:expr),+], prepend_args: [$($pa:expr),+ $(,)?] $(,)?
+    ) => {
+        simple_checker!(@gen $processor, $config, $desc, $name,
+            subcommand: [], prepend_args: [$($pa),+], tool_kind: [static_tool: $($tool),+],);
+    };
 }
 
 mod aspell;
 mod ascii;
+mod black_check;
 mod checkpatch;
 mod clippy;
 mod clang_tidy;
 mod cppcheck;
 mod cpplint;
+mod doctest;
 
 mod make;
 mod markdownlint;
@@ -472,6 +481,7 @@ mod mypy;
 
 
 mod pylint;
+mod pytest;
 mod pyrefly;
 mod ruff;
 mod rumdl;
@@ -504,11 +514,13 @@ pub(crate) mod terms;
 
 pub use aspell::AspellProcessor;
 pub use ascii::AsciiProcessor;
+pub use black_check::BlackCheckProcessor;
 pub use checkpatch::CheckpatchProcessor;
 pub use clippy::ClippyProcessor;
 pub use clang_tidy::ClangTidyProcessor;
 pub use cppcheck::CppcheckProcessor;
 pub use cpplint::CpplintProcessor;
+pub use doctest::DoctestProcessor;
 
 pub use make::MakeProcessor;
 pub use markdownlint::MarkdownlintProcessor;
@@ -517,6 +529,7 @@ pub use mypy::MypyProcessor;
 
 
 pub use pylint::PylintProcessor;
+pub use pytest::PytestProcessor;
 pub use pyrefly::PyreflyProcessor;
 pub use ruff::RuffProcessor;
 pub use rumdl::RumdlProcessor;
