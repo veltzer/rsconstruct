@@ -716,7 +716,7 @@ pub use checkers::{
     StandardProcessor, StylelintProcessor,
     TaploProcessor, TermsProcessor, TidyProcessor, XmllintProcessor, YamllintProcessor, YqProcessor,
 };
-pub use generators::{A2xProcessor, CcSingleFileProcessor, ChromiumProcessor, DrawioProcessor, GeneratorProcessor, LibreofficeProcessor, LinuxModuleProcessor, MakoProcessor, MarpProcessor, MarkdownProcessor, MermaidProcessor, ObjdumpProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, TagsProcessor, TeraProcessor};
+pub use generators::{A2xProcessor, CcSingleFileProcessor, ChromiumProcessor, DrawioProcessor, GeneratorProcessor, Jinja2Processor, LibreofficeProcessor, LinuxModuleProcessor, MakoProcessor, MarpProcessor, MarkdownProcessor, MermaidProcessor, ObjdumpProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, TagsProcessor, TeraProcessor};
 pub use mass_generators::{CargoProcessor, CcProcessor, GemProcessor, JekyllProcessor, MdbookProcessor, NpmProcessor, PipProcessor, SphinxProcessor};
 pub(crate) use generators::tags as tags_cmd;
 pub(crate) use checkers::terms;

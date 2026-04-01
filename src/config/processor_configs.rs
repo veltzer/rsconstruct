@@ -389,6 +389,37 @@ impl KnownFields for MakoConfig {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Jinja2Config {
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(default)]
+    pub auto_inputs: Vec<String>,
+    #[serde(default = "default_true")]
+    pub batch: bool,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for Jinja2Config {
+    fn default() -> Self {
+        Self {
+            extra_inputs: Vec::new(),
+            auto_inputs: Vec::new(),
+            batch: true,
+            scan: default_scan!(scan_dir: "templates.jinja2", extensions: [".j2"]),
+        }
+    }
+}
+
+impl KnownFields for Jinja2Config {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "extra_inputs", "auto_inputs", "batch",
+        ]
+    }
+}
+
 checker_config!(RuffConfig, extensions: [".py"], linter: "ruff", auto_inputs: ["ruff.toml", ".ruff.toml", "pyproject.toml"]);
 
 checker_config!(PylintConfig, extensions: [".py"], auto_inputs: [".pylintrc"]);

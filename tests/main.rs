@@ -42,6 +42,7 @@ mod processors {
     pub mod cppcheck;
     pub mod drawio;
     pub mod gem;
+    pub mod jinja2;
     pub mod jq;
     pub mod json_schema;
     pub mod jsonlint;

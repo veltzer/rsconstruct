@@ -33,6 +33,7 @@
     - [HTMLHint](processors/htmlhint.md)
     - [HTMLLint](processors/htmllint.md)
     - [Jekyll](processors/jekyll.md)
+    - [Jinja2](processors/jinja2.md)
     - [Jq](processors/jq.md)
     - [JSHint](processors/jshint.md)
     - [JSLint](processors/jslint.md)

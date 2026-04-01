@@ -30,11 +30,19 @@ Items from `suggestions.md` that have been implemented.
 ## Completed New Processors
 
 - **mypy** — Python type checking using `mypy`. Batch-capable. Config: `checker`, `args`, `extra_inputs`, `scan`.
+- **yamllint** — Lint YAML files using `yamllint`. `src/processors/checkers/yamllint.rs`.
+- **jsonlint** — Validate JSON files for syntax errors. `src/processors/checkers/jsonlint.rs`.
+- **taplo (toml-lint)** — Validate TOML files using `taplo`. `src/processors/checkers/taplo.rs`.
+- **markdownlint** — Lint Markdown files for structural issues. Uses `mdl` or `markdownlint-cli`.
+- **pandoc** — Convert Markdown to other formats (PDF, HTML, EPUB). Generator processor.
+- **jinja2** — Render Jinja2 templates (`.j2`) via Python jinja2 library. `src/processors/generators/jinja2.rs`.
 
 ## Completed Test Coverage
 
 - **Ruff/pylint processor tests** — `tests/processors/ruff.rs` and `tests/processors/pylint.rs` with integration tests.
 - **Make processor tests** — `tests/processors/make.rs` with Makefile discovery and execution tests.
+- **All generator processor tests** — Integration tests for all 14 previously untested generators: a2x, drawio, gem, libreoffice, markdown, marp, mermaid, npm, pandoc, pdflatex, pdfunite, pip, sphinx.
+- **All checker processor tests** — Integration tests for all 5 previously untested checkers: ascii, aspell, markdownlint, mdbook, mdl.
 
 ## Completed Caching & Performance
 
@@ -46,12 +54,16 @@ Items from `suggestions.md` that have been implemented.
 - **`--quiet` flag** — `-q`/`--quiet` suppresses all output except errors. Useful for CI scripts that only care about exit code.
 - **Flaky product detection / retry** — `--retry=N` retries failed products up to N times. Reports FLAKY (passed on retry) vs FAILED status in build summary.
 - **Actionable error messages** — `rsconstruct tools check` shows install hints for missing tools (e.g., "install with: pip install ruff").
+- **Build profiling / tracing** — `--trace=file.json` generates Chrome trace format output viewable in `chrome://tracing` or Perfetto UI.
+- **`rsconstruct build <target>`** — Build specific targets by name or pattern via `--target` glob patterns and `-d/--dir` flags.
+- **`rsconstruct why <file>` / Explain rebuilds** — `--explain` flag shows why each product is skipped, restored, or rebuilt.
+- **`rsconstruct doctor`** — Diagnose build environment: checks config, tools, and versions. Full implementation in `src/builder/doctor.rs`.
+- **`rsconstruct sloc`** — Source lines of code statistics with COCOMO effort/cost estimation. `src/builder/sloc.rs`.
 
 ## Completed Quick Wins
 
 - **Batch processing for more processors** — All checker processors that support multiple file arguments now use batching.
 - **Progress bar for long builds** — Implemented with `indicatif`, shows `[elapsed] [bar] pos/len message`.
-- **`rsconstruct why <file>` / Explain rebuilds** — `--explain` flag shows why each product is skipped, restored, or rebuilt.
 - **`--processors` flag for build and watch** — Filter processors with `-p` flag.
 - **Emit `ProductStart` JSON events** — Wired up and emitted before execution.
 - **Colored diff on config changes** — Shows colored JSON diff when processor config changes.

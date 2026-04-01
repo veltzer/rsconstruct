@@ -53,6 +53,7 @@ macro_rules! for_each_processor {
             TERMS,          terms,          TermsConfig,           TermsProcessor,           ("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
             CHROMIUM,       chromium,       ChromiumConfig,        ChromiumProcessor,        ("out/marp", &[".html"], BUILD_TOOL_EXCLUDES);
             MAKO,           mako,           MakoConfig,            MakoProcessor,            ("templates.mako", &[".mako"], &[]);
+            JINJA2,         jinja2,         Jinja2Config,          Jinja2Processor,          ("templates.jinja2", &[".j2"], &[]);
             MERMAID,        mermaid,        MermaidConfig,         MermaidProcessor,         ("", &[".mmd"], BUILD_TOOL_EXCLUDES);
             DRAWIO,         drawio,         DrawioConfig,          DrawioProcessor,          ("", &[".drawio"], BUILD_TOOL_EXCLUDES);
             LIBREOFFICE,    libreoffice,    LibreofficeConfig,     LibreofficeProcessor,     ("", &[".odp"], BUILD_TOOL_EXCLUDES);

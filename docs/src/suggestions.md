@@ -7,44 +7,9 @@ Grades:
 - **Urgency**: `high` (users need this), `medium` (nice to have), `low` (speculative/future)
 - **Complexity**: `low` (hours), `medium` (days), `high` (weeks+)
 
-## Test Coverage
-
-### Add tests for untested generators
-- 14 out of 17 generator processors have no integration tests: a2x, drawio, gem, libreoffice, markdown, marp, mermaid, npm, pandoc, pdflatex, pdfunite, pip, sphinx.
-- The test pattern is well-established in `tests/processors/` — each test creates a temp project, writes source files, runs `rsconstruct build`, and verifies outputs.
-- **Urgency**: high | **Complexity**: low (per processor)
-
-### Add tests for untested checkers
-- 5 checkers have no integration tests: ascii, aspell, markdownlint, mdbook, mdl.
-- **Urgency**: medium | **Complexity**: low (per processor)
-
 ## New Processors
 
 ### Linting / Checking (stub-based)
-
-#### yamllint
-- Lint YAML files (`.yml`, `.yaml`) using `yamllint`.
-- Catches syntax errors and style violations.
-- Config: `linter` (default `"yamllint"`), `args`, `extra_inputs`, `scan`.
-- **Urgency**: medium | **Complexity**: low
-
-#### jsonlint
-- Validate JSON files (`.json`) for syntax errors.
-- Could use `python3 -m json.tool` or a dedicated tool like `jsonlint`.
-- Config: `linter`, `args`, `extra_inputs`, `scan`.
-- **Urgency**: medium | **Complexity**: low
-
-#### toml-lint
-- Validate TOML files (`.toml`) for syntax errors.
-- Could use `taplo check` or a built-in Rust parser.
-- Config: `linter` (default `"taplo"`), `args`, `extra_inputs`, `scan`.
-- **Urgency**: low | **Complexity**: low
-
-#### markdownlint
-- Lint Markdown files (`.md`) for structural issues (complements zspell which only checks spelling).
-- Uses `mdl` or `markdownlint-cli`.
-- Config: `linter` (default `"mdl"`), `args`, `extra_inputs`, `scan`.
-- **Urgency**: low | **Complexity**: low
 
 #### black-check
 - Python formatting verification using `black --check`.
@@ -70,19 +35,6 @@ Grades:
 - Compile `.proto` files to generated code using `protoc`.
 - Config: `protoc` (default `"protoc"`), `args`, `language` (default `"cpp"`), `extra_inputs`, `scan`.
 - **Urgency**: low | **Complexity**: medium
-
-#### pandoc
-- Convert Markdown (`.md`) to other formats (PDF, HTML, EPUB) using `pandoc`.
-- Single-file transformation.
-- Config: `output_format` (default `"html"`), `args`, `extra_inputs`, `scan`.
-- **Urgency**: low | **Complexity**: low
-
-#### jinja2
-- Render Jinja2 templates (`.j2`, `.jinja2`) via `python3 -c` using the `jinja2` library.
-- Similar to the mako and tera processors but using Jinja2 syntax.
-- Scan directory: `templates.jinja2/`, strips prefix and extension for output path.
-- Config: `extra_inputs`, `scan`.
-- **Urgency**: medium | **Complexity**: low
 
 ### Testing
 
@@ -213,17 +165,11 @@ Grades:
 
 ## Developer Experience
 
-### Build profiling / tracing
-- Generate Chrome trace format or flamegraph SVG showing what ran when, including parallel lanes.
-- Include critical path highlighting, CPU usage, and idle time analysis.
-- Usage: `rsconstruct build --trace=build.json`
-- Viewable in `chrome://tracing` or Perfetto UI.
-- **Urgency**: medium | **Complexity**: medium
-
 ### Build Event Protocol / structured event stream
-- rsconstruct has `--json` on stdout, but a proper Build Event Protocol (file or gRPC stream) enables external dashboards, CI integrations, and build analytics services.
+- rsconstruct already has `--json` on stdout with JSON Lines events (BuildEvent, ProductStart, ProductComplete, BuildSummary) and `--trace` for Chrome trace format.
+- A proper Build Event Protocol (file or gRPC stream) would enable external dashboards, CI integrations, and build analytics services beyond what JSON Lines provides.
 - Write events to a file (`--build-event-log=events.pb`) or stream to a remote service.
-- Richer event types than current JSON Lines: action graph, configuration, progress, test results.
+- Richer event types: action graph, configuration, progress, test results.
 - **Urgency**: medium | **Complexity**: medium
 
 ### Build notifications
@@ -231,11 +177,6 @@ Grades:
 - Platform-specific: `notify-send` (Linux), `osascript` (macOS).
 - Config: `notify = true`, `notify_on_success = false`.
 - **Urgency**: low | **Complexity**: low
-
-### `rsconstruct build <target>` — Build specific targets
-- Build only specific targets by name or pattern:
-  `rsconstruct build src/main.c`, `rsconstruct build out/cc_single_file/`, `rsconstruct build "*.py"`
-- **Urgency**: medium | **Complexity**: medium
 
 ### Parallel dependency analysis
 - The cpp analyzer scans files sequentially, which can be slow for large codebases.
@@ -260,8 +201,8 @@ Grades:
 - **Urgency**: low | **Complexity**: medium
 
 ### Remote cache authentication
-- Support authenticated remote caches: S3 (AWS credentials), HTTP (bearer tokens), GCS.
-- Variable substitution from environment for secrets.
+- S3 and HTTP/HTTPS remote caches are already supported.
+- Still needed: explicit bearer token support, GCS backend, and environment variable substitution for secrets in config.
 - **Urgency**: medium | **Complexity**: medium
 
 ### `rsconstruct fmt` — Auto-format source files
@@ -270,29 +211,10 @@ Grades:
 - Could be a new processor type (`Formatter`) or a convenience command that runs formatter processors.
 - **Urgency**: medium | **Complexity**: medium
 
-### `rsconstruct why <file>` — Explain why a file is built
-- Show which processors consume a given file, what products it belongs to, and what triggered a rebuild.
-- Useful for debugging unexpected rebuilds or understanding the build graph.
-- **Urgency**: medium | **Complexity**: low
-
-### `rsconstruct doctor` — Diagnose build environment
-- Check for common issues: missing tools, misconfigured processors, stale cache, version mismatches.
-- Report warnings and suggestions for fixing problems.
-- **Urgency**: medium | **Complexity**: low
-
 ### `rsconstruct lint` — Run only checkers
 - Convenience command to run only checker processors.
 - Equivalent to `rsconstruct build -p ruff,pylint,...` but shorter.
 - **Urgency**: low | **Complexity**: low
-
-### `rsconstruct sloc` — Source lines of code statistics
-- Count source lines of code across the project, broken down by language/extension.
-- Leverage rsconstruct's existing file index and extension-to-language mapping from processor configs.
-- Show: files, blank lines, comment lines, code lines per language. Total summary.
-- Optional COCOMO-style effort/cost estimation (person-months, schedule, cost at configurable salary).
-- Usage: `rsconstruct sloc`, `rsconstruct sloc --json`, `rsconstruct sloc --cocomo --salary 100000`
-- Similar to external tools: `sloccount`, `cloc`, `tokei`.
-- **Urgency**: low | **Complexity**: medium
 
 ### Watch mode keyboard commands
 - During `rsconstruct watch`, support `r` (rebuild), `c` (clean), `q` (quit), `Enter` (rebuild now), `s` (status).
@@ -376,8 +298,8 @@ Grades:
 ## Content & Documentation
 
 ### `rsconstruct init --detect`
-- Scan the project and generate a complete `rsconstruct.toml` with all detected processors enabled and configured.
-- Goes beyond `smart auto` by also setting processor-specific config (scan_dirs, extensions, tool paths).
+- `rsconstruct smart auto` already scans and enables processors, but a dedicated `init --detect` could go further.
+- Generate a complete `rsconstruct.toml` with processor-specific config (scan_dirs, extensions, tool paths).
 - **Urgency**: medium | **Complexity**: medium
 
 ### `rsconstruct fmt`  — Auto-format rsconstruct.toml
