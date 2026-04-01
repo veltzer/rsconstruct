@@ -24,7 +24,7 @@ fn setup_tags_project_with_config(md_files: &[(&str, &str)], tag_lists: &[(&str,
     }
 
     if !tag_lists.is_empty() {
-        let tag_dir = p.join("tag_lists");
+        let tag_dir = p.join("tags");
         fs::create_dir_all(&tag_dir).unwrap();
         for (name, content) in tag_lists {
             fs::write(tag_dir.join(name), content).unwrap();

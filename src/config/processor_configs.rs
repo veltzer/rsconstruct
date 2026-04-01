@@ -1003,7 +1003,7 @@ fn default_tags_output() -> String {
 }
 
 fn default_tags_dir() -> String {
-    "tag_lists".into()
+    "tags".into()
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -1050,7 +1050,7 @@ impl Default for TagsConfig {
     fn default() -> Self {
         Self {
             output: "out/tags/tags.db".into(),
-            tags_dir: "tag_lists".into(),
+            tags_dir: "tags".into(),
             required_fields: Vec::new(),
             required_values: Vec::new(),
             unique_fields: Vec::new(),

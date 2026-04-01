@@ -374,7 +374,7 @@ fn run() -> Result<()> {
             let db_path = config.processor.instance_field_str("tags", "output")
                 .unwrap_or_else(|| "out/tags/tags.db".into());
             let tags_dir = config.processor.instance_field_str("tags", "tags_dir")
-                .unwrap_or_else(|| "tag_lists".into());
+                .unwrap_or_else(|| "tags".into());
             match action {
                 cli::TagsAction::Files { tags, or } => processors::tags_cmd::files_for_tags(&db_path, &tags, or)?,
                 cli::TagsAction::Grep { text, ignore_case } => processors::tags_cmd::grep_tags(&db_path, &text, ignore_case)?,
