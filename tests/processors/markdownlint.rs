@@ -53,7 +53,7 @@ fn markdownlint_no_project_discovered() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.markdownlint]\nscan_dir = \"mdlint_docs\"\n",
+        "[processor.markdownlint]\nscan_dirs = [\"mdlint_docs\"]\n",
     )
     .unwrap();
 

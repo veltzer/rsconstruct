@@ -22,7 +22,7 @@ const CONFIG_FILE: &str = "rsconstruct.toml";
 /// Fields contributed by ScanConfig via `#[serde(flatten)]`.
 /// These are automatically appended to every processor's known fields during validation.
 pub(crate) const SCAN_CONFIG_FIELDS: &[&str] = &[
-    "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+    "scan_dirs", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
 ];
 
 pub(crate) trait KnownFields {
@@ -48,7 +48,7 @@ pub(crate) fn resolve_extra_inputs(extra_inputs: &[String]) -> Result<Vec<PathBu
 /// Fields that never affect product output and are excluded from the output config hash.
 /// These control file discovery, caching strategy, and execution batching.
 const NON_OUTPUT_FIELDS: &[&str] = &[
-    "scan_dir", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
+    "scan_dirs", "extensions", "exclude_dirs", "exclude_files", "exclude_paths",
     "extra_inputs", "auto_inputs", "batch",
 ];
 
@@ -105,8 +105,8 @@ pub(crate) struct ScanConfig {
 impl ScanConfig {
     /// Fill in None fields with the given defaults (mutates in place).
     pub(crate) fn resolve(&mut self, scan_dir: &str, extensions: &[&str], exclude_dirs: &[&str]) {
-        if self.scan_dir.is_none() {
-            self.scan_dir = Some(scan_dir.to_string());
+        if self.scan_dirs.is_none() {
+            self.scan_dirs = Some(vec![scan_dir.to_string()]);
         }
         if self.extensions.is_none() {
             self.extensions = Some(extensions.iter().map(|s| s.to_string()).collect());
@@ -122,9 +122,9 @@ impl ScanConfig {
         }
     }
 
-    /// Get the resolved scan directory. Panics if called before resolve().
-    pub(crate) fn scan_dir(&self) -> &str {
-        self.scan_dir.as_deref().expect(errors::SCAN_CONFIG_NOT_RESOLVED)
+    /// Get the resolved scan directories. Panics if called before resolve().
+    pub(crate) fn scan_dirs(&self) -> &[String] {
+        self.scan_dirs.as_deref().expect(errors::SCAN_CONFIG_NOT_RESOLVED)
     }
 
     /// Get the resolved extensions. Panics if called before resolve().
@@ -335,11 +335,12 @@ macro_rules! gen_processor_config {
             /// Collect unique scan directories from all declared instances.
             pub(crate) fn scan_dirs(&self) -> Vec<String> {
                 let mut dirs: Vec<String> = self.instances.iter()
-                    .filter_map(|inst| {
-                        inst.config_toml.get("scan_dir")
-                            .and_then(|v| v.as_str())
+                    .flat_map(|inst| {
+                        inst.config_toml.get("scan_dirs")
+                            .and_then(|v| v.as_array())
+                            .into_iter()
+                            .flat_map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())))
                             .filter(|d| !d.is_empty())
-                            .map(|d| d.to_string())
                     })
                     .collect();
                 dirs.sort();
@@ -661,7 +662,7 @@ impl FieldType {
 fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
     // ScanConfig fields — shared by all processors
     match field {
-        "scan_dir" => return Some(FieldType::String),
+        "scan_dirs" => return Some(FieldType::StringArray),
         "extensions" => return Some(FieldType::StringArray),
         "exclude_dirs" => return Some(FieldType::StringArray),
         "exclude_files" => return Some(FieldType::StringArray),
@@ -893,10 +894,10 @@ pub(crate) fn scan_config_from_toml(
 ) -> ScanConfig {
     let table = value.as_table();
 
-    let scan_dir = table
-        .and_then(|t| t.get("scan_dir"))
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+    let scan_dirs = table
+        .and_then(|t| t.get("scan_dirs"))
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
 
     let extensions = table
         .and_then(|t| t.get("extensions"))
@@ -919,7 +920,7 @@ pub(crate) fn scan_config_from_toml(
         .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
 
     let mut scan = ScanConfig {
-        scan_dir,
+        scan_dirs,
         extensions,
         exclude_dirs,
         exclude_files,

@@ -778,7 +778,7 @@ fn cc_single_file_angle_bracket_include_dependency() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         r#"[processor.cc_single_file]
-scan_dir = "src"
+scan_dirs = ["src"]
 include_paths = ["include"]
 
 [analyzer.cpp]
@@ -839,7 +839,7 @@ fn cc_single_file_multiple_compiler_profiles() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         r#"[processor.cc_single_file]
-scan_dir = "src"
+scan_dirs = ["src"]
 
 [[processor.cc_single_file.compilers]]
 name = "gcc"
@@ -894,7 +894,7 @@ fn cc_single_file_missing_include_errors() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         r#"[processor.cc_single_file]
-scan_dir = "src"
+scan_dirs = ["src"]
 "#
     ).unwrap();
 
@@ -925,7 +925,7 @@ fn cc_single_file_profile_specific_flags() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         r#"[processor.cc_single_file]
-scan_dir = "src"
+scan_dirs = ["src"]
 
 [[processor.cc_single_file.compilers]]
 name = "gcc"
@@ -1002,7 +1002,7 @@ fn cc_single_file_exclude_profile() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         r#"[processor.cc_single_file]
-scan_dir = "src"
+scan_dirs = ["src"]
 
 [[processor.cc_single_file.compilers]]
 name = "gcc"

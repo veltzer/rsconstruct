@@ -15,7 +15,7 @@ fn pandoc_valid_file() {
     // Use HTML format to avoid requiring LaTeX for PDF
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.pandoc]\nformats = [\"html\"]\nscan_dir = \"\"\n",
+        "[processor.pandoc]\nformats = [\"html\"]\nscan_dirs = [\"\"]\n",
     )
     .unwrap();
 
@@ -53,7 +53,7 @@ fn pandoc_incremental_skip() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.pandoc]\nformats = [\"html\"]\nscan_dir = \"\"\n",
+        "[processor.pandoc]\nformats = [\"html\"]\nscan_dirs = [\"\"]\n",
     )
     .unwrap();
 
@@ -110,7 +110,7 @@ fn pandoc_pdf_deterministic() {
     }
 
     let md_content = "---\ntitle: Determinism Test\n---\n# Hello World\n\nThis is a test.\n\n## Outline\n* Chapter one\n* Chapter two\n";
-    let config = "[processor.pandoc]\nformats = [\"pdf\"]\nscan_dir = \"\"\n";
+    let config = "[processor.pandoc]\nformats = [\"pdf\"]\nscan_dirs = [\"\"]\n";
 
     // Build 1
     let dir1 = TempDir::new().expect("Failed to create temp dir");

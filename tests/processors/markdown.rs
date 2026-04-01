@@ -84,7 +84,7 @@ fn markdown_no_project_discovered() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.markdown]\nscan_dir = \"markdown_docs\"\n",
+        "[processor.markdown]\nscan_dirs = [\"markdown_docs\"]\n",
     )
     .unwrap();
 

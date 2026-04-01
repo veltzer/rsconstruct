@@ -97,7 +97,7 @@ fn aspell_no_project_discovered() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.aspell]\nscan_dir = \"aspell_docs\"\n",
+        "[processor.aspell]\nscan_dirs = [\"aspell_docs\"]\n",
     )
     .unwrap();
 

@@ -120,12 +120,12 @@ macro_rules! checker_config {
     };
 }
 
-/// Create a default ScanConfig with optional scan_dir and required extensions.
+/// Create a default ScanConfig with optional scan_dirs and required extensions.
 /// All exclude fields default to None (filled by resolve_scan_defaults).
 macro_rules! default_scan {
     (extensions: [$($ext:expr),+ $(,)?]) => {
         ScanConfig {
-            scan_dir: None,
+            scan_dirs: None,
             extensions: Some(vec![$($ext.into()),+]),
             exclude_dirs: None,
             exclude_files: None,
@@ -134,7 +134,7 @@ macro_rules! default_scan {
     };
     (scan_dir: $dir:expr, extensions: [$($ext:expr),+ $(,)?]) => {
         ScanConfig {
-            scan_dir: Some($dir.into()),
+            scan_dirs: Some(vec![$dir.into()]),
             extensions: Some(vec![$($ext.into()),+]),
             exclude_dirs: None,
             exclude_files: None,
@@ -1104,7 +1104,7 @@ impl Default for ScriptConfig {
             auto_inputs: Vec::new(),
             batch: true,
             scan: ScanConfig {
-                scan_dir: None,
+                scan_dirs: None,
                 extensions: None,
                 exclude_dirs: None,
                 exclude_files: None,

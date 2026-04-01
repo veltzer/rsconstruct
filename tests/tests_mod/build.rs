@@ -450,7 +450,7 @@ fn checker_and_generator_both_rebuild_on_shared_input_change() {
             "[processor.tera]\n",
             "\n",
             "[processor.script]\n",
-            "scan_dir = \"tera.templates\"\n",
+            "scan_dirs = [\"tera.templates\"]\n",
             "extensions = [\".tera\"]\n",
             "linter = \"true\"\n",
         ),

@@ -7,7 +7,7 @@ use std::process::Command;
 use crate::config::{CcSingleFileConfig, CompilerProfile, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProductDiscovery, scan_root, clean_outputs, check_command_output, format_command, run_command};
+use crate::processors::{ProductDiscovery, clean_outputs, check_command_output, format_command, run_command};
 
 use source_flags::{SourceFlags, parse_source_flags, should_exclude_for_profile};
 
@@ -28,9 +28,9 @@ impl CcSingleFileProcessor {
         }
     }
 
-    /// Get the source directory from scan config (relative path)
+    /// Get the first source directory from scan config (relative path)
     fn source_dir(&self) -> PathBuf {
-        scan_root(&self.config.scan)
+        PathBuf::from(self.config.scan.scan_dirs().first().map(|s| s.as_str()).unwrap_or(""))
     }
 
     /// Check if cc processing should be enabled

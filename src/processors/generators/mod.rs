@@ -214,7 +214,7 @@ impl TemplateItem {
 pub(super) fn find_templates(scan: &ScanConfig, file_index: &FileIndex) -> Result<Vec<TemplateItem>> {
     let paths = file_index.scan(scan, true);
     let extensions = scan.extensions();
-    let scan_dir = scan.scan_dir();
+    let scan_dirs = scan.scan_dirs();
 
     let mut items = Vec::new();
     for path in paths {
@@ -223,16 +223,11 @@ pub(super) fn find_templates(scan: &ScanConfig, file_index: &FileIndex) -> Resul
             if filename.ends_with(ext.as_str()) {
                 let output_name = &filename[..filename.len() - ext.len()];
                 if !output_name.is_empty() {
-                    // Strip the scan_dir prefix to get the output path
-                    let output_path = if !scan_dir.is_empty() {
-                        if let Ok(relative) = path.strip_prefix(scan_dir) {
-                            relative.with_file_name(output_name)
-                        } else {
-                            PathBuf::from(output_name)
-                        }
-                    } else {
-                        PathBuf::from(output_name)
-                    };
+                    // Strip the matching scan_dir prefix to get the output path
+                    let output_path = scan_dirs.iter()
+                        .filter(|d| !d.is_empty())
+                        .find_map(|d| path.strip_prefix(d).ok().map(|r| r.with_file_name(output_name)))
+                        .unwrap_or_else(|| PathBuf::from(output_name));
                     items.push(TemplateItem::new(path.clone(), output_path));
                     break;
                 }
@@ -254,13 +249,15 @@ pub(super) struct DiscoverParams<'a, C: Serialize> {
 
 /// Compute the output path for a source file.
 ///
-/// Strips the `scan_dir` prefix from the source path, replaces the extension,
+/// Strips the matching `scan_dirs` prefix from the source path, replaces the extension,
 /// and joins the result under `output_dir`. This is the single place where
 /// source-to-output path mapping is defined.
-pub(super) fn output_path(source: &Path, scan_dir: &str, output_dir: &str, extension: &str) -> PathBuf {
-    let scan_root = Path::new(scan_dir);
+pub(super) fn output_path(source: &Path, scan_dirs: &[String], output_dir: &str, extension: &str) -> PathBuf {
     let full_parent = source.parent().unwrap_or(Path::new(""));
-    let parent = full_parent.strip_prefix(scan_root).unwrap_or(full_parent);
+    let parent = scan_dirs.iter()
+        .filter(|d| !d.is_empty())
+        .find_map(|d| full_parent.strip_prefix(d).ok())
+        .unwrap_or(full_parent);
     let stem = source.file_stem().unwrap_or_default();
     let output_name = format!("{}.{}", stem.to_string_lossy(), extension);
     Path::new(output_dir).join(parent).join(output_name)
@@ -280,11 +277,11 @@ pub(super) fn discover_multi_format(
 
     let hash = Some(output_config_hash(params.config, &["formats", "output_dir"]));
     let extra = resolve_extra_inputs(params.extra_inputs)?;
-    let scan_dir = params.scan.scan_dir();
+    let scan_dirs = params.scan.scan_dirs();
 
     for source in &files {
         for format in formats {
-            let output = output_path(source, scan_dir, params.output_dir, format);
+            let output = output_path(source, scan_dirs, params.output_dir, format);
 
             let mut inputs = Vec::with_capacity(1 + extra.len());
             inputs.push(source.clone());

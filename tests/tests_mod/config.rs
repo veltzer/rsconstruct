@@ -99,7 +99,7 @@ fn config_vars_substitution_string() {
 my_dir = "custom_templates"
 
 [processor.tera]
-scan_dir = "${my_dir}"
+scan_dirs = ["${my_dir}"]
 "#
     ).unwrap();
 
@@ -174,7 +174,7 @@ fn config_vars_no_vars_section() {
         project_path.join("rsconstruct.toml"),
         r#"
 [processor.tera]
-scan_dir = "templates"
+scan_dirs = ["templates"]
 "#
     ).unwrap();
 

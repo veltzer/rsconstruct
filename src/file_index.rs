@@ -119,25 +119,29 @@ impl FileIndex {
         scan: &ScanConfig,
         recursive: bool,
     ) -> Vec<PathBuf> {
-        let dir = scan.scan_dir();
-        let root = PathBuf::from(dir);
         let ext_refs: Vec<&str> = scan.extensions().iter().map(|s| s.as_str()).collect();
         let exclude_dir_refs: Vec<&str> = scan.exclude_dirs().iter().map(|s| s.as_str()).collect();
         let exclude_file_refs: Vec<&str> = scan.exclude_files().iter().map(|s| s.as_str()).collect();
         let exclude_path_refs: Vec<&str> = scan.exclude_paths().iter().map(|s| s.as_str()).collect();
-        let mut results = self.query(&root, &ext_refs, &exclude_dir_refs, &exclude_file_refs, &exclude_path_refs);
 
-        if !recursive {
-            // Filter to depth 1 from scan root: keep only files whose path has
-            // exactly one more component than the root.
-            // e.g. root="src" keeps "src/main.c" but not "src/sub/foo.c"
-            //      root=""    keeps "README.md"   but not "sub/foo.c"
-            let root_depth = root.components().count();
-            results.retain(|path| {
-                path.components().count() == root_depth + 1
-            });
+        let mut results = Vec::new();
+        for dir in scan.scan_dirs() {
+            let root = PathBuf::from(dir);
+            let mut dir_results = self.query(&root, &ext_refs, &exclude_dir_refs, &exclude_file_refs, &exclude_path_refs);
+
+            if !recursive {
+                // Filter to depth 1 from scan root: keep only files whose path has
+                // exactly one more component than the root.
+                let root_depth = root.components().count();
+                dir_results.retain(|path| {
+                    path.components().count() == root_depth + 1
+                });
+            }
+
+            results.append(&mut dir_results);
         }
-
+        results.sort();
+        results.dedup();
         results
     }
 

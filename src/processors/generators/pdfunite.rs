@@ -97,8 +97,9 @@ impl ProductDiscovery for PdfuniteProcessor {
                 .next()
                 .map(|c| c.as_os_str().to_string_lossy().into_owned())
                 .unwrap_or_default();
+            let upstream_scan_dirs = [upstream_scan_dir];
             let inputs: Vec<PathBuf> = source_files.iter().map(|src| {
-                super::output_path(src, &upstream_scan_dir, &self.config.source_output_dir, "pdf")
+                super::output_path(src, &upstream_scan_dirs, &self.config.source_output_dir, "pdf")
             }).chain(extra.iter().cloned()).collect();
 
             let course_name = subdir_name.to_string_lossy();

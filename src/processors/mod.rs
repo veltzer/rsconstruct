@@ -299,14 +299,9 @@ pub(crate) fn check_command_output(output: &Output, context: impl std::fmt::Disp
 
 /// Compute the scan root directory from a ScanConfig.
 /// Returns empty path if scan_dir is empty, otherwise the scan_dir as a relative path.
-pub(crate) fn scan_root(scan: &crate::config::ScanConfig) -> PathBuf {
-    PathBuf::from(scan.scan_dir())
-}
-
-/// Check if a scan root is valid (empty means current dir, otherwise must exist).
+/// Check if all scan roots are valid (empty means current dir, otherwise must exist).
 pub(crate) fn scan_root_valid(scan: &crate::config::ScanConfig) -> bool {
-    let root = scan_root(scan);
-    root.as_os_str().is_empty() || root.exists()
+    scan.scan_dirs().iter().all(|dir| dir.is_empty() || Path::new(dir).exists())
 }
 
 /// Compute a stub path for a source file.

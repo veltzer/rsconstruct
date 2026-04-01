@@ -45,7 +45,7 @@ fn mdl_no_project_discovered() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.mdl]\nscan_dir = \"mdl_docs\"\n",
+        "[processor.mdl]\nscan_dirs = [\"mdl_docs\"]\n",
     )
     .unwrap();
 

@@ -48,7 +48,7 @@ fn marp_no_project_discovered() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.marp]\nscan_dir = \"marp\"\n",
+        "[processor.marp]\nscan_dirs = [\"marp\"]\n",
     )
     .unwrap();
 
