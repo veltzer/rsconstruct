@@ -1,7 +1,7 @@
 /// Macro to generate `ProductDiscovery` trait implementations for checker processors.
 ///
 /// Eliminates boilerplate for `description()`, `auto_detect()`, `required_tools()`,
-/// `discover()`, `execute()`, `config_json()`, `hidden()`, and batch support.
+/// `discover()`, `execute()`, `config_json()`, and batch support.
 ///
 /// # Required parameters
 /// - `$processor:ty` — the processor struct type
@@ -16,7 +16,6 @@
 /// - `tool_field: $field:ident` — config sub-field to clone as a tool name
 /// - `tool_field_extra: $field:ident [$($extra:expr),+]` — config field plus extra static tools
 /// - `config_json: true` — emit `config_json()` using `serde_json::to_string`
-/// - `hidden: true` — `hidden()` returns true
 /// - `batch: $batch_method:ident` — method on self for batch execution
 macro_rules! impl_checker {
     // --- @build: generate the impl block ---
@@ -24,7 +23,6 @@ macro_rules! impl_checker {
      guard: [$($guard:ident)?],
      tools_kind: $tools_kind:tt,
      config_json: $cj:tt,
-     hidden: $hid:tt,
      batch: [$($batch:ident)?],
      execute: $execute:ident,
     ) => {
@@ -32,8 +30,6 @@ macro_rules! impl_checker {
             fn description(&self) -> &str {
                 $desc
             }
-
-            impl_checker!(@hidden $hid);
 
             fn auto_detect(&self, file_index: &$crate::file_index::FileIndex) -> bool {
                 impl_checker!(@auto_detect self, file_index, $config_field, [$($guard)?])
@@ -60,12 +56,6 @@ macro_rules! impl_checker {
             impl_checker!(@batch self, $config_field, [$($batch)?]);
         }
     };
-
-    // --- hidden ---
-    (@hidden true) => {
-        fn hidden(&self) -> bool { true }
-    };
-    (@hidden false) => {};
 
     // --- auto_detect ---
     (@auto_detect $self:ident, $fi:ident, $cfg:ident, [scan_root]) => {
@@ -159,7 +149,7 @@ macro_rules! impl_checker {
             guard: [],
             tools_kind: [none],
             config_json: false,
-            hidden: false,
+
             batch: [],
             ; $($($rest)*)?
         );
@@ -170,7 +160,7 @@ macro_rules! impl_checker {
      guard: [],
      tools_kind: $tk:tt,
      config_json: $cj:tt,
-     hidden: $hid:tt,
+
      batch: [$($batch:ident)?],
      ; guard: $guard:ident $(, $($rest:tt)*)?
     ) => {
@@ -178,7 +168,7 @@ macro_rules! impl_checker {
             guard: [$guard],
             tools_kind: $tk,
             config_json: $cj,
-            hidden: $hid,
+
             batch: [$($batch)?],
             ; $($($rest)*)?
         );
@@ -189,7 +179,7 @@ macro_rules! impl_checker {
      guard: [$($guard:ident)?],
      tools_kind: [none],
      config_json: $cj:tt,
-     hidden: $hid:tt,
+
      batch: [$($batch:ident)?],
      ; tools: [$($tool:expr),+] $(, $($rest:tt)*)?
     ) => {
@@ -197,7 +187,7 @@ macro_rules! impl_checker {
             guard: [$($guard)?],
             tools_kind: [literal: $($tool),+],
             config_json: $cj,
-            hidden: $hid,
+
             batch: [$($batch)?],
             ; $($($rest)*)?
         );
@@ -208,7 +198,7 @@ macro_rules! impl_checker {
      guard: [$($guard:ident)?],
      tools_kind: [none],
      config_json: $cj:tt,
-     hidden: $hid:tt,
+
      batch: [$($batch:ident)?],
      ; tool_field: $tool_field:ident $(, $($rest:tt)*)?
     ) => {
@@ -216,7 +206,7 @@ macro_rules! impl_checker {
             guard: [$($guard)?],
             tools_kind: [field: $tool_field],
             config_json: $cj,
-            hidden: $hid,
+
             batch: [$($batch)?],
             ; $($($rest)*)?
         );
@@ -227,7 +217,7 @@ macro_rules! impl_checker {
      guard: [$($guard:ident)?],
      tools_kind: [none],
      config_json: $cj:tt,
-     hidden: $hid:tt,
+
      batch: [$($batch:ident)?],
      ; tool_field_extra: $tool_field:ident [$($extra:expr),+] $(, $($rest:tt)*)?
     ) => {
@@ -235,7 +225,7 @@ macro_rules! impl_checker {
             guard: [$($guard)?],
             tools_kind: [field_and_extra: $tool_field, [$($extra),+]],
             config_json: $cj,
-            hidden: $hid,
+
             batch: [$($batch)?],
             ; $($($rest)*)?
         );
@@ -246,7 +236,7 @@ macro_rules! impl_checker {
      guard: [$($guard:ident)?],
      tools_kind: $tk:tt,
      config_json: false,
-     hidden: $hid:tt,
+
      batch: [$($batch:ident)?],
      ; config_json: true $(, $($rest:tt)*)?
     ) => {
@@ -254,26 +244,7 @@ macro_rules! impl_checker {
             guard: [$($guard)?],
             tools_kind: $tk,
             config_json: true,
-            hidden: $hid,
-            batch: [$($batch)?],
-            ; $($($rest)*)?
-        );
-    };
 
-    // Parse hidden
-    (@parse $processor:ty, $config_field:ident, $desc:expr, $name:expr, $execute:ident,
-     guard: [$($guard:ident)?],
-     tools_kind: $tk:tt,
-     config_json: $cj:tt,
-     hidden: false,
-     batch: [$($batch:ident)?],
-     ; hidden: true $(, $($rest:tt)*)?
-    ) => {
-        impl_checker!(@parse $processor, $config_field, $desc, $name, $execute,
-            guard: [$($guard)?],
-            tools_kind: $tk,
-            config_json: $cj,
-            hidden: true,
             batch: [$($batch)?],
             ; $($($rest)*)?
         );
@@ -284,7 +255,7 @@ macro_rules! impl_checker {
      guard: [$($guard:ident)?],
      tools_kind: $tk:tt,
      config_json: $cj:tt,
-     hidden: $hid:tt,
+
      batch: [],
      ; batch: $batch_method:ident $(, $($rest:tt)*)?
     ) => {
@@ -292,7 +263,7 @@ macro_rules! impl_checker {
             guard: [$($guard)?],
             tools_kind: $tk,
             config_json: $cj,
-            hidden: $hid,
+
             batch: [$batch_method],
             ; $($($rest)*)?
         );
@@ -303,7 +274,7 @@ macro_rules! impl_checker {
      guard: [$($guard:ident)?],
      tools_kind: $tk:tt,
      config_json: $cj:tt,
-     hidden: $hid:tt,
+
      batch: [$($batch:ident)?],
      ;
     ) => {
@@ -311,7 +282,7 @@ macro_rules! impl_checker {
             guard: [$($guard)?],
             tools_kind: $tk,
             config_json: $cj,
-            hidden: $hid,
+
             batch: [$($batch)?],
             execute: $execute,
         );

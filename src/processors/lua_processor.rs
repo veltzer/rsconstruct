@@ -352,17 +352,6 @@ impl ProductDiscovery for LuaProcessor {
         }
     }
 
-    fn hidden(&self) -> bool {
-        if self.has_function("hidden") {
-            self.lua.lock().globals()
-                .get::<LuaFunction>("hidden")
-                .and_then(|f| f.call::<bool>(()))
-                .unwrap_or(false)
-        } else {
-            false
-        }
-    }
-
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()> {
         let files = file_index.scan(&self.scan_config, true);
         if files.is_empty() {

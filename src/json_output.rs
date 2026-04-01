@@ -96,7 +96,6 @@ pub struct ProcessorListEntry {
     pub processor_type: String,
     pub enabled: bool,
     pub detected: bool,
-    pub hidden: bool,
     pub batch: bool,
     pub description: String,
 }

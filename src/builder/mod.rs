@@ -309,7 +309,7 @@ impl Builder {
         let processors = create_all_default_processors();
         let mut detected = std::collections::HashSet::new();
         for (name, proc) in &processors {
-            if !proc.hidden() && proc.auto_detect(&self.file_index) {
+            if proc.auto_detect(&self.file_index) {
                 detected.insert(name.clone());
             }
         }
@@ -322,7 +322,7 @@ impl Builder {
         let processors = create_all_default_processors();
         let mut available = std::collections::HashSet::new();
         for (name, proc) in &processors {
-            if proc.hidden() || !proc.auto_detect(&self.file_index) {
+            if !proc.auto_detect(&self.file_index) {
                 continue;
             }
             let tools = proc.required_tools();

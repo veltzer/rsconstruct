@@ -7,13 +7,12 @@ use super::{Builder, create_all_default_processors, sorted_keys};
 
 /// List all built-in processors (works without rsconstruct.toml).
 /// Used when no project config is available.
-pub fn list_processors_no_config(all: bool) -> Result<()> {
+pub fn list_processors_no_config() -> Result<()> {
     let processors = create_all_default_processors();
     let proc_names = sorted_keys(&processors);
 
     if crate::json_output::is_json_mode() {
         let entries: Vec<crate::json_output::ProcessorListEntry> = proc_names.iter()
-            .filter(|name| all || !processors[name.as_str()].hidden())
             .map(|name| {
                 let proc = &processors[name.as_str()];
                 crate::json_output::ProcessorListEntry {
@@ -21,7 +20,6 @@ pub fn list_processors_no_config(all: bool) -> Result<()> {
                     processor_type: proc.processor_type().as_str().to_string(),
                     enabled: false,
                     detected: false,
-                    hidden: proc.hidden(),
                     batch: proc.supports_batch(),
                     description: proc.description().to_string(),
                 }
@@ -33,14 +31,6 @@ pub fn list_processors_no_config(all: bool) -> Result<()> {
 
     for name in &proc_names {
         let proc = &processors[name.as_str()];
-        if proc.hidden() && !all {
-            continue;
-        }
-        let hidden_tag = if proc.hidden() {
-            format!(" {}", color::dim("(hidden)"))
-        } else {
-            String::new()
-        };
         let type_str = format!("[{}]", proc.processor_type().as_str());
         let proc_type = color::dim(&type_str);
         let batch = if proc.supports_batch() {
@@ -48,7 +38,7 @@ pub fn list_processors_no_config(all: bool) -> Result<()> {
         } else {
             String::new()
         };
-        println!("{} {}{}{} \u{2014} {}", name, proc_type, batch, hidden_tag, color::dim(proc.description()));
+        println!("{} {}{} \u{2014} {}", name, proc_type, batch, color::dim(proc.description()));
     }
 
     Ok(())
@@ -93,10 +83,9 @@ impl Builder {
         let proc_names = sorted_keys(&processors);
 
         match action {
-            ProcessorAction::List { all } => {
+            ProcessorAction::List { .. } => {
                 if crate::json_output::is_json_mode() {
                     let entries: Vec<crate::json_output::ProcessorListEntry> = proc_names.iter()
-                        .filter(|name| all || !processors[name.as_str()].hidden())
                         .map(|name| {
                             let proc = &processors[name.as_str()];
                             crate::json_output::ProcessorListEntry {
@@ -104,7 +93,6 @@ impl Builder {
                                 processor_type: proc.processor_type().as_str().to_string(),
                                 enabled: true,
                                 detected: true,
-                                hidden: proc.hidden(),
                                 batch: proc.supports_batch(),
                                 description: proc.description().to_string(),
                             }
@@ -116,14 +104,6 @@ impl Builder {
 
                 for name in &proc_names {
                     let proc = &processors[name.as_str()];
-                    if proc.hidden() && !all {
-                        continue;
-                    }
-                    let hidden_tag = if proc.hidden() {
-                        format!(" {}", color::dim("(hidden)"))
-                    } else {
-                        String::new()
-                    };
                     let type_str = format!("[{}]", proc.processor_type().as_str());
                     let proc_type = color::dim(&type_str);
                     let batch = if proc.supports_batch() {
@@ -131,7 +111,7 @@ impl Builder {
                     } else {
                         String::new()
                     };
-                    println!("{} {}{}{} \u{2014} {}", name, proc_type, batch, hidden_tag, color::dim(proc.description()));
+                    println!("{} {}{} \u{2014} {}", name, proc_type, batch, color::dim(proc.description()));
                 }
             }
             ProcessorAction::Config { ref name, diff } => {
@@ -249,13 +229,13 @@ impl Builder {
                     }
                 }
             }
-            ProcessorAction::Files { name, all } => {
+            ProcessorAction::Files { name } => {
                 if let Some(ref n) = name
                     && !processors.contains_key(n.as_str()) {
                         bail!("Unknown processor: '{}'. Run 'rsconstruct processors list' to see available processors.", n);
                     }
 
-                let graph = self.build_graph_filtered(name.as_deref(), all)?;
+                let graph = self.build_graph_filtered(name.as_deref(), false)?;
 
                 let products = graph.products();
 

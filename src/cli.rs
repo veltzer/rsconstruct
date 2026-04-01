@@ -382,7 +382,7 @@ pub enum ConfigAction {
 pub enum ProcessorAction {
     /// List available processors with status and descriptions
     List {
-        /// Include hidden processors
+        /// Show all built-in processors, not just those enabled in the project
         #[arg(short, long)]
         all: bool,
     },
@@ -390,9 +390,6 @@ pub enum ProcessorAction {
     Files {
         /// Processor name (omit to show all enabled processors)
         name: Option<String>,
-        /// Include disabled and hidden processors
-        #[arg(short, long)]
-        all: bool,
     },
     /// Show resolved configuration for a processor
     Config {

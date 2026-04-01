@@ -280,11 +280,11 @@ fn run() -> Result<()> {
             let has_config = std::path::Path::new("rsconstruct.toml").exists();
             match action {
                 cli::ProcessorAction::List { all } => {
-                    if has_config {
-                        let builder = Builder::new()?;
-                        builder.processor(cli::ProcessorAction::List { all })?;
+                    if all || !has_config {
+                        builder::processors::list_processors_no_config()?;
                     } else {
-                        builder::processors::list_processors_no_config(all)?;
+                        let builder = Builder::new()?;
+                        builder.processor(cli::ProcessorAction::List { all: false })?;
                     }
                 }
                 cli::ProcessorAction::Defconfig { ref name } => {
