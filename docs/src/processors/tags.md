@@ -35,12 +35,12 @@ Both inline YAML lists (`tags: [a, b, c]`) and multi-line lists are supported.
 
 ### The `tags_dir` Allowlist
 
-The `tags_dir` directory (default: `tag_lists/`) contains `.txt` files that
+The `tags_dir` directory (default: `tags/`) contains `.txt` files that
 define the allowed tags. Each file `<name>.txt` contributes tags as
 `<name>:<line>` pairs. For example:
 
 ```
-tag_lists/
+tags/
 ├── level.txt        # Contains: beginner, intermediate, advanced
 ├── languages.txt    # Contains: python, rust, go, ...
 ├── tools.txt        # Contains: docker, ansible, ...
@@ -99,7 +99,7 @@ Files missing required field groups (must satisfy at least one):
 ### Required Values
 
 When `required_values` is configured, scalar fields must contain a value that
-exists in the corresponding `tag_lists/<field>.txt` file. This catches typos in
+exists in the corresponding `tags/<field>.txt` file. This catches typos in
 scalar values:
 
 ```toml
@@ -109,7 +109,7 @@ required_values = ["level", "category"]
 
 ```
 Invalid values for validated fields:
-  syllabi/courses/intro.md: level=begginer (not in tag_lists/level.txt)
+  syllabi/courses/intro.md: level=begginer (not in tags/level.txt)
 ```
 
 ### Field Types
@@ -177,7 +177,7 @@ files. Note that the same value in different categories is fine (`tools:docker`
 and `infra:docker` are distinct tags):
 
 ```
-Duplicate tags found across tag_lists files:
+Duplicate tags found across tags files:
   tools:docker in tools.txt and infra.txt
 ```
 
@@ -187,7 +187,7 @@ Every tag found in frontmatter must exist in `tags_dir`. Unknown tags cause an
 error with a typo suggestion (Levenshtein distance):
 
 ```
-Unknown tags found (not in tag_lists):
+Unknown tags found (not in tags):
   tools:dockker (did you mean 'tools:docker'?)
     - syllabi/courses/containers/intro.md
 ```
@@ -198,7 +198,7 @@ Every tag defined in `tags_dir/*.txt` must be used by at least one `.md` file.
 This catches stale entries that should be cleaned up:
 
 ```
-Unused tags in tag_lists (not used by any file):
+Unused tags in tags (not used by any file):
   tools:vagrant
   languages:fortran
 ```
@@ -213,13 +213,13 @@ Unused tags in tag_lists (not used by any file):
 ```toml
 [processor.tags]
 output = "out/tags/tags.db"                                       # Output database path
-tags_dir = "tag_lists"                                            # Directory containing tag list files
+tags_dir = "tags"                                            # Directory containing tag list files
 required_fields = ["tags", "level", "category"]                   # Fields every .md file must have
 required_field_groups = [                                         # At least one group must be fully present
     ["duration_hours"],
     ["duration_hours_long", "duration_hours_short"],
 ]
-required_values = ["level", "category"]                           # Scalar fields validated against tag_lists
+required_values = ["level", "category"]                           # Scalar fields validated against tags
 unique_fields = ["title"]                                         # Fields that must be unique across files
 sorted_tags = true                                                # Require list items in sorted order
 extra_inputs = []                                                 # Additional files that trigger rebuilds
@@ -233,10 +233,10 @@ duration_hours = "number"                                         # Must be nume
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `output` | string | `"out/tags/tags.db"` | Path to the tags database file |
-| `tags_dir` | string | `"tag_lists"` | Directory containing `.txt` tag list files |
+| `tags_dir` | string | `"tags"` | Directory containing `.txt` tag list files |
 | `required_fields` | string[] | `[]` | Frontmatter fields that every `.md` file must have |
 | `required_field_groups` | string[][] | `[]` | Alternative field groups; at least one group must be fully present |
-| `required_values` | string[] | `[]` | Scalar fields whose values must exist in `tag_lists/<field>.txt` |
+| `required_values` | string[] | `[]` | Scalar fields whose values must exist in `tags/<field>.txt` |
 | `unique_fields` | string[] | `[]` | Fields whose values must be unique across all files |
 | `field_types` | map | `{}` | Expected types per field: `"list"`, `"scalar"`, or `"number"` |
 | `sorted_tags` | bool | `false` | Require list items in sorted order within each file |

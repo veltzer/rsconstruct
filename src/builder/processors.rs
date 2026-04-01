@@ -252,7 +252,7 @@ impl Builder {
             ProcessorAction::Files { name, all } => {
                 if let Some(ref n) = name
                     && !processors.contains_key(n.as_str()) {
-                        bail!("Unknown processor: '{}'. Run 'rsconstruct processor list' to see available processors.", n);
+                        bail!("Unknown processor: '{}'. Run 'rsconstruct processors list' to see available processors.", n);
                     }
 
                 let graph = self.build_graph_filtered(name.as_deref(), all)?;

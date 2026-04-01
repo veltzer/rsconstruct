@@ -573,9 +573,9 @@ pub enum TagsAction {
         /// Path to the file
         path: String,
     },
-    /// Merge tags from another project's tag_lists directory into the current one
+    /// Merge tags from another project's tags directory into the current one
     Merge {
-        /// Path to the other project's tag_lists directory
+        /// Path to the other project's tags directory
         path: String,
     },
 }

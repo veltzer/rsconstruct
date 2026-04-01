@@ -2,8 +2,8 @@ use std::fs;
 use crate::common::run_rsconstruct_with_env;
 use tempfile::TempDir;
 
-/// Helper: create a tags test project with given .md files and optional tag_lists directory.
-/// `tag_lists` is a slice of (filename, content) pairs for files in tag_lists/.
+/// Helper: create a tags test project with given .md files and optional tags directory.
+/// `tag_lists` is a slice of (filename, content) pairs for files in tags/.
 fn setup_tags_project(md_files: &[(&str, &str)], tag_lists: &[(&str, &str)]) -> TempDir {
     setup_tags_project_with_config(md_files, tag_lists, "[processor.tags]\n")
 }

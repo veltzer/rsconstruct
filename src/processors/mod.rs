@@ -906,7 +906,6 @@ impl InstallMethod {
     }
 
     /// Return the install command for multiple packages at once (batch install)
-    #[allow(dead_code)]
     pub fn batch_command(method: &str, packages: &[&str]) -> String {
         match method {
             "apt" => format!("sudo apt install -y {}", packages.join(" ")),
@@ -1065,12 +1064,6 @@ pub fn tool_install_command(tool: &str) -> Option<String> {
 /// Return the runtime category for a tool, if known.
 pub fn tool_runtime(tool: &str) -> Option<&'static str> {
     tool_info(tool).map(|t| t.runtime)
-}
-
-/// Return all install methods for a tool.
-#[allow(dead_code)]
-pub fn tool_install_methods(tool: &str) -> Option<&'static [InstallMethod]> {
-    tool_info(tool).map(|t| t.install_methods)
 }
 
 /// Timing for a single product execution

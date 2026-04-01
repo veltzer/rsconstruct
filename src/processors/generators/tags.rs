@@ -303,7 +303,7 @@ impl ProductDiscovery for TagsProcessor {
             bail!("{}", msg.trim_end());
         }
 
-        // Check required_values (scalar fields must have values in tag_lists)
+        // Check required_values (scalar fields must have values in tags dir)
         if !self.config.required_values.is_empty() {
             let dir = Path::new(&self.config.tags_dir);
             let allowed = if dir.is_dir() { load_tags_dir(dir)? } else { HashSet::new() };
@@ -1509,7 +1509,7 @@ pub(crate) fn load_tags_dir(dir: &Path) -> Result<HashSet<String>> {
     Ok(tags)
 }
 
-/// Merge tags from another project's tag_lists directory into the current one.
+/// Merge tags from another project's tags directory into the current one.
 /// For each .txt file in `source_dir`:
 ///   - If a file with the same name exists in `tags_dir`, merge (union) and sort the entries.
 ///   - Otherwise, copy the file as-is.

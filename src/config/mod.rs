@@ -315,20 +315,6 @@ macro_rules! gen_processor_config {
             matches!(name, $( stringify!($field) )|*)
         }
 
-        /// Deserialize a TOML value into a typed config for the given processor type.
-        /// Returns the config with scan defaults resolved, serialized back to toml::Value.
-        #[allow(dead_code)]
-        pub(crate) fn deserialize_instance_config(type_name: &str, value: &toml::Value) -> anyhow::Result<toml::Value> {
-            match type_name {
-                $(
-                    stringify!($field) => {
-                        let cfg: $config_type = toml::from_str(&toml::to_string(value)?)?;
-                        Ok(toml::Value::try_from(&cfg)?)
-                    }
-                )*
-                _ => anyhow::bail!("Unknown processor type: {}", type_name),
-            }
-        }
 
         /// Resolve scan defaults for an instance config in-place.
         pub(crate) fn resolve_instance_scan_defaults(type_name: &str, value: &mut toml::Value) -> anyhow::Result<()> {
@@ -526,28 +512,10 @@ impl ProcessorConfig {
         }
     }
 
-    /// Check if a processor instance name is declared.
-    #[allow(dead_code)]
-    pub(crate) fn is_declared(&self, instance_name: &str) -> bool {
-        self.instances.iter().any(|i| i.instance_name == instance_name)
-    }
-
-    /// Get all instance names for a given type.
-    #[allow(dead_code)]
-    pub(crate) fn instances_of_type(&self, type_name: &str) -> Vec<&ProcessorInstance> {
-        self.instances.iter().filter(|i| i.type_name == type_name).collect()
-    }
-
     /// Get the first instance of a given type (for single-instance access).
     /// Returns None if no instance of that type is declared.
     pub(crate) fn first_instance_of_type(&self, type_name: &str) -> Option<&ProcessorInstance> {
         self.instances.iter().find(|i| i.type_name == type_name)
-    }
-
-    /// Get mutable reference to first instance of a given type.
-    #[allow(dead_code)]
-    pub(crate) fn first_instance_of_type_mut(&mut self, type_name: &str) -> Option<&mut ProcessorInstance> {
-        self.instances.iter_mut().find(|i| i.type_name == type_name)
     }
 
     /// Get a typed config value from an instance's TOML config.
