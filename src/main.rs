@@ -367,6 +367,9 @@ fn run() -> Result<()> {
                 cli::TermsAction::Merge { path } => {
                     processors::terms::merge_terms(&terms_config, &path)?;
                 }
+                cli::TermsAction::Stats => {
+                    processors::terms::stats(&terms_config)?;
+                }
             }
         }
         Commands::Tags { action } => {

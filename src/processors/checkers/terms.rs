@@ -603,3 +603,23 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
     println!("Done. Merged {} file(s), copied {} new file(s).", merged_count, copied_count);
     Ok(())
 }
+
+/// Print term statistics.
+pub fn stats(config: &TermsConfig) -> Result<()> {
+    let dir = Path::new(&config.terms_dir);
+    if !dir.is_dir() {
+        bail!("terms_dir `{}` does not exist or is not a directory", config.terms_dir);
+    }
+    let mut file_count = 0;
+    let mut total_terms = 0;
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        if entry.path().extension().is_some_and(|e| e == "txt") {
+            file_count += 1;
+            let content = fs::read_to_string(entry.path())?;
+            total_terms += content.lines().filter(|l| !l.trim().is_empty()).count();
+        }
+    }
+    println!("{} term file(s), {} total terms", file_count, total_terms);
+    Ok(())
+}

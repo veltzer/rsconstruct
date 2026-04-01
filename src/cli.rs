@@ -513,6 +513,8 @@ pub enum TermsAction {
         /// Path to the other project's terms directory
         path: String,
     },
+    /// Show term file and term count statistics
+    Stats,
 }
 
 #[derive(Subcommand)]
