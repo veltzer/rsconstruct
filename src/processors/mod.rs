@@ -707,11 +707,11 @@ where
 pub use checkers::{
     AsciiProcessor, AspellProcessor, BlackCheckProcessor,
     CheckpatchProcessor, ClippyProcessor, ClangTidyProcessor, CppcheckProcessor, CpplintProcessor,
-    CheckstyleProcessor, CmakeProcessor,
+    CheckstyleProcessor, CmakeProcessor, DoctestProcessor,
     HadolintProcessor, EslintProcessor, HtmlhintProcessor, HtmllintProcessor,
     JshintProcessor, JslintProcessor, JqProcessor, JsonlintProcessor, JsonSchemaProcessor,
     LuacheckProcessor, MakeProcessor, MarkdownlintProcessor, MdlProcessor, MypyProcessor,
-    PerlcriticProcessor, PhpLintProcessor, PylintProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor,
+    PerlcriticProcessor, PhpLintProcessor, PylintProcessor, PytestProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor,
     ScriptProcessor, ShellcheckProcessor, SlidevProcessor, ZspellProcessor,
     StandardProcessor, StylelintProcessor,
     TaploProcessor, TermsProcessor, TidyProcessor, XmllintProcessor, YamllintProcessor, YqProcessor,

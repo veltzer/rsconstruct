@@ -1897,6 +1897,51 @@ generator_config!(SassConfig, tool: "sass", sass_bin,
     default_scan!(scan_dir: "sass", extensions: [".scss", ".sass"]),
 );
 
+fn default_rustc() -> String { "rustc".into() }
+fn default_rust_single_file_output_suffix() -> String { ".elf".into() }
+fn default_rust_single_file_output_dir() -> String { "out/rust_single_file".into() }
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct RustSingleFileConfig {
+    #[serde(default = "default_rustc")]
+    pub rustc: String,
+    #[serde(default)]
+    pub flags: Vec<String>,
+    #[serde(default = "default_rust_single_file_output_suffix")]
+    pub output_suffix: String,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(default)]
+    pub auto_inputs: Vec<String>,
+    #[serde(default = "default_rust_single_file_output_dir")]
+    pub output_dir: String,
+    #[serde(default = "default_true")]
+    pub batch: bool,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for RustSingleFileConfig {
+    fn default() -> Self {
+        Self {
+            rustc: "rustc".into(),
+            flags: Vec::new(),
+            output_suffix: ".elf".into(),
+            extra_inputs: Vec::new(),
+            auto_inputs: Vec::new(),
+            output_dir: "out/rust_single_file".into(),
+            batch: true,
+            scan: default_scan!(scan_dir: "src", extensions: [".rs"]),
+        }
+    }
+}
+
+impl KnownFields for RustSingleFileConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &["rustc", "flags", "output_suffix", "extra_inputs", "auto_inputs", "output_dir", "batch"]
+    }
+}
+
 fn default_pdfunite_bin() -> String {
     "pdfunite".into()
 }

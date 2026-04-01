@@ -64,7 +64,9 @@ mod processors {
     pub mod pdflatex;
     pub mod pdfunite;
     pub mod pip;
+    pub mod protobuf;
     pub mod pylint;
+    pub mod pytest;
     pub mod pyrefly;
     pub mod ruff;
     pub mod rumdl;
