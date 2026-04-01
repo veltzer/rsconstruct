@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::Path;
 use tempfile::TempDir;
 use crate::common::{run_rsconstruct_with_env, tool_available};
 
@@ -98,4 +99,36 @@ fn pandoc_no_project_discovered() {
         "Should discover 0 products: {}",
         stdout
     );
+}
+
+/// Build the same markdown file twice with pandoc and verify the PDF output is binary identical.
+/// This tests that our pandoc invocation is deterministic (no embedded timestamps, random IDs, etc.).
+#[test]
+fn pandoc_pdf_deterministic() {
+    if !tool_available("pandoc") || !tool_available("pdflatex") {
+        eprintln!("pandoc or pdflatex not found, skipping test");
+        return;
+    }
+
+    let md_content = "---\ntitle: Determinism Test\n---\n# Hello World\n\nThis is a test.\n\n## Outline\n* Chapter one\n* Chapter two\n";
+    let config = "[processor.pandoc]\nformats = [\"pdf\"]\nscan_dir = \"\"\n";
+
+    // Build 1
+    let dir1 = TempDir::new().expect("Failed to create temp dir");
+    fs::write(dir1.path().join("rsconstruct.toml"), config).unwrap();
+    fs::write(dir1.path().join("doc.md"), md_content).unwrap();
+    let out1 = run_rsconstruct_with_env(dir1.path(), &["build"], &[("NO_COLOR", "1")]);
+    assert!(out1.status.success(), "Build 1 failed: {}", String::from_utf8_lossy(&out1.stderr));
+
+    // Build 2
+    let dir2 = TempDir::new().expect("Failed to create temp dir");
+    fs::write(dir2.path().join("rsconstruct.toml"), config).unwrap();
+    fs::write(dir2.path().join("doc.md"), md_content).unwrap();
+    let out2 = run_rsconstruct_with_env(dir2.path(), &["build"], &[("NO_COLOR", "1")]);
+    assert!(out2.status.success(), "Build 2 failed: {}", String::from_utf8_lossy(&out2.stderr));
+
+    // Compare PDFs
+    let pdf1 = fs::read(dir1.path().join("out/pandoc/doc.pdf")).expect("PDF 1 not found");
+    let pdf2 = fs::read(dir2.path().join("out/pandoc/doc.pdf")).expect("PDF 2 not found");
+    assert_eq!(pdf1, pdf2, "PDFs should be binary identical but differ ({} vs {} bytes)", pdf1.len(), pdf2.len());
 }
