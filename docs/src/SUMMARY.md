@@ -76,6 +76,7 @@
     - [XMLLint](processors/xmllint.md)
     - [Yamllint](processors/yamllint.md)
     - [YQ](processors/yq.md)
+- [GitHub Actions](github-actions.md)
 - [Lua Plugins](plugins.md)
 - [Advanced Usage](advanced.md)
 - [Testing](testing.md)

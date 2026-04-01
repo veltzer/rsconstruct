@@ -807,11 +807,6 @@ pub trait ProductDiscovery: Sync + Send {
         ProcessorType::Checker
     }
 
-    /// Whether this processor should be hidden from default listings (e.g. testing-only processors)
-    fn hidden(&self) -> bool {
-        false
-    }
-
     /// Discover all products this processor can produce
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()>;
 
