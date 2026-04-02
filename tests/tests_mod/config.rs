@@ -257,3 +257,82 @@ fn config_validate_json() {
     assert!(first.get("severity").is_some(), "Expected severity field");
     assert!(first.get("message").is_some(), "Expected message field");
 }
+
+#[test]
+fn config_per_processor_output_dir_override() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    // Override the output_dir for the marp processor
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.marp]\noutput_dir = \"custom_out/slides\"\n",
+    ).unwrap();
+
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["--json", "processors", "config", "marp"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(output.status.success(), "processors config failed: {}", String::from_utf8_lossy(&output.stderr));
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("JSON parse failed: {}\nOutput: {}", e, stdout));
+    let output_dir = parsed["marp"]["output_dir"].as_str().unwrap();
+    assert_eq!(output_dir, "custom_out/slides", "Expected custom output_dir");
+}
+
+#[test]
+fn config_global_output_dir_remaps_processor_defaults() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    // Set global output_dir to "build" and enable marp with default output_dir
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[build]\noutput_dir = \"build\"\n\n[processor.marp]\n",
+    ).unwrap();
+
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["--json", "processors", "config", "marp"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(output.status.success(), "processors config failed: {}", String::from_utf8_lossy(&output.stderr));
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("JSON parse failed: {}\nOutput: {}", e, stdout));
+    let output_dir = parsed["marp"]["output_dir"].as_str().unwrap();
+    assert_eq!(output_dir, "build/marp", "Global output_dir should remap out/marp to build/marp");
+}
+
+#[test]
+fn config_named_instances_get_separate_output_dirs() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    // Create two named instances of marp
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.marp.slides]\n\n[processor.marp.docs]\n",
+    ).unwrap();
+
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["--json", "processors", "config"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(output.status.success(), "processors config failed: {}", String::from_utf8_lossy(&output.stderr));
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("JSON parse failed: {}\nOutput: {}", e, stdout));
+
+    let slides_dir = parsed["marp.slides"]["output_dir"].as_str().unwrap();
+    let docs_dir = parsed["marp.docs"]["output_dir"].as_str().unwrap();
+    assert_eq!(slides_dir, "out/marp.slides", "Named instance should get out/{{instance_name}}");
+    assert_eq!(docs_dir, "out/marp.docs", "Named instance should get out/{{instance_name}}");
+    assert_ne!(slides_dir, docs_dir, "Named instances must have different output dirs");
+}

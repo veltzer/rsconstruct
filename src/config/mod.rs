@@ -222,10 +222,18 @@ pub(crate) struct BuildConfig {
     /// 0 = no limit (all files in one batch), None = disable batching entirely.
     #[serde(default)]
     pub batch_size: Option<usize>,
+    /// Global output directory prefix (default: "out").
+    /// Processor output_dir fields that start with "out/" will use this as the base instead.
+    #[serde(default = "default_output_dir")]
+    pub output_dir: String,
 }
 
 fn default_parallel() -> usize {
     1
+}
+
+fn default_output_dir() -> String {
+    "out".into()
 }
 
 impl Default for BuildConfig {
@@ -233,6 +241,7 @@ impl Default for BuildConfig {
         Self {
             parallel: 1,
             batch_size: Some(0), // Default: batching enabled, no size limit
+            output_dir: "out".into(),
         }
     }
 }
@@ -510,6 +519,37 @@ impl ProcessorConfig {
     pub(crate) fn resolve_scan_defaults(&mut self) {
         for inst in &mut self.instances {
             resolve_instance_scan_defaults(&inst.type_name, &mut inst.config_toml).ok();
+        }
+    }
+
+    /// Rewrite output paths in processor configs:
+    /// 1. For named instances (e.g., `pylint.core`), remap default `out/{type_name}`
+    ///    to `out/{instance_name}` so each instance gets its own output directory.
+    /// 2. If the global `output_dir` is not "out", replace the `out/` prefix with the
+    ///    global value (e.g., `build/` → `build/marp`).
+    pub(crate) fn apply_output_dir_defaults(&mut self, global_output_dir: &str) {
+        for inst in &mut self.instances {
+            let type_default_prefix = format!("out/{}", inst.type_name);
+            let instance_prefix = format!("{}/{}", global_output_dir, inst.instance_name);
+
+            for field in &["output_dir", "output"] {
+                let val = match inst.config_toml.get(field).and_then(|v| v.as_str()).map(|s| s.to_string()) {
+                    Some(v) => v,
+                    None => continue,
+                };
+                let new_val = if inst.instance_name != inst.type_name && val.starts_with(&type_default_prefix) {
+                    // Named instance: remap out/{type} → {global}/{instance}
+                    format!("{}{}", instance_prefix, &val[type_default_prefix.len()..])
+                } else if global_output_dir != "out" && val.starts_with("out/") {
+                    // Global output dir override: remap out/ → {global}/
+                    format!("{}/{}", global_output_dir, &val[4..])
+                } else {
+                    continue;
+                };
+                if let Some(table) = inst.config_toml.as_table_mut() {
+                    table.insert(field.to_string(), toml::Value::String(new_val));
+                }
+            }
         }
     }
 
@@ -880,6 +920,7 @@ impl Config {
             Config::default()
         };
         config.processor.resolve_scan_defaults();
+        config.processor.apply_output_dir_defaults(&config.build.output_dir);
         Ok(config)
     }
 }

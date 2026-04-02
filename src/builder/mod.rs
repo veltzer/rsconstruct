@@ -355,12 +355,22 @@ impl Builder {
         if phases_debug() {
             eprintln!("{}", color::dim("  Phase: discover"));
         }
+        // Build instance_name → type_name mapping for named instances
+        let instance_to_type: HashMap<&str, &str> = self.config.processor.instances.iter()
+            .filter(|inst| inst.instance_name != inst.type_name)
+            .map(|inst| (inst.instance_name.as_str(), inst.type_name.as_str()))
+            .collect();
+
         let t = Instant::now();
         for name in &active_processors {
             if mode == GraphBuildMode::ForClean {
                 processors[*name].discover_for_clean(&mut graph, &self.file_index)?;
             } else {
                 processors[*name].discover(&mut graph, &self.file_index)?;
+            }
+            // Remap processor name from type_name to instance_name for named instances
+            if let Some(&type_name) = instance_to_type.get(name.as_str()) {
+                graph.remap_processor_name(type_name, name);
             }
         }
         phase_timings.push(("discover".to_string(), t.elapsed()));
@@ -430,9 +440,19 @@ impl Builder {
             })
             .collect();
 
+        // Build instance_name → type_name mapping for named instances
+        let instance_to_type: HashMap<&str, &str> = self.config.processor.instances.iter()
+            .filter(|inst| inst.instance_name != inst.type_name)
+            .map(|inst| (inst.instance_name.as_str(), inst.type_name.as_str()))
+            .collect();
+
         // Phase 1: Discover products
         for name in &active_processors {
             processors[*name].discover(&mut graph, &self.file_index)?;
+            // Remap processor name from type_name to instance_name for named instances
+            if let Some(&type_name) = instance_to_type.get(name.as_str()) {
+                graph.remap_processor_name(type_name, name);
+            }
         }
 
         // Phase 2: Run dependency analyzers

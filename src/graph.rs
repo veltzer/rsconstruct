@@ -232,6 +232,16 @@ impl BuildGraph {
         Ok(id)
     }
 
+    /// Rename the processor field on all products that currently use `old_name` to `new_name`.
+    /// Used to remap type names to instance names for named processor instances.
+    pub fn remap_processor_name(&mut self, old_name: &str, new_name: &str) {
+        for product in &mut self.products {
+            if product.processor == old_name {
+                product.processor = new_name.to_string();
+            }
+        }
+    }
+
     /// Incorporate tool version hashes into product config hashes.
     /// For each product whose processor has an entry in the map, the tool
     /// version hash is appended to (or becomes) the product's config_hash.

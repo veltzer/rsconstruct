@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use anyhow::{Context, Result, bail};
@@ -33,10 +34,19 @@ impl Builder {
                 let processors = self.create_processors()?;
                 let mut graph = crate::graph::BuildGraph::new();
 
+                // Build instance_name → type_name mapping for named instances
+                let instance_to_type: HashMap<&str, &str> = self.config.processor.instances.iter()
+                    .filter(|inst| inst.instance_name != inst.type_name)
+                    .map(|inst| (inst.instance_name.as_str(), inst.type_name.as_str()))
+                    .collect();
+
                 // Phase 1: Discover products
                 for name in sorted_keys(&processors) {
                     if self.is_processor_active(name, processors[name].as_ref()) {
                         processors[name].discover(&mut graph, &self.file_index)?;
+                        if let Some(&type_name) = instance_to_type.get(name.as_str()) {
+                            graph.remap_processor_name(type_name, name);
+                        }
                     }
                 }
 

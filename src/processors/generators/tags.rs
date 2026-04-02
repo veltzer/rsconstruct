@@ -919,6 +919,78 @@ pub fn unused_tags(db_path: &str, tags_dir: &str, strict: bool) -> Result<()> {
     Ok(())
 }
 
+/// Scan the tags database and add any missing tags back to the tag collection files.
+/// For key:value tags (e.g. "level:advanced"), adds the value to `{tags_dir}/{key}.txt`.
+/// For bare tags (e.g. "docker"), adds to `{tags_dir}/tags.txt`.
+pub fn collect_tags(db_path: &str, tags_dir: &str) -> Result<()> {
+    let dir = Path::new(tags_dir);
+    if !dir.is_dir() {
+        fs::create_dir_all(dir)
+            .with_context(|| format!("Failed to create tags_dir: {}", tags_dir))?;
+    }
+    let allowed = load_tags_dir(dir)?;
+    let db_tags = load_all_tags(db_path)?;
+
+    // Find tags in the database that are not in the allowlist
+    let mut missing: Vec<&String> = db_tags.iter()
+        .filter(|t| !tag_matches_allowed(t, &allowed))
+        .collect();
+    missing.sort();
+
+    if missing.is_empty() {
+        println!("All tags are already in the collection.");
+        return Ok(());
+    }
+
+    // Group by category: key:value → file={key}.txt, bare → file=tags.txt
+    let mut by_file: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for tag in &missing {
+        if let Some((key, value)) = tag.split_once(':') {
+            by_file.entry(format!("{}.txt", key))
+                .or_default()
+                .insert(value.to_string());
+        } else {
+            by_file.entry("tags.txt".to_string())
+                .or_default()
+                .insert((*tag).clone());
+        }
+    }
+
+    // Append to each file and keep sorted
+    for (filename, new_values) in &by_file {
+        let path = dir.join(filename);
+        let mut existing: BTreeSet<String> = if path.exists() {
+            fs::read_to_string(&path)
+                .with_context(|| format!("Failed to read {}", path.display()))?
+                .lines()
+                .map(|l| l.trim().to_string())
+                .filter(|l| !l.is_empty() && !l.starts_with('#'))
+                .collect()
+        } else {
+            BTreeSet::new()
+        };
+
+        let before = existing.len();
+        existing.extend(new_values.iter().cloned());
+        let added = existing.len() - before;
+
+        if added > 0 {
+            let mut sorted: Vec<&String> = existing.iter().collect();
+            sorted.sort();
+            let content = sorted.iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join("\n");
+            fs::write(&path, format!("{}\n", content))
+                .with_context(|| format!("Failed to write {}", path.display()))?;
+            println!("Added {} tag(s) to {}", added, path.display());
+        }
+    }
+
+    println!("Collected {} missing tag(s) into {}.", missing.len(), tags_dir);
+    Ok(())
+}
+
 /// Validate tags against allowed set without building.
 pub fn validate_tags(db_path: &str, tags_dir: &str) -> Result<()> {
     let dir = Path::new(tags_dir);

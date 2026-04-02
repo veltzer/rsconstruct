@@ -295,6 +295,13 @@ fn run() -> Result<()> {
                         builder::processors::processor_defconfig(name)?;
                     }
                 }
+                cli::ProcessorAction::Config { ref name, .. } if !has_config => {
+                    // Without a config file, show default config (like defconfig)
+                    match name {
+                        Some(n) => builder::processors::processor_defconfig(n)?,
+                        None => bail!("No rsconstruct.toml found. Specify a processor name to show its default config."),
+                    }
+                }
                 action => {
                     let builder = Builder::new()?;
                     builder.processor(action, cli.verbose)?;
@@ -403,6 +410,7 @@ fn run() -> Result<()> {
                 }
                 cli::TagsAction::Suggest { path } => processors::tags_cmd::suggest_tags(&db_path, &path)?,
                 cli::TagsAction::Merge { path } => processors::tags_cmd::merge_tags(&tags_dir, &path)?,
+                cli::TagsAction::Collect => processors::tags_cmd::collect_tags(&db_path, &tags_dir)?,
             }
         }
         Commands::Tools { action } => {

@@ -152,8 +152,10 @@ impl Builder {
             return Ok(());
         }
 
-        // Create executor with parallelism from command line or config
-        let parallel = opts.jobs.unwrap_or(self.config.build.parallel);
+        // Create executor with parallelism from command line, env var, or config
+        let parallel = opts.jobs
+            .or_else(|| std::env::var("RSCONSTRUCT_THREADS").ok().and_then(|v| v.parse().ok()))
+            .unwrap_or(self.config.build.parallel);
         // CLI overrides config for batch_size
         let batch_size = opts.batch_size.unwrap_or(self.config.build.batch_size);
         let executor = Executor::new(&processors, ExecutorOptions {

@@ -577,6 +577,8 @@ pub enum TagsAction {
         /// Path to the other project's tags directory
         path: String,
     },
+    /// Scan source files and add missing tags back to the tag collection
+    Collect,
 }
 
 /// CLI arguments shared between Build and Watch commands.
