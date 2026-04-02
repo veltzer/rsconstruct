@@ -64,6 +64,7 @@ macro_rules! for_each_processor {
             PDFUNITE,       pdfunite,       PdfuniteConfig,        PdfuniteProcessor,        ("", &["course.yaml"], BUILD_TOOL_EXCLUDES);
             SCRIPT,   script,   ScriptConfig,     ScriptProcessor,     ("", &[], &[]);
             GENERATOR,  generator,  GeneratorConfig,   GeneratorProcessor,   ("", &[], &[]);
+            EXPLICIT,   explicit,   ExplicitConfig,    ExplicitProcessor,    ("", &[], &[]);
             LINUX_MODULE,   linux_module,   LinuxModuleConfig,     LinuxModuleProcessor,     ("", &["linux-module.yaml"], BUILD_TOOL_EXCLUDES);
             CPPLINT,        cpplint,        CpplintConfig,         CpplintProcessor,         ("src", &[".c", ".cc", ".h", ".hh"], CC_EXCLUDE_DIRS);
             CHECKPATCH,     checkpatch,     CheckpatchConfig,      CheckpatchProcessor,      ("src", &[".c", ".h"], CC_EXCLUDE_DIRS);

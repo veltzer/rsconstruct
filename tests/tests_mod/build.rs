@@ -569,3 +569,66 @@ extensions = [".txt"]
     assert!(has_generated_input,
         "ascii should have generated.txt as input.\nascii products: {:?}", ascii_products);
 }
+
+/// Test the explicit processor: declares inputs, input_globs, and outputs explicitly.
+/// Verifies discovery creates a single product with all resolved inputs and the declared output.
+#[test]
+fn explicit_processor_discovery() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    // Create input files
+    fs::create_dir_all(project_path.join("data")).unwrap();
+    fs::write(project_path.join("config.txt"), "config").unwrap();
+    fs::write(project_path.join("data/a.csv"), "a").unwrap();
+    fs::write(project_path.join("data/b.csv"), "b").unwrap();
+    fs::write(project_path.join("data/skip.txt"), "not a csv").unwrap();
+
+    // Configure an explicit processor with literal inputs and a glob
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        r#"
+[processor.explicit.report]
+command = "scripts/build_report.py"
+inputs = ["config.txt"]
+input_globs = ["data/*.csv"]
+outputs = ["out/report.html"]
+"#,
+    ).unwrap();
+
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["--json", "processors", "files"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(output.status.success(), "processors files failed: {}",
+        String::from_utf8_lossy(&output.stderr));
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: Vec<serde_json::Value> = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("JSON parse failed: {}\nOutput: {}", e, stdout));
+
+    // Should have exactly one product
+    let explicit_products: Vec<&serde_json::Value> = parsed.iter()
+        .filter(|p| p["processor"].as_str().unwrap().contains("explicit"))
+        .collect();
+    assert_eq!(explicit_products.len(), 1,
+        "Expected 1 explicit product, got {}: {:?}", explicit_products.len(), explicit_products);
+
+    let product = explicit_products[0];
+
+    // Check inputs: config.txt (literal) + data/a.csv, data/b.csv (glob, sorted)
+    let inputs: Vec<&str> = product["inputs"].as_array().unwrap()
+        .iter().map(|v| v.as_str().unwrap()).collect();
+    assert_eq!(inputs.len(), 3, "Expected 3 inputs: {:?}", inputs);
+    assert_eq!(inputs[0], "config.txt");
+    assert!(inputs[1].ends_with("a.csv"), "Expected a.csv, got {}", inputs[1]);
+    assert!(inputs[2].ends_with("b.csv"), "Expected b.csv, got {}", inputs[2]);
+    // skip.txt should NOT be included (not matching *.csv)
+    assert!(!inputs.iter().any(|i| i.contains("skip.txt")), "skip.txt should not be an input");
+
+    // Check output
+    let outputs: Vec<&str> = product["outputs"].as_array().unwrap()
+        .iter().map(|v| v.as_str().unwrap()).collect();
+    assert_eq!(outputs, vec!["out/report.html"]);
+}

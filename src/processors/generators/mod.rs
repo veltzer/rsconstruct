@@ -154,6 +154,7 @@ mod a2x;
 mod cc_single_file;
 mod chromium;
 mod drawio;
+mod explicit;
 mod generator;
 mod jinja2;
 mod libreoffice;
@@ -174,6 +175,7 @@ mod tera;
 
 pub use a2x::A2xProcessor;
 pub use cc_single_file::CcSingleFileProcessor;
+pub use explicit::ExplicitProcessor;
 pub use generator::GeneratorProcessor;
 pub use jinja2::Jinja2Processor;
 pub use chromium::ChromiumProcessor;

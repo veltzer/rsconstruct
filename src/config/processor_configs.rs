@@ -1228,6 +1228,59 @@ impl KnownFields for GeneratorConfig {
     }
 }
 
+// --- explicit processor (many inputs → few outputs, fully declared) ---
+
+fn default_explicit_command() -> String {
+    "true".into()
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ExplicitConfig {
+    /// Script or binary to execute
+    #[serde(default = "default_explicit_command")]
+    pub command: String,
+    /// Extra arguments passed before --inputs
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// Literal input file paths
+    #[serde(default)]
+    pub inputs: Vec<String>,
+    /// Glob patterns resolved to input files
+    #[serde(default)]
+    pub input_globs: Vec<String>,
+    /// Output file paths produced by the command
+    #[serde(default)]
+    pub outputs: Vec<String>,
+    /// Unused — present for compatibility with the processor macro system
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for ExplicitConfig {
+    fn default() -> Self {
+        Self {
+            command: "true".into(),
+            args: Vec::new(),
+            inputs: Vec::new(),
+            input_globs: Vec::new(),
+            outputs: Vec::new(),
+            scan: ScanConfig {
+                scan_dirs: None,
+                extensions: None,
+                exclude_dirs: None,
+                exclude_files: None,
+                exclude_paths: None,
+            },
+        }
+    }
+}
+
+impl KnownFields for ExplicitConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &["command", "args", "inputs", "input_globs", "outputs"]
+    }
+}
+
 fn default_pip() -> String {
     "pip".into()
 }

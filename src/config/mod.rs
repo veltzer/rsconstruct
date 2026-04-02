@@ -36,11 +36,23 @@ pub(crate) trait KnownFields {
 pub(crate) fn resolve_extra_inputs(extra_inputs: &[String]) -> Result<Vec<PathBuf>> {
     let mut resolved = Vec::new();
     for p in extra_inputs {
-        let path = PathBuf::from(p);
-        if !path.exists() {
-            anyhow::bail!("extra_inputs file not found: {}", p);
+        if p.contains('*') || p.contains('?') || p.contains('[') {
+            // Glob pattern: expand to matching files
+            for entry in glob::glob(p)
+                .with_context(|| format!("Invalid glob pattern in extra_inputs: {}", p))?
+            {
+                let path = entry.with_context(|| format!("Failed to read glob entry for: {}", p))?;
+                if path.is_file() {
+                    resolved.push(path);
+                }
+            }
+        } else {
+            let path = PathBuf::from(p);
+            if !path.exists() {
+                anyhow::bail!("extra_inputs file not found: {}", p);
+            }
+            resolved.push(path);
         }
-        resolved.push(path);
     }
     Ok(resolved)
 }
