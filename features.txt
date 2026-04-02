@@ -5,3 +5,13 @@ why cant I do "rsconstruct prcoessors config pyrefly"
 I cant only do defconfig
 
 when I do "tags collect" I want to scan source files and collect back to the tag collection any tags which are missing from it.
+
+when in a single file I have two processors of the same type:
+[processor.pylint.one]
+...
+[processor.pylint.two]
+...
+one and two should be their names and whenever there is a problem they should report their
+full name (e.g. pylint.one and pylint.two) to enable me to distinguish between them.
+
+processors with just one instance can just use the name of the processor as their name.
