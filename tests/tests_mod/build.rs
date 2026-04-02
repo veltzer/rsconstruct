@@ -503,3 +503,69 @@ fn checker_and_generator_both_rebuild_on_shared_input_change() {
     assert_eq!(content3, "version2",
         "Output should contain new content after rebuild");
 }
+
+/// Test that cross-processor dependencies work: a downstream processor discovers
+/// products whose inputs are declared outputs of an upstream processor, even on
+/// a clean build where those output files don't exist on disk yet.
+#[test]
+fn cross_processor_discovery() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    // Enable tera (generates files) and ascii (checks files).
+    // Configure ascii to scan .txt files at the project root — exactly where
+    // tera will output them.
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        r#"
+[processor.tera]
+
+[processor.ascii]
+scan_dirs = [""]
+extensions = [".txt"]
+"#,
+    ).unwrap();
+
+    // Create a tera template that generates a .txt file
+    fs::create_dir_all(project_path.join("tera.templates")).unwrap();
+    fs::write(
+        project_path.join("tera.templates/generated.txt.tera"),
+        "hello world",
+    ).unwrap();
+
+    // The generated.txt does NOT exist on disk yet — this is a clean build.
+    assert!(!project_path.join("generated.txt").exists());
+
+    // Ask rsconstruct to list processor files (discovery only, no build).
+    // The ascii processor should discover generated.txt as an input,
+    // because the fixed-point discovery loop injects tera's declared output
+    // as a virtual file.
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["--json", "processors", "files"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(output.status.success(), "processors files failed: {}",
+        String::from_utf8_lossy(&output.stderr));
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: Vec<serde_json::Value> = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("JSON parse failed: {}\nOutput: {}", e, stdout));
+
+    // Find the ascii processor's entries
+    let ascii_products: Vec<&serde_json::Value> = parsed.iter()
+        .filter(|p| p["processor"].as_str() == Some("ascii"))
+        .collect();
+
+    assert!(!ascii_products.is_empty(),
+        "ascii processor should have discovered products from tera's output.\n\
+         All products: {:?}", parsed);
+
+    // Verify that generated.txt is an input to ascii
+    let has_generated_input = ascii_products.iter().any(|p| {
+        p["inputs"].as_array().unwrap().iter()
+            .any(|i| i.as_str().unwrap().contains("generated.txt"))
+    });
+    assert!(has_generated_input,
+        "ascii should have generated.txt as input.\nascii products: {:?}", ascii_products);
+}
