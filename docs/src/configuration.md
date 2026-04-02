@@ -7,7 +7,9 @@ RSConstruct is configured via an `rsconstruct.toml` file in the project root.
 ```toml
 [build]
 parallel = 1          # Number of parallel jobs (1 = sequential, 0 = auto-detect CPU cores)
+                      # Also settable via RSCONSTRUCT_THREADS env var (CLI -j takes precedence)
 batch_size = 0        # Max files per batch for batch-capable processors (0 = no limit, omit to disable)
+output_dir = "out"    # Global output directory prefix for generator processors
 
 # Declare processors by adding [processor.NAME] sections.
 # Only declared processors run — no processors are enabled by default.
@@ -79,9 +81,24 @@ scan_dirs = ["tests"]
 args = ["--disable=C0114,C0116"]
 ```
 
-Each instance runs independently with its own config and cache. The instance name (e.g., `pylint.core`) appears in build output and cache keys.
+Each instance runs independently with its own config and cache.
 
 You cannot mix single-instance and multi-instance formats for the same processor type — use either `[processor.pylint]` or `[processor.pylint.NAME]`, not both.
+
+#### Instance naming
+
+A single instance declared as `[processor.pylint]` has the instance name `pylint`. Named instances declared as `[processor.pylint.core]` and `[processor.pylint.tests]` have instance names `pylint.core` and `pylint.tests`.
+
+The instance name is used everywhere a processor is identified:
+
+- **Build output and progress**: `[pylint.core] src/core/main.py`
+- **Error messages**: `Error: [pylint.tests] tests/test_foo.py: ...`
+- **Build statistics**: each instance reports its own file counts and durations
+- **Cache keys**: instances have separate caches, so changing one config does not invalidate the other
+- **Output directories**: generator processors default to `out/{instance_name}` (e.g., `out/marp.slides` and `out/marp.docs` for two marp instances), ensuring outputs do not collide
+- **The `--processors` filter**: use the full instance name, e.g., `rsconstruct build -p pylint.core`
+
+For single instances, the instance name equals the processor type name (e.g., `pylint`), so there is no visible difference from previous behavior.
 
 ### Auto-detection
 
@@ -110,8 +127,9 @@ Variables are substituted before TOML parsing. The `"${var_name}"` (including qu
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `parallel` | integer | `1` | Number of parallel jobs. `1` = sequential, `0` = auto-detect CPU cores. |
+| `parallel` | integer | `1` | Number of parallel jobs. `1` = sequential, `0` = auto-detect CPU cores. Can also be set via the `RSCONSTRUCT_THREADS` environment variable (CLI `-j` takes precedence). |
 | `batch_size` | integer | `0` | Maximum files per batch for batch-capable processors. `0` = no limit (all files in one batch). Omit to disable batching entirely. |
+| `output_dir` | string | `"out"` | Global output directory prefix. Processor `output_dir` defaults that start with `out/` are remapped to use this prefix (e.g., setting `"build"` changes `out/marp` to `build/marp`). Individual processors can still override their `output_dir` explicitly. |
 
 ### `[processor.NAME]`
 
