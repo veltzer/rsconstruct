@@ -227,7 +227,7 @@ impl Builder {
             stale: (color::yellow("BUILD"), "build"),
         };
 
-        self.print_product_status(&products, force, &labels, explain, DisplayOptions::default(), true);
+        self.print_product_status(&products, force, &labels, explain, DisplayOptions::default(), true, &[]);
         Ok(())
     }
 
@@ -237,10 +237,6 @@ impl Builder {
         let graph = self.build_graph_with_processors(&processors)?;
 
         let products: Vec<&_> = graph.products().iter().collect();
-        if products.is_empty() {
-            println!("No products discovered.");
-            return Ok(());
-        }
 
         let labels = ProductStatusLabels {
             current: (color::green("UP-TO-DATE"), "up-to-date"),
@@ -248,7 +244,12 @@ impl Builder {
             stale: (color::yellow("STALE"), "stale"),
         };
 
-        self.print_product_status(&products, false, &labels, false, DisplayOptions::default(), verbose);
+        // Collect all processor names so we also show processors with 0 files
+        let all_proc_names: Vec<&str> = super::sorted_keys(&processors)
+            .into_iter()
+            .map(|s| s.as_str())
+            .collect();
+        self.print_product_status(&products, false, &labels, false, DisplayOptions::default(), verbose, &all_proc_names);
 
         if breakdown {
             // Collect unique source files per processor, then count by extension
@@ -332,11 +333,16 @@ impl Builder {
         explain: bool,
         display_opts: DisplayOptions,
         verbose: bool,
+        all_processor_names: &[&str],
     ) {
         use crate::object_store::ExplainAction;
 
         let mut counts = [0usize; 3]; // [current, restorable, stale]
         let mut per_processor: BTreeMap<&str, [usize; 3]> = BTreeMap::new();
+        // Seed with all processor names so processors with 0 products are shown
+        for name in all_processor_names {
+            per_processor.entry(name).or_default();
+        }
 
         for product in products {
             let cache_key = product.cache_key();
