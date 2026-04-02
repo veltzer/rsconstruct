@@ -767,6 +767,10 @@ pub enum ProcessorType {
     /// (e.g., pip → site-packages, npm → node_modules, cargo → target).
     /// May use stamp files for cache tracking.
     MassGenerator,
+    /// Explicitly declared inputs and outputs — many inputs aggregated into few outputs.
+    /// Unlike Generator (one product per input file), creates a single product.
+    /// Outputs are cached and can be restored, like Generator.
+    Explicit,
 }
 
 impl ProcessorType {
@@ -776,6 +780,7 @@ impl ProcessorType {
             ProcessorType::Generator => "generator",
             ProcessorType::Checker => "checker",
             ProcessorType::MassGenerator => "mass_generator",
+            ProcessorType::Explicit => "explicit",
         }
     }
 }

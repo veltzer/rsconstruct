@@ -344,6 +344,7 @@ impl ProductDiscovery for LuaProcessor {
             match type_str.to_lowercase().as_str() {
                 "generator" => super::ProcessorType::Generator,
                 "mass_generator" => super::ProcessorType::MassGenerator,
+                "explicit" => super::ProcessorType::Explicit,
                 _ => super::ProcessorType::Checker,
             }
         } else {

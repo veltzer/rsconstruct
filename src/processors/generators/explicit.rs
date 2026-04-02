@@ -67,7 +67,7 @@ impl ProductDiscovery for ExplicitProcessor {
     }
 
     fn processor_type(&self) -> ProcessorType {
-        ProcessorType::Generator
+        ProcessorType::Explicit
     }
 
     fn auto_detect(&self, _file_index: &FileIndex) -> bool {
