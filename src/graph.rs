@@ -186,23 +186,36 @@ impl BuildGraph {
     pub fn add_product_with_variant(&mut self, inputs: Vec<PathBuf>, outputs: Vec<PathBuf>, processor: &str, config_hash: Option<String>, variant: Option<&str>) -> Result<usize> {
         let id = self.products.len();
 
-        // Check for output conflicts before mutating anything.
-        // During fixed-point discovery, the same processor may re-declare the same
-        // outputs with a potentially expanded input set (due to virtual files from
-        // upstream generators). When the same processor (or its remapped instance
-        // name) re-declares the same outputs, update the existing product's inputs
-        // to the new (superset) list and return the existing id.
+        // During fixed-point discovery, processors re-run and may re-declare
+        // products that already exist. Detect and deduplicate these cases.
+
+        // Checkers have no outputs, so the output-based dedup below won't catch them.
+        // Deduplicate by matching on processor name, primary input, and variant.
+        if outputs.is_empty() && !inputs.is_empty() {
+            for existing in &self.products {
+                if !existing.outputs.is_empty() || existing.inputs.is_empty() {
+                    continue;
+                }
+                let same_processor = existing.processor == processor
+                    || existing.processor.starts_with(&format!("{}.", processor))
+                    || processor.starts_with(&format!("{}.", existing.processor));
+                if same_processor && existing.inputs[0] == inputs[0]
+                    && existing.variant.as_deref() == variant
+                {
+                    return Ok(existing.id);
+                }
+            }
+        }
+
+        // For generators: check output conflicts and deduplicate re-declarations.
         for output in &outputs {
             if let Some(&existing_id) = self.output_to_product.get(output) {
                 let existing = self.products.get(existing_id).expect(crate::errors::INVALID_PRODUCT_ID);
                 let same_processor = existing.processor == processor
                     || existing.processor.starts_with(&format!("{}.", processor))
                     || processor.starts_with(&format!("{}.", existing.processor));
-                // During fixed-point discovery, the same processor may re-declare
-                // the same product with an expanded input set (virtual files from
-                // upstream generators were added to the FileIndex). Detect this as:
-                // same processor, same outputs, and new inputs are a superset of
-                // (or equal to) the existing inputs.
+                // Same processor re-declaring the same outputs: update inputs if
+                // they grew (virtual files from upstream generators were added).
                 let is_superset = same_processor && existing.outputs == outputs
                     && existing.inputs.iter().all(|i| inputs.contains(i));
                 if is_superset {
