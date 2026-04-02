@@ -73,3 +73,12 @@ Items from `suggestions.md` that have been implemented.
 - **`--processors` flag for build and watch** — Filter processors with `-p` flag.
 - **Emit `ProductStart` JSON events** — Wired up and emitted before execution.
 - **Colored diff on config changes** — Shows colored JSON diff when processor config changes.
+
+## Completed Features (v0.3.7)
+
+- **`RSCONSTRUCT_THREADS` env var** — Set parallelism via environment variable instead of `-j`. Priority: CLI `-j` > `RSCONSTRUCT_THREADS` > config `parallel`.
+- **Global `output_dir` in `[build]`** — Global output directory prefix (default: `"out"`). Processor defaults like `out/marp` are remapped when the global is changed (e.g., `output_dir = "build"` makes marp output to `build/marp`). Individual processors can still override their `output_dir` explicitly.
+- **Named processor instance output directories** — When multiple instances of the same processor are declared (e.g., `[processor.marp.slides]` and `[processor.marp.docs]`), each instance defaults to `out/{instance_name}` (e.g., `out/marp.slides`, `out/marp.docs`) instead of sharing the same output directory.
+- **Named processor instance names in error reporting** — When multiple instances of the same processor exist, error messages, build progress, and statistics use the full instance name (e.g., `[pylint.core]`, `[pylint.tests]`). Single instances continue to use just the processor type name.
+- **`processors config` without config file** — `rsconstruct processors config <name>` now works without an `rsconstruct.toml`, showing the default configuration (same as `defconfig`).
+- **`tags collect` command** — `rsconstruct tags collect` scans the tags database for tags that are not in the tag collection (`tags_dir`) and adds them to the appropriate `.txt` files. Key:value tags go to `{key}.txt`, bare tags go to `tags.txt`.
