@@ -27,11 +27,18 @@ impl TermsProcessor {
             return Ok(());
         }
         let sorted = sorted_terms(&terms);
-        let mut bad_files = Vec::new();
+        let mut bad_files: Vec<String> = Vec::new();
 
         for file in files {
-            if check_file(file, &terms, &sorted)? {
-                bad_files.push(file.display().to_string());
+            let unquoted = check_file_detail(file, &terms, &sorted)?;
+            if !unquoted.is_empty() {
+                let mut entry = file.display().to_string();
+                // Deduplicate and sort the unquoted terms for display
+                let mut unique_terms: Vec<&str> = unquoted.iter().map(|s| s.as_str()).collect();
+                unique_terms.sort();
+                unique_terms.dedup();
+                entry.push_str(&format!(": {}", unique_terms.join(", ")));
+                bad_files.push(entry);
             }
         }
 
@@ -493,11 +500,12 @@ fn fix_content(original: &str, terms: &HashSet<String>, sorted_terms: &[&str], r
     }
 }
 
-/// Check if a file would be changed by `terms fix`. Returns true if it needs fixing.
-fn check_file(path: &Path, terms: &HashSet<String>, sorted_terms: &[&str]) -> Result<bool> {
-    let original = fs::read_to_string(path)?;
-    let fixed = fix_content(&original, terms, sorted_terms, false);
-    Ok(fixed != original)
+/// Check a file and return the list of unquoted terms found.
+/// Returns an empty vec if the file is clean.
+fn check_file_detail(path: &Path, _terms: &HashSet<String>, sorted_terms: &[&str]) -> Result<Vec<String>> {
+    let content = fs::read_to_string(path)?;
+    let matches = find_unquoted_positions(&content, sorted_terms);
+    Ok(matches.into_iter().map(|(_, _, term)| term).collect())
 }
 
 /// Auto-fix a single markdown file. Returns true if the file was modified.
