@@ -1,1 +1,5 @@
 allow RSCONSTRUCT_THREADS env var to be used instead of -j
+allow to override the out folder at the processor level. I don't see the out folder at all!
+
+why cant I do "rsconstruct prcoessors config pyrefly"
+I cant only do defconfig
