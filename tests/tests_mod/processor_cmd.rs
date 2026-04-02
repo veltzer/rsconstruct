@@ -29,7 +29,7 @@ fn processors_files_shows_products() {
         "{% set c = load_python(path='config/test.py') %}{{ c.value }}"
     ).expect("Failed to write template");
 
-    let output = run_rsconstruct_with_env(project_path, &["processors", "files"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["processors", "files", "--headers"], &[("NO_COLOR", "1")]);
     assert!(output.status.success(), "processors files failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);

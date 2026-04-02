@@ -231,7 +231,7 @@ impl Builder {
                     }
                 }
             }
-            ProcessorAction::Files { name } => {
+            ProcessorAction::Files { name, headers } => {
                 if let Some(ref n) = name
                     && !processors.contains_key(n.as_str()) {
                         bail!("Unknown processor: '{}'. Run 'rsconstruct processors list' to see available processors.", n);
@@ -276,12 +276,14 @@ impl Builder {
                 let mut current_processor = "";
                 for product in products {
                     if product.processor.as_str() != current_processor {
-                        if !current_processor.is_empty() {
+                        if headers && !current_processor.is_empty() {
                             println!();
                         }
                         current_processor = product.processor.as_str();
-                        let n = counts.get(current_processor).copied().unwrap_or(0);
-                        println!("[{}] ({} {})", current_processor, n, if n == 1 { "product" } else { "products" });
+                        if headers {
+                            let n = counts.get(current_processor).copied().unwrap_or(0);
+                            println!("[{}] ({} {})", current_processor, n, if n == 1 { "product" } else { "products" });
+                        }
                     }
                     let inputs: Vec<String> = product.inputs.iter()
                         .map(|p| p.display().to_string())

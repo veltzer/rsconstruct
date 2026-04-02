@@ -395,6 +395,9 @@ pub enum ProcessorAction {
     Files {
         /// Processor name (omit to show all enabled processors)
         name: Option<String>,
+        /// Show processor headers (e.g., "[ruff] (42 products)")
+        #[arg(long)]
+        headers: bool,
     },
     /// Show resolved configuration for a processor
     Config {
