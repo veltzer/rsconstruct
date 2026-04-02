@@ -604,6 +604,13 @@ pub(crate) fn run_checker(
     args: &[String],
     files: &[&Path],
 ) -> Result<()> {
+    // Deduplicate files — the same file can appear in multiple products
+    // (e.g., a script that is both a normal scan result and a generator dependency)
+    let mut files: Vec<&Path> = files.to_vec();
+    files.sort();
+    files.dedup();
+    let files = &files[..];
+
     // Calculate the base command length (tool + subcommand + args)
     let base_len: usize = tool.len()
         + subcommand.map_or(0, |s| s.len() + 1)

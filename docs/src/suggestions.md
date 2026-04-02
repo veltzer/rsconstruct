@@ -308,6 +308,76 @@ Grades:
 - Registry as a GitHub repository with a JSON index. Version pinning in `rsconstruct.toml`.
 - **Urgency**: low | **Complexity**: high
 
+## Cleaning & Cache
+
+### Selective processor cleaning
+- `rsconstruct clean outputs --processors ruff,pylint` to clean only specific processors' outputs.
+- Currently `clean outputs` is all-or-nothing. Multi-processor projects need granular control.
+- Filter products in the clean loop by processor name.
+- **Urgency**: high | **Complexity**: low
+
+### Time-based cache purge
+- `rsconstruct cache purge --older-than=7d` to remove cache entries older than a given duration.
+- Currently only `cache clear` exists which removes everything.
+- Walk the object store, check file mtimes, remove old entries.
+- **Urgency**: medium | **Complexity**: low
+
+### Enhanced cache statistics
+- `rsconstruct cache stats` currently shows minimal info.
+- Add: hit rate percentage, bytes saved vs rebuild time, per-processor breakdown, slowest processors.
+- Helps users identify optimization opportunities.
+- **Urgency**: medium | **Complexity**: medium
+
+## CLI & UX
+
+### `rsconstruct status --json`
+- The status command has no JSON output mode, unlike most other commands.
+- CI systems can't parse the current human-readable output.
+- Add JSON output with per-processor and total counts.
+- **Urgency**: high | **Complexity**: low
+
+### `rsconstruct processors search <keyword>`
+- Search the processor list by name or description substring.
+- With 85+ processors, scrolling through `processors list` is unwieldy.
+- **Urgency**: medium | **Complexity**: low
+
+### Config validation warnings
+- Warn about common mistakes during build: processor enabled but no matching files, unknown fields, deprecated options.
+- Passive warnings (not errors) shown before the build starts.
+- We have `smart remove-no-file-processors` for cleanup, but no passive heads-up.
+- **Urgency**: medium | **Complexity**: low
+
+## Configuration
+
+### Environment variable expansion in config
+- Allow `${env:HOME}` or `${env:CI}` in `rsconstruct.toml` to reference environment variables.
+- The variable substitution system already exists for `[vars]`; extending it to env vars is natural.
+- Useful for CI/CD systems that pass secrets or paths via environment.
+- **Urgency**: medium | **Complexity**: low
+
+### Per-processor batch size
+- Each processor config has a `batch` boolean, but batch size is global (`[build] batch_size`).
+- Different tools have different startup costs — fast tools benefit from large batches, slow tools from small ones.
+- Add `batch_size` field to individual processor configs, overriding the global default.
+- **Urgency**: medium | **Complexity**: low
+
+## Processor Ecosystem
+
+### Prettier (JavaScript/TypeScript/CSS/HTML formatter)
+- The most popular web formatter. Industry standard for frontend projects.
+- Checker processor using `prettier --check`. Batch-capable.
+- **Urgency**: high | **Complexity**: low
+
+### Isort (Python import sorter)
+- Complements ruff/black for complete Python formatting pipeline.
+- Checker processor using `isort --check-only --diff`. Batch-capable.
+- **Urgency**: medium | **Complexity**: low
+
+### Flake8 (Python linter)
+- Many projects still use flake8 over ruff. Widely adopted.
+- Checker processor using `flake8`. Batch-capable.
+- **Urgency**: medium | **Complexity**: low
+
 ## Security
 
 ### Shell command execution from source file comments
