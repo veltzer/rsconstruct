@@ -20,7 +20,7 @@ pub struct CcSingleFileProcessor {
 impl CcSingleFileProcessor {
     pub fn new(config: CcSingleFileConfig) -> Self {
         let profiles = config.get_compiler_profiles();
-        let output_dir = PathBuf::from("out/cc_single_file");
+        let output_dir = PathBuf::from(&config.output_dir);
         Self {
             config,
             profiles,

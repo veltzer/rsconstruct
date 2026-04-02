@@ -577,6 +577,9 @@ pub struct CcSingleFileConfig {
     pub extra_inputs: Vec<String>,
     #[serde(default)]
     pub auto_inputs: Vec<String>,
+    /// Output directory for compiled executables
+    #[serde(default = "default_cc_single_file_output_dir")]
+    pub output_dir: String,
     /// Method for scanning header dependencies (native or compiler)
     #[serde(default)]
     pub include_scanner: IncludeScanner,
@@ -609,6 +612,8 @@ impl CcSingleFileConfig {
     }
 }
 
+fn default_cc_single_file_output_dir() -> String { "out/cc_single_file".into() }
+
 impl Default for CcSingleFileConfig {
     fn default() -> Self {
         Self {
@@ -622,6 +627,7 @@ impl Default for CcSingleFileConfig {
             include_paths: Vec::new(),
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
+            output_dir: "out/cc_single_file".into(),
             include_scanner: IncludeScanner::default(),
             batch: true,
             scan: default_scan!(scan_dir: "src", extensions: [".c", ".cc"]),
@@ -633,7 +639,8 @@ impl KnownFields for CcSingleFileConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
             "cc", "cxx", "cflags", "cxxflags", "ldflags", "output_suffix",
-            "compilers", "include_paths", "extra_inputs", "auto_inputs", "include_scanner", "batch",
+            "compilers", "include_paths", "extra_inputs", "auto_inputs", "output_dir",
+            "include_scanner", "batch",
         ]
     }
 }
