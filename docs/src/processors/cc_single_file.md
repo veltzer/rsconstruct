@@ -283,6 +283,10 @@ Each entry in the `compilers` array can have:
 | `ldflags` | string[] | No | Linker flags |
 | `output_suffix` | string | No | Output suffix (default: ".elf") |
 
+## Batch support
+
+Each input file is processed individually, producing its own output file.
+
 ## Include Scanner
 
 The `include_scanner` option controls how header dependencies are discovered:

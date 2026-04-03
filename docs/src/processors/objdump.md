@@ -28,3 +28,7 @@ output_dir = "out/objdump"
 | `args` | string[] | `[]` | Extra arguments passed to objdump |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `output_dir` | string | `"out/objdump"` | Directory for disassembly output |
+
+## Batch support
+
+Each input file is processed individually, producing its own output file.

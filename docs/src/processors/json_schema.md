@@ -35,3 +35,7 @@ extra_inputs = []                            # Additional files that trigger reb
 |-----|------|---------|-------------|
 | `args` | string[] | `[]` | Reserved for future use |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+
+## Batch support
+
+The tool processes one file at a time. Each file is checked in a separate invocation.

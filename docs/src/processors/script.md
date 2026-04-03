@@ -43,3 +43,7 @@ scan_dirs = ["marp"]
 | `scan_dirs` | string[] | `[""]` | Directory to scan (empty = project root) |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `auto_inputs` | string[] | `[]` | Auto-detected input files |
+
+## Batch support
+
+The tool accepts multiple files on the command line. When batching is enabled (default), rsconstruct passes all files in a single invocation for better performance.

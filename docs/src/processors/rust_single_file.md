@@ -41,3 +41,7 @@ extra_inputs = []                         # Additional files that trigger rebuil
 | `output_suffix` | string | `".elf"` | Suffix for output executables |
 | `output_dir` | string | `"out/rust_single_file"` | Output directory |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+
+## Batch support
+
+Each input file is processed individually, producing its own output file.

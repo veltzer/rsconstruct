@@ -27,3 +27,7 @@ extra_inputs = []
 |-----|------|---------|-------------|
 | `args` | string[] | `[]` | Extra arguments passed to jekyll build |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+
+## Batch support
+
+Runs as a single whole-project operation (e.g., `cargo build`, `npm install`).

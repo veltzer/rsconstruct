@@ -37,3 +37,7 @@ extra_inputs = [".cppcheck-suppressions"]   # Additional files that trigger rebu
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
 To use a suppressions file, add `"--suppressions-list=.cppcheck-suppressions"` to `args`.
+
+## Batch support
+
+The tool processes one file at a time. Each file is checked in a separate invocation.

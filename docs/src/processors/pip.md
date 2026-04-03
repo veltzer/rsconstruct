@@ -31,3 +31,7 @@ cache_output_dir = true                # Cache the stamp directory for fast rest
 | `args` | string[] | `[]` | Extra arguments passed to pip |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `cache_output_dir` | boolean | `true` | Cache the `out/pip/` directory so `rsconstruct clean && rsconstruct build` restores from cache |
+
+## Batch support
+
+Runs as a single whole-project operation (e.g., `cargo build`, `npm install`).

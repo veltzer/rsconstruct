@@ -60,6 +60,10 @@ cache_output_dir = true  # Cache the target/ directory for fast restore after cl
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `cache_output_dir` | boolean | `true` | Cache the `target/` directory so `rsconstruct clean && rsconstruct build` restores from cache. Consider disabling for large projects. |
 
+## Batch support
+
+Runs as a single whole-project operation (e.g., `cargo build`, `npm install`).
+
 ## Examples
 
 ### Basic Usage

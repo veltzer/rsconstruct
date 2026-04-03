@@ -34,3 +34,7 @@ extra_inputs = []                      # Additional files that trigger rebuilds 
 | `args` | string[] | `[]` | Extra arguments passed to mdl |
 | `gem_stamp` | string | `"out/gem/root.stamp"` | Stamp file from gem processor (ensures gems are installed first) |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+
+## Batch support
+
+The tool processes one file at a time. Each file is checked in a separate invocation.

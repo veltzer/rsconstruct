@@ -27,3 +27,7 @@ args = []                                 # Extra arguments passed to black
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rechecks |
 | `auto_inputs` | string[] | `["pyproject.toml"]` | Config files that auto-trigger rechecks |
 | `args` | string[] | `[]` | Additional arguments passed to `black` |
+
+## Batch support
+
+The tool accepts multiple files on the command line. When batching is enabled (default), rsconstruct passes all files in a single invocation for better performance.

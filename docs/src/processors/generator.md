@@ -44,3 +44,7 @@ extra_inputs = []
 | `batch` | bool | `true` | Pass all pairs in one invocation |
 | `args` | string[] | `[]` | Extra arguments prepended before file pairs |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+
+## Batch support
+
+Configurable via `batch = true` (default). In batch mode, the script receives all input/output pairs in a single invocation. Set `batch = false` to invoke the script once per file.

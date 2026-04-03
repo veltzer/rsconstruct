@@ -32,3 +32,7 @@ extra_inputs = []                      # Additional files that trigger rebuilds 
 | `args` | string[] | `["--html", "--allow-local-files"]` | Extra arguments passed to marp |
 | `output_dir` | string | `"out/marp"` | Base output directory |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+
+## Batch support
+
+Each input file is processed individually, producing its own output file.

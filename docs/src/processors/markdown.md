@@ -30,3 +30,7 @@ extra_inputs = []                      # Additional files that trigger rebuilds 
 | `args` | string[] | `[]` | Extra arguments passed to markdown |
 | `output_dir` | string | `"out/markdown"` | Output directory for HTML files |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+
+## Batch support
+
+Each input file is processed individually, producing its own output file.

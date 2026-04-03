@@ -62,3 +62,7 @@ extra_inputs = ["config/settings.py"]      # Additional files that trigger rebui
 | `extensions` | string[] | `[".tera"]` | File extensions to discover |
 | `trim_blocks` | bool | `false` | Remove first newline after block tags |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+
+## Batch support
+
+Each input file is processed individually, producing its own output file.

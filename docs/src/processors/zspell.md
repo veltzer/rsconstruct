@@ -52,3 +52,7 @@ extra_inputs = []                     # Additional files that trigger rebuilds w
 | `auto_add_words` | bool | `false` | Auto-add misspelled words to words_file instead of failing (also available as `--auto-add-words` CLI flag) |
 | `auto_inputs` | string[] | `[".zspell-words"]` | Config files auto-detected as inputs |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+
+## Batch support
+
+The tool accepts multiple files on the command line. When batching is enabled (default), rsconstruct passes all files in a single invocation for better performance.

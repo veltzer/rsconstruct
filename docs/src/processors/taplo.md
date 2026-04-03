@@ -32,3 +32,7 @@ extra_inputs = []                            # Additional files that trigger reb
 | `linter` | string | `"taplo"` | The taplo executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to taplo |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+
+## Batch support
+
+The tool accepts multiple files on the command line. When batching is enabled (default), rsconstruct passes all files in a single invocation for better performance.

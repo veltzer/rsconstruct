@@ -115,6 +115,10 @@ extra_inputs = []        # Extra files that trigger rebuilds
 | `extensions` | string[] | `["linux-module.yaml"]` | File patterns to scan for |
 | `exclude_dirs` | string[] | common excludes | Directories to skip during scanning |
 
+## Batch support
+
+Each input file is processed individually, producing its own output file.
+
 ## Caching
 
 The `.ko` outputs are cached in the rsconstruct object store. After `rsconstruct clean`,

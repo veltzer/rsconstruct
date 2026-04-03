@@ -33,6 +33,10 @@ extra_inputs = [".clang-tidy"]              # Additional files that trigger rebu
 | `compiler_args` | string[] | `[]` | Compiler arguments passed after `--` separator |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
+## Batch support
+
+The tool processes one file at a time. Each file is checked in a separate invocation.
+
 ## Compiler Arguments
 
 Clang-tidy requires knowing compiler flags to properly parse the source files.

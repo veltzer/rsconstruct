@@ -50,6 +50,10 @@ extra_inputs = []        # Additional files that trigger rebuilds
 | `exclude_paths` | string[] | `[]` | Paths (relative to project root) to exclude |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
+## Batch support
+
+The tool processes one file at a time. Each file is checked in a separate invocation.
+
 ## Examples
 
 ### Basic Usage

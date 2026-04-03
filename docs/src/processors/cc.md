@@ -156,6 +156,10 @@ compiler and flags.
 | `scan_dirs` | string[] | `[""]` | Directory to scan for cc.yaml files |
 | `extensions` | string[] | `["cc.yaml"]` | File patterns to scan for |
 
+## Batch support
+
+Runs as a single whole-project operation (e.g., `cargo build`, `npm install`).
+
 ## Example
 
 Given this project layout:

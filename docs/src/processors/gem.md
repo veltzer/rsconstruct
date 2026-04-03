@@ -33,3 +33,7 @@ cache_output_dir = true                # Cache the vendor/bundle directory for f
 | `args` | string[] | `[]` | Extra arguments passed to bundler |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `cache_output_dir` | boolean | `true` | Cache the `vendor/bundle/` directory so `rsconstruct clean && rsconstruct build` restores from cache |
+
+## Batch support
+
+Runs as a single whole-project operation (e.g., `cargo build`, `npm install`).

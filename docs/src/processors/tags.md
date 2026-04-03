@@ -242,6 +242,10 @@ duration_hours = "number"                                         # Must be nume
 | `sorted_tags` | bool | `false` | Require list items in sorted order within each file |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
+## Batch support
+
+Each input file is processed individually, producing its own output file.
+
 ## Subcommands
 
 All subcommands require a prior `rsconstruct build` to populate the database

@@ -36,6 +36,10 @@ extra_inputs = []                            # Additional files that trigger reb
 | `args` | string[] | `[]` | Extra arguments passed to mypy |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
+## Batch support
+
+The tool accepts multiple files on the command line. When batching is enabled (default), rsconstruct passes all files in a single invocation for better performance.
+
 ## Using mypy.ini
 
 Mypy automatically reads configuration from a `mypy.ini` file in the project

@@ -37,3 +37,7 @@ extra_inputs = ["config/settings.py"]     # Additional files that trigger rebuil
 |-----|------|---------|-------------|
 | `extensions` | string[] | `[".j2"]` | File extensions to discover |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+
+## Batch support
+
+Each input file is processed individually, producing its own output file.
