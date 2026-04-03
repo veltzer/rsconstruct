@@ -48,6 +48,12 @@ dir = "plugins"  # Directory containing .lua processor plugins
 
 [completions]
 shells = ["bash"]
+
+[dependencies]
+pip = ["pyyaml", "jinja2"]    # Python packages
+npm = ["eslint", "prettier"]  # Node.js packages
+gem = ["mdl"]                 # Ruby gems
+system = ["pandoc", "graphviz"]  # System packages (checked but not auto-installed)
 ```
 
 Per-processor configuration is documented on each processor's page under [Processors](processors.md).
@@ -190,3 +196,14 @@ Processor-specific fields are documented on each processor's page under [Process
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `shells` | array | `["bash"]` | Shells to generate completions for |
+
+### `[dependencies]`
+
+Declare project dependencies by package manager. Used by `rsconstruct doctor` to verify availability and `rsconstruct tools install-deps` to install missing packages.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `pip` | array of strings | `[]` | Python packages to install via `pip install`. Supports version specifiers (e.g., `"ruff>=0.4"`). |
+| `npm` | array of strings | `[]` | Node.js packages to install via `npm install`. |
+| `gem` | array of strings | `[]` | Ruby gems to install via `gem install`. |
+| `system` | array of strings | `[]` | System packages checked via `which`. Not auto-installed — `rsconstruct doctor` reports missing ones. |

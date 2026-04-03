@@ -54,6 +54,72 @@ impl Builder {
             }
         }
 
+        // Check declared dependencies
+        let deps = &self.config.dependencies;
+        if !deps.is_empty() {
+            println!();
+            println!("{}:", color::bold("Declared dependencies"));
+
+            for pkg in &deps.system {
+                if which::which(pkg).is_ok() {
+                    println!("{} {} (system)", color::green("[ok]"), pkg);
+                    ok_count += 1;
+                } else {
+                    println!("{} {} not found (system)", color::red("[FAIL]"), pkg);
+                    fail_count += 1;
+                }
+            }
+
+            for pkg in &deps.pip {
+                let name = pkg.split(&['>', '<', '=', '!', '~'][..]).next().unwrap_or(pkg);
+                let found = Command::new("pip")
+                    .args(["show", "--quiet", name])
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status()
+                    .is_ok_and(|s| s.success());
+                if found {
+                    println!("{} {} (pip)", color::green("[ok]"), pkg);
+                    ok_count += 1;
+                } else {
+                    println!("{} {} not installed (pip install {})", color::red("[FAIL]"), pkg, pkg);
+                    fail_count += 1;
+                }
+            }
+
+            for pkg in &deps.npm {
+                let found = Command::new("npm")
+                    .args(["list", "--depth=0", pkg])
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status()
+                    .is_ok_and(|s| s.success());
+                if found {
+                    println!("{} {} (npm)", color::green("[ok]"), pkg);
+                    ok_count += 1;
+                } else {
+                    println!("{} {} not installed (npm install {})", color::red("[FAIL]"), pkg, pkg);
+                    fail_count += 1;
+                }
+            }
+
+            for pkg in &deps.gem {
+                let found = Command::new("gem")
+                    .args(["list", "--installed", "--exact", pkg])
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status()
+                    .is_ok_and(|s| s.success());
+                if found {
+                    println!("{} {} (gem)", color::green("[ok]"), pkg);
+                    ok_count += 1;
+                } else {
+                    println!("{} {} not installed (gem install {})", color::red("[FAIL]"), pkg, pkg);
+                    fail_count += 1;
+                }
+            }
+        }
+
         // Summary
         println!();
         let total = ok_count + fail_count;

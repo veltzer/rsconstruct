@@ -448,6 +448,12 @@ pub enum ToolsAction {
         #[arg(short, long)]
         all: bool,
     },
+    /// Install declared dependencies from the [dependencies] config section
+    InstallDeps {
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
     /// Show tool availability statistics and language runtime breakdown
     Stats,
     /// Show tool-to-processor dependency graph

@@ -205,6 +205,31 @@ impl Default for PluginsConfig {
     }
 }
 
+/// Declared project dependencies by package manager.
+/// Used by `rsconstruct doctor` to verify and `rsconstruct tools install-deps` to install.
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct DependenciesConfig {
+    /// Python packages (installed via pip)
+    #[serde(default)]
+    pub pip: Vec<String>,
+    /// Node.js packages (installed via npm)
+    #[serde(default)]
+    pub npm: Vec<String>,
+    /// Ruby gems (installed via gem)
+    #[serde(default)]
+    pub gem: Vec<String>,
+    /// System packages (checked via `which`, not auto-installed)
+    #[serde(default)]
+    pub system: Vec<String>,
+}
+
+impl DependenciesConfig {
+    pub fn is_empty(&self) -> bool {
+        self.pip.is_empty() && self.npm.is_empty() && self.gem.is_empty() && self.system.is_empty()
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Default)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Config {
@@ -222,6 +247,8 @@ pub(crate) struct Config {
     pub graph: GraphConfig,
     #[serde(default)]
     pub plugins: PluginsConfig,
+    #[serde(default)]
+    pub dependencies: DependenciesConfig,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

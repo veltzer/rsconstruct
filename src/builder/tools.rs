@@ -427,6 +427,93 @@ fn run_tools_command(
                 println!("{}", color::green("All tools installed successfully."));
             }
         }
+        ToolsAction::InstallDeps { yes } => {
+            let config = builder
+                .map(|b| &b.config.dependencies)
+                .ok_or_else(|| anyhow::anyhow!("install-deps requires a project with rsconstruct.toml"))?;
+
+            if config.is_empty() {
+                println!("No dependencies declared in [dependencies].");
+                return Ok(());
+            }
+
+            // Build install commands
+            let mut commands: Vec<(String, String)> = Vec::new(); // (description, command)
+            if !config.pip.is_empty() {
+                let pkgs = config.pip.join(" ");
+                commands.push((
+                    format!("[pip] {}", config.pip.join(", ")),
+                    format!("pip install {}", pkgs),
+                ));
+            }
+            if !config.npm.is_empty() {
+                let pkgs = config.npm.join(" ");
+                commands.push((
+                    format!("[npm] {}", config.npm.join(", ")),
+                    format!("npm install {}", pkgs),
+                ));
+            }
+            if !config.gem.is_empty() {
+                let pkgs = config.gem.join(" ");
+                commands.push((
+                    format!("[gem] {}", config.gem.join(", ")),
+                    format!("gem install {}", pkgs),
+                ));
+            }
+            if !config.system.is_empty() {
+                println!("{}: system packages must be installed manually: {}",
+                    color::yellow("Note"),
+                    config.system.join(", "));
+            }
+
+            if commands.is_empty() {
+                println!("No installable dependencies (only system packages declared).");
+                return Ok(());
+            }
+
+            println!("{}:", color::bold("Dependencies to install"));
+            for (desc, cmd) in &commands {
+                println!("  {} {}", color::bold(desc), color::dim(&format!("({})", cmd)));
+            }
+            println!();
+
+            if !yes {
+                use std::io::Write;
+                print!("Proceed? [y/N] ");
+                std::io::stdout().flush()?;
+                let mut answer = String::new();
+                std::io::stdin().read_line(&mut answer)?;
+                if !matches!(answer.trim().to_lowercase().as_str(), "y" | "yes") {
+                    println!("Aborted.");
+                    return Ok(());
+                }
+            }
+
+            let mut any_failed = false;
+            for (desc, cmd) in &commands {
+                println!("Running: {} ({})", desc, color::dim(cmd));
+                let status = Command::new("sh")
+                    .arg("-c")
+                    .arg(cmd)
+                    .status()?;
+                if status.success() {
+                    println!("{}", color::green("OK"));
+                } else {
+                    println!("{} (exit code {})", color::red("FAILED"),
+                        status.code().map_or("unknown".to_string(), |c| c.to_string()));
+                    any_failed = true;
+                }
+            }
+
+            if any_failed {
+                return Err(crate::exit_code::RsconstructError::new(
+                    crate::exit_code::RsconstructExitCode::ToolError,
+                    "Some dependency installs failed",
+                ).into());
+            } else {
+                println!("{}", color::green("All dependencies installed successfully."));
+            }
+        }
     }
 
     Ok(())
