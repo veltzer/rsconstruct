@@ -7,7 +7,7 @@ use crate::color;
 use crate::errors;
 use crate::executor::{Executor, ExecutorOptions};
 use crate::processors::{BuildStats, ProcessorMap, ProcessorType};
-use super::{Builder, ProductStatusLabels, phases_debug};
+use super::{Builder, ProductStatusLabels, StatusPrintOptions, phases_debug};
 
 /// Expand `@`-prefixed shortcuts in the processor filter.
 ///
@@ -227,7 +227,11 @@ impl Builder {
             stale: (color::yellow("BUILD"), "build"),
         };
 
-        self.print_product_status(&products, force, &labels, explain, DisplayOptions::default(), true, &[]);
+        self.print_product_status(&products, &StatusPrintOptions {
+            force, labels: &labels, explain,
+            display_opts: DisplayOptions::default(), verbose: true,
+            all_processor_names: &[],
+        });
         Ok(())
     }
 
@@ -253,7 +257,11 @@ impl Builder {
             .into_iter()
             .map(|s| s.as_str())
             .collect();
-        self.print_product_status(&products, false, &labels, false, DisplayOptions::default(), verbose, &all_proc_names);
+        self.print_product_status(&products, &StatusPrintOptions {
+            force: false, labels: &labels, explain: false,
+            display_opts: DisplayOptions::default(), verbose,
+            all_processor_names: &all_proc_names,
+        });
 
         if breakdown {
             // Collect unique source files per processor, then count by extension
@@ -340,76 +348,54 @@ impl Builder {
     pub(super) fn print_product_status(
         &self,
         products: &[&crate::graph::Product],
-        force: bool,
-        labels: &ProductStatusLabels<'_>,
-        explain: bool,
-        display_opts: DisplayOptions,
-        verbose: bool,
-        all_processor_names: &[&str],
+        opts: &StatusPrintOptions<'_>,
     ) {
         use crate::object_store::ExplainAction;
 
         let mut counts = [0usize; 3]; // [current, restorable, stale]
         let mut per_processor: BTreeMap<&str, [usize; 3]> = BTreeMap::new();
         // Seed with all processor names so processors with 0 products are shown
-        for name in all_processor_names {
+        for name in opts.all_processor_names {
             per_processor.entry(name).or_default();
         }
 
+        let status_labels = [&opts.labels.current.0, &opts.labels.restorable.0, &opts.labels.stale.0];
+
         for product in products {
             let cache_key = product.cache_key();
-            let status_idx;
+            let display = product.display(opts.display_opts);
+
             let input_checksum = match self.object_store.combined_input_checksum_fast(&product.inputs) {
                 Ok(cs) => cs,
                 Err(_) => {
-                    if verbose {
-                        println!("{} [{}] {}", labels.stale.0, product.processor, product.display(display_opts));
+                    if opts.verbose {
+                        println!("{} [{}] {}", status_labels[2], product.processor, display);
                     }
-                    status_idx = 2;
-                    counts[status_idx] += 1;
-                    per_processor.entry(&product.processor).or_default()[status_idx] += 1;
+                    counts[2] += 1;
+                    per_processor.entry(&product.processor).or_default()[2] += 1;
                     continue;
                 }
             };
 
-            if explain {
-                let action = self.object_store.explain_action(&cache_key, &input_checksum, &product.outputs, force);
-                let reason_str = format!(" ({})", action);
-                status_idx = match action {
-                    ExplainAction::Skip => {
-                        if verbose {
-                            println!("{} [{}] {}{}", labels.current.0, product.processor, product.display(display_opts), reason_str);
-                        }
-                        0
-                    }
-                    ExplainAction::Restore(_) => {
-                        if verbose {
-                            println!("{} [{}] {}{}", labels.restorable.0, product.processor, product.display(display_opts), reason_str);
-                        }
-                        1
-                    }
-                    ExplainAction::Rebuild(_) => {
-                        if verbose {
-                            println!("{} [{}] {}{}", labels.stale.0, product.processor, product.display(display_opts), reason_str);
-                        }
-                        2
-                    }
+            let (status_idx, reason) = if opts.explain {
+                let action = self.object_store.explain_action(&cache_key, &input_checksum, &product.outputs, opts.force);
+                let reason = format!(" ({})", action);
+                let idx = match action {
+                    ExplainAction::Skip => 0,
+                    ExplainAction::Restore(_) => 1,
+                    ExplainAction::Rebuild(_) => 2,
                 };
-            } else if !force && !self.object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs) {
-                if verbose {
-                    println!("{} [{}] {}", labels.current.0, product.processor, product.display(display_opts));
-                }
-                status_idx = 0;
-            } else if !force && self.object_store.can_restore(&cache_key, &input_checksum, &product.outputs) {
-                if verbose {
-                    println!("{} [{}] {}", labels.restorable.0, product.processor, product.display(display_opts));
-                }
-                status_idx = 1;
+                (idx, reason)
+            } else if !opts.force && !self.object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs) {
+                (0, String::new())
+            } else if !opts.force && self.object_store.can_restore(&cache_key, &input_checksum, &product.outputs) {
+                (1, String::new())
             } else {
-                if verbose {
-                    println!("{} [{}] {}", labels.stale.0, product.processor, product.display(display_opts));
-                }
-                status_idx = 2;
+                (2, String::new())
+            };
+
+            if opts.verbose {
+                println!("{} [{}] {}{}", status_labels[status_idx], product.processor, display, reason);
             }
 
             counts[status_idx] += 1;
@@ -422,17 +408,17 @@ impl Builder {
             for (name, pc) in &per_processor {
                 println!("{:width$} {} {}, {} {}, {} {}",
                     format!("{}:", name),
-                    pc[0], labels.current.1,
-                    pc[1], labels.restorable.1,
-                    pc[2], labels.stale.1,
+                    pc[0], opts.labels.current.1,
+                    pc[1], opts.labels.restorable.1,
+                    pc[2], opts.labels.stale.1,
                     width = max_name_len + 1);
             }
         }
         println!("{}: {} {}, {} {}, {} {}",
             color::bold("Summary"),
-            counts[0], labels.current.1,
-            counts[1], labels.restorable.1,
-            counts[2], labels.stale.1);
+            counts[0], opts.labels.current.1,
+            counts[1], opts.labels.restorable.1,
+            counts[2], opts.labels.stale.1);
     }
 }
 

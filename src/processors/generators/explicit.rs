@@ -45,10 +45,9 @@ impl ExplicitProcessor {
                 }
             }
             // Also match against virtual files in the file index
-            for file in file_index.files() {
-                let file_str = file.to_string_lossy();
-                if let Ok(pat) = glob::Pattern::new(pattern) {
-                    if pat.matches(&file_str) && !glob_results.contains(file) {
+            if let Ok(pat) = glob::Pattern::new(pattern) {
+                for file in file_index.files() {
+                    if pat.matches(&*file.to_string_lossy()) && !glob_results.contains(file) {
                         glob_results.push(file.clone());
                     }
                 }

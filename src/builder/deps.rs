@@ -1,10 +1,22 @@
-use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use anyhow::{Context, Result, bail};
 use crate::color;
 use crate::deps_cache::DepsCache;
 use super::{Builder, sorted_keys};
+
+/// Print per-analyzer dependency stats with a total line.
+fn print_deps_stats(stats: &std::collections::HashMap<String, (usize, usize)>) {
+    let mut total_files = 0;
+    let mut total_deps = 0;
+    for name in sorted_keys(stats) {
+        let (files, deps) = stats[name];
+        total_files += files;
+        total_deps += deps;
+        println!("{}: {} files, {} dependencies", color::bold(name), files, deps);
+    }
+    println!("{}: {} files, {} dependencies", color::bold("Total"), total_files, total_deps);
+}
 
 impl Builder {
     /// Handle `rsconstruct deps` subcommands
@@ -34,34 +46,12 @@ impl Builder {
                 let processors = self.create_processors()?;
                 let mut graph = crate::graph::BuildGraph::new();
 
-                // Build instance_name → type_name mapping for named instances
-                let instance_to_type: HashMap<&str, &str> = self.config.processor.instances.iter()
-                    .filter(|inst| inst.instance_name != inst.type_name)
-                    .map(|inst| (inst.instance_name.as_str(), inst.type_name.as_str()))
-                    .collect();
-
                 // Phase 1: Discover products (fixed-point loop for cross-processor deps)
                 let active: Vec<String> = sorted_keys(&processors).into_iter()
                     .filter(|name| self.is_processor_active(name, processors[*name].as_ref()))
                     .cloned()
                     .collect();
-                let mut file_index = self.file_index.clone();
-                for _pass in 0..10 {
-                    let before = graph.products().len();
-                    for name in &active {
-                        processors[name].discover(&mut graph, &file_index)?;
-                        if let Some(&type_name) = instance_to_type.get(name.as_str()) {
-                            graph.remap_processor_name(type_name, name);
-                        }
-                    }
-                    let after = graph.products().len();
-                    if after == before { break; }
-                    let outputs: Vec<std::path::PathBuf> = graph.products()[before..after]
-                        .iter()
-                        .flat_map(|p| p.outputs.iter().cloned())
-                        .collect();
-                    if file_index.add_virtual_files(&outputs) == 0 { break; }
-                }
+                self.discover_products(&mut graph, &processors, &active, false)?;
 
                 let product_count = graph.products().len();
                 if product_count == 0 {
@@ -76,17 +66,7 @@ impl Builder {
                 let deps_cache = DepsCache::open()?;
                 let stats = deps_cache.stats_by_analyzer();
                 if !stats.is_empty() {
-                    let mut total_files = 0;
-                    let mut total_deps = 0;
-                    for name in sorted_keys(&stats) {
-                        let (files, deps) = stats[name];
-                        total_files += files;
-                        total_deps += deps;
-                        println!("{}: {} files, {} dependencies",
-                            color::bold(name), files, deps);
-                    }
-                    println!("{}: {} files, {} dependencies",
-                        color::bold("Total"), total_files, total_deps);
+                    print_deps_stats(&stats);
                 }
             }
             DepsAction::Config { name } => {
@@ -153,18 +133,7 @@ impl Builder {
                     println!("Dependency cache is empty. Run a build first.");
                     return Ok(());
                 }
-                let mut total_files = 0;
-                let mut total_deps = 0;
-                for name in sorted_keys(&stats) {
-                    let (files, deps) = stats[name];
-                    total_files += files;
-                    total_deps += deps;
-                    println!("{}: {} files, {} dependencies",
-                        color::bold(name), files, deps);
-                }
-                println!();
-                println!("{}: {} files, {} dependencies",
-                    color::bold("Total"), total_files, total_deps);
+                print_deps_stats(&stats);
             }
             DepsAction::Show { filter } => {
                 use crate::cli::DepsShowFilter;

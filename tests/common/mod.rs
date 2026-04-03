@@ -54,6 +54,22 @@ pub fn run_rsconstruct_with_env(dir: &Path, args: &[&str], env_vars: &[(&str, &s
     cmd.output().expect("Failed to execute rsconstruct")
 }
 
+/// Create a temp dir with a rsconstruct.toml containing the given config string.
+pub fn setup_project_with_config(config: &str) -> TempDir {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    fs::write(temp_dir.path().join("rsconstruct.toml"), config).unwrap();
+    temp_dir
+}
+
+/// Create a file at the given path, creating parent directories as needed.
+pub fn write_file(base: &Path, relative: &str, content: &str) {
+    let path = base.join(relative);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).unwrap();
+    }
+    fs::write(path, content).unwrap();
+}
+
 /// Helper to set up a C project with the cc processor enabled
 pub fn setup_cc_project(project_path: &Path) {
     fs::create_dir_all(project_path.join("src")).unwrap();
