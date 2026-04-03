@@ -98,6 +98,9 @@ rsconstruct clean                # Remove build output files (preserves cache) [
 rsconstruct clean outputs        # Remove build output files (preserves cache)
 rsconstruct clean all            # Remove out/ and .rsconstruct/ directories
 rsconstruct clean git            # Hard clean using git clean -qffxd (requires git repository)
+rsconstruct clean unknown        # Remove files not tracked by git and not known as build outputs
+rsconstruct clean unknown --dry-run      # Show what would be removed without deleting
+rsconstruct clean unknown --no-gitignore # Include gitignored files as unknown
 ```
 
 ## `rsconstruct status`
@@ -105,7 +108,9 @@ rsconstruct clean git            # Hard clean using git clean -qffxd (requires g
 Show product status — whether each product is up-to-date, stale, or restorable from cache.
 
 ```bash
-rsconstruct status
+rsconstruct status                     # Show per-processor and total summary
+rsconstruct status -v                  # Show per-product status
+rsconstruct status --breakdown         # Show source file counts by processor and extension
 ```
 
 ## `rsconstruct smart auto`
@@ -179,7 +184,8 @@ rsconstruct cache remove-stale  # Remove stale index entries not matching any cu
 Show or manage source file dependencies from the dependency cache. The cache is populated during builds when dependency analyzers scan source files (e.g., C/C++ headers, Python imports).
 
 ```bash
-rsconstruct deps list                        # List all available dependency analyzers
+rsconstruct deps list                          # List all available dependency analyzers
+rsconstruct deps build                         # Run dependency analysis without building
 rsconstruct deps show all                    # Show all cached dependencies
 rsconstruct deps show files src/main.c       # Show dependencies for a specific file
 rsconstruct deps show files src/a.c src/b.c  # Show dependencies for multiple files
@@ -244,6 +250,7 @@ rsconstruct smart enable-if-available    # Add sections for detected processors 
 rsconstruct smart minimal                # Remove all, then add only detected processors
 rsconstruct smart only ruff pylint       # Remove all, then add only listed processors
 rsconstruct smart reset                  # Remove all processor sections
+rsconstruct smart remove-no-file-processors  # Remove processors that don't match any files
 ```
 
 ## `rsconstruct processors`
@@ -255,7 +262,13 @@ rsconstruct processors files             # Show source and target files for each
 rsconstruct processors files ruff        # Show files for a specific processor
 rsconstruct processors files              # Show files for enabled processors
 rsconstruct processors config ruff       # Show resolved configuration for a processor
+rsconstruct processors config --diff     # Show only fields that differ from defaults
 rsconstruct processors defconfig ruff    # Show default configuration for a processor
+rsconstruct processors allowlist         # Show the current processor allowlist
+rsconstruct processors graph             # Show inter-processor dependencies
+rsconstruct processors graph --format dot    # Graphviz DOT format
+rsconstruct processors graph --format mermaid # Mermaid format
+rsconstruct processors files --headers   # Show files with processor headers
 ```
 
 ## `rsconstruct tools`
@@ -296,6 +309,13 @@ rsconstruct tags frontmatter src/main.md     # Show raw frontmatter for a file
 rsconstruct tags validate                    # Validate tags against tags_dir allowlist
 rsconstruct tags unused                      # List tags in tags_dir not used by any file
 rsconstruct tags unused --strict             # Exit with error if unused tags found (CI)
+rsconstruct tags check                       # Run all tag validations without building
+rsconstruct tags suggest src/main.md         # Suggest tags for a file based on similarity
+rsconstruct tags coverage                    # Show percentage of files with each tag category
+rsconstruct tags matrix                      # Show coverage matrix of tag categories per file
+rsconstruct tags orphans                     # Find markdown files with no tags
+rsconstruct tags merge ../other/tags         # Merge tags from another project
+rsconstruct tags collect                     # Add missing tags from source files to tag collection
 ```
 
 ## `rsconstruct complete`
@@ -327,6 +347,32 @@ Merge terms from another project's terms directory. Unions matching files and co
 
 ```bash
 rsconstruct terms merge ../other-project/terms
+```
+
+## `rsconstruct doctor`
+
+Diagnose build environment — checks config, tools, and versions.
+
+```bash
+rsconstruct doctor
+```
+
+## `rsconstruct info`
+
+Show project information.
+
+```bash
+rsconstruct info source          # Show source file counts by extension
+```
+
+## `rsconstruct sloc`
+
+Count source lines of code (SLOC) by language, with optional COCOMO effort/cost estimation.
+
+```bash
+rsconstruct sloc                 # Show SLOC by language
+rsconstruct sloc --cocomo        # Include COCOMO effort/cost estimation
+rsconstruct sloc --cocomo --salary 80000  # Custom annual salary for COCOMO
 ```
 
 ## `rsconstruct version`

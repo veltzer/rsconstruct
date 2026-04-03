@@ -51,4 +51,7 @@ When implementing a processor (built-in or Lua plugin):
 
 RSConstruct inherits the full parent environment for subprocess execution. This is unavoidable — tools need `PATH` to be found, `HOME` to read their own config files, etc. The key design decision is that RSConstruct itself never *reads* env vars to make build decisions, and processors never *add* env vars derived from the user's environment.
 
-The one exception is `NO_COLOR` — RSConstruct respects this standard env var to disable colored output, which is a display concern and does not affect build output.
+The exceptions are:
+
+- `NO_COLOR` — RSConstruct respects this standard env var to disable colored output, which is a display concern and does not affect build output.
+- `RSCONSTRUCT_THREADS` — Sets the number of parallel jobs (equivalent to `-j`). Priority: CLI `-j` flag > `RSCONSTRUCT_THREADS` env var > `[build] parallel` config. This is a performance tuning concern and does not affect build correctness or output.

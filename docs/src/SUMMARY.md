@@ -29,6 +29,7 @@
     - [Doctest](processors/doctest.md)
     - [Drawio](processors/drawio.md)
     - [ESLint](processors/eslint.md)
+    - [Explicit](processors/explicit.md)
     - [Gem](processors/gem.md)
     - [Generator](processors/generator.md)
     - [Hadolint](processors/hadolint.md)
