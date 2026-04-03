@@ -1020,7 +1020,10 @@ pub static TOOLS: &[ToolInfo] = &[
     // Rust tools
     tool!("mdbook",          "rust", "cargo"),
     tool!("rumdl",           "rust", "cargo"),
-    tool!("taplo",           "rust", "cargo", "taplo-cli"),
+    tool_multi!("taplo",     "rust",
+        ("binary", "curl -fsSL https://github.com/tamasfe/taplo/releases/latest/download/taplo-full-linux-x86_64.gz | gunzip > /tmp/taplo && chmod +x /tmp/taplo && sudo mv /tmp/taplo /usr/local/bin/taplo"),
+        ("cargo",  "taplo-cli"),
+    ),
     tool!("cargo",           "rust", "binary", "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"),
     tool!("rustc",           "rust", "binary", "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"),
     // Perl tools
