@@ -96,6 +96,10 @@ message Clean {
 
 #[test]
 fn protobuf_no_files_discovered() {
+    if !tool_available("protoc") {
+        eprintln!("protoc not found, skipping test");
+        return;
+    }
     let temp_dir = setup_protobuf_project();
     let project_path = temp_dir.path();
 

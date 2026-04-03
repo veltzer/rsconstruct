@@ -109,6 +109,46 @@ impl Builder {
             }
         }
 
+        // Pre-flight: verify all required tools are available for declared processors
+        {
+            let active_names: Vec<&String> = if let Some(filter) = processor_filter {
+                processors.keys().filter(|k| filter.iter().any(|f| f == *k)).collect()
+            } else {
+                processors.keys().collect()
+            };
+            let mut missing: Vec<(String, Vec<String>)> = Vec::new();
+            let mut checked: std::collections::HashSet<String> = std::collections::HashSet::new();
+            for name in &active_names {
+                for tool in processors[*name].required_tools() {
+                    if !checked.insert(tool.clone()) {
+                        continue;
+                    }
+                    if which::which(&tool).is_err() {
+                        let procs: Vec<String> = active_names.iter()
+                            .filter(|n| processors[**n].required_tools().contains(&tool))
+                            .map(|n| (*n).clone())
+                            .collect();
+                        missing.push((tool, procs));
+                    }
+                }
+            }
+            if !missing.is_empty() {
+                missing.sort_by(|a, b| a.0.cmp(&b.0));
+                let mut msg = String::from("Missing required tools:\n");
+                for (tool, procs) in &missing {
+                    let install_hint = crate::processors::tool_install_command(&tool)
+                        .map(|cmd| format!("  install: {}", cmd))
+                        .unwrap_or_default();
+                    msg.push_str(&format!("  {} (needed by: {}){}\n", tool, procs.join(", "), install_hint));
+                }
+                msg.push_str("\nRun `rsconstruct tools install` to install missing tools.");
+                return Err(crate::exit_code::RsconstructError::new(
+                    crate::exit_code::RsconstructExitCode::ToolError,
+                    msg.trim_end(),
+                ).into());
+            }
+        }
+
         // Check for config changes and display diffs
         self.detect_config_changes(&processors);
 
