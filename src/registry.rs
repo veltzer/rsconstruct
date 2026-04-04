@@ -88,6 +88,10 @@ macro_rules! for_each_processor {
             SASS,           sass,           SassConfig,            SassProcessor,            ("sass", &[".scss", ".sass"], &[]);
             RUST_SINGLE_FILE, rust_single_file, RustSingleFileConfig, RustSingleFileProcessor, ("src", &[".rs"], &[]);
             SLIDEV,         slidev,         SlidevConfig,          SlidevProcessor,          ("", &[".md"], BUILD_TOOL_EXCLUDES);
+            ENCODING,       encoding,       EncodingConfig,        EncodingProcessor,        ("", &[".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".bash", ".lua", ".pl", ".pm", ".php", ".md", ".yaml", ".yml", ".json", ".toml", ".xml", ".html", ".htm", ".css", ".scss", ".sass", ".tex", ".txt"], BUILD_TOOL_EXCLUDES);
+            DUPLICATE_FILES, duplicate_files, DuplicateFilesConfig, DuplicateFilesProcessor, ("", &[".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".md", ".yaml", ".yml", ".json", ".toml", ".xml", ".html", ".css"], BUILD_TOOL_EXCLUDES);
+            MARP_IMAGES,    marp_images,    MarpImagesConfig,      MarpImagesProcessor,      ("marp", &[".md"], MARKDOWN_EXCLUDE_DIRS);
+            LICENSE_HEADER, license_header, LicenseHeaderConfig,   LicenseHeaderProcessor,   ("", &[".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".bash"], BUILD_TOOL_EXCLUDES);
         }
     };
 }

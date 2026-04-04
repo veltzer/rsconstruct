@@ -2161,3 +2161,48 @@ checker_config!(JekyllConfig, extensions: ["_config.yml"]);
 
 // --- slidev (Slidev presentations) ---
 checker_config!(SlidevConfig, extensions: [".md"]);
+
+// --- encoding (UTF-8 validation) ---
+checker_config!(EncodingConfig, extensions: [".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".bash", ".lua", ".pl", ".pm", ".php", ".md", ".yaml", ".yml", ".json", ".toml", ".xml", ".html", ".htm", ".css", ".scss", ".sass", ".tex", ".txt"]);
+
+// --- duplicate_files (duplicate detection by SHA-256) ---
+checker_config!(DuplicateFilesConfig, extensions: [".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".md", ".yaml", ".yml", ".json", ".toml", ".xml", ".html", ".css"]);
+
+// --- marp_images (validate image references in Marp presentations) ---
+checker_config!(MarpImagesConfig, extensions: [".md"]);
+
+// --- license_header (verify license headers in source files) ---
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct LicenseHeaderConfig {
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(default)]
+    pub auto_inputs: Vec<String>,
+    #[serde(default = "default_true")]
+    pub batch: bool,
+    #[serde(default)]
+    pub header_lines: Vec<String>,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for LicenseHeaderConfig {
+    fn default() -> Self {
+        Self {
+            args: Vec::new(),
+            extra_inputs: Vec::new(),
+            auto_inputs: Vec::new(),
+            batch: true,
+            header_lines: Vec::new(),
+            scan: default_scan!(extensions: [".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".bash"]),
+        }
+    }
+}
+
+impl KnownFields for LicenseHeaderConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &["args", "extra_inputs", "auto_inputs", "batch", "header_lines"]
+    }
+}

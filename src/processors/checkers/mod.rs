@@ -473,8 +473,12 @@ mod clang_tidy;
 mod cppcheck;
 mod cpplint;
 mod doctest;
+mod duplicate_files;
+mod encoding;
 
+mod license_header;
 mod make;
+mod marp_images;
 mod markdownlint;
 mod mdl;
 mod mypy;
@@ -521,8 +525,11 @@ pub use clang_tidy::ClangTidyProcessor;
 pub use cppcheck::CppcheckProcessor;
 pub use cpplint::CpplintProcessor;
 pub use doctest::DoctestProcessor;
-
+pub use duplicate_files::DuplicateFilesProcessor;
+pub use encoding::EncodingProcessor;
+pub use license_header::LicenseHeaderProcessor;
 pub use make::MakeProcessor;
+pub use marp_images::MarpImagesProcessor;
 pub use markdownlint::MarkdownlintProcessor;
 pub use mdl::MdlProcessor;
 pub use mypy::MypyProcessor;

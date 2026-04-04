@@ -267,6 +267,8 @@ pub enum Commands {
         #[command(subcommand)]
         action: ToolsAction,
     },
+    /// Create symlinks from source folders to target folders (for local development installs)
+    SymlinkInstall,
     /// Print version information
     Version,
     /// Watch source files and auto-rebuild on changes

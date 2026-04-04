@@ -249,6 +249,29 @@ pub(crate) struct Config {
     pub plugins: PluginsConfig,
     #[serde(default)]
     pub dependencies: DependenciesConfig,
+    #[serde(default)]
+    pub command: CommandsConfig,
+}
+
+/// Configuration for the `symlink-install` command.
+/// `sources[i]` is symlinked to `targets[i]`. Both arrays must be the same length.
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct SymlinkInstallConfig {
+    /// Source folders containing files to symlink
+    #[serde(default)]
+    pub sources: Vec<String>,
+    /// Target folders where symlinks are created (same length as sources)
+    #[serde(default)]
+    pub targets: Vec<String>,
+}
+
+/// Configuration for custom commands.
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CommandsConfig {
+    #[serde(default)]
+    pub symlink_install: SymlinkInstallConfig,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

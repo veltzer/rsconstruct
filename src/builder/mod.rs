@@ -7,6 +7,7 @@ mod graph;
 pub(crate) mod processors;
 pub(crate) mod sloc;
 pub(crate) mod smart;
+pub(crate) mod symlink_install;
 pub(crate) mod tools;
 
 use std::borrow::Cow;

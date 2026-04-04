@@ -363,6 +363,10 @@ fn run() -> Result<()> {
             let builder = Builder::new()?;
             builder.status(cli.verbose, breakdown)?;
         }
+        Commands::SymlinkInstall => {
+            let config = Config::load()?;
+            builder::symlink_install::run(&config.command.symlink_install)?;
+        }
         Commands::Terms { action } => {
             let config = Config::load()?;
             let mut terms_config: config::TermsConfig = config.processor
