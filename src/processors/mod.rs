@@ -907,6 +907,15 @@ pub trait ProductDiscovery: Sync + Send {
     fn config_json(&self) -> Option<String> {
         None
     }
+
+    /// Maximum number of concurrent jobs for this processor.
+    /// Returns None to use the global `-j` parallelism (default).
+    /// Returns Some(n) to limit this processor to at most n concurrent executions,
+    /// regardless of the global `-j` setting. Useful for processors that spawn
+    /// heavyweight subprocesses (e.g., marp spawns headless Chromium).
+    fn max_jobs(&self) -> Option<usize> {
+        None
+    }
 }
 
 /// Central registry of all known external tools — single source of truth for

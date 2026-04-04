@@ -4,7 +4,7 @@ use std::fs;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use indicatif::ProgressBar;
-use parking_lot::Mutex;
+use parking_lot::{Condvar, Mutex};
 use std::thread;
 use std::time::Instant;
 
@@ -17,6 +17,37 @@ use crate::processors::{BuildStats, ProductTiming};
 use crate::progress;
 
 use super::{Executor, HandlerContext, LevelWork, PreCheckResult, RestoreOutcome, SharedState, WorkItem};
+
+/// A simple counting semaphore for limiting per-processor concurrency.
+struct Semaphore {
+    state: Mutex<usize>,
+    condvar: Condvar,
+    max_permits: usize,
+}
+
+impl Semaphore {
+    fn new(max_permits: usize) -> Self {
+        Self {
+            state: Mutex::new(0),
+            condvar: Condvar::new(),
+            max_permits,
+        }
+    }
+
+    fn acquire(&self) {
+        let mut active = self.state.lock();
+        while *active >= self.max_permits {
+            self.condvar.wait(&mut active);
+        }
+        *active += 1;
+    }
+
+    fn release(&self) {
+        let mut active = self.state.lock();
+        *active -= 1;
+        self.condvar.notify_one();
+    }
+}
 
 /// Remove existing output files before executing a product.
 ///
@@ -159,6 +190,13 @@ impl<'a> Executor<'a> {
             global_total,
         };
 
+        // Build per-processor semaphores for max_jobs limits
+        let semaphores: HashMap<String, Arc<Semaphore>> = self.processors.iter()
+            .filter_map(|(name, proc)| {
+                proc.max_jobs().map(|max| (name.clone(), Arc::new(Semaphore::new(max))))
+            })
+            .collect();
+
         for level in levels {
             // Check for Ctrl+C before starting next level
             if self.is_interrupted() {
@@ -177,6 +215,7 @@ impl<'a> Executor<'a> {
             // Process this level in parallel using thread pool
             thread::scope(|s| {
                 let lctx_ref = &lctx;
+                let semaphores_ref = &semaphores;
 
                 // Spawn one thread per batch group
                 for (proc_name, items) in &batch_groups {
@@ -196,6 +235,7 @@ impl<'a> Executor<'a> {
                         s.spawn(move || {
                             self.process_non_batch_chunk(
                                 chunk, lctx_ref, &total_ref, &current_ref,
+                                semaphores_ref,
                             );
                         });
                     }
@@ -392,6 +432,7 @@ impl<'a> Executor<'a> {
         lctx: &LevelContext,
         total_per_processor: &HashMap<String, usize>,
         current_per_processor: &Mutex<HashMap<String, usize>>,
+        semaphores: &HashMap<String, Arc<Semaphore>>,
     ) {
         for item in chunk {
             // Stop if interrupted or if there's an error (non-keep-going mode)
@@ -405,6 +446,12 @@ impl<'a> Executor<'a> {
 
             if let PreCheckResult::Handled = self.try_skip_or_restore(item, &product.processor, lctx, true) {
                 continue;
+            }
+
+            // Acquire per-processor semaphore permit if max_jobs is set
+            let semaphore = semaphores.get(&product.processor);
+            if let Some(sem) = semaphore {
+                sem.acquire();
             }
 
             if let Some(processor) = self.processors.get(&product.processor) {
@@ -518,6 +565,11 @@ impl<'a> Executor<'a> {
                 }
                 crate::processors::set_declared_tools(None);
                 Self::inc_progress(lctx.pb, lctx.shared);
+            }
+
+            // Release per-processor semaphore permit
+            if let Some(sem) = semaphore {
+                sem.release();
             }
         }
     }

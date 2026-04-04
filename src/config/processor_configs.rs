@@ -50,6 +50,8 @@ macro_rules! checker_config {
             pub auto_inputs: Vec<String>,
             #[serde(default = "default_true")]
             pub batch: bool,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub max_jobs: Option<usize>,
             #[serde(flatten)]
             pub scan: ScanConfig,
         }
@@ -61,6 +63,7 @@ macro_rules! checker_config {
                     extra_inputs: Vec::new(),
                     auto_inputs: vec![$($ai.into()),*],
                     batch: true,
+                    max_jobs: None,
                     scan: $scan,
                 }
             }
@@ -68,7 +71,7 @@ macro_rules! checker_config {
 
         impl KnownFields for $name {
             fn known_fields() -> &'static [&'static str] {
-                &["args", "extra_inputs", "auto_inputs", "batch"]
+                &["args", "extra_inputs", "auto_inputs", "batch", "max_jobs"]
             }
         }
     };
@@ -94,6 +97,8 @@ macro_rules! checker_config {
                 pub auto_inputs: Vec<String>,
                 #[serde(default = "default_true")]
                 pub batch: bool,
+                #[serde(default, skip_serializing_if = "Option::is_none")]
+                pub max_jobs: Option<usize>,
                 #[serde(flatten)]
                 pub scan: ScanConfig,
             }
@@ -107,6 +112,7 @@ macro_rules! checker_config {
                     extra_inputs: Vec::new(),
                     auto_inputs: vec![$($ai.into()),*],
                     batch: true,
+                    max_jobs: None,
                     scan: $scan,
                 }
             }
@@ -114,7 +120,7 @@ macro_rules! checker_config {
 
         impl KnownFields for $name {
             fn known_fields() -> &'static [&'static str] {
-                &["linter", "args", "extra_inputs", "auto_inputs", "batch"]
+                &["linter", "args", "extra_inputs", "auto_inputs", "batch", "max_jobs"]
             }
         }
     };
@@ -180,6 +186,8 @@ macro_rules! generator_config {
                 pub output_dir: String,
                 #[serde(default = "default_true")]
                 pub batch: bool,
+                #[serde(default, skip_serializing_if = "Option::is_none")]
+                pub max_jobs: Option<usize>,
                 #[serde(flatten)]
                 pub scan: ScanConfig,
             }
@@ -195,6 +203,7 @@ macro_rules! generator_config {
                     auto_inputs: generator_config!(@default_auto_inputs $($($ai),+)?),
                     output_dir: $output_dir.into(),
                     batch: true,
+                    max_jobs: None,
                     scan: $scan,
                 }
             }
@@ -203,7 +212,7 @@ macro_rules! generator_config {
         impl KnownFields for $name {
             fn known_fields() -> &'static [&'static str] {
                 &[stringify!($tool_field), "formats", "args",
-                  "extra_inputs", "auto_inputs", "output_dir", "batch"]
+                  "extra_inputs", "auto_inputs", "output_dir", "batch", "max_jobs"]
             }
         }
     };
@@ -236,6 +245,8 @@ macro_rules! generator_config {
                 pub output_dir: String,
                 #[serde(default = "default_true")]
                 pub batch: bool,
+                #[serde(default, skip_serializing_if = "Option::is_none")]
+                pub max_jobs: Option<usize>,
                 #[serde(flatten)]
                 pub scan: ScanConfig,
             }
@@ -251,6 +262,7 @@ macro_rules! generator_config {
                     auto_inputs: generator_config!(@default_auto_inputs $($($ai),+)?),
                     output_dir: $output_dir.into(),
                     batch: true,
+                    max_jobs: None,
                     scan: $scan,
                 }
             }
@@ -259,7 +271,7 @@ macro_rules! generator_config {
         impl KnownFields for $name {
             fn known_fields() -> &'static [&'static str] {
                 &[stringify!($tool_field), "formats", "args",
-                  "extra_inputs", "auto_inputs", "output_dir", "batch"]
+                  "extra_inputs", "auto_inputs", "output_dir", "batch", "max_jobs"]
             }
         }
     };
@@ -289,6 +301,8 @@ macro_rules! generator_config {
                 pub output_dir: String,
                 #[serde(default = "default_true")]
                 pub batch: bool,
+                #[serde(default, skip_serializing_if = "Option::is_none")]
+                pub max_jobs: Option<usize>,
                 #[serde(flatten)]
                 pub scan: ScanConfig,
             }
@@ -303,6 +317,7 @@ macro_rules! generator_config {
                     auto_inputs: generator_config!(@default_auto_inputs $($($ai),+)?),
                     output_dir: $output_dir.into(),
                     batch: true,
+                    max_jobs: None,
                     scan: $scan,
                 }
             }
@@ -311,7 +326,7 @@ macro_rules! generator_config {
         impl KnownFields for $name {
             fn known_fields() -> &'static [&'static str] {
                 &[stringify!($tool_field), "args",
-                  "extra_inputs", "auto_inputs", "output_dir", "batch"]
+                  "extra_inputs", "auto_inputs", "output_dir", "batch", "max_jobs"]
             }
         }
     };
@@ -333,6 +348,8 @@ pub struct TeraConfig {
     pub auto_inputs: Vec<String>,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -345,6 +362,7 @@ impl Default for TeraConfig {
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(scan_dir: "tera.templates", extensions: [".tera"]),
         }
     }
@@ -353,7 +371,7 @@ impl Default for TeraConfig {
 impl KnownFields for TeraConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "strict", "trim_blocks", "extra_inputs", "auto_inputs", "batch",
+            "strict", "trim_blocks", "extra_inputs", "auto_inputs", "batch", "max_jobs",
         ]
     }
 }
@@ -366,6 +384,8 @@ pub struct MakoConfig {
     pub auto_inputs: Vec<String>,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -376,6 +396,7 @@ impl Default for MakoConfig {
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(scan_dir: "templates.mako", extensions: [".mako"]),
         }
     }
@@ -384,7 +405,7 @@ impl Default for MakoConfig {
 impl KnownFields for MakoConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "extra_inputs", "auto_inputs", "batch",
+            "extra_inputs", "auto_inputs", "batch", "max_jobs",
         ]
     }
 }
@@ -397,6 +418,8 @@ pub struct Jinja2Config {
     pub auto_inputs: Vec<String>,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -407,6 +430,7 @@ impl Default for Jinja2Config {
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(scan_dir: "templates.jinja2", extensions: [".j2"]),
         }
     }
@@ -415,7 +439,7 @@ impl Default for Jinja2Config {
 impl KnownFields for Jinja2Config {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "extra_inputs", "auto_inputs", "batch",
+            "extra_inputs", "auto_inputs", "batch", "max_jobs",
         ]
     }
 }
@@ -451,6 +475,8 @@ pub struct CppcheckConfig {
     pub auto_inputs: Vec<String>,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -462,6 +488,7 @@ impl Default for CppcheckConfig {
             extra_inputs: Vec::new(),
             auto_inputs: default_cppcheck_auto_inputs(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(scan_dir: "src", extensions: [".c", ".cc"]),
         }
     }
@@ -470,7 +497,7 @@ impl Default for CppcheckConfig {
 impl KnownFields for CppcheckConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "args", "extra_inputs", "auto_inputs", "batch",
+            "args", "extra_inputs", "auto_inputs", "batch", "max_jobs",
         ]
     }
 }
@@ -487,6 +514,8 @@ pub struct ClangTidyConfig {
     pub auto_inputs: Vec<String>,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -503,6 +532,7 @@ impl Default for ClangTidyConfig {
             extra_inputs: Vec::new(),
             auto_inputs: default_clang_tidy_auto_inputs(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(scan_dir: "src", extensions: [".c", ".cc"]),
         }
     }
@@ -511,7 +541,7 @@ impl Default for ClangTidyConfig {
 impl KnownFields for ClangTidyConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "args", "compiler_args", "extra_inputs", "auto_inputs", "batch",
+            "args", "compiler_args", "extra_inputs", "auto_inputs", "batch", "max_jobs",
         ]
     }
 }
@@ -585,6 +615,8 @@ pub struct CcSingleFileConfig {
     pub include_scanner: IncludeScanner,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -630,6 +662,7 @@ impl Default for CcSingleFileConfig {
             output_dir: "out/cc_single_file".into(),
             include_scanner: IncludeScanner::default(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(scan_dir: "src", extensions: [".c", ".cc"]),
         }
     }
@@ -640,7 +673,7 @@ impl KnownFields for CcSingleFileConfig {
         &[
             "cc", "cxx", "cflags", "cxxflags", "ldflags", "output_suffix",
             "compilers", "include_paths", "extra_inputs", "auto_inputs", "output_dir",
-            "include_scanner", "batch",
+            "include_scanner", "batch", "max_jobs",
         ]
     }
 }
@@ -726,6 +759,8 @@ pub struct CcConfig {
     pub cache_output_dir: bool,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -743,6 +778,7 @@ impl Default for CcConfig {
             extra_inputs: Vec::new(),
             cache_output_dir: true,
             batch: true,
+            max_jobs: None,
             scan: default_scan!(extensions: ["cc.yaml"]),
         }
     }
@@ -753,7 +789,7 @@ impl KnownFields for CcConfig {
         &[
             "cc", "cxx", "cflags", "cxxflags", "ldflags",
             "include_dirs", "single_invocation",
-            "extra_inputs", "cache_output_dir", "batch",
+            "extra_inputs", "cache_output_dir", "batch", "max_jobs",
         ]
     }
 }
@@ -805,6 +841,8 @@ pub struct LinuxModuleConfig {
     pub extra_inputs: Vec<String>,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -814,6 +852,7 @@ impl Default for LinuxModuleConfig {
         Self {
             extra_inputs: Vec::new(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(extensions: ["linux-module.yaml"]),
         }
     }
@@ -822,7 +861,7 @@ impl Default for LinuxModuleConfig {
 impl KnownFields for LinuxModuleConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "extra_inputs", "batch",
+            "extra_inputs", "batch", "max_jobs",
         ]
     }
 }
@@ -850,6 +889,8 @@ pub struct ZspellConfig {
     pub auto_inputs: Vec<String>,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -867,6 +908,7 @@ impl Default for ZspellConfig {
             extra_inputs: Vec::new(),
             auto_inputs: default_zspell_auto_inputs(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(extensions: [".md"]),
         }
     }
@@ -875,7 +917,7 @@ impl Default for ZspellConfig {
 impl KnownFields for ZspellConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "language", "words_file", "auto_add_words", "extra_inputs", "auto_inputs", "batch",
+            "language", "words_file", "auto_add_words", "extra_inputs", "auto_inputs", "batch", "max_jobs",
         ]
     }
 }
@@ -912,6 +954,8 @@ pub struct CargoConfig {
     pub cache_output_dir: bool,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -926,6 +970,7 @@ impl Default for CargoConfig {
             profiles: default_cargo_profiles(),
             cache_output_dir: true,
             batch: true,
+            max_jobs: None,
             scan: default_scan!(extensions: ["Cargo.toml"]),
         }
     }
@@ -935,7 +980,7 @@ impl KnownFields for CargoConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
             "cargo", "command", "args", "extra_inputs", "profiles",
-            "cache_output_dir", "batch", "scan_dir", "extensions", "exclude_dirs", "exclude_files",
+            "cache_output_dir", "batch", "max_jobs", "scan_dir", "extensions", "exclude_dirs", "exclude_files",
             "exclude_paths",
         ]
     }
@@ -959,6 +1004,8 @@ pub struct ClippyConfig {
     pub auto_inputs: Vec<String>,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -972,6 +1019,7 @@ impl Default for ClippyConfig {
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(extensions: ["Cargo.toml"]),
         }
     }
@@ -980,7 +1028,7 @@ impl Default for ClippyConfig {
 impl KnownFields for ClippyConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "cargo", "command", "args", "extra_inputs", "auto_inputs", "batch",
+            "cargo", "command", "args", "extra_inputs", "auto_inputs", "batch", "max_jobs",
         ]
     }
 }
@@ -999,6 +1047,8 @@ pub struct MakeConfig {
     pub auto_inputs: Vec<String>,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1012,6 +1062,7 @@ impl Default for MakeConfig {
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(extensions: ["Makefile"]),
         }
     }
@@ -1020,7 +1071,7 @@ impl Default for MakeConfig {
 impl KnownFields for MakeConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "make", "args", "target", "extra_inputs", "auto_inputs", "batch",
+            "make", "args", "target", "extra_inputs", "auto_inputs", "batch", "max_jobs",
         ]
     }
 }
@@ -1085,6 +1136,8 @@ pub struct TagsConfig {
     pub auto_inputs: Vec<String>,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1104,6 +1157,7 @@ impl Default for TagsConfig {
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(extensions: [".md"]),
         }
     }
@@ -1114,7 +1168,7 @@ impl KnownFields for TagsConfig {
         &[
             "output", "tags_dir", "required_fields", "required_values",
             "unique_fields", "field_types", "required_field_groups", "sorted_tags",
-            "check_unused", "extra_inputs", "auto_inputs", "batch",
+            "check_unused", "extra_inputs", "auto_inputs", "batch", "max_jobs",
         ]
     }
 }
@@ -1135,6 +1189,8 @@ pub struct ScriptConfig {
     pub auto_inputs: Vec<String>,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1147,6 +1203,7 @@ impl Default for ScriptConfig {
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
             batch: true,
+            max_jobs: None,
             scan: ScanConfig {
                 scan_dirs: None,
                 extensions: None,
@@ -1161,7 +1218,7 @@ impl Default for ScriptConfig {
 impl KnownFields for ScriptConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "linter", "args", "extra_inputs", "auto_inputs", "batch",
+            "linter", "args", "extra_inputs", "auto_inputs", "batch", "max_jobs",
         ]
     }
 }
@@ -1194,6 +1251,8 @@ pub struct GeneratorConfig {
     pub auto_inputs: Vec<String>,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1208,6 +1267,7 @@ impl Default for GeneratorConfig {
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
             batch: true,
+            max_jobs: None,
             scan: ScanConfig {
                 scan_dirs: None,
                 extensions: None,
@@ -1223,7 +1283,7 @@ impl KnownFields for GeneratorConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
             "command", "output_dir", "output_extension", "args",
-            "extra_inputs", "auto_inputs", "batch",
+            "extra_inputs", "auto_inputs", "batch", "max_jobs",
         ]
     }
 }
@@ -1295,6 +1355,8 @@ pub struct PipConfig {
     pub extra_inputs: Vec<String>,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1306,6 +1368,7 @@ impl Default for PipConfig {
             args: Vec::new(),
             extra_inputs: Vec::new(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(extensions: ["requirements.txt"]),
         }
     }
@@ -1314,7 +1377,7 @@ impl Default for PipConfig {
 impl KnownFields for PipConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "pip", "args", "extra_inputs", "batch",
+            "pip", "args", "extra_inputs", "batch", "max_jobs",
         ]
     }
 }
@@ -1343,6 +1406,8 @@ pub struct SphinxConfig {
     pub cache_output_dir: bool,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1357,6 +1422,7 @@ impl Default for SphinxConfig {
             extra_inputs: Vec::new(),
             cache_output_dir: true,
             batch: true,
+            max_jobs: None,
             scan: default_scan!(extensions: ["conf.py"]),
         }
     }
@@ -1365,7 +1431,7 @@ impl Default for SphinxConfig {
 impl KnownFields for SphinxConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "sphinx_build", "output_dir", "working_dir", "args", "extra_inputs", "cache_output_dir", "batch",
+            "sphinx_build", "output_dir", "working_dir", "args", "extra_inputs", "cache_output_dir", "batch", "max_jobs",
         ]
     }
 }
@@ -1392,6 +1458,8 @@ pub struct MdbookConfig {
     pub cache_output_dir: bool,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1405,6 +1473,7 @@ impl Default for MdbookConfig {
             extra_inputs: Vec::new(),
             cache_output_dir: true,
             batch: true,
+            max_jobs: None,
             scan: default_scan!(extensions: ["book.toml"]),
         }
     }
@@ -1413,7 +1482,7 @@ impl Default for MdbookConfig {
 impl KnownFields for MdbookConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "mdbook", "output_dir", "args", "extra_inputs", "cache_output_dir", "batch",
+            "mdbook", "output_dir", "args", "extra_inputs", "cache_output_dir", "batch", "max_jobs",
         ]
     }
 }
@@ -1440,6 +1509,8 @@ pub struct NpmConfig {
     pub cache_output_dir: bool,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1453,6 +1524,7 @@ impl Default for NpmConfig {
             extra_inputs: Vec::new(),
             cache_output_dir: true,
             batch: true,
+            max_jobs: None,
             scan: default_scan!(extensions: ["package.json"]),
         }
     }
@@ -1461,7 +1533,7 @@ impl Default for NpmConfig {
 impl KnownFields for NpmConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "npm", "command", "args", "extra_inputs", "cache_output_dir", "batch",
+            "npm", "command", "args", "extra_inputs", "cache_output_dir", "batch", "max_jobs",
         ]
     }
 }
@@ -1500,6 +1572,8 @@ pub struct MdlConfig {
     pub gem_stamp: String,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1515,6 +1589,7 @@ impl Default for MdlConfig {
             auto_inputs: default_mdl_auto_inputs(),
             gem_stamp: "out/gem/root.stamp".into(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(extensions: [".md"]),
         }
     }
@@ -1523,7 +1598,7 @@ impl Default for MdlConfig {
 impl KnownFields for MdlConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "local_repo", "gem_home", "mdl_bin", "args", "extra_inputs", "auto_inputs", "gem_stamp", "batch",
+            "local_repo", "gem_home", "mdl_bin", "args", "extra_inputs", "auto_inputs", "gem_stamp", "batch", "max_jobs",
         ]
     }
 }
@@ -1556,6 +1631,8 @@ pub struct MarkdownlintConfig {
     pub npm_stamp: String,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1570,6 +1647,7 @@ impl Default for MarkdownlintConfig {
             auto_inputs: default_markdownlint_auto_inputs(),
             npm_stamp: "out/npm/root.stamp".into(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(extensions: [".md"]),
         }
     }
@@ -1578,7 +1656,7 @@ impl Default for MarkdownlintConfig {
 impl KnownFields for MarkdownlintConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "local_repo", "markdownlint_bin", "args", "extra_inputs", "auto_inputs", "npm_stamp", "batch",
+            "local_repo", "markdownlint_bin", "args", "extra_inputs", "auto_inputs", "npm_stamp", "batch", "max_jobs",
         ]
     }
 }
@@ -1623,6 +1701,8 @@ pub struct AspellConfig {
     pub auto_inputs: Vec<String>,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1639,6 +1719,7 @@ impl Default for AspellConfig {
             extra_inputs: Vec::new(),
             auto_inputs: default_aspell_auto_inputs(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(extensions: [".md"]),
         }
     }
@@ -1647,7 +1728,7 @@ impl Default for AspellConfig {
 impl KnownFields for AspellConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "aspell", "args", "conf_dir", "conf", "auto_add_words", "words_file", "extra_inputs", "auto_inputs", "batch",
+            "aspell", "args", "conf_dir", "conf", "auto_add_words", "words_file", "extra_inputs", "auto_inputs", "batch", "max_jobs",
         ]
     }
 }
@@ -1668,6 +1749,8 @@ pub struct TermsConfig {
     pub auto_inputs: Vec<String>,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1679,6 +1762,7 @@ impl Default for TermsConfig {
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(extensions: [".md"]),
         }
     }
@@ -1686,7 +1770,7 @@ impl Default for TermsConfig {
 
 impl KnownFields for TermsConfig {
     fn known_fields() -> &'static [&'static str] {
-        &["terms_dir", "extra_inputs", "auto_inputs", "batch"]
+        &["terms_dir", "extra_inputs", "auto_inputs", "batch", "max_jobs"]
     }
 }
 
@@ -1724,6 +1808,8 @@ pub struct PandocConfig {
     pub output_dir: String,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1739,6 +1825,7 @@ impl Default for PandocConfig {
             auto_inputs: Vec::new(),
             output_dir: "out/pandoc".into(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(scan_dir: "pandoc", extensions: [".md"]),
         }
     }
@@ -1747,7 +1834,7 @@ impl Default for PandocConfig {
 impl KnownFields for PandocConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "pandoc", "from", "formats", "args", "extra_inputs", "auto_inputs", "output_dir", "batch",
+            "pandoc", "from", "formats", "args", "extra_inputs", "auto_inputs", "output_dir", "batch", "max_jobs",
         ]
     }
 }
@@ -1793,6 +1880,8 @@ pub struct PdflatexConfig {
     pub output_dir: String,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1808,6 +1897,7 @@ impl Default for PdflatexConfig {
             qpdf: true,
             output_dir: "out/pdflatex".into(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(extensions: [".tex"]),
         }
     }
@@ -1816,7 +1906,7 @@ impl Default for PdflatexConfig {
 impl KnownFields for PdflatexConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "pdflatex", "args", "extra_inputs", "auto_inputs", "runs", "qpdf", "output_dir", "batch",
+            "pdflatex", "args", "extra_inputs", "auto_inputs", "runs", "qpdf", "output_dir", "batch", "max_jobs",
         ]
     }
 }
@@ -1849,6 +1939,8 @@ pub struct A2xConfig {
     pub output_dir: String,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1863,6 +1955,7 @@ impl Default for A2xConfig {
             auto_inputs: Vec::new(),
             output_dir: "out/a2x".into(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(extensions: [".txt"]),
         }
     }
@@ -1871,7 +1964,7 @@ impl Default for A2xConfig {
 impl KnownFields for A2xConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "a2x", "format", "args", "extra_inputs", "auto_inputs", "output_dir", "batch",
+            "a2x", "format", "args", "extra_inputs", "auto_inputs", "output_dir", "batch", "max_jobs",
         ]
     }
 }
@@ -1905,6 +1998,8 @@ pub struct GemConfig {
     pub cache_output_dir: bool,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1919,6 +2014,7 @@ impl Default for GemConfig {
             extra_inputs: Vec::new(),
             cache_output_dir: true,
             batch: true,
+            max_jobs: None,
             scan: default_scan!(extensions: ["Gemfile"]),
         }
     }
@@ -1927,7 +2023,7 @@ impl Default for GemConfig {
 impl KnownFields for GemConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "bundler", "command", "gem_home", "args", "extra_inputs", "cache_output_dir", "batch",
+            "bundler", "command", "gem_home", "args", "extra_inputs", "cache_output_dir", "batch", "max_jobs",
         ]
     }
 }
@@ -1977,6 +2073,8 @@ pub struct RustSingleFileConfig {
     pub output_dir: String,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1991,6 +2089,7 @@ impl Default for RustSingleFileConfig {
             auto_inputs: Vec::new(),
             output_dir: "out/rust_single_file".into(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(scan_dir: "src", extensions: [".rs"]),
         }
     }
@@ -1998,7 +2097,7 @@ impl Default for RustSingleFileConfig {
 
 impl KnownFields for RustSingleFileConfig {
     fn known_fields() -> &'static [&'static str] {
-        &["rustc", "flags", "output_suffix", "extra_inputs", "auto_inputs", "output_dir", "batch"]
+        &["rustc", "flags", "output_suffix", "extra_inputs", "auto_inputs", "output_dir", "batch", "max_jobs"]
     }
 }
 
@@ -2042,6 +2141,8 @@ pub struct PdfuniteConfig {
     pub output_dir: String,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -2058,6 +2159,7 @@ impl Default for PdfuniteConfig {
             auto_inputs: Vec::new(),
             output_dir: "out/pdfunite".into(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(extensions: ["course.yaml"]),
         }
     }
@@ -2067,7 +2169,7 @@ impl KnownFields for PdfuniteConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
             "pdfunite_bin", "source_dir", "source_ext", "source_output_dir",
-            "args", "extra_inputs", "auto_inputs", "output_dir", "batch",
+            "args", "extra_inputs", "auto_inputs", "output_dir", "batch", "max_jobs",
         ]
     }
 }
@@ -2086,6 +2188,8 @@ pub struct ObjdumpConfig {
     pub output_dir: String,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -2101,6 +2205,7 @@ impl Default for ObjdumpConfig {
             extra_inputs: Vec::new(),
             output_dir: default_objdump_output_dir(),
             batch: true,
+            max_jobs: None,
             scan: default_scan!(scan_dir: "out/cc_single_file", extensions: [".elf"]),
         }
     }
@@ -2109,7 +2214,7 @@ impl Default for ObjdumpConfig {
 impl KnownFields for ObjdumpConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "args", "extra_inputs", "output_dir", "batch",
+            "args", "extra_inputs", "output_dir", "batch", "max_jobs",
         ]
     }
 }
@@ -2182,6 +2287,8 @@ pub struct LicenseHeaderConfig {
     pub auto_inputs: Vec<String>,
     #[serde(default = "default_true")]
     pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
     #[serde(default)]
     pub header_lines: Vec<String>,
     #[serde(flatten)]
@@ -2195,6 +2302,7 @@ impl Default for LicenseHeaderConfig {
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
             batch: true,
+            max_jobs: None,
             header_lines: Vec::new(),
             scan: default_scan!(extensions: [".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".bash"]),
         }
@@ -2203,6 +2311,6 @@ impl Default for LicenseHeaderConfig {
 
 impl KnownFields for LicenseHeaderConfig {
     fn known_fields() -> &'static [&'static str] {
-        &["args", "extra_inputs", "auto_inputs", "batch", "header_lines"]
+        &["args", "extra_inputs", "auto_inputs", "batch", "max_jobs", "header_lines"]
     }
 }
