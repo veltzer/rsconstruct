@@ -217,4 +217,8 @@ impl ProductDiscovery for ZspellProcessor {
             "zspell",
         )
     }
+
+    fn max_jobs(&self) -> Option<usize> {
+        self.config.max_jobs
+    }
 }

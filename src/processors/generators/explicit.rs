@@ -142,4 +142,5 @@ impl ProductDiscovery for ExplicitProcessor {
     fn config_json(&self) -> Option<String> {
         serde_json::to_string(&self.config).ok()
     }
+
 }

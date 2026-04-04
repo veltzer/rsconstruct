@@ -113,4 +113,8 @@ impl ProductDiscovery for GeneratorProcessor {
     fn config_json(&self) -> Option<String> {
         serde_json::to_string(&self.config).ok()
     }
+
+    fn max_jobs(&self) -> Option<usize> {
+        self.config.max_jobs
+    }
 }

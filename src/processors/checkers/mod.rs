@@ -54,6 +54,10 @@ macro_rules! impl_checker {
             impl_checker!(@config_json self, $config_field, $cj);
 
             impl_checker!(@batch self, $config_field, [$($batch)?]);
+
+            fn max_jobs(&self) -> Option<usize> {
+                self.$config_field.max_jobs
+            }
         }
     };
 

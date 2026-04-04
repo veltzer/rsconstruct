@@ -76,4 +76,8 @@ impl ProductDiscovery for MakeProcessor {
     fn execute(&self, product: &Product) -> Result<()> {
         self.execute_make(product.primary_input())
     }
+
+    fn max_jobs(&self) -> Option<usize> {
+        self.config.max_jobs
+    }
 }

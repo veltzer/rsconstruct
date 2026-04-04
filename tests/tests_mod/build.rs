@@ -1,5 +1,7 @@
 use std::fs;
-use crate::common::{setup_test_project, run_rsconstruct, run_rsconstruct_with_env, run_rsconstruct_json};
+#[allow(unused_imports)]
+use std::path::Path;
+use crate::common::{setup_test_project, run_rsconstruct, run_rsconstruct_with_env, run_rsconstruct_json, run_rsconstruct_json_with_env};
 
 #[test]
 fn clean_command() {
@@ -701,4 +703,195 @@ extensions = [".txt"]
     let ascii_input = ascii_products[0]["inputs"].as_array().unwrap()[0].as_str().unwrap();
     assert!(ascii_input.contains("out/generated/hello.txt"),
         "ascii input should be out/generated/hello.txt, got: {}", ascii_input);
+}
+
+#[test]
+fn max_jobs_limits_per_processor_concurrency() {
+    // Verify that max_jobs limits concurrency for a specific processor.
+    // Uses the script processor with a bash script that tracks peak concurrency
+    // via a shared counter file protected by flock.
+    //
+    // Setup: 8 input files, global -j8, but max_jobs=2 for the script processor.
+    // The script sleeps 0.3s per file, so without max_jobs all 8 would run at once.
+    // With max_jobs=2, peak concurrency must never exceed 2.
+
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    // Create the concurrency-tracking script
+    let script_content = r#"#!/bin/bash
+# Track concurrency: atomically increment counter, record peak, sleep, decrement.
+COUNTER_FILE="$PROJECT_ROOT/.concurrency_counter"
+PEAK_FILE="$PROJECT_ROOT/.concurrency_peak"
+LOCK_FILE="$PROJECT_ROOT/.concurrency_lock"
+
+# Increment and record peak
+(
+    flock 9
+    current=$(cat "$COUNTER_FILE" 2>/dev/null || echo 0)
+    current=$((current + 1))
+    echo "$current" > "$COUNTER_FILE"
+    peak=$(cat "$PEAK_FILE" 2>/dev/null || echo 0)
+    if [ "$current" -gt "$peak" ]; then
+        echo "$current" > "$PEAK_FILE"
+    fi
+) 9>"$LOCK_FILE"
+
+# Hold the slot for a bit so concurrency can be observed
+sleep 0.3
+
+# Decrement
+(
+    flock 9
+    current=$(cat "$COUNTER_FILE" 2>/dev/null || echo 0)
+    current=$((current - 1))
+    echo "$current" > "$COUNTER_FILE"
+) 9>"$LOCK_FILE"
+"#;
+
+    let script_path = project_path.join("check_concurrency.sh");
+    fs::write(&script_path, script_content).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&script_path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    // Create rsconstruct.toml with script processor, max_jobs=2, batch disabled
+    let config = format!(
+        r#"[processor.script]
+linter = "bash"
+args = ["{script}"]
+extensions = [".txt"]
+scan_dirs = ["inputs"]
+max_jobs = 2
+batch = false
+"#,
+        script = script_path.display(),
+    );
+    fs::write(project_path.join("rsconstruct.toml"), &config).unwrap();
+
+    // Create 8 input files
+    fs::create_dir_all(project_path.join("inputs")).unwrap();
+    for i in 0..8 {
+        fs::write(
+            project_path.join(format!("inputs/file_{:02}.txt", i)),
+            format!("content {}", i),
+        ).unwrap();
+    }
+
+    // Initialize counter files
+    fs::write(project_path.join(".concurrency_counter"), "0").unwrap();
+    fs::write(project_path.join(".concurrency_peak"), "0").unwrap();
+
+    // Run build with -j8 global parallelism
+    let result = run_rsconstruct_json_with_env(
+        project_path,
+        &["build", "-j8"],
+        &[("NO_COLOR", "1"), ("PROJECT_ROOT", project_path.to_str().unwrap())],
+    );
+
+    assert!(result.exit_success,
+        "Build should succeed. Errors: {:?}", result.errors);
+    assert_eq!(result.success, 8, "All 8 files should be processed");
+
+    // Read peak concurrency
+    let peak: usize = fs::read_to_string(project_path.join(".concurrency_peak"))
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+
+    assert!(peak <= 2,
+        "Peak concurrency was {} but max_jobs=2 should limit it to 2", peak);
+    assert!(peak >= 1,
+        "Peak concurrency should be at least 1, got {}", peak);
+}
+
+#[test]
+fn max_jobs_unset_allows_full_parallelism() {
+    // Verify that without max_jobs, the processor uses full global parallelism.
+    // Same setup as above but without max_jobs — peak should be > 2.
+
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    let script_content = r#"#!/bin/bash
+COUNTER_FILE="$PROJECT_ROOT/.concurrency_counter"
+PEAK_FILE="$PROJECT_ROOT/.concurrency_peak"
+LOCK_FILE="$PROJECT_ROOT/.concurrency_lock"
+
+(
+    flock 9
+    current=$(cat "$COUNTER_FILE" 2>/dev/null || echo 0)
+    current=$((current + 1))
+    echo "$current" > "$COUNTER_FILE"
+    peak=$(cat "$PEAK_FILE" 2>/dev/null || echo 0)
+    if [ "$current" -gt "$peak" ]; then
+        echo "$current" > "$PEAK_FILE"
+    fi
+) 9>"$LOCK_FILE"
+
+sleep 0.3
+
+(
+    flock 9
+    current=$(cat "$COUNTER_FILE" 2>/dev/null || echo 0)
+    current=$((current - 1))
+    echo "$current" > "$COUNTER_FILE"
+) 9>"$LOCK_FILE"
+"#;
+
+    let script_path = project_path.join("check_concurrency.sh");
+    fs::write(&script_path, script_content).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&script_path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    // No max_jobs, batch disabled — should use full parallelism
+    let config = format!(
+        r#"[processor.script]
+linter = "bash"
+args = ["{script}"]
+extensions = [".txt"]
+scan_dirs = ["inputs"]
+batch = false
+"#,
+        script = script_path.display(),
+    );
+    fs::write(project_path.join("rsconstruct.toml"), &config).unwrap();
+
+    fs::create_dir_all(project_path.join("inputs")).unwrap();
+    for i in 0..8 {
+        fs::write(
+            project_path.join(format!("inputs/file_{:02}.txt", i)),
+            format!("content {}", i),
+        ).unwrap();
+    }
+
+    fs::write(project_path.join(".concurrency_counter"), "0").unwrap();
+    fs::write(project_path.join(".concurrency_peak"), "0").unwrap();
+
+    let result = run_rsconstruct_json_with_env(
+        project_path,
+        &["build", "-j8"],
+        &[("NO_COLOR", "1"), ("PROJECT_ROOT", project_path.to_str().unwrap())],
+    );
+
+    assert!(result.exit_success,
+        "Build should succeed. Errors: {:?}", result.errors);
+    assert_eq!(result.success, 8, "All 8 files should be processed");
+
+    let peak: usize = fs::read_to_string(project_path.join(".concurrency_peak"))
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+
+    // Without max_jobs and -j8, peak should be higher than 2
+    // (on any machine with >= 2 cores)
+    assert!(peak > 2,
+        "Without max_jobs, peak concurrency should exceed 2 with -j8, got {}", peak);
 }
