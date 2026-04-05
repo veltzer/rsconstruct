@@ -794,7 +794,7 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
     // Processor-specific fields
     match (processor, field) {
         // tera
-        ("tera", "strict") => Some(FieldType::Bool),
+        // tera has no processor-specific fields
         // ruff
         ("ruff", "linter") => Some(FieldType::String),
         // cc_single_file
@@ -840,13 +840,13 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
         ("markdownlint", "markdownlint_bin" | "npm_stamp") => Some(FieldType::String),
         ("markdownlint", "local_repo") => Some(FieldType::Bool),
         // aspell
-        ("aspell", "aspell" | "conf_dir" | "conf" | "words_file") => Some(FieldType::String),
+        ("aspell", "aspell" | "conf" | "words_file") => Some(FieldType::String),
         ("aspell", "auto_add_words") => Some(FieldType::Bool),
         // marp
         ("marp", "marp_bin" | "output_dir") => Some(FieldType::String),
         ("marp", "formats") => Some(FieldType::StringArray),
         // pandoc
-        ("pandoc", "pandoc" | "from" | "output_dir") => Some(FieldType::String),
+        ("pandoc", "pandoc" | "output_dir") => Some(FieldType::String),
         ("pandoc", "formats") => Some(FieldType::StringArray),
         // markdown
         ("markdown", "markdown_bin" | "output_dir") => Some(FieldType::String),
@@ -855,7 +855,7 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
         ("pdflatex", "runs") => Some(FieldType::Integer),
         ("pdflatex", "qpdf") => Some(FieldType::Bool),
         // a2x
-        ("a2x", "a2x" | "format" | "output_dir") => Some(FieldType::String),
+        ("a2x", "a2x" | "output_dir") => Some(FieldType::String),
         ("chromium", "chromium_bin" | "output_dir") => Some(FieldType::String),
         // mermaid
         ("mermaid", "mmdc_bin" | "output_dir") => Some(FieldType::String),

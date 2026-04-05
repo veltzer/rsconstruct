@@ -51,7 +51,6 @@ impl ProductDiscovery for A2xProcessor {
         crate::processors::ensure_output_dir(output)?;
 
         let mut cmd = Command::new(&self.config.a2x);
-        cmd.arg("-f").arg(&self.config.format);
         for arg in &self.config.args {
             cmd.arg(arg);
         }

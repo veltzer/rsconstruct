@@ -353,8 +353,6 @@ macro_rules! generator_config {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TeraConfig {
-    #[serde(default = "default_true")]
-    pub strict: bool,
     #[serde(default)]
     pub extra_inputs: Vec<String>,
     #[serde(default)]
@@ -370,7 +368,6 @@ pub struct TeraConfig {
 impl Default for TeraConfig {
     fn default() -> Self {
         Self {
-            strict: true,
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
             batch: true,
@@ -383,11 +380,11 @@ impl Default for TeraConfig {
 impl KnownFields for TeraConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "strict", "extra_inputs", "auto_inputs", "batch", "max_jobs",
+            "extra_inputs", "auto_inputs", "batch", "max_jobs",
         ]
     }
     fn output_fields() -> &'static [&'static str] {
-        &["strict"]
+        &[]
     }
 }
 
@@ -1753,10 +1750,6 @@ fn default_aspell() -> String {
     "aspell".into()
 }
 
-fn default_aspell_conf_dir() -> String {
-    ".".into()
-}
-
 fn default_aspell_conf() -> String {
     ".aspell.conf".into()
 }
@@ -1775,8 +1768,6 @@ pub struct AspellConfig {
     pub aspell: String,
     #[serde(default)]
     pub args: Vec<String>,
-    #[serde(default = "default_aspell_conf_dir")]
-    pub conf_dir: String,
     #[serde(default = "default_aspell_conf")]
     pub conf: String,
     #[serde(default)]
@@ -1800,7 +1791,6 @@ impl Default for AspellConfig {
         Self {
             aspell: "aspell".into(),
             args: Vec::new(),
-            conf_dir: ".".into(),
             conf: ".aspell.conf".into(),
             auto_add_words: false,
             words_file: ".aspell.en.pws".into(),
@@ -1816,11 +1806,11 @@ impl Default for AspellConfig {
 impl KnownFields for AspellConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "aspell", "args", "conf_dir", "conf", "auto_add_words", "words_file", "extra_inputs", "auto_inputs", "batch", "max_jobs",
+            "aspell", "args", "conf", "auto_add_words", "words_file", "extra_inputs", "auto_inputs", "batch", "max_jobs",
         ]
     }
     fn output_fields() -> &'static [&'static str] {
-        &["aspell", "args", "conf_dir", "conf", "auto_add_words"]
+        &["aspell", "args", "conf", "auto_add_words"]
     }
 }
 
@@ -1872,10 +1862,6 @@ fn default_pandoc() -> String {
     "pandoc".into()
 }
 
-fn default_pandoc_from() -> String {
-    "markdown".into()
-}
-
 fn default_pandoc_formats() -> Vec<String> {
     vec!["pdf".into(), "html".into(), "docx".into()]
 }
@@ -1888,8 +1874,6 @@ fn default_pandoc_output_dir() -> String {
 pub struct PandocConfig {
     #[serde(default = "default_pandoc")]
     pub pandoc: String,
-    #[serde(default = "default_pandoc_from")]
-    pub from: String,
     #[serde(default = "default_pandoc_formats")]
     pub formats: Vec<String>,
     #[serde(default)]
@@ -1912,7 +1896,6 @@ impl Default for PandocConfig {
     fn default() -> Self {
         Self {
             pandoc: "pandoc".into(),
-            from: "markdown".into(),
             formats: vec!["pdf".into(), "html".into(), "docx".into()],
             args: Vec::new(),
             extra_inputs: Vec::new(),
@@ -1928,11 +1911,11 @@ impl Default for PandocConfig {
 impl KnownFields for PandocConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "pandoc", "from", "formats", "args", "extra_inputs", "auto_inputs", "output_dir", "batch", "max_jobs",
+            "pandoc", "formats", "args", "extra_inputs", "auto_inputs", "output_dir", "batch", "max_jobs",
         ]
     }
     fn output_fields() -> &'static [&'static str] {
-        &["pandoc", "from", "formats", "args", "output_dir"]
+        &["pandoc", "formats", "args", "output_dir"]
     }
 }
 
@@ -2015,9 +1998,6 @@ fn default_a2x() -> String {
     "a2x".into()
 }
 
-fn default_a2x_format() -> String {
-    "pdf".into()
-}
 
 fn default_a2x_output_dir() -> String {
     "out/a2x".into()
@@ -2027,8 +2007,6 @@ fn default_a2x_output_dir() -> String {
 pub struct A2xConfig {
     #[serde(default = "default_a2x")]
     pub a2x: String,
-    #[serde(default = "default_a2x_format")]
-    pub format: String,
     #[serde(default)]
     pub args: Vec<String>,
     #[serde(default)]
@@ -2049,7 +2027,6 @@ impl Default for A2xConfig {
     fn default() -> Self {
         Self {
             a2x: "a2x".into(),
-            format: "pdf".into(),
             args: Vec::new(),
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
@@ -2064,11 +2041,11 @@ impl Default for A2xConfig {
 impl KnownFields for A2xConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "a2x", "format", "args", "extra_inputs", "auto_inputs", "output_dir", "batch", "max_jobs",
+            "a2x", "args", "extra_inputs", "auto_inputs", "output_dir", "batch", "max_jobs",
         ]
     }
     fn output_fields() -> &'static [&'static str] {
-        &["a2x", "format", "args", "output_dir"]
+        &["a2x", "args", "output_dir"]
     }
 }
 

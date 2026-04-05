@@ -17,7 +17,7 @@ use crate::processors::{ProcessorBase, ProductDiscovery, run_command_capture};
 use super::TemplateItem;
 
 /// Render a template item and write to output
-fn render_template(item: &TemplateItem, config: &TeraConfig) -> Result<()> {
+fn render_template(item: &TemplateItem) -> Result<()> {
     // Ensure parent directory of output exists
     crate::processors::ensure_output_dir(&item.output_path)?;
 
@@ -65,13 +65,7 @@ fn render_template(item: &TemplateItem, config: &TeraConfig) -> Result<()> {
     // Render the template
     let rendered = tera
         .render("template", &context)
-        .with_context(|| {
-            if config.strict {
-                format!("Failed to render template (strict mode enabled): {}", item.source_path.display())
-            } else {
-                format!("Failed to render template: {}", item.source_path.display())
-            }
-        })?;
+        .with_context(|| format!("Failed to render template: {}", item.source_path.display()))?;
 
     // Write to output file
     fs::write(&item.output_path, rendered)?;
@@ -131,7 +125,7 @@ impl ProductDiscovery for TeraProcessor {
             product.primary_input().to_path_buf(),
             product.primary_output().to_path_buf(),
         );
-        render_template(&item, &self.config)
+        render_template(&item)
     }
 }
 

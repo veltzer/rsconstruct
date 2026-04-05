@@ -53,7 +53,6 @@ impl AspellProcessor {
             .with_context(|| format!("Failed to read file: {}", file.display()))?;
 
         let mut cmd = Command::new(&self.config.aspell);
-        cmd.arg("--conf-dir").arg(&self.config.conf_dir);
         cmd.arg("--conf").arg(&self.config.conf);
         for arg in &self.config.args {
             cmd.arg(arg);

@@ -50,14 +50,12 @@ version = "{{ config.version }}"
 
 ```toml
 [processor.tera]
-strict = true                              # Fail on undefined variables (default: true)
 extensions = [".tera"]                     # File extensions to process (default: [".tera"])
 extra_inputs = ["config/settings.py"]      # Additional files that trigger rebuilds when changed
 ```
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `strict` | bool | `true` | Fail on undefined tera variables |
 | `extensions` | string[] | `[".tera"]` | File extensions to discover |
 | `extra_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 

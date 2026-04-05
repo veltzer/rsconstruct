@@ -56,7 +56,6 @@ impl ProductDiscovery for PandocProcessor {
         let mut cmd = Command::new(&self.config.pandoc);
         // Deterministic output: fixed timestamps
         cmd.env("SOURCE_DATE_EPOCH", "0");
-        cmd.arg("--from").arg(&self.config.from);
         cmd.arg("--to").arg(format.as_ref());
         // For PDF output, suppress the random trailer ID
         if format.as_ref() == "pdf" {
