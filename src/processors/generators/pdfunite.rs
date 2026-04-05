@@ -114,15 +114,13 @@ impl ProductDiscovery for PdfuniteProcessor {
                 super::output_path(src, &upstream_scan_dirs, &self.config.source_output_dir, "pdf")
             }).chain(extra.iter().cloned()).collect();
 
-            // Use the relative path from source_dir as the output name,
-            // replacing path separators with dashes for a flat output.
+            // Mirror the directory structure from source_dir into output_dir,
+            // naming each merged PDF after its leaf directory.
             let relative = dir_path.strip_prefix(base).unwrap_or(&dir_path);
-            let course_name = relative.components()
-                .map(|c| c.as_os_str().to_string_lossy().into_owned())
-                .collect::<Vec<_>>()
-                .join("-");
+            let parent = relative.parent().unwrap_or(Path::new(""));
+            let leaf = relative.file_name().unwrap_or(relative.as_os_str());
             let outputs = vec![
-                Path::new(&self.config.output_dir).join(format!("{course_name}.pdf")),
+                Path::new(&self.config.output_dir).join(parent).join(format!("{}.pdf", leaf.to_string_lossy())),
             ];
 
             graph.add_product(inputs, outputs, crate::processors::names::PDFUNITE, hash.clone())?;
