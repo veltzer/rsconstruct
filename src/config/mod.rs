@@ -161,30 +161,13 @@ impl ScanConfig {
 }
 
 /// Base exclude dirs shared by all processors.
-pub(crate) const COMMON_EXCLUDE_DIRS: &[&str] = &["/.git/", "/out/", "/build/", "/dist/"];
-
-/// Common + build tool dirs (/.rsconstruct/, /node_modules/, /target/).
-/// Used by processors that scan broadly and need to skip build artifacts.
-pub(crate) const BUILD_TOOL_EXCLUDES: &[&str] = &[
-    "/.git/", "/out/", "/build/", "/dist/",
-    "/.rsconstruct/", "/node_modules/", "/target/", "/gems/",
-];
-
-pub(crate) const PYTHON_EXCLUDE_DIRS: &[&str] = &[
-    "/.git/", "/out/", "/build/", "/dist/",
-    "/.venv/", "/__pycache__/", "/node_modules/", "/.tox/", "/.eggs/",
-];
-
-pub(crate) const CC_EXCLUDE_DIRS: &[&str] = COMMON_EXCLUDE_DIRS;
-pub(crate) const ZSPELL_EXCLUDE_DIRS: &[&str] = BUILD_TOOL_EXCLUDES;
-pub(crate) const SHELL_EXCLUDE_DIRS: &[&str] = BUILD_TOOL_EXCLUDES;
-pub(crate) const MARKDOWN_EXCLUDE_DIRS: &[&str] = BUILD_TOOL_EXCLUDES;
-
-/// MAKE and Cargo exclude node_modules-free build tool dirs.
-pub(crate) const MAKE_CARGO_EXCLUDES: &[&str] = &[
-    "/.git/", "/out/", "/build/", "/dist/",
-    "/.rsconstruct/", "/target/",
-];
+pub(crate) const BUILD_TOOL_EXCLUDES: &[&str] = &[];
+pub(crate) const PYTHON_EXCLUDE_DIRS: &[&str] = &[];
+pub(crate) const CC_EXCLUDE_DIRS: &[&str] = &[];
+pub(crate) const ZSPELL_EXCLUDE_DIRS: &[&str] = &[];
+pub(crate) const SHELL_EXCLUDE_DIRS: &[&str] = &[];
+pub(crate) const MARKDOWN_EXCLUDE_DIRS: &[&str] = &[];
+pub(crate) const MAKE_CARGO_EXCLUDES: &[&str] = &[];
 
 const DEFAULT_PLUGINS_DIR: &str = "plugins";
 
