@@ -34,6 +34,13 @@ pub(crate) trait KnownFields {
     /// Fields not listed here (e.g., scan_dirs, exclude_dirs, batch, max_jobs)
     /// are discovery or execution parameters that don't affect what the tool produces.
     fn output_fields() -> &'static [&'static str];
+
+    /// Return fields that must be explicitly set (non-empty) for the processor to work.
+    /// If any of these fields are absent or empty in the user's config, an error is reported.
+    /// Default is no required fields.
+    fn must_fields() -> &'static [&'static str] {
+        &[]
+    }
 }
 
 
@@ -438,6 +445,14 @@ macro_rules! gen_processor_config {
             pub(crate) fn output_fields_for(type_name: &str) -> Option<&'static [&'static str]> {
                 match type_name {
                     $( stringify!($field) => Some(<$config_type as KnownFields>::output_fields()), )*
+                    _ => None,
+                }
+            }
+
+            /// Return must fields (required non-empty fields) for a builtin processor type, or None for Lua plugins.
+            pub(crate) fn must_fields_for(type_name: &str) -> Option<&'static [&'static str]> {
+                match type_name {
+                    $( stringify!($field) => Some(<$config_type as KnownFields>::must_fields()), )*
                     _ => None,
                 }
             }
@@ -910,6 +925,33 @@ fn validate_single_processor(
                 FieldType::describe_value(field_value),
                 field_value,
             ));
+        }
+    }
+
+    // Check that all must_fields are present and non-empty
+    if let Some(must) = ProcessorConfig::must_fields_for(type_name) {
+        for field in must {
+            match table.get(*field) {
+                None => {
+                    errors.push(format!(
+                        "[{}]: required field '{}' must be specified",
+                        section_label, field,
+                    ));
+                }
+                Some(toml::Value::Array(arr)) if arr.is_empty() => {
+                    errors.push(format!(
+                        "[{}]: required field '{}' must not be empty",
+                        section_label, field,
+                    ));
+                }
+                Some(toml::Value::String(s)) if s.is_empty() => {
+                    errors.push(format!(
+                        "[{}]: required field '{}' must not be empty",
+                        section_label, field,
+                    ));
+                }
+                _ => {} // present and non-empty: OK
+            }
         }
     }
 }

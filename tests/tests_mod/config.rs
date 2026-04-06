@@ -336,3 +336,53 @@ fn config_named_instances_get_separate_output_dirs() {
     assert_eq!(docs_dir, "out/marp.docs", "Named instance should get out/{{instance_name}}");
     assert_ne!(slides_dir, docs_dir, "Named instances must have different output dirs");
 }
+
+#[test]
+fn config_validate_explicit_missing_outputs() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    // Configure explicit processor without the required 'outputs' field
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.explicit]\ncommand = \"my_script\"\n",
+    ).unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
+    assert!(!output.status.success(), "Expected config validate to fail when outputs is missing");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("outputs"), "Expected error about missing 'outputs' field, got: {}", stderr);
+    assert!(stderr.contains("required"), "Expected error to say field is required, got: {}", stderr);
+}
+
+#[test]
+fn config_validate_explicit_empty_outputs() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    // Configure explicit processor with explicitly empty 'outputs'
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.explicit]\ncommand = \"my_script\"\noutputs = []\n",
+    ).unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
+    assert!(!output.status.success(), "Expected config validate to fail when outputs is empty");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("outputs"), "Expected error about empty 'outputs' field, got: {}", stderr);
+}
+
+#[test]
+fn config_validate_explicit_with_outputs_ok() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    // Configure explicit processor with required 'outputs' field present
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.explicit]\ncommand = \"my_script\"\noutputs = [\"out/result.txt\"]\n",
+    ).unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(), "Expected config validate to succeed with outputs set: {}", String::from_utf8_lossy(&output.stderr));
+}

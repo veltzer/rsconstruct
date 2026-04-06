@@ -65,11 +65,29 @@ fn config_diff(name: &str, current: &serde_json::Value) -> serde_json::Value {
     serde_json::Value::Object(diff)
 }
 
+/// Print metadata annotations (required fields and output-affecting fields) for a processor.
+/// Only shown in text mode (not JSON mode).
+fn print_processor_metadata(name: &str) {
+    if let Some(must) = ProcessorConfig::must_fields_for(name)
+        && !must.is_empty()
+    {
+        println!("Required fields: {}", must.join(", "));
+    }
+    if let Some(output) = ProcessorConfig::output_fields_for(name)
+        && !output.is_empty()
+    {
+        println!("Output-affecting fields: {}", output.join(", "));
+    }
+}
+
 /// Show default configuration for a processor (works without rsconstruct.toml).
 pub fn processor_defconfig(name: &str) -> Result<()> {
     match ProcessorConfig::defconfig_json(name) {
         Some(json) => {
             println!("{}", json);
+            if !crate::json_output::is_json_mode() {
+                print_processor_metadata(name);
+            }
             Ok(())
         }
         None => bail!("Unknown processor: '{}'. Run 'rsconstruct processors list' to see available processors.", name),
@@ -159,6 +177,10 @@ impl Builder {
                             println!("{}:", n);
                         }
                         println!("{}", serde_json::to_string_pretty(&value)?);
+                        // Show the processor's type name for metadata lookup.
+                        // Multi-instance names are like "explicit.report" — strip the instance suffix.
+                        let type_name = n.split('.').next().unwrap_or(n);
+                        print_processor_metadata(type_name);
                         if i + 1 < names.len() {
                             println!();
                         }

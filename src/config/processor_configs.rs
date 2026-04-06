@@ -1406,6 +1406,9 @@ impl KnownFields for ExplicitConfig {
     fn output_fields() -> &'static [&'static str] {
         &["command", "args", "inputs", "input_globs", "outputs"]
     }
+    fn must_fields() -> &'static [&'static str] {
+        &["outputs"]
+    }
 }
 
 fn default_pip() -> String {
