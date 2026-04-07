@@ -1,0 +1,5 @@
+We are missing two types of dependencies:
+
+md files dependent on external files (![name][url])
+
+tera files depending on configuration and inclusion.
