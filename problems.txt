@@ -3,6 +3,3 @@ We are missing two types of dependencies:
 md files dependent on external files (![name][url])
 
 tera files depending on configuration and inclusion.
-
-Why do we need pdfunite(1) from another package? Lets implement our own pdfunite? How hard can it be?
-It will be in our rsconstruct project as a prcessor and so will not require launching another process.
