@@ -88,6 +88,12 @@ macro_rules! for_each_processor {
             HADOLINT,       hadolint,       HadolintConfig,        HadolintProcessor,        ("", &["Dockerfile"], BUILD_TOOL_EXCLUDES);
             JEKYLL,         jekyll,         JekyllConfig,          JekyllProcessor,          ("", &["_config.yml"], BUILD_TOOL_EXCLUDES);
             SASS,           sass,           SassConfig,            SassProcessor,            ("sass", &[".scss", ".sass"], &[]);
+            IJQ,            ijq,            IjqConfig,             IjqProcessor,             ("", &[".json"], BUILD_TOOL_EXCLUDES);
+            IJSONLINT,      ijsonlint,      IjsonlintConfig,       IjsonlintProcessor,       ("", &[".json"], BUILD_TOOL_EXCLUDES);
+            IYAMLLINT,      iyamllint,      IyamllintConfig,       IyamllintProcessor,       ("", &[".yml", ".yaml"], BUILD_TOOL_EXCLUDES);
+            ITAPLO,         itaplo,         ItaploConfig,          ItaploProcessor,          ("", &[".toml"], BUILD_TOOL_EXCLUDES);
+            IMARKDOWN,      imarkdown,      ImarkdownConfig,       ImarkdownProcessor,       ("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
+            ISASS,          isass,          IsassConfig,           IsassProcessor,           ("sass", &[".scss", ".sass"], &[]);
             RUST_SINGLE_FILE, rust_single_file, RustSingleFileConfig, RustSingleFileProcessor, ("src", &[".rs"], &[]);
             SLIDEV,         slidev,         SlidevConfig,          SlidevProcessor,          ("", &[".md"], BUILD_TOOL_EXCLUDES);
             ENCODING,       encoding,       EncodingConfig,        EncodingProcessor,        ("", &[".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".bash", ".lua", ".pl", ".pm", ".php", ".md", ".yaml", ".yml", ".json", ".toml", ".xml", ".html", ".htm", ".css", ".scss", ".sass", ".tex", ".txt"], BUILD_TOOL_EXCLUDES);

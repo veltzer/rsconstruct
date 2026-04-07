@@ -36,6 +36,10 @@ serde_yml = "0.0.12"
 zstd = "0.13"
 paste = "1.0"
 lopdf = "0.40.0"
+serde_yaml = "0.9.34"
+grass = { version = "0.13.4", default-features = false }
+pulldown-cmark = { version = "0.13.3", default-features = false, features = ["html"] }
+jsonschema = { version = "0.45.1", default-features = false, features = ["resolve-file"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

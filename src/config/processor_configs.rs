@@ -2139,6 +2139,94 @@ generator_config!(SassConfig, tool: "sass", sass_bin,
     default_scan!(scan_dir: "sass", extensions: [".scss", ".sass"]),
 );
 
+checker_config!(IjqConfig, extensions: [".json"]);
+
+checker_config!(IjsonlintConfig, extensions: [".json"]);
+
+checker_config!(IyamllintConfig, extensions: [".yml", ".yaml"]);
+
+checker_config!(ItaploConfig, extensions: [".toml"]);
+
+fn default_imarkdown_output_dir() -> String { "out/imarkdown".into() }
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ImarkdownConfig {
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(default)]
+    pub auto_inputs: Vec<String>,
+    #[serde(default = "default_imarkdown_output_dir")]
+    pub output_dir: String,
+    #[serde(default = "default_true")]
+    pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for ImarkdownConfig {
+    fn default() -> Self {
+        Self {
+            extra_inputs: Vec::new(),
+            auto_inputs: Vec::new(),
+            output_dir: "out/imarkdown".into(),
+            batch: true,
+            max_jobs: None,
+            scan: default_scan!(extensions: [".md"]),
+        }
+    }
+}
+
+impl KnownFields for ImarkdownConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &["extra_inputs", "auto_inputs", "output_dir", "batch", "max_jobs"]
+    }
+    fn output_fields() -> &'static [&'static str] {
+        &["output_dir"]
+    }
+}
+
+fn default_isass_output_dir() -> String { "out/isass".into() }
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct IsassConfig {
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(default)]
+    pub auto_inputs: Vec<String>,
+    #[serde(default = "default_isass_output_dir")]
+    pub output_dir: String,
+    #[serde(default = "default_true")]
+    pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for IsassConfig {
+    fn default() -> Self {
+        Self {
+            extra_inputs: Vec::new(),
+            auto_inputs: Vec::new(),
+            output_dir: "out/isass".into(),
+            batch: true,
+            max_jobs: None,
+            scan: default_scan!(scan_dir: "sass", extensions: [".scss", ".sass"]),
+        }
+    }
+}
+
+impl KnownFields for IsassConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &["extra_inputs", "auto_inputs", "output_dir", "batch", "max_jobs"]
+    }
+    fn output_fields() -> &'static [&'static str] {
+        &["output_dir"]
+    }
+}
+
 fn default_rustc() -> String { "rustc".into() }
 fn default_rust_single_file_output_suffix() -> String { ".elf".into() }
 fn default_rust_single_file_output_dir() -> String { "out/rust_single_file".into() }

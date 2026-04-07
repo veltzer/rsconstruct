@@ -856,6 +856,7 @@ pub use checkers::{
     CheckstyleProcessor, CmakeProcessor, DoctestProcessor, DuplicateFilesProcessor,
     EncodingProcessor, EslintProcessor,
     HadolintProcessor, HtmlhintProcessor, HtmllintProcessor,
+    IjqProcessor, IjsonlintProcessor, ItaploProcessor, IyamllintProcessor,
     JshintProcessor, JslintProcessor, JqProcessor, JsonlintProcessor, JsonSchemaProcessor,
     LicenseHeaderProcessor, LuacheckProcessor, MakeProcessor, MarpImagesProcessor,
     MarkdownlintProcessor, MdlProcessor, MypyProcessor,
@@ -864,7 +865,7 @@ pub use checkers::{
     StandardProcessor, StylelintProcessor, SvglintProcessor,
     TaploProcessor, TermsProcessor, TidyProcessor, XmllintProcessor, YamllintProcessor, YqProcessor,
 };
-pub use generators::{A2xProcessor, CcSingleFileProcessor, ChromiumProcessor, DrawioProcessor, ExplicitProcessor, GeneratorProcessor, IpdfuniteProcessor, Jinja2Processor, LibreofficeProcessor, LinuxModuleProcessor, MakoProcessor, MarpProcessor, MarkdownProcessor, MermaidProcessor, ObjdumpProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, ProtobufProcessor, RustSingleFileProcessor, SassProcessor, TagsProcessor, TeraProcessor};
+pub use generators::{A2xProcessor, CcSingleFileProcessor, ChromiumProcessor, DrawioProcessor, ExplicitProcessor, GeneratorProcessor, ImarkdownProcessor, IpdfuniteProcessor, IsassProcessor, Jinja2Processor, LibreofficeProcessor, LinuxModuleProcessor, MakoProcessor, MarpProcessor, MarkdownProcessor, MermaidProcessor, ObjdumpProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, ProtobufProcessor, RustSingleFileProcessor, SassProcessor, TagsProcessor, TeraProcessor};
 pub use mass_generators::{CargoProcessor, CcProcessor, GemProcessor, JekyllProcessor, MdbookProcessor, NpmProcessor, PipProcessor, SphinxProcessor};
 pub(crate) use generators::tags as tags_cmd;
 pub(crate) use checkers::terms;

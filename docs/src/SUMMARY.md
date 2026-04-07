@@ -96,5 +96,6 @@
 - [Processor Contract](processor-contract.md)
 - [Coding Standards](coding-standards.md)
 - [Crates.io Publishing](crates-io.md)
+- [Internal Processors](internal-processors.md)
 - [Missing Processors](missing-processors.md)
 - [Suggestions](suggestions.md)
