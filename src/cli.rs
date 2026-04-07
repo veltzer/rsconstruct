@@ -1,11 +1,6 @@
-use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum, builder::PossibleValuesParser};
+use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
 use std::str::FromStr;
-
-/// Build a value parser that completes processor type names.
-fn processor_name_parser() -> PossibleValuesParser {
-    PossibleValuesParser::new(crate::config::all_type_names())
-}
 
 #[derive(Parser)]
 #[command(name = "rsconstruct")]
@@ -416,7 +411,6 @@ pub enum ProcessorAction {
     /// Show default configuration for a processor
     Defconfig {
         /// Processor name
-        #[arg(value_parser = processor_name_parser())]
         name: String,
     },
     /// Show the current processor allowlist (for use in rsconstruct.toml [processor] enabled)
@@ -766,11 +760,10 @@ pub fn print_completions(shell: Shell) {
 fn inject_bash_processor_completions(script: &str) -> String {
     let names = crate::config::all_type_names();
     let names_str = names.join(" ");
-    let replacement = format!("COMPREPLY=($(compgen -W \"{}\" -- \"${{cur}}\"))", names_str);
 
-    // For each of these commands, find the section and replace the empty COMPREPLY=()
-    // in the *) catch-all with processor name completions.
-    // Process from last to first in the script so position shifts don't affect earlier sections
+    // For each of these commands, inject processor names into the opts variable
+    // so they appear as completions.
+    // Process from last to first in the script so position shifts don't affect earlier sections.
     let targets = [
         "rsconstruct__processors__files)",
         "rsconstruct__processors__defconfig)",
@@ -781,21 +774,19 @@ fn inject_bash_processor_completions(script: &str) -> String {
     for target in &targets {
         if let Some(section_start) = result.find(target) {
             let after_start = section_start + target.len();
-            // Section ends at the next command case (next line starting with spaces + identifier + ")")
+            // Section ends at the next command case
             let section_len = result[after_start..]
                 .find("\n        rsconstruct__")
                 .unwrap_or(result.len() - after_start);
             let section_end = after_start + section_len;
 
-            // Find the COMPREPLY=() in the *) catch-all within this section
-            if let Some(empty_pos) = result[section_start..section_end].rfind("COMPREPLY=()") {
-                let abs_pos = section_start + empty_pos;
-                result = format!(
-                    "{}{}{}",
-                    &result[..abs_pos],
-                    replacement,
-                    &result[abs_pos + "COMPREPLY=()".len()..]
-                );
+            // The generated bash completion has an early-return `if` that checks
+            // `COMP_CWORD -eq N` and only offers flags. We need to inject processor
+            // names into the `opts` variable so they appear in that early-return path.
+            let section_slice = &result[section_start..section_end];
+            if let Some(opts_pos) = section_slice.find("opts=\"") {
+                let abs_opts = section_start + opts_pos + "opts=\"".len();
+                result.insert_str(abs_opts, &format!("{} ", names_str));
             }
         }
     }
