@@ -8,6 +8,45 @@ use crate::json_output;
 use crate::tool_lock;
 use super::{Builder, sorted_keys};
 
+/// Check if a system package is installed using the platform's package manager.
+/// Tries dpkg-query (Debian/Ubuntu), rpm (Fedora/RHEL), pacman (Arch), and brew (macOS).
+fn is_system_package_installed(pkg: &str) -> bool {
+    if which::which("dpkg-query").is_ok() {
+        return Command::new("dpkg-query")
+            .args(["-W", "-f", "${Status}", pkg])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success());
+    }
+    if which::which("rpm").is_ok() {
+        return Command::new("rpm")
+            .args(["-q", pkg])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success());
+    }
+    if which::which("pacman").is_ok() {
+        return Command::new("pacman")
+            .args(["-Q", pkg])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success());
+    }
+    if which::which("brew").is_ok() {
+        return Command::new("brew")
+            .args(["list", pkg])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success());
+    }
+    // Fallback: check if the package name is available as a command
+    which::which(pkg).is_ok()
+}
+
 /// Return the language runtime category for a tool.
 /// Delegates to the central `TOOLS` registry in `processors/mod.rs`.
 fn tool_runtime(tool: &str) -> &'static str {
@@ -437,49 +476,117 @@ fn run_tools_command(
                 return Ok(());
             }
 
-            // Build install commands
+            // Filter out already-installed packages, then build install commands
             let mut commands: Vec<(String, String)> = Vec::new(); // (description, command)
+            let mut skipped: Vec<String> = Vec::new();
+
             if !config.pip.is_empty() {
-                let pkgs = config.pip.join(" ");
-                commands.push((
-                    format!("[pip] {}", config.pip.join(", ")),
-                    format!("pip install {}", pkgs),
-                ));
+                let missing: Vec<&str> = config.pip.iter()
+                    .filter(|pkg| {
+                        // Strip version specifiers (e.g., "ruff>=0.4" -> "ruff")
+                        let name = pkg.split(&['>', '<', '=', '!', '~'][..]).next().unwrap_or(pkg);
+                        let installed = Command::new("pip")
+                            .args(["show", name])
+                            .stdout(std::process::Stdio::null())
+                            .stderr(std::process::Stdio::null())
+                            .status()
+                            .is_ok_and(|s| s.success());
+                        if installed { skipped.push(format!("[pip] {}", pkg)); }
+                        !installed
+                    })
+                    .map(|s| s.as_str())
+                    .collect();
+                if !missing.is_empty() {
+                    let pkgs = missing.join(" ");
+                    commands.push((
+                        format!("[pip] {}", missing.join(", ")),
+                        format!("pip install {}", pkgs),
+                    ));
+                }
             }
             if !config.npm.is_empty() {
-                let pkgs = config.npm.join(" ");
-                commands.push((
-                    format!("[npm] {}", config.npm.join(", ")),
-                    format!("npm install {}", pkgs),
-                ));
+                let missing: Vec<&str> = config.npm.iter()
+                    .filter(|pkg| {
+                        let installed = Command::new("npm")
+                            .args(["ls", "-g", pkg])
+                            .stdout(std::process::Stdio::null())
+                            .stderr(std::process::Stdio::null())
+                            .status()
+                            .is_ok_and(|s| s.success());
+                        if installed { skipped.push(format!("[npm] {}", pkg)); }
+                        !installed
+                    })
+                    .map(|s| s.as_str())
+                    .collect();
+                if !missing.is_empty() {
+                    let pkgs = missing.join(" ");
+                    commands.push((
+                        format!("[npm] {}", missing.join(", ")),
+                        format!("npm install {}", pkgs),
+                    ));
+                }
             }
             if !config.gem.is_empty() {
-                let pkgs = config.gem.join(" ");
-                commands.push((
-                    format!("[gem] {}", config.gem.join(", ")),
-                    format!("gem install {}", pkgs),
-                ));
+                let missing: Vec<&str> = config.gem.iter()
+                    .filter(|pkg| {
+                        let installed = Command::new("gem")
+                            .args(["list", "-i", pkg])
+                            .stdout(std::process::Stdio::null())
+                            .stderr(std::process::Stdio::null())
+                            .status()
+                            .is_ok_and(|s| s.success());
+                        if installed { skipped.push(format!("[gem] {}", pkg)); }
+                        !installed
+                    })
+                    .map(|s| s.as_str())
+                    .collect();
+                if !missing.is_empty() {
+                    let pkgs = missing.join(" ");
+                    commands.push((
+                        format!("[gem] {}", missing.join(", ")),
+                        format!("gem install {}", pkgs),
+                    ));
+                }
             }
             if !config.system.is_empty() {
-                let pkgs = config.system.join(" ");
-                let (mgr, cmd) = if which::which("apt-get").is_ok() {
-                    ("apt", format!("sudo apt-get install -y {}", pkgs))
-                } else if which::which("dnf").is_ok() {
-                    ("dnf", format!("sudo dnf install -y {}", pkgs))
-                } else if which::which("pacman").is_ok() {
-                    ("pacman", format!("sudo pacman -S --noconfirm {}", pkgs))
-                } else if which::which("brew").is_ok() {
-                    ("brew", format!("brew install {}", pkgs))
-                } else {
-                    ("system", format!("echo 'No supported package manager found; install manually: {}'", pkgs))
-                };
-                commands.push((
-                    format!("[{}] {}", mgr, config.system.join(", ")),
-                    cmd,
-                ));
+                let missing: Vec<&str> = config.system.iter()
+                    .filter(|pkg| {
+                        let installed = is_system_package_installed(pkg);
+                        if installed { skipped.push(format!("[system] {}", pkg)); }
+                        !installed
+                    })
+                    .map(|s| s.as_str())
+                    .collect();
+                if !missing.is_empty() {
+                    let pkgs = missing.join(" ");
+                    let (mgr, cmd) = if which::which("apt-get").is_ok() {
+                        ("apt", format!("sudo apt-get install -y {}", pkgs))
+                    } else if which::which("dnf").is_ok() {
+                        ("dnf", format!("sudo dnf install -y {}", pkgs))
+                    } else if which::which("pacman").is_ok() {
+                        ("pacman", format!("sudo pacman -S --noconfirm {}", pkgs))
+                    } else if which::which("brew").is_ok() {
+                        ("brew", format!("brew install {}", pkgs))
+                    } else {
+                        ("system", format!("echo 'No supported package manager found; install manually: {}'", pkgs))
+                    };
+                    commands.push((
+                        format!("[{}] {}", mgr, missing.join(", ")),
+                        cmd,
+                    ));
+                }
+            }
+
+            if !skipped.is_empty() {
+                println!("{}:", color::dim("Already installed (skipping)"));
+                for s in &skipped {
+                    println!("  {} {}", color::green("✓"), s);
+                }
+                println!();
             }
 
             if commands.is_empty() {
+                println!("{}", color::green("All dependencies already installed."));
                 return Ok(());
             }
 
