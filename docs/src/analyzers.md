@@ -78,6 +78,33 @@ Scans Python source files for `import` and `from ... import` statements and adds
 - Supports both `import foo` and `from foo import bar` syntax
 - Searches relative to source file and project root
 
+### markdown
+
+Scans Markdown source files for image and link references (`![alt](path)`, `[text](path)`) and adds referenced local files as dependencies.
+
+**Auto-detects**: Projects with `.md` files.
+
+**Features**:
+- Extracts `![alt](path)` image references and `[text](path)` link references
+- Resolves paths relative to the source file's directory
+- Skips URLs (`http://`, `https://`, `ftp://`), data URIs, and anchor-only links
+- Strips title text and anchor fragments from paths
+
+This ensures that when an image or linked file changes, any Markdown product that references it is rebuilt.
+
+### tera
+
+Scans Tera template files for `{% include %}`, `{% import %}`, and `{% extends %}` directives and adds referenced template files as dependencies.
+
+**Auto-detects**: Projects with `.tera` files.
+
+**Features**:
+- Extracts paths from `{% include "path" %}`, `{% import "path" %}`, and `{% extends "path" %}`
+- Handles both double and single quoted paths
+- Resolves paths relative to the source file's directory and project root
+
+This ensures that when an included template changes, any template that includes it is rebuilt.
+
 ## Configuration
 
 Analyzers can be configured in `rsconstruct.toml`:
@@ -85,7 +112,7 @@ Analyzers can be configured in `rsconstruct.toml`:
 ```toml
 [analyzer]
 auto_detect = true  # auto-detect which analyzers to run (default: true)
-enabled = ["cpp", "python"]  # list of enabled analyzers
+enabled = ["cpp", "markdown", "python", "tera"]  # list of enabled analyzers
 ```
 
 ### Auto-detection
