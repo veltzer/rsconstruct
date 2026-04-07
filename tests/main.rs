@@ -91,6 +91,7 @@ mod processors {
     pub mod php_lint;
     pub mod perlcritic;
     pub mod xmllint;
+    pub mod svglint;
     pub mod checkstyle;
     pub mod yq;
     pub mod cmake;

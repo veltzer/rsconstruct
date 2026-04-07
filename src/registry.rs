@@ -79,7 +79,8 @@ macro_rules! for_each_processor {
             HTMLLINT,       htmllint,       HtmllintConfig,        HtmllintProcessor,        ("", &[".html", ".htm"], BUILD_TOOL_EXCLUDES);
             PHP_LINT,       php_lint,       PhpLintConfig,         PhpLintProcessor,         ("", &[".php"], BUILD_TOOL_EXCLUDES);
             PERLCRITIC,     perlcritic,     PerlcriticConfig,      PerlcriticProcessor,      ("", &[".pl", ".pm"], BUILD_TOOL_EXCLUDES);
-            XMLLINT,        xmllint,        XmllintConfig,         XmllintProcessor,         ("", &[".xml"], BUILD_TOOL_EXCLUDES);
+            XMLLINT,        xmllint,        XmllintConfig,         XmllintProcessor,         ("", &[".xml", ".svg"], BUILD_TOOL_EXCLUDES);
+            SVGLINT,        svglint,        SvglintConfig,         SvglintProcessor,         ("", &[".svg"], BUILD_TOOL_EXCLUDES);
             CHECKSTYLE,     checkstyle,     CheckstyleConfig,      CheckstyleProcessor,      ("", &[".java"], BUILD_TOOL_EXCLUDES);
             YQ,             yq,             YqConfig,              YqProcessor,              ("", &[".yml", ".yaml"], BUILD_TOOL_EXCLUDES);
             CMAKE,          cmake,          CmakeConfig,           CmakeProcessor,           ("", &["CMakeLists.txt"], BUILD_TOOL_EXCLUDES);

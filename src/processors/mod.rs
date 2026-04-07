@@ -861,7 +861,7 @@ pub use checkers::{
     MarkdownlintProcessor, MdlProcessor, MypyProcessor,
     PerlcriticProcessor, PhpLintProcessor, PylintProcessor, PytestProcessor, PyreflyProcessor, RuffProcessor, RumdlProcessor,
     ScriptProcessor, ShellcheckProcessor, SlidevProcessor, ZspellProcessor,
-    StandardProcessor, StylelintProcessor,
+    StandardProcessor, StylelintProcessor, SvglintProcessor,
     TaploProcessor, TermsProcessor, TidyProcessor, XmllintProcessor, YamllintProcessor, YqProcessor,
 };
 pub use generators::{A2xProcessor, CcSingleFileProcessor, ChromiumProcessor, DrawioProcessor, ExplicitProcessor, GeneratorProcessor, Jinja2Processor, LibreofficeProcessor, LinuxModuleProcessor, MakoProcessor, MarpProcessor, MarkdownProcessor, MermaidProcessor, ObjdumpProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, ProtobufProcessor, RustSingleFileProcessor, SassProcessor, TagsProcessor, TeraProcessor};
@@ -1205,6 +1205,7 @@ pub static TOOLS: &[ToolInfo] = &[
     tool!("objdump",         "system", "apt", "binutils"),
     tool!("tidy",            "system", "apt"),
     tool!("xmllint",         "system", "apt", "libxml2-utils"),
+    tool!("svglint",         "node", "npm"),
     tool!("cmake",           "system", "apt"),
     tool!("protoc",          "system", "apt", "protobuf-compiler"),
     tool!("sass",            "node", "npm"),

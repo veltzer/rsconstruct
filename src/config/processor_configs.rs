@@ -2345,7 +2345,10 @@ checker_config!(PhpLintConfig, extensions: [".php"]);
 checker_config!(PerlcriticConfig, extensions: [".pl", ".pm"], auto_inputs: [".perlcriticrc"]);
 
 // --- xmllint (XML validator) ---
-checker_config!(XmllintConfig, extensions: [".xml"]);
+checker_config!(XmllintConfig, extensions: [".xml", ".svg"]);
+
+// --- svglint (SVG linter) ---
+checker_config!(SvglintConfig, extensions: [".svg"], auto_inputs: [".svglintrc.js"]);
 
 // --- checkstyle (Java style checker) ---
 checker_config!(CheckstyleConfig, extensions: [".java"], auto_inputs: ["checkstyle.xml"]);
