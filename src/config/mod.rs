@@ -967,7 +967,7 @@ fn validate_single_processor(
     // Require scan_dirs for processors whose default would scan the project root.
     // This prevents accidentally scanning everything when the user forgets to set scan_dirs.
     // Exempt processors that don't use scan_dirs for file discovery.
-    const SCAN_DIRS_EXEMPT: &[&str] = &["explicit", "pdfunite"];
+    const SCAN_DIRS_EXEMPT: &[&str] = &["explicit", "pdfunite", "ipdfunite"];
     if let Some("") = ProcessorConfig::default_scan_dir_for(type_name)
     && !SCAN_DIRS_EXEMPT.contains(&type_name) {
         match table.get("scan_dirs") {

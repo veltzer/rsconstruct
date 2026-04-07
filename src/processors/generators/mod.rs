@@ -4,6 +4,7 @@ mod chromium;
 mod drawio;
 mod explicit;
 mod generator;
+mod ipdfunite;
 mod jinja2;
 mod libreoffice;
 mod linux_module;
@@ -25,6 +26,7 @@ pub use a2x::A2xProcessor;
 pub use cc_single_file::CcSingleFileProcessor;
 pub use explicit::ExplicitProcessor;
 pub use generator::GeneratorProcessor;
+pub use ipdfunite::IpdfuniteProcessor;
 pub use jinja2::Jinja2Processor;
 pub use chromium::ChromiumProcessor;
 pub use drawio::DrawioProcessor;
@@ -105,6 +107,44 @@ pub(super) struct DiscoverParams<'a, C: Serialize> {
     pub config: &'a C,
     pub output_dir: &'a str,
     pub processor_name: &'a str,
+}
+
+/// Recursively find directories under `base` that contain files with the given extension.
+/// Results are sorted for deterministic output.
+/// Shared by pdfunite and ipdfunite processors.
+pub(super) fn find_dirs_with_ext(base: &Path, ext: &str) -> Vec<PathBuf> {
+    let mut result = Vec::new();
+    collect_dirs_with_ext(base, ext, &mut result);
+    result.sort();
+    result
+}
+
+fn collect_dirs_with_ext(dir: &Path, ext: &str, result: &mut Vec<PathBuf>) {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    let mut has_matching_file = false;
+    let mut subdirs = Vec::new();
+    for entry in entries.flatten() {
+        let ft = match entry.file_type() {
+            Ok(ft) => ft,
+            Err(_) => continue,
+        };
+        if ft.is_dir() {
+            subdirs.push(entry.path());
+        } else if !has_matching_file && ft.is_file() {
+            if entry.path().extension().is_some_and(|e| e == ext) {
+                has_matching_file = true;
+            }
+        }
+    }
+    if has_matching_file {
+        result.push(dir.to_path_buf());
+    }
+    for subdir in subdirs {
+        collect_dirs_with_ext(&subdir, ext, result);
+    }
 }
 
 /// Compute the output path for a source file.

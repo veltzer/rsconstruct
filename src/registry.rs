@@ -62,6 +62,7 @@ macro_rules! for_each_processor {
             LIBREOFFICE,    libreoffice,    LibreofficeConfig,     LibreofficeProcessor,     ("", &[".odp"], BUILD_TOOL_EXCLUDES);
             PROTOBUF,       protobuf,       ProtobufConfig,        ProtobufProcessor,        ("proto", &[".proto"], &[]);
             PDFUNITE,       pdfunite,       PdfuniteConfig,        PdfuniteProcessor,        ("", &["course.yaml"], BUILD_TOOL_EXCLUDES);
+            IPDFUNITE,      ipdfunite,      IpdfuniteConfig,       IpdfuniteProcessor,       ("", &["course.yaml"], BUILD_TOOL_EXCLUDES);
             SCRIPT,   script,   ScriptConfig,     ScriptProcessor,     ("", &[], &[]);
             GENERATOR,  generator,  GeneratorConfig,   GeneratorProcessor,   ("", &[], &[]);
             EXPLICIT,   explicit,   ExplicitConfig,    ExplicitProcessor,    ("", &[], &[]);

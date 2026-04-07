@@ -2269,6 +2269,76 @@ impl KnownFields for PdfuniteConfig {
     }
 }
 
+// --- ipdfunite (internal PDF merge, no external binary) ---
+
+fn default_ipdfunite_source_dir() -> String {
+    "marp/courses".into()
+}
+
+fn default_ipdfunite_source_ext() -> String {
+    ".md".into()
+}
+
+fn default_ipdfunite_source_output_dir() -> String {
+    "out/marp".into()
+}
+
+fn default_ipdfunite_output_dir() -> String {
+    "out/ipdfunite".into()
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct IpdfuniteConfig {
+    #[serde(default = "default_ipdfunite_source_dir")]
+    pub source_dir: String,
+    #[serde(default = "default_ipdfunite_source_ext")]
+    pub source_ext: String,
+    #[serde(default = "default_ipdfunite_source_output_dir")]
+    pub source_output_dir: String,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(default)]
+    pub auto_inputs: Vec<String>,
+    #[serde(default = "default_ipdfunite_output_dir")]
+    pub output_dir: String,
+    #[serde(default = "default_true")]
+    pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for IpdfuniteConfig {
+    fn default() -> Self {
+        Self {
+            source_dir: "marp/courses".into(),
+            source_ext: ".md".into(),
+            source_output_dir: "out/marp".into(),
+            extra_inputs: Vec::new(),
+            auto_inputs: Vec::new(),
+            output_dir: "out/ipdfunite".into(),
+            batch: true,
+            max_jobs: None,
+            scan: default_scan!(extensions: ["course.yaml"]),
+        }
+    }
+}
+
+impl KnownFields for IpdfuniteConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "source_dir", "source_ext", "source_output_dir",
+            "extra_inputs", "auto_inputs", "output_dir", "batch", "max_jobs",
+        ]
+    }
+    fn output_fields() -> &'static [&'static str] {
+        &[
+            "source_dir", "source_ext", "source_output_dir", "output_dir",
+        ]
+    }
+}
+
 checker_config!(CpplintConfig, scan_dir: "src", extensions: [".c", ".cc", ".h", ".hh"]);
 
 checker_config!(CheckpatchConfig, scan_dir: "src", extensions: [".c", ".h"]);

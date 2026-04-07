@@ -1,0 +1,230 @@
+use anyhow::{Context, Result};
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use crate::config::{IpdfuniteConfig, output_config_hash, resolve_extra_inputs};
+use crate::file_index::FileIndex;
+use crate::graph::{BuildGraph, Product};
+use crate::processors::{ProcessorBase, ProductDiscovery};
+
+use super::find_dirs_with_ext;
+
+pub struct IpdfuniteProcessor {
+    base: ProcessorBase,
+    config: IpdfuniteConfig,
+}
+
+impl IpdfuniteProcessor {
+    pub fn new(config: IpdfuniteConfig) -> Self {
+        Self {
+            base: ProcessorBase::generator(
+                crate::processors::names::IPDFUNITE,
+                "Merge PDFs from subdirectories into course bundles (in-process)",
+            ),
+            config,
+        }
+    }
+}
+
+/// Merge multiple PDF files into a single output using lopdf.
+/// Follows the lopdf merge example: renumber objects, collect pages and objects,
+/// then assemble a new document with a unified catalog and pages tree.
+fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
+    use lopdf::{Document, Object, ObjectId};
+
+    let mut documents: Vec<Document> = Vec::with_capacity(inputs.len());
+    for input in inputs {
+        let doc = Document::load(input)
+            .with_context(|| format!("Failed to load PDF: {}", input.display()))?;
+        documents.push(doc);
+    }
+
+    let mut max_id = 1;
+    let mut documents_pages: BTreeMap<ObjectId, Object> = BTreeMap::new();
+    let mut documents_objects: BTreeMap<ObjectId, Object> = BTreeMap::new();
+    let mut document = Document::with_version("1.5");
+
+    for mut doc in documents {
+        doc.renumber_objects_with(max_id);
+        max_id = doc.max_id + 1;
+
+        documents_pages.extend(
+            doc.get_pages()
+                .into_iter()
+                .map(|(_, object_id)| {
+                    (object_id, doc.get_object(object_id).unwrap().to_owned())
+                })
+        );
+        documents_objects.extend(doc.objects);
+    }
+
+    // Find "Catalog" and "Pages" objects from the collected objects
+    let mut catalog_object: Option<(ObjectId, Object)> = None;
+    let mut pages_object: Option<(ObjectId, Object)> = None;
+
+    for (object_id, object) in &documents_objects {
+        let type_name = object.as_dict()
+            .ok()
+            .and_then(|d| d.get(b"Type").ok())
+            .and_then(|t| t.as_name().ok())
+            .map(|n| n.to_vec());
+
+        match type_name.as_deref() {
+            Some(b"Catalog") => {
+                catalog_object = Some((*object_id, object.clone()));
+            }
+            Some(b"Pages") => {
+                if let Ok(dictionary) = object.as_dict() {
+                    let mut dictionary = dictionary.clone();
+                    dictionary.remove(b"Outlines");
+                    if let Some((_, ref existing)) = pages_object {
+                        if let Ok(old_dict) = existing.as_dict() {
+                            dictionary.extend(old_dict);
+                        }
+                    }
+                    pages_object = Some((
+                        pages_object.as_ref().map(|(id, _)| *id).unwrap_or(*object_id),
+                        Object::Dictionary(dictionary),
+                    ));
+                }
+            }
+            Some(b"Page") => {} // handled separately
+            Some(b"Outlines") | Some(b"Outline") => {} // not supported
+            _ => {
+                document.objects.insert(*object_id, object.clone());
+            }
+        }
+    }
+
+    let catalog_object = catalog_object
+        .context("No PDF Catalog found in input documents")?;
+    let pages_object = pages_object
+        .context("No PDF Pages tree found in input documents")?;
+
+    // Set page parents and insert into document
+    for (object_id, object) in &documents_pages {
+        if let Ok(dictionary) = object.as_dict() {
+            let mut dictionary = dictionary.clone();
+            dictionary.set("Parent", pages_object.0);
+            document.objects.insert(*object_id, Object::Dictionary(dictionary));
+        }
+    }
+
+    // Build new Pages object with all kids
+    if let Ok(dictionary) = pages_object.1.as_dict() {
+        let mut dictionary = dictionary.clone();
+        dictionary.set("Count", documents_pages.len() as u32);
+        dictionary.set(
+            "Kids",
+            documents_pages.into_iter()
+                .map(|(id, _)| Object::Reference(id))
+                .collect::<Vec<_>>(),
+        );
+        document.objects.insert(pages_object.0, Object::Dictionary(dictionary));
+    }
+
+    // Build new Catalog
+    if let Ok(dictionary) = catalog_object.1.as_dict() {
+        let mut dictionary = dictionary.clone();
+        dictionary.set("Pages", pages_object.0);
+        dictionary.remove(b"Outlines");
+        document.objects.insert(catalog_object.0, Object::Dictionary(dictionary));
+    }
+
+    document.trailer.set("Root", catalog_object.0);
+    document.max_id = max_id;
+    document.renumber_objects();
+    document.adjust_zero_pages();
+    if let Some(n) = document.build_outline() {
+        if let Ok(Object::Dictionary(dict)) = document.get_object_mut(catalog_object.0) {
+            dict.set("Outlines", Object::Reference(n));
+        }
+    }
+    document.compress();
+
+    document.save(output)
+        .with_context(|| format!("Failed to write merged PDF: {}", output.display()))?;
+
+    Ok(())
+}
+
+impl ProductDiscovery for IpdfuniteProcessor {
+    delegate_base!(generator_no_auto_detect);
+
+    fn auto_detect(&self, _file_index: &FileIndex) -> bool {
+        let base = Path::new(&self.config.source_dir);
+        if !base.exists() {
+            return false;
+        }
+        let ext = self.config.source_ext.strip_prefix('.').unwrap_or(&self.config.source_ext);
+        !find_dirs_with_ext(base, ext).is_empty()
+    }
+
+    fn required_tools(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    fn discover(&self, graph: &mut BuildGraph, _file_index: &FileIndex, instance_name: &str) -> Result<()> {
+        let base = Path::new(&self.config.source_dir);
+        if !base.exists() {
+            return Ok(());
+        }
+
+        let hash = Some(output_config_hash(&self.config, &[]));
+        let extra = resolve_extra_inputs(&self.config.extra_inputs)?;
+        let ext = self.config.source_ext.strip_prefix('.').unwrap_or(&self.config.source_ext);
+
+        let dirs = find_dirs_with_ext(base, ext);
+
+        let upstream_scan_dir = Path::new(&self.config.source_dir)
+            .components()
+            .next()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let upstream_scan_dirs = [upstream_scan_dir];
+
+        for dir_path in dirs {
+            let mut source_files: Vec<PathBuf> = fs::read_dir(&dir_path)?
+                .filter_map(|e| e.ok())
+                .map(|e| e.path())
+                .filter(|p| p.extension().is_some_and(|e| e == ext))
+                .collect();
+            if source_files.is_empty() {
+                continue;
+            }
+            source_files.sort();
+
+            let inputs: Vec<PathBuf> = source_files.iter().map(|src| {
+                super::output_path(src, &upstream_scan_dirs, &self.config.source_output_dir, "pdf")
+            }).chain(extra.iter().cloned()).collect();
+
+            let relative = dir_path.strip_prefix(base).unwrap_or(&dir_path);
+            let parent = relative.parent().unwrap_or(Path::new(""));
+            let leaf = relative.file_name().unwrap_or(relative.as_os_str());
+            let outputs = vec![
+                Path::new(&self.config.output_dir).join(parent).join(format!("{}.pdf", leaf.to_string_lossy())),
+            ];
+
+            graph.add_product(inputs, outputs, instance_name, hash.clone())?;
+        }
+
+        Ok(())
+    }
+
+    fn execute(&self, product: &Product) -> Result<()> {
+        let output = product.primary_output();
+        crate::processors::ensure_output_dir(output)?;
+
+        let pdf_inputs: Vec<PathBuf> = product.inputs.iter()
+            .filter(|p| p.extension().is_some_and(|e| e == "pdf"))
+            .cloned()
+            .collect();
+
+        if pdf_inputs.is_empty() {
+            anyhow::bail!("No PDF inputs found for {}", output.display());
+        }
+
+        merge_pdfs(&pdf_inputs, output)
+    }
+}
