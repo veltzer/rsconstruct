@@ -10,3 +10,6 @@ And check that they are specified and error if they are not.
 When I do "rsconstruct processor config [NAME]" I don't just want to see the
 fields with their default values but also which are the must contraints, and
 which fields affect the output (which each proicessor already declares)
+
+between runs we show config changes if there were any. By default show only config
+changed that influence the output.
