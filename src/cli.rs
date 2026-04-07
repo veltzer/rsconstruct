@@ -1,7 +1,11 @@
-use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
+use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum, builder::PossibleValuesParser};
 use clap_complete::{generate, Shell};
-use std::io;
 use std::str::FromStr;
+
+/// Build a value parser that completes processor type names.
+fn processor_name_parser() -> PossibleValuesParser {
+    PossibleValuesParser::new(crate::config::all_type_names())
+}
 
 #[derive(Parser)]
 #[command(name = "rsconstruct")]
@@ -412,6 +416,7 @@ pub enum ProcessorAction {
     /// Show default configuration for a processor
     Defconfig {
         /// Processor name
+        #[arg(value_parser = processor_name_parser())]
         name: String,
     },
     /// Show the current processor allowlist (for use in rsconstruct.toml [processor] enabled)
@@ -740,8 +745,60 @@ pub fn parse_cli() -> Cli {
     Cli::from_arg_matches(&matches).expect("failed to parse CLI arguments")
 }
 
-/// Generate shell completions and print to stdout
+/// Generate shell completions and print to stdout.
+/// Post-processes the generated script to inject processor name completions
+/// for `processors config`, `processors defconfig`, and `processors files`.
 pub fn print_completions(shell: Shell) {
     let mut cmd = Cli::command();
-    generate(shell, &mut cmd, "rsconstruct", &mut io::stdout());
+    let mut buf = Vec::new();
+    generate(shell, &mut cmd, "rsconstruct", &mut buf);
+    let script = String::from_utf8(buf).expect("completion script should be UTF-8");
+
+    match shell {
+        Shell::Bash => print!("{}", inject_bash_processor_completions(&script)),
+        _ => print!("{}", script),
+    }
+}
+
+/// Inject processor name completions into a bash completion script.
+/// Replaces the empty `COMPREPLY=()` in the defconfig/config/files cases
+/// with processor name suggestions.
+fn inject_bash_processor_completions(script: &str) -> String {
+    let names = crate::config::all_type_names();
+    let names_str = names.join(" ");
+    let replacement = format!("COMPREPLY=($(compgen -W \"{}\" -- \"${{cur}}\"))", names_str);
+
+    // For each of these commands, find the section and replace the empty COMPREPLY=()
+    // in the *) catch-all with processor name completions.
+    // Process from last to first in the script so position shifts don't affect earlier sections
+    let targets = [
+        "rsconstruct__processors__files)",
+        "rsconstruct__processors__defconfig)",
+        "rsconstruct__processors__config)",
+    ];
+
+    let mut result = script.to_string();
+    for target in &targets {
+        if let Some(section_start) = result.find(target) {
+            let after_start = section_start + target.len();
+            // Section ends at the next command case (next line starting with spaces + identifier + ")")
+            let section_len = result[after_start..]
+                .find("\n        rsconstruct__")
+                .unwrap_or(result.len() - after_start);
+            let section_end = after_start + section_len;
+
+            // Find the COMPREPLY=() in the *) catch-all within this section
+            if let Some(empty_pos) = result[section_start..section_end].rfind("COMPREPLY=()") {
+                let abs_pos = section_start + empty_pos;
+                result = format!(
+                    "{}{}{}",
+                    &result[..abs_pos],
+                    replacement,
+                    &result[abs_pos + "COMPREPLY=()".len()..]
+                );
+            }
+        }
+    }
+
+    result
 }
