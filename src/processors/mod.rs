@@ -33,7 +33,7 @@ macro_rules! delegate_base {
         }
 
         fn clean(&self, product: &$crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
-            $crate::processors::ProcessorBase::clean(product, self.base.name, verbose)
+            $crate::processors::ProcessorBase::clean(product, &product.processor, verbose)
         }
     };
 
@@ -56,7 +56,7 @@ macro_rules! delegate_base {
         }
 
         fn clean(&self, product: &$crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
-            $crate::processors::ProcessorBase::clean(product, self.base.name, verbose)
+            $crate::processors::ProcessorBase::clean(product, &product.processor, verbose)
         }
     };
 
@@ -83,7 +83,7 @@ macro_rules! delegate_base {
         }
 
         fn clean(&self, product: &$crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
-            $crate::processors::ProcessorBase::clean_output_dir(product, self.base.name, verbose)
+            $crate::processors::ProcessorBase::clean_output_dir(product, &product.processor, verbose)
         }
     };
 
@@ -106,7 +106,7 @@ macro_rules! delegate_base {
         }
 
         fn clean(&self, product: &$crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
-            $crate::processors::ProcessorBase::clean_output_dir(product, self.base.name, verbose)
+            $crate::processors::ProcessorBase::clean_output_dir(product, &product.processor, verbose)
         }
     };
 
@@ -963,7 +963,7 @@ impl ProcessorType {
 ///     }
 ///     fn execute(&self, product: &Product) -> Result<()> { ... }
 ///     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
-///         clean_outputs(product, "mygen", verbose)
+///         clean_outputs(product, &product.processor, verbose)
 ///     }
 ///     fn auto_detect(&self, file_index: &FileIndex) -> bool { ... }
 /// }

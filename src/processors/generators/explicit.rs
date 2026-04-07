@@ -143,7 +143,7 @@ impl ProductDiscovery for ExplicitProcessor {
     }
 
     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
-        ProcessorBase::clean(product, self.base.name, verbose)
+        ProcessorBase::clean(product, &product.processor, verbose)
     }
 
     fn config_json(&self) -> Option<String> {

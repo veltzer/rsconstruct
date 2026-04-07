@@ -454,7 +454,7 @@ impl ProductDiscovery for LuaProcessor {
             let exist_after = product.outputs.iter().filter(|o| o.exists()).count();
             Ok(existed_before.saturating_sub(exist_after))
         } else {
-            clean_outputs(product, &self.name, verbose)
+            clean_outputs(product, &product.processor, verbose)
         }
     }
 
