@@ -40,9 +40,21 @@ impl TeraDepAnalyzer {
                 .expect(errors::INVALID_REGEX)
         });
 
+        // Match load_lua(path="file"), load_data(path="file"), etc.
+        // These are Tera function calls that load external files.
+        static LOAD_RE: OnceLock<Regex> = OnceLock::new();
+        let load_re = LOAD_RE.get_or_init(|| {
+            Regex::new(r#"load_(?:lua|data|json|toml|csv)\s*\(\s*path\s*=\s*["']([^"']+)["']"#)
+                .expect(errors::INVALID_REGEX)
+        });
+
         let source_dir = source.parent().unwrap_or(Path::new("."));
 
-        for caps in include_re.captures_iter(&content) {
+        // Collect paths from both regex patterns
+        let all_captures = include_re.captures_iter(&content)
+            .chain(load_re.captures_iter(&content));
+
+        for caps in all_captures {
             let path_str = &caps[1];
 
             if path_str.is_empty() {
