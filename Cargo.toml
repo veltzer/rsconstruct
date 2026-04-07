@@ -1,6 +1,6 @@
 [package]
 name = "rsconstruct"
-version = "0.4.2"
+version = "0.5.0"
 edition = "2024"
 authors = ["Mark Veltzer <mark.veltzer@gmail.com>"]
 description = "Rust based fast build system"
