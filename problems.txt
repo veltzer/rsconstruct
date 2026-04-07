@@ -15,6 +15,3 @@ between runs we show config changes if there were any. By default show only conf
 changed that influence the output.
 
 If I mis-spell a linter I should get an error immediately!
-
-When I do "rsconstruct status" I see a category "stale" but it does not distinguish between stale
-and non existing. I want to see that stat.
