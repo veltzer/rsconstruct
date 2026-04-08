@@ -1153,7 +1153,7 @@ pub static TOOLS: &[ToolInfo] = &[
     tool!("yamllint",        "python", "pip"),
     tool!("sphinx-build",    "python", "pip", "sphinx"),
     tool!("pip",             "python", "system", "python3 -m ensurepip"),
-    tool!("jsonlint",        "python", "pip"),
+    tool!("jsonlint",        "python", "pip", "demjson3"),
     tool!("cpplint",         "python", "pip"),
     tool!("black",           "python", "pip"),
     tool!("pytest",          "python", "pip"),
