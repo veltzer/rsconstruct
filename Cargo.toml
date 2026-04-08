@@ -41,6 +41,7 @@ grass = { version = "0.13.4", default-features = false }
 pulldown-cmark = { version = "0.13.3", default-features = false, features = ["html"] }
 jsonschema = { version = "0.45.1", default-features = false, features = ["resolve-file"] }
 tabled = "0.20.0"
+ureq = "3"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

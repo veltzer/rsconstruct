@@ -26,6 +26,8 @@ mod runtime_flags;
 mod remote_cache;
 mod tool_lock;
 mod watcher;
+#[allow(dead_code)]
+mod webcache;
 
 use anyhow::{Context, bail, Result};
 use cli::{BuildPhase, CacheAction, CleanAction, Commands, parse_shell, print_completions};
