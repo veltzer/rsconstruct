@@ -34,18 +34,14 @@ pub fn list_processors_no_config(verbose: bool) -> Result<()> {
         let proc = &processors[name.as_str()];
         let type_str = format!("[{}]", proc.processor_type().as_str());
         let proc_type = color::dim(&type_str);
-        let native_tag = if proc.is_native() {
-            format!(" {}", color::dim("[native]"))
+        let extra = if verbose {
+            let native_tag = if proc.is_native() { "native" } else { "external" };
+            let batch_tag = if proc.supports_batch() { "batch" } else { "single" };
+            format!(" {} {}", color::dim(&format!("[{}]", native_tag)), color::dim(&format!("[{}]", batch_tag)))
         } else {
             String::new()
         };
-        let mode = if verbose {
-            let tag = if proc.supports_batch() { "batch" } else { "single" };
-            format!(" {}", color::dim(&format!("[{}]", tag)))
-        } else {
-            String::new()
-        };
-        println!("{} {}{}{} \u{2014} {}", name, proc_type, native_tag, mode, color::dim(proc.description()));
+        println!("{} {}{} \u{2014} {}", name, proc_type, extra, color::dim(proc.description()));
     }
 
     Ok(())
@@ -136,18 +132,14 @@ impl Builder {
                     let proc = &processors[name.as_str()];
                     let type_str = format!("[{}]", proc.processor_type().as_str());
                     let proc_type = color::dim(&type_str);
-                    let native_tag = if proc.is_native() {
-                        format!(" {}", color::dim("[native]"))
+                    let extra = if verbose {
+                        let native_tag = if proc.is_native() { "native" } else { "external" };
+                        let batch_tag = if proc.supports_batch() { "batch" } else { "single" };
+                        format!(" {} {}", color::dim(&format!("[{}]", native_tag)), color::dim(&format!("[{}]", batch_tag)))
                     } else {
                         String::new()
                     };
-                    let mode = if verbose {
-                        let tag = if proc.supports_batch() { "batch" } else { "single" };
-                        format!(" {}", color::dim(&format!("[{}]", tag)))
-                    } else {
-                        String::new()
-                    };
-                    println!("{} {}{}{} \u{2014} {}", name, proc_type, native_tag, mode, color::dim(proc.description()));
+                    println!("{} {}{} \u{2014} {}", name, proc_type, extra, color::dim(proc.description()));
                 }
             }
             ProcessorAction::Config { ref name, diff } => {

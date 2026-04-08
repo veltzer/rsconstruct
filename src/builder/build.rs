@@ -464,17 +464,18 @@ impl Builder {
             data_max.max(col_labels[i].len())
         });
 
+        let total_line_width = max_name + 2 + col_widths[0] + 2 + col_widths[1] + 2 + col_widths[2] + 2 + "native".len();
+
         if per_processor.len() > 1 {
             // Header
-            println!("{:<name_w$}  {:>w0$}  {:>w1$}  {:>w2$}  {}",
-                color::bold("Processor"),
-                color::bold(col_labels[0]),
-                color::bold(col_labels[1]),
-                color::bold(col_labels[2]),
-                color::bold("native"),
-                name_w = max_name, w0 = col_widths[0], w1 = col_widths[1], w2 = col_widths[2]);
+            println!("{}  {}  {}  {}  {}",
+                color::bold(&format!("{:<width$}", "Processor", width = max_name)),
+                color::bold(&format!("{:>width$}", col_labels[0], width = col_widths[0])),
+                color::bold(&format!("{:>width$}", col_labels[1], width = col_widths[1])),
+                color::bold(&format!("{:>width$}", col_labels[2], width = col_widths[2])),
+                color::bold("native"));
             // Separator
-            println!("{}", "\u{2500}".repeat(max_name + 2 + col_widths[0] + 2 + col_widths[1] + 2 + col_widths[2] + 2 + "native".len()));
+            println!("{}", "\u{2500}".repeat(total_line_width));
             // Rows
             for (name, pc) in &per_processor {
                 let native = if opts.native_processors.contains(name) { "yes" } else { "" };
@@ -485,13 +486,13 @@ impl Builder {
                     name_w = max_name, w0 = col_widths[0], w1 = col_widths[1], w2 = col_widths[2]);
             }
             // Separator before summary
-            println!("{}", "\u{2500}".repeat(max_name + 2 + col_widths[0] + 2 + col_widths[1] + 2 + col_widths[2] + 2 + "native".len()));
+            println!("{}", "\u{2500}".repeat(total_line_width));
         }
         // Summary row
-        println!("{:<name_w$}  {:>w0$}  {:>w1$}  {:>w2$}",
-            color::bold("Total"),
+        println!("{}  {:>w0$}  {:>w1$}  {:>w2$}",
+            color::bold(&format!("{:<width$}", "Total", width = max_name)),
             counts[0], counts[1], counts[2],
-            name_w = max_name, w0 = col_widths[0], w1 = col_widths[1], w2 = col_widths[2]);
+            w0 = col_widths[0], w1 = col_widths[1], w2 = col_widths[2]);
     }
 }
 

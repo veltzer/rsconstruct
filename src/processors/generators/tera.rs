@@ -93,6 +93,8 @@ impl TeraProcessor {
 impl ProductDiscovery for TeraProcessor {
     delegate_base!(generator_no_auto_detect);
 
+    fn is_native(&self) -> bool { true }
+
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         super::find_templates(&self.config.scan, file_index).is_ok_and(|t| !t.is_empty())
     }
