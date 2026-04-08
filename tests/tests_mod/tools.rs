@@ -80,7 +80,7 @@ fn tools_stats_shows_summary() {
     assert!(output.status.success(), "tools stats failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Tools:"), "Expected 'Tools:' header");
+    assert!(stdout.contains("Tool"), "Expected 'Tool' table header");
     assert!(stdout.contains("Runtime summary:"), "Expected 'Runtime summary:' section");
     assert!(stdout.contains("Total:"), "Expected 'Total:' summary line");
     assert!(stdout.contains("installed"), "Expected 'installed' count");

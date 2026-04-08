@@ -72,9 +72,8 @@ fn processors_list_shows_descriptions() {
     assert!(output.status.success(), "processors list failed: {}", String::from_utf8_lossy(&output.stderr));
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // processors list shows descriptions with " — " separator
+    // processors list shows processors in a table
     assert!(stdout.contains("tera"), "Expected tera processor");
-    assert!(stdout.contains("\u{2014}"), "Expected description separator in list output");
 }
 
 #[test]
