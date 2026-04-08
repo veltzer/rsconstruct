@@ -2,23 +2,23 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::process::Command;
 
-use crate::config::MarkdownConfig;
+use crate::config::Markdown2htmlConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use crate::processors::{ProcessorBase, ProductDiscovery, run_command_capture, check_command_output};
 
 use super::DiscoverParams;
 
-pub struct MarkdownProcessor {
+pub struct Markdown2htmlProcessor {
     base: ProcessorBase,
-    config: MarkdownConfig,
+    config: Markdown2htmlConfig,
 }
 
-impl MarkdownProcessor {
-    pub fn new(config: MarkdownConfig) -> Self {
+impl Markdown2htmlProcessor {
+    pub fn new(config: Markdown2htmlConfig) -> Self {
         Self {
             base: ProcessorBase::generator(
-                crate::processors::names::MARKDOWN,
+                crate::processors::names::MARKDOWN2HTML,
                 "Convert Markdown to HTML using markdown",
             ),
             config,
@@ -26,7 +26,7 @@ impl MarkdownProcessor {
     }
 }
 
-impl ProductDiscovery for MarkdownProcessor {
+impl ProductDiscovery for Markdown2htmlProcessor {
     delegate_base!(generator);
 
     fn required_tools(&self) -> Vec<String> {

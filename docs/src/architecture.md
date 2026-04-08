@@ -62,7 +62,7 @@ Detection heuristics per processor:
 | `npm` | Mass Generator | Project contains `package.json` files |
 | `gem` | Mass Generator | Project contains `Gemfile` files |
 | `pandoc` | Generator | Project contains `.md` files |
-| `markdown` | Generator | Project contains `.md` files |
+| `markdown2html` | Generator | Project contains `.md` files |
 | `marp` | Generator | Project contains `.md` files |
 | `mermaid` | Generator | Project contains `.mmd` files |
 | `drawio` | Generator | Project contains `.drawio` files |
@@ -112,7 +112,7 @@ don't have valid cache entries:
   way to determine which outputs are valid from a single exit code. On the next
   run, all products from the failed batch are rebuilt.
 
-- **Batch mode with internal processors** (e.g., `imarkdown`, `isass`, `ipdfunite`):
+- **Batch mode with internal processors** (e.g., `imarkdown2html`, `isass`, `ipdfunite`):
   These process files sequentially in-process and return per-file results, so
   partial failure is handled correctly even in batch mode — only the failed
   products are rebuilt.

@@ -1928,8 +1928,8 @@ generator_config!(MarpConfig, tool: "marp", marp_bin,
     args: ["--html", "--allow-local-files"],
 );
 
-generator_config!(MarkdownConfig, tool: "markdown", markdown_bin,
-    output_dir: "out/markdown",
+generator_config!(Markdown2htmlConfig, tool: "markdown", markdown_bin,
+    output_dir: "out/markdown2html",
     default_scan!(extensions: [".md"]),
 );
 
@@ -2147,15 +2147,15 @@ checker_config!(IyamllintConfig, extensions: [".yml", ".yaml"]);
 
 checker_config!(ItaploConfig, extensions: [".toml"]);
 
-fn default_imarkdown_output_dir() -> String { "out/imarkdown".into() }
+fn default_imarkdown2html_output_dir() -> String { "out/imarkdown2html".into() }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct ImarkdownConfig {
+pub struct Imarkdown2htmlConfig {
     #[serde(default)]
     pub extra_inputs: Vec<String>,
     #[serde(default)]
     pub auto_inputs: Vec<String>,
-    #[serde(default = "default_imarkdown_output_dir")]
+    #[serde(default = "default_imarkdown2html_output_dir")]
     pub output_dir: String,
     #[serde(default = "default_true")]
     pub batch: bool,
@@ -2165,12 +2165,12 @@ pub struct ImarkdownConfig {
     pub scan: ScanConfig,
 }
 
-impl Default for ImarkdownConfig {
+impl Default for Imarkdown2htmlConfig {
     fn default() -> Self {
         Self {
             extra_inputs: Vec::new(),
             auto_inputs: Vec::new(),
-            output_dir: "out/imarkdown".into(),
+            output_dir: "out/imarkdown2html".into(),
             batch: true,
             max_jobs: None,
             scan: default_scan!(extensions: [".md"]),
@@ -2178,7 +2178,7 @@ impl Default for ImarkdownConfig {
     }
 }
 
-impl KnownFields for ImarkdownConfig {
+impl KnownFields for Imarkdown2htmlConfig {
     fn known_fields() -> &'static [&'static str] {
         &["extra_inputs", "auto_inputs", "output_dir", "batch", "max_jobs"]
     }

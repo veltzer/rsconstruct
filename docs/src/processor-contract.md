@@ -83,7 +83,7 @@ batch typically use `execute_generator_batch()`, which maps a single exit code
 to all-success or all-failure. If the tool fails, all products in the batch
 are marked failed — there is no way to determine which outputs are valid.
 
-**Internal processors** (e.g., `imarkdown`, `isass`, `ipdfunite`) that process
+**Internal processors** (e.g., `imarkdown2html`, `isass`, `ipdfunite`) that process
 files in-process should return per-file results so that partial failure is
 handled correctly — only the actually-failed products are rebuilt on the next run.
 

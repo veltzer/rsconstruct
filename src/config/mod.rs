@@ -873,7 +873,7 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
         ("pandoc", "pandoc" | "output_dir") => Some(FieldType::String),
         ("pandoc", "formats") => Some(FieldType::StringArray),
         // markdown
-        ("markdown", "markdown_bin" | "output_dir") => Some(FieldType::String),
+        ("markdown2html", "markdown_bin" | "output_dir") => Some(FieldType::String),
         // pdflatex
         ("pdflatex", "pdflatex" | "output_dir") => Some(FieldType::String),
         ("pdflatex", "runs") => Some(FieldType::Integer),

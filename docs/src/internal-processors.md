@@ -61,9 +61,9 @@ supports JSON Schema draft 2020-12, draft 7, and draft 4.
 **Crate:** `jsonschema`
 **Complexity:** Medium — need to load schema files and validate against them
 
-### imarkdown — Markdown to HTML
+### imarkdown2html — Markdown to HTML
 
-Replaces: `markdown` (external markdown CLI)
+Replaces: `markdown2html` (external markdown CLI)
 
 Convert Markdown files to HTML. `pulldown-cmark` is a fast, CommonMark-compliant
 Markdown parser written in Rust.

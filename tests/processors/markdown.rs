@@ -14,7 +14,7 @@ fn markdown_valid_file() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.markdown]\nscan_dirs = [\".\"]\n",
+        "[processor.markdown2html]\nscan_dirs = [\".\"]\n",
     )
     .unwrap();
 
@@ -52,7 +52,7 @@ fn markdown_incremental_skip() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.markdown]\nscan_dirs = [\".\"]\n",
+        "[processor.markdown2html]\nscan_dirs = [\".\"]\n",
     )
     .unwrap();
 
@@ -71,7 +71,7 @@ fn markdown_incremental_skip() {
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
-        stdout2.contains("[markdown] Skipping (unchanged):"),
+        stdout2.contains("[markdown2html] Skipping (unchanged):"),
         "Second build should skip: {}",
         stdout2
     );
@@ -84,7 +84,7 @@ fn markdown_no_project_discovered() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.markdown]\nscan_dirs = [\"markdown_docs\"]\n",
+        "[processor.markdown2html]\nscan_dirs = [\"markdown_docs\"]\n",
     )
     .unwrap();
 

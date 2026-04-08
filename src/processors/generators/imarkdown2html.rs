@@ -1,22 +1,22 @@
 use anyhow::{Context, Result};
 
-use crate::config::ImarkdownConfig;
+use crate::config::Imarkdown2htmlConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use crate::processors::{ProcessorBase, ProductDiscovery};
 
 use super::DiscoverParams;
 
-pub struct ImarkdownProcessor {
+pub struct Imarkdown2htmlProcessor {
     base: ProcessorBase,
-    config: ImarkdownConfig,
+    config: Imarkdown2htmlConfig,
 }
 
-impl ImarkdownProcessor {
-    pub fn new(config: ImarkdownConfig) -> Self {
+impl Imarkdown2htmlProcessor {
+    pub fn new(config: Imarkdown2htmlConfig) -> Self {
         Self {
             base: ProcessorBase::generator(
-                crate::processors::names::IMARKDOWN,
+                crate::processors::names::IMARKDOWN2HTML,
                 "Convert Markdown to HTML (in-process)",
             ),
             config,
@@ -24,7 +24,7 @@ impl ImarkdownProcessor {
     }
 }
 
-impl ProductDiscovery for ImarkdownProcessor {
+impl ProductDiscovery for Imarkdown2htmlProcessor {
     delegate_base!(generator);
 
     fn is_native(&self) -> bool { true }

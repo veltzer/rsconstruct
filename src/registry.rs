@@ -49,7 +49,7 @@ macro_rules! for_each_processor {
             ASPELL,         aspell,         AspellConfig,          AspellProcessor,          ("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
             MARP,           marp,           MarpConfig,            MarpProcessor,            ("marp", &[".md"], MARKDOWN_EXCLUDE_DIRS);
             PANDOC,         pandoc,         PandocConfig,          PandocProcessor,          ("pandoc", &[".md"], MARKDOWN_EXCLUDE_DIRS);
-            MARKDOWN,       markdown,       MarkdownConfig,        MarkdownProcessor,        ("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
+            MARKDOWN2HTML,  markdown2html,  Markdown2htmlConfig,   Markdown2htmlProcessor,   ("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
             PDFLATEX,       pdflatex,       PdflatexConfig,        PdflatexProcessor,        ("", &[".tex"], BUILD_TOOL_EXCLUDES);
             A2X,            a2x,            A2xConfig,             A2xProcessor,             ("", &[".txt"], BUILD_TOOL_EXCLUDES);
             ASCII,    ascii,    AsciiConfig,      AsciiProcessor,      ("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
@@ -92,7 +92,7 @@ macro_rules! for_each_processor {
             IJSONLINT,      ijsonlint,      IjsonlintConfig,       IjsonlintProcessor,       ("", &[".json"], BUILD_TOOL_EXCLUDES);
             IYAMLLINT,      iyamllint,      IyamllintConfig,       IyamllintProcessor,       ("", &[".yml", ".yaml"], BUILD_TOOL_EXCLUDES);
             ITAPLO,         itaplo,         ItaploConfig,          ItaploProcessor,          ("", &[".toml"], BUILD_TOOL_EXCLUDES);
-            IMARKDOWN,      imarkdown,      ImarkdownConfig,       ImarkdownProcessor,       ("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
+            IMARKDOWN2HTML, imarkdown2html, Imarkdown2htmlConfig,  Imarkdown2htmlProcessor,  ("", &[".md"], MARKDOWN_EXCLUDE_DIRS);
             ISASS,          isass,          IsassConfig,           IsassProcessor,           ("sass", &[".scss", ".sass"], &[]);
             YAML2JSON,      yaml2json,      Yaml2jsonConfig,       Yaml2jsonProcessor,       ("", &[".yml", ".yaml"], BUILD_TOOL_EXCLUDES);
             RUST_SINGLE_FILE, rust_single_file, RustSingleFileConfig, RustSingleFileProcessor, ("src", &[".rs"], &[]);
