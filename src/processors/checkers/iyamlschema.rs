@@ -66,11 +66,13 @@ impl IyamlschemaProcessor {
         }
 
         // Check property ordering
-        let mut ordering_errors = Vec::new();
-        check_property_ordering(&data, &schema, "", &mut ordering_errors);
+        if self.config.check_ordering {
+            let mut ordering_errors = Vec::new();
+            check_property_ordering(&data, &schema, "", &mut ordering_errors);
 
-        if !ordering_errors.is_empty() {
-            bail!("property ordering errors:\n{}", ordering_errors.join("\n"));
+            if !ordering_errors.is_empty() {
+                bail!("property ordering errors:\n{}", ordering_errors.join("\n"));
+            }
         }
 
         Ok(())

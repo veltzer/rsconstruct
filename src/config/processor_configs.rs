@@ -2150,7 +2150,43 @@ checker_config!(IjsonlintConfig, extensions: [".json"]);
 
 checker_config!(IyamllintConfig, extensions: [".yml", ".yaml"]);
 
-checker_config!(IyamlschemaConfig, extensions: [".yml", ".yaml"]);
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct IyamlschemaConfig {
+    #[serde(default = "default_true")]
+    pub check_ordering: bool,
+    #[serde(default)]
+    pub extra_inputs: Vec<String>,
+    #[serde(default)]
+    pub auto_inputs: Vec<String>,
+    #[serde(default = "default_true")]
+    pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for IyamlschemaConfig {
+    fn default() -> Self {
+        Self {
+            check_ordering: true,
+            extra_inputs: Vec::new(),
+            auto_inputs: Vec::new(),
+            batch: true,
+            max_jobs: None,
+            scan: default_scan!(extensions: [".yml", ".yaml"]),
+        }
+    }
+}
+
+impl KnownFields for IyamlschemaConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &["check_ordering", "extra_inputs", "auto_inputs", "batch", "max_jobs"]
+    }
+    fn output_fields() -> &'static [&'static str] {
+        &["check_ordering"]
+    }
+}
 
 checker_config!(ItaploConfig, extensions: [".toml"]);
 
