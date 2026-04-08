@@ -468,11 +468,8 @@ impl Builder {
             opts.labels.stale.1,
             opts.labels.new.1,
         ];
-        let max_name = if per_processor.len() > 1 {
-            per_processor.keys().map(|n| n.len()).max().unwrap_or(0)
-        } else {
-            0
-        }.max("Processor".len());
+        let max_name = per_processor.keys().map(|n| n.len()).max().unwrap_or(0)
+            .max("Processor".len());
         let col_widths: [usize; NUM_STATES] = std::array::from_fn(|i| {
             let data_max = per_processor.values()
                 .map(|pc| digit_width(pc[i]))
@@ -486,30 +483,28 @@ impl Builder {
             + col_widths.iter().map(|w| w + 2).sum::<usize>()
             + "native".len();
 
-        if per_processor.len() > 1 {
-            // Header
-            println!("{}  {}  {}  {}  {}  {}",
-                color::bold(&format!("{:<width$}", "Processor", width = max_name)),
-                color::bold(&format!("{:>width$}", col_labels[0], width = col_widths[0])),
-                color::bold(&format!("{:>width$}", col_labels[1], width = col_widths[1])),
-                color::bold(&format!("{:>width$}", col_labels[2], width = col_widths[2])),
-                color::bold(&format!("{:>width$}", col_labels[3], width = col_widths[3])),
-                color::bold("native"));
-            // Separator
-            println!("{}", "\u{2500}".repeat(total_line_width));
-            // Rows
-            for (name, pc) in &per_processor {
-                let native = if opts.native_processors.contains(name) { "yes" } else { "" };
-                println!("{:<name_w$}  {:>w0$}  {:>w1$}  {:>w2$}  {:>w3$}  {}",
-                    name,
-                    pc[0], pc[1], pc[2], pc[3],
-                    native,
-                    name_w = max_name, w0 = col_widths[0], w1 = col_widths[1],
-                    w2 = col_widths[2], w3 = col_widths[3]);
-            }
-            // Separator before summary
-            println!("{}", "\u{2500}".repeat(total_line_width));
+        // Header
+        println!("{}  {}  {}  {}  {}  {}",
+            color::bold(&format!("{:<width$}", "Processor", width = max_name)),
+            color::bold(&format!("{:>width$}", col_labels[0], width = col_widths[0])),
+            color::bold(&format!("{:>width$}", col_labels[1], width = col_widths[1])),
+            color::bold(&format!("{:>width$}", col_labels[2], width = col_widths[2])),
+            color::bold(&format!("{:>width$}", col_labels[3], width = col_widths[3])),
+            color::bold("native"));
+        // Separator
+        println!("{}", "\u{2500}".repeat(total_line_width));
+        // Rows
+        for (name, pc) in &per_processor {
+            let native = if opts.native_processors.contains(name) { "yes" } else { "" };
+            println!("{:<name_w$}  {:>w0$}  {:>w1$}  {:>w2$}  {:>w3$}  {}",
+                name,
+                pc[0], pc[1], pc[2], pc[3],
+                native,
+                name_w = max_name, w0 = col_widths[0], w1 = col_widths[1],
+                w2 = col_widths[2], w3 = col_widths[3]);
         }
+        // Separator before summary
+        println!("{}", "\u{2500}".repeat(total_line_width));
         // Summary row
         println!("{}  {:>w0$}  {:>w1$}  {:>w2$}  {:>w3$}",
             color::bold(&format!("{:<width$}", "Total", width = max_name)),
