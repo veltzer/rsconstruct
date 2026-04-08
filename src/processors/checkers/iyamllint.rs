@@ -42,5 +42,6 @@ impl_checker!(IyamllintProcessor,
     name: crate::processors::names::IYAMLLINT,
     execute: execute_product,
     config_json: true,
+    native: true,
     batch: check_files,
 );

@@ -60,5 +60,6 @@ impl_checker!(AsciiProcessor,
     name: crate::processors::names::ASCII,
     execute: execute_product,
     config_json: true,
+    native: true,
     batch: check_files,
 );

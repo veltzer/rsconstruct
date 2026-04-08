@@ -32,6 +32,8 @@ impl TagsProcessor {
 impl ProductDiscovery for TagsProcessor {
     delegate_base!(generator_no_auto_detect);
 
+    fn is_native(&self) -> bool { true }
+
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         if !scan_root_valid(&self.config.scan)
             || file_index.scan(&self.config.scan, true).is_empty()

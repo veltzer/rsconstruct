@@ -81,6 +81,7 @@ struct StatusPrintOptions<'a> {
     display_opts: DisplayOptions,
     verbose: bool,
     all_processor_names: &'a [&'a str],
+    native_processors: &'a std::collections::HashSet<&'a str>,
 }
 
 /// Auto-generate `create_processor_for_instance` dispatch function from the central registry.

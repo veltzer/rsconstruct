@@ -29,7 +29,7 @@ fn status_command() {
     assert!(stdout2.contains("UP-TO-DATE"), "After build, product should be UP-TO-DATE: {}", stdout2);
 
     // Check summary line
-    assert!(stdout2.contains("Summary"), "Status output should contain Summary line");
+    assert!(stdout2.contains("Total"), "Status output should contain Total line");
 }
 
 #[test]

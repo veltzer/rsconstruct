@@ -1026,6 +1026,12 @@ pub trait ProductDiscovery: Sync + Send {
             .collect()
     }
 
+    /// Whether this processor is native (written in Rust, inside the rsconstruct binary)
+    /// as opposed to shelling out to external tools.
+    fn is_native(&self) -> bool {
+        false
+    }
+
     /// Whether this processor supports batch execution of multiple products at once.
     fn supports_batch(&self) -> bool {
         false

@@ -70,5 +70,6 @@ impl_checker!(LicenseHeaderProcessor,
     name: crate::processors::names::LICENSE_HEADER,
     execute: execute_product,
     config_json: true,
+    native: true,
     batch: check_files,
 );

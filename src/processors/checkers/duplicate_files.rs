@@ -56,5 +56,6 @@ impl_checker!(DuplicateFilesProcessor,
     name: crate::processors::names::DUPLICATE_FILES,
     execute: execute_product,
     config_json: true,
+    native: true,
     batch: check_files,
 );

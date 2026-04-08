@@ -16,6 +16,7 @@
 /// - `tool_field: $field:ident` — config sub-field to clone as a tool name
 /// - `tool_field_extra: $field:ident [$($extra:expr),+]` — config field plus extra static tools
 /// - `config_json: true` — emit `config_json()` using `serde_json::to_string`
+/// - `native: true` — mark this processor as native (pure Rust, no external tools)
 /// - `batch: $batch_method:ident` — method on self for batch execution
 macro_rules! impl_checker {
     // --- @build: generate the impl block ---
@@ -23,6 +24,7 @@ macro_rules! impl_checker {
      guard: [$($guard:ident)?],
      tools_kind: $tools_kind:tt,
      config_json: $cj:tt,
+     native: $native:tt,
      batch: [$($batch:ident)?],
      execute: $execute:ident,
     ) => {
@@ -53,6 +55,8 @@ macro_rules! impl_checker {
             }
 
             impl_checker!(@config_json self, $config_field, $cj);
+
+            impl_checker!(@native $native);
 
             impl_checker!(@batch self, $config_field, [$($batch)?]);
 
@@ -129,6 +133,12 @@ macro_rules! impl_checker {
     };
     (@config_json $self:ident, $cfg:ident, false) => {};
 
+    // --- native ---
+    (@native true) => {
+        fn is_native(&self) -> bool { true }
+    };
+    (@native false) => {};
+
     // --- batch ---
     (@batch $self:ident, $cfg:ident, [$batch:ident]) => {
         fn supports_batch(&self) -> bool { self.$cfg.batch }
@@ -154,7 +164,7 @@ macro_rules! impl_checker {
             guard: [],
             tools_kind: [none],
             config_json: false,
-
+            native: false,
             batch: [],
             ; $($($rest)*)?
         );
@@ -165,7 +175,7 @@ macro_rules! impl_checker {
      guard: [],
      tools_kind: $tk:tt,
      config_json: $cj:tt,
-
+     native: $native:tt,
      batch: [$($batch:ident)?],
      ; guard: $guard:ident $(, $($rest:tt)*)?
     ) => {
@@ -173,7 +183,7 @@ macro_rules! impl_checker {
             guard: [$guard],
             tools_kind: $tk,
             config_json: $cj,
-
+            native: $native,
             batch: [$($batch)?],
             ; $($($rest)*)?
         );
@@ -184,7 +194,7 @@ macro_rules! impl_checker {
      guard: [$($guard:ident)?],
      tools_kind: [none],
      config_json: $cj:tt,
-
+     native: $native:tt,
      batch: [$($batch:ident)?],
      ; tools: [$($tool:expr),+] $(, $($rest:tt)*)?
     ) => {
@@ -192,7 +202,7 @@ macro_rules! impl_checker {
             guard: [$($guard)?],
             tools_kind: [literal: $($tool),+],
             config_json: $cj,
-
+            native: $native,
             batch: [$($batch)?],
             ; $($($rest)*)?
         );
@@ -203,7 +213,7 @@ macro_rules! impl_checker {
      guard: [$($guard:ident)?],
      tools_kind: [none],
      config_json: $cj:tt,
-
+     native: $native:tt,
      batch: [$($batch:ident)?],
      ; tool_field: $tool_field:ident $(, $($rest:tt)*)?
     ) => {
@@ -211,7 +221,7 @@ macro_rules! impl_checker {
             guard: [$($guard)?],
             tools_kind: [field: $tool_field],
             config_json: $cj,
-
+            native: $native,
             batch: [$($batch)?],
             ; $($($rest)*)?
         );
@@ -222,7 +232,7 @@ macro_rules! impl_checker {
      guard: [$($guard:ident)?],
      tools_kind: [none],
      config_json: $cj:tt,
-
+     native: $native:tt,
      batch: [$($batch:ident)?],
      ; tool_field_extra: $tool_field:ident [$($extra:expr),+] $(, $($rest:tt)*)?
     ) => {
@@ -230,7 +240,7 @@ macro_rules! impl_checker {
             guard: [$($guard)?],
             tools_kind: [field_and_extra: $tool_field, [$($extra),+]],
             config_json: $cj,
-
+            native: $native,
             batch: [$($batch)?],
             ; $($($rest)*)?
         );
@@ -241,7 +251,7 @@ macro_rules! impl_checker {
      guard: [$($guard:ident)?],
      tools_kind: $tk:tt,
      config_json: false,
-
+     native: $native:tt,
      batch: [$($batch:ident)?],
      ; config_json: true $(, $($rest:tt)*)?
     ) => {
@@ -249,7 +259,26 @@ macro_rules! impl_checker {
             guard: [$($guard)?],
             tools_kind: $tk,
             config_json: true,
+            native: $native,
+            batch: [$($batch)?],
+            ; $($($rest)*)?
+        );
+    };
 
+    // Parse native
+    (@parse $processor:ty, $config_field:ident, $desc:expr, $name:expr, $execute:ident,
+     guard: [$($guard:ident)?],
+     tools_kind: $tk:tt,
+     config_json: $cj:tt,
+     native: false,
+     batch: [$($batch:ident)?],
+     ; native: true $(, $($rest:tt)*)?
+    ) => {
+        impl_checker!(@parse $processor, $config_field, $desc, $name, $execute,
+            guard: [$($guard)?],
+            tools_kind: $tk,
+            config_json: $cj,
+            native: true,
             batch: [$($batch)?],
             ; $($($rest)*)?
         );
@@ -260,7 +289,7 @@ macro_rules! impl_checker {
      guard: [$($guard:ident)?],
      tools_kind: $tk:tt,
      config_json: $cj:tt,
-
+     native: $native:tt,
      batch: [],
      ; batch: $batch_method:ident $(, $($rest:tt)*)?
     ) => {
@@ -268,7 +297,7 @@ macro_rules! impl_checker {
             guard: [$($guard)?],
             tools_kind: $tk,
             config_json: $cj,
-
+            native: $native,
             batch: [$batch_method],
             ; $($($rest)*)?
         );
@@ -279,7 +308,7 @@ macro_rules! impl_checker {
      guard: [$($guard:ident)?],
      tools_kind: $tk:tt,
      config_json: $cj:tt,
-
+     native: $native:tt,
      batch: [$($batch:ident)?],
      ;
     ) => {
@@ -287,7 +316,7 @@ macro_rules! impl_checker {
             guard: [$($guard)?],
             tools_kind: $tk,
             config_json: $cj,
-
+            native: $native,
             batch: [$($batch)?],
             execute: $execute,
         );

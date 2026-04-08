@@ -271,6 +271,7 @@ impl Builder {
             force, labels: &labels, explain,
             display_opts: DisplayOptions::default(), verbose: true,
             all_processor_names: &[],
+            native_processors: &std::collections::HashSet::new(),
         });
         Ok(())
     }
@@ -297,10 +298,15 @@ impl Builder {
             .into_iter()
             .map(|s| s.as_str())
             .collect();
+        let native_set: std::collections::HashSet<&str> = processors.iter()
+            .filter(|(_, proc)| proc.is_native())
+            .map(|(name, _)| name.as_str())
+            .collect();
         self.print_product_status(&products, &StatusPrintOptions {
             force: false, labels: &labels, explain: false,
             display_opts: DisplayOptions::default(), verbose,
             all_processor_names: &all_proc_names,
+            native_processors: &native_set,
         });
 
         if breakdown {
@@ -442,24 +448,57 @@ impl Builder {
             per_processor.entry(&product.processor).or_default()[status_idx] += 1;
         }
 
-        // Per-processor breakdown
+        // Per-processor table
+        let col_labels = [opts.labels.current.1, opts.labels.restorable.1, opts.labels.stale.1];
+        let max_name = if per_processor.len() > 1 {
+            per_processor.keys().map(|n| n.len()).max().unwrap_or(0)
+        } else {
+            0
+        }.max("Processor".len());
+        let col_widths: [usize; 3] = std::array::from_fn(|i| {
+            let data_max = per_processor.values()
+                .map(|pc| digit_width(pc[i]))
+                .max()
+                .unwrap_or(0)
+                .max(digit_width(counts[i]));
+            data_max.max(col_labels[i].len())
+        });
+
         if per_processor.len() > 1 {
-            let max_name_len = per_processor.keys().map(|n| n.len()).max().unwrap_or(0);
+            // Header
+            println!("{:<name_w$}  {:>w0$}  {:>w1$}  {:>w2$}  {}",
+                color::bold("Processor"),
+                color::bold(col_labels[0]),
+                color::bold(col_labels[1]),
+                color::bold(col_labels[2]),
+                color::bold("native"),
+                name_w = max_name, w0 = col_widths[0], w1 = col_widths[1], w2 = col_widths[2]);
+            // Separator
+            println!("{}", "\u{2500}".repeat(max_name + 2 + col_widths[0] + 2 + col_widths[1] + 2 + col_widths[2] + 2 + "native".len()));
+            // Rows
             for (name, pc) in &per_processor {
-                println!("{:width$} {} {}, {} {}, {} {}",
-                    format!("{}:", name),
-                    pc[0], opts.labels.current.1,
-                    pc[1], opts.labels.restorable.1,
-                    pc[2], opts.labels.stale.1,
-                    width = max_name_len + 1);
+                let native = if opts.native_processors.contains(name) { "yes" } else { "" };
+                println!("{:<name_w$}  {:>w0$}  {:>w1$}  {:>w2$}  {}",
+                    name,
+                    pc[0], pc[1], pc[2],
+                    native,
+                    name_w = max_name, w0 = col_widths[0], w1 = col_widths[1], w2 = col_widths[2]);
             }
+            // Separator before summary
+            println!("{}", "\u{2500}".repeat(max_name + 2 + col_widths[0] + 2 + col_widths[1] + 2 + col_widths[2] + 2 + "native".len()));
         }
-        println!("{}: {} {}, {} {}, {} {}",
-            color::bold("Summary"),
-            counts[0], opts.labels.current.1,
-            counts[1], opts.labels.restorable.1,
-            counts[2], opts.labels.stale.1);
+        // Summary row
+        println!("{:<name_w$}  {:>w0$}  {:>w1$}  {:>w2$}",
+            color::bold("Total"),
+            counts[0], counts[1], counts[2],
+            name_w = max_name, w0 = col_widths[0], w1 = col_widths[1], w2 = col_widths[2]);
     }
+}
+
+/// Number of decimal digits needed to display `n` (minimum 1).
+fn digit_width(n: usize) -> usize {
+    if n == 0 { return 1; }
+    ((n as f64).log10().floor() as usize) + 1
 }
 
 /// Write a Chrome trace format JSON file from build statistics.

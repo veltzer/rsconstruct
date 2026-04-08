@@ -42,5 +42,6 @@ impl_checker!(IjqProcessor,
     name: crate::processors::names::IJQ,
     execute: execute_product,
     config_json: true,
+    native: true,
     batch: check_files,
 );

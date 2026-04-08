@@ -59,6 +59,8 @@ impl crate::processors::ProductDiscovery for TermsProcessor {
         "Check that technical terms are backtick-quoted in markdown files"
     }
 
+    fn is_native(&self) -> bool { true }
+
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         Path::new(&self.config.terms_dir).is_dir()
             && !file_index.scan(&self.config.scan, true).is_empty()

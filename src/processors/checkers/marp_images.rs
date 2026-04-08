@@ -67,5 +67,6 @@ impl_checker!(MarpImagesProcessor,
     name: crate::processors::names::MARP_IMAGES,
     execute: execute_product,
     config_json: true,
+    native: true,
     batch: check_files,
 );

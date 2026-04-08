@@ -17,7 +17,7 @@ fn dry_run_shows_build_actions() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("BUILD"), "Dry run should show BUILD for unbuilt product: {}", stdout);
-    assert!(stdout.contains("Summary"), "Dry run should show Summary");
+    assert!(stdout.contains("Total"), "Dry run should show Total");
 
     // Verify no output file was created (dry-run should not execute anything)
     assert!(!project_path.join("dry.txt").exists(), "Dry run should not create output files");

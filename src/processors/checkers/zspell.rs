@@ -173,6 +173,8 @@ impl ZspellProcessor {
 impl ProductDiscovery for ZspellProcessor {
     delegate_base!(checker);
 
+    fn is_native(&self) -> bool { true }
+
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
         let mut extra_inputs = self.config.extra_inputs.clone();
         for ai in &self.config.auto_inputs {

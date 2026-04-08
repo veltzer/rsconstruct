@@ -61,5 +61,6 @@ impl_checker!(EncodingProcessor,
     name: crate::processors::names::ENCODING,
     execute: execute_product,
     config_json: true,
+    native: true,
     batch: check_files,
 );

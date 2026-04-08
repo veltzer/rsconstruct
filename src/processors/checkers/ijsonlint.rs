@@ -42,5 +42,6 @@ impl_checker!(IjsonlintProcessor,
     name: crate::processors::names::IJSONLINT,
     execute: execute_product,
     config_json: true,
+    native: true,
     batch: check_files,
 );

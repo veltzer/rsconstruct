@@ -27,6 +27,8 @@ impl IsassProcessor {
 impl ProductDiscovery for IsassProcessor {
     delegate_base!(generator);
 
+    fn is_native(&self) -> bool { true }
+
     fn required_tools(&self) -> Vec<String> {
         Vec::new()
     }

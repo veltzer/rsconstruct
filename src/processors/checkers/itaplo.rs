@@ -42,5 +42,6 @@ impl_checker!(ItaploProcessor,
     name: crate::processors::names::ITAPLO,
     execute: execute_product,
     config_json: true,
+    native: true,
     batch: check_files,
 );

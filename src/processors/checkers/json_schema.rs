@@ -101,4 +101,5 @@ impl_checker!(JsonSchemaProcessor,
     name: crate::processors::names::JSON_SCHEMA,
     execute: execute_product,
     config_json: true,
+    native: true,
 );

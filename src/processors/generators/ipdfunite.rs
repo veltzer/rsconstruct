@@ -152,6 +152,8 @@ fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
 impl ProductDiscovery for IpdfuniteProcessor {
     delegate_base!(generator_no_auto_detect);
 
+    fn is_native(&self) -> bool { true }
+
     fn auto_detect(&self, _file_index: &FileIndex) -> bool {
         let base = Path::new(&self.config.source_dir);
         if !base.exists() {
