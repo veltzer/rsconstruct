@@ -142,7 +142,7 @@ macro_rules! default_scan {
             exclude_dirs: None,
             exclude_files: None,
             exclude_paths: None,
-            include_paths: None,
+            match_paths: None,
         }
     };
     (scan_dir: $dir:expr, extensions: [$($ext:expr),+ $(,)?]) => {
@@ -152,7 +152,7 @@ macro_rules! default_scan {
             exclude_dirs: None,
             exclude_files: None,
             exclude_paths: None,
-            include_paths: None,
+            match_paths: None,
         }
     };
 }
@@ -1270,7 +1270,7 @@ impl Default for ScriptConfig {
                 exclude_dirs: None,
                 exclude_files: None,
                 exclude_paths: None,
-                include_paths: None,
+                match_paths: None,
             },
         }
     }
@@ -1338,7 +1338,7 @@ impl Default for GeneratorConfig {
                 exclude_dirs: None,
                 exclude_files: None,
                 exclude_paths: None,
-                include_paths: None,
+                match_paths: None,
             },
         }
     }
@@ -1398,7 +1398,7 @@ impl Default for ExplicitConfig {
                 exclude_dirs: None,
                 exclude_files: None,
                 exclude_paths: None,
-                include_paths: None,
+                match_paths: None,
             },
         }
     }

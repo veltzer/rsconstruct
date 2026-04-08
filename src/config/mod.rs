@@ -22,7 +22,7 @@ const CONFIG_FILE: &str = "rsconstruct.toml";
 /// Fields contributed by ScanConfig via `#[serde(flatten)]`.
 /// These are automatically appended to every processor's known fields during validation.
 pub(crate) const SCAN_CONFIG_FIELDS: &[&str] = &[
-    "scan_dirs", "extensions", "exclude_dirs", "exclude_files", "exclude_paths", "include_paths",
+    "scan_dirs", "extensions", "exclude_dirs", "exclude_files", "exclude_paths", "match_paths",
 ];
 
 pub(crate) trait KnownFields {
@@ -128,7 +128,7 @@ pub(crate) struct ScanConfig {
 
     /// Paths (relative to project root) to include — when set, only these paths are matched
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub include_paths: Option<Vec<String>>,
+    pub match_paths: Option<Vec<String>>,
 }
 
 impl ScanConfig {
@@ -149,8 +149,8 @@ impl ScanConfig {
         if self.exclude_paths.is_none() {
             self.exclude_paths = Some(Vec::new());
         }
-        if self.include_paths.is_none() {
-            self.include_paths = Some(Vec::new());
+        if self.match_paths.is_none() {
+            self.match_paths = Some(Vec::new());
         }
     }
 
@@ -180,8 +180,8 @@ impl ScanConfig {
     }
 
     /// Get the resolved include paths. Panics if called before resolve().
-    pub(crate) fn include_paths(&self) -> &[String] {
-        self.include_paths.as_deref().expect(errors::SCAN_CONFIG_NOT_RESOLVED)
+    pub(crate) fn match_paths(&self) -> &[String] {
+        self.match_paths.as_deref().expect(errors::SCAN_CONFIG_NOT_RESOLVED)
     }
 }
 
@@ -979,14 +979,14 @@ fn validate_single_processor(
     // Require scan_dirs for processors whose default would scan the project root.
     // This prevents accidentally scanning everything when the user forgets to set scan_dirs.
     // Exempt processors that don't use scan_dirs for file discovery,
-    // and processors that specify include_paths (files are explicitly listed).
+    // and processors that specify match_paths (files are explicitly listed).
     const SCAN_DIRS_EXEMPT: &[&str] = &["explicit", "pdfunite", "ipdfunite"];
-    let has_include_paths = table.get("include_paths")
+    let has_match_paths = table.get("match_paths")
         .and_then(|v| v.as_array())
         .is_some_and(|arr| !arr.is_empty());
     if let Some("") = ProcessorConfig::default_scan_dir_for(type_name)
     && !SCAN_DIRS_EXEMPT.contains(&type_name)
-    && !has_include_paths {
+    && !has_match_paths {
         match table.get("scan_dirs") {
             None => {
                 errors.push(format!(
@@ -1137,8 +1137,8 @@ pub(crate) fn scan_config_from_toml(
         .and_then(|v| v.as_array())
         .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
 
-    let include_paths = table
-        .and_then(|t| t.get("include_paths"))
+    let match_paths = table
+        .and_then(|t| t.get("match_paths"))
         .and_then(|v| v.as_array())
         .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
 
@@ -1148,7 +1148,7 @@ pub(crate) fn scan_config_from_toml(
         exclude_dirs,
         exclude_files,
         exclude_paths,
-        include_paths,
+        match_paths,
     };
     scan.resolve(default_scan_dir, default_extensions, default_exclude_dirs);
     scan

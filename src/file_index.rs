@@ -53,7 +53,7 @@ impl FileIndex {
     /// - `exclude_dirs`: directory path segments to skip (e.g., `["/.git/", "/out/"]`)
     /// - `exclude_files`: file names to skip (e.g., `["setup.py"]`)
     /// - `exclude_paths`: paths relative to project root to skip (e.g., `["Makefile"]`)
-    /// - `include_paths`: if non-empty, only these paths are matched (allowlist)
+    /// - `match_paths`: if non-empty, only these paths are matched (allowlist)
     pub fn query(
         &self,
         root: &Path,
@@ -61,7 +61,7 @@ impl FileIndex {
         exclude_dirs: &[&str],
         exclude_files: &[&str],
         exclude_paths: &[&str],
-        include_paths: &[&str],
+        match_paths: &[&str],
     ) -> Vec<PathBuf> {
         self.files
             .iter()
@@ -74,11 +74,11 @@ impl FileIndex {
                         return false;
                     }
 
-                // If include_paths is set, only match those exact paths
+                // If match_paths is set, only match those exact paths
                 // (skip extension and exclude checks — the user explicitly listed files)
-                if !include_paths.is_empty() {
+                if !match_paths.is_empty() {
                     let path_str = path.to_string_lossy();
-                    return include_paths.iter().any(|p| *p == path_str);
+                    return match_paths.iter().any(|p| *p == path_str);
                 }
 
                 // Check exclude dirs
@@ -132,7 +132,7 @@ impl FileIndex {
         let exclude_dir_refs: Vec<&str> = scan.exclude_dirs().iter().map(|s| s.as_str()).collect();
         let exclude_file_refs: Vec<&str> = scan.exclude_files().iter().map(|s| s.as_str()).collect();
         let exclude_path_refs: Vec<&str> = scan.exclude_paths().iter().map(|s| s.as_str()).collect();
-        let include_path_refs: Vec<&str> = scan.include_paths().iter().map(|s| s.as_str()).collect();
+        let include_path_refs: Vec<&str> = scan.match_paths().iter().map(|s| s.as_str()).collect();
 
         let mut results = Vec::new();
         for dir in scan.scan_dirs() {
