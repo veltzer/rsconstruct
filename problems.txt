@@ -2,3 +2,6 @@ python files dependency analysis:
   for "import local_python_module" statements
   for dependency on other files with open(filename) or other functions.
   for import of external dependencies and generate external depenencies.
+
+For every command both in the documentation and in the commands line state if I
+can run the command without configuration or do I have to have configuration.
