@@ -2,4 +2,3 @@ python files dependency analysis:
   for "import local_python_module" statements
   for dependency on other files with open(filename) or other functions.
   for import of external dependencies and generate external depenencies.
-
