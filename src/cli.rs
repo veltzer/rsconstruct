@@ -186,47 +186,47 @@ pub enum Commands {
         #[command(flatten)]
         shared: SharedBuildArgs,
     },
-    /// Manage the build cache (requires config, except 'clear')
+    /// Manage the build cache
     Cache {
         #[command(subcommand)]
         action: CacheAction,
     },
-    /// Clean build artifacts (requires config)
+    /// Clean build artifacts
     Clean {
         #[command(subcommand)]
         action: Option<CleanAction>,
     },
-    /// Generate shell completion scripts (no config needed with shell args)
+    /// Generate shell completion scripts
     Complete {
         /// The shells to generate completions for (if none specified, uses config file)
         #[arg(value_enum)]
         shells: Vec<Shell>,
     },
-    /// Show or inspect configuration (requires config)
+    /// Show or inspect configuration
     Config {
         #[command(subcommand)]
         action: ConfigAction,
     },
-    /// Show source file dependencies (requires config, except 'list')
+    /// Show source file dependencies
     Deps {
         #[command(subcommand)]
         action: DepsAction,
     },
     /// Check build environment (requires config)
     Doctor,
-    /// Display the build dependency graph (requires config)
+    /// Display the build dependency graph
     Graph {
         #[command(subcommand)]
         action: GraphAction,
     },
-    /// Show project information (requires config)
+    /// Show project information
     Info {
         #[command(subcommand)]
         action: InfoAction,
     },
-    /// Initialize a new rsconstruct project in the current directory (no config needed)
+    /// Initialize a new rsconstruct project (no config needed)
     Init,
-    /// Manage processors (some subcommands work without config)
+    /// Manage processors
     Processors {
         #[command(subcommand)]
         action: ProcessorAction,
@@ -240,7 +240,7 @@ pub enum Commands {
         #[arg(long, default_value = "56286")]
         salary: u64,
     },
-    /// Smart config manipulation commands (requires config)
+    /// Smart config manipulation commands
     Smart {
         #[command(subcommand)]
         action: SmartAction,
@@ -251,17 +251,17 @@ pub enum Commands {
         #[arg(long)]
         breakdown: bool,
     },
-    /// Manage term checking and fixing in markdown files (requires config)
+    /// Manage term checking and fixing in markdown files
     Terms {
         #[command(subcommand)]
         action: TermsAction,
     },
-    /// Search and query frontmatter tags from markdown files (requires config)
+    /// Search and query frontmatter tags from markdown files
     Tags {
         #[command(subcommand)]
         action: TagsAction,
     },
-    /// Manage external tool dependencies (works with or without config)
+    /// Manage external tool dependencies
     Tools {
         #[command(subcommand)]
         action: ToolsAction,
@@ -275,7 +275,7 @@ pub enum Commands {
         #[command(flatten)]
         shared: SharedBuildArgs,
     },
-    /// Manage the web request cache (no config needed)
+    /// Manage the web request cache
     #[command(name = "webcache")]
     WebCache {
         #[command(subcommand)]
@@ -285,73 +285,73 @@ pub enum Commands {
 
 #[derive(Subcommand)]
 pub enum SmartAction {
-    /// Disable all processors in rsconstruct.toml (so you can enable them one by one)
+    /// Disable all processors in rsconstruct.toml (no config needed)
     DisableAll,
-    /// Enable all processors in rsconstruct.toml (remove enabled = false from all)
+    /// Enable all processors in rsconstruct.toml (no config needed)
     EnableAll,
-    /// Enable only processors whose files are detected in the project
+    /// Enable only processors whose files are detected in the project (requires config)
     EnableDetected,
-    /// Disable a single processor in rsconstruct.toml
+    /// Disable a single processor in rsconstruct.toml (no config needed)
     Disable {
         /// Processor name
         name: String,
     },
-    /// Enable a single processor in rsconstruct.toml
+    /// Enable a single processor in rsconstruct.toml (no config needed)
     Enable {
         /// Processor name
         name: String,
     },
-    /// Disable all, then enable only detected processors (clean minimal config)
+    /// Disable all, then enable only detected processors (requires config)
     Minimal,
-    /// Remove all [processor.*] sections, returning to pure defaults
+    /// Remove all [processor.*] sections, returning to pure defaults (no config needed)
     Reset,
-    /// Auto-detect relevant processors and add them to rsconstruct.toml
+    /// Auto-detect relevant processors and add them to rsconstruct.toml (requires config)
     Auto,
-    /// Enable only processors whose files are detected and tools are installed
+    /// Enable only processors whose files are detected and tools are installed (requires config)
     EnableIfAvailable,
-    /// Disable all, then enable only the listed processors
+    /// Disable all, then enable only the listed processors (no config needed)
     Only {
         /// Processor names to enable
         #[arg(required = true)]
         names: Vec<String>,
     },
-    /// Remove processors from rsconstruct.toml that don't match any files
+    /// Remove processors from rsconstruct.toml that don't match any files (requires config)
     RemoveNoFileProcessors,
 }
 
 #[derive(Subcommand)]
 pub enum InfoAction {
-    /// Show source file counts by extension
+    /// Show source file counts by extension (requires config)
     Source,
 }
 
 #[derive(Subcommand)]
 pub enum GraphAction {
-    /// Print the dependency graph to stdout
+    /// Print the dependency graph to stdout (requires config)
     Show {
         /// Output format
         #[arg(short, long, value_enum, default_value = "svg")]
         format: GraphFormat,
     },
-    /// Open the dependency graph in a viewer
+    /// Open the dependency graph in a viewer (requires config)
     View {
         /// Viewer to use
         #[arg(long, value_enum, default_value = "svg")]
         viewer: GraphViewer,
     },
-    /// Show graph statistics (products, processors, dependencies)
+    /// Show graph statistics (requires config)
     Stats,
 }
 
 #[derive(Subcommand)]
 pub enum CleanAction {
-    /// Remove build output files (preserves cache) [default]
+    /// Remove build output files, preserves cache (requires config) [default]
     Outputs,
-    /// Remove all build outputs and cache directories (.rsconstruct/ and out/)
+    /// Remove all build outputs and cache directories (requires config)
     All,
-    /// Hard clean using git clean (requires git repository)
+    /// Hard clean using git clean (requires config)
     Git,
-    /// Remove files not tracked by git and not known as RSConstruct build outputs
+    /// Remove files not tracked by git and not known as build outputs (requires config)
     Unknown {
         /// Show what would be removed without actually deleting
         #[arg(long)]
@@ -364,53 +364,53 @@ pub enum CleanAction {
 
 #[derive(Subcommand)]
 pub enum CacheAction {
-    /// Clear the entire cache
+    /// Clear the entire cache (no config needed)
     Clear,
-    /// Show cache size
+    /// Show cache size (requires config)
     Size,
-    /// Remove unreferenced objects from cache
+    /// Remove unreferenced objects from cache (requires config)
     Trim,
-    /// Remove stale index entries not matching any current product
+    /// Remove stale index entries not matching any current product (requires config)
     RemoveStale,
-    /// List all cache entries and their status
+    /// List all cache entries and their status (requires config)
     List,
-    /// Show which cache entries are stale vs current
+    /// Show which cache entries are stale vs current (requires config)
     Stale,
-    /// Show per-processor cache statistics
+    /// Show per-processor cache statistics (requires config)
     Stats,
 }
 
 #[derive(Subcommand)]
 pub enum WebCacheAction {
-    /// Clear the web cache
+    /// Clear the web cache (no config needed)
     Clear,
-    /// Show web cache statistics (size, entry count)
+    /// Show web cache statistics (no config needed)
     Stats,
-    /// List all cached entries
+    /// List all cached entries (no config needed)
     List,
 }
 
 #[derive(Subcommand)]
 pub enum ConfigAction {
-    /// Show the active configuration (defaults merged with rsconstruct.toml overrides)
+    /// Show the active configuration (requires config)
     Show,
-    /// Show the default configuration (without rsconstruct.toml overrides)
+    /// Show the default configuration (requires config)
     ShowDefault,
-    /// Validate the configuration for errors and warnings
+    /// Validate the configuration for errors and warnings (requires config)
     Validate,
 }
 
 #[derive(Subcommand)]
 pub enum ProcessorAction {
-    /// List available processors with status and descriptions
+    /// List available processors with status and descriptions (no config needed with --all)
     List {
         /// Show all built-in processors, not just those enabled in the project
         #[arg(short, long)]
         all: bool,
     },
-    /// Show which processors are enabled and detected in the current project
+    /// Show which processors are enabled and detected (requires config)
     Used,
-    /// Show source and target files for each processor
+    /// Show source and target files for each processor (requires config)
     Files {
         /// Processor name (omit to show all enabled processors)
         name: Option<String>,
@@ -418,7 +418,7 @@ pub enum ProcessorAction {
         #[arg(long)]
         headers: bool,
     },
-    /// Show resolved configuration for a processor
+    /// Show resolved configuration for a processor (uses config if available)
     Config {
         /// Processor name (omit to show all enabled processors)
         name: Option<String>,
@@ -426,14 +426,14 @@ pub enum ProcessorAction {
         #[arg(short, long)]
         diff: bool,
     },
-    /// Show default configuration for a processor
+    /// Show default configuration for a processor (no config needed)
     Defconfig {
         /// Processor name
         name: String,
     },
-    /// Show the current processor allowlist (for use in rsconstruct.toml [processor] enabled)
+    /// Show the current processor allowlist (requires config)
     Allowlist,
-    /// Show inter-processor dependencies
+    /// Show inter-processor dependencies (requires config)
     Graph {
         /// Output format
         #[arg(short, long, value_enum, default_value = "text")]
@@ -443,7 +443,7 @@ pub enum ProcessorAction {
 
 #[derive(Subcommand)]
 pub enum ToolsAction {
-    /// List all required external tools
+    /// List all required external tools (uses config if available)
     List {
         /// Include tools from disabled processors too
         #[arg(short, long)]
@@ -452,11 +452,11 @@ pub enum ToolsAction {
         #[arg(short = 'M', long)]
         methods: bool,
     },
-    /// Verify tool versions against .tools.versions lock file
+    /// Verify tool versions against .tools.versions lock file (uses config if available)
     Check,
-    /// Lock tool versions to .tools.versions (creates or updates the lock file)
+    /// Lock tool versions to .tools.versions (uses config if available)
     Lock,
-    /// Install missing external tools (all missing, or a specific tool by name)
+    /// Install missing external tools (uses config if available)
     Install {
         /// Tool name to install (omit to install missing tools for enabled processors)
         name: Option<String>,
@@ -464,15 +464,15 @@ pub enum ToolsAction {
         #[arg(short, long)]
         yes: bool,
     },
-    /// Install declared dependencies from the [dependencies] config section
+    /// Install declared dependencies from the [dependencies] config section (uses config if available)
     InstallDeps {
         /// Skip confirmation prompt
         #[arg(short, long)]
         yes: bool,
     },
-    /// Show tool availability statistics and language runtime breakdown
+    /// Show tool availability statistics (uses config if available)
     Stats,
-    /// Show tool-to-processor dependency graph
+    /// Show tool-to-processor dependency graph (uses config if available)
     Graph {
         /// Output format
         #[arg(short, long, value_enum, default_value = "dot")]
@@ -485,25 +485,25 @@ pub enum ToolsAction {
 
 #[derive(Subcommand)]
 pub enum DepsAction {
-    /// List all available dependency analyzers
+    /// List all available dependency analyzers (no config needed)
     List,
-    /// Show which dependency analyzers are enabled and detected in the current project
+    /// Show which dependency analyzers are enabled and detected (requires config)
     Used,
-    /// Run dependency analysis without building (scan headers, imports, etc.)
+    /// Run dependency analysis without building (requires config)
     Build,
-    /// Show analyzer configuration
+    /// Show analyzer configuration (requires config)
     Config {
         /// Analyzer name (e.g., "cpp", "python"); omit to show all
         name: Option<String>,
     },
-    /// Show cached dependencies
+    /// Show cached dependencies (requires config)
     Show {
         #[command(subcommand)]
         filter: DepsShowFilter,
     },
-    /// Show statistics about cached dependencies by analyzer
+    /// Show statistics about cached dependencies by analyzer (requires config)
     Stats,
-    /// Clear the dependency cache (all analyzers, or specific one)
+    /// Clear the dependency cache (requires config)
     Clean {
         /// Only clear entries from this analyzer (e.g., "cpp", "python")
         #[arg(long)]
@@ -531,24 +531,24 @@ pub enum DepsShowFilter {
 
 #[derive(Subcommand)]
 pub enum TermsAction {
-    /// Auto-fix: add backticks to terms (optionally remove backticks from non-terms)
+    /// Auto-fix: add backticks to terms (requires config)
     Fix {
         /// Also remove backticks from non-terms
         #[arg(long, default_value_t = false)]
         remove_non_terms: bool,
     },
-    /// Merge terms from another project's terms directory into the current one
+    /// Merge terms from another project's terms directory (requires config)
     Merge {
         /// Path to the other project's terms directory
         path: String,
     },
-    /// Show term file and term count statistics
+    /// Show term file and term count statistics (requires config)
     Stats,
 }
 
 #[derive(Subcommand)]
 pub enum TagsAction {
-    /// List files matching given tags (AND by default, --or for OR)
+    /// List files matching given tags, AND by default, --or for OR (requires config)
     Files {
         /// Tags: bare values (e.g. "docker") or key:value (e.g. "level:advanced")
         #[arg(required = true)]
@@ -557,7 +557,7 @@ pub enum TagsAction {
         #[arg(long, short)]
         or: bool,
     },
-    /// Search for tags containing a substring
+    /// Search for tags containing a substring (requires config)
     Grep {
         /// Text to search for in tag names
         text: String,
@@ -565,51 +565,51 @@ pub enum TagsAction {
         #[arg(short, long)]
         ignore_case: bool,
     },
-    /// List all unique tags
+    /// List all unique tags (requires config)
     List,
-    /// Show each tag with its file count, sorted by frequency
+    /// Show each tag with its file count, sorted by frequency (requires config)
     Count,
-    /// Show tags grouped by prefix/category
+    /// Show tags grouped by prefix/category (requires config)
     Tree,
-    /// Show statistics about the tags database
+    /// Show statistics about the tags database (requires config)
     Stats,
-    /// List all tags for a specific file
+    /// List all tags for a specific file (requires config)
     ForFile {
         /// Path to the file
         path: String,
     },
-    /// Show the raw frontmatter for a specific file
+    /// Show the raw frontmatter for a specific file (requires config)
     Frontmatter {
         /// Path to the file
         path: String,
     },
-    /// List tags in the allowlist (tags_dir) that are not used by any file
+    /// List tags in the allowlist (tags_dir) that are not used by any file (requires config)
     Unused {
         /// Exit with error if unused tags are found (useful for CI)
         #[arg(long)]
         strict: bool,
     },
-    /// Validate tags against the allowlist (tags_dir) without building
+    /// Validate tags against the allowlist without building (requires config)
     Validate,
-    /// Show a coverage matrix of tag categories per file
+    /// Show a coverage matrix of tag categories per file (requires config)
     Matrix,
-    /// Show percentage of files that have each tag category
+    /// Show percentage of files that have each tag category (requires config)
     Coverage,
-    /// Find markdown files with no tags at all
+    /// Find markdown files with no tags at all (requires config)
     Orphans,
-    /// Run all tag validations without building (lint pass)
+    /// Run all tag validations without building (requires config)
     Check,
-    /// Suggest tags for a file based on similarity to other tagged files
+    /// Suggest tags for a file based on similarity (requires config)
     Suggest {
         /// Path to the file
         path: String,
     },
-    /// Merge tags from another project's tags directory into the current one
+    /// Merge tags from another project's tags directory (requires config)
     Merge {
         /// Path to the other project's tags directory
         path: String,
     },
-    /// Scan source files and add missing tags back to the tag collection
+    /// Scan source files and add missing tags back to the tag collection (requires config)
     Collect,
 }
 

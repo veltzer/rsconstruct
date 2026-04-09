@@ -29,7 +29,7 @@ rsconstruct -I all build                      # Show all input files (including 
 
 ## `rsconstruct build`
 
-**Requires config.**
+**Requires config.** (no subcommands)
 
 Incremental build — only rebuilds products whose inputs have changed.
 
@@ -102,9 +102,14 @@ The `--stop-after` flag allows stopping the build at a specific phase:
 
 ## `rsconstruct clean`
 
-**Requires config.**
-
 Clean build artifacts. When run without a subcommand, removes build output files (same as `rsconstruct clean outputs`).
+
+| Subcommand | Config required? |
+|------------|-----------------|
+| `outputs` | Yes |
+| `all` | Yes |
+| `git` | Yes |
+| `unknown` | Yes |
 
 ```bash
 rsconstruct clean                # Remove build output files (preserves cache) [default]
@@ -118,7 +123,7 @@ rsconstruct clean unknown --no-gitignore # Include gitignored files as unknown
 
 ## `rsconstruct status`
 
-**Requires config.**
+**Requires config.** (no subcommands)
 
 Show product status — whether each product is up-to-date, stale, or restorable from cache.
 
@@ -130,9 +135,7 @@ rsconstruct status --breakdown         # Show source file counts by processor an
 
 ## `rsconstruct smart auto`
 
-**Requires config.**
-
-Auto-detect relevant processors and add them to `rsconstruct.toml`. Scans the project for files matching each processor's conventions and checks that the required tools are installed. Only adds new sections — existing processor sections are preserved.
+Auto-detect relevant processors and add them to `rsconstruct.toml`. Scans the project for files matching each processor's conventions and checks that the required tools are installed. Only adds new sections — existing processor sections are preserved. **Requires config.**
 
 ```bash
 rsconstruct smart auto
@@ -146,7 +149,7 @@ Added 3 processor(s): pylint, ruff, shellcheck
 
 ## `rsconstruct init`
 
-**No config needed.**
+**No config needed.** (no subcommands)
 
 Initialize a new rsconstruct project in the current directory.
 
@@ -156,7 +159,7 @@ rsconstruct init
 
 ## `rsconstruct watch`
 
-**Requires config.**
+**Requires config.** (no subcommands)
 
 Watch source files and auto-rebuild on changes.
 
@@ -171,9 +174,13 @@ The watch command accepts the same build flags as `rsconstruct build` (e.g., `--
 
 ## `rsconstruct graph`
 
-**Requires config.**
-
 Display the build dependency graph.
+
+| Subcommand | Config required? |
+|------------|-----------------|
+| `show` | Yes |
+| `view` | Yes |
+| `stats` | Yes |
 
 ```bash
 rsconstruct graph show                    # Default SVG format
@@ -190,9 +197,17 @@ rsconstruct graph stats                   # Show graph statistics (products, pro
 
 ## `rsconstruct cache`
 
-**Requires config** (except `cache clear` which works without).
-
 Manage the build cache.
+
+| Subcommand | Config required? |
+|------------|-----------------|
+| `clear` | No |
+| `size` | Yes |
+| `trim` | Yes |
+| `list` | Yes |
+| `stale` | Yes |
+| `stats` | Yes |
+| `remove-stale` | Yes |
 
 ```bash
 rsconstruct cache clear         # Clear the entire cache
@@ -206,9 +221,13 @@ rsconstruct cache remove-stale  # Remove stale index entries not matching any cu
 
 ## `rsconstruct webcache`
 
-**No config needed.**
-
 Manage the web request cache. Schemas fetched by `iyamlschema` (and any future processors that fetch URLs) are cached in `.rsconstruct/webcache.redb`.
+
+| Subcommand | Config required? |
+|------------|-----------------|
+| `clear` | No |
+| `stats` | No |
+| `list` | No |
 
 ```bash
 rsconstruct webcache clear   # Clear all cached web responses
@@ -218,9 +237,17 @@ rsconstruct webcache list    # List all cached URLs and their sizes
 
 ## `rsconstruct deps`
 
-**`list`: no config needed. Other subcommands require config.**
-
 Show or manage source file dependencies from the dependency cache. The cache is populated during builds when dependency analyzers scan source files (e.g., C/C++ headers, Python imports).
+
+| Subcommand | Config required? |
+|------------|-----------------|
+| `list` | No |
+| `used` | Yes |
+| `build` | Yes |
+| `config` | Yes |
+| `show` | Yes |
+| `stats` | Yes |
+| `clean` | Yes |
 
 ```bash
 rsconstruct deps list                          # List all available dependency analyzers
@@ -267,9 +294,13 @@ This command is useful for:
 
 ## `rsconstruct config`
 
-**Requires config.**
-
 Show or inspect the configuration.
+
+| Subcommand | Config required? |
+|------------|-----------------|
+| `show` | Yes |
+| `show-default` | Yes |
+| `validate` | Yes |
 
 ```bash
 rsconstruct config show           # Show the active configuration (defaults merged with rsconstruct.toml)
@@ -279,9 +310,21 @@ rsconstruct config validate       # Validate the configuration for errors and wa
 
 ## `rsconstruct smart`
 
-**Requires config.**
-
 Smart config manipulation commands for managing processor sections in `rsconstruct.toml`.
+
+| Subcommand | Config required? |
+|------------|-----------------|
+| `disable-all` | No |
+| `enable-all` | No |
+| `enable` | No |
+| `disable` | No |
+| `only` | No |
+| `reset` | No |
+| `enable-detected` | Yes |
+| `enable-if-available` | Yes |
+| `minimal` | Yes |
+| `auto` | Yes |
+| `remove-no-file-processors` | Yes |
 
 ```bash
 rsconstruct smart enable pylint          # Add [processor.pylint] section
@@ -298,7 +341,16 @@ rsconstruct smart remove-no-file-processors  # Remove processors that don't matc
 
 ## `rsconstruct processors`
 
-**`list --all` and `defconfig`: no config needed. Other subcommands require config.**
+| Subcommand | Config required? |
+|------------|-----------------|
+| `list --all` | No |
+| `list` | Yes (without `--all`) |
+| `defconfig` | No |
+| `config` | Uses config if available |
+| `used` | Yes |
+| `files` | Yes |
+| `allowlist` | Yes |
+| `graph` | Yes |
 
 ```bash
 rsconstruct processors list              # List declared processors and descriptions
@@ -318,9 +370,17 @@ rsconstruct processors files --headers   # Show files with processor headers
 
 ## `rsconstruct tools`
 
-**Works with or without config.** With config, shows tools for declared processors. Without config, shows tools for all built-in processors.
+List or check external tools required by declared processors. All subcommands use config if available; without config, they operate on all built-in processors.
 
-List or check external tools required by declared processors.
+| Subcommand | Config required? |
+|------------|-----------------|
+| `list` | Uses config if available |
+| `check` | Uses config if available |
+| `lock` | Uses config if available |
+| `install` | Uses config if available |
+| `install-deps` | Uses config if available |
+| `stats` | Uses config if available |
+| `graph` | Uses config if available |
 
 ```bash
 rsconstruct tools list              # List required tools and which processor needs them
@@ -341,9 +401,27 @@ rsconstruct tools graph --view      # Open tool graph in browser
 
 ## `rsconstruct tags`
 
-**Requires config.**
-
 Search and query frontmatter tags from markdown files.
+
+| Subcommand | Config required? |
+|------------|-----------------|
+| `list` | Yes |
+| `count` | Yes |
+| `tree` | Yes |
+| `stats` | Yes |
+| `files` | Yes |
+| `grep` | Yes |
+| `for-file` | Yes |
+| `frontmatter` | Yes |
+| `unused` | Yes |
+| `validate` | Yes |
+| `matrix` | Yes |
+| `coverage` | Yes |
+| `orphans` | Yes |
+| `check` | Yes |
+| `suggest` | Yes |
+| `merge` | Yes |
+| `collect` | Yes |
 
 ```bash
 rsconstruct tags list                        # List all unique tags
@@ -371,9 +449,7 @@ rsconstruct tags collect                     # Add missing tags from source file
 
 ## `rsconstruct complete`
 
-**No config needed** (when shell is specified as argument; uses config if no argument given).
-
-Generate shell completions.
+Generate shell completions. No config needed when shell is specified as argument; uses config to read default shells if no argument given.
 
 ```bash
 rsconstruct complete bash    # Generate bash completions
@@ -383,9 +459,13 @@ rsconstruct complete fish    # Generate fish completions
 
 ## `rsconstruct terms`
 
-**Requires config.**
-
 Manage term checking and fixing in markdown files.
+
+| Subcommand | Config required? |
+|------------|-----------------|
+| `fix` | Yes |
+| `merge` | Yes |
+| `stats` | Yes |
 
 ### `rsconstruct terms fix`
 
@@ -406,7 +486,7 @@ rsconstruct terms merge ../other-project/terms
 
 ## `rsconstruct doctor`
 
-**Requires config.**
+**Requires config.** (no subcommands)
 
 Diagnose build environment — checks config, tools, and versions.
 
@@ -416,9 +496,11 @@ rsconstruct doctor
 
 ## `rsconstruct info`
 
-**Requires config.**
-
 Show project information.
+
+| Subcommand | Config required? |
+|------------|-----------------|
+| `source` | Yes |
 
 ```bash
 rsconstruct info source          # Show source file counts by extension
@@ -426,7 +508,7 @@ rsconstruct info source          # Show source file counts by extension
 
 ## `rsconstruct sloc`
 
-**No config needed.**
+**No config needed.** (no subcommands)
 
 Count source lines of code (SLOC) by language, with optional COCOMO effort/cost estimation.
 
@@ -438,7 +520,7 @@ rsconstruct sloc --cocomo --salary 80000  # Custom annual salary for COCOMO
 
 ## `rsconstruct version`
 
-**No config needed.**
+**No config needed.** (no subcommands)
 
 Print version information.
 
