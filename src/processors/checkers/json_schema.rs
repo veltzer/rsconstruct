@@ -95,11 +95,43 @@ fn check_property_ordering(value: &Value, path: &str, errors: &mut Vec<String>) 
     }
 }
 
-impl_checker!(JsonSchemaProcessor,
-    config: config,
-    description: "Validate propertyOrdering in JSON schema files",
-    name: crate::processors::names::JSON_SCHEMA,
-    execute: execute_product,
-    config_json: true,
-    native: true,
-);
+impl crate::processors::ProductDiscovery for JsonSchemaProcessor {
+    fn description(&self) -> &str {
+        "Validate propertyOrdering in JSON schema files"
+    }
+
+    fn auto_detect(&self, file_index: &crate::file_index::FileIndex) -> bool {
+        crate::processors::checker_auto_detect(&self.config.scan, file_index)
+    }
+
+    fn required_tools(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    fn discover(
+        &self,
+        graph: &mut crate::graph::BuildGraph,
+        file_index: &crate::file_index::FileIndex,
+        instance_name: &str,
+    ) -> anyhow::Result<()> {
+        crate::processors::checker_discover(
+            graph, &self.config.scan, file_index,
+            &self.config.dep_inputs, &self.config.dep_auto,
+            &self.config, instance_name,
+        )
+    }
+
+    fn execute(&self, product: &crate::graph::Product) -> anyhow::Result<()> {
+        self.execute_product(product)
+    }
+
+    fn config_json(&self) -> Option<String> {
+        serde_json::to_string(&self.config).ok()
+    }
+
+    fn is_native(&self) -> bool { true }
+
+    fn max_jobs(&self) -> Option<usize> {
+        self.config.max_jobs
+    }
+}

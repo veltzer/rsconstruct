@@ -619,7 +619,6 @@ pub(crate) fn discover_checker_products(
 
 /// Standard checker discover: merge dep_inputs + dep_auto, then call discover_checker_products.
 /// Used by all checkers that follow the standard discover pattern.
-#[allow(dead_code)] // Will be used when impl_checker! is removed
 pub(crate) fn checker_discover(
     graph: &mut BuildGraph,
     scan: &crate::config::ScanConfig,
@@ -637,13 +636,11 @@ pub(crate) fn checker_discover(
 }
 
 /// Standard checker auto_detect: check if scan finds any files.
-#[allow(dead_code)]
 pub(crate) fn checker_auto_detect(scan: &crate::config::ScanConfig, file_index: &FileIndex) -> bool {
     !file_index.scan(scan, true).is_empty()
 }
 
 /// Standard checker auto_detect with scan_root guard.
-#[allow(dead_code)]
 pub(crate) fn checker_auto_detect_with_scan_root(scan: &crate::config::ScanConfig, file_index: &FileIndex) -> bool {
     scan_root_valid(scan) && !file_index.scan(scan, true).is_empty()
 }

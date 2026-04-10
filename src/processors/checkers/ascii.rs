@@ -54,12 +54,49 @@ impl AsciiProcessor {
     }
 }
 
-impl_checker!(AsciiProcessor,
-    config: config,
-    description: "Check files for non-ASCII characters",
-    name: crate::processors::names::ASCII,
-    execute: execute_product,
-    config_json: true,
-    native: true,
-    batch: check_files,
-);
+impl crate::processors::ProductDiscovery for AsciiProcessor {
+    fn description(&self) -> &str {
+        "Check files for non-ASCII characters"
+    }
+
+    fn auto_detect(&self, file_index: &crate::file_index::FileIndex) -> bool {
+        crate::processors::checker_auto_detect(&self.config.scan, file_index)
+    }
+
+    fn required_tools(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    fn discover(
+        &self,
+        graph: &mut crate::graph::BuildGraph,
+        file_index: &crate::file_index::FileIndex,
+        instance_name: &str,
+    ) -> anyhow::Result<()> {
+        crate::processors::checker_discover(
+            graph, &self.config.scan, file_index,
+            &self.config.dep_inputs, &self.config.dep_auto,
+            &self.config, instance_name,
+        )
+    }
+
+    fn execute(&self, product: &crate::graph::Product) -> anyhow::Result<()> {
+        self.execute_product(product)
+    }
+
+    fn config_json(&self) -> Option<String> {
+        serde_json::to_string(&self.config).ok()
+    }
+
+    fn is_native(&self) -> bool { true }
+
+    fn supports_batch(&self) -> bool { self.config.batch }
+
+    fn execute_batch(&self, products: &[&crate::graph::Product]) -> Vec<anyhow::Result<()>> {
+        crate::processors::execute_checker_batch(products, |files| self.check_files(files))
+    }
+
+    fn max_jobs(&self) -> Option<usize> {
+        self.config.max_jobs
+    }
+}
