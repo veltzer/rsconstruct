@@ -54,6 +54,63 @@ pub fn list_processors_no_config(verbose: bool) -> Result<()> {
     Ok(())
 }
 
+/// Print a table mapping file extensions to the recommended processor for each.
+pub fn list_recommendations() {
+    // Each entry: (extension, processor, reason)
+    let recommendations: &[(&str, &str, &str)] = &[
+        (".py",          "ruff",         "fastest Python linter, replaces flake8/pylint"),
+        (".c",           "cppcheck",     "best static analysis for C"),
+        (".cc",          "cppcheck",     "best static analysis for C++"),
+        (".h",           "cppcheck",     "best static analysis for C/C++ headers"),
+        (".hh",          "cppcheck",     "best static analysis for C++ headers"),
+        (".rs",          "clippy",       "official Rust linter"),
+        (".js",          "eslint",       "industry standard JS/TS linter"),
+        (".jsx",         "eslint",       "industry standard JS/TS linter"),
+        (".ts",          "eslint",       "industry standard JS/TS linter"),
+        (".tsx",         "eslint",       "industry standard JS/TS linter"),
+        (".html",        "tidy",         "most thorough HTML validator"),
+        (".htm",         "tidy",         "most thorough HTML validator"),
+        (".css",         "stylelint",    "industry standard CSS linter"),
+        (".scss",        "stylelint",    "industry standard CSS/SCSS linter"),
+        (".sass",        "stylelint",    "industry standard CSS/Sass linter"),
+        (".md",          "markdownlint", "comprehensive markdown linting"),
+        (".yml",         "yamllint",     "best YAML syntax and style checker"),
+        (".yaml",        "yamllint",     "best YAML syntax and style checker"),
+        (".json",        "jsonlint",     "JSON syntax validator"),
+        (".toml",        "taplo",        "TOML formatter and validator"),
+        (".xml",         "xmllint",      "XML/DTD validator"),
+        (".svg",         "xmllint",      "SVG is XML — xmllint validates structure"),
+        (".java",        "checkstyle",   "Java style and static analysis"),
+        (".sh",          "shellcheck",   "best shell script analyzer"),
+        (".bash",        "shellcheck",   "best shell script analyzer"),
+        (".lua",         "luacheck",     "Lua static analyzer"),
+        (".pl",          "perlcritic",   "Perl best-practice checker"),
+        (".pm",          "perlcritic",   "Perl module best-practice checker"),
+        (".php",         "php_lint",     "PHP syntax checker"),
+        (".tex",         "pdflatex",     "compile and validate LaTeX"),
+        (".proto",       "protobuf",     "Protocol Buffer compiler"),
+        (".mmd",         "mermaid",      "render Mermaid diagrams"),
+        (".drawio",      "drawio",       "export draw.io diagrams"),
+        (".tera",        "tera",         "Tera template renderer"),
+        (".j2",          "jinja2",       "Jinja2 template renderer"),
+        (".mako",        "mako",         "Mako template renderer"),
+        ("Dockerfile",   "hadolint",     "best Dockerfile linter"),
+        ("Makefile",     "make",         "run make to validate"),
+        ("Cargo.toml",   "cargo",        "build and validate Rust project"),
+        ("book.toml",    "mdbook",       "build mdBook documentation"),
+        ("package.json", "npm",          "run npm to validate Node project"),
+        ("Gemfile",      "gem",          "run bundler to validate Ruby project"),
+        ("conf.py",      "sphinx",       "build Sphinx documentation"),
+    ];
+
+    let mut builder = TableBuilder::new();
+    builder.push_record(["Extension / File", "Processor", "Reason"]);
+    for (ext, proc, reason) in recommendations {
+        builder.push_record([*ext, *proc, *reason]);
+    }
+    color::print_table(builder.build());
+}
+
 /// Return a JSON value containing only fields that differ from the default config.
 fn config_diff(name: &str, current: &serde_json::Value) -> serde_json::Value {
     let default_json = ProcessorConfig::defconfig_json(name);
@@ -143,7 +200,7 @@ impl Builder {
         let proc_names = sorted_keys(&processors);
 
         match action {
-            ProcessorAction::List => unreachable!("List is handled before Builder is constructed"),
+            ProcessorAction::List | ProcessorAction::Recommend => unreachable!("handled before Builder is constructed"),
             ProcessorAction::Used => {
                 let mut builder = TableBuilder::new();
                 builder.push_record(["Name", "Type", "Detected", "Description"]);
