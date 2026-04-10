@@ -352,7 +352,7 @@ impl Builder {
                 };
                 builder.push_record([proc_name.to_string(), format!("{} files", total), breakdown_str]);
             }
-            let table = builder.build().with(Style::modern()).to_string();
+            let table = builder.build().with(Style::modern_rounded()).to_string();
             println!("{table}");
         }
 
@@ -393,7 +393,7 @@ impl Builder {
             for (ext, count) in &ext_counts {
                 builder.push_record([format!(".{}", ext), count.to_string()]);
             }
-            let table = builder.build().with(Style::modern()).to_string();
+            let table = builder.build().with(Style::modern_rounded()).to_string();
             println!("{table}");
         }
         Ok(())
@@ -492,7 +492,7 @@ impl Builder {
             counts[0].to_string(), counts[1].to_string(), counts[2].to_string(), counts[3].to_string(),
             String::new(),
         ]);
-        let table = builder.build().with(Style::modern()).to_string();
+        let table = builder.build().with(Style::modern_rounded()).to_string();
         println!("{table}");
     }
 }
