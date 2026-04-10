@@ -98,8 +98,12 @@ macro_rules! gen_processor_dispatch {
             match type_name {
                 $(
                     stringify!($field) => {
-                        let mut cfg: $config_type = toml::from_str(&toml::to_string(config_toml)?)?;
-                        cfg.scan.resolve_from::<$config_type>();
+                        let mut config_val = config_toml.clone();
+                        apply_processor_defaults(stringify!($field), &mut config_val);
+                        let mut cfg: $config_type = toml::from_str(&toml::to_string(&config_val)?)?;
+                        if let Some(defaults) = scan_defaults_for(stringify!($field)) {
+                            cfg.scan.resolve_with(&defaults);
+                        }
                         gen_processor_dispatch!(@construct $proc_type, cfg)
                     }
                 )*
@@ -126,8 +130,12 @@ macro_rules! gen_processor_dispatch {
     // Register a processor with default config.
     (@register_default $processors:ident, $const_name:ident, $field:ident, $config_type:ty, $proc_type:ident) => {
         {
-            let mut cfg = <$config_type>::default();
-            cfg.scan.resolve_from::<$config_type>();
+            let mut config_val = toml::Value::Table(toml::map::Map::new());
+            apply_processor_defaults(stringify!($field), &mut config_val);
+            let mut cfg: $config_type = toml::from_str(&toml::to_string(&config_val).unwrap()).unwrap();
+            if let Some(defaults) = scan_defaults_for(stringify!($field)) {
+                cfg.scan.resolve_with(&defaults);
+            }
             let proc: proc_mod::$proc_type = proc_mod::$proc_type::new(cfg);
             Builder::register(&mut $processors, proc_names::$const_name, proc);
         }

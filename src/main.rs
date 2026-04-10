@@ -378,7 +378,9 @@ fn run() -> Result<()> {
                 .transpose()
                 .context("Failed to parse terms config")?
                 .unwrap_or_default();
-            terms_config.scan.resolve_from::<config::TermsConfig>();
+            if let Some(defaults) = config::scan_defaults_for("terms") {
+                terms_config.scan.resolve_with(&defaults);
+            }
             match action {
                 cli::TermsAction::Fix { remove_non_terms } => {
                     processors::terms::fix_all(&terms_config, remove_non_terms)?;

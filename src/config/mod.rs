@@ -49,16 +49,20 @@ pub(crate) trait KnownFields {
     }
 }
 
-/// Trait providing default scan configuration for a processor config struct.
-/// Each config struct implements this to declare its default src_dirs, extensions, and exclude dirs.
-/// This is the single source of truth — no separate registry tuple needed.
-pub(crate) trait ScanDefaults {
-    /// Default directories to scan. Empty slice means "project root" (user must set src_dirs).
-    fn default_src_dirs() -> &'static [&'static str] { &[] }
-    /// Default file extensions to match.
-    fn default_src_extensions() -> &'static [&'static str] { &[] }
-    /// Default directory segments to exclude from scanning.
-    fn default_src_exclude_dirs() -> &'static [&'static str] { &[] }
+/// Default scan configuration for a processor, as plain data.
+/// Used to resolve None fields in ScanConfig after TOML deserialization.
+pub(crate) struct ScanDefaultsData {
+    pub src_dirs: &'static [&'static str],
+    pub src_extensions: &'static [&'static str],
+    pub src_exclude_dirs: &'static [&'static str],
+}
+
+/// Per-processor default values applied after TOML deserialization.
+pub(crate) struct ProcessorDefaults {
+    /// Default command binary name (for CheckerConfigWithCommand). Empty if not applicable.
+    pub command: &'static str,
+    /// Default dep_auto entries.
+    pub dep_auto: &'static [&'static str],
 }
 
 /// Validate dep_inputs paths exist and return them as PathBufs.
@@ -166,17 +170,30 @@ pub(crate) struct ScanConfig {
     pub src_files: Option<Vec<String>>,
 }
 
+impl Default for ScanConfig {
+    fn default() -> Self {
+        Self {
+            src_dirs: None,
+            src_extensions: None,
+            src_exclude_dirs: None,
+            src_exclude_files: None,
+            src_exclude_paths: None,
+            src_files: None,
+        }
+    }
+}
+
 impl ScanConfig {
-    /// Fill in None fields from the config struct's ScanDefaults.
-    pub(crate) fn resolve_from<T: ScanDefaults>(&mut self) {
+    /// Fill in None fields from scan defaults data.
+    pub(crate) fn resolve_with(&mut self, defaults: &ScanDefaultsData) {
         if self.src_dirs.is_none() {
-            self.src_dirs = Some(T::default_src_dirs().iter().map(|s| s.to_string()).collect());
+            self.src_dirs = Some(defaults.src_dirs.iter().map(|s| s.to_string()).collect());
         }
         if self.src_extensions.is_none() {
-            self.src_extensions = Some(T::default_src_extensions().iter().map(|s| s.to_string()).collect());
+            self.src_extensions = Some(defaults.src_extensions.iter().map(|s| s.to_string()).collect());
         }
         if self.src_exclude_dirs.is_none() {
-            self.src_exclude_dirs = Some(T::default_src_exclude_dirs().iter().map(|s| s.to_string()).collect());
+            self.src_exclude_dirs = Some(defaults.src_exclude_dirs.iter().map(|s| s.to_string()).collect());
         }
         if self.src_exclude_files.is_none() {
             self.src_exclude_files = Some(Vec::new());
@@ -186,25 +203,6 @@ impl ScanConfig {
         }
         if self.src_files.is_none() {
             self.src_files = Some(Vec::new());
-        }
-    }
-
-    /// Create a ScanConfig pre-populated from a ScanDefaults impl.
-    /// Used in Default impls so the struct's defaults match its ScanDefaults trait.
-    pub(crate) fn from_defaults<T: ScanDefaults>() -> Self {
-        Self {
-            src_dirs: {
-                let dirs = T::default_src_dirs();
-                if dirs.is_empty() { None } else { Some(dirs.iter().map(|s| s.to_string()).collect()) }
-            },
-            src_extensions: {
-                let exts = T::default_src_extensions();
-                if exts.is_empty() { None } else { Some(exts.iter().map(|s| s.to_string()).collect()) }
-            },
-            src_exclude_dirs: None,
-            src_exclude_files: None,
-            src_exclude_paths: None,
-            src_files: None,
         }
     }
 
@@ -239,11 +237,6 @@ impl ScanConfig {
     }
 }
 
-/// Exclude dir constants used by ScanDefaults impls.
-pub(crate) const CC_EXCLUDE_DIRS: &[&str] = &[];
-pub(crate) const ZSPELL_EXCLUDE_DIRS: &[&str] = &[];
-pub(crate) const MARKDOWN_EXCLUDE_DIRS: &[&str] = &[];
-pub(crate) const MAKE_CARGO_EXCLUDES: &[&str] = &[];
 
 const DEFAULT_PLUGINS_DIR: &str = "plugins";
 
@@ -463,13 +456,16 @@ macro_rules! gen_processor_config {
         }
 
 
-        /// Resolve scan defaults for an instance config in-place.
-        pub(crate) fn resolve_instance_scan_defaults(type_name: &str, value: &mut toml::Value) -> anyhow::Result<()> {
+        /// Resolve scan and processor defaults for an instance config in-place.
+        pub(crate) fn resolve_instance_defaults(type_name: &str, value: &mut toml::Value) -> anyhow::Result<()> {
             match type_name {
                 $(
                     stringify!($field) => {
+                        apply_processor_defaults(stringify!($field), value);
                         let mut cfg: $config_type = toml::from_str(&toml::to_string(value)?)?;
-                        cfg.scan.resolve_from::<$config_type>();
+                        if let Some(defaults) = scan_defaults_for(stringify!($field)) {
+                            cfg.scan.resolve_with(&defaults);
+                        }
                         *value = toml::Value::try_from(&cfg)?;
                         Ok(())
                     }
@@ -530,18 +526,19 @@ macro_rules! gen_processor_config {
             /// Return the default src_dirs for a builtin processor type, or None for Lua plugins.
             /// Returns `Some(&[])` for processors that default to scanning the project root.
             pub(crate) fn default_src_dirs_for(type_name: &str) -> Option<&'static [&'static str]> {
-                match type_name {
-                    $( stringify!($field) => Some(<$config_type as ScanDefaults>::default_src_dirs()), )*
-                    _ => None,
-                }
+                scan_defaults_for(type_name).map(|d| d.src_dirs)
             }
 
             /// Return the default config for a processor type as pretty JSON, or None if unknown.
             pub(crate) fn defconfig_json(type_name: &str) -> Option<String> {
                 let json: serde_json::Value = match type_name {
                     $( stringify!($field) => {
-                        let mut cfg = <$config_type>::default();
-                        cfg.scan.resolve_from::<$config_type>();
+                        let mut config_val = toml::Value::Table(toml::map::Map::new());
+                        apply_processor_defaults(stringify!($field), &mut config_val);
+                        let mut cfg: $config_type = toml::from_str(&toml::to_string(&config_val).ok()?).ok()?;
+                        if let Some(defaults) = scan_defaults_for(stringify!($field)) {
+                            cfg.scan.resolve_with(&defaults);
+                        }
                         serde_json::to_value(cfg).ok()?
                     }, )*
                     _ => return None,
@@ -552,6 +549,151 @@ macro_rules! gen_processor_config {
     };
 }
 for_each_processor!(gen_processor_config);
+
+/// Return scan defaults for a builtin processor type.
+pub(crate) fn scan_defaults_for(type_name: &str) -> Option<ScanDefaultsData> {
+    Some(match type_name {
+        "tera" => ScanDefaultsData { src_dirs: &["tera.templates"], src_extensions: &[".tera"], src_exclude_dirs: &[] },
+        "ruff" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".py"], src_exclude_dirs: &[] },
+        "pylint" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".py"], src_exclude_dirs: &[] },
+        "mypy" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".py"], src_exclude_dirs: &[] },
+        "pyrefly" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".py"], src_exclude_dirs: &[] },
+        "black" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".py"], src_exclude_dirs: &[] },
+        "doctest" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".py"], src_exclude_dirs: &[] },
+        "pytest" => ScanDefaultsData { src_dirs: &["tests"], src_extensions: &[".py"], src_exclude_dirs: &[] },
+        "cc_single_file" => ScanDefaultsData { src_dirs: &["src"], src_extensions: &[".c", ".cc"], src_exclude_dirs: &[] },
+        "cc" => ScanDefaultsData { src_dirs: &[], src_extensions: &["cc.yaml"], src_exclude_dirs: &[] },
+        "cppcheck" => ScanDefaultsData { src_dirs: &["src"], src_extensions: &[".c", ".cc"], src_exclude_dirs: &[] },
+        "clang_tidy" => ScanDefaultsData { src_dirs: &["src"], src_extensions: &[".c", ".cc"], src_exclude_dirs: &[] },
+        "zspell" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] },
+        "shellcheck" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".sh", ".bash"], src_exclude_dirs: &[] },
+        "luacheck" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".lua"], src_exclude_dirs: &[] },
+        "make" => ScanDefaultsData { src_dirs: &[], src_extensions: &["Makefile"], src_exclude_dirs: &[] },
+        "cargo" => ScanDefaultsData { src_dirs: &[], src_extensions: &["Cargo.toml"], src_exclude_dirs: &[] },
+        "clippy" => ScanDefaultsData { src_dirs: &[], src_extensions: &["Cargo.toml"], src_exclude_dirs: &[] },
+        "rumdl" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] },
+        "yamllint" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] },
+        "jq" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".json"], src_exclude_dirs: &[] },
+        "jsonlint" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".json"], src_exclude_dirs: &[] },
+        "taplo" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".toml"], src_exclude_dirs: &[] },
+        "json_schema" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".json"], src_exclude_dirs: &[] },
+        "tags" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] },
+        "pip" => ScanDefaultsData { src_dirs: &[], src_extensions: &["requirements.txt"], src_exclude_dirs: &[] },
+        "sphinx" => ScanDefaultsData { src_dirs: &[], src_extensions: &["conf.py"], src_exclude_dirs: &[] },
+        "mdbook" => ScanDefaultsData { src_dirs: &[], src_extensions: &["book.toml"], src_exclude_dirs: &[] },
+        "npm" => ScanDefaultsData { src_dirs: &[], src_extensions: &["package.json"], src_exclude_dirs: &[] },
+        "gem" => ScanDefaultsData { src_dirs: &[], src_extensions: &["Gemfile"], src_exclude_dirs: &[] },
+        "mdl" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] },
+        "markdownlint" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] },
+        "aspell" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] },
+        "marp" => ScanDefaultsData { src_dirs: &["marp"], src_extensions: &[".md"], src_exclude_dirs: &[] },
+        "pandoc" => ScanDefaultsData { src_dirs: &["pandoc"], src_extensions: &[".md"], src_exclude_dirs: &[] },
+        "markdown2html" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] },
+        "pdflatex" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".tex"], src_exclude_dirs: &[] },
+        "a2x" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".txt"], src_exclude_dirs: &[] },
+        "ascii" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] },
+        "terms" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] },
+        "chromium" => ScanDefaultsData { src_dirs: &["out/marp"], src_extensions: &[".html"], src_exclude_dirs: &[] },
+        "mako" => ScanDefaultsData { src_dirs: &["templates.mako"], src_extensions: &[".mako"], src_exclude_dirs: &[] },
+        "jinja2" => ScanDefaultsData { src_dirs: &["templates.jinja2"], src_extensions: &[".j2"], src_exclude_dirs: &[] },
+        "mermaid" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".mmd"], src_exclude_dirs: &[] },
+        "drawio" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".drawio"], src_exclude_dirs: &[] },
+        "libreoffice" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".odp"], src_exclude_dirs: &[] },
+        "protobuf" => ScanDefaultsData { src_dirs: &["proto"], src_extensions: &[".proto"], src_exclude_dirs: &[] },
+        "pdfunite" => ScanDefaultsData { src_dirs: &[], src_extensions: &["course.yaml"], src_exclude_dirs: &[] },
+        "ipdfunite" => ScanDefaultsData { src_dirs: &[], src_extensions: &["course.yaml"], src_exclude_dirs: &[] },
+        "script" => ScanDefaultsData { src_dirs: &[], src_extensions: &[], src_exclude_dirs: &[] },
+        "generator" => ScanDefaultsData { src_dirs: &[], src_extensions: &[], src_exclude_dirs: &[] },
+        "explicit" => ScanDefaultsData { src_dirs: &[], src_extensions: &[], src_exclude_dirs: &[] },
+        "linux_module" => ScanDefaultsData { src_dirs: &[], src_extensions: &["linux-module.yaml"], src_exclude_dirs: &[] },
+        "cpplint" => ScanDefaultsData { src_dirs: &["src"], src_extensions: &[".c", ".cc", ".h", ".hh"], src_exclude_dirs: &[] },
+        "checkpatch" => ScanDefaultsData { src_dirs: &["src"], src_extensions: &[".c", ".h"], src_exclude_dirs: &[] },
+        "objdump" => ScanDefaultsData { src_dirs: &["out/cc_single_file"], src_extensions: &[".elf"], src_exclude_dirs: &[] },
+        "eslint" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"], src_exclude_dirs: &[] },
+        "jshint" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".js", ".jsx", ".mjs", ".cjs"], src_exclude_dirs: &[] },
+        "htmlhint" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".html", ".htm"], src_exclude_dirs: &[] },
+        "tidy" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".html", ".htm"], src_exclude_dirs: &[] },
+        "stylelint" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".css", ".scss", ".sass", ".less"], src_exclude_dirs: &[] },
+        "jslint" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".js"], src_exclude_dirs: &[] },
+        "standard" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".js"], src_exclude_dirs: &[] },
+        "htmllint" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".html", ".htm"], src_exclude_dirs: &[] },
+        "php_lint" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".php"], src_exclude_dirs: &[] },
+        "perlcritic" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".pl", ".pm"], src_exclude_dirs: &[] },
+        "xmllint" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".xml", ".svg"], src_exclude_dirs: &[] },
+        "svglint" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".svg"], src_exclude_dirs: &[] },
+        "checkstyle" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".java"], src_exclude_dirs: &[] },
+        "yq" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] },
+        "cmake" => ScanDefaultsData { src_dirs: &[], src_extensions: &["CMakeLists.txt"], src_exclude_dirs: &[] },
+        "hadolint" => ScanDefaultsData { src_dirs: &[], src_extensions: &["Dockerfile"], src_exclude_dirs: &[] },
+        "jekyll" => ScanDefaultsData { src_dirs: &[], src_extensions: &["_config.yml"], src_exclude_dirs: &[] },
+        "sass" => ScanDefaultsData { src_dirs: &["sass"], src_extensions: &[".scss", ".sass"], src_exclude_dirs: &[] },
+        "ijq" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".json"], src_exclude_dirs: &[] },
+        "ijsonlint" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".json"], src_exclude_dirs: &[] },
+        "iyamllint" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] },
+        "iyamlschema" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] },
+        "itaplo" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".toml"], src_exclude_dirs: &[] },
+        "imarkdown2html" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] },
+        "isass" => ScanDefaultsData { src_dirs: &["sass"], src_extensions: &[".scss", ".sass"], src_exclude_dirs: &[] },
+        "yaml2json" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] },
+        "rust_single_file" => ScanDefaultsData { src_dirs: &["src"], src_extensions: &[".rs"], src_exclude_dirs: &[] },
+        "slidev" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] },
+        "encoding" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".bash", ".lua", ".pl", ".pm", ".php", ".md", ".yaml", ".yml", ".json", ".toml", ".xml", ".html", ".htm", ".css", ".scss", ".sass", ".tex", ".txt"], src_exclude_dirs: &[] },
+        "duplicate_files" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".md", ".yaml", ".yml", ".json", ".toml", ".xml", ".html", ".css"], src_exclude_dirs: &[] },
+        "marp_images" => ScanDefaultsData { src_dirs: &["marp"], src_extensions: &[".md"], src_exclude_dirs: &[] },
+        "license_header" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".bash"], src_exclude_dirs: &[] },
+        _ => return None,
+    })
+}
+
+/// Return per-processor default values (command, dep_auto).
+/// Only needed for processors whose defaults differ from the struct's Default impl.
+pub(crate) fn processor_defaults_for(type_name: &str) -> Option<ProcessorDefaults> {
+    Some(match type_name {
+        "ruff" => ProcessorDefaults { command: "ruff", dep_auto: &["ruff.toml", ".ruff.toml", "pyproject.toml"] },
+        "pylint" => ProcessorDefaults { command: "", dep_auto: &[".pylintrc"] },
+        "pytest" => ProcessorDefaults { command: "", dep_auto: &["conftest.py", "pytest.ini", "pyproject.toml"] },
+        "black" => ProcessorDefaults { command: "", dep_auto: &["pyproject.toml"] },
+        "mypy" => ProcessorDefaults { command: "mypy", dep_auto: &["mypy.ini"] },
+        "pyrefly" => ProcessorDefaults { command: "pyrefly", dep_auto: &["pyproject.toml"] },
+        "rumdl" => ProcessorDefaults { command: "rumdl", dep_auto: &[".rumdl.toml"] },
+        "yamllint" => ProcessorDefaults { command: "yamllint", dep_auto: &[".yamllint", ".yamllint.yml", ".yamllint.yaml"] },
+        "jq" => ProcessorDefaults { command: "jq", dep_auto: &[] },
+        "jsonlint" => ProcessorDefaults { command: "jsonlint", dep_auto: &[] },
+        "taplo" => ProcessorDefaults { command: "taplo", dep_auto: &["taplo.toml", ".taplo.toml"] },
+        "shellcheck" => ProcessorDefaults { command: "shellcheck", dep_auto: &[".shellcheckrc"] },
+        "luacheck" => ProcessorDefaults { command: "luacheck", dep_auto: &[".luacheckrc"] },
+        "eslint" => ProcessorDefaults { command: "eslint", dep_auto: &[".eslintrc", ".eslintrc.json", ".eslintrc.js", ".eslintrc.yml", ".eslintrc.yaml", ".eslintrc.cjs", "eslint.config.js", "eslint.config.mjs", "eslint.config.cjs"] },
+        "jshint" => ProcessorDefaults { command: "jshint", dep_auto: &[".jshintrc"] },
+        "htmlhint" => ProcessorDefaults { command: "htmlhint", dep_auto: &[".htmlhintrc"] },
+        "stylelint" => ProcessorDefaults { command: "stylelint", dep_auto: &[".stylelintrc", ".stylelintrc.json", ".stylelintrc.yml", ".stylelintrc.yaml", ".stylelintrc.js", ".stylelintrc.cjs", "stylelint.config.js", "stylelint.config.cjs"] },
+        "perlcritic" => ProcessorDefaults { command: "", dep_auto: &[".perlcriticrc"] },
+        "svglint" => ProcessorDefaults { command: "", dep_auto: &[".svglintrc.js"] },
+        "checkstyle" => ProcessorDefaults { command: "", dep_auto: &["checkstyle.xml"] },
+        _ => return None,
+    })
+}
+
+/// Apply processor-specific defaults to a config TOML value.
+/// Sets command and dep_auto if they weren't explicitly provided by the user.
+pub(crate) fn apply_processor_defaults(type_name: &str, value: &mut toml::Value) {
+    if let Some(defaults) = processor_defaults_for(type_name) {
+        let table = match value.as_table_mut() {
+            Some(t) => t,
+            None => return,
+        };
+        // Set command default if not provided and non-empty
+        if !defaults.command.is_empty() && !table.contains_key("command") {
+            table.insert("command".into(), toml::Value::String(defaults.command.into()));
+        }
+        // Set dep_auto default if not provided
+        if !defaults.dep_auto.is_empty() && !table.contains_key("dep_auto") {
+            let arr: Vec<toml::Value> = defaults.dep_auto.iter()
+                .map(|s| toml::Value::String(s.to_string()))
+                .collect();
+            table.insert("dep_auto".into(), toml::Value::Array(arr));
+        }
+    }
+}
 
 /// Processor configuration: a collection of declared processor instances.
 /// Each `[processor.TYPE]` or `[processor.TYPE.NAME]` section in rsconstruct.toml
@@ -630,7 +772,7 @@ impl ProcessorConfig {
                     for (name, inst_val) in sub_table {
                         let instance_name = format!("{}.{}", key, name);
                         let mut config = inst_val.clone();
-                        resolve_instance_scan_defaults(key, &mut config).ok();
+                        resolve_instance_defaults(key, &mut config).ok();
                         instances.push(ProcessorInstance {
                             instance_name,
                             type_name: key.clone(),
@@ -640,7 +782,7 @@ impl ProcessorConfig {
                 } else {
                     // Single instance: [processor.pylint]
                     let mut config = val.clone();
-                    resolve_instance_scan_defaults(key, &mut config).ok();
+                    resolve_instance_defaults(key, &mut config).ok();
                     instances.push(ProcessorInstance {
                         instance_name: key.clone(),
                         type_name: key.clone(),
@@ -689,7 +831,7 @@ impl ProcessorConfig {
     /// Resolve scan defaults for all instances.
     pub(crate) fn resolve_scan_defaults(&mut self) {
         for inst in &mut self.instances {
-            resolve_instance_scan_defaults(&inst.type_name, &mut inst.config_toml).ok();
+            resolve_instance_defaults(&inst.type_name, &mut inst.config_toml).ok();
         }
     }
 

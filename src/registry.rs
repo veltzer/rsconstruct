@@ -8,7 +8,7 @@
 ///
 /// - `CONST_NAME`: used for `processors::names::CONST_NAME` constant (value = stringify!(field_name))
 /// - `field_name`: the field name in `ProcessorConfig` and the TOML section name `[processor.field_name]`
-/// - `ConfigType`: the config struct (must impl Default, Serialize, Deserialize, Clone, KnownFields, ScanDefaults)
+/// - `ConfigType`: the config struct (must impl Default, Serialize, Deserialize, Clone, KnownFields)
 /// - `ProcessorType`: the processor struct (must impl ProductDiscovery, have `fn new(config) -> Self`)
 macro_rules! for_each_processor {
     ($callback:ident) => {

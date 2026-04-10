@@ -1,170 +1,103 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use super::{default_true, default_cc_compiler, default_cxx_compiler, default_output_suffix, KnownFields, ScanConfig, ScanDefaults,
-    CC_EXCLUDE_DIRS, ZSPELL_EXCLUDE_DIRS, MAKE_CARGO_EXCLUDES, MARKDOWN_EXCLUDE_DIRS};
+use super::{default_true, default_cc_compiler, default_cxx_compiler, default_output_suffix, KnownFields, ScanConfig,};
 
-/// Generate a checker config struct with standard fields.
-///
-/// Generates the struct with serde `Deserialize`/`Serialize`/`Clone` derives,
-/// a `Default` impl, `KnownFields` impl, and `ScanDefaults` impl.
-///
-/// Variants:
-/// - `checker_config!(Name, src_extensions: [".py"])` — basic checker
-/// - `checker_config!(Name, scan_dir: "src", src_extensions: [".c"])` — with scan dir
-/// - `checker_config!(Name, src_extensions: [".py"], command: "ruff")` — with configurable tool name
-/// - `checker_config!(Name, src_extensions: [".py"], dep_auto: [".pylintrc"])` — with auto inputs
-/// - `checker_config!(Name, src_extensions: [".py"], command: "ruff", dep_auto: [".ruff.toml"])` — both
-macro_rules! checker_config {
-    // --- Public entry points ---
-
-    // Basic: extensions only
-    ($name:ident, src_extensions: [$($ext:expr),+ $(,)?]) => {
-        checker_config!(@no_linter $name, [], dirs: [], exts: [$($ext),+], excl: []);
-    };
-    // With scan_dir
-    ($name:ident, scan_dir: $dir:expr, src_extensions: [$($ext:expr),+ $(,)?]) => {
-        checker_config!(@no_linter $name, [], dirs: [$dir], exts: [$($ext),+], excl: []);
-    };
-    // With dep_auto only
-    ($name:ident, src_extensions: [$($ext:expr),+ $(,)?], dep_auto: [$($ai:expr),+ $(,)?]) => {
-        checker_config!(@no_linter $name, [$($ai),+], dirs: [], exts: [$($ext),+], excl: []);
-    };
-    // With scan_dir + dep_auto
-    ($name:ident, scan_dir: $dir:expr, src_extensions: [$($ext:expr),+ $(,)?], dep_auto: [$($ai:expr),+ $(,)?]) => {
-        checker_config!(@no_linter $name, [$($ai),+], dirs: [$dir], exts: [$($ext),+], excl: []);
-    };
-    // With linter only
-    ($name:ident, src_extensions: [$($ext:expr),+ $(,)?], command: $command:expr) => {
-        checker_config!(@with_command $name, [], $command, dirs: [], exts: [$($ext),+], excl: []);
-    };
-    // With linter + dep_auto
-    ($name:ident, src_extensions: [$($ext:expr),+ $(,)?], command: $command:expr, dep_auto: [$($ai:expr),+ $(,)?]) => {
-        checker_config!(@with_command $name, [$($ai),+], $command, dirs: [], exts: [$($ext),+], excl: []);
-    };
-
-    // Helper: generate a ScanDefaults method — empty list uses trait default, non-empty overrides
-    (@scan_default_method $method:ident, []) => {};
-    (@scan_default_method $method:ident, [$($val:expr),+]) => {
-        fn $method() -> &'static [&'static str] { &[$($val),+] }
-    };
-
-    // --- Internal: without linter field ---
-    (@no_linter $name:ident, [$($ai:expr),*], dirs: [$($dir:expr),*], exts: [$($ext:expr),+], excl: [$($excl:expr),*]) => {
-        #[derive(Debug, Deserialize, Serialize, Clone)]
-        pub struct $name {
-            #[serde(default)]
-            pub args: Vec<String>,
-            #[serde(default)]
-            pub dep_inputs: Vec<String>,
-            #[serde(default)]
-            pub dep_auto: Vec<String>,
-            #[serde(default = "default_true")]
-            pub batch: bool,
-            #[serde(default, skip_serializing_if = "Option::is_none")]
-            pub max_jobs: Option<usize>,
-            #[serde(flatten)]
-            pub scan: ScanConfig,
-        }
-
-        impl Default for $name {
-            fn default() -> Self {
-                Self {
-                    args: Vec::new(),
-                    dep_inputs: Vec::new(),
-                    dep_auto: vec![$($ai.into()),*],
-                    batch: true,
-                    max_jobs: None,
-                    scan: ScanConfig::from_defaults::<$name>(),
-                }
-            }
-        }
-
-        impl KnownFields for $name {
-            fn known_fields() -> &'static [&'static str] {
-                &["args", "dep_inputs", "dep_auto", "batch", "max_jobs"]
-            }
-            fn output_fields() -> &'static [&'static str] {
-                &["args"]
-            }
-            fn field_descriptions() -> &'static [(&'static str, &'static str)] {
-                &[
-                    ("args", "Extra arguments passed to the tool before the file path(s)"),
-                ]
-            }
-        }
-
-        impl ScanDefaults for $name {
-            checker_config!(@scan_default_method default_src_dirs, [$($dir),*]);
-            checker_config!(@scan_default_method default_src_extensions, [$($ext),+]);
-            checker_config!(@scan_default_method default_src_exclude_dirs, [$($excl),*]);
-        }
-    };
-
-    // --- Internal: with command field ---
-    (@with_command $name:ident, [$($ai:expr),*], $command:expr, dirs: [$($dir:expr),*], exts: [$($ext:expr),+], excl: [$($excl:expr),*]) => {
-        paste::paste! {
-            fn [<default_ $name:lower _command>]() -> String {
-                $command.into()
-            }
-        }
-
-        paste::paste! {
-            #[derive(Debug, Deserialize, Serialize, Clone)]
-            pub struct $name {
-                #[serde(default = "" [<default_ $name:lower _command>] "")]
-                pub command: String,
-                #[serde(default)]
-                pub args: Vec<String>,
-                #[serde(default)]
-                pub dep_inputs: Vec<String>,
-                #[serde(default)]
-                pub dep_auto: Vec<String>,
-                #[serde(default = "default_true")]
-                pub batch: bool,
-                #[serde(default, skip_serializing_if = "Option::is_none")]
-                pub max_jobs: Option<usize>,
-                #[serde(flatten)]
-                pub scan: ScanConfig,
-            }
-        }
-
-        impl Default for $name {
-            fn default() -> Self {
-                Self {
-                    command: $command.into(),
-                    args: Vec::new(),
-                    dep_inputs: Vec::new(),
-                    dep_auto: vec![$($ai.into()),*],
-                    batch: true,
-                    max_jobs: None,
-                    scan: ScanConfig::from_defaults::<$name>(),
-                }
-            }
-        }
-
-        impl KnownFields for $name {
-            fn known_fields() -> &'static [&'static str] {
-                &["command", "args", "dep_inputs", "dep_auto", "batch", "max_jobs"]
-            }
-            fn output_fields() -> &'static [&'static str] {
-                &["command", "args"]
-            }
-            fn field_descriptions() -> &'static [(&'static str, &'static str)] {
-                &[
-                    ("command", concat!("Path to the ", $command, " executable")),
-                    ("args", "Extra arguments passed to the tool before the file path(s)"),
-                ]
-            }
-        }
-
-        impl ScanDefaults for $name {
-            checker_config!(@scan_default_method default_src_dirs, [$($dir),*]);
-            checker_config!(@scan_default_method default_src_extensions, [$($ext),+]);
-            checker_config!(@scan_default_method default_src_exclude_dirs, [$($excl),*]);
-        }
-    };
+/// Standard checker config without a configurable command.
+/// Used by checkers that don't expose the tool binary as a config option.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CheckerConfig {
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub dep_inputs: Vec<String>,
+    #[serde(default)]
+    pub dep_auto: Vec<String>,
+    #[serde(default = "default_true")]
+    pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
 }
+
+impl Default for CheckerConfig {
+    fn default() -> Self {
+        Self {
+            args: Vec::new(),
+            dep_inputs: Vec::new(),
+            dep_auto: Vec::new(),
+            batch: true,
+            max_jobs: None,
+            scan: ScanConfig::default(),
+        }
+    }
+}
+
+impl KnownFields for CheckerConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &["args", "dep_inputs", "dep_auto", "batch", "max_jobs"]
+    }
+    fn output_fields() -> &'static [&'static str] {
+        &["args"]
+    }
+    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
+        &[
+            ("args", "Extra arguments passed to the tool before the file path(s)"),
+        ]
+    }
+}
+
+
+/// Standard checker config with a configurable command binary.
+/// Used by checkers that let the user override which tool binary to run.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CheckerConfigWithCommand {
+    #[serde(default)]
+    pub command: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub dep_inputs: Vec<String>,
+    #[serde(default)]
+    pub dep_auto: Vec<String>,
+    #[serde(default = "default_true")]
+    pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
+
+impl Default for CheckerConfigWithCommand {
+    fn default() -> Self {
+        Self {
+            command: String::new(),
+            args: Vec::new(),
+            dep_inputs: Vec::new(),
+            dep_auto: Vec::new(),
+            batch: true,
+            max_jobs: None,
+            scan: ScanConfig::default(),
+        }
+    }
+}
+
+impl KnownFields for CheckerConfigWithCommand {
+    fn known_fields() -> &'static [&'static str] {
+        &["command", "args", "dep_inputs", "dep_auto", "batch", "max_jobs"]
+    }
+    fn output_fields() -> &'static [&'static str] {
+        &["command", "args"]
+    }
+    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
+        &[
+            ("command", "Path to the tool executable"),
+            ("args", "Extra arguments passed to the tool before the file path(s)"),
+        ]
+    }
+}
+
 
 /// Generate a generator config struct with standard fields plus a tool binary and output directory.
 ///
@@ -222,7 +155,7 @@ macro_rules! generator_config {
                     output_dir: $output_dir.into(),
                     batch: true,
                     max_jobs: None,
-                    scan: ScanConfig::from_defaults::<$name>(),
+                    scan: ScanConfig::default(),
                 }
             }
         }
@@ -245,11 +178,6 @@ macro_rules! generator_config {
             }
         }
 
-        impl ScanDefaults for $name {
-            generator_config!(@scan_default_method default_src_dirs, [$($dir),*]);
-            generator_config!(@scan_default_method default_src_extensions, [$($ext),+]);
-            generator_config!(@scan_default_method default_src_exclude_dirs, [$($excl),*]);
-        }
     };
 
     // Multi-format variant without custom args
@@ -299,7 +227,7 @@ macro_rules! generator_config {
                     output_dir: $output_dir.into(),
                     batch: true,
                     max_jobs: None,
-                    scan: ScanConfig::from_defaults::<$name>(),
+                    scan: ScanConfig::default(),
                 }
             }
         }
@@ -322,11 +250,6 @@ macro_rules! generator_config {
             }
         }
 
-        impl ScanDefaults for $name {
-            generator_config!(@scan_default_method default_src_dirs, [$($dir),*]);
-            generator_config!(@scan_default_method default_src_extensions, [$($ext),+]);
-            generator_config!(@scan_default_method default_src_exclude_dirs, [$($excl),*]);
-        }
     };
 
     // Single-output variant (no formats field)
@@ -372,7 +295,7 @@ macro_rules! generator_config {
                     output_dir: $output_dir.into(),
                     batch: true,
                     max_jobs: None,
-                    scan: ScanConfig::from_defaults::<$name>(),
+                    scan: ScanConfig::default(),
                 }
             }
         }
@@ -394,17 +317,6 @@ macro_rules! generator_config {
             }
         }
 
-        impl ScanDefaults for $name {
-            generator_config!(@scan_default_method default_src_dirs, [$($dir),*]);
-            generator_config!(@scan_default_method default_src_extensions, [$($ext),+]);
-            generator_config!(@scan_default_method default_src_exclude_dirs, [$($excl),*]);
-        }
-    };
-
-    // Helper: generate a ScanDefaults method — empty list uses trait default, non-empty overrides
-    (@scan_default_method $method:ident, []) => {};
-    (@scan_default_method $method:ident, [$($val:expr),+]) => {
-        fn $method() -> &'static [&'static str] { &[$($val),+] }
     };
 
     // Helper: default dep_auto (empty or provided)
@@ -433,7 +345,7 @@ impl Default for TeraConfig {
             dep_auto: Vec::new(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -473,7 +385,7 @@ impl Default for MakoConfig {
             dep_auto: Vec::new(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -513,7 +425,7 @@ impl Default for Jinja2Config {
             dep_auto: Vec::new(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -532,15 +444,15 @@ impl KnownFields for Jinja2Config {
     }
 }
 
-checker_config!(RuffConfig, src_extensions: [".py"], command: "ruff", dep_auto: ["ruff.toml", ".ruff.toml", "pyproject.toml"]);
+pub type RuffConfig = CheckerConfigWithCommand;
 
-checker_config!(PylintConfig, src_extensions: [".py"], dep_auto: [".pylintrc"]);
+pub type PylintConfig = CheckerConfig;
 
-checker_config!(PytestConfig, scan_dir: "tests", src_extensions: [".py"], dep_auto: ["conftest.py", "pytest.ini", "pyproject.toml"]);
+pub type PytestConfig = CheckerConfig;
 
-checker_config!(BlackConfig, src_extensions: [".py"], dep_auto: ["pyproject.toml"]);
+pub type BlackConfig = CheckerConfig;
 
-checker_config!(DoctestConfig, src_extensions: [".py"]);
+pub type DoctestConfig = CheckerConfig;
 
 fn default_cppcheck_args() -> Vec<String> {
     vec![
@@ -577,7 +489,7 @@ impl Default for CppcheckConfig {
             dep_auto: default_cppcheck_auto_inputs(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -629,7 +541,7 @@ impl Default for ClangTidyConfig {
             dep_auto: default_clang_tidy_auto_inputs(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -768,7 +680,7 @@ impl Default for CcSingleFileConfig {
             include_scanner: IncludeScanner::default(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -901,7 +813,7 @@ impl Default for CcConfig {
             cache_output_dir: true,
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -993,7 +905,7 @@ impl Default for LinuxModuleConfig {
             dep_inputs: Vec::new(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -1055,7 +967,7 @@ impl Default for ZspellConfig {
             dep_auto: default_zspell_auto_inputs(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -1127,7 +1039,7 @@ impl Default for CargoConfig {
             cache_output_dir: true,
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -1187,7 +1099,7 @@ impl Default for ClippyConfig {
             dep_auto: Vec::new(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -1240,7 +1152,7 @@ impl Default for MakeConfig {
             dep_auto: Vec::new(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -1263,21 +1175,21 @@ impl KnownFields for MakeConfig {
     }
 }
 
-checker_config!(MypyConfig, src_extensions: [".py"], command: "mypy", dep_auto: ["mypy.ini"]);
+pub type MypyConfig = CheckerConfigWithCommand;
 
-checker_config!(PyreflyConfig, src_extensions: [".py"], command: "pyrefly", dep_auto: ["pyproject.toml"]);
+pub type PyreflyConfig = CheckerConfigWithCommand;
 
-checker_config!(RumdlConfig, src_extensions: [".md"], command: "rumdl", dep_auto: [".rumdl.toml"]);
+pub type RumdlConfig = CheckerConfigWithCommand;
 
-checker_config!(YamllintConfig, src_extensions: [".yml", ".yaml"], command: "yamllint", dep_auto: [".yamllint", ".yamllint.yml", ".yamllint.yaml"]);
+pub type YamllintConfig = CheckerConfigWithCommand;
 
-checker_config!(JqConfig, src_extensions: [".json"], command: "jq");
+pub type JqConfig = CheckerConfigWithCommand;
 
-checker_config!(JsonlintConfig, src_extensions: [".json"], command: "jsonlint");
+pub type JsonlintConfig = CheckerConfigWithCommand;
 
-checker_config!(TaploConfig, src_extensions: [".toml"], command: "taplo", dep_auto: ["taplo.toml", ".taplo.toml"]);
+pub type TaploConfig = CheckerConfigWithCommand;
 
-checker_config!(JsonSchemaConfig, src_extensions: [".json"]);
+pub type JsonSchemaConfig = CheckerConfig;
 
 fn default_tags_output() -> String {
     "out/tags/tags.db".into()
@@ -1345,7 +1257,7 @@ impl Default for TagsConfig {
             dep_auto: Vec::new(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -1380,9 +1292,9 @@ impl KnownFields for TagsConfig {
     }
 }
 
-checker_config!(ShellcheckConfig, src_extensions: [".sh", ".bash"], command: "shellcheck", dep_auto: [".shellcheckrc"]);
+pub type ShellcheckConfig = CheckerConfigWithCommand;
 
-checker_config!(LuacheckConfig, src_extensions: [".lua"], command: "luacheck", dep_auto: [".luacheckrc"]);
+pub type LuacheckConfig = CheckerConfigWithCommand;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ScriptConfig {
@@ -1410,7 +1322,7 @@ impl Default for ScriptConfig {
             dep_auto: Vec::new(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -1472,7 +1384,7 @@ impl Default for GeneratorConfig {
             dep_auto: Vec::new(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -1533,7 +1445,7 @@ impl Default for ExplicitConfig {
             inputs: Vec::new(),
             input_globs: Vec::new(),
             outputs: Vec::new(),
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -1587,7 +1499,7 @@ impl Default for PipConfig {
             dep_inputs: Vec::new(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -1650,7 +1562,7 @@ impl Default for SphinxConfig {
             cache_output_dir: true,
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -1712,7 +1624,7 @@ impl Default for MdbookConfig {
             cache_output_dir: true,
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -1773,7 +1685,7 @@ impl Default for NpmConfig {
             cache_output_dir: true,
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -1848,7 +1760,7 @@ impl Default for MdlConfig {
             gem_stamp: "out/gem/root.stamp".into(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -1918,7 +1830,7 @@ impl Default for MarkdownlintConfig {
             npm_stamp: "out/npm/root.stamp".into(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -1994,7 +1906,7 @@ impl Default for AspellConfig {
             dep_auto: default_aspell_auto_inputs(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -2019,7 +1931,7 @@ impl KnownFields for AspellConfig {
     }
 }
 
-checker_config!(AsciiConfig, src_extensions: [".md"]);
+pub type AsciiConfig = CheckerConfig;
 
 fn default_terms_dir() -> String {
     "terms".into()
@@ -2049,7 +1961,7 @@ impl Default for TermsConfig {
             dep_auto: Vec::new(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -2113,7 +2025,7 @@ impl Default for PandocConfig {
             output_dir: "out/pandoc".into(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -2196,7 +2108,7 @@ impl Default for PdflatexConfig {
             output_dir: "out/pdflatex".into(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -2260,7 +2172,7 @@ impl Default for A2xConfig {
             output_dir: "out/a2x".into(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -2329,7 +2241,7 @@ impl Default for GemConfig {
             cache_output_dir: true,
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -2378,11 +2290,11 @@ generator_config!(SassConfig, tool: "sass", sass_bin,
     dirs: ["sass"], exts: [".scss", ".sass"], excl: [],
 );
 
-checker_config!(IjqConfig, src_extensions: [".json"]);
+pub type IjqConfig = CheckerConfig;
 
-checker_config!(IjsonlintConfig, src_extensions: [".json"]);
+pub type IjsonlintConfig = CheckerConfig;
 
-checker_config!(IyamllintConfig, src_extensions: [".yml", ".yaml"]);
+pub type IyamllintConfig = CheckerConfig;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct IyamlschemaConfig {
@@ -2408,7 +2320,7 @@ impl Default for IyamlschemaConfig {
             dep_auto: Vec::new(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -2427,7 +2339,7 @@ impl KnownFields for IyamlschemaConfig {
     }
 }
 
-checker_config!(ItaploConfig, src_extensions: [".toml"]);
+pub type ItaploConfig = CheckerConfig;
 
 fn default_imarkdown2html_output_dir() -> String { "out/imarkdown2html".into() }
 
@@ -2455,7 +2367,7 @@ impl Default for Imarkdown2htmlConfig {
             output_dir: "out/imarkdown2html".into(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -2500,7 +2412,7 @@ impl Default for Yaml2jsonConfig {
             output_dir: "out/yaml2json".into(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -2545,7 +2457,7 @@ impl Default for IsassConfig {
             output_dir: "out/isass".into(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -2601,7 +2513,7 @@ impl Default for RustSingleFileConfig {
             output_dir: "out/rust_single_file".into(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -2682,7 +2594,7 @@ impl Default for PdfuniteConfig {
             output_dir: "out/pdfunite".into(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -2763,7 +2675,7 @@ impl Default for IpdfuniteConfig {
             output_dir: "out/ipdfunite".into(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -2790,9 +2702,9 @@ impl KnownFields for IpdfuniteConfig {
     }
 }
 
-checker_config!(CpplintConfig, scan_dir: "src", src_extensions: [".c", ".cc", ".h", ".hh"]);
+pub type CpplintConfig = CheckerConfig;
 
-checker_config!(CheckpatchConfig, scan_dir: "src", src_extensions: [".c", ".h"]);
+pub type CheckpatchConfig = CheckerConfig;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ObjdumpConfig {
@@ -2822,7 +2734,7 @@ impl Default for ObjdumpConfig {
             output_dir: default_objdump_output_dir(),
             batch: true,
             max_jobs: None,
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -2844,65 +2756,65 @@ impl KnownFields for ObjdumpConfig {
     }
 }
 
-checker_config!(EslintConfig, src_extensions: [".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"], command: "eslint", dep_auto: [".eslintrc", ".eslintrc.json", ".eslintrc.js", ".eslintrc.yml", ".eslintrc.yaml", ".eslintrc.cjs", "eslint.config.js", "eslint.config.mjs", "eslint.config.cjs"]);
+pub type EslintConfig = CheckerConfigWithCommand;
 
-checker_config!(JshintConfig, src_extensions: [".js", ".jsx", ".mjs", ".cjs"], command: "jshint", dep_auto: [".jshintrc"]);
+pub type JshintConfig = CheckerConfigWithCommand;
 
-checker_config!(HtmlhintConfig, src_extensions: [".html", ".htm"], command: "htmlhint", dep_auto: [".htmlhintrc"]);
+pub type HtmlhintConfig = CheckerConfigWithCommand;
 
 // --- tidy (HTML validator) ---
-checker_config!(TidyConfig, src_extensions: [".html", ".htm"]);
+pub type TidyConfig = CheckerConfig;
 
 // --- stylelint (CSS linter) ---
-checker_config!(StylelintConfig, src_extensions: [".css", ".scss", ".sass", ".less"], command: "stylelint", dep_auto: [".stylelintrc", ".stylelintrc.json", ".stylelintrc.yml", ".stylelintrc.yaml", ".stylelintrc.js", ".stylelintrc.cjs", "stylelint.config.js", "stylelint.config.cjs"]);
+pub type StylelintConfig = CheckerConfigWithCommand;
 
 // --- jslint (JavaScript linter) ---
-checker_config!(JslintConfig, src_extensions: [".js"]);
+pub type JslintConfig = CheckerConfig;
 
 // --- standard (JavaScript style checker) ---
-checker_config!(StandardConfig, src_extensions: [".js"]);
+pub type StandardConfig = CheckerConfig;
 
 // --- htmllint (HTML linter) ---
-checker_config!(HtmllintConfig, src_extensions: [".html", ".htm"]);
+pub type HtmllintConfig = CheckerConfig;
 
 // --- php_lint (PHP syntax checker) ---
-checker_config!(PhpLintConfig, src_extensions: [".php"]);
+pub type PhpLintConfig = CheckerConfig;
 
 // --- perlcritic (Perl code analyzer) ---
-checker_config!(PerlcriticConfig, src_extensions: [".pl", ".pm"], dep_auto: [".perlcriticrc"]);
+pub type PerlcriticConfig = CheckerConfig;
 
 // --- xmllint (XML validator) ---
-checker_config!(XmllintConfig, src_extensions: [".xml", ".svg"]);
+pub type XmllintConfig = CheckerConfig;
 
 // --- svglint (SVG linter) ---
-checker_config!(SvglintConfig, src_extensions: [".svg"], dep_auto: [".svglintrc.js"]);
+pub type SvglintConfig = CheckerConfig;
 
 // --- checkstyle (Java style checker) ---
-checker_config!(CheckstyleConfig, src_extensions: [".java"], dep_auto: ["checkstyle.xml"]);
+pub type CheckstyleConfig = CheckerConfig;
 
 // --- yq (YAML processor/validator) ---
-checker_config!(YqConfig, src_extensions: [".yml", ".yaml"]);
+pub type YqConfig = CheckerConfig;
 
 // --- cmake (CMake build system) ---
-checker_config!(CmakeConfig, src_extensions: ["CMakeLists.txt"]);
+pub type CmakeConfig = CheckerConfig;
 
 // --- docker (Docker image build) ---
-checker_config!(HadolintConfig, src_extensions: ["Dockerfile"]);
+pub type HadolintConfig = CheckerConfig;
 
 // --- jekyll (Static site generator) ---
-checker_config!(JekyllConfig, src_extensions: ["_config.yml"]);
+pub type JekyllConfig = CheckerConfig;
 
 // --- slidev (Slidev presentations) ---
-checker_config!(SlidevConfig, src_extensions: [".md"]);
+pub type SlidevConfig = CheckerConfig;
 
 // --- encoding (UTF-8 validation) ---
-checker_config!(EncodingConfig, src_extensions: [".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".bash", ".lua", ".pl", ".pm", ".php", ".md", ".yaml", ".yml", ".json", ".toml", ".xml", ".html", ".htm", ".css", ".scss", ".sass", ".tex", ".txt"]);
+pub type EncodingConfig = CheckerConfig;
 
 // --- duplicate_files (duplicate detection by SHA-256) ---
-checker_config!(DuplicateFilesConfig, src_extensions: [".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".md", ".yaml", ".yml", ".json", ".toml", ".xml", ".html", ".css"]);
+pub type DuplicateFilesConfig = CheckerConfig;
 
 // --- marp_images (validate image references in Marp presentations) ---
-checker_config!(MarpImagesConfig, scan_dir: "marp", src_extensions: [".md"]);
+pub type MarpImagesConfig = CheckerConfig;
 
 // --- license_header (verify license headers in source files) ---
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -2932,7 +2844,7 @@ impl Default for LicenseHeaderConfig {
             batch: true,
             max_jobs: None,
             header_lines: Vec::new(),
-            scan: ScanConfig::from_defaults::<Self>(),
+            scan: ScanConfig::default(),
         }
     }
 }
@@ -2950,172 +2862,5 @@ impl KnownFields for LicenseHeaderConfig {
             ("header_lines", "Lines of the license header that must appear at the top of each file"),
         ]
     }
-}
 
-// --- ScanDefaults impls for manually-defined config structs ---
-
-impl ScanDefaults for TeraConfig {
-    fn default_src_dirs() -> &'static [&'static str] { &["tera.templates"] }
-    fn default_src_extensions() -> &'static [&'static str] { &[".tera"] }
-}
-
-impl ScanDefaults for MakoConfig {
-    fn default_src_dirs() -> &'static [&'static str] { &["templates.mako"] }
-    fn default_src_extensions() -> &'static [&'static str] { &[".mako"] }
-}
-
-impl ScanDefaults for Jinja2Config {
-    fn default_src_dirs() -> &'static [&'static str] { &["templates.jinja2"] }
-    fn default_src_extensions() -> &'static [&'static str] { &[".j2"] }
-}
-
-impl ScanDefaults for CppcheckConfig {
-    fn default_src_dirs() -> &'static [&'static str] { &["src"] }
-    fn default_src_extensions() -> &'static [&'static str] { &[".c", ".cc"] }
-    fn default_src_exclude_dirs() -> &'static [&'static str] { CC_EXCLUDE_DIRS }
-}
-
-impl ScanDefaults for ClangTidyConfig {
-    fn default_src_dirs() -> &'static [&'static str] { &["src"] }
-    fn default_src_extensions() -> &'static [&'static str] { &[".c", ".cc"] }
-    fn default_src_exclude_dirs() -> &'static [&'static str] { CC_EXCLUDE_DIRS }
-}
-
-impl ScanDefaults for CcSingleFileConfig {
-    fn default_src_dirs() -> &'static [&'static str] { &["src"] }
-    fn default_src_extensions() -> &'static [&'static str] { &[".c", ".cc"] }
-}
-
-impl ScanDefaults for CcConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &["cc.yaml"] }
-    fn default_src_exclude_dirs() -> &'static [&'static str] { CC_EXCLUDE_DIRS }
-}
-
-impl ScanDefaults for LinuxModuleConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &["linux-module.yaml"] }
-}
-
-impl ScanDefaults for ZspellConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &[".md"] }
-    fn default_src_exclude_dirs() -> &'static [&'static str] { ZSPELL_EXCLUDE_DIRS }
-}
-
-impl ScanDefaults for CargoConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &["Cargo.toml"] }
-    fn default_src_exclude_dirs() -> &'static [&'static str] { MAKE_CARGO_EXCLUDES }
-}
-
-impl ScanDefaults for ClippyConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &["Cargo.toml"] }
-    fn default_src_exclude_dirs() -> &'static [&'static str] { MAKE_CARGO_EXCLUDES }
-}
-
-impl ScanDefaults for MakeConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &["Makefile"] }
-    fn default_src_exclude_dirs() -> &'static [&'static str] { MAKE_CARGO_EXCLUDES }
-}
-
-impl ScanDefaults for TagsConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &[".md"] }
-    fn default_src_exclude_dirs() -> &'static [&'static str] { MARKDOWN_EXCLUDE_DIRS }
-}
-
-impl ScanDefaults for ScriptConfig {}
-impl ScanDefaults for GeneratorConfig {}
-impl ScanDefaults for ExplicitConfig {}
-
-impl ScanDefaults for PipConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &["requirements.txt"] }
-    fn default_src_exclude_dirs() -> &'static [&'static str] { MAKE_CARGO_EXCLUDES }
-}
-
-impl ScanDefaults for SphinxConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &["conf.py"] }
-}
-
-impl ScanDefaults for MdbookConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &["book.toml"] }
-}
-
-impl ScanDefaults for NpmConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &["package.json"] }
-    fn default_src_exclude_dirs() -> &'static [&'static str] { MAKE_CARGO_EXCLUDES }
-}
-
-impl ScanDefaults for MdlConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &[".md"] }
-    fn default_src_exclude_dirs() -> &'static [&'static str] { MARKDOWN_EXCLUDE_DIRS }
-}
-
-impl ScanDefaults for MarkdownlintConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &[".md"] }
-    fn default_src_exclude_dirs() -> &'static [&'static str] { MARKDOWN_EXCLUDE_DIRS }
-}
-
-impl ScanDefaults for AspellConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &[".md"] }
-    fn default_src_exclude_dirs() -> &'static [&'static str] { MARKDOWN_EXCLUDE_DIRS }
-}
-
-impl ScanDefaults for TermsConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &[".md"] }
-    fn default_src_exclude_dirs() -> &'static [&'static str] { MARKDOWN_EXCLUDE_DIRS }
-}
-
-impl ScanDefaults for PandocConfig {
-    fn default_src_dirs() -> &'static [&'static str] { &["pandoc"] }
-    fn default_src_extensions() -> &'static [&'static str] { &[".md"] }
-    fn default_src_exclude_dirs() -> &'static [&'static str] { MARKDOWN_EXCLUDE_DIRS }
-}
-
-impl ScanDefaults for PdflatexConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &[".tex"] }
-}
-
-impl ScanDefaults for A2xConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &[".txt"] }
-}
-
-impl ScanDefaults for GemConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &["Gemfile"] }
-}
-
-impl ScanDefaults for IyamlschemaConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &[".yml", ".yaml"] }
-}
-
-impl ScanDefaults for Imarkdown2htmlConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &[".md"] }
-    fn default_src_exclude_dirs() -> &'static [&'static str] { MARKDOWN_EXCLUDE_DIRS }
-}
-
-impl ScanDefaults for Yaml2jsonConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &[".yml", ".yaml"] }
-}
-
-impl ScanDefaults for IsassConfig {
-    fn default_src_dirs() -> &'static [&'static str] { &["sass"] }
-    fn default_src_extensions() -> &'static [&'static str] { &[".scss", ".sass"] }
-}
-
-impl ScanDefaults for RustSingleFileConfig {
-    fn default_src_dirs() -> &'static [&'static str] { &["src"] }
-    fn default_src_extensions() -> &'static [&'static str] { &[".rs"] }
-}
-
-impl ScanDefaults for PdfuniteConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &["course.yaml"] }
-}
-
-impl ScanDefaults for IpdfuniteConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &["course.yaml"] }
-}
-
-impl ScanDefaults for ObjdumpConfig {
-    fn default_src_dirs() -> &'static [&'static str] { &["out/cc_single_file"] }
-    fn default_src_extensions() -> &'static [&'static str] { &[".elf"] }
-}
-
-impl ScanDefaults for LicenseHeaderConfig {
-    fn default_src_extensions() -> &'static [&'static str] { &[".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".bash"] }
 }
