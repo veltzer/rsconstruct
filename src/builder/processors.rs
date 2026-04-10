@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use anyhow::{Result, bail};
 use tabled::builder::Builder as TableBuilder;
-use tabled::settings::Style;
 use crate::cli::ProcessorAction;
 use crate::color;
 use crate::config::ProcessorConfig;
@@ -50,8 +49,7 @@ pub fn list_processors_no_config(verbose: bool) -> Result<()> {
             builder.push_record([name.to_string(), type_str, proc.description().to_string()]);
         }
     }
-    let table = builder.build().with(Style::modern()).to_string();
-    println!("{table}");
+    color::print_table(builder.build());
 
     Ok(())
 }
@@ -120,7 +118,7 @@ fn print_processor_metadata(name: &str) {
     }
 
     println!("\nParameters:");
-    println!("{}", builder.build().with(Style::modern()).to_string());
+    color::print_table(builder.build());
 }
 
 /// Show default configuration for a processor (works without rsconstruct.toml).
@@ -164,8 +162,7 @@ impl Builder {
                         proc.description().to_string(),
                     ]);
                 }
-                let table = builder.build().with(tabled::settings::Style::modern()).to_string();
-                println!("{table}");
+                color::print_table(builder.build());
             }
             ProcessorAction::Config { ref name, diff } => {
                 let names: Vec<&str> = if let Some(n) = name {

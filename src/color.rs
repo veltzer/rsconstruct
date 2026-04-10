@@ -1,6 +1,8 @@
 use std::borrow::Cow;
 use std::env;
 use std::sync::OnceLock;
+use tabled::Table;
+use tabled::settings::Style;
 
 /// Check if color output is disabled via NO_COLOR env var
 fn no_color() -> bool {
@@ -42,4 +44,9 @@ pub fn bold(text: &str) -> Cow<'_, str> {
 
 pub fn dim(text: &str) -> Cow<'_, str> {
     wrap("2", text)
+}
+
+/// Apply the standard rsconstruct table style and print to stdout.
+pub fn print_table(mut table: Table) {
+    println!("{}", table.with(Style::modern_rounded()));
 }

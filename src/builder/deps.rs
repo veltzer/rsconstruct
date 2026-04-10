@@ -2,7 +2,6 @@ use std::fs;
 use std::path::PathBuf;
 use anyhow::{Context, Result, bail};
 use tabled::builder::Builder as TableBuilder;
-use tabled::settings::Style;
 use crate::color;
 use crate::deps_cache::DepsCache;
 use super::{Builder, sorted_keys};
@@ -21,8 +20,7 @@ pub fn list_analyzers() {
     for (name, analyzer) in &analyzers {
         builder.push_record([name.to_string(), analyzer.description().to_string()]);
     }
-    let table = builder.build().with(Style::modern()).to_string();
-    println!("{table}");
+    color::print_table(builder.build());
 }
 
 /// Print per-analyzer dependency stats with a total line.
@@ -38,8 +36,7 @@ fn print_deps_stats(stats: &std::collections::HashMap<String, (usize, usize)>) {
         builder.push_record([name.to_string(), files.to_string(), deps.to_string()]);
     }
     builder.push_record(["Total".to_string(), total_files.to_string(), total_deps.to_string()]);
-    let table = builder.build().with(Style::modern()).to_string();
-    println!("{table}");
+    color::print_table(builder.build());
 }
 
 impl Builder {
@@ -67,8 +64,7 @@ impl Builder {
 
                     builder.push_record([name.to_string(), status.to_string(), analyzer.description().to_string()]);
                 }
-                let table = builder.build().with(Style::modern()).to_string();
-                println!("{table}");
+                color::print_table(builder.build());
             }
             DepsAction::Build => {
                 let processors = self.create_processors()?;

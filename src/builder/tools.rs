@@ -3,7 +3,6 @@ use std::io::Write;
 use std::process::Command;
 use anyhow::Result;
 use tabled::builder::Builder as TableBuilder;
-use tabled::settings::Style;
 use crate::cli::{GraphFormat, ToolsAction};
 use crate::color;
 use crate::json_output;
@@ -280,8 +279,7 @@ fn run_tools_command(
                     let install = stat.install_command.as_deref().unwrap_or("").to_string();
                     builder.push_record([stat.name.clone(), status.to_string(), procs, install]);
                 }
-                let table = builder.build().with(Style::modern()).to_string();
-                println!("{table}");
+                color::print_table(builder.build());
 
                 println!();
                 println!("Runtime summary:");
@@ -306,8 +304,7 @@ fn run_tools_command(
                         rt_builder.push_record([label.to_string(), line.to_string()]);
                     }
                 }
-                let rt_table = rt_builder.build().with(Style::modern()).to_string();
-                println!("{rt_table}");
+                color::print_table(rt_builder.build());
 
                 println!();
                 let total_line = format!("Total: {}/{} tools installed", installed_count, total_tools);

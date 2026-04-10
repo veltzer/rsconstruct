@@ -4,8 +4,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tabled::builder::Builder as TableBuilder;
-use tabled::settings::Style;
 
+use crate::color;
 use crate::config::{TagsConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
@@ -680,8 +680,7 @@ pub fn count_tags(db_path: &str) -> Result<()> {
         for (tag, count) in &entries {
             builder.push_record([count.to_string(), tag.to_string()]);
         }
-        let table = builder.build().with(Style::modern()).to_string();
-        println!("{table}");
+        color::print_table(builder.build());
     }
 
     Ok(())
@@ -1080,8 +1079,7 @@ pub fn matrix_tags(db_path: &str) -> Result<()> {
             }
             builder.push_record(row);
         }
-        let table = builder.build().with(Style::modern()).to_string();
-        println!("{table}");
+        color::print_table(builder.build());
     }
     Ok(())
 }
@@ -1133,8 +1131,7 @@ pub fn coverage_tags(db_path: &str) -> Result<()> {
         for (cat, count, pct) in &coverage {
             builder.push_record([cat.to_string(), count.to_string(), format!("{:.0}%", pct)]);
         }
-        let table = builder.build().with(Style::modern()).to_string();
-        println!("{table}");
+        color::print_table(builder.build());
         println!("Total files: {}", total_files);
     }
     Ok(())
@@ -1466,8 +1463,7 @@ pub fn suggest_tags(db_path: &str, path: &str) -> Result<()> {
         for (tag, score) in sorted_suggestions.iter().take(15) {
             builder.push_record([tag.to_string(), format!("{:.2}", score)]);
         }
-        let table = builder.build().with(Style::modern()).to_string();
-        println!("{table}");
+        color::print_table(builder.build());
     }
     Ok(())
 }

@@ -466,10 +466,7 @@ fn run() -> Result<()> {
                                 humansize::format_size(entry.size, humansize::BINARY),
                             ]);
                         }
-                        let table = builder.build()
-                            .with(tabled::settings::Style::modern())
-                            .to_string();
-                        println!("{table}");
+                        color::print_table(builder.build());
                     }
                 }
             }

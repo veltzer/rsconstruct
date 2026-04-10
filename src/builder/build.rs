@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use anyhow::Result;
-use tabled::settings::Style;
 use tabled::builder::Builder as TableBuilder;
 use crate::cli::{BuildOptions, BuildPhase, DisplayOptions};
 use crate::color;
@@ -352,8 +351,7 @@ impl Builder {
                 };
                 builder.push_record([proc_name.to_string(), format!("{} files", total), breakdown_str]);
             }
-            let table = builder.build().with(Style::modern_rounded()).to_string();
-            println!("{table}");
+            color::print_table(builder.build());
         }
 
         Ok(())
@@ -393,8 +391,7 @@ impl Builder {
             for (ext, count) in &ext_counts {
                 builder.push_record([format!(".{}", ext), count.to_string()]);
             }
-            let table = builder.build().with(Style::modern_rounded()).to_string();
-            println!("{table}");
+            color::print_table(builder.build());
         }
         Ok(())
     }
@@ -492,8 +489,7 @@ impl Builder {
             counts[0].to_string(), counts[1].to_string(), counts[2].to_string(), counts[3].to_string(),
             String::new(),
         ]);
-        let table = builder.build().with(Style::modern_rounded()).to_string();
-        println!("{table}");
+        color::print_table(builder.build());
     }
 }
 

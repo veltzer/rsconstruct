@@ -1424,8 +1424,7 @@ impl BuildStats {
                 for (name, dur) in &self.phase_timings {
                     builder.push_record([name.to_string(), format!("{:.3}s", dur.as_secs_f64())]);
                 }
-                let table = builder.build().with(tabled::settings::Style::modern()).to_string();
-                println!("{table}");
+                crate::color::print_table(builder.build());
             }
 
             // Per-product timings

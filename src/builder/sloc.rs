@@ -4,7 +4,7 @@ use std::path::Path;
 
 use anyhow::Result;
 use tabled::builder::Builder as TableBuilder;
-use tabled::settings::Style;
+use crate::color;
 
 use crate::file_index::FileIndex;
 use crate::json_output::{self, SlocCocomoEstimate, SlocLanguageEntry, SlocOutput, SlocTotals};
@@ -297,8 +297,7 @@ pub fn run_sloc(file_index: &FileIndex, cocomo: bool, salary: u64) -> Result<()>
             "Total".to_string(), total_files.to_string(), total_blank.to_string(),
             total_comment.to_string(), total_code.to_string(),
         ]);
-        let table = builder.build().with(Style::modern()).to_string();
-        println!("{table}");
+        color::print_table(builder.build());
 
         if let Some(ref est) = cocomo_estimate {
             println!();
