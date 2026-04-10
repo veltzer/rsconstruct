@@ -189,15 +189,16 @@ macro_rules! default_scan {
 /// Generate a generator config struct with standard fields plus a tool binary and output directory.
 ///
 /// Variants:
-/// - `generator_config!(Name, tool: "bin_name" "field_name", output_dir: "out/x", scan)` — single output
-/// - `generator_config!(Name, tool: "bin_name" "field_name", formats: ["pdf"], output_dir: "out/x", scan)` — multi-format
+/// - `generator_config!(Name, tool: "bin" field, output_dir: "out/x", dirs: [], exts: [...], excl: [])` — single output
+/// - `generator_config!(Name, tool: "bin" field, formats: ["pdf"], output_dir: "out/x", dirs: [], exts: [...], excl: [])` — multi-format
 /// - Add `args: ["--flag"]` for non-empty default args
 /// - Add `dep_auto: [".config"]` for auto input files
 macro_rules! generator_config {
     // Multi-format variant with custom default args
     ($name:ident, tool: $tool_default:expr, $tool_field:ident,
      formats: [$($fmt:expr),+ $(,)?], output_dir: $output_dir:expr,
-     $scan:expr, args: [$($arg:expr),+ $(,)?] $(, dep_auto: [$($ai:expr),+ $(,)?])? $(,)?
+     dirs: [$($dir:expr),*], exts: [$($ext:expr),+], excl: [$($excl:expr),*],
+     args: [$($arg:expr),+ $(,)?] $(, dep_auto: [$($ai:expr),+ $(,)?])? $(,)?
     ) => {
         paste::paste! {
             fn [<default_ $name:lower _tool>]() -> String { $tool_default.into() }
@@ -241,7 +242,7 @@ macro_rules! generator_config {
                     output_dir: $output_dir.into(),
                     batch: true,
                     max_jobs: None,
-                    scan: $scan,
+                    scan: ScanConfig::from_defaults::<$name>(),
                 }
             }
         }
@@ -263,12 +264,19 @@ macro_rules! generator_config {
                 ]
             }
         }
+
+        impl ScanDefaults for $name {
+            generator_config!(@scan_default_method default_src_dirs, [$($dir),*]);
+            generator_config!(@scan_default_method default_src_extensions, [$($ext),+]);
+            generator_config!(@scan_default_method default_src_exclude_dirs, [$($excl),*]);
+        }
     };
 
     // Multi-format variant without custom args
     ($name:ident, tool: $tool_default:expr, $tool_field:ident,
      formats: [$($fmt:expr),+ $(,)?], output_dir: $output_dir:expr,
-     $scan:expr $(, dep_auto: [$($ai:expr),+ $(,)?])? $(,)?
+     dirs: [$($dir:expr),*], exts: [$($ext:expr),+], excl: [$($excl:expr),*]
+     $(, dep_auto: [$($ai:expr),+ $(,)?])? $(,)?
     ) => {
         paste::paste! {
             fn [<default_ $name:lower _tool>]() -> String { $tool_default.into() }
@@ -311,7 +319,7 @@ macro_rules! generator_config {
                     output_dir: $output_dir.into(),
                     batch: true,
                     max_jobs: None,
-                    scan: $scan,
+                    scan: ScanConfig::from_defaults::<$name>(),
                 }
             }
         }
@@ -333,12 +341,19 @@ macro_rules! generator_config {
                 ]
             }
         }
+
+        impl ScanDefaults for $name {
+            generator_config!(@scan_default_method default_src_dirs, [$($dir),*]);
+            generator_config!(@scan_default_method default_src_extensions, [$($ext),+]);
+            generator_config!(@scan_default_method default_src_exclude_dirs, [$($excl),*]);
+        }
     };
 
     // Single-output variant (no formats field)
     ($name:ident, tool: $tool_default:expr, $tool_field:ident,
      output_dir: $output_dir:expr,
-     $scan:expr $(, dep_auto: [$($ai:expr),+ $(,)?])? $(,)?
+     dirs: [$($dir:expr),*], exts: [$($ext:expr),+], excl: [$($excl:expr),*]
+     $(, dep_auto: [$($ai:expr),+ $(,)?])? $(,)?
     ) => {
         paste::paste! {
             fn [<default_ $name:lower _tool>]() -> String { $tool_default.into() }
@@ -377,7 +392,7 @@ macro_rules! generator_config {
                     output_dir: $output_dir.into(),
                     batch: true,
                     max_jobs: None,
-                    scan: $scan,
+                    scan: ScanConfig::from_defaults::<$name>(),
                 }
             }
         }
@@ -398,6 +413,18 @@ macro_rules! generator_config {
                 ]
             }
         }
+
+        impl ScanDefaults for $name {
+            generator_config!(@scan_default_method default_src_dirs, [$($dir),*]);
+            generator_config!(@scan_default_method default_src_extensions, [$($ext),+]);
+            generator_config!(@scan_default_method default_src_exclude_dirs, [$($excl),*]);
+        }
+    };
+
+    // Helper: generate a ScanDefaults method — empty list uses trait default, non-empty overrides
+    (@scan_default_method $method:ident, []) => {};
+    (@scan_default_method $method:ident, [$($val:expr),+]) => {
+        fn $method() -> &'static [&'static str] { &[$($val),+] }
     };
 
     // Helper: default dep_auto (empty or provided)
@@ -2153,13 +2180,13 @@ impl KnownFields for PandocConfig {
 
 generator_config!(MarpConfig, tool: "marp", marp_bin,
     formats: ["pdf"], output_dir: "out/marp",
-    default_scan!(src_extensions: [".md"]),
+    dirs: [], exts: [".md"], excl: [],
     args: ["--html", "--allow-local-files"],
 );
 
 generator_config!(Markdown2htmlConfig, tool: "markdown", markdown_bin,
     output_dir: "out/markdown2html",
-    default_scan!(src_extensions: [".md"]),
+    dirs: [], exts: [".md"], excl: [],
 );
 
 fn default_pdflatex() -> String {
@@ -2299,7 +2326,7 @@ impl KnownFields for A2xConfig {
 
 generator_config!(ChromiumConfig, tool: "google-chrome", chromium_bin,
     output_dir: "out/chromium",
-    default_scan!(src_extensions: [".html"]),
+    dirs: [], exts: [".html"], excl: [],
 );
 
 fn default_bundler() -> String {
@@ -2369,27 +2396,27 @@ impl KnownFields for GemConfig {
 
 generator_config!(MermaidConfig, tool: "mmdc", mmdc_bin,
     formats: ["png"], output_dir: "out/mermaid",
-    default_scan!(src_extensions: [".mmd"]),
+    dirs: [], exts: [".mmd"], excl: [],
 );
 
 generator_config!(DrawioConfig, tool: "drawio", drawio_bin,
     formats: ["png"], output_dir: "out/drawio",
-    default_scan!(src_extensions: [".drawio"]),
+    dirs: [], exts: [".drawio"], excl: [],
 );
 
 generator_config!(LibreofficeConfig, tool: "libreoffice", libreoffice_bin,
     formats: ["pdf"], output_dir: "out/libreoffice",
-    default_scan!(src_extensions: [".odp"]),
+    dirs: [], exts: [".odp"], excl: [],
 );
 
 generator_config!(ProtobufConfig, tool: "protoc", protoc_bin,
     output_dir: "out/protobuf",
-    default_scan!(scan_dir: "proto", src_extensions: [".proto"]),
+    dirs: ["proto"], exts: [".proto"], excl: [],
 );
 
 generator_config!(SassConfig, tool: "sass", sass_bin,
     output_dir: "out/sass",
-    default_scan!(scan_dir: "sass", src_extensions: [".scss", ".sass"]),
+    dirs: ["sass"], exts: [".scss", ".sass"], excl: [],
 );
 
 checker_config!(IjqConfig, src_extensions: [".json"]);
