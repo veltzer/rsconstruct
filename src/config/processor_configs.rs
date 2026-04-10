@@ -4,104 +4,11 @@ use std::collections::HashMap;
 use super::{default_true, default_cc_compiler, default_cxx_compiler, default_output_suffix, KnownFields, ScanConfig,};
 
 /// Standard checker config without a configurable command.
-/// Used by checkers that don't expose the tool binary as a config option.
+/// Universal processor config with all standard fields.
+/// Checkers, generators, and simple processors all use this.
+/// Fields not relevant to a given processor type are simply ignored.
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct CheckerConfig {
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
-    #[serde(flatten)]
-    pub scan: ScanConfig,
-}
-
-impl Default for CheckerConfig {
-    fn default() -> Self {
-        Self {
-            args: Vec::new(),
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
-        }
-    }
-}
-
-impl KnownFields for CheckerConfig {
-    fn known_fields() -> &'static [&'static str] {
-        &["args", "dep_inputs", "dep_auto", "batch", "max_jobs"]
-    }
-    fn output_fields() -> &'static [&'static str] {
-        &["args"]
-    }
-    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
-        &[
-            ("args", "Extra arguments passed to the tool before the file path(s)"),
-        ]
-    }
-}
-
-
-/// Standard checker config with a configurable command binary.
-/// Used by checkers that let the user override which tool binary to run.
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct CheckerConfigWithCommand {
-    #[serde(default)]
-    pub command: String,
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
-    #[serde(flatten)]
-    pub scan: ScanConfig,
-}
-
-impl Default for CheckerConfigWithCommand {
-    fn default() -> Self {
-        Self {
-            command: String::new(),
-            args: Vec::new(),
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
-        }
-    }
-}
-
-impl KnownFields for CheckerConfigWithCommand {
-    fn known_fields() -> &'static [&'static str] {
-        &["command", "args", "dep_inputs", "dep_auto", "batch", "max_jobs"]
-    }
-    fn output_fields() -> &'static [&'static str] {
-        &["command", "args"]
-    }
-    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
-        &[
-            ("command", "Path to the tool executable"),
-            ("args", "Extra arguments passed to the tool before the file path(s)"),
-        ]
-    }
-}
-
-
-/// Standard generator config with command binary, output directory, and optional formats.
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct GeneratorConfigWithFormats {
+pub struct StandardConfig {
     #[serde(default)]
     pub command: String,
     #[serde(default)]
@@ -122,7 +29,7 @@ pub struct GeneratorConfigWithFormats {
     pub scan: ScanConfig,
 }
 
-impl Default for GeneratorConfigWithFormats {
+impl Default for StandardConfig {
     fn default() -> Self {
         Self {
             command: String::new(),
@@ -138,7 +45,7 @@ impl Default for GeneratorConfigWithFormats {
     }
 }
 
-impl KnownFields for GeneratorConfigWithFormats {
+impl KnownFields for StandardConfig {
     fn known_fields() -> &'static [&'static str] {
         &["command", "formats", "args", "dep_inputs", "dep_auto", "output_dir", "batch", "max_jobs"]
     }
@@ -155,57 +62,11 @@ impl KnownFields for GeneratorConfigWithFormats {
     }
 }
 
-/// Standard generator config without formats field.
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct GeneratorConfigSimple {
-    #[serde(default)]
-    pub command: String,
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default)]
-    pub output_dir: String,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
-    #[serde(flatten)]
-    pub scan: ScanConfig,
-}
-
-impl Default for GeneratorConfigSimple {
-    fn default() -> Self {
-        Self {
-            command: String::new(),
-            args: Vec::new(),
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            output_dir: String::new(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
-        }
-    }
-}
-
-impl KnownFields for GeneratorConfigSimple {
-    fn known_fields() -> &'static [&'static str] {
-        &["command", "args", "dep_inputs", "dep_auto", "output_dir", "batch", "max_jobs"]
-    }
-    fn output_fields() -> &'static [&'static str] {
-        &["command", "args", "output_dir"]
-    }
-    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
-        &[
-            ("command",    "Path to the tool executable"),
-            ("args",       "Extra arguments passed to the tool"),
-            ("output_dir", "Directory where generated output files are written"),
-        ]
-    }
-}
+// Type aliases for backward compatibility
+pub type CheckerConfig = StandardConfig;
+pub type CheckerConfigWithCommand = StandardConfig;
+pub type GeneratorConfigWithFormats = StandardConfig;
+pub type GeneratorConfigSimple = StandardConfig;
 
 pub type MarpConfig = GeneratorConfigWithFormats;
 pub type MermaidConfig = GeneratorConfigWithFormats;

@@ -617,6 +617,37 @@ pub(crate) fn discover_checker_products(
     Ok(())
 }
 
+/// Standard checker discover: merge dep_inputs + dep_auto, then call discover_checker_products.
+/// Used by all checkers that follow the standard discover pattern.
+#[allow(dead_code)] // Will be used when impl_checker! is removed
+pub(crate) fn checker_discover(
+    graph: &mut BuildGraph,
+    scan: &crate::config::ScanConfig,
+    file_index: &FileIndex,
+    dep_inputs: &[String],
+    dep_auto: &[String],
+    cfg_hash: &impl serde::Serialize,
+    processor_name: &str,
+) -> Result<()> {
+    let mut all_dep_inputs = dep_inputs.to_vec();
+    for ai in dep_auto {
+        all_dep_inputs.extend(config_file_inputs(ai));
+    }
+    discover_checker_products(graph, scan, file_index, &all_dep_inputs, cfg_hash, processor_name)
+}
+
+/// Standard checker auto_detect: check if scan finds any files.
+#[allow(dead_code)]
+pub(crate) fn checker_auto_detect(scan: &crate::config::ScanConfig, file_index: &FileIndex) -> bool {
+    !file_index.scan(scan, true).is_empty()
+}
+
+/// Standard checker auto_detect with scan_root guard.
+#[allow(dead_code)]
+pub(crate) fn checker_auto_detect_with_scan_root(scan: &crate::config::ScanConfig, file_index: &FileIndex) -> bool {
+    scan_root_valid(scan) && !file_index.scan(scan, true).is_empty()
+}
+
 /// Run a command in the parent directory of an anchor file (e.g., Makefile, Cargo.toml).
 /// Sets `current_dir` to the parent directory (unless it's the project root).
 /// Returns a display-friendly directory name for error messages.
