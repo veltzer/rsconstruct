@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use super::{default_true, default_cc_compiler, default_cxx_compiler, default_output_suffix, KnownFields, ScanConfig};
+use super::{default_true, default_cc_compiler, default_cxx_compiler, default_output_suffix, KnownFields, ScanConfig, ScanDefaults};
 
 /// Generate a checker config struct with standard fields.
 ///
-/// Generates the struct with serde `Deserialize`/`Serialize`/`Clone` derives and
-/// a `Default` impl with the specified scan settings.
+/// Generates the struct with serde `Deserialize`/`Serialize`/`Clone` derives,
+/// a `Default` impl, `KnownFields` impl, and `ScanDefaults` impl.
 ///
 /// Variants:
 /// - `checker_config!(Name, src_extensions: [".py"])` — basic checker
@@ -19,27 +19,33 @@ macro_rules! checker_config {
 
     // Basic: extensions only
     ($name:ident, src_extensions: [$($ext:expr),+ $(,)?]) => {
-        checker_config!(@no_linter $name, default_scan!(src_extensions: [$($ext),+]), []);
+        checker_config!(@no_linter $name, [], dirs: [], exts: [$($ext),+], excl: []);
     };
     // With scan_dir
     ($name:ident, scan_dir: $dir:expr, src_extensions: [$($ext:expr),+ $(,)?]) => {
-        checker_config!(@no_linter $name, default_scan!(scan_dir: $dir, src_extensions: [$($ext),+]), []);
+        checker_config!(@no_linter $name, [], dirs: [$dir], exts: [$($ext),+], excl: []);
     };
     // With dep_auto only
     ($name:ident, src_extensions: [$($ext:expr),+ $(,)?], dep_auto: [$($ai:expr),+ $(,)?]) => {
-        checker_config!(@no_linter $name, default_scan!(src_extensions: [$($ext),+]), [$($ai),+]);
+        checker_config!(@no_linter $name, [$($ai),+], dirs: [], exts: [$($ext),+], excl: []);
     };
     // With linter only
     ($name:ident, src_extensions: [$($ext:expr),+ $(,)?], command: $command:expr) => {
-        checker_config!(@with_command $name, default_scan!(src_extensions: [$($ext),+]), $command, []);
+        checker_config!(@with_command $name, [], $command, dirs: [], exts: [$($ext),+], excl: []);
     };
     // With linter + dep_auto
     ($name:ident, src_extensions: [$($ext:expr),+ $(,)?], command: $command:expr, dep_auto: [$($ai:expr),+ $(,)?]) => {
-        checker_config!(@with_command $name, default_scan!(src_extensions: [$($ext),+]), $command, [$($ai),+]);
+        checker_config!(@with_command $name, [$($ai),+], $command, dirs: [], exts: [$($ext),+], excl: []);
+    };
+
+    // Helper: generate a ScanDefaults method — empty list uses trait default, non-empty overrides
+    (@scan_default_method $method:ident, []) => {};
+    (@scan_default_method $method:ident, [$($val:expr),+]) => {
+        fn $method() -> &'static [&'static str] { &[$($val),+] }
     };
 
     // --- Internal: without linter field ---
-    (@no_linter $name:ident, $scan:expr, [$($ai:expr),*]) => {
+    (@no_linter $name:ident, [$($ai:expr),*], dirs: [$($dir:expr),*], exts: [$($ext:expr),+], excl: [$($excl:expr),*]) => {
         #[derive(Debug, Deserialize, Serialize, Clone)]
         pub struct $name {
             #[serde(default)]
@@ -64,7 +70,7 @@ macro_rules! checker_config {
                     dep_auto: vec![$($ai.into()),*],
                     batch: true,
                     max_jobs: None,
-                    scan: $scan,
+                    scan: ScanConfig::from_defaults::<$name>(),
                 }
             }
         }
@@ -82,10 +88,16 @@ macro_rules! checker_config {
                 ]
             }
         }
+
+        impl ScanDefaults for $name {
+            checker_config!(@scan_default_method default_src_dirs, [$($dir),*]);
+            checker_config!(@scan_default_method default_src_extensions, [$($ext),+]);
+            checker_config!(@scan_default_method default_src_exclude_dirs, [$($excl),*]);
+        }
     };
 
     // --- Internal: with command field ---
-    (@with_command $name:ident, $scan:expr, $command:expr, [$($ai:expr),*]) => {
+    (@with_command $name:ident, [$($ai:expr),*], $command:expr, dirs: [$($dir:expr),*], exts: [$($ext:expr),+], excl: [$($excl:expr),*]) => {
         paste::paste! {
             fn [<default_ $name:lower _command>]() -> String {
                 $command.into()
@@ -121,7 +133,7 @@ macro_rules! checker_config {
                     dep_auto: vec![$($ai.into()),*],
                     batch: true,
                     max_jobs: None,
-                    scan: $scan,
+                    scan: ScanConfig::from_defaults::<$name>(),
                 }
             }
         }
@@ -139,6 +151,12 @@ macro_rules! checker_config {
                     ("args", "Extra arguments passed to the tool before the file path(s)"),
                 ]
             }
+        }
+
+        impl ScanDefaults for $name {
+            checker_config!(@scan_default_method default_src_dirs, [$($dir),*]);
+            checker_config!(@scan_default_method default_src_extensions, [$($ext),+]);
+            checker_config!(@scan_default_method default_src_exclude_dirs, [$($excl),*]);
         }
     };
 }
