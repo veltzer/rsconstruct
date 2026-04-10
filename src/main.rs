@@ -287,6 +287,9 @@ fn run() -> Result<()> {
                 cli::ProcessorAction::List => {
                     builder::processors::list_processors_no_config(cli.verbose)?;
                 }
+                cli::ProcessorAction::Recommend => {
+                    builder::processors::list_recommendations();
+                }
                 cli::ProcessorAction::Defconfig { ref name } => {
                     if has_config {
                         let builder = Builder::new()?;

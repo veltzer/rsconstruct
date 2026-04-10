@@ -440,6 +440,8 @@ pub enum ProcessorAction {
     Allowlist,
     /// Show names of all enabled processors (one per line, requires config)
     Names,
+    /// Show the recommended processor for each file extension (no config needed)
+    Recommend,
     /// Show inter-processor dependencies (requires config)
     Graph {
         /// Output format
