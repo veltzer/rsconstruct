@@ -30,6 +30,10 @@ macro_rules! checker_config {
     ($name:ident, src_extensions: [$($ext:expr),+ $(,)?], dep_auto: [$($ai:expr),+ $(,)?]) => {
         checker_config!(@no_linter $name, [$($ai),+], dirs: [], exts: [$($ext),+], excl: []);
     };
+    // With scan_dir + dep_auto
+    ($name:ident, scan_dir: $dir:expr, src_extensions: [$($ext:expr),+ $(,)?], dep_auto: [$($ai:expr),+ $(,)?]) => {
+        checker_config!(@no_linter $name, [$($ai),+], dirs: [$dir], exts: [$($ext),+], excl: []);
+    };
     // With linter only
     ($name:ident, src_extensions: [$($ext:expr),+ $(,)?], command: $command:expr) => {
         checker_config!(@with_command $name, [], $command, dirs: [], exts: [$($ext),+], excl: []);
@@ -532,7 +536,7 @@ checker_config!(RuffConfig, src_extensions: [".py"], command: "ruff", dep_auto: 
 
 checker_config!(PylintConfig, src_extensions: [".py"], dep_auto: [".pylintrc"]);
 
-checker_config!(PytestConfig, src_extensions: [".py"], dep_auto: ["conftest.py", "pytest.ini", "pyproject.toml"]);
+checker_config!(PytestConfig, scan_dir: "tests", src_extensions: [".py"], dep_auto: ["conftest.py", "pytest.ini", "pyproject.toml"]);
 
 checker_config!(BlackConfig, src_extensions: [".py"], dep_auto: ["pyproject.toml"]);
 

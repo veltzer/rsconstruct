@@ -55,7 +55,7 @@ impl LuaProcessor {
         )?;
 
         // Extract scan config from the TOML config value
-        let scan_config = scan_config_from_toml(&config_value, "", &[], &[]);
+        let scan_config = scan_config_from_toml(&config_value, &[], &[], &[]);
 
         let stub_dir = PathBuf::from("out").join(&name);
 

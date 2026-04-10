@@ -162,8 +162,7 @@ use crate::graph::{BuildGraph, Product};
 
 /// Processor name constants — auto-generated from the central registry in `src/registry.rs`.
 macro_rules! gen_processor_names {
-    ( $( $const_name:ident, $field:ident, $config_type:ty, $proc_type:ty,
-         ($($scan_args:tt)*); )* ) => {
+    ( $( $const_name:ident, $field:ident, $config_type:ty, $proc_type:ty; )* ) => {
         pub mod names {
             $( pub const $const_name: &str = stringify!($field); )*
         }

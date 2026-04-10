@@ -52,7 +52,6 @@ pub(crate) trait KnownFields {
 /// Trait providing default scan configuration for a processor config struct.
 /// Each config struct implements this to declare its default src_dirs, extensions, and exclude dirs.
 /// This is the single source of truth — no separate registry tuple needed.
-#[allow(dead_code)] // Will be used once callers migrate from resolve() to resolve_from()
 pub(crate) trait ScanDefaults {
     /// Default directories to scan. Empty slice means "project root" (user must set src_dirs).
     fn default_src_dirs() -> &'static [&'static str] { &[] }
@@ -168,36 +167,7 @@ pub(crate) struct ScanConfig {
 }
 
 impl ScanConfig {
-    /// Fill in None fields with the given defaults (mutates in place).
-    /// A `scan_dir` of `""` means "no default" — `src_dirs` will be set to `[]`
-    /// and the user must provide it in their config.
-    pub(crate) fn resolve(&mut self, scan_dir: &str, src_extensions: &[&str], src_exclude_dirs: &[&str]) {
-        if self.src_dirs.is_none() {
-            if scan_dir.is_empty() {
-                self.src_dirs = Some(Vec::new());
-            } else {
-                self.src_dirs = Some(vec![scan_dir.to_string()]);
-            }
-        }
-        if self.src_extensions.is_none() {
-            self.src_extensions = Some(src_extensions.iter().map(|s| s.to_string()).collect());
-        }
-        if self.src_exclude_dirs.is_none() {
-            self.src_exclude_dirs = Some(src_exclude_dirs.iter().map(|s| s.to_string()).collect());
-        }
-        if self.src_exclude_files.is_none() {
-            self.src_exclude_files = Some(Vec::new());
-        }
-        if self.src_exclude_paths.is_none() {
-            self.src_exclude_paths = Some(Vec::new());
-        }
-        if self.src_files.is_none() {
-            self.src_files = Some(Vec::new());
-        }
-    }
-
     /// Fill in None fields from the config struct's ScanDefaults.
-    #[allow(dead_code)] // Will be used once callers migrate from resolve()
     pub(crate) fn resolve_from<T: ScanDefaults>(&mut self) {
         if self.src_dirs.is_none() {
             self.src_dirs = Some(T::default_src_dirs().iter().map(|s| s.to_string()).collect());
@@ -221,7 +191,6 @@ impl ScanConfig {
 
     /// Create a ScanConfig pre-populated from a ScanDefaults impl.
     /// Used in Default impls so the struct's defaults match its ScanDefaults trait.
-    #[allow(dead_code)] // Will be used once config macros migrate
     pub(crate) fn from_defaults<T: ScanDefaults>() -> Self {
         Self {
             src_dirs: {
@@ -270,12 +239,9 @@ impl ScanConfig {
     }
 }
 
-/// Base exclude dirs shared by all processors.
-pub(crate) const BUILD_TOOL_EXCLUDES: &[&str] = &[];
-pub(crate) const PYTHON_EXCLUDE_DIRS: &[&str] = &[];
+/// Exclude dir constants used by ScanDefaults impls.
 pub(crate) const CC_EXCLUDE_DIRS: &[&str] = &[];
 pub(crate) const ZSPELL_EXCLUDE_DIRS: &[&str] = &[];
-pub(crate) const SHELL_EXCLUDE_DIRS: &[&str] = &[];
 pub(crate) const MARKDOWN_EXCLUDE_DIRS: &[&str] = &[];
 pub(crate) const MAKE_CARGO_EXCLUDES: &[&str] = &[];
 
@@ -484,8 +450,7 @@ pub(crate) struct ProcessorInstance {
 /// Auto-generate `ProcessorConfig` and all per-processor wiring
 /// from the central registry in `src/registry.rs`.
 macro_rules! gen_processor_config {
-    ( $( $const_name:ident, $field:ident, $config_type:ty, $proc_type:ty,
-         ($scan_dir:expr, $exts:expr, $excl:expr); )* ) => {
+    ( $( $const_name:ident, $field:ident, $config_type:ty, $proc_type:ty; )* ) => {
 
         /// Return all known builtin processor type names.
         pub(crate) fn all_type_names() -> Vec<&'static str> {
@@ -504,7 +469,7 @@ macro_rules! gen_processor_config {
                 $(
                     stringify!($field) => {
                         let mut cfg: $config_type = toml::from_str(&toml::to_string(value)?)?;
-                        cfg.scan.resolve($scan_dir, $exts, $excl);
+                        cfg.scan.resolve_from::<$config_type>();
                         *value = toml::Value::try_from(&cfg)?;
                         Ok(())
                     }
@@ -562,11 +527,11 @@ macro_rules! gen_processor_config {
                 }
             }
 
-            /// Return the default scan_dir for a builtin processor type, or None for Lua plugins.
-            /// Returns `Some("")` for processors that default to scanning the project root.
-            pub(crate) fn default_scan_dir_for(type_name: &str) -> Option<&'static str> {
+            /// Return the default src_dirs for a builtin processor type, or None for Lua plugins.
+            /// Returns `Some(&[])` for processors that default to scanning the project root.
+            pub(crate) fn default_src_dirs_for(type_name: &str) -> Option<&'static [&'static str]> {
                 match type_name {
-                    $( stringify!($field) => Some($scan_dir), )*
+                    $( stringify!($field) => Some(<$config_type as ScanDefaults>::default_src_dirs()), )*
                     _ => None,
                 }
             }
@@ -576,7 +541,7 @@ macro_rules! gen_processor_config {
                 let json: serde_json::Value = match type_name {
                     $( stringify!($field) => {
                         let mut cfg = <$config_type>::default();
-                        cfg.scan.resolve($scan_dir, $exts, $excl);
+                        cfg.scan.resolve_from::<$config_type>();
                         serde_json::to_value(cfg).ok()?
                     }, )*
                     _ => return None,
@@ -1074,7 +1039,7 @@ fn validate_single_processor(
     let has_match_paths = table.get("src_files")
         .and_then(|v| v.as_array())
         .is_some_and(|arr| !arr.is_empty());
-    if let Some("") = ProcessorConfig::default_scan_dir_for(type_name)
+    if ProcessorConfig::default_src_dirs_for(type_name).is_some_and(|dirs| dirs.is_empty())
     && !SCAN_DIRS_EXEMPT.contains(&type_name)
     && !has_match_paths {
         match table.get("src_dirs") {
@@ -1190,7 +1155,7 @@ impl Config {
 /// Falls back to the given defaults for any missing fields.
 pub(crate) fn scan_config_from_toml(
     value: &toml::Value,
-    default_scan_dir: &str,
+    default_src_dirs: &[&str],
     default_src_extensions: &[&str],
     default_exclude_dirs: &[&str],
 ) -> ScanConfig {
@@ -1234,6 +1199,24 @@ pub(crate) fn scan_config_from_toml(
         src_exclude_paths,
         src_files,
     };
-    scan.resolve(default_scan_dir, default_src_extensions, default_exclude_dirs);
+    // Fill defaults for None fields
+    if scan.src_dirs.is_none() {
+        scan.src_dirs = Some(default_src_dirs.iter().map(|s| s.to_string()).collect());
+    }
+    if scan.src_extensions.is_none() {
+        scan.src_extensions = Some(default_src_extensions.iter().map(|s| s.to_string()).collect());
+    }
+    if scan.src_exclude_dirs.is_none() {
+        scan.src_exclude_dirs = Some(default_exclude_dirs.iter().map(|s| s.to_string()).collect());
+    }
+    if scan.src_exclude_files.is_none() {
+        scan.src_exclude_files = Some(Vec::new());
+    }
+    if scan.src_exclude_paths.is_none() {
+        scan.src_exclude_paths = Some(Vec::new());
+    }
+    if scan.src_files.is_none() {
+        scan.src_files = Some(Vec::new());
+    }
     scan
 }

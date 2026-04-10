@@ -88,8 +88,7 @@ struct StatusPrintOptions<'a> {
 /// Auto-generate `create_processor_for_instance` dispatch function from the central registry.
 /// Given a type name and TOML config, constructs the appropriate processor.
 macro_rules! gen_processor_dispatch {
-    ( $( $const_name:ident, $field:ident, $config_type:ty, $proc_type:ident,
-         ($scan_dir:expr, $exts:expr, $excl:expr); )* ) => {
+    ( $( $const_name:ident, $field:ident, $config_type:ty, $proc_type:ident; )* ) => {
         /// Create a processor from a type name and TOML config value.
         /// Returns None for unknown types (Lua plugins handled separately).
         pub(crate) fn create_processor_for_instance(
@@ -100,7 +99,7 @@ macro_rules! gen_processor_dispatch {
                 $(
                     stringify!($field) => {
                         let mut cfg: $config_type = toml::from_str(&toml::to_string(config_toml)?)?;
-                        cfg.scan.resolve($scan_dir, $exts, $excl);
+                        cfg.scan.resolve_from::<$config_type>();
                         gen_processor_dispatch!(@construct $proc_type, cfg)
                     }
                 )*
@@ -112,8 +111,7 @@ macro_rules! gen_processor_dispatch {
         pub(crate) fn create_all_default_processors() -> ProcessorMap {
             let mut processors: ProcessorMap = HashMap::new();
             $(
-                gen_processor_dispatch!(@register_default processors, $const_name, $field, $config_type, $proc_type,
-                    $scan_dir, $exts, $excl);
+                gen_processor_dispatch!(@register_default processors, $const_name, $field, $config_type, $proc_type);
             )*
             processors
         }
@@ -125,12 +123,11 @@ macro_rules! gen_processor_dispatch {
         let proc: proc_mod::$proc_type = proc_mod::$proc_type::new($cfg);
         Ok(Some(Box::new(proc)))
     }};
-    // Register a processor with default config. new() must return Self (not Result<Self>).
-    (@register_default $processors:ident, $const_name:ident, $field:ident, $config_type:ty, $proc_type:ident,
-     $scan_dir:expr, $exts:expr, $excl:expr) => {
+    // Register a processor with default config.
+    (@register_default $processors:ident, $const_name:ident, $field:ident, $config_type:ty, $proc_type:ident) => {
         {
             let mut cfg = <$config_type>::default();
-            cfg.scan.resolve($scan_dir, $exts, $excl);
+            cfg.scan.resolve_from::<$config_type>();
             let proc: proc_mod::$proc_type = proc_mod::$proc_type::new(cfg);
             Builder::register(&mut $processors, proc_names::$const_name, proc);
         }
