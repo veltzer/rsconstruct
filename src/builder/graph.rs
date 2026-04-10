@@ -1,5 +1,6 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
+use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use crate::cli::{GraphAction, GraphFormat, GraphViewer};
 use crate::color;
@@ -14,6 +15,7 @@ impl Builder {
             GraphAction::Show { format } => self.print_graph(format),
             GraphAction::View { viewer } => self.view_graph(viewer),
             GraphAction::Stats => self.graph_stats(),
+            GraphAction::Unreferenced { extensions, rm } => self.graph_unreferenced(extensions, rm),
         }
     }
 
@@ -139,6 +141,41 @@ impl Builder {
         Ok(())
     }
 
+    /// List files on disk not referenced by any product input (primary or dependency).
+    fn graph_unreferenced(&self, extensions: Vec<String>, rm: bool) -> Result<()> {
+        let graph = self.build_graph()?;
+
+        // Collect every file that appears in any product's inputs
+        let referenced: HashSet<PathBuf> = graph.products()
+            .iter()
+            .flat_map(|p| p.inputs.iter().cloned())
+            .collect();
+
+        // Normalise extensions: ensure they start with '.'
+        let exts: Vec<String> = extensions.iter()
+            .map(|e| if e.starts_with('.') { e.clone() } else { format!(".{}", e) })
+            .collect();
+
+        // Walk the project directory for matching files
+        let mut unreferenced: Vec<PathBuf> = Vec::new();
+        collect_unreferenced(std::path::Path::new("."), &exts, &referenced, &mut unreferenced)?;
+
+        unreferenced.sort();
+
+        for path in &unreferenced {
+            println!("{}", path.display());
+        }
+
+        if rm {
+            for path in &unreferenced {
+                fs::remove_file(path)
+                    .with_context(|| format!("Failed to delete {}", path.display()))?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Open a file with the configured viewer or the system default application
     pub(super) fn open_file(&self, path: &std::path::Path) -> Result<()> {
         use std::process::Command;
@@ -158,4 +195,37 @@ impl Builder {
 
         Ok(())
     }
+}
+
+/// Recursively collect files whose extension matches `exts` and are not in `referenced`.
+fn collect_unreferenced(
+    dir: &Path,
+    exts: &[String],
+    referenced: &HashSet<PathBuf>,
+    out: &mut Vec<PathBuf>,
+) -> Result<()> {
+    for entry in fs::read_dir(dir).with_context(|| format!("Failed to read dir {}", dir.display()))? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            // Skip hidden directories and common non-project dirs
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if name.starts_with('.') || name == "target" {
+                continue;
+            }
+            collect_unreferenced(&path, exts, referenced, out)?;
+        } else if path.is_file() {
+            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                let dot_ext = format!(".{}", ext);
+                if exts.contains(&dot_ext) {
+                    // Normalise to a path without leading "./"
+                    let clean = path.strip_prefix("./").unwrap_or(&path).to_path_buf();
+                    if !referenced.contains(&clean) {
+                        out.push(clean);
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }

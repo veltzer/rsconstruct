@@ -341,6 +341,15 @@ pub enum GraphAction {
     },
     /// Show graph statistics (requires config)
     Stats,
+    /// List files on disk not referenced by any product in the graph (requires config)
+    Unreferenced {
+        /// File extensions to check, comma-separated (e.g. .svg,.png)
+        #[arg(short, long, value_delimiter = ',', required = true)]
+        extensions: Vec<String>,
+        /// Delete the unreferenced files
+        #[arg(long)]
+        rm: bool,
+    },
 }
 
 #[derive(Subcommand)]

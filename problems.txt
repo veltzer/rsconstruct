@@ -2,7 +2,3 @@ python files dependency analysis:
   for "import local_python_module" statements
   for dependency on other files with open(filename) or other functions.
   for import of external dependencies and generate external depenencies.
-
-- lets say I want to know which svg files does not get references in a probject. 
-  rsconstruct is the ideal tool to tell me that since it has the graph.
-  so contruct the graphs and then tell me which files are not references by the graph.

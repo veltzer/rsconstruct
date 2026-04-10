@@ -101,3 +101,101 @@ fn graph_stats_json() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.starts_with('{'), "Expected JSON output, got: {}", stdout);
 }
+
+#[test]
+fn graph_unreferenced_finds_untracked_files() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    // Processor scans only the "src" subdir
+    fs::create_dir(project_path.join("src")).unwrap();
+    fs::write(project_path.join("rsconstruct.toml"), concat!(
+        "[processor.script]\n",
+        "command = \"true\"\n",
+        "src_extensions = [\".txt\"]\n",
+        "src_dirs = [\"src\"]\n",
+    )).unwrap();
+
+    // This file IS referenced (primary input inside src/)
+    fs::write(project_path.join("src/used.txt"), "used\n").unwrap();
+    // This file is NOT referenced (outside src/, not picked up by processor)
+    fs::write(project_path.join("unused.txt"), "unused\n").unwrap();
+
+    run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["graph", "unreferenced", "--extensions", ".txt"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(output.status.success(), "graph unreferenced failed: {}", String::from_utf8_lossy(&output.stderr));
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("unused.txt"), "Should report unused.txt: {}", stdout);
+    assert!(!stdout.contains("src/used.txt"), "Should not report src/used.txt: {}", stdout);
+}
+
+#[test]
+fn graph_unreferenced_dep_inputs_not_reported() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    fs::create_dir(project_path.join("src")).unwrap();
+
+    // dep.txt is a dependency (dep_inputs) — referenced but not a primary input
+    fs::write(project_path.join("dep.txt"), "dep\n").unwrap();
+    // source.txt is a primary input
+    fs::write(project_path.join("src/source.txt"), "source\n").unwrap();
+    // unused.txt is neither
+    fs::write(project_path.join("unused.txt"), "unused\n").unwrap();
+
+    fs::write(project_path.join("rsconstruct.toml"), concat!(
+        "[processor.script]\n",
+        "command = \"true\"\n",
+        "src_extensions = [\".txt\"]\n",
+        "src_dirs = [\"src\"]\n",
+        "dep_inputs = [\"dep.txt\"]\n",
+    )).unwrap();
+
+    run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["graph", "unreferenced", "--extensions", ".txt"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.contains("dep.txt"), "dep.txt is referenced via dep_inputs, should not appear: {}", stdout);
+    assert!(!stdout.contains("source.txt"), "source.txt is a primary input, should not appear: {}", stdout);
+    assert!(stdout.contains("unused.txt"), "unused.txt should appear: {}", stdout);
+}
+
+#[test]
+fn graph_unreferenced_rm_deletes_files() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+
+    fs::create_dir(project_path.join("src")).unwrap();
+    fs::write(project_path.join("rsconstruct.toml"), concat!(
+        "[processor.script]\n",
+        "command = \"true\"\n",
+        "src_extensions = [\".txt\"]\n",
+        "src_dirs = [\"src\"]\n",
+    )).unwrap();
+
+    fs::write(project_path.join("src/used.txt"), "used\n").unwrap();
+    fs::write(project_path.join("unused.txt"), "unused\n").unwrap();
+
+    run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["graph", "unreferenced", "--extensions", ".txt", "--rm"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(output.status.success());
+
+    assert!(!project_path.join("unused.txt").exists(), "unused.txt should have been deleted");
+    assert!(project_path.join("src/used.txt").exists(), "src/used.txt should still exist");
+}
