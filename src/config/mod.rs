@@ -49,6 +49,18 @@ pub(crate) trait KnownFields {
     }
 }
 
+/// Trait providing default scan configuration for a processor config struct.
+/// Each config struct implements this to declare its default src_dirs, extensions, and exclude dirs.
+/// This is the single source of truth — no separate registry tuple needed.
+#[allow(dead_code)] // Will be used once callers migrate from resolve() to resolve_from()
+pub(crate) trait ScanDefaults {
+    /// Default directories to scan. Empty slice means "project root" (user must set src_dirs).
+    fn default_src_dirs() -> &'static [&'static str] { &[] }
+    /// Default file extensions to match.
+    fn default_src_extensions() -> &'static [&'static str] { &[] }
+    /// Default directory segments to exclude from scanning.
+    fn default_src_exclude_dirs() -> &'static [&'static str] { &[] }
+}
 
 /// Validate dep_inputs paths exist and return them as PathBufs.
 /// Paths are relative to project root (which is cwd).
@@ -181,6 +193,49 @@ impl ScanConfig {
         }
         if self.src_files.is_none() {
             self.src_files = Some(Vec::new());
+        }
+    }
+
+    /// Fill in None fields from the config struct's ScanDefaults.
+    #[allow(dead_code)] // Will be used once callers migrate from resolve()
+    pub(crate) fn resolve_from<T: ScanDefaults>(&mut self) {
+        if self.src_dirs.is_none() {
+            self.src_dirs = Some(T::default_src_dirs().iter().map(|s| s.to_string()).collect());
+        }
+        if self.src_extensions.is_none() {
+            self.src_extensions = Some(T::default_src_extensions().iter().map(|s| s.to_string()).collect());
+        }
+        if self.src_exclude_dirs.is_none() {
+            self.src_exclude_dirs = Some(T::default_src_exclude_dirs().iter().map(|s| s.to_string()).collect());
+        }
+        if self.src_exclude_files.is_none() {
+            self.src_exclude_files = Some(Vec::new());
+        }
+        if self.src_exclude_paths.is_none() {
+            self.src_exclude_paths = Some(Vec::new());
+        }
+        if self.src_files.is_none() {
+            self.src_files = Some(Vec::new());
+        }
+    }
+
+    /// Create a ScanConfig pre-populated from a ScanDefaults impl.
+    /// Used in Default impls so the struct's defaults match its ScanDefaults trait.
+    #[allow(dead_code)] // Will be used once config macros migrate
+    pub(crate) fn from_defaults<T: ScanDefaults>() -> Self {
+        Self {
+            src_dirs: {
+                let dirs = T::default_src_dirs();
+                if dirs.is_empty() { None } else { Some(dirs.iter().map(|s| s.to_string()).collect()) }
+            },
+            src_extensions: {
+                let exts = T::default_src_extensions();
+                if exts.is_empty() { None } else { Some(exts.iter().map(|s| s.to_string()).collect()) }
+            },
+            src_exclude_dirs: None,
+            src_exclude_files: None,
+            src_exclude_paths: None,
+            src_files: None,
         }
     }
 
