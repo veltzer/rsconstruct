@@ -30,7 +30,7 @@ impl DuplicateFilesProcessor {
         }
 
         let mut duplicates: Vec<String> = Vec::new();
-        for (_hash, paths) in &checksums {
+        for paths in checksums.values() {
             if paths.len() > 1 {
                 let names: Vec<String> = paths.iter().map(|p| p.display().to_string()).collect();
                 duplicates.push(format!("  {}", names.join(", ")));

@@ -29,10 +29,10 @@ pub fn fetch(url: &str) -> Result<String> {
     // Check cache
     {
         let read_txn = db.begin_read()?;
-        if let Ok(table) = read_txn.open_table(TABLE) {
-            if let Some(entry) = table.get(url)? {
-                return Ok(entry.value().to_string());
-            }
+        if let Ok(table) = read_txn.open_table(TABLE)
+            && let Some(entry) = table.get(url)?
+        {
+            return Ok(entry.value().to_string());
         }
     }
 

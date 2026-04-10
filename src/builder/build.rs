@@ -137,7 +137,7 @@ impl Builder {
                 missing.sort_by(|a, b| a.0.cmp(&b.0));
                 let mut msg = String::from("Missing required tools:\n");
                 for (tool, procs) in &missing {
-                    let install_hint = crate::processors::tool_install_command(&tool)
+                    let install_hint = crate::processors::tool_install_command(tool)
                         .map(|cmd| format!("  install: {}", cmd))
                         .unwrap_or_default();
                     msg.push_str(&format!("  {} (needed by: {}){}\n", tool, procs.join(", "), install_hint));

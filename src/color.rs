@@ -48,5 +48,5 @@ pub fn dim(text: &str) -> Cow<'_, str> {
 
 /// Apply the standard rsconstruct table style and print to stdout.
 pub fn print_table(mut table: Table) {
-    println!("{}", table.with(Style::modern_rounded()));
+    println!("{}", table.with(Style::rounded()));
 }

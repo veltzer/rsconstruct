@@ -51,8 +51,8 @@ fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
 
         documents_pages.extend(
             doc.get_pages()
-                .into_iter()
-                .map(|(_, object_id)| {
+                .into_values()
+                .map(|object_id| {
                     (object_id, doc.get_object(object_id).unwrap().to_owned())
                 })
         );
@@ -78,10 +78,10 @@ fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
                 if let Ok(dictionary) = object.as_dict() {
                     let mut dictionary = dictionary.clone();
                     dictionary.remove(b"Outlines");
-                    if let Some((_, ref existing)) = pages_object {
-                        if let Ok(old_dict) = existing.as_dict() {
-                            dictionary.extend(old_dict);
-                        }
+                    if let Some((_, ref existing)) = pages_object
+                        && let Ok(old_dict) = existing.as_dict()
+                    {
+                        dictionary.extend(old_dict);
                     }
                     pages_object = Some((
                         pages_object.as_ref().map(|(id, _)| *id).unwrap_or(*object_id),
@@ -117,8 +117,8 @@ fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
         dictionary.set("Count", documents_pages.len() as u32);
         dictionary.set(
             "Kids",
-            documents_pages.into_iter()
-                .map(|(id, _)| Object::Reference(id))
+            documents_pages.into_keys()
+                .map(Object::Reference)
                 .collect::<Vec<_>>(),
         );
         document.objects.insert(pages_object.0, Object::Dictionary(dictionary));
@@ -136,10 +136,10 @@ fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
     document.max_id = max_id;
     document.renumber_objects();
     document.adjust_zero_pages();
-    if let Some(n) = document.build_outline() {
-        if let Ok(Object::Dictionary(dict)) = document.get_object_mut(catalog_object.0) {
-            dict.set("Outlines", Object::Reference(n));
-        }
+    if let Some(n) = document.build_outline()
+        && let Ok(Object::Dictionary(dict)) = document.get_object_mut(catalog_object.0)
+    {
+        dict.set("Outlines", Object::Reference(n));
     }
     document.compress();
 

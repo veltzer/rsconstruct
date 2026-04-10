@@ -214,16 +214,14 @@ fn collect_unreferenced(
                 continue;
             }
             collect_unreferenced(&path, exts, referenced, out)?;
-        } else if path.is_file() {
-            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                let dot_ext = format!(".{}", ext);
-                if exts.contains(&dot_ext) {
-                    // Normalise to a path without leading "./"
-                    let clean = path.strip_prefix("./").unwrap_or(&path).to_path_buf();
-                    if !referenced.contains(&clean) {
-                        out.push(clean);
-                    }
-                }
+        } else if path.is_file()
+            && let Some(ext) = path.extension().and_then(|e| e.to_str())
+            && exts.contains(&format!(".{}", ext))
+        {
+            // Normalise to a path without leading "./"
+            let clean = path.strip_prefix("./").unwrap_or(&path).to_path_buf();
+            if !referenced.contains(&clean) {
+                out.push(clean);
             }
         }
     }

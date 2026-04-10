@@ -149,12 +149,12 @@ fn check_property_ordering(
             }
 
             // Recurse into items (for arrays-of-objects)
-            if let Some(items_schema) = schema_map.get("items") {
-                if let Value::Array(arr) = data {
-                    for (i, item) in arr.iter().enumerate() {
-                        let child_path = format!("{}[{}]", path, i);
-                        check_property_ordering(item, items_schema, &child_path, errors);
-                    }
+            if let Some(items_schema) = schema_map.get("items")
+                && let Value::Array(arr) = data
+            {
+                for (i, item) in arr.iter().enumerate() {
+                    let child_path = format!("{}[{}]", path, i);
+                    check_property_ordering(item, items_schema, &child_path, errors);
                 }
             }
         }

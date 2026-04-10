@@ -139,10 +139,11 @@ fn collect_dirs_with_ext(dir: &Path, ext: &str, result: &mut Vec<PathBuf>) {
         };
         if ft.is_dir() {
             subdirs.push(entry.path());
-        } else if !has_matching_file && ft.is_file() {
-            if entry.path().extension().is_some_and(|e| e == ext) {
-                has_matching_file = true;
-            }
+        } else if !has_matching_file
+            && ft.is_file()
+            && entry.path().extension().is_some_and(|e| e == ext)
+        {
+            has_matching_file = true;
         }
     }
     if has_matching_file {

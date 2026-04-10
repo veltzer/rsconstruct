@@ -39,10 +39,10 @@ pub fn run(config: &SymlinkInstallConfig) -> Result<()> {
 
 /// Expand ~ to the user's home directory.
 fn expand_tilde(path: &str) -> String {
-    if let Some(rest) = path.strip_prefix("~/") {
-        if let Ok(home) = std::env::var("HOME") {
-            return format!("{}/{}", home, rest);
-        }
+    if let Some(rest) = path.strip_prefix("~/")
+        && let Ok(home) = std::env::var("HOME")
+    {
+        return format!("{}/{}", home, rest);
     }
     path.to_string()
 }
@@ -115,10 +115,10 @@ enum LinkResult {
 /// Create or update a single symlink.
 fn install_symlink(source: &Path, target: &Path) -> LinkResult {
     if target.is_symlink() {
-        if let Ok(existing) = fs::read_link(target) {
-            if existing == source {
-                return LinkResult::Unchanged;
-            }
+        if let Ok(existing) = fs::read_link(target)
+            && existing == source
+        {
+            return LinkResult::Unchanged;
         }
         let _ = fs::remove_file(target);
         let _ = symlink(source, target);
