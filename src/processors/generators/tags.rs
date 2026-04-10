@@ -32,7 +32,25 @@ impl TagsProcessor {
 }
 
 impl ProductDiscovery for TagsProcessor {
-    delegate_base!(generator_no_auto_detect);
+    fn description(&self) -> &str {
+        self.base.description()
+    }
+
+    fn processor_type(&self) -> crate::processors::ProcessorType {
+        self.base.processor_type()
+    }
+
+    fn config_json(&self) -> Option<String> {
+        crate::processors::ProcessorBase::config_json(&self.config)
+    }
+
+    fn max_jobs(&self) -> Option<usize> {
+        self.config.max_jobs
+    }
+
+    fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
+        crate::processors::ProcessorBase::clean(product, &product.processor, verbose)
+    }
 
     fn is_native(&self) -> bool { true }
 

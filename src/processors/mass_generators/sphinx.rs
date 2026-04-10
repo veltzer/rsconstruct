@@ -49,7 +49,29 @@ impl SphinxProcessor {
 }
 
 impl ProductDiscovery for SphinxProcessor {
-    delegate_base!(mass_generator);
+    fn description(&self) -> &str {
+        self.base.description()
+    }
+
+    fn processor_type(&self) -> crate::processors::ProcessorType {
+        self.base.processor_type()
+    }
+
+    fn auto_detect(&self, file_index: &crate::file_index::FileIndex) -> bool {
+        crate::processors::ProcessorBase::auto_detect(&self.config.scan, file_index)
+    }
+
+    fn config_json(&self) -> Option<String> {
+        crate::processors::ProcessorBase::config_json(&self.config)
+    }
+
+    fn max_jobs(&self) -> Option<usize> {
+        self.config.max_jobs
+    }
+
+    fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
+        crate::processors::ProcessorBase::clean_output_dir(product, &product.processor, verbose)
+    }
 
     fn required_tools(&self) -> Vec<String> {
         vec![self.config.sphinx_build.clone(), "python3".to_string()]

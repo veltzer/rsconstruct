@@ -51,7 +51,29 @@ impl MarpProcessor {
 }
 
 impl ProductDiscovery for MarpProcessor {
-    delegate_base!(generator);
+    fn description(&self) -> &str {
+        self.base.description()
+    }
+
+    fn processor_type(&self) -> crate::processors::ProcessorType {
+        self.base.processor_type()
+    }
+
+    fn auto_detect(&self, file_index: &crate::file_index::FileIndex) -> bool {
+        crate::processors::ProcessorBase::auto_detect(&self.config.scan, file_index)
+    }
+
+    fn config_json(&self) -> Option<String> {
+        crate::processors::ProcessorBase::config_json(&self.config)
+    }
+
+    fn max_jobs(&self) -> Option<usize> {
+        self.config.max_jobs
+    }
+
+    fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
+        crate::processors::ProcessorBase::clean(product, &product.processor, verbose)
+    }
 
     fn required_tools(&self) -> Vec<String> {
         vec![self.config.command.clone(), "node".to_string()]

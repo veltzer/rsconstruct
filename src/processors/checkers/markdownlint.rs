@@ -22,7 +22,25 @@ impl MarkdownlintProcessor {
 }
 
 impl ProductDiscovery for MarkdownlintProcessor {
-    delegate_base!(checker);
+    fn description(&self) -> &str {
+        self.base.description()
+    }
+
+    fn processor_type(&self) -> crate::processors::ProcessorType {
+        self.base.processor_type()
+    }
+
+    fn auto_detect(&self, file_index: &crate::file_index::FileIndex) -> bool {
+        crate::processors::ProcessorBase::auto_detect(&self.config.scan, file_index)
+    }
+
+    fn config_json(&self) -> Option<String> {
+        crate::processors::ProcessorBase::config_json(&self.config)
+    }
+
+    fn max_jobs(&self) -> Option<usize> {
+        self.config.max_jobs
+    }
 
     fn required_tools(&self) -> Vec<String> {
         vec![self.config.markdownlint_bin.clone()]
