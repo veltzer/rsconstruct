@@ -34,7 +34,6 @@ regex = "1"
 glob = "0.3.3"
 serde_yml = "0.0.12"
 zstd = "0.13"
-paste = "1.0"
 lopdf = "0.40.0"
 serde_yaml = "0.9.34"
 grass = { version = "0.13.4", default-features = false }

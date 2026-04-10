@@ -54,7 +54,7 @@ impl ProductDiscovery for MarpProcessor {
     delegate_base!(generator);
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.marp_bin.clone(), "node".to_string()]
+        vec![self.config.command.clone(), "node".to_string()]
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
@@ -78,7 +78,7 @@ impl ProductDiscovery for MarpProcessor {
 
         crate::processors::ensure_output_dir(output)?;
 
-        let mut cmd = Command::new(&self.config.marp_bin);
+        let mut cmd = Command::new(&self.config.command);
         // HTML is marp's default output, so no format flag needed for it
         if format != "html" {
             cmd.arg(format!("--{}", format));

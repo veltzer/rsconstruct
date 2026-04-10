@@ -29,7 +29,7 @@ impl ProductDiscovery for ProtobufProcessor {
     delegate_base!(generator);
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.protoc_bin.clone()]
+        vec![self.config.command.clone()]
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
@@ -50,7 +50,7 @@ impl ProductDiscovery for ProtobufProcessor {
 
         crate::processors::ensure_output_dir(output)?;
 
-        let mut cmd = Command::new(&self.config.protoc_bin);
+        let mut cmd = Command::new(&self.config.command);
         // Set the proto path to the directory containing the input file
         if let Some(parent) = input.parent() {
             cmd.arg(format!("--proto_path={}", parent.display()));

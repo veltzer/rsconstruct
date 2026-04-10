@@ -29,7 +29,7 @@ impl ProductDiscovery for DrawioProcessor {
     delegate_base!(generator);
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.drawio_bin.clone()]
+        vec![self.config.command.clone()]
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
@@ -53,7 +53,7 @@ impl ProductDiscovery for DrawioProcessor {
 
         crate::processors::ensure_output_dir(output)?;
 
-        let mut cmd = Command::new(&self.config.drawio_bin);
+        let mut cmd = Command::new(&self.config.command);
         cmd.arg("--export");
         cmd.arg("--format").arg(format.as_ref());
         cmd.arg("--output").arg(output);

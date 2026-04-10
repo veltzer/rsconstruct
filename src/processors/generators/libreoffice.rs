@@ -30,7 +30,7 @@ impl ProductDiscovery for LibreofficeProcessor {
     delegate_base!(generator);
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.libreoffice_bin.clone(), "flock".into()]
+        vec![self.config.command.clone(), "flock".into()]
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
@@ -61,7 +61,7 @@ impl ProductDiscovery for LibreofficeProcessor {
         // Use flock to serialize LibreOffice invocations (it can't run multiple instances)
         let mut cmd = Command::new("flock");
         cmd.arg("/tmp/rsconstruct_libreoffice");
-        cmd.arg(&self.config.libreoffice_bin);
+        cmd.arg(&self.config.command);
         cmd.arg("--headless");
         cmd.arg("--convert-to").arg(format.as_ref());
         cmd.arg("--outdir").arg(output_dir);

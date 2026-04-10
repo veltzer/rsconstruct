@@ -59,10 +59,16 @@ pub(crate) struct ScanDefaultsData {
 
 /// Per-processor default values applied after TOML deserialization.
 pub(crate) struct ProcessorDefaults {
-    /// Default command binary name (for CheckerConfigWithCommand). Empty if not applicable.
+    /// Default command binary name. Empty if not applicable.
     pub command: &'static str,
     /// Default dep_auto entries.
     pub dep_auto: &'static [&'static str],
+    /// Default output directory (generators only). Empty if not applicable.
+    pub output_dir: &'static str,
+    /// Default output formats (generators only). Empty if not applicable.
+    pub formats: &'static [&'static str],
+    /// Default args. Empty if not applicable.
+    pub args: &'static [&'static str],
 }
 
 /// Validate dep_inputs paths exist and return them as PathBufs.
@@ -143,7 +149,7 @@ pub(crate) fn output_config_hash(value: &impl Serialize, extra_exclude: &[&str])
 /// Fields use `Option` so that serde can distinguish "not specified" (None) from
 /// "explicitly set" (Some). `resolve_scan_defaults()` fills in None values after
 /// loading, so processors can always unwrap safely.
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub(crate) struct ScanConfig {
     /// Directories to scan for source files ("" means project root)
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -168,19 +174,6 @@ pub(crate) struct ScanConfig {
     /// Additional files (relative to project root) to include alongside normal scanning
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub src_files: Option<Vec<String>>,
-}
-
-impl Default for ScanConfig {
-    fn default() -> Self {
-        Self {
-            src_dirs: None,
-            src_extensions: None,
-            src_exclude_dirs: None,
-            src_exclude_files: None,
-            src_exclude_paths: None,
-            src_files: None,
-        }
-    }
 }
 
 impl ScanConfig {
@@ -649,26 +642,35 @@ pub(crate) fn scan_defaults_for(type_name: &str) -> Option<ScanDefaultsData> {
 /// Only needed for processors whose defaults differ from the struct's Default impl.
 pub(crate) fn processor_defaults_for(type_name: &str) -> Option<ProcessorDefaults> {
     Some(match type_name {
-        "ruff" => ProcessorDefaults { command: "ruff", dep_auto: &["ruff.toml", ".ruff.toml", "pyproject.toml"] },
-        "pylint" => ProcessorDefaults { command: "", dep_auto: &[".pylintrc"] },
-        "pytest" => ProcessorDefaults { command: "", dep_auto: &["conftest.py", "pytest.ini", "pyproject.toml"] },
-        "black" => ProcessorDefaults { command: "", dep_auto: &["pyproject.toml"] },
-        "mypy" => ProcessorDefaults { command: "mypy", dep_auto: &["mypy.ini"] },
-        "pyrefly" => ProcessorDefaults { command: "pyrefly", dep_auto: &["pyproject.toml"] },
-        "rumdl" => ProcessorDefaults { command: "rumdl", dep_auto: &[".rumdl.toml"] },
-        "yamllint" => ProcessorDefaults { command: "yamllint", dep_auto: &[".yamllint", ".yamllint.yml", ".yamllint.yaml"] },
-        "jq" => ProcessorDefaults { command: "jq", dep_auto: &[] },
-        "jsonlint" => ProcessorDefaults { command: "jsonlint", dep_auto: &[] },
-        "taplo" => ProcessorDefaults { command: "taplo", dep_auto: &["taplo.toml", ".taplo.toml"] },
-        "shellcheck" => ProcessorDefaults { command: "shellcheck", dep_auto: &[".shellcheckrc"] },
-        "luacheck" => ProcessorDefaults { command: "luacheck", dep_auto: &[".luacheckrc"] },
-        "eslint" => ProcessorDefaults { command: "eslint", dep_auto: &[".eslintrc", ".eslintrc.json", ".eslintrc.js", ".eslintrc.yml", ".eslintrc.yaml", ".eslintrc.cjs", "eslint.config.js", "eslint.config.mjs", "eslint.config.cjs"] },
-        "jshint" => ProcessorDefaults { command: "jshint", dep_auto: &[".jshintrc"] },
-        "htmlhint" => ProcessorDefaults { command: "htmlhint", dep_auto: &[".htmlhintrc"] },
-        "stylelint" => ProcessorDefaults { command: "stylelint", dep_auto: &[".stylelintrc", ".stylelintrc.json", ".stylelintrc.yml", ".stylelintrc.yaml", ".stylelintrc.js", ".stylelintrc.cjs", "stylelint.config.js", "stylelint.config.cjs"] },
-        "perlcritic" => ProcessorDefaults { command: "", dep_auto: &[".perlcriticrc"] },
-        "svglint" => ProcessorDefaults { command: "", dep_auto: &[".svglintrc.js"] },
-        "checkstyle" => ProcessorDefaults { command: "", dep_auto: &["checkstyle.xml"] },
+        "ruff" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "ruff", dep_auto: &["ruff.toml", ".ruff.toml", "pyproject.toml"] },
+        "pylint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "", dep_auto: &[".pylintrc"] },
+        "pytest" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "", dep_auto: &["conftest.py", "pytest.ini", "pyproject.toml"] },
+        "black" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "", dep_auto: &["pyproject.toml"] },
+        "mypy" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "mypy", dep_auto: &["mypy.ini"] },
+        "pyrefly" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "pyrefly", dep_auto: &["pyproject.toml"] },
+        "rumdl" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "rumdl", dep_auto: &[".rumdl.toml"] },
+        "yamllint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "yamllint", dep_auto: &[".yamllint", ".yamllint.yml", ".yamllint.yaml"] },
+        "jq" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "jq", dep_auto: &[] },
+        "jsonlint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "jsonlint", dep_auto: &[] },
+        "taplo" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "taplo", dep_auto: &["taplo.toml", ".taplo.toml"] },
+        "shellcheck" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "shellcheck", dep_auto: &[".shellcheckrc"] },
+        "luacheck" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "luacheck", dep_auto: &[".luacheckrc"] },
+        "eslint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "eslint", dep_auto: &[".eslintrc", ".eslintrc.json", ".eslintrc.js", ".eslintrc.yml", ".eslintrc.yaml", ".eslintrc.cjs", "eslint.config.js", "eslint.config.mjs", "eslint.config.cjs"] },
+        "jshint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "jshint", dep_auto: &[".jshintrc"] },
+        "htmlhint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "htmlhint", dep_auto: &[".htmlhintrc"] },
+        "stylelint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "stylelint", dep_auto: &[".stylelintrc", ".stylelintrc.json", ".stylelintrc.yml", ".stylelintrc.yaml", ".stylelintrc.js", ".stylelintrc.cjs", "stylelint.config.js", "stylelint.config.cjs"] },
+        "perlcritic" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "", dep_auto: &[".perlcriticrc"] },
+        "svglint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "", dep_auto: &[".svglintrc.js"] },
+        "checkstyle" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "", dep_auto: &["checkstyle.xml"] },
+        // Generators
+        "marp" => ProcessorDefaults { output_dir: "out/marp", formats: &["pdf"], args: &["--html", "--allow-local-files"], command: "marp", dep_auto: &[] },
+        "markdown2html" => ProcessorDefaults { output_dir: "out/markdown2html", formats: &[], args: &[], command: "markdown", dep_auto: &[] },
+        "chromium" => ProcessorDefaults { output_dir: "out/chromium", formats: &[], args: &[], command: "google-chrome", dep_auto: &[] },
+        "mermaid" => ProcessorDefaults { output_dir: "out/mermaid", formats: &["png"], args: &[], command: "mmdc", dep_auto: &[] },
+        "drawio" => ProcessorDefaults { output_dir: "out/drawio", formats: &["png"], args: &[], command: "drawio", dep_auto: &[] },
+        "libreoffice" => ProcessorDefaults { output_dir: "out/libreoffice", formats: &["pdf"], args: &[], command: "libreoffice", dep_auto: &[] },
+        "protobuf" => ProcessorDefaults { output_dir: "out/protobuf", formats: &[], args: &[], command: "protoc", dep_auto: &[] },
+        "sass" => ProcessorDefaults { output_dir: "out/sass", formats: &[], args: &[], command: "sass", dep_auto: &[] },
         _ => return None,
     })
 }
@@ -681,17 +683,22 @@ pub(crate) fn apply_processor_defaults(type_name: &str, value: &mut toml::Value)
             Some(t) => t,
             None => return,
         };
-        // Set command default if not provided and non-empty
-        if !defaults.command.is_empty() && !table.contains_key("command") {
-            table.insert("command".into(), toml::Value::String(defaults.command.into()));
-        }
-        // Set dep_auto default if not provided
-        if !defaults.dep_auto.is_empty() && !table.contains_key("dep_auto") {
-            let arr: Vec<toml::Value> = defaults.dep_auto.iter()
-                .map(|s| toml::Value::String(s.to_string()))
-                .collect();
-            table.insert("dep_auto".into(), toml::Value::Array(arr));
-        }
+        let set_string = |t: &mut toml::map::Map<String, toml::Value>, key: &str, val: &str| {
+            if !val.is_empty() && !t.contains_key(key) {
+                t.insert(key.into(), toml::Value::String(val.into()));
+            }
+        };
+        let set_array = |t: &mut toml::map::Map<String, toml::Value>, key: &str, vals: &[&str]| {
+            if !vals.is_empty() && !t.contains_key(key) {
+                let arr: Vec<toml::Value> = vals.iter().map(|s| toml::Value::String(s.to_string())).collect();
+                t.insert(key.into(), toml::Value::Array(arr));
+            }
+        };
+        set_string(table, "command", defaults.command);
+        set_string(table, "output_dir", defaults.output_dir);
+        set_array(table, "dep_auto", defaults.dep_auto);
+        set_array(table, "formats", defaults.formats);
+        set_array(table, "args", defaults.args);
     }
 }
 

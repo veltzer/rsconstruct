@@ -30,7 +30,7 @@ impl ProductDiscovery for ChromiumProcessor {
     delegate_base!(generator);
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.chromium_bin.clone()]
+        vec![self.config.command.clone()]
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
@@ -55,7 +55,7 @@ impl ProductDiscovery for ChromiumProcessor {
             .with_context(|| format!("Failed to resolve absolute path for: {}", input.display()))?;
         let input_url = format!("file://{}", abs_input.display());
 
-        let mut cmd = Command::new(&self.config.chromium_bin);
+        let mut cmd = Command::new(&self.config.command);
         cmd.arg("--headless");
         cmd.arg("--disable-gpu");
         cmd.arg("--no-sandbox");
