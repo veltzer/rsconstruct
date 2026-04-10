@@ -238,6 +238,11 @@ impl Builder {
                         .join(", "));
                 }
             }
+            ProcessorAction::Names => {
+                for name in &proc_names {
+                    println!("{}", name);
+                }
+            }
             ProcessorAction::Graph { format } => {
                 let graph = self.build_graph()?;
                 let proc_deps = graph.processor_dependencies();

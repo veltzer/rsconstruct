@@ -438,6 +438,8 @@ pub enum ProcessorAction {
     },
     /// Show the current processor allowlist (requires config)
     Allowlist,
+    /// Show names of all enabled processors (one per line, requires config)
+    Names,
     /// Show inter-processor dependencies (requires config)
     Graph {
         /// Output format
@@ -813,5 +815,12 @@ fn inject_bash_processor_completions(script: &str) -> String {
         }
     }
 
-    result
+    // Inject dynamic processor names for --processors/-p flags in build/watch commands.
+    // This replaces `compgen -f` (file completion) with a call to `rsconstruct processors names`.
+    let old_processors = "                --processors)\n                    COMPREPLY=($(compgen -f \"${cur}\"))";
+    let new_processors = "                --processors)\n                    COMPREPLY=($(compgen -W \"$(rsconstruct processors names 2>/dev/null)\" -- \"${cur}\"))";
+    let old_p = "                -p)\n                    COMPREPLY=($(compgen -f \"${cur}\"))";
+    let new_p = "                -p)\n                    COMPREPLY=($(compgen -W \"$(rsconstruct processors names 2>/dev/null)\" -- \"${cur}\"))";
+
+    result.replace(old_processors, new_processors).replace(old_p, new_p)
 }
