@@ -23,8 +23,7 @@ impl ScriptProcessor {
     }
 
     fn check_files(&self, files: &[&Path]) -> Result<()> {
-        let command = self.config.command.as_deref().unwrap();
-        run_checker(command, None, &self.config.args, files)
+        run_checker(&self.config.command, None, &self.config.args, files)
     }
 }
 
@@ -52,11 +51,15 @@ impl Processor for ScriptProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        self.config.command.iter().cloned().collect()
+        if self.config.command.is_empty() {
+            Vec::new()
+        } else {
+            vec![self.config.command.clone()]
+        }
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
-        if self.config.command.is_none() {
+        if self.config.command.is_empty() {
             return Ok(());
         }
         let files = file_index.scan(&self.config.scan, true);
@@ -69,8 +72,7 @@ impl Processor for ScriptProcessor {
             dep_inputs.extend(config_file_inputs(ai));
         }
         // If the command is a local file, depend on its contents
-        let command = self.config.command.as_deref().unwrap();
-        dep_inputs.extend(config_file_inputs(command));
+        dep_inputs.extend(config_file_inputs(&self.config.command));
         let extra = resolve_extra_inputs(&dep_inputs)?;
         for file in files {
             let mut inputs = Vec::with_capacity(1 + extra.len());

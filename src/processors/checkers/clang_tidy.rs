@@ -16,7 +16,7 @@ impl ClangTidyProcessor {
 
     fn execute_product(&self, product: &Product) -> Result<()> {
         let mut cmd = Command::new("clang-tidy");
-        for arg in &self.config.args {
+        for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
         cmd.arg(product.primary_input());
@@ -33,7 +33,7 @@ impl ClangTidyProcessor {
 
 impl crate::processors::Processor for ClangTidyProcessor {
     fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.scan
+        &self.config.standard.scan
     }
 
 
@@ -42,7 +42,7 @@ impl crate::processors::Processor for ClangTidyProcessor {
     }
 
     fn auto_detect(&self, file_index: &crate::file_index::FileIndex) -> bool {
-        crate::processors::checker_auto_detect_with_scan_root(&self.config.scan, file_index)
+        crate::processors::checker_auto_detect_with_scan_root(&self.config.standard.scan, file_index)
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -55,12 +55,12 @@ impl crate::processors::Processor for ClangTidyProcessor {
         file_index: &crate::file_index::FileIndex,
         instance_name: &str,
     ) -> anyhow::Result<()> {
-        if !crate::processors::scan_root_valid(&self.config.scan) {
+        if !crate::processors::scan_root_valid(&self.config.standard.scan) {
             return Ok(());
         }
         crate::processors::checker_discover(
-            graph, &self.config.scan, file_index,
-            &self.config.dep_inputs, &self.config.dep_auto,
+            graph, &self.config.standard.scan, file_index,
+            &self.config.standard.dep_inputs, &self.config.standard.dep_auto,
             &self.config, instance_name,
         )
     }
@@ -76,7 +76,7 @@ impl crate::processors::Processor for ClangTidyProcessor {
     }
 
     fn max_jobs(&self) -> Option<usize> {
-        self.config.max_jobs
+        self.config.standard.max_jobs
     }
 }
 

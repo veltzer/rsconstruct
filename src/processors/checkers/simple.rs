@@ -21,12 +21,12 @@ impl SimpleChecker {
     }
 
     fn check_files(&self, files: &[&Path]) -> Result<()> {
-        let tool = &self.config.command;
+        let tool = &self.config.standard.command;
         if self.params.prepend_args.is_empty() {
-            run_checker(tool, self.params.subcommand, &self.config.args, files)
+            run_checker(tool, self.params.subcommand, &self.config.standard.args, files)
         } else {
             let mut combined_args: Vec<String> = self.params.prepend_args.iter().map(|s| s.to_string()).collect();
-            combined_args.extend_from_slice(&self.config.args);
+            combined_args.extend_from_slice(&self.config.standard.args);
             run_checker(tool, self.params.subcommand, &combined_args, files)
         }
     }
@@ -34,11 +34,11 @@ impl SimpleChecker {
 
 impl Processor for SimpleChecker {
     fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.scan
+        &self.config.standard.scan
     }
 
     fn standard_config(&self) -> Option<&crate::config::StandardConfig> {
-        Some(&self.config)
+        Some(&self.config.standard)
     }
 
     fn description(&self) -> &str {
@@ -46,11 +46,11 @@ impl Processor for SimpleChecker {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        !file_index.scan(&self.config.scan, true).is_empty()
+        !file_index.scan(&self.config.standard.scan, true).is_empty()
     }
 
     fn required_tools(&self) -> Vec<String> {
-        let mut tools = vec![self.config.command.clone()];
+        let mut tools = vec![self.config.standard.command.clone()];
         for t in self.params.extra_tools {
             tools.push(t.to_string());
         }
@@ -63,12 +63,12 @@ impl Processor for SimpleChecker {
         file_index: &FileIndex,
         instance_name: &str,
     ) -> Result<()> {
-        let mut dep_inputs = self.config.dep_inputs.clone();
-        for ai in &self.config.dep_auto {
+        let mut dep_inputs = self.config.standard.dep_inputs.clone();
+        for ai in &self.config.standard.dep_auto {
             dep_inputs.extend(config_file_inputs(ai));
         }
         discover_checker_products(
-            graph, &self.config.scan, file_index, &dep_inputs, &self.config, instance_name,
+            graph, &self.config.standard.scan, file_index, &dep_inputs, &self.config, instance_name,
         )
     }
 
@@ -78,7 +78,7 @@ impl Processor for SimpleChecker {
 
 
     fn supports_batch(&self) -> bool {
-        self.config.batch
+        self.config.standard.batch
     }
 
     fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {

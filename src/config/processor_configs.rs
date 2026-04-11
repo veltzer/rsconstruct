@@ -66,54 +66,55 @@ impl KnownFields for StandardConfig {
     }
 }
 
-// Type aliases for backward compatibility
-pub type CheckerConfig = StandardConfig;
-pub type CheckerConfigWithCommand = StandardConfig;
+/// Simple checker config. No custom fields.
+/// Unused StandardConfig fields: formats, output_dir.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CheckerConfig {
+    #[serde(flatten)]
+    pub standard: StandardConfig,
+}
+impl Default for CheckerConfig {
+    fn default() -> Self { Self { standard: StandardConfig::default() } }
+}
+impl KnownFields for CheckerConfig {
+    fn known_fields() -> &'static [&'static str] { StandardConfig::known_fields() }
+    fn output_fields() -> &'static [&'static str] { StandardConfig::output_fields() }
+    fn must_fields() -> &'static [&'static str] { StandardConfig::must_fields() }
+    fn field_descriptions() -> &'static [(&'static str, &'static str)] { StandardConfig::field_descriptions() }
+}
+
+/// Alias for CheckerConfig (used by SimpleChecker).
+pub type CheckerConfigWithCommand = CheckerConfig;
 
 /// Config for Creator processors — run a command and cache declared outputs.
 #[derive(Debug, Deserialize, Serialize, Clone)]
+/// Creator processor config.
+/// Custom fields: output_dirs, output_files.
+/// Unused StandardConfig fields: formats, output_dir.
 pub struct CreatorConfig {
-    #[serde(default)]
-    pub command: String,
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
     /// Directories to cache after the command runs.
     #[serde(default)]
     pub output_dirs: Vec<String>,
     /// Individual files to cache after the command runs.
     #[serde(default)]
     pub output_files: Vec<String>,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
     #[serde(flatten)]
-    pub scan: ScanConfig,
+    pub standard: StandardConfig,
 }
 
 impl Default for CreatorConfig {
     fn default() -> Self {
         Self {
-            command: String::new(),
-            args: Vec::new(),
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
             output_dirs: Vec::new(),
             output_files: Vec::new(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
+            standard: StandardConfig::default(),
         }
     }
 }
 
 impl KnownFields for CreatorConfig {
     fn known_fields() -> &'static [&'static str] {
-        &["command", "args", "dep_inputs", "dep_auto", "output_dirs", "output_files", "batch", "max_jobs"]
+        &["command", "args", "dep_inputs", "dep_auto", "output_dirs", "output_files", "batch", "max_jobs", "cache"]
     }
     fn output_fields() -> &'static [&'static str] {
         &["command", "args", "output_dirs", "output_files"]
@@ -127,19 +128,56 @@ impl KnownFields for CreatorConfig {
         ]
     }
 }
-/// Tera template processor config.
-/// Uses StandardConfig. Unused fields: command, formats, output_dir.
-pub type TeraConfig = StandardConfig;
+/// Tera template processor config. No custom fields.
+/// Unused StandardConfig fields: command, formats, output_dir.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct TeraConfig {
+    #[serde(flatten)]
+    pub standard: StandardConfig,
+}
+impl Default for TeraConfig {
+    fn default() -> Self { Self { standard: StandardConfig::default() } }
+}
+impl KnownFields for TeraConfig {
+    fn known_fields() -> &'static [&'static str] { StandardConfig::known_fields() }
+    fn output_fields() -> &'static [&'static str] { StandardConfig::output_fields() }
+    fn must_fields() -> &'static [&'static str] { StandardConfig::must_fields() }
+    fn field_descriptions() -> &'static [(&'static str, &'static str)] { StandardConfig::field_descriptions() }
+}
 
-/// Mako template processor config.
-/// Uses StandardConfig. Unused fields: command, formats, output_dir.
-pub type MakoConfig = StandardConfig;
+/// Mako template processor config. No custom fields.
+/// Unused StandardConfig fields: command, formats, output_dir.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct MakoConfig {
+    #[serde(flatten)]
+    pub standard: StandardConfig,
+}
+impl Default for MakoConfig {
+    fn default() -> Self { Self { standard: StandardConfig::default() } }
+}
+impl KnownFields for MakoConfig {
+    fn known_fields() -> &'static [&'static str] { StandardConfig::known_fields() }
+    fn output_fields() -> &'static [&'static str] { StandardConfig::output_fields() }
+    fn must_fields() -> &'static [&'static str] { StandardConfig::must_fields() }
+    fn field_descriptions() -> &'static [(&'static str, &'static str)] { StandardConfig::field_descriptions() }
+}
 
-/// Jinja2 template processor config.
-/// Uses StandardConfig. Unused fields: command, formats, output_dir.
-pub type Jinja2Config = StandardConfig;
-
-// Jinja2Config KnownFields — inherited from StandardConfig via type alias
+/// Jinja2 template processor config. No custom fields.
+/// Unused StandardConfig fields: command, formats, output_dir.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Jinja2Config {
+    #[serde(flatten)]
+    pub standard: StandardConfig,
+}
+impl Default for Jinja2Config {
+    fn default() -> Self { Self { standard: StandardConfig::default() } }
+}
+impl KnownFields for Jinja2Config {
+    fn known_fields() -> &'static [&'static str] { StandardConfig::known_fields() }
+    fn output_fields() -> &'static [&'static str] { StandardConfig::output_fields() }
+    fn must_fields() -> &'static [&'static str] { StandardConfig::must_fields() }
+    fn field_descriptions() -> &'static [(&'static str, &'static str)] { StandardConfig::field_descriptions() }
+}
 
 
 
@@ -148,38 +186,21 @@ pub type Jinja2Config = StandardConfig;
 
 pub type MarpImagesConfig = CheckerConfig;
 
+/// ClangTidy config. Custom fields: compiler_args.
+/// Unused StandardConfig fields: command, formats, output_dir.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ClangTidyConfig {
     #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
     pub compiler_args: Vec<String>,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default = "default_clang_tidy_auto_inputs")]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
     #[serde(flatten)]
-    pub scan: ScanConfig,
-}
-
-fn default_clang_tidy_auto_inputs() -> Vec<String> {
-    vec![".clang-tidy".into()]
+    pub standard: StandardConfig,
 }
 
 impl Default for ClangTidyConfig {
     fn default() -> Self {
         Self {
-            args: Vec::new(),
             compiler_args: Vec::new(),
-            dep_inputs: Vec::new(),
-            dep_auto: default_clang_tidy_auto_inputs(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
+            standard: StandardConfig::default(),
         }
     }
 }
@@ -235,6 +256,8 @@ pub struct CompilerProfile {
     pub output_suffix: String,
 }
 
+/// CcSingleFile config. Custom fields: cc, cxx, cflags, cxxflags, ldflags, output_suffix, compilers, include_paths, include_scanner.
+/// Unused StandardConfig fields: command, formats.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CcSingleFileConfig {
     /// Legacy single-compiler fields (used when `compilers` is empty)
@@ -250,30 +273,17 @@ pub struct CcSingleFileConfig {
     pub ldflags: Vec<String>,
     #[serde(default = "default_output_suffix")]
     pub output_suffix: String,
-
     /// Multiple compiler profiles (if set, overrides legacy fields)
     #[serde(default)]
     pub compilers: Vec<CompilerProfile>,
-
     /// Shared settings across all compilers
     #[serde(default)]
     pub include_paths: Vec<String>,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    /// Output directory for compiled executables
-    #[serde(default = "default_cc_single_file_output_dir")]
-    pub output_dir: String,
     /// Method for scanning header dependencies (native or compiler)
     #[serde(default)]
     pub include_scanner: IncludeScanner,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
     #[serde(flatten)]
-    pub scan: ScanConfig,
+    pub standard: StandardConfig,
 }
 
 impl CcSingleFileConfig {
@@ -299,8 +309,6 @@ impl CcSingleFileConfig {
     }
 }
 
-fn default_cc_single_file_output_dir() -> String { "out/cc_single_file".into() }
-
 impl Default for CcSingleFileConfig {
     fn default() -> Self {
         Self {
@@ -312,13 +320,11 @@ impl Default for CcSingleFileConfig {
             output_suffix: ".elf".into(),
             compilers: Vec::new(),
             include_paths: Vec::new(),
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            output_dir: "out/cc_single_file".into(),
             include_scanner: IncludeScanner::default(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
+            standard: StandardConfig {
+                output_dir: "out/cc_single_file".into(),
+                ..StandardConfig::default()
+            },
         }
     }
 }
@@ -525,41 +531,21 @@ fn default_linux_module_w() -> u32 {
     1
 }
 
+/// Linux module config. No custom fields.
+/// Unused StandardConfig fields: command, formats, output_dir, args.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct LinuxModuleConfig {
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
     #[serde(flatten)]
-    pub scan: ScanConfig,
+    pub standard: StandardConfig,
 }
-
 impl Default for LinuxModuleConfig {
-    fn default() -> Self {
-        Self {
-            dep_inputs: Vec::new(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
-        }
-    }
+    fn default() -> Self { Self { standard: StandardConfig::default() } }
 }
-
 impl KnownFields for LinuxModuleConfig {
-    fn known_fields() -> &'static [&'static str] {
-        &[
-            "dep_inputs", "batch", "max_jobs",
-        ]
-    }
-    fn output_fields() -> &'static [&'static str] {
-        &[]
-    }
-    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
-        &[]
-    }
+    fn known_fields() -> &'static [&'static str] { StandardConfig::known_fields() }
+    fn output_fields() -> &'static [&'static str] { StandardConfig::output_fields() }
+    fn must_fields() -> &'static [&'static str] { StandardConfig::must_fields() }
+    fn field_descriptions() -> &'static [(&'static str, &'static str)] { StandardConfig::field_descriptions() }
 }
 
 fn default_zspell_language() -> String {
@@ -570,6 +556,8 @@ fn default_zspell_words_file() -> String {
     ".zspell-words".into()
 }
 
+/// Zspell config. Custom fields: language, words_file, auto_add_words.
+/// Unused StandardConfig fields: command, formats, output_dir.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ZspellConfig {
     #[serde(default = "default_zspell_language")]
@@ -579,20 +567,8 @@ pub struct ZspellConfig {
     /// When true, automatically add misspelled words to words_file instead of failing
     #[serde(default)]
     pub auto_add_words: bool,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default = "default_zspell_auto_inputs")]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
     #[serde(flatten)]
-    pub scan: ScanConfig,
-}
-
-fn default_zspell_auto_inputs() -> Vec<String> {
-    vec![".zspell-words".into()]
+    pub standard: StandardConfig,
 }
 
 impl Default for ZspellConfig {
@@ -601,11 +577,7 @@ impl Default for ZspellConfig {
             language: "en_US".into(),
             words_file: ".zspell-words".into(),
             auto_add_words: false,
-            dep_inputs: Vec::new(),
-            dep_auto: default_zspell_auto_inputs(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
+            standard: StandardConfig::default(),
         }
     }
 }
@@ -924,52 +896,22 @@ impl KnownFields for TagsConfig {
 }
 
 
+/// Script processor config. No custom fields.
+/// Unused StandardConfig fields: formats, output_dir.
+/// Note: empty command means "no command configured".
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ScriptConfig {
-    pub command: Option<String>,
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
     #[serde(flatten)]
-    pub scan: ScanConfig,
+    pub standard: StandardConfig,
 }
-
 impl Default for ScriptConfig {
-    fn default() -> Self {
-        Self {
-            command: None,
-            args: Vec::new(),
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
-        }
-    }
+    fn default() -> Self { Self { standard: StandardConfig::default() } }
 }
-
 impl KnownFields for ScriptConfig {
-    fn known_fields() -> &'static [&'static str] {
-        &[
-            "command", "args", "dep_inputs", "dep_auto", "batch", "max_jobs",
-        ]
-    }
-    fn output_fields() -> &'static [&'static str] {
-        &["command", "args"]
-    }
-    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
-        &[
-            ("command", "Script or executable to run as a checker (required)"),
-            ("args",    "Extra arguments passed to the command before file paths"),
-        ]
-    }
+    fn known_fields() -> &'static [&'static str] { StandardConfig::known_fields() }
+    fn output_fields() -> &'static [&'static str] { StandardConfig::output_fields() }
+    fn must_fields() -> &'static [&'static str] { StandardConfig::must_fields() }
+    fn field_descriptions() -> &'static [(&'static str, &'static str)] { StandardConfig::field_descriptions() }
 }
 
 fn default_generator_output_dir() -> String {

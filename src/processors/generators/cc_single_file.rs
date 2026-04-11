@@ -341,7 +341,7 @@ pub struct CcSingleFileProcessor {
 impl CcSingleFileProcessor {
     pub fn new(config: CcSingleFileConfig) -> Self {
         let profiles = config.get_compiler_profiles();
-        let output_dir = PathBuf::from(&config.output_dir);
+        let output_dir = PathBuf::from(&config.standard.output_dir);
         Self {
             base: ProcessorBase::generator(
                 crate::processors::names::CC_SINGLE_FILE,
@@ -355,7 +355,7 @@ impl CcSingleFileProcessor {
 
     /// Get the first source directory from scan config (relative path)
     fn source_dir(&self) -> PathBuf {
-        PathBuf::from(self.config.scan.src_dirs().first().map(|s| s.as_str()).unwrap_or(""))
+        PathBuf::from(self.config.standard.scan.src_dirs().first().map(|s| s.as_str()).unwrap_or(""))
     }
 
     /// Check if cc processing should be enabled
@@ -366,7 +366,7 @@ impl CcSingleFileProcessor {
 
     /// Find all C/C++ source files. Returns (path, is_cpp) pairs.
     fn find_source_files(&self, file_index: &FileIndex) -> Vec<(PathBuf, bool)> {
-        file_index.scan(&self.config.scan, true)
+        file_index.scan(&self.config.standard.scan, true)
             .into_iter()
             .map(|p| {
                 let is_cpp = p.extension().and_then(|s| s.to_str()) == Some("cc");
@@ -475,7 +475,7 @@ impl CcSingleFileProcessor {
         }
 
         let cfg_hash = if for_clean { None } else { Some(output_config_hash(&self.config, &[])) };
-        let extra = if for_clean { Vec::new() } else { resolve_extra_inputs(&self.config.dep_inputs)? };
+        let extra = if for_clean { Vec::new() } else { resolve_extra_inputs(&self.config.standard.dep_inputs)? };
 
         for profile in &self.profiles {
             let variant = if profile.name.is_empty() { None } else { Some(profile.name.as_str()) };
@@ -507,7 +507,7 @@ impl CcSingleFileProcessor {
 
 impl Processor for CcSingleFileProcessor {
     fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.scan
+        &self.config.standard.scan
     }
 
 
@@ -524,7 +524,7 @@ impl Processor for CcSingleFileProcessor {
     }
 
     fn max_jobs(&self) -> Option<usize> {
-        self.config.max_jobs
+        self.config.standard.max_jobs
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {

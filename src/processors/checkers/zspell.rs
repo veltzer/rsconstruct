@@ -172,7 +172,7 @@ impl ZspellProcessor {
 
 impl Processor for ZspellProcessor {
     fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.scan
+        &self.config.standard.scan
     }
 
 
@@ -190,19 +190,19 @@ impl Processor for ZspellProcessor {
     }
 
     fn max_jobs(&self) -> Option<usize> {
-        self.config.max_jobs
+        self.config.standard.max_jobs
     }
 
     fn is_native(&self) -> bool { true }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
-        let mut dep_inputs = self.config.dep_inputs.clone();
-        for ai in &self.config.dep_auto {
+        let mut dep_inputs = self.config.standard.dep_inputs.clone();
+        for ai in &self.config.standard.dep_auto {
             dep_inputs.extend(config_file_inputs(ai));
         }
         discover_checker_products(
             graph,
-            &self.config.scan,
+            &self.config.standard.scan,
             file_index,
             &dep_inputs,
             &self.config,

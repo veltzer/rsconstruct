@@ -38,7 +38,7 @@ impl CreatorProcessor {
 
 impl Processor for CreatorProcessor {
     fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.scan
+        &self.config.standard.scan
     }
 
     fn description(&self) -> &str {
@@ -54,7 +54,7 @@ impl Processor for CreatorProcessor {
     }
 
     fn max_jobs(&self) -> Option<usize> {
-        self.config.max_jobs
+        self.config.standard.max_jobs
     }
 
     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
@@ -62,20 +62,20 @@ impl Processor for CreatorProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        if self.config.command.is_empty() {
+        if self.config.standard.command.is_empty() {
             Vec::new()
         } else {
-            vec![self.config.command.clone()]
+            vec![self.config.standard.command.clone()]
         }
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
-        let Some(files) = crate::processors::scan_or_skip(&self.config.scan, file_index) else {
+        let Some(files) = crate::processors::scan_or_skip(&self.config.standard.scan, file_index) else {
             return Ok(());
         };
 
         let hash = Some(output_config_hash(&self.config, &["output_dirs", "output_files"]));
-        let extra = resolve_extra_inputs(&self.config.dep_inputs)?;
+        let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
         for anchor in files {
             let anchor_dir = anchor.parent().map(|p| p.to_path_buf()).unwrap_or_default();
@@ -116,12 +116,12 @@ impl Processor for CreatorProcessor {
 
     fn execute(&self, product: &Product) -> Result<()> {
         let anchor = product.primary_input();
-        let mut cmd = Command::new(&self.config.command);
-        for arg in &self.config.args {
+        let mut cmd = Command::new(&self.config.standard.command);
+        for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
         let output = run_in_anchor_dir(&mut cmd, anchor)?;
-        check_command_output(&output, format_args!("{} in {}", self.config.command, anchor_display_dir(anchor)))
+        check_command_output(&output, format_args!("{} in {}", self.config.standard.command, anchor_display_dir(anchor)))
     }
 }
 
