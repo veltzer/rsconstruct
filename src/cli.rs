@@ -519,6 +519,12 @@ pub enum AnalyzersAction {
     Used,
     /// Run dependency analysis without building (requires config)
     Build,
+    /// Show default analyzer configuration (no config needed)
+    Defconfig {
+        /// Analyzer name; omit to show all
+        #[arg(value_parser = ["cpp", "markdown", "python", "tera"])]
+        name: Option<String>,
+    },
     /// Show analyzer configuration (requires config)
     Config {
         /// Analyzer name (e.g., "cpp", "python"); omit to show all

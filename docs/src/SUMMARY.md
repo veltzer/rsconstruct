@@ -6,6 +6,7 @@
 - [Getting Started](getting-started.md)
 - [Binary Releases](binary-releases.md)
 - [Commands](commands.md)
+- [Shell Completions](completions.md)
 - [Configuration](configuration.md)
 - [Cache System](cache.md)
 - [Checksum Cache](checksum-cache.md)

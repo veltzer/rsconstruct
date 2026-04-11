@@ -32,6 +32,47 @@ pub fn list_analyzers(verbose: bool) {
     color::print_table(builder.build());
 }
 
+/// Show default analyzer configuration (works without rsconstruct.toml).
+pub fn analyzer_defconfig(name: Option<&str>) -> Result<()> {
+    use crate::config::{CppAnalyzerConfig, PythonAnalyzerConfig};
+
+    fn print_analyzer(name: &str, toml_str: &str) {
+        println!("[analyzer.{}]", name);
+        print!("{}", toml_str);
+    }
+
+    let print_one = |name: &str| -> Result<()> {
+        match name {
+            "cpp" => {
+                let toml = toml::to_string_pretty(&CppAnalyzerConfig::default())
+                    .context("Failed to serialize cpp analyzer default config")?;
+                print_analyzer("cpp", &toml);
+            }
+            "python" => {
+                let toml = toml::to_string_pretty(&PythonAnalyzerConfig::default())
+                    .context("Failed to serialize python analyzer default config")?;
+                print_analyzer("python", &toml);
+            }
+            "markdown" | "tera" => {
+                println!("[analyzer.{}]", name);
+                println!("# no configuration options");
+            }
+            _ => bail!("Unknown analyzer '{}'. Run 'rsconstruct analyzers list' to see available analyzers.", name),
+        }
+        Ok(())
+    };
+
+    if let Some(name) = name {
+        print_one(name)?;
+    } else {
+        for name in &["cpp", "markdown", "python", "tera"] {
+            print_one(name)?;
+            println!();
+        }
+    }
+    Ok(())
+}
+
 /// Print per-analyzer dependency stats with a total line.
 fn print_deps_stats(stats: &std::collections::HashMap<String, (usize, usize)>) {
     let mut total_files = 0;
@@ -54,7 +95,7 @@ impl Builder {
         use crate::cli::AnalyzersAction;
 
         match action {
-            AnalyzersAction::List => unreachable!("handled in main.rs"),
+            AnalyzersAction::List | AnalyzersAction::Defconfig { .. } => unreachable!("handled in main.rs"),
             AnalyzersAction::Used => {
                 let analyzers = self.create_analyzers(false);
                 let mut builder = TableBuilder::new();

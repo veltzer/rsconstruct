@@ -262,11 +262,17 @@ fn run() -> Result<()> {
             builder.config(action)?;
         }
         Commands::Analyzers { action } => {
-            if matches!(action, cli::AnalyzersAction::List) {
-                builder::analyzers::list_analyzers(cli.verbose);
-            } else {
-                let builder = Builder::new()?;
-                builder.analyzers(action, cli.verbose)?;
+            match &action {
+                cli::AnalyzersAction::List => {
+                    builder::analyzers::list_analyzers(cli.verbose);
+                }
+                cli::AnalyzersAction::Defconfig { name } => {
+                    builder::analyzers::analyzer_defconfig(name.as_deref())?;
+                }
+                _ => {
+                    let builder = Builder::new()?;
+                    builder.analyzers(action, cli.verbose)?;
+                }
             }
         }
         Commands::Doctor => {
