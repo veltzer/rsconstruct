@@ -47,7 +47,7 @@ impl SimpleGenerator {
 }
 
 impl Processor for SimpleGenerator {
-    fn scan_config(&self) -> &crate::config::ScanConfig {
+    fn scan_config(&self) -> &crate::config::StandardConfig {
         &self.config.scan
     }
 
@@ -93,7 +93,7 @@ impl Processor for SimpleGenerator {
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
         let params = DiscoverParams {
-            scan: &self.config.scan,
+            scan: &self.config,
             dep_inputs: &self.config.dep_inputs,
             config: &self.config,
             output_dir: &self.config.output_dir,

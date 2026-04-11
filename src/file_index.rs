@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
-use crate::config::ScanConfig;
+use crate::config::StandardConfig;
 
 #[derive(Debug, Clone)]
 pub struct FileIndex {
@@ -127,7 +127,7 @@ impl FileIndex {
     /// - `recursive`: if false, only include files at depth 1 from the scan root
     pub fn scan(
         &self,
-        scan: &ScanConfig,
+        scan: &StandardConfig,
         recursive: bool,
     ) -> Vec<PathBuf> {
         let ext_refs: Vec<&str> = scan.src_extensions().iter().map(|s| s.as_str()).collect();

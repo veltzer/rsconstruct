@@ -355,7 +355,7 @@ impl CcSingleFileProcessor {
 
     /// Get the first source directory from scan config (relative path)
     fn source_dir(&self) -> PathBuf {
-        PathBuf::from(self.config.standard.scan.src_dirs().first().map(|s| s.as_str()).unwrap_or(""))
+        PathBuf::from(self.config.standard.src_dirs().first().map(|s| s.as_str()).unwrap_or(""))
     }
 
     /// Check if cc processing should be enabled
@@ -506,8 +506,8 @@ impl CcSingleFileProcessor {
 }
 
 impl Processor for CcSingleFileProcessor {
-    fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.standard.scan
+    fn scan_config(&self) -> &crate::config::StandardConfig {
+        &self.config.standard
     }
 
 

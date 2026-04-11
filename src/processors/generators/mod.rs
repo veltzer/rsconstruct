@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use serde::Serialize;
 
-use crate::config::{ScanConfig, output_config_hash, resolve_extra_inputs};
+use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
 
@@ -40,7 +40,7 @@ impl TemplateItem {
 
 /// Find all template files matching configured extensions, stripping the
 /// extension to produce the output path. Shared by tera and mako processors.
-pub(super) fn find_templates(scan: &ScanConfig, file_index: &FileIndex) -> Result<Vec<TemplateItem>> {
+pub(super) fn find_templates(scan: &StandardConfig, file_index: &FileIndex) -> Result<Vec<TemplateItem>> {
     let paths = file_index.scan(scan, true);
     let extensions = scan.src_extensions();
     let src_dirs = scan.src_dirs();
@@ -69,7 +69,7 @@ pub(super) fn find_templates(scan: &ScanConfig, file_index: &FileIndex) -> Resul
 
 /// Parameters shared by multi-format and single-format discover helpers.
 pub(super) struct DiscoverParams<'a, C: Serialize> {
-    pub scan: &'a ScanConfig,
+    pub scan: &'a StandardConfig,
     pub dep_inputs: &'a [String],
     pub config: &'a C,
     pub output_dir: &'a str,

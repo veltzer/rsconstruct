@@ -54,8 +54,8 @@ impl MakoProcessor {
 }
 
 impl Processor for MakoProcessor {
-    fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.standard.scan
+    fn scan_config(&self) -> &crate::config::StandardConfig {
+        &self.config.standard
     }
 
 

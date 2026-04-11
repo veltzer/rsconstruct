@@ -176,8 +176,8 @@ fn check_property_ordering(
 }
 
 impl crate::processors::Processor for IyamlschemaProcessor {
-    fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.standard.scan
+    fn scan_config(&self) -> &crate::config::StandardConfig {
+        &self.config.standard
     }
 
     fn standard_config(&self) -> Option<&crate::config::StandardConfig> {

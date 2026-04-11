@@ -324,7 +324,7 @@ pub(crate) fn check_command_output(output: &Output, context: impl std::fmt::Disp
 /// Check if scan directories are valid. Always returns true because scan directories
 /// may not exist on disk yet but contain virtual files from the fixed-point discovery
 /// loop (upstream generator outputs). The actual filtering is done by `file_index.scan()`.
-pub(crate) fn scan_root_valid(_scan: &crate::config::ScanConfig) -> bool {
+pub(crate) fn scan_root_valid(_scan: &crate::config::StandardConfig) -> bool {
     true
 }
 
@@ -451,7 +451,7 @@ pub(crate) fn build_anchor_inputs(anchor: &Path, sibling_files: &[PathBuf], extr
 /// Combine the scan_root_valid check, scan, and empty check that creators
 /// repeat in their discover() methods. Returns None if the scan root is invalid
 /// or no files were found, otherwise returns the list of files.
-pub(crate) fn scan_or_skip(scan: &crate::config::ScanConfig, file_index: &FileIndex) -> Option<Vec<PathBuf>> {
+pub(crate) fn scan_or_skip(scan: &crate::config::StandardConfig, file_index: &FileIndex) -> Option<Vec<PathBuf>> {
     if !scan_root_valid(scan) {
         return None;
     }
@@ -491,7 +491,7 @@ pub(crate) struct SiblingFilter<'a> {
 
 /// Options for `discover_directory_products`.
 pub(crate) struct DirectoryProductOpts<'a, H: serde::Serialize> {
-    pub scan: &'a crate::config::ScanConfig,
+    pub scan: &'a crate::config::StandardConfig,
     pub file_index: &'a FileIndex,
     pub dep_inputs: &'a [String],
     pub cfg_hash: &'a H,
@@ -564,7 +564,7 @@ pub(crate) fn discover_directory_products(
 /// All paths are relative to project root.
 pub(crate) fn discover_checker_products(
     graph: &mut BuildGraph,
-    scan: &crate::config::ScanConfig,
+    scan: &crate::config::StandardConfig,
     file_index: &FileIndex,
     dep_inputs: &[String],
     cfg_hash: &impl serde::Serialize,
@@ -590,7 +590,7 @@ pub(crate) fn discover_checker_products(
 /// Used by all checkers that follow the standard discover pattern.
 pub(crate) fn checker_discover(
     graph: &mut BuildGraph,
-    scan: &crate::config::ScanConfig,
+    scan: &crate::config::StandardConfig,
     file_index: &FileIndex,
     dep_inputs: &[String],
     dep_auto: &[String],
@@ -605,12 +605,12 @@ pub(crate) fn checker_discover(
 }
 
 /// Standard checker auto_detect: check if scan finds any files.
-pub(crate) fn checker_auto_detect(scan: &crate::config::ScanConfig, file_index: &FileIndex) -> bool {
+pub(crate) fn checker_auto_detect(scan: &crate::config::StandardConfig, file_index: &FileIndex) -> bool {
     !file_index.scan(scan, true).is_empty()
 }
 
 /// Standard checker auto_detect with scan_root guard.
-pub(crate) fn checker_auto_detect_with_scan_root(scan: &crate::config::ScanConfig, file_index: &FileIndex) -> bool {
+pub(crate) fn checker_auto_detect_with_scan_root(scan: &crate::config::StandardConfig, file_index: &FileIndex) -> bool {
     scan_root_valid(scan) && !file_index.scan(scan, true).is_empty()
 }
 
@@ -889,7 +889,7 @@ pub trait Processor: Sync + Send {
     }
 
     /// Access the scan configuration. Required for auto_detect and discover defaults.
-    fn scan_config(&self) -> &crate::config::ScanConfig;
+    fn scan_config(&self) -> &crate::config::StandardConfig;
 
     /// Access the standard config fields. Override to enable defaults for
     /// config_json, max_jobs, supports_batch, and discover.

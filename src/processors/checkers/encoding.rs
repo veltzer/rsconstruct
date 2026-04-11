@@ -56,8 +56,8 @@ fn validate_utf8(bytes: &[u8]) -> std::result::Result<(), String> {
 }
 
 impl crate::processors::Processor for EncodingProcessor {
-    fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.standard.scan
+    fn scan_config(&self) -> &crate::config::StandardConfig {
+        &self.config.standard
     }
 
     fn standard_config(&self) -> Option<&crate::config::StandardConfig> {

@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::config::{output_config_hash, scan_config_from_toml, ScanConfig};
+use crate::config::{output_config_hash, scan_config_from_toml, StandardConfig};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use super::{clean_outputs, ensure_stub_dir, run_command, Processor};
@@ -331,7 +331,7 @@ impl LuaProcessor {
 }
 
 impl Processor for LuaProcessor {
-    fn scan_config(&self) -> &crate::config::ScanConfig {
+    fn scan_config(&self) -> &crate::config::StandardConfig {
         &self.scan_config
     }
 

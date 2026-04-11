@@ -1,5 +1,5 @@
 use serde::Serialize;
-use crate::config::ScanConfig;
+use crate::config::StandardConfig;
 use crate::graph::Product;
 use crate::processors::ProcessorType;
 
@@ -53,7 +53,7 @@ impl ProcessorBase {
         crate::processors::clean_output_dir(product, name, verbose)
     }
 
-    pub fn auto_detect(scan: &ScanConfig, file_index: &crate::file_index::FileIndex) -> bool {
+    pub fn auto_detect(scan: &StandardConfig, file_index: &crate::file_index::FileIndex) -> bool {
         crate::processors::scan_root_valid(scan) && !file_index.scan(scan, true).is_empty()
     }
 }

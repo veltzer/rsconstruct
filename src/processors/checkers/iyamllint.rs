@@ -37,8 +37,8 @@ impl IyamllintProcessor {
 }
 
 impl crate::processors::Processor for IyamllintProcessor {
-    fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.standard.scan
+    fn scan_config(&self) -> &crate::config::StandardConfig {
+        &self.config.standard
     }
 
     fn standard_config(&self) -> Option<&crate::config::StandardConfig> {

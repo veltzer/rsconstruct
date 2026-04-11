@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use super::{default_true, default_cc_compiler, default_cxx_compiler, default_output_suffix, KnownFields, ScanConfig,};
+use super::{default_true, default_cc_compiler, default_cxx_compiler, default_output_suffix, KnownFields, ScanDefaultsData};
 
 /// Universal processor config with all standard fields.
 /// Checkers, generators, and simple processors all use this.
@@ -28,8 +28,19 @@ pub struct StandardConfig {
     /// Set to false to always rebuild and never store results.
     #[serde(default = "default_true")]
     pub cache: bool,
-    #[serde(flatten)]
-    pub scan: ScanConfig,
+    // --- Scan fields (file discovery) ---
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub src_dirs: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub src_extensions: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub src_exclude_dirs: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub src_exclude_files: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub src_exclude_paths: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub src_files: Option<Vec<String>>,
 }
 
 impl Default for StandardConfig {
@@ -44,8 +55,56 @@ impl Default for StandardConfig {
             batch: true,
             max_jobs: None,
             cache: true,
-            scan: ScanConfig::default(),
+            src_dirs: None,
+            src_extensions: None,
+            src_exclude_dirs: None,
+            src_exclude_files: None,
+            src_exclude_paths: None,
+            src_files: None,
         }
+    }
+}
+
+impl StandardConfig {
+    /// Fill in None scan fields from scan defaults data.
+    pub(crate) fn resolve_scan(&mut self, defaults: &ScanDefaultsData) {
+        if self.src_dirs.is_none() {
+            self.src_dirs = Some(defaults.src_dirs.iter().map(|s| s.to_string()).collect());
+        }
+        if self.src_extensions.is_none() {
+            self.src_extensions = Some(defaults.src_extensions.iter().map(|s| s.to_string()).collect());
+        }
+        if self.src_exclude_dirs.is_none() {
+            self.src_exclude_dirs = Some(defaults.src_exclude_dirs.iter().map(|s| s.to_string()).collect());
+        }
+        if self.src_exclude_files.is_none() {
+            self.src_exclude_files = Some(Vec::new());
+        }
+        if self.src_exclude_paths.is_none() {
+            self.src_exclude_paths = Some(Vec::new());
+        }
+        if self.src_files.is_none() {
+            self.src_files = Some(Vec::new());
+        }
+    }
+
+    pub(crate) fn src_dirs(&self) -> &[String] {
+        self.src_dirs.as_deref().expect(crate::errors::SCAN_CONFIG_NOT_RESOLVED)
+    }
+    pub(crate) fn src_extensions(&self) -> &[String] {
+        self.src_extensions.as_deref().expect(crate::errors::SCAN_CONFIG_NOT_RESOLVED)
+    }
+    pub(crate) fn src_exclude_dirs(&self) -> &[String] {
+        self.src_exclude_dirs.as_deref().expect(crate::errors::SCAN_CONFIG_NOT_RESOLVED)
+    }
+    pub(crate) fn src_exclude_files(&self) -> &[String] {
+        self.src_exclude_files.as_deref().expect(crate::errors::SCAN_CONFIG_NOT_RESOLVED)
+    }
+    pub(crate) fn src_exclude_paths(&self) -> &[String] {
+        self.src_exclude_paths.as_deref().expect(crate::errors::SCAN_CONFIG_NOT_RESOLVED)
+    }
+    pub(crate) fn src_files(&self) -> &[String] {
+        self.src_files.as_deref().expect(crate::errors::SCAN_CONFIG_NOT_RESOLVED)
     }
 }
 

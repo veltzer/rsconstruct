@@ -28,8 +28,8 @@ impl ScriptProcessor {
 }
 
 impl Processor for ScriptProcessor {
-    fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.standard.scan
+    fn scan_config(&self) -> &crate::config::StandardConfig {
+        &self.config.standard
     }
 
 

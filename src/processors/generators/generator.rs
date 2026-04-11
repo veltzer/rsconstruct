@@ -57,8 +57,8 @@ impl GeneratorProcessor {
 }
 
 impl Processor for GeneratorProcessor {
-    fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.standard.scan
+    fn scan_config(&self) -> &crate::config::StandardConfig {
+        &self.config.standard
     }
 
 
@@ -112,7 +112,7 @@ impl Processor for GeneratorProcessor {
         let command = &self.config.standard.command;
         dep_inputs.extend(config_file_inputs(command));
         let extra = resolve_extra_inputs(&dep_inputs)?;
-        let src_dirs = self.config.standard.scan.src_dirs();
+        let src_dirs = self.config.standard.src_dirs();
 
         for source in &files {
             let output = super::output_path(

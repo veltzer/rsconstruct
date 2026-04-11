@@ -24,7 +24,7 @@ impl RustSingleFileProcessor {
     }
 
     fn get_output_path(&self, source: &Path) -> PathBuf {
-        let src_dirs = self.config.standard.scan.src_dirs();
+        let src_dirs = self.config.standard.src_dirs();
         let full_parent = source.parent().unwrap_or(Path::new(""));
         let parent = src_dirs.iter()
             .filter(|d| !d.is_empty())
@@ -37,8 +37,8 @@ impl RustSingleFileProcessor {
 }
 
 impl Processor for RustSingleFileProcessor {
-    fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.standard.scan
+    fn scan_config(&self) -> &crate::config::StandardConfig {
+        &self.config.standard
     }
 
     fn standard_config(&self) -> Option<&crate::config::StandardConfig> {
