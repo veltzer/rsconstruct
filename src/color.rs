@@ -1,13 +1,11 @@
 use std::borrow::Cow;
-use std::env;
-use std::sync::OnceLock;
 use tabled::Table;
 use tabled::settings::Style;
 
-/// Check if color output is disabled via NO_COLOR env var
+/// Color is globally disabled because ANSI escape codes break table column alignment.
+/// To re-enable, change this to check an AtomicBool flag or the NO_COLOR env var.
 fn no_color() -> bool {
-    static NO_COLOR: OnceLock<bool> = OnceLock::new();
-    *NO_COLOR.get_or_init(|| env::var("NO_COLOR").is_ok())
+    true
 }
 
 fn wrap<'a>(code: &str, text: &'a str) -> Cow<'a, str> {

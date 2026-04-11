@@ -93,7 +93,7 @@ impl Processor for SimpleChecker {
 // --- Plugin registrations ---
 
 fn create_ruff(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("check"), prepend_args: &[], extra_tools: &[] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint and format Python files using ruff", subcommand: Some("check"), prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "ruff", processor_type: crate::processors::ProcessorType::Checker, create: create_ruff,
@@ -105,7 +105,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_pylint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint Python files using pylint", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "pylint", processor_type: crate::processors::ProcessorType::Checker, create: create_pylint,
@@ -117,7 +117,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_pytest(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Run Python tests using pytest", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "pytest", processor_type: crate::processors::ProcessorType::Checker, create: create_pytest,
@@ -129,7 +129,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_black(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &["--check"], extra_tools: &["python3"] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Check Python code formatting using black", subcommand: None, prepend_args: &["--check"], extra_tools: &["python3"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "black", processor_type: crate::processors::ProcessorType::Checker, create: create_black,
@@ -141,7 +141,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_doctest(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &["-m", "doctest"], extra_tools: &[] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Run Python doctests", subcommand: None, prepend_args: &["-m", "doctest"], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "doctest", processor_type: crate::processors::ProcessorType::Checker, create: create_doctest,
@@ -153,7 +153,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_mypy(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Type-check Python files using mypy", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "mypy", processor_type: crate::processors::ProcessorType::Checker, create: create_mypy,
@@ -165,7 +165,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_pyrefly(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("check"), prepend_args: &["--disable-project-excludes-heuristics"], extra_tools: &[] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Type-check Python files using pyrefly", subcommand: Some("check"), prepend_args: &["--disable-project-excludes-heuristics"], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "pyrefly", processor_type: crate::processors::ProcessorType::Checker, create: create_pyrefly,
@@ -177,7 +177,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_rumdl(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("check"), prepend_args: &[], extra_tools: &[] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint Markdown files using rumdl", subcommand: Some("check"), prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "rumdl", processor_type: crate::processors::ProcessorType::Checker, create: create_rumdl,
@@ -189,7 +189,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_yamllint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint YAML files using yamllint", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "yamllint", processor_type: crate::processors::ProcessorType::Checker, create: create_yamllint,
@@ -201,7 +201,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_jq(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &["empty"], extra_tools: &[] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Validate JSON files using jq", subcommand: None, prepend_args: &["empty"], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "jq", processor_type: crate::processors::ProcessorType::Checker, create: create_jq,
@@ -213,7 +213,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_jsonlint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint JSON files using jsonlint", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "jsonlint", processor_type: crate::processors::ProcessorType::Checker, create: create_jsonlint,
@@ -225,7 +225,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_taplo(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("check"), prepend_args: &[], extra_tools: &[] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Check TOML files using taplo", subcommand: Some("check"), prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "taplo", processor_type: crate::processors::ProcessorType::Checker, create: create_taplo,
@@ -237,7 +237,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_eslint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint JavaScript/TypeScript files using ESLint", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "eslint", processor_type: crate::processors::ProcessorType::Checker, create: create_eslint,
@@ -249,7 +249,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_jshint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint JavaScript files using JSHint", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "jshint", processor_type: crate::processors::ProcessorType::Checker, create: create_jshint,
@@ -261,7 +261,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_htmlhint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint HTML files using HTMLHint", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "htmlhint", processor_type: crate::processors::ProcessorType::Checker, create: create_htmlhint,
@@ -273,7 +273,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_stylelint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint CSS/SCSS files using stylelint", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "stylelint", processor_type: crate::processors::ProcessorType::Checker, create: create_stylelint,
@@ -285,7 +285,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_checkstyle(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Check Java code style using Checkstyle", subcommand: None, prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "checkstyle", processor_type: crate::processors::ProcessorType::Checker, create: create_checkstyle,
@@ -297,7 +297,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_cmake(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("--lint"), prepend_args: &[], extra_tools: &[] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint CMake files using cmake --lint", subcommand: Some("--lint"), prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "cmake", processor_type: crate::processors::ProcessorType::Checker, create: create_cmake,
@@ -309,7 +309,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_hadolint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint Dockerfiles using hadolint", subcommand: None, prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "hadolint", processor_type: crate::processors::ProcessorType::Checker, create: create_hadolint,
@@ -321,7 +321,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_htmllint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint HTML files using htmllint", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "htmllint", processor_type: crate::processors::ProcessorType::Checker, create: create_htmllint,
@@ -333,7 +333,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_jslint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint JavaScript files using JSLint", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "jslint", processor_type: crate::processors::ProcessorType::Checker, create: create_jslint,
@@ -345,7 +345,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_perlcritic(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["perl"] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Analyze Perl code using perlcritic", subcommand: None, prepend_args: &[], extra_tools: &["perl"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "perlcritic", processor_type: crate::processors::ProcessorType::Checker, create: create_perlcritic,
@@ -357,7 +357,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_php_lint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("-l"), prepend_args: &[], extra_tools: &[] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Check PHP syntax using php -l", subcommand: Some("-l"), prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "php_lint", processor_type: crate::processors::ProcessorType::Checker, create: create_php_lint,
@@ -369,7 +369,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_slidev(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("build"), prepend_args: &[], extra_tools: &["node"] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Build Slidev presentations", subcommand: Some("build"), prepend_args: &[], extra_tools: &["node"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "slidev", processor_type: crate::processors::ProcessorType::Checker, create: create_slidev,
@@ -381,7 +381,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_standard(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Check JavaScript style using standard", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "standard", processor_type: crate::processors::ProcessorType::Checker, create: create_standard,
@@ -393,7 +393,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_svglint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint SVG files using svglint", subcommand: None, prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "svglint", processor_type: crate::processors::ProcessorType::Checker, create: create_svglint,
@@ -405,7 +405,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_tidy(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("-errors"), prepend_args: &[], extra_tools: &[] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Validate HTML files using tidy", subcommand: Some("-errors"), prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "tidy", processor_type: crate::processors::ProcessorType::Checker, create: create_tidy,
@@ -417,7 +417,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_xmllint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("--noout"), prepend_args: &[], extra_tools: &[] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Validate XML files using xmllint", subcommand: Some("--noout"), prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "xmllint", processor_type: crate::processors::ProcessorType::Checker, create: create_xmllint,
@@ -429,7 +429,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_yq(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("."), prepend_args: &[], extra_tools: &[] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Validate YAML files using yq", subcommand: Some("."), prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "yq", processor_type: crate::processors::ProcessorType::Checker, create: create_yq,
@@ -441,7 +441,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_cppcheck(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Static analysis for C/C++ using cppcheck", subcommand: None, prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "cppcheck", processor_type: crate::processors::ProcessorType::Checker, create: create_cppcheck,
@@ -453,7 +453,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_cpplint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint C/C++ files using cpplint", subcommand: None, prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "cpplint", processor_type: crate::processors::ProcessorType::Checker, create: create_cpplint,
@@ -465,7 +465,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_checkpatch(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &["--no-tree", "-f"], extra_tools: &["perl"] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Check kernel patches using checkpatch.pl", subcommand: None, prepend_args: &["--no-tree", "-f"], extra_tools: &["perl"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "checkpatch", processor_type: crate::processors::ProcessorType::Checker, create: create_checkpatch,
@@ -477,7 +477,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_shellcheck(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint shell scripts using shellcheck", subcommand: None, prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "shellcheck", processor_type: crate::processors::ProcessorType::Checker, create: create_shellcheck,
@@ -489,7 +489,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_luacheck(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint Lua files using luacheck", subcommand: None, prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "luacheck", processor_type: crate::processors::ProcessorType::Checker, create: create_luacheck,

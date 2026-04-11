@@ -6,6 +6,33 @@ use crate::color;
 use crate::config::ProcessorConfig;
 use super::{Builder, create_all_default_processors, sorted_keys};
 
+/// List all processor types (generator, checker, creator, explicit).
+pub fn list_processor_types() -> Result<()> {
+    use strum::IntoEnumIterator;
+    use crate::processors::ProcessorType;
+
+    if crate::json_output::is_json_mode() {
+        #[derive(serde::Serialize)]
+        struct TypeEntry {
+            name: &'static str,
+            description: &'static str,
+        }
+        let entries: Vec<TypeEntry> = ProcessorType::iter()
+            .map(|pt| TypeEntry { name: pt.as_str(), description: pt.description() })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&entries)?);
+        return Ok(());
+    }
+
+    let mut builder = TableBuilder::new();
+    builder.push_record(["Type", "Description"]);
+    for pt in ProcessorType::iter() {
+        builder.push_record([pt.as_str(), pt.description()]);
+    }
+    color::print_table(builder.build());
+    Ok(())
+}
+
 /// List all built-in processors (works without rsconstruct.toml).
 /// Used when no project config is available.
 pub fn list_processors_no_config(verbose: bool) -> Result<()> {

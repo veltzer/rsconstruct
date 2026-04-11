@@ -373,7 +373,7 @@ fn execute_yaml2json(_config: &StandardConfig, product: &Product) -> Result<()> 
 // --- Plugin registrations ---
 
 fn create_mermaid(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "", extra_tools: &["node"], discover_mode: DiscoverMode::MultiFormat, execute_fn: execute_mermaid, is_native: false })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "Render Mermaid diagrams to images", extra_tools: &["node"], discover_mode: DiscoverMode::MultiFormat, execute_fn: execute_mermaid, is_native: false })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "mermaid", processor_type: crate::processors::ProcessorType::Generator, create: create_mermaid,
@@ -385,7 +385,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_drawio(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "", extra_tools: &[], discover_mode: DiscoverMode::MultiFormat, execute_fn: execute_drawio, is_native: false })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "Export draw.io diagrams to images", extra_tools: &[], discover_mode: DiscoverMode::MultiFormat, execute_fn: execute_drawio, is_native: false })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "drawio", processor_type: crate::processors::ProcessorType::Generator, create: create_drawio,
@@ -397,7 +397,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_sass(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("css"), execute_fn: execute_sass, is_native: false })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "Compile Sass/SCSS to CSS", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("css"), execute_fn: execute_sass, is_native: false })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "sass", processor_type: crate::processors::ProcessorType::Generator, create: create_sass,
@@ -409,7 +409,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_protobuf(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("pb.cc"), execute_fn: execute_protobuf, is_native: false })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "Compile Protocol Buffer definitions", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("pb.cc"), execute_fn: execute_protobuf, is_native: false })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "protobuf", processor_type: crate::processors::ProcessorType::Generator, create: create_protobuf,
@@ -421,7 +421,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_chromium(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("pdf"), execute_fn: execute_chromium, is_native: false })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "Convert files to PDF using Chromium", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("pdf"), execute_fn: execute_chromium, is_native: false })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "chromium", processor_type: crate::processors::ProcessorType::Generator, create: create_chromium,
@@ -433,7 +433,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_markdown2html(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "", extra_tools: &["perl"], discover_mode: DiscoverMode::SingleFormat("html"), execute_fn: execute_markdown2html, is_native: false })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "Convert Markdown files to HTML", extra_tools: &["perl"], discover_mode: DiscoverMode::SingleFormat("html"), execute_fn: execute_markdown2html, is_native: false })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "markdown2html", processor_type: crate::processors::ProcessorType::Generator, create: create_markdown2html,
@@ -445,7 +445,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_libreoffice(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "", extra_tools: &["flock"], discover_mode: DiscoverMode::MultiFormat, execute_fn: execute_libreoffice, is_native: false })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "Convert documents using LibreOffice", extra_tools: &["flock"], discover_mode: DiscoverMode::MultiFormat, execute_fn: execute_libreoffice, is_native: false })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "libreoffice", processor_type: crate::processors::ProcessorType::Generator, create: create_libreoffice,
@@ -457,7 +457,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_marp(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "", extra_tools: &["node"], discover_mode: DiscoverMode::MultiFormat, execute_fn: execute_marp, is_native: false })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "Convert Marp Markdown presentations to PDF/HTML", extra_tools: &["node"], discover_mode: DiscoverMode::MultiFormat, execute_fn: execute_marp, is_native: false })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "marp", processor_type: crate::processors::ProcessorType::Generator, create: create_marp,
@@ -469,7 +469,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_pandoc(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "", extra_tools: &[], discover_mode: DiscoverMode::MultiFormat, execute_fn: execute_pandoc, is_native: false })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "Convert documents using pandoc", extra_tools: &[], discover_mode: DiscoverMode::MultiFormat, execute_fn: execute_pandoc, is_native: false })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "pandoc", processor_type: crate::processors::ProcessorType::Generator, create: create_pandoc,
@@ -481,7 +481,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_a2x(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "", extra_tools: &["python3"], discover_mode: DiscoverMode::SingleFormat("pdf"), execute_fn: execute_a2x, is_native: false })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "Convert AsciiDoc files to PDF", extra_tools: &["python3"], discover_mode: DiscoverMode::SingleFormat("pdf"), execute_fn: execute_a2x, is_native: false })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "a2x", processor_type: crate::processors::ProcessorType::Generator, create: create_a2x,
@@ -493,7 +493,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_objdump(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("dis"), execute_fn: execute_objdump, is_native: false })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "Disassemble object files using objdump", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("dis"), execute_fn: execute_objdump, is_native: false })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "objdump", processor_type: crate::processors::ProcessorType::Generator, create: create_objdump,
@@ -505,7 +505,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_imarkdown2html(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("html"), execute_fn: execute_imarkdown2html, is_native: true })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "Convert Markdown to HTML (in-process)", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("html"), execute_fn: execute_imarkdown2html, is_native: true })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "imarkdown2html", processor_type: crate::processors::ProcessorType::Generator, create: create_imarkdown2html,
@@ -517,7 +517,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_isass(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("css"), execute_fn: execute_isass, is_native: true })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "Compile Sass/SCSS to CSS (in-process)", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("css"), execute_fn: execute_isass, is_native: true })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "isass", processor_type: crate::processors::ProcessorType::Generator, create: create_isass,
@@ -529,7 +529,7 @@ inventory::submit! { crate::registry::ProcessorPlugin {
 } }
 
 fn create_yaml2json(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("json"), execute_fn: execute_yaml2json, is_native: true })))
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { description: "Convert YAML files to JSON (in-process)", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("json"), execute_fn: execute_yaml2json, is_native: true })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "yaml2json", processor_type: crate::processors::ProcessorType::Generator, create: create_yaml2json,
