@@ -14,6 +14,7 @@ use crate::processors::{Processor, ProcessorType};
 /// The framework applies defaults to the TOML before calling `create`.
 /// The `create` function deserializes the TOML and returns a fully configured,
 /// immutable processor.
+#[allow(dead_code)]
 pub struct ProcessorPlugin {
     pub name: &'static str,
     pub processor_type: ProcessorType,
@@ -24,8 +25,9 @@ pub struct ProcessorPlugin {
     pub output_fields: fn() -> &'static [&'static str],
     pub must_fields: fn() -> &'static [&'static str],
     pub field_descriptions: fn() -> &'static [(&'static str, &'static str)],
-    /// Return the default config as pretty JSON.
-    pub defconfig_json: fn() -> Option<String>,
+    /// Return the default config as pretty JSON. Receives the processor name
+    /// so it can apply the correct defaults.
+    pub defconfig_json: fn(&str) -> Option<String>,
 }
 
 unsafe impl Sync for ProcessorPlugin {}

@@ -89,445 +89,414 @@ impl Processor for SimpleChecker {
 
 // --- Plugin registrations ---
 
-fn create_ruff(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("check"), prepend_args: &[], extra_tools: &[] })))
+
+// --- Plugin registrations ---
+
+fn create_ruff(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("check"), prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "ruff", processor_type: crate::processors::ProcessorType::Checker, create: create_ruff,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_pylint(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
+fn create_pylint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "pylint", processor_type: crate::processors::ProcessorType::Checker, create: create_pylint,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_pytest(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
+fn create_pytest(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "pytest", processor_type: crate::processors::ProcessorType::Checker, create: create_pytest,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_black(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &["--check"], extra_tools: &["python3"] })))
+fn create_black(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &["--check"], extra_tools: &["python3"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "black", processor_type: crate::processors::ProcessorType::Checker, create: create_black,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_doctest(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &["-m", "doctest"], extra_tools: &[] })))
+fn create_doctest(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &["-m", "doctest"], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "doctest", processor_type: crate::processors::ProcessorType::Checker, create: create_doctest,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_mypy(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
+fn create_mypy(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "mypy", processor_type: crate::processors::ProcessorType::Checker, create: create_mypy,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_pyrefly(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("check"), prepend_args: &["--disable-project-excludes-heuristics"], extra_tools: &[] })))
+fn create_pyrefly(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("check"), prepend_args: &["--disable-project-excludes-heuristics"], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "pyrefly", processor_type: crate::processors::ProcessorType::Checker, create: create_pyrefly,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_rumdl(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("check"), prepend_args: &[], extra_tools: &[] })))
+fn create_rumdl(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("check"), prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "rumdl", processor_type: crate::processors::ProcessorType::Checker, create: create_rumdl,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_yamllint(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
+fn create_yamllint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "yamllint", processor_type: crate::processors::ProcessorType::Checker, create: create_yamllint,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_jq(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &["empty"], extra_tools: &[] })))
+fn create_jq(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &["empty"], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "jq", processor_type: crate::processors::ProcessorType::Checker, create: create_jq,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_jsonlint(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
+fn create_jsonlint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["python3"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "jsonlint", processor_type: crate::processors::ProcessorType::Checker, create: create_jsonlint,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_taplo(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("check"), prepend_args: &[], extra_tools: &[] })))
+fn create_taplo(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("check"), prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "taplo", processor_type: crate::processors::ProcessorType::Checker, create: create_taplo,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_eslint(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
+fn create_eslint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "eslint", processor_type: crate::processors::ProcessorType::Checker, create: create_eslint,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_jshint(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
+fn create_jshint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "jshint", processor_type: crate::processors::ProcessorType::Checker, create: create_jshint,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_htmlhint(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
+fn create_htmlhint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "htmlhint", processor_type: crate::processors::ProcessorType::Checker, create: create_htmlhint,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_stylelint(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
+fn create_stylelint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "stylelint", processor_type: crate::processors::ProcessorType::Checker, create: create_stylelint,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_checkstyle(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
+fn create_checkstyle(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "checkstyle", processor_type: crate::processors::ProcessorType::Checker, create: create_checkstyle,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_cmake(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("--lint"), prepend_args: &[], extra_tools: &[] })))
+fn create_cmake(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("--lint"), prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "cmake", processor_type: crate::processors::ProcessorType::Checker, create: create_cmake,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_hadolint(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
+fn create_hadolint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "hadolint", processor_type: crate::processors::ProcessorType::Checker, create: create_hadolint,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_htmllint(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
+fn create_htmllint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "htmllint", processor_type: crate::processors::ProcessorType::Checker, create: create_htmllint,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_jslint(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
+fn create_jslint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "jslint", processor_type: crate::processors::ProcessorType::Checker, create: create_jslint,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_perlcritic(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["perl"] })))
+fn create_perlcritic(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["perl"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "perlcritic", processor_type: crate::processors::ProcessorType::Checker, create: create_perlcritic,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_php_lint(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("-l"), prepend_args: &[], extra_tools: &[] })))
+fn create_php_lint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("-l"), prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "php_lint", processor_type: crate::processors::ProcessorType::Checker, create: create_php_lint,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_slidev(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("build"), prepend_args: &[], extra_tools: &["node"] })))
+fn create_slidev(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("build"), prepend_args: &[], extra_tools: &["node"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "slidev", processor_type: crate::processors::ProcessorType::Checker, create: create_slidev,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_standard(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
+fn create_standard(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "standard", processor_type: crate::processors::ProcessorType::Checker, create: create_standard,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_svglint(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
+fn create_svglint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "svglint", processor_type: crate::processors::ProcessorType::Checker, create: create_svglint,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_tidy(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("-errors"), prepend_args: &[], extra_tools: &[] })))
+fn create_tidy(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("-errors"), prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "tidy", processor_type: crate::processors::ProcessorType::Checker, create: create_tidy,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_xmllint(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("--noout"), prepend_args: &[], extra_tools: &[] })))
+fn create_xmllint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("--noout"), prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "xmllint", processor_type: crate::processors::ProcessorType::Checker, create: create_xmllint,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_yq(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("."), prepend_args: &[], extra_tools: &[] })))
+fn create_yq(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: Some("."), prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "yq", processor_type: crate::processors::ProcessorType::Checker, create: create_yq,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_cppcheck(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
+fn create_cppcheck(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "cppcheck", processor_type: crate::processors::ProcessorType::Checker, create: create_cppcheck,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_cpplint(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
+fn create_cpplint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "cpplint", processor_type: crate::processors::ProcessorType::Checker, create: create_cpplint,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_checkpatch(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &["--no-tree", "-f"], extra_tools: &["perl"] })))
+fn create_checkpatch(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &["--no-tree", "-f"], extra_tools: &["perl"] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "checkpatch", processor_type: crate::processors::ProcessorType::Checker, create: create_checkpatch,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_shellcheck(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
+fn create_shellcheck(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "shellcheck", processor_type: crate::processors::ProcessorType::Checker, create: create_shellcheck,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 
-fn create_luacheck(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
+fn create_luacheck(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "", subcommand: None, prepend_args: &[], extra_tools: &[] })))
 }
 inventory::submit! { crate::registry::ProcessorPlugin {
     name: "luacheck", processor_type: crate::processors::ProcessorType::Checker, create: create_luacheck,
-    resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::StandardConfig>,
-    defconfig_json: crate::registry::typed_defconfig_json::<crate::config::StandardConfig>,
     known_fields: crate::registry::typed_known_fields::<crate::config::StandardConfig>,
     output_fields: crate::registry::typed_output_fields::<crate::config::StandardConfig>,
     must_fields: crate::registry::typed_must_fields::<crate::config::StandardConfig>,
     field_descriptions: crate::registry::typed_field_descriptions::<crate::config::StandardConfig>,
+    defconfig_json: crate::registry::default_config_json::<crate::config::StandardConfig>,
 } }
 

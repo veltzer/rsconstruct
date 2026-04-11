@@ -519,7 +519,8 @@ impl ProcessorConfig {
 
     /// Return the default config for a processor type as pretty JSON, or None if unknown.
     pub(crate) fn defconfig_json(type_name: &str) -> Option<String> {
-        (find_registry_entry(type_name)?.defconfig_json)()
+        let entry = find_registry_entry(type_name)?;
+        (entry.defconfig_json)(entry.name)
     }
 }
 

@@ -271,6 +271,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: ToolsAction,
     },
+    /// Validate rsconstruct.toml configuration (no processors created)
+    #[command(name = "toml")]
+    Toml {
+        #[command(subcommand)]
+        action: TomlAction,
+    },
     /// Create symlinks from source folders to target folders (requires config)
     SymlinkInstall,
     /// Print version information (no config needed)
@@ -455,6 +461,12 @@ pub enum ProcessorAction {
     },
     /// List all processor types with descriptions
     Types,
+}
+
+#[derive(Subcommand)]
+pub enum TomlAction {
+    /// Validate rsconstruct.toml — check for unknown fields, type errors, and missing required fields
+    Check,
 }
 
 #[derive(Subcommand)]

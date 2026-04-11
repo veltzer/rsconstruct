@@ -138,16 +138,15 @@ impl Processor for GeneratorProcessor {
     }
 }
 
-fn plugin_create(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(GeneratorProcessor::new(cfg)))
+fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(GeneratorProcessor::new(cfg)))
 }
 inventory::submit! {
     crate::registry::ProcessorPlugin {
         name: "generator",
         processor_type: crate::processors::ProcessorType::Generator,
         create: plugin_create,
-        resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::GeneratorConfig>,
-        defconfig_json: crate::registry::typed_defconfig_json::<crate::config::GeneratorConfig>,
+        defconfig_json: crate::registry::default_config_json::<crate::config::GeneratorConfig>,
         known_fields: crate::registry::typed_known_fields::<crate::config::GeneratorConfig>,
         output_fields: crate::registry::typed_output_fields::<crate::config::GeneratorConfig>,
         must_fields: crate::registry::typed_must_fields::<crate::config::GeneratorConfig>,

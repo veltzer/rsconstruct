@@ -97,16 +97,15 @@ impl Processor for MdlProcessor {
     }
 }
 
-fn plugin_create(name: &str, toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registry::typed_create(name, toml, |cfg| Box::new(MdlProcessor::new(cfg)))
+fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registry::deserialize_and_create(toml, |cfg| Box::new(MdlProcessor::new(cfg)))
 }
 inventory::submit! {
     crate::registry::ProcessorPlugin {
         name: "mdl",
         processor_type: crate::processors::ProcessorType::Checker,
         create: plugin_create,
-        resolve_defaults: crate::registry::typed_resolve_defaults::<crate::config::MdlConfig>,
-        defconfig_json: crate::registry::typed_defconfig_json::<crate::config::MdlConfig>,
+        defconfig_json: crate::registry::default_config_json::<crate::config::MdlConfig>,
         known_fields: crate::registry::typed_known_fields::<crate::config::MdlConfig>,
         output_fields: crate::registry::typed_output_fields::<crate::config::MdlConfig>,
         must_fields: crate::registry::typed_must_fields::<crate::config::MdlConfig>,

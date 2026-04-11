@@ -439,6 +439,17 @@ fn run() -> Result<()> {
                 cli::TagsAction::Collect => processors::tags_cmd::collect_tags(&db_path, &tags_dir)?,
             }
         }
+        Commands::Toml { action } => {
+            match action {
+                cli::TomlAction::Check => {
+                    config::Config::require_config()?;
+                    // Config::load() validates all fields — unknown fields, types, required fields.
+                    // If it succeeds, the config is valid.
+                    let _config = config::Config::load()?;
+                    println!("rsconstruct.toml is valid.");
+                }
+            }
+        }
         Commands::Tools { action } => {
             // Fall back to default config only if no config file exists.
             // If config exists but is broken, fail — don't silently use defaults.
