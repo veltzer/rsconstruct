@@ -1161,8 +1161,10 @@ pub struct ExplicitConfig {
     pub input_globs: Vec<String>,
     /// Output file paths produced by the command
     #[serde(default)]
-    pub outputs: Vec<String>,
-    /// Unused — present for compatibility with the processor macro system
+    pub output_files: Vec<String>,
+    /// Output directories produced by the command
+    #[serde(default)]
+    pub output_dirs: Vec<String>,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -1174,7 +1176,8 @@ impl Default for ExplicitConfig {
             args: Vec::new(),
             inputs: Vec::new(),
             input_globs: Vec::new(),
-            outputs: Vec::new(),
+            output_files: Vec::new(),
+            output_dirs: Vec::new(),
             scan: ScanConfig::default(),
         }
     }
@@ -1182,21 +1185,19 @@ impl Default for ExplicitConfig {
 
 impl KnownFields for ExplicitConfig {
     fn known_fields() -> &'static [&'static str] {
-        &["command", "args", "inputs", "input_globs", "outputs"]
+        &["command", "args", "inputs", "input_globs", "output_files", "output_dirs"]
     }
     fn output_fields() -> &'static [&'static str] {
-        &["command", "args", "inputs", "input_globs", "outputs"]
-    }
-    fn must_fields() -> &'static [&'static str] {
-        &["outputs"]
+        &["command", "args", "inputs", "input_globs", "output_files", "output_dirs"]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
         &[
-            ("command",     "Command to run to produce the outputs"),
-            ("args",        "Extra arguments passed before input/output paths"),
-            ("inputs",      "Explicit list of input files"),
-            ("input_globs", "Glob patterns for input files"),
-            ("outputs",     "Explicit list of output files produced by the command"),
+            ("command",      "Command to run to produce the outputs"),
+            ("args",         "Extra arguments passed before input/output paths"),
+            ("inputs",       "Explicit list of input files"),
+            ("input_globs",  "Glob patterns for input files"),
+            ("output_files", "Output files produced by the command"),
+            ("output_dirs",  "Output directories produced by the command"),
         ]
     }
 }

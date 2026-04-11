@@ -594,7 +594,7 @@ fn explicit_processor_discovery() {
 command = "scripts/build_report.py"
 inputs = ["config.txt"]
 input_globs = ["data/*.csv"]
-outputs = ["out/report.html"]
+output_files = ["out/report.html"]
 src_dirs = ["."]
 "#,
     ).unwrap();

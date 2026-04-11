@@ -343,17 +343,15 @@ fn config_validate_explicit_missing_outputs() {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let project_path = temp_dir.path();
 
-    // Configure explicit processor without the required 'outputs' field
+    // Configure explicit processor without any output_files or output_dirs
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[processor.explicit]\ncommand = \"my_script\"\nsrc_dirs = [\".\"]\n",
     ).unwrap();
 
+    // Should succeed — explicit with no outputs is valid (just won't discover any products)
     let output = run_rsconstruct_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
-    assert!(!output.status.success(), "Expected config validate to fail when outputs is missing");
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("outputs"), "Expected error about missing 'outputs' field, got: {}", stderr);
-    assert!(stderr.contains("required"), "Expected error to say field is required, got: {}", stderr);
+    assert!(output.status.success(), "Explicit with no outputs should be valid: {}", String::from_utf8_lossy(&output.stderr));
 }
 
 #[test]
@@ -361,16 +359,15 @@ fn config_validate_explicit_empty_outputs() {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let project_path = temp_dir.path();
 
-    // Configure explicit processor with explicitly empty 'outputs'
+    // Configure explicit processor with explicitly empty output_files
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.explicit]\ncommand = \"my_script\"\noutputs = []\nsrc_dirs = [\".\"]\n",
+        "[processor.explicit]\ncommand = \"my_script\"\noutput_files = []\nsrc_dirs = [\".\"]\n",
     ).unwrap();
 
+    // Should succeed — empty output_files is valid (might have output_dirs instead)
     let output = run_rsconstruct_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
-    assert!(!output.status.success(), "Expected config validate to fail when outputs is empty");
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("outputs"), "Expected error about empty 'outputs' field, got: {}", stderr);
+    assert!(output.status.success(), "Explicit with empty output_files should be valid: {}", String::from_utf8_lossy(&output.stderr));
 }
 
 #[test]
@@ -378,12 +375,12 @@ fn config_validate_explicit_with_outputs_ok() {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let project_path = temp_dir.path();
 
-    // Configure explicit processor with required 'outputs' field present
+    // Configure explicit processor with output_files
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.explicit]\ncommand = \"my_script\"\noutputs = [\"out/result.txt\"]\nsrc_dirs = [\".\"]\n",
+        "[processor.explicit]\ncommand = \"my_script\"\noutput_files = [\"out/result.txt\"]\nsrc_dirs = [\".\"]\n",
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "Expected config validate to succeed with outputs set: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(output.status.success(), "Expected config validate to succeed with output_files set: {}", String::from_utf8_lossy(&output.stderr));
 }

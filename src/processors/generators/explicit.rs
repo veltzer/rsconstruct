@@ -83,7 +83,8 @@ impl Processor for ExplicitProcessor {
 
     fn auto_detect(&self, _file_index: &FileIndex) -> bool {
         // Only active if command is set to something real and outputs are declared
-        self.config.command != "true" && !self.config.outputs.is_empty()
+        self.config.command != "true"
+            && (!self.config.output_files.is_empty() || !self.config.output_dirs.is_empty())
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -95,7 +96,7 @@ impl Processor for ExplicitProcessor {
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
-        if self.config.outputs.is_empty() {
+        if self.config.output_files.is_empty() && self.config.output_dirs.is_empty() {
             return Ok(());
         }
 
@@ -104,15 +105,17 @@ impl Processor for ExplicitProcessor {
             return Ok(());
         }
 
-        let outputs: Vec<PathBuf> = self.config.outputs.iter().map(PathBuf::from).collect();
+        let output_files: Vec<PathBuf> = self.config.output_files.iter().map(PathBuf::from).collect();
+        let output_dirs: Vec<PathBuf> = self.config.output_dirs.iter().map(PathBuf::from).collect();
         let hash = Some(output_config_hash(&self.config, &["inputs", "input_globs"]));
 
-        graph.add_product(
-            inputs,
-            outputs,
-            instance_name,
-            hash,
-        )?;
+        if output_dirs.is_empty() {
+            graph.add_product(inputs, output_files, instance_name, hash)?;
+        } else {
+            graph.add_product_with_output_dirs_and_variant(
+                inputs, output_files, instance_name, hash, output_dirs, None,
+            )?;
+        }
 
         Ok(())
     }
@@ -120,7 +123,7 @@ impl Processor for ExplicitProcessor {
     fn supports_batch(&self) -> bool { false }
 
     fn execute(&self, product: &Product) -> Result<()> {
-        // Ensure output directories exist
+        // Ensure output file directories exist
         for output in &product.outputs {
             ensure_output_dir(output)?;
         }
@@ -133,24 +136,33 @@ impl Processor for ExplicitProcessor {
         for input in &product.inputs {
             cmd.arg(input);
         }
-        cmd.arg("--outputs");
-        for output in &product.outputs {
-            cmd.arg(output);
+        if !self.config.output_files.is_empty() {
+            cmd.arg("--output-files");
+            for f in &self.config.output_files {
+                cmd.arg(f);
+            }
+        }
+        if !self.config.output_dirs.is_empty() {
+            cmd.arg("--output-dirs");
+            for d in &self.config.output_dirs {
+                cmd.arg(d);
+            }
         }
 
         let out = run_command(&mut cmd)?;
         check_command_output(
             &out,
-            format_args!("{} ({} inputs → {} outputs)",
+            format_args!("{} ({} inputs)",
                 self.config.command,
                 product.inputs.len(),
-                product.outputs.len(),
             ),
         )
     }
 
     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
-        ProcessorBase::clean(product, &product.processor, verbose)
+        let file_count = ProcessorBase::clean(product, &product.processor, verbose)?;
+        let dir_count = crate::processors::clean_output_dir(product, &product.processor, verbose)?;
+        Ok(file_count + dir_count)
     }
 
     fn config_json(&self) -> Option<String> {
