@@ -138,7 +138,7 @@ pub fn load_terms(terms_dir: &str) -> Result<HashSet<String>> {
         let path = entry.path();
         if path.extension().is_some_and(|e| e == "txt") {
             let filename = path.file_name().unwrap().to_string_lossy().to_string();
-            let content = fs::read_to_string(&path)?;
+            let content = ctx!(fs::read_to_string(&path), format!("Failed to read terms file: {}", path.display()))?;
             for (line_idx, line) in content.lines().enumerate() {
                 let term = line.trim();
                 if term.is_empty() {
@@ -511,17 +511,17 @@ fn fix_content(original: &str, terms: &HashSet<String>, sorted_terms: &[&str], r
 /// Check a file and return the list of unquoted terms found.
 /// Returns an empty vec if the file is clean.
 fn check_file_detail(path: &Path, _terms: &HashSet<String>, sorted_terms: &[&str]) -> Result<Vec<String>> {
-    let content = fs::read_to_string(path)?;
+    let content = ctx!(fs::read_to_string(path), format!("Failed to read {}", path.display()))?;
     let matches = find_unquoted_positions(&content, sorted_terms);
     Ok(matches.into_iter().map(|(_, _, term)| term).collect())
 }
 
 /// Auto-fix a single markdown file. Returns true if the file was modified.
 pub fn fix_file(path: &Path, terms: &HashSet<String>, sorted_terms: &[&str], remove_non_terms: bool) -> Result<bool> {
-    let original = fs::read_to_string(path)?;
+    let original = ctx!(fs::read_to_string(path), format!("Failed to read {}", path.display()))?;
     let fixed = fix_content(&original, terms, sorted_terms, remove_non_terms);
     if fixed != original {
-        fs::write(path, &fixed)?;
+        ctx!(fs::write(path, &fixed), format!("Failed to write {}", path.display()))?;
         Ok(true)
     } else {
         Ok(false)
@@ -586,7 +586,7 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
         let filename = path.file_name().unwrap();
         let dest_path = dest.join(filename);
 
-        let source_content = fs::read_to_string(&path)?;
+        let source_content = ctx!(fs::read_to_string(&path), format!("Failed to read terms source: {}", path.display()))?;
         let source_terms: HashSet<String> = source_content
             .lines()
             .map(|l| l.trim().to_string())
@@ -594,7 +594,7 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
             .collect();
 
         if dest_path.exists() {
-            let dest_content = fs::read_to_string(&dest_path)?;
+            let dest_content = ctx!(fs::read_to_string(&dest_path), format!("Failed to read terms dest: {}", dest_path.display()))?;
             let dest_terms: HashSet<String> = dest_content
                 .lines()
                 .map(|l| l.trim().to_string())
@@ -606,8 +606,8 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
             sorted.sort();
             let content = sorted.join("\n") + "\n";
             if content != source_content || content != dest_content {
-                fs::write(&dest_path, &content)?;
-                fs::write(&path, &content)?;
+                ctx!(fs::write(&dest_path, &content), format!("Failed to write {}", dest_path.display()))?;
+                ctx!(fs::write(&path, &content), format!("Failed to write {}", path.display()))?;
                 merged_count += 1;
                 let added_to_dest = sorted.len() - dest_terms.len();
                 let added_to_src = sorted.len() - source_terms.len();
