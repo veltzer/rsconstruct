@@ -7,7 +7,7 @@ use crate::config::ProcessorConfig;
 use super::{Builder, create_all_default_processors, sorted_keys};
 
 /// List all processor types (generator, checker, creator, explicit).
-pub fn list_processor_types() -> Result<()> {
+pub fn list_processor_types(verbose: bool) -> Result<()> {
     use strum::IntoEnumIterator;
     use crate::processors::ProcessorType;
 
@@ -25,9 +25,16 @@ pub fn list_processor_types() -> Result<()> {
     }
 
     let mut builder = TableBuilder::new();
-    builder.push_record(["Type", "Description"]);
-    for pt in ProcessorType::iter() {
-        builder.push_record([pt.as_str(), pt.description()]);
+    if verbose {
+        builder.push_record(["Type", "Description"]);
+        for pt in ProcessorType::iter() {
+            builder.push_record([pt.as_str(), pt.description()]);
+        }
+    } else {
+        builder.push_record(["Type"]);
+        for pt in ProcessorType::iter() {
+            builder.push_record([pt.as_str()]);
+        }
     }
     color::print_table(builder.build());
     Ok(())
@@ -59,21 +66,19 @@ pub fn list_processors_no_config(verbose: bool) -> Result<()> {
     }
 
     let mut builder = TableBuilder::new();
-    let header = if verbose {
-        vec!["Name", "Type", "Native", "Batch", "Description"]
-    } else {
-        vec!["Name", "Type", "Description"]
-    };
-    builder.push_record(header);
-    for name in &proc_names {
-        let proc = &processors[name.as_str()];
-        let type_str = proc.processor_type().as_str().to_string();
-        if verbose {
+    if verbose {
+        builder.push_record(["Name", "Type", "Native", "Batch", "Description"]);
+        for name in &proc_names {
+            let proc = &processors[name.as_str()];
             let native_tag = if proc.is_native() { "native" } else { "external" };
             let batch_tag = if proc.supports_batch() { "batch" } else { "single" };
-            builder.push_record([name.to_string(), type_str, native_tag.to_string(), batch_tag.to_string(), proc.description().to_string()]);
-        } else {
-            builder.push_record([name.to_string(), type_str, proc.description().to_string()]);
+            builder.push_record([name, proc.processor_type().as_str(), native_tag, batch_tag, proc.description()]);
+        }
+    } else {
+        builder.push_record(["Name", "Type"]);
+        for name in &proc_names {
+            let proc = &processors[name.as_str()];
+            builder.push_record([name.as_str(), proc.processor_type().as_str()]);
         }
     }
     color::print_table(builder.build());
@@ -221,7 +226,7 @@ pub fn processor_defconfig(name: &str) -> Result<()> {
 
 impl Builder {
     /// Handle `rsconstruct processor` subcommands
-    pub fn processor(&self, action: ProcessorAction, _verbose: bool) -> Result<()> {
+    pub fn processor(&self, action: ProcessorAction, verbose: bool) -> Result<()> {
         let processors = self.create_processors()?;
 
         let proc_names = sorted_keys(&processors);
@@ -230,17 +235,20 @@ impl Builder {
             ProcessorAction::List | ProcessorAction::Recommend | ProcessorAction::Types => unreachable!("handled before Builder is constructed"),
             ProcessorAction::Used => {
                 let mut builder = TableBuilder::new();
-                builder.push_record(["Name", "Type", "Detected", "Description"]);
-                for name in &proc_names {
-                    let proc = &processors[name.as_str()];
-                    let detected = proc.auto_detect(&self.file_index);
-                    let detected_str = if detected { "yes" } else { "no" };
-                    builder.push_record([
-                        name.as_str(),
-                        proc.processor_type().as_str(),
-                        detected_str,
-                        proc.description(),
-                    ]);
+                if verbose {
+                    builder.push_record(["Name", "Type", "Detected", "Description"]);
+                    for name in &proc_names {
+                        let proc = &processors[name.as_str()];
+                        let detected_str = if proc.auto_detect(&self.file_index) { "yes" } else { "no" };
+                        builder.push_record([name.as_str(), proc.processor_type().as_str(), detected_str, proc.description()]);
+                    }
+                } else {
+                    builder.push_record(["Name", "Type", "Detected"]);
+                    for name in &proc_names {
+                        let proc = &processors[name.as_str()];
+                        let detected_str = if proc.auto_detect(&self.file_index) { "yes" } else { "no" };
+                        builder.push_record([name.as_str(), proc.processor_type().as_str(), detected_str]);
+                    }
                 }
                 color::print_table(builder.build());
             }

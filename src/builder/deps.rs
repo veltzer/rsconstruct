@@ -7,7 +7,7 @@ use crate::deps_cache::DepsCache;
 use super::{Builder, sorted_keys};
 
 /// List all available dependency analyzers (works without rsconstruct.toml).
-pub fn list_analyzers() {
+pub fn list_analyzers(verbose: bool) {
     use crate::analyzers::{CppDepAnalyzer, MarkdownDepAnalyzer, PythonDepAnalyzer, TeraDepAnalyzer, DepAnalyzer};
     let analyzers: Vec<(&str, Box<dyn DepAnalyzer>)> = vec![
         ("cpp", Box::new(CppDepAnalyzer::new(Default::default(), false))),
@@ -16,9 +16,16 @@ pub fn list_analyzers() {
         ("tera", Box::new(TeraDepAnalyzer::new())),
     ];
     let mut builder = TableBuilder::new();
-    builder.push_record(["Name", "Description"]);
-    for (name, analyzer) in &analyzers {
-        builder.push_record([name.to_string(), analyzer.description().to_string()]);
+    if verbose {
+        builder.push_record(["Name", "Description"]);
+        for (name, analyzer) in &analyzers {
+            builder.push_record([name.to_string(), analyzer.description().to_string()]);
+        }
+    } else {
+        builder.push_record(["Name"]);
+        for (name, _) in &analyzers {
+            builder.push_record([name.to_string()]);
+        }
     }
     color::print_table(builder.build());
 }
@@ -41,7 +48,7 @@ fn print_deps_stats(stats: &std::collections::HashMap<String, (usize, usize)>) {
 
 impl Builder {
     /// Handle `rsconstruct deps` subcommands
-    pub fn deps(&self, action: crate::cli::DepsAction) -> Result<()> {
+    pub fn deps(&self, action: crate::cli::DepsAction, verbose: bool) -> Result<()> {
         use crate::cli::DepsAction;
 
         match action {
@@ -49,20 +56,34 @@ impl Builder {
             DepsAction::Used => {
                 let analyzers = self.create_analyzers(false);
                 let mut builder = TableBuilder::new();
-                builder.push_record(["Name", "Status", "Description"]);
-                for name in sorted_keys(&analyzers) {
-                    let analyzer = &analyzers[name];
-                    let enabled = self.config.analyzer.is_enabled(name);
-                    let detected = analyzer.auto_detect(&self.file_index);
-
-                    let status = match (enabled, detected) {
-                        (true, true) => color::green("enabled, detected"),
-                        (true, false) => color::yellow("enabled, not detected"),
-                        (false, true) => color::yellow("disabled, detected"),
-                        (false, false) => color::dim("disabled"),
-                    };
-
-                    builder.push_record([name.to_string(), status.to_string(), analyzer.description().to_string()]);
+                if verbose {
+                    builder.push_record(["Name", "Status", "Description"]);
+                    for name in sorted_keys(&analyzers) {
+                        let analyzer = &analyzers[name];
+                        let enabled = self.config.analyzer.is_enabled(name);
+                        let detected = analyzer.auto_detect(&self.file_index);
+                        let status = match (enabled, detected) {
+                            (true, true) => color::green("enabled, detected"),
+                            (true, false) => color::yellow("enabled, not detected"),
+                            (false, true) => color::yellow("disabled, detected"),
+                            (false, false) => color::dim("disabled"),
+                        };
+                        builder.push_record([name.to_string(), status.to_string(), analyzer.description().to_string()]);
+                    }
+                } else {
+                    builder.push_record(["Name", "Status"]);
+                    for name in sorted_keys(&analyzers) {
+                        let analyzer = &analyzers[name];
+                        let enabled = self.config.analyzer.is_enabled(name);
+                        let detected = analyzer.auto_detect(&self.file_index);
+                        let status = match (enabled, detected) {
+                            (true, true) => color::green("enabled, detected"),
+                            (true, false) => color::yellow("enabled, not detected"),
+                            (false, true) => color::yellow("disabled, detected"),
+                            (false, false) => color::dim("disabled"),
+                        };
+                        builder.push_record([name.to_string(), status.to_string()]);
+                    }
                 }
                 color::print_table(builder.build());
             }

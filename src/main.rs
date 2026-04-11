@@ -263,10 +263,10 @@ fn run() -> Result<()> {
         }
         Commands::Deps { action } => {
             if matches!(action, cli::DepsAction::List) {
-                builder::deps::list_analyzers();
+                builder::deps::list_analyzers(cli.verbose);
             } else {
                 let builder = Builder::new()?;
-                builder.deps(action)?;
+                builder.deps(action, cli.verbose)?;
             }
         }
         Commands::Doctor => {
@@ -295,7 +295,7 @@ fn run() -> Result<()> {
                     builder::processors::list_processors_no_config(cli.verbose)?;
                 }
                 cli::ProcessorAction::Types => {
-                    builder::processors::list_processor_types()?;
+                    builder::processors::list_processor_types(cli.verbose)?;
                 }
                 cli::ProcessorAction::Recommend => {
                     builder::processors::list_recommendations();
