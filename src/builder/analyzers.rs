@@ -17,14 +17,16 @@ pub fn list_analyzers(verbose: bool) {
     ];
     let mut builder = TableBuilder::new();
     if verbose {
-        builder.push_record(["Name", "Description"]);
+        builder.push_record(["Name", "Native", "Description"]);
         for (name, analyzer) in &analyzers {
-            builder.push_record([name.to_string(), analyzer.description().to_string()]);
+            let native_tag = if analyzer.is_native() { "native" } else { "external" };
+            builder.push_record([name.to_string(), native_tag.to_string(), analyzer.description().to_string()]);
         }
     } else {
-        builder.push_record(["Name"]);
-        for (name, _) in &analyzers {
-            builder.push_record([name.to_string()]);
+        builder.push_record(["Name", "Native"]);
+        for (name, analyzer) in &analyzers {
+            let native_tag = if analyzer.is_native() { "native" } else { "external" };
+            builder.push_record([name.to_string(), native_tag.to_string()]);
         }
     }
     color::print_table(builder.build());
@@ -47,13 +49,13 @@ fn print_deps_stats(stats: &std::collections::HashMap<String, (usize, usize)>) {
 }
 
 impl Builder {
-    /// Handle `rsconstruct deps` subcommands
-    pub fn deps(&self, action: crate::cli::DepsAction, verbose: bool) -> Result<()> {
-        use crate::cli::DepsAction;
+    /// Handle `rsconstruct analyzers` subcommands
+    pub fn analyzers(&self, action: crate::cli::AnalyzersAction, verbose: bool) -> Result<()> {
+        use crate::cli::AnalyzersAction;
 
         match action {
-            DepsAction::List => unreachable!("handled in main.rs"),
-            DepsAction::Used => {
+            AnalyzersAction::List => unreachable!("handled in main.rs"),
+            AnalyzersAction::Used => {
                 let analyzers = self.create_analyzers(false);
                 let mut builder = TableBuilder::new();
                 if verbose {
@@ -87,7 +89,7 @@ impl Builder {
                 }
                 color::print_table(builder.build());
             }
-            DepsAction::Build => {
+            AnalyzersAction::Build => {
                 let processors = self.create_processors()?;
                 let mut graph = crate::graph::BuildGraph::new();
 
@@ -114,7 +116,7 @@ impl Builder {
                     print_deps_stats(&stats);
                 }
             }
-            DepsAction::Config { name } => {
+            AnalyzersAction::Config { name } => {
                 if let Some(name) = name {
                     match name.as_str() {
                         "cpp" => {
@@ -148,7 +150,7 @@ impl Builder {
                     print!("{}", toml);
                 }
             }
-            DepsAction::Clean { analyzer } => {
+            AnalyzersAction::Clean { analyzer } => {
                 if let Some(analyzer_name) = analyzer {
                     // Clear only entries from specific analyzer
                     let deps_cache = DepsCache::open()?;
@@ -170,7 +172,7 @@ impl Builder {
                     }
                 }
             }
-            DepsAction::Stats => {
+            AnalyzersAction::Stats => {
                 // Show statistics by analyzer
                 let deps_cache = DepsCache::open()?;
                 let stats = deps_cache.stats_by_analyzer();
@@ -180,12 +182,12 @@ impl Builder {
                 }
                 print_deps_stats(&stats);
             }
-            DepsAction::Show { filter } => {
-                use crate::cli::DepsShowFilter;
+            AnalyzersAction::Show { filter } => {
+                use crate::cli::AnalyzersShowFilter;
                 let deps_cache = DepsCache::open()?;
 
                 match filter {
-                    DepsShowFilter::All => {
+                    AnalyzersShowFilter::All => {
                         // List all entries
                         let mut entries: Vec<_> = deps_cache.list_all();
                         if entries.is_empty() {
@@ -198,7 +200,7 @@ impl Builder {
                             Self::print_deps(&source, &deps, &analyzer);
                         }
                     }
-                    DepsShowFilter::Files { files } => {
+                    AnalyzersShowFilter::Files { files } => {
                         // Query specific files
                         let mut found_any = false;
                         for file_arg in &files {
@@ -214,7 +216,7 @@ impl Builder {
                             bail!("No cached dependencies found for the specified files");
                         }
                     }
-                    DepsShowFilter::Analyzers { analyzers } => {
+                    AnalyzersShowFilter::Analyzers { analyzers } => {
                         // Filter by analyzer names
                         let mut entries: Vec<_> = deps_cache.list_by_analyzers(&analyzers);
                         if entries.is_empty() {

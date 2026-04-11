@@ -32,6 +32,9 @@ pub trait DepAnalyzer: Sync + Send {
     /// Human-readable description of what this analyzer does.
     fn description(&self) -> &str;
 
+    /// Whether this analyzer is native (pure Rust, no external tools).
+    fn is_native(&self) -> bool { true }
+
     /// Auto-detect if this analyzer is relevant for the project.
     /// Called with the file index to check for relevant file types.
     fn auto_detect(&self, file_index: &FileIndex) -> bool;

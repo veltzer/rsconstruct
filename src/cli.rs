@@ -212,10 +212,10 @@ pub enum Commands {
         #[command(subcommand)]
         action: ConfigAction,
     },
-    /// Show source file dependencies
-    Deps {
+    /// Manage dependency analyzers
+    Analyzers {
         #[command(subcommand)]
-        action: DepsAction,
+        action: AnalyzersAction,
     },
     /// Check build environment (requires config)
     Doctor,
@@ -512,7 +512,7 @@ pub enum ToolsAction {
 }
 
 #[derive(Subcommand)]
-pub enum DepsAction {
+pub enum AnalyzersAction {
     /// List all available dependency analyzers (no config needed)
     List,
     /// Show which dependency analyzers are enabled and detected (requires config)
@@ -522,25 +522,26 @@ pub enum DepsAction {
     /// Show analyzer configuration (requires config)
     Config {
         /// Analyzer name (e.g., "cpp", "python"); omit to show all
+        #[arg(value_parser = ["cpp", "markdown", "python", "tera"])]
         name: Option<String>,
     },
     /// Show cached dependencies (requires config)
     Show {
         #[command(subcommand)]
-        filter: DepsShowFilter,
+        filter: AnalyzersShowFilter,
     },
     /// Show statistics about cached dependencies by analyzer (requires config)
     Stats,
     /// Clear the dependency cache (requires config)
     Clean {
         /// Only clear entries from this analyzer (e.g., "cpp", "python")
-        #[arg(long)]
+        #[arg(long, value_parser = ["cpp", "markdown", "python", "tera"])]
         analyzer: Option<String>,
     },
 }
 
 #[derive(Subcommand)]
-pub enum DepsShowFilter {
+pub enum AnalyzersShowFilter {
     /// Show dependencies for all source files
     All,
     /// Show dependencies for specific files

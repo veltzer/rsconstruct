@@ -1,7 +1,7 @@
 mod build;
 mod clean;
 mod config_cmd;
-pub(crate) mod deps;
+pub(crate) mod analyzers;
 mod doctor;
 mod graph;
 pub(crate) mod processors;

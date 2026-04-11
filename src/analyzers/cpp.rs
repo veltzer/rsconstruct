@@ -548,6 +548,8 @@ impl DepAnalyzer for CppDepAnalyzer {
         "Scan C/C++ source files for #include dependencies"
     }
 
+    fn is_native(&self) -> bool { false }
+
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         // Check if there are any C/C++ source files
         let extensions = [".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"];
