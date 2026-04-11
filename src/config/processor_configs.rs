@@ -971,9 +971,6 @@ fn default_sphinx_build() -> String {
     "sphinx-build".into()
 }
 
-fn default_sphinx_output_dir() -> String {
-    "docs".into()
-}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 /// Sphinx config. Custom: sphinx_build, working_dir, cache_output_dir.
@@ -1022,9 +1019,6 @@ fn default_mdbook() -> String {
     "mdbook".into()
 }
 
-fn default_mdbook_output_dir() -> String {
-    "book".into()
-}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 /// Mdbook config. Custom: mdbook, cache_output_dir.
@@ -1069,9 +1063,6 @@ fn default_npm() -> String {
     "npm".into()
 }
 
-fn default_npm_command() -> String {
-    "install".into()
-}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 /// Npm config. Custom: npm, cache_output_dir.
