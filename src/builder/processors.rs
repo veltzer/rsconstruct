@@ -221,8 +221,8 @@ impl Builder {
                 }
                 color::print_table(builder.build());
             }
-            ProcessorAction::Config { ref name, diff } => {
-                let names: Vec<&str> = if let Some(n) = name {
+            ProcessorAction::Config { ref iname, diff } => {
+                let names: Vec<&str> = if let Some(n) = iname {
                     if !processors.contains_key(n.as_str()) {
                         bail!("Unknown processor: '{}'. Run 'rsconstruct processors list' to see available processors.", n);
                     }
@@ -271,13 +271,13 @@ impl Builder {
                         if i + 1 < names.len() {
                             println!();
                         }
-                    } else if name.is_some() {
+                    } else if iname.is_some() {
                         println!("Processor '{}' does not expose configuration.", n);
                     }
                 }
             }
-            ProcessorAction::Defconfig { ref name } => {
-                processor_defconfig(name)?;
+            ProcessorAction::Defconfig { ref pname } => {
+                processor_defconfig(pname)?;
             }
             ProcessorAction::Allowlist => {
                 let enabled: Vec<&str> = proc_names.iter()
@@ -345,7 +345,7 @@ impl Builder {
                     }
                 }
             }
-            ProcessorAction::Files { name, headers } => {
+            ProcessorAction::Files { iname: name, headers } => {
                 if let Some(ref n) = name
                     && !processors.contains_key(n.as_str()) {
                         bail!("Unknown processor: '{}'. Run 'rsconstruct processors list' to see available processors.", n);

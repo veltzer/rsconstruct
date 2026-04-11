@@ -428,24 +428,24 @@ pub enum ProcessorAction {
     Used,
     /// Show source and target files for each processor (requires config)
     Files {
-        /// Processor name (omit to show all enabled processors)
-        name: Option<String>,
+        /// Instance name (iname) as declared in rsconstruct.toml (omit to show all)
+        iname: Option<String>,
         /// Show processor headers (e.g., "[ruff] (42 products)")
         #[arg(long)]
         headers: bool,
     },
     /// Show resolved configuration for a processor instance (requires config)
     Config {
-        /// Instance name as declared in rsconstruct.toml (omit to show all)
-        name: Option<String>,
+        /// Instance name (iname) as declared in rsconstruct.toml (omit to show all)
+        iname: Option<String>,
         /// Show only fields that differ from the default configuration
         #[arg(short, long)]
         diff: bool,
     },
     /// Show default configuration for a processor type (no config needed)
     Defconfig {
-        /// Processor type name (e.g., ruff, pip, tera)
-        name: String,
+        /// Processor name (pname) — the type name (e.g., ruff, pip, tera)
+        pname: String,
     },
     /// Show the current processor allowlist (requires config)
     Allowlist,

@@ -1,6 +1,7 @@
 # Summary
 
 - [Introduction](introduction.md)
+- [Nomenclature](nomenclature.md)
 - [Installation](installation.md)
 - [Getting Started](getting-started.md)
 - [Binary Releases](binary-releases.md)
