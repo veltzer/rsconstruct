@@ -46,7 +46,7 @@ impl Processor for SimpleChecker {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        !file_index.scan(&self.config.standard.scan, true).is_empty()
+        !file_index.scan(&self.config.standard, true).is_empty()
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -68,7 +68,7 @@ impl Processor for SimpleChecker {
             dep_inputs.extend(config_file_inputs(ai));
         }
         discover_checker_products(
-            graph, &self.config.standard.scan, file_index, &dep_inputs, &self.config, instance_name,
+            graph, &self.config.standard, file_index, &dep_inputs, &self.config, instance_name,
         )
     }
 

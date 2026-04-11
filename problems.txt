@@ -5,20 +5,6 @@ python files dependency analysis:
 
 - when doing batch processing we are not using multi core. What can we do about it?
 
-- we need to cache the output of mass generators better. We didnt handle it up till now.
-    lets take mkdocs in veltzer.github.io. It generates a whole folder and we need ot cache that folder
-    and be honest about it.
-    The abstraction:
-    In checkers there is no output.
-    In geneators the outputs are derived from the inpput (one to one)
-    in mass geneatros which really should be called another name (creators) since they can create either:
-      - a single files
-      - several files
-      - a whole folder
-      - several folders
-      - or any combination of the above
-    And we should really know how to cache their outputs.
-
 - want rsconstruct processors config [TAB] to complete inames
 - want rsconstruct processors defconfig [TAB] to complete pnames
 

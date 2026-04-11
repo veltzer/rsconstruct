@@ -48,7 +48,7 @@ impl SimpleGenerator {
 
 impl Processor for SimpleGenerator {
     fn scan_config(&self) -> &crate::config::StandardConfig {
-        &self.config.scan
+        &self.config
     }
 
     fn standard_config(&self) -> Option<&StandardConfig> {

@@ -29,7 +29,7 @@ impl GeneratorProcessor {
     }
 
     fn should_process(&self) -> bool {
-        scan_root_valid(&self.config.standard.scan) && !self.config.standard.command.is_empty()
+        scan_root_valid(&self.config.standard) && !self.config.standard.command.is_empty()
     }
 
     fn execute_product(&self, product: &Product) -> Result<()> {
@@ -83,7 +83,7 @@ impl Processor for GeneratorProcessor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        self.should_process() && !file_index.scan(&self.config.standard.scan, true).is_empty()
+        self.should_process() && !file_index.scan(&self.config.standard, true).is_empty()
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -98,7 +98,7 @@ impl Processor for GeneratorProcessor {
         if !self.should_process() {
             return Ok(());
         }
-        let files = file_index.scan(&self.config.standard.scan, true);
+        let files = file_index.scan(&self.config.standard, true);
         if files.is_empty() {
             return Ok(());
         }

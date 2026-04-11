@@ -62,7 +62,7 @@ impl Processor for ScriptProcessor {
         if self.config.standard.command.is_empty() {
             return Ok(());
         }
-        let files = file_index.scan(&self.config.standard.scan, true);
+        let files = file_index.scan(&self.config.standard, true);
         if files.is_empty() {
             return Ok(());
         }

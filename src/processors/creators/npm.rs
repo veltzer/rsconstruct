@@ -67,7 +67,7 @@ impl Processor for NpmProcessor {
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
-        let Some(files) = crate::processors::scan_or_skip(&self.config.standard.scan, file_index) else {
+        let Some(files) = crate::processors::scan_or_skip(&self.config.standard, file_index) else {
             return Ok(());
         };
 

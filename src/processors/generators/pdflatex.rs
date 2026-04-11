@@ -69,7 +69,7 @@ impl Processor for PdflatexProcessor {
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
         let params = DiscoverParams {
-            scan: &self.config.standard.scan,
+            scan: &self.config.standard,
             dep_inputs: &self.config.standard.dep_inputs,
             config: &self.config,
             output_dir: &self.config.standard.output_dir,

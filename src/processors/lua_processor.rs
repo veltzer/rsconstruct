@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::config::{output_config_hash, scan_config_from_toml, StandardConfig};
+use crate::config::{output_config_hash, standard_config_from_toml, StandardConfig};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use super::{clean_outputs, ensure_stub_dir, run_command, Processor};
@@ -21,7 +21,7 @@ pub struct LuaProcessor {
     lua: Mutex<Lua>,
     stub_dir: PathBuf,
     config_value: toml::Value,
-    scan_config: ScanConfig,
+    scan_config: StandardConfig,
 }
 
 impl LuaProcessor {
@@ -55,7 +55,7 @@ impl LuaProcessor {
         )?;
 
         // Extract scan config from the TOML config value
-        let scan_config = scan_config_from_toml(&config_value, &[], &[], &[]);
+        let scan_config = standard_config_from_toml(&config_value, &[], &[], &[]);
 
         let stub_dir = PathBuf::from("out").join(&name);
 

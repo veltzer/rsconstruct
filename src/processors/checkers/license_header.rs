@@ -78,7 +78,7 @@ impl crate::processors::Processor for LicenseHeaderProcessor {
     }
 
     fn auto_detect(&self, file_index: &crate::file_index::FileIndex) -> bool {
-        crate::processors::checker_auto_detect(&self.config.standard.scan, file_index)
+        crate::processors::checker_auto_detect(&self.config.standard, file_index)
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -92,7 +92,7 @@ impl crate::processors::Processor for LicenseHeaderProcessor {
         instance_name: &str,
     ) -> anyhow::Result<()> {
         crate::processors::checker_discover(
-            graph, &self.config.standard.scan, file_index,
+            graph, &self.config.standard, file_index,
             &self.config.standard.dep_inputs, &self.config.standard.dep_auto,
             &self.config, instance_name,
         )

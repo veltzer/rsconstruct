@@ -80,7 +80,7 @@ impl Processor for Jinja2Processor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        super::find_templates(&self.config.standard.scan, file_index).is_ok_and(|t| !t.is_empty())
+        super::find_templates(&self.config.standard, file_index).is_ok_and(|t| !t.is_empty())
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -88,7 +88,7 @@ impl Processor for Jinja2Processor {
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
-        let items = super::find_templates(&self.config.standard.scan, file_index)?;
+        let items = super::find_templates(&self.config.standard, file_index)?;
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
         for item in items {

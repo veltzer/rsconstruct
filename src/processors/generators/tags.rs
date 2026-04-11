@@ -60,8 +60,8 @@ impl Processor for TagsProcessor {
     fn is_native(&self) -> bool { true }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        if !scan_root_valid(&self.config.standard.scan)
-            || file_index.scan(&self.config.standard.scan, true).is_empty()
+        if !scan_root_valid(&self.config.standard)
+            || file_index.scan(&self.config.standard, true).is_empty()
         {
             return false;
         }
@@ -74,7 +74,7 @@ impl Processor for TagsProcessor {
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
-        let files = file_index.scan(&self.config.standard.scan, true);
+        let files = file_index.scan(&self.config.standard, true);
         if files.is_empty() {
             return Ok(());
         }
@@ -1209,7 +1209,7 @@ pub fn orphan_files(db_path: &str) -> Result<()> {
 /// Run all tag validations without building.
 pub fn check_tags(config: &crate::config::TagsConfig) -> Result<()> {
     let file_index = crate::file_index::FileIndex::build()?;
-    let files = file_index.scan(&config.standard.scan, true);
+    let files = file_index.scan(&config.standard, true);
     if files.is_empty() {
         println!("No files to check.");
         return Ok(());

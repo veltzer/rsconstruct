@@ -202,7 +202,7 @@ impl Processor for ZspellProcessor {
         }
         discover_checker_products(
             graph,
-            &self.config.standard.scan,
+            &self.config.standard,
             file_index,
             &dep_inputs,
             &self.config,

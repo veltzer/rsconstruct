@@ -366,7 +366,7 @@ impl CcSingleFileProcessor {
 
     /// Find all C/C++ source files. Returns (path, is_cpp) pairs.
     fn find_source_files(&self, file_index: &FileIndex) -> Vec<(PathBuf, bool)> {
-        file_index.scan(&self.config.standard.scan, true)
+        file_index.scan(&self.config.standard, true)
             .into_iter()
             .map(|p| {
                 let is_cpp = p.extension().and_then(|s| s.to_str()) == Some("cc");

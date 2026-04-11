@@ -43,7 +43,7 @@ impl Processor for MarkdownlintProcessor {
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
-        let files = file_index.scan(&self.config.standard.scan, true);
+        let files = file_index.scan(&self.config.standard, true);
         if files.is_empty() {
             return Ok(());
         }

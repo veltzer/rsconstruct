@@ -35,7 +35,7 @@ pub const JSON_SERIALIZE: &str = "internal error: failed to serialize JSON";
 pub const CONFIG_SERIALIZE: &str = "internal error: failed to serialize config";
 
 // -- Config resolution --
-pub const SCAN_CONFIG_NOT_RESOLVED: &str = "internal error: ScanConfig not resolved";
+pub const SCAN_CONFIG_NOT_RESOLVED: &str = "internal error: scan fields not resolved";
 pub const CAPTURE_GROUP_MISSING: &str = "internal error: capture group missing";
 
 // -- Runtime / system --

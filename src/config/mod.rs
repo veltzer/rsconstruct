@@ -19,14 +19,14 @@ use variables::substitute_variables;
 
 const CONFIG_FILE: &str = "rsconstruct.toml";
 
-/// Fields contributed by ScanConfig via `#[serde(flatten)]`.
+/// Scan field names in StandardConfig.
 /// These are automatically appended to every processor's known fields during validation.
 pub(crate) const SCAN_CONFIG_FIELDS: &[&str] = &[
     "src_dirs", "src_extensions", "src_exclude_dirs", "src_exclude_files", "src_exclude_paths", "src_files",
 ];
 
 pub(crate) trait KnownFields {
-    /// Return the known fields for this config struct, excluding ScanConfig fields.
+    /// Return the known fields for this config struct, excluding scan fields.
     fn known_fields() -> &'static [&'static str];
 
     /// Return only the fields that affect build output.
@@ -50,7 +50,7 @@ pub(crate) trait KnownFields {
 }
 
 /// Default scan configuration for a processor, as plain data.
-/// Used to resolve None fields in ScanConfig after TOML deserialization.
+/// Used to resolve None scan fields in StandardConfig after TOML deserialization.
 pub(crate) struct ScanDefaultsData {
     pub src_dirs: &'static [&'static str],
     pub src_extensions: &'static [&'static str],
@@ -110,7 +110,7 @@ pub(crate) fn resolve_extra_inputs(dep_inputs: &[String]) -> Result<Vec<PathBuf>
     Ok(resolved)
 }
 
-/// Descriptions for ScanConfig fields shared by every processor.
+/// Descriptions for scan fields shared by every processor.
 pub(crate) const SCAN_FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
     ("src_dirs",            "Directories to scan for source files"),
     ("src_extensions",      "File extensions to match during scanning"),
@@ -978,10 +978,10 @@ impl FieldType {
 }
 
 /// Return the expected TOML type for a processor config field.
-/// Fields common to all processors (ScanConfig fields, enabled, args, dep_inputs)
+/// Fields common to all processors (scan fields, enabled, args, dep_inputs)
 /// are handled generically. Processor-specific fields are looked up by processor name.
 fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
-    // ScanConfig fields — shared by all processors
+    // Scan fields — shared by all processors
     match field {
         "src_dirs" => return Some(FieldType::StringArray),
         "src_extensions" => return Some(FieldType::StringArray),
@@ -1264,72 +1264,50 @@ impl Config {
     }
 }
 
-/// Extract a `ScanConfig` from a dynamic TOML table (used by Lua plugins).
-/// Falls back to the given defaults for any missing fields.
-pub(crate) fn scan_config_from_toml(
+/// Extract a `StandardConfig` with scan fields from a dynamic TOML table (used by Lua plugins).
+/// Falls back to the given defaults for any missing scan fields.
+pub(crate) fn standard_config_from_toml(
     value: &toml::Value,
     default_src_dirs: &[&str],
     default_src_extensions: &[&str],
     default_exclude_dirs: &[&str],
-) -> ScanConfig {
+) -> StandardConfig {
     let table = value.as_table();
 
-    let src_dirs = table
-        .and_then(|t| t.get("src_dirs"))
-        .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
+    let toml_array = |key: &str| -> Option<Vec<String>> {
+        table
+            .and_then(|t| t.get(key))
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+    };
 
-    let src_extensions = table
-        .and_then(|t| t.get("src_extensions"))
-        .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
-
-    let src_exclude_dirs = table
-        .and_then(|t| t.get("src_exclude_dirs"))
-        .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
-
-    let src_exclude_files = table
-        .and_then(|t| t.get("src_exclude_files"))
-        .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
-
-    let src_exclude_paths = table
-        .and_then(|t| t.get("src_exclude_paths"))
-        .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
-
-    let src_files = table
-        .and_then(|t| t.get("src_files"))
-        .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
-
-    let mut scan = ScanConfig {
-        src_dirs,
-        src_extensions,
-        src_exclude_dirs,
-        src_exclude_files,
-        src_exclude_paths,
-        src_files,
+    let mut cfg = StandardConfig {
+        src_dirs: toml_array("src_dirs"),
+        src_extensions: toml_array("src_extensions"),
+        src_exclude_dirs: toml_array("src_exclude_dirs"),
+        src_exclude_files: toml_array("src_exclude_files"),
+        src_exclude_paths: toml_array("src_exclude_paths"),
+        src_files: toml_array("src_files"),
+        ..StandardConfig::default()
     };
     // Fill defaults for None fields
-    if scan.src_dirs.is_none() {
-        scan.src_dirs = Some(default_src_dirs.iter().map(|s| s.to_string()).collect());
+    if cfg.src_dirs.is_none() {
+        cfg.src_dirs = Some(default_src_dirs.iter().map(|s| s.to_string()).collect());
     }
-    if scan.src_extensions.is_none() {
-        scan.src_extensions = Some(default_src_extensions.iter().map(|s| s.to_string()).collect());
+    if cfg.src_extensions.is_none() {
+        cfg.src_extensions = Some(default_src_extensions.iter().map(|s| s.to_string()).collect());
     }
-    if scan.src_exclude_dirs.is_none() {
-        scan.src_exclude_dirs = Some(default_exclude_dirs.iter().map(|s| s.to_string()).collect());
+    if cfg.src_exclude_dirs.is_none() {
+        cfg.src_exclude_dirs = Some(default_exclude_dirs.iter().map(|s| s.to_string()).collect());
     }
-    if scan.src_exclude_files.is_none() {
-        scan.src_exclude_files = Some(Vec::new());
+    if cfg.src_exclude_files.is_none() {
+        cfg.src_exclude_files = Some(Vec::new());
     }
-    if scan.src_exclude_paths.is_none() {
-        scan.src_exclude_paths = Some(Vec::new());
+    if cfg.src_exclude_paths.is_none() {
+        cfg.src_exclude_paths = Some(Vec::new());
     }
-    if scan.src_files.is_none() {
-        scan.src_files = Some(Vec::new());
+    if cfg.src_files.is_none() {
+        cfg.src_files = Some(Vec::new());
     }
-    scan
+    cfg
 }

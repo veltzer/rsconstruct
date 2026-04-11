@@ -118,7 +118,7 @@ impl Processor for AspellProcessor {
         file_index: &FileIndex,
         instance_name: &str,
     ) -> Result<()> {
-        if !scan_root_valid(&self.config.standard.scan) {
+        if !scan_root_valid(&self.config.standard) {
             return Ok(());
         }
 
@@ -128,7 +128,7 @@ impl Processor for AspellProcessor {
         }
         crate::processors::discover_checker_products(
             graph,
-            &self.config.standard.scan,
+            &self.config.standard,
             file_index,
             &dep_inputs,
             &self.config,

@@ -51,7 +51,7 @@ impl Processor for PipProcessor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        scan_root_valid(&self.config.standard.scan) && !file_index.scan(&self.config.standard.scan, false).is_empty()
+        scan_root_valid(&self.config.standard) && !file_index.scan(&self.config.standard, false).is_empty()
     }
 
     fn config_json(&self) -> Option<String> {
@@ -67,11 +67,11 @@ impl Processor for PipProcessor {
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
-        if !scan_root_valid(&self.config.standard.scan) {
+        if !scan_root_valid(&self.config.standard) {
             return Ok(());
         }
 
-        let files = file_index.scan(&self.config.standard.scan, false);
+        let files = file_index.scan(&self.config.standard, false);
         if files.is_empty() {
             return Ok(());
         }

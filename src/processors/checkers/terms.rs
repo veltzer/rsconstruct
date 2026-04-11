@@ -71,7 +71,7 @@ impl crate::processors::Processor for TermsProcessor {
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         Path::new(&self.config.terms_dir).is_dir()
-            && !file_index.scan(&self.config.standard.scan, true).is_empty()
+            && !file_index.scan(&self.config.standard, true).is_empty()
     }
 
     fn discover(
@@ -96,7 +96,7 @@ impl crate::processors::Processor for TermsProcessor {
             dep_inputs.extend(crate::processors::config_file_inputs(ai));
         }
         discover_checker_products(
-            graph, &self.config.standard.scan, file_index, &dep_inputs, &self.config,
+            graph, &self.config.standard, file_index, &dep_inputs, &self.config,
             instance_name,
         )
     }
@@ -538,7 +538,7 @@ pub fn fix_all(config: &TermsConfig, remove_non_terms: bool) -> Result<()> {
     let sorted = sorted_terms(&terms);
 
     let file_index = FileIndex::build()?;
-    let md_files = file_index.scan(&config.standard.scan, true);
+    let md_files = file_index.scan(&config.standard, true);
 
     if md_files.is_empty() {
         println!("No markdown files found");

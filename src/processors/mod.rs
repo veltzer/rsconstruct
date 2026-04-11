@@ -901,7 +901,7 @@ pub trait Processor: Sync + Send {
     /// Default: standard checker discover using dep_inputs/dep_auto from standard_config.
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
         let cfg = self.standard_config().expect("discover() requires standard_config() or must be overridden");
-        checker_discover(graph, &cfg.scan, file_index, &cfg.dep_inputs, &cfg.dep_auto, cfg, instance_name)
+        checker_discover(graph, cfg, file_index, &cfg.dep_inputs, &cfg.dep_auto, cfg, instance_name)
     }
 
     /// Discover products for clean operation (outputs only, skip expensive dependency scanning).

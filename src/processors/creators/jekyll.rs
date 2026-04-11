@@ -24,7 +24,7 @@ impl JekyllProcessor {
     }
 
     fn should_process(&self) -> bool {
-        scan_root_valid(&self.config.standard.scan)
+        scan_root_valid(&self.config.standard)
     }
 
     fn execute_jekyll(&self, config_yml: &Path) -> Result<()> {
@@ -65,7 +65,7 @@ impl Processor for JekyllProcessor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        self.should_process() && !file_index.scan(&self.config.standard.scan, true).is_empty()
+        self.should_process() && !file_index.scan(&self.config.standard, true).is_empty()
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -78,7 +78,7 @@ impl Processor for JekyllProcessor {
         }
 
         discover_directory_products(graph, DirectoryProductOpts {
-            scan: &self.config.standard.scan,
+            scan: &self.config.standard,
             file_index,
             dep_inputs: &self.config.standard.dep_inputs,
             cfg_hash: &self.config,

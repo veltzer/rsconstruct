@@ -120,7 +120,7 @@ impl FileIndex {
             .collect()
     }
 
-    /// Convenience wrapper using `ScanConfig` fields.
+    /// Convenience wrapper using `StandardConfig` scan fields.
     /// Returns relative paths.
     ///
     /// - `scan`: processor scan configuration
