@@ -172,7 +172,7 @@ Processor-specific fields are documented on each processor's page under [Process
 | `remote` | string | none | Remote cache URL. See [Remote Caching](remote-caching.md). |
 | `remote_push` | boolean | `true` | Push locally built artifacts to remote cache. |
 | `remote_pull` | boolean | `true` | Pull from remote cache on local cache miss. |
-| `mtime_check` | boolean | `true` | Use mtime pre-check to skip unchanged file checksums. |
+| `mtime_check` | boolean | `true` | Persist file checksums across builds using an mtime database. Set to `false` in CI/CD environments where the cache won't survive the build and the write overhead isn't worth it. Can also be disabled via `--no-mtime-cache` flag. See [Checksum Cache](checksum-cache.md). |
 
 ### `[analyzer]`
 

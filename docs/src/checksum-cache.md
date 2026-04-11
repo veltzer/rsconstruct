@@ -38,16 +38,24 @@ For the first build, every file must be read and hashed. The mtime database is p
 
 ## Configuration
 
-The mtime pre-check can be disabled via `rsconstruct.toml`:
+The persistent mtime database can be disabled via `rsconstruct.toml`:
 
 ```toml
 [cache]
 mtime_check = false
 ```
 
-When disabled, every file is read and hashed on every build (the in-memory cache still prevents redundant reads within a single run). This is useful for debugging cache issues or when the filesystem doesn't provide reliable mtimes.
+Or via the command-line flag:
 
-The `rsconstruct status` command automatically disables mtime checking to ensure accurate classification.
+```bash
+rsconstruct build --no-mtime-cache
+```
+
+When disabled, every file is read and hashed on every build. The in-memory cache still prevents redundant reads within a single run, but there is no cross-build benefit.
+
+**When to disable:** In CI/CD environments with a fresh checkout, the mtime database has nothing cached from previous builds and just adds write overhead. The in-memory cache is sufficient. Use `--no-mtime-cache` (or `mtime_check = false` in config) to skip the database entirely.
+
+The `rsconstruct status` command also disables mtime checking internally to ensure accurate classification.
 
 ## Database location
 

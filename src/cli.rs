@@ -43,6 +43,11 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub phases: bool,
 
+    /// Disable persistent mtime checksum cache (useful for CI/CD where the
+    /// cache won't survive the build and the write overhead isn't worth it)
+    #[arg(long, global = true)]
+    pub no_mtime_cache: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }

@@ -77,6 +77,11 @@ fn run() -> Result<()> {
         quiet: cli.quiet,
     });
 
+    // Apply CLI override for mtime cache before any Builder is created
+    if cli.no_mtime_cache {
+        checksum::set_mtime_check(false);
+    }
+
     // Set up Ctrl+C handler: sets a flag so the executor can stop gracefully
     let interrupted = Arc::new(AtomicBool::new(false));
     {

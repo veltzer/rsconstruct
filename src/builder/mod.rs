@@ -183,7 +183,10 @@ impl Builder {
             None => None,
         };
 
-        crate::checksum::set_mtime_check(config.cache.mtime_check);
+        // Config can disable mtime check (CLI --no-mtime-cache may have already disabled it)
+        if !config.cache.mtime_check {
+            crate::checksum::set_mtime_check(false);
+        }
         let object_store = ObjectStore::new(ObjectStoreOptions {
             restore_method,
             compression: config.cache.compression,
