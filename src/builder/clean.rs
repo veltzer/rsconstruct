@@ -143,7 +143,7 @@ impl Builder {
             for output in &product.outputs {
                 rsconstruct_outputs.insert(output.clone());
             }
-            if let Some(ref dir) = product.output_dir {
+            for dir in &product.output_dirs {
                 rsconstruct_output_dirs.push(dir.as_ref().clone());
             }
         }

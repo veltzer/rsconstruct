@@ -494,149 +494,122 @@ pub(crate) struct ProcessorInstance {
 
 /// Auto-generate `ProcessorConfig` and all per-processor wiring
 /// from the central registry in `src/registry.rs`.
-macro_rules! gen_processor_config {
-    ( $( $const_name:ident, $field:ident, $config_type:ty, $proc_type:ty; )* ) => {
+use std::sync::LazyLock;
+use crate::processors::generators::simple::{simple_generator_params, simple_generator_type_names};
+use crate::registry::{self, RegistryOps};
 
-        /// Return all known builtin processor type names.
-        pub(crate) fn all_type_names() -> Vec<&'static str> {
-            let mut names = vec![ $( stringify!($field), )* ];
-            names.extend(simple_checker_type_names());
-            names
-        }
+static REGISTRY: LazyLock<Vec<Box<dyn RegistryOps>>> = LazyLock::new(registry::build_registry);
 
-        /// Check if a name is a known builtin processor type.
-        pub(crate) fn is_builtin_type(name: &str) -> bool {
-            matches!(name, $( stringify!($field) )|*)
-            || simple_checker_params(name).is_some()
-        }
-
-
-        /// Resolve scan and processor defaults for an instance config in-place.
-        pub(crate) fn resolve_instance_defaults(type_name: &str, value: &mut toml::Value) -> anyhow::Result<()> {
-            // Simple checkers use CheckerConfigWithCommand
-            if simple_checker_params(type_name).is_some() {
-                apply_processor_defaults(type_name, value);
-                let mut cfg: CheckerConfigWithCommand = toml::from_str(&toml::to_string(value)?)?;
-                if let Some(defaults) = scan_defaults_for(type_name) {
-                    cfg.scan.resolve_with(&defaults);
-                }
-                *value = toml::Value::try_from(&cfg)?;
-                return Ok(());
-            }
-            match type_name {
-                $(
-                    stringify!($field) => {
-                        apply_processor_defaults(stringify!($field), value);
-                        let mut cfg: $config_type = toml::from_str(&toml::to_string(value)?)?;
-                        if let Some(defaults) = scan_defaults_for(stringify!($field)) {
-                            cfg.scan.resolve_with(&defaults);
-                        }
-                        *value = toml::Value::try_from(&cfg)?;
-                        Ok(())
-                    }
-                )*
-                _ => Ok(()), // Lua plugins handle their own defaults
-            }
-        }
-
-        impl ProcessorConfig {
-            /// Collect unique scan directories from all declared instances.
-            pub(crate) fn src_dirs(&self) -> Vec<String> {
-                let mut dirs: Vec<String> = self.instances.iter()
-                    .flat_map(|inst| {
-                        inst.config_toml.get("src_dirs")
-                            .and_then(|v| v.as_array())
-                            .into_iter()
-                            .flat_map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())))
-                            .filter(|d| !d.is_empty())
-                    })
-                    .collect();
-                dirs.sort();
-                dirs.dedup();
-                dirs
-            }
-
-            /// Return known fields for a builtin processor type, or None for Lua plugins.
-            pub(crate) fn known_fields_for(type_name: &str) -> Option<&'static [&'static str]> {
-                if simple_checker_params(type_name).is_some() {
-                    return Some(<CheckerConfigWithCommand as KnownFields>::known_fields());
-                }
-                match type_name {
-                    $( stringify!($field) => Some(<$config_type as KnownFields>::known_fields()), )*
-                    _ => None,
-                }
-            }
-
-            /// Return output-affecting fields for a builtin processor type, or None for Lua plugins.
-            pub(crate) fn output_fields_for(type_name: &str) -> Option<&'static [&'static str]> {
-                if simple_checker_params(type_name).is_some() {
-                    return Some(<CheckerConfigWithCommand as KnownFields>::output_fields());
-                }
-                match type_name {
-                    $( stringify!($field) => Some(<$config_type as KnownFields>::output_fields()), )*
-                    _ => None,
-                }
-            }
-
-            /// Return must fields (required non-empty fields) for a builtin processor type, or None for Lua plugins.
-            pub(crate) fn must_fields_for(type_name: &str) -> Option<&'static [&'static str]> {
-                if simple_checker_params(type_name).is_some() {
-                    return Some(<CheckerConfigWithCommand as KnownFields>::must_fields());
-                }
-                match type_name {
-                    $( stringify!($field) => Some(<$config_type as KnownFields>::must_fields()), )*
-                    _ => None,
-                }
-            }
-
-            /// Return (field, description) pairs for a builtin processor type, or None for Lua plugins.
-            pub(crate) fn field_descriptions_for(type_name: &str) -> Option<&'static [(&'static str, &'static str)]> {
-                if simple_checker_params(type_name).is_some() {
-                    return Some(<CheckerConfigWithCommand as KnownFields>::field_descriptions());
-                }
-                match type_name {
-                    $( stringify!($field) => Some(<$config_type as KnownFields>::field_descriptions()), )*
-                    _ => None,
-                }
-            }
-
-            /// Return the default src_dirs for a builtin processor type, or None for Lua plugins.
-            /// Returns `Some(&[])` for processors that default to scanning the project root.
-            pub(crate) fn default_src_dirs_for(type_name: &str) -> Option<&'static [&'static str]> {
-                scan_defaults_for(type_name).map(|d| d.src_dirs)
-            }
-
-            /// Return the default config for a processor type as pretty JSON, or None if unknown.
-            pub(crate) fn defconfig_json(type_name: &str) -> Option<String> {
-                // Simple checkers use CheckerConfigWithCommand
-                if simple_checker_params(type_name).is_some() {
-                    let mut config_val = toml::Value::Table(toml::map::Map::new());
-                    apply_processor_defaults(type_name, &mut config_val);
-                    let mut cfg: CheckerConfigWithCommand = toml::from_str(&toml::to_string(&config_val).ok()?).ok()?;
-                    if let Some(defaults) = scan_defaults_for(type_name) {
-                        cfg.scan.resolve_with(&defaults);
-                    }
-                    let json = serde_json::to_value(cfg).ok()?;
-                    return serde_json::to_string_pretty(&json).ok();
-                }
-                let json: serde_json::Value = match type_name {
-                    $( stringify!($field) => {
-                        let mut config_val = toml::Value::Table(toml::map::Map::new());
-                        apply_processor_defaults(stringify!($field), &mut config_val);
-                        let mut cfg: $config_type = toml::from_str(&toml::to_string(&config_val).ok()?).ok()?;
-                        if let Some(defaults) = scan_defaults_for(stringify!($field)) {
-                            cfg.scan.resolve_with(&defaults);
-                        }
-                        serde_json::to_value(cfg).ok()?
-                    }, )*
-                    _ => return None,
-                };
-                serde_json::to_string_pretty(&json).ok()
-            }
-        }
-    };
+pub(crate) fn find_registry_entry(type_name: &str) -> Option<&dyn RegistryOps> {
+    REGISTRY.iter().find(|e| e.name() == type_name).map(|e| e.as_ref())
 }
-for_each_processor!(gen_processor_config);
+
+pub(crate) fn registry_entries() -> &'static [Box<dyn RegistryOps>] {
+    &REGISTRY
+}
+
+/// Return all known builtin processor type names.
+pub(crate) fn all_type_names() -> Vec<&'static str> {
+    let mut names: Vec<&str> = REGISTRY.iter().map(|e| e.name()).collect();
+    names.extend(simple_checker_type_names());
+    names.extend(simple_generator_type_names());
+    names
+}
+
+/// Check if a name is a known builtin processor type.
+pub(crate) fn is_builtin_type(name: &str) -> bool {
+    find_registry_entry(name).is_some()
+        || simple_checker_params(name).is_some()
+        || simple_generator_params(name).is_some()
+}
+
+/// Resolve scan and processor defaults for an instance config in-place.
+pub(crate) fn resolve_instance_defaults(type_name: &str, value: &mut toml::Value) -> anyhow::Result<()> {
+    if simple_checker_params(type_name).is_some() || simple_generator_params(type_name).is_some() {
+        apply_processor_defaults(type_name, value);
+        apply_scan_defaults(type_name, value);
+        let cfg: StandardConfig = toml::from_str(&toml::to_string(value)?)?;
+        *value = toml::Value::try_from(&cfg)?;
+        return Ok(());
+    }
+    if let Some(entry) = find_registry_entry(type_name) {
+        return entry.resolve_defaults(value);
+    }
+    Ok(()) // Lua plugins handle their own defaults
+}
+
+impl ProcessorConfig {
+    /// Collect unique scan directories from all declared instances.
+    pub(crate) fn src_dirs(&self) -> Vec<String> {
+        let mut dirs: Vec<String> = self.instances.iter()
+            .flat_map(|inst| {
+                inst.config_toml.get("src_dirs")
+                    .and_then(|v| v.as_array())
+                    .into_iter()
+                    .flat_map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())))
+                    .filter(|d| !d.is_empty())
+            })
+            .collect();
+        dirs.sort();
+        dirs.dedup();
+        dirs
+    }
+
+    /// Check if a type uses StandardConfig (simple checkers and simple generators).
+    fn is_standard_config_type(type_name: &str) -> bool {
+        simple_checker_params(type_name).is_some() || simple_generator_params(type_name).is_some()
+    }
+
+    /// Return known fields for a builtin processor type, or None for Lua plugins.
+    pub(crate) fn known_fields_for(type_name: &str) -> Option<&'static [&'static str]> {
+        if Self::is_standard_config_type(type_name) {
+            return Some(<StandardConfig as KnownFields>::known_fields());
+        }
+        find_registry_entry(type_name).map(|e| e.known_fields())
+    }
+
+    /// Return output-affecting fields for a builtin processor type, or None for Lua plugins.
+    pub(crate) fn output_fields_for(type_name: &str) -> Option<&'static [&'static str]> {
+        if Self::is_standard_config_type(type_name) {
+            return Some(<StandardConfig as KnownFields>::output_fields());
+        }
+        find_registry_entry(type_name).map(|e| e.output_fields())
+    }
+
+    /// Return must fields (required non-empty fields) for a builtin processor type, or None for Lua plugins.
+    pub(crate) fn must_fields_for(type_name: &str) -> Option<&'static [&'static str]> {
+        if Self::is_standard_config_type(type_name) {
+            return Some(<StandardConfig as KnownFields>::must_fields());
+        }
+        find_registry_entry(type_name).map(|e| e.must_fields())
+    }
+
+    /// Return (field, description) pairs for a builtin processor type, or None for Lua plugins.
+    pub(crate) fn field_descriptions_for(type_name: &str) -> Option<&'static [(&'static str, &'static str)]> {
+        if Self::is_standard_config_type(type_name) {
+            return Some(<StandardConfig as KnownFields>::field_descriptions());
+        }
+        find_registry_entry(type_name).map(|e| e.field_descriptions())
+    }
+
+    /// Return the default src_dirs for a builtin processor type, or None for Lua plugins.
+    pub(crate) fn default_src_dirs_for(type_name: &str) -> Option<&'static [&'static str]> {
+        scan_defaults_for(type_name).map(|d| d.src_dirs)
+    }
+
+    /// Return the default config for a processor type as pretty JSON, or None if unknown.
+    pub(crate) fn defconfig_json(type_name: &str) -> Option<String> {
+        if Self::is_standard_config_type(type_name) {
+            let mut config_val = toml::Value::Table(toml::map::Map::new());
+            apply_processor_defaults(type_name, &mut config_val);
+            apply_scan_defaults(type_name, &mut config_val);
+            let cfg: StandardConfig = toml::from_str(&toml::to_string(&config_val).ok()?).ok()?;
+            let json = serde_json::to_value(cfg).ok()?;
+            return serde_json::to_string_pretty(&json).ok();
+        }
+        find_registry_entry(type_name)?.defconfig_json()
+    }
+}
 
 /// Return scan defaults for a builtin processor type.
 pub(crate) fn scan_defaults_for(type_name: &str) -> Option<ScanDefaultsData> {
@@ -691,6 +664,7 @@ pub(crate) fn scan_defaults_for(type_name: &str) -> Option<ScanDefaultsData> {
         "pdfunite" => ScanDefaultsData { src_dirs: &[], src_extensions: &["course.yaml"], src_exclude_dirs: &[] },
         "ipdfunite" => ScanDefaultsData { src_dirs: &[], src_extensions: &["course.yaml"], src_exclude_dirs: &[] },
         "script" => ScanDefaultsData { src_dirs: &[], src_extensions: &[], src_exclude_dirs: &[] },
+        "creator" => ScanDefaultsData { src_dirs: &[], src_extensions: &[], src_exclude_dirs: &[] },
         "generator" => ScanDefaultsData { src_dirs: &[], src_extensions: &[], src_exclude_dirs: &[] },
         "explicit" => ScanDefaultsData { src_dirs: &[], src_extensions: &[], src_exclude_dirs: &[] },
         "linux_module" => ScanDefaultsData { src_dirs: &[], src_extensions: &["linux-module.yaml"], src_exclude_dirs: &[] },
@@ -777,6 +751,12 @@ pub(crate) fn processor_defaults_for(type_name: &str) -> Option<ProcessorDefault
         "libreoffice" => ProcessorDefaults { output_dir: "out/libreoffice", formats: &["pdf"], args: &[], command: "libreoffice", dep_auto: &[] },
         "protobuf" => ProcessorDefaults { output_dir: "out/protobuf", formats: &[], args: &[], command: "protoc", dep_auto: &[] },
         "sass" => ProcessorDefaults { output_dir: "out/sass", formats: &[], args: &[], command: "sass", dep_auto: &[] },
+        "pandoc" => ProcessorDefaults { output_dir: "out/pandoc", formats: &["pdf", "html", "docx"], args: &[], command: "pandoc", dep_auto: &[] },
+        "a2x" => ProcessorDefaults { output_dir: "out/a2x", formats: &[], args: &[], command: "a2x", dep_auto: &[] },
+        "objdump" => ProcessorDefaults { output_dir: "out/objdump", formats: &[], args: &[], command: "objdump", dep_auto: &[] },
+        "imarkdown2html" => ProcessorDefaults { output_dir: "out/imarkdown2html", formats: &[], args: &[], command: "", dep_auto: &[] },
+        "isass" => ProcessorDefaults { output_dir: "out/isass", formats: &[], args: &[], command: "", dep_auto: &[] },
+        "yaml2json" => ProcessorDefaults { output_dir: "out/yaml2json", formats: &[], args: &[], command: "", dep_auto: &[] },
         _ => return None,
     })
 }
@@ -805,6 +785,35 @@ pub(crate) fn apply_processor_defaults(type_name: &str, value: &mut toml::Value)
         set_array(table, "dep_auto", defaults.dep_auto);
         set_array(table, "formats", defaults.formats);
         set_array(table, "args", defaults.args);
+    }
+}
+
+/// Apply scan defaults to a config TOML value.
+/// Sets src_dirs, src_extensions, and src_exclude_dirs if not explicitly provided.
+pub(crate) fn apply_scan_defaults(type_name: &str, value: &mut toml::Value) {
+    if let Some(defaults) = scan_defaults_for(type_name) {
+        let table = match value.as_table_mut() {
+            Some(t) => t,
+            None => return,
+        };
+        let set_array = |t: &mut toml::map::Map<String, toml::Value>, key: &str, vals: &[&str]| {
+            if !t.contains_key(key) {
+                let arr: Vec<toml::Value> = vals.iter().map(|s| toml::Value::String(s.to_string())).collect();
+                t.insert(key.into(), toml::Value::Array(arr));
+            }
+        };
+        set_array(table, "src_dirs", defaults.src_dirs);
+        set_array(table, "src_extensions", defaults.src_extensions);
+        set_array(table, "src_exclude_dirs", defaults.src_exclude_dirs);
+        // resolve_with also fills these with empty vecs if None
+        let set_empty = |t: &mut toml::map::Map<String, toml::Value>, key: &str| {
+            if !t.contains_key(key) {
+                t.insert(key.into(), toml::Value::Array(Vec::new()));
+            }
+        };
+        set_empty(table, "src_exclude_files");
+        set_empty(table, "src_exclude_paths");
+        set_empty(table, "src_files");
     }
 }
 

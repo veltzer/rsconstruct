@@ -448,6 +448,8 @@ pub enum ProcessorAction {
         #[arg(short, long, value_enum, default_value = "text")]
         format: GraphFormat,
     },
+    /// List all processor types with descriptions
+    Types,
 }
 
 #[derive(Subcommand)]

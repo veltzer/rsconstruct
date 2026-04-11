@@ -15,7 +15,7 @@ pub struct JekyllProcessor {
 impl JekyllProcessor {
     pub fn new(config: JekyllConfig) -> Self {
         Self {
-            base: ProcessorBase::mass_generator(
+            base: ProcessorBase::creator(
                 crate::processors::names::JEKYLL,
                 "Build Jekyll sites",
             ),

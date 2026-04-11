@@ -15,7 +15,7 @@ pub struct GemProcessor {
 impl GemProcessor {
     pub fn new(config: GemConfig) -> Self {
         Self {
-            base: ProcessorBase::mass_generator(
+            base: ProcessorBase::creator(
                 crate::processors::names::GEM,
                 "Install Ruby dependencies using Bundler",
             ),

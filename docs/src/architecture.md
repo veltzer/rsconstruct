@@ -251,70 +251,9 @@ Build order is deterministic:
 
 This ensures that the same project always builds in the same order, regardless of filesystem ordering.
 
-## Config-aware caching
+## Caching
 
-Processor configuration (compiler flags, linter arguments, etc.) is hashed into cache keys. This means changing a config value like `cflags` will trigger rebuilds of affected products, even if the source files haven't changed.
-
-## Cache keys
-
-Each product has a unique cache key used to store and look up its cached state.
-The cache key is computed from:
-
-```
-{processor}:{config_hash}:{inputs}>{outputs}
-```
-
-For example, pandoc producing three formats from the same source file generates three
-products with distinct cache keys:
-
-```
-pandoc:a1b2c3:syllabi/intro.md>out/pandoc/intro.pdf
-pandoc:a1b2c3:syllabi/intro.md>out/pandoc/intro.html
-pandoc:a1b2c3:syllabi/intro.md>out/pandoc/intro.docx
-```
-
-For checkers (which have no output files), the key omits the output part:
-
-```
-ruff:d4e5f6:src/main.py
-```
-
-### Why outputs are included in the key
-
-Including outputs in the cache key is critical for multi-format processors.
-Without it, all three pandoc products above would share the key `pandoc:a1b2c3:syllabi/intro.md`,
-and each execution would overwrite the previous format's cache entry. This caused a bug where:
-
-1. First build: PDF, HTML, and DOCX all built correctly, but only the last format's cache entry survived
-2. Source file modified
-3. Second build: only the last format detected the change and rebuilt; the other two skipped because the cache entry (from the last format) happened to match
-
-The fix (including outputs in the key) ensures each format gets its own independent cache entry.
-
-**Note:** changing the cache key format invalidates all existing caches. The first build
-after upgrading will be a full rebuild.
-
-## Cache storage
-
-The cache lives in `.rsconstruct/` and consists of:
-
-- `db.redb` — redb database storing the object store index (maps product hashes to cached outputs)
-- `objects/` — stored build artifacts (addressed by content hash)
-- `deps.redb` — redb database storing source file dependencies (see [Dependency Caching](dependency-caching.md))
-
-Cache restoration can use either hardlinks (fast, same filesystem) or copies (works across filesystems), configured via `restore_method`. The default is `"auto"`, which detects CI environments (via `CI=true` environment variable) and uses `"copy"` there, falling back to `"hardlink"` for local development. This avoids hardlink failures on CI runners where the cache may be on a different filesystem.
-
-## Caching and clean behavior
-
-The cache (`.rsconstruct/`) stores build state to enable fast incremental builds:
-
-- **Generators**: Cache stores copies of output files. After `rsconstruct clean`, outputs are deleted but cache remains. Next `rsconstruct build` restores outputs from cache (fast hardlink/copy) instead of regenerating.
-
-- **Checkers**: No output files to cache. The cache entry itself serves as a "success marker". After `rsconstruct clean` (nothing to delete), next `rsconstruct build` sees the cache entry is valid and skips the check entirely (instant).
-
-- **Mass generators**: When `cache_output_dir` is enabled (default), the entire output directory is walked after execution. Each file is stored as a content-addressed object in `.rsconstruct/objects/`, and a manifest records the relative path, checksum, and Unix permissions of every file. After `rsconstruct clean` (which removes the output directory), `rsconstruct build` recreates the directory from cached objects with permissions restored. This makes `rsconstruct clean && rsconstruct build` fast for doc builders like sphinx and mdbook.
-
-This ensures `rsconstruct clean && rsconstruct build` is fast for all types — generators restore from cache, checkers skip entirely, mass generators restore their output directories.
+See [Cache System](cache.md) for full details on cache keys, storage format, rebuild classification, and per-processor caching behavior.
 
 ## Subprocess execution
 

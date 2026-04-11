@@ -15,7 +15,7 @@ pub struct NpmProcessor {
 impl NpmProcessor {
     pub fn new(config: NpmConfig) -> Self {
         Self {
-            base: ProcessorBase::mass_generator(
+            base: ProcessorBase::creator(
                 crate::processors::names::NPM,
                 "Install Node.js dependencies using npm",
             ),

@@ -97,6 +97,7 @@ mod processors {
     pub mod checkstyle;
     pub mod yq;
     pub mod cmake;
+    pub mod creator;
     pub mod hadolint;
     pub mod jekyll;
     pub mod slidev;

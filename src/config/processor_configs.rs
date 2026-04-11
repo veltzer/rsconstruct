@@ -65,18 +65,64 @@ impl KnownFields for StandardConfig {
 // Type aliases for backward compatibility
 pub type CheckerConfig = StandardConfig;
 pub type CheckerConfigWithCommand = StandardConfig;
-pub type GeneratorConfigWithFormats = StandardConfig;
-pub type GeneratorConfigSimple = StandardConfig;
 
-pub type MarpConfig = GeneratorConfigWithFormats;
-pub type MermaidConfig = GeneratorConfigWithFormats;
-pub type DrawioConfig = GeneratorConfigWithFormats;
-pub type LibreofficeConfig = GeneratorConfigWithFormats;
+/// Config for Creator processors — run a command and cache declared outputs.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CreatorConfig {
+    #[serde(default)]
+    pub command: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub dep_inputs: Vec<String>,
+    #[serde(default)]
+    pub dep_auto: Vec<String>,
+    /// Directories to cache after the command runs.
+    #[serde(default)]
+    pub output_dirs: Vec<String>,
+    /// Individual files to cache after the command runs.
+    #[serde(default)]
+    pub output_files: Vec<String>,
+    #[serde(default = "default_true")]
+    pub batch: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_jobs: Option<usize>,
+    #[serde(flatten)]
+    pub scan: ScanConfig,
+}
 
-pub type Markdown2htmlConfig = GeneratorConfigSimple;
-pub type ChromiumConfig = GeneratorConfigSimple;
-pub type ProtobufConfig = GeneratorConfigSimple;
-pub type SassConfig = GeneratorConfigSimple;
+impl Default for CreatorConfig {
+    fn default() -> Self {
+        Self {
+            command: String::new(),
+            args: Vec::new(),
+            dep_inputs: Vec::new(),
+            dep_auto: Vec::new(),
+            output_dirs: Vec::new(),
+            output_files: Vec::new(),
+            batch: true,
+            max_jobs: None,
+            scan: ScanConfig::default(),
+        }
+    }
+}
+
+impl KnownFields for CreatorConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &["command", "args", "dep_inputs", "dep_auto", "output_dirs", "output_files", "batch", "max_jobs"]
+    }
+    fn output_fields() -> &'static [&'static str] {
+        &["command", "args", "output_dirs", "output_files"]
+    }
+    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
+        &[
+            ("command",      "Command to run"),
+            ("args",         "Extra arguments passed to the command"),
+            ("output_dirs",  "Directories to cache after the command runs"),
+            ("output_files", "Individual files to cache after the command runs"),
+        ]
+    }
+}
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TeraConfig {
     #[serde(default)]
@@ -1723,77 +1769,6 @@ impl KnownFields for TermsConfig {
     }
 }
 
-fn default_pandoc() -> String {
-    "pandoc".into()
-}
-
-fn default_pandoc_formats() -> Vec<String> {
-    vec!["pdf".into(), "html".into(), "docx".into()]
-}
-
-fn default_pandoc_output_dir() -> String {
-    "out/pandoc".into()
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct PandocConfig {
-    #[serde(default = "default_pandoc")]
-    pub pandoc: String,
-    #[serde(default = "default_pandoc_formats")]
-    pub formats: Vec<String>,
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_pandoc_output_dir")]
-    pub output_dir: String,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
-    #[serde(flatten)]
-    pub scan: ScanConfig,
-}
-
-impl Default for PandocConfig {
-    fn default() -> Self {
-        Self {
-            pandoc: "pandoc".into(),
-            formats: vec!["pdf".into(), "html".into(), "docx".into()],
-            args: Vec::new(),
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            output_dir: "out/pandoc".into(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
-        }
-    }
-}
-
-impl KnownFields for PandocConfig {
-    fn known_fields() -> &'static [&'static str] {
-        &[
-            "pandoc", "formats", "args", "dep_inputs", "dep_auto", "output_dir", "batch", "max_jobs",
-        ]
-    }
-    fn output_fields() -> &'static [&'static str] {
-        &["pandoc", "formats", "args", "output_dir"]
-    }
-    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
-        &[
-            ("pandoc",     "Path to the pandoc executable"),
-            ("formats",    "Output formats to generate (e.g. pdf, html, docx)"),
-            ("args",       "Extra arguments passed to pandoc"),
-            ("output_dir", "Directory where converted files are written"),
-        ]
-    }
-}
-
-
-
 
 
 fn default_pdflatex() -> String {
@@ -1865,68 +1840,6 @@ impl KnownFields for PdflatexConfig {
             ("runs",      "Number of pdflatex compilation passes"),
             ("qpdf",      "Run qpdf to optimize the output PDF"),
             ("output_dir","Directory where compiled PDFs are written"),
-        ]
-    }
-}
-
-fn default_a2x() -> String {
-    "a2x".into()
-}
-
-
-fn default_a2x_output_dir() -> String {
-    "out/a2x".into()
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct A2xConfig {
-    #[serde(default = "default_a2x")]
-    pub a2x: String,
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_a2x_output_dir")]
-    pub output_dir: String,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
-    #[serde(flatten)]
-    pub scan: ScanConfig,
-}
-
-impl Default for A2xConfig {
-    fn default() -> Self {
-        Self {
-            a2x: "a2x".into(),
-            args: Vec::new(),
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            output_dir: "out/a2x".into(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
-        }
-    }
-}
-
-impl KnownFields for A2xConfig {
-    fn known_fields() -> &'static [&'static str] {
-        &[
-            "a2x", "args", "dep_inputs", "dep_auto", "output_dir", "batch", "max_jobs",
-        ]
-    }
-    fn output_fields() -> &'static [&'static str] {
-        &["a2x", "args", "output_dir"]
-    }
-    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
-        &[
-            ("a2x",       "Path to the a2x executable"),
-            ("args",      "Extra arguments passed to a2x"),
-            ("output_dir","Directory where converted files are written"),
         ]
     }
 }
@@ -2053,141 +1966,6 @@ impl KnownFields for IyamlschemaConfig {
 }
 
 pub type ItaploConfig = CheckerConfig;
-
-fn default_imarkdown2html_output_dir() -> String { "out/imarkdown2html".into() }
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Imarkdown2htmlConfig {
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_imarkdown2html_output_dir")]
-    pub output_dir: String,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
-    #[serde(flatten)]
-    pub scan: ScanConfig,
-}
-
-impl Default for Imarkdown2htmlConfig {
-    fn default() -> Self {
-        Self {
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            output_dir: "out/imarkdown2html".into(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
-        }
-    }
-}
-
-impl KnownFields for Imarkdown2htmlConfig {
-    fn known_fields() -> &'static [&'static str] {
-        &["dep_inputs", "dep_auto", "output_dir", "batch", "max_jobs"]
-    }
-    fn output_fields() -> &'static [&'static str] {
-        &["output_dir"]
-    }
-    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
-        &[
-            ("output_dir", "Directory where rendered HTML files are written"),
-        ]
-    }
-}
-
-fn default_yaml2json_output_dir() -> String { "out/yaml2json".into() }
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Yaml2jsonConfig {
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_yaml2json_output_dir")]
-    pub output_dir: String,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
-    #[serde(flatten)]
-    pub scan: ScanConfig,
-}
-
-impl Default for Yaml2jsonConfig {
-    fn default() -> Self {
-        Self {
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            output_dir: "out/yaml2json".into(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
-        }
-    }
-}
-
-impl KnownFields for Yaml2jsonConfig {
-    fn known_fields() -> &'static [&'static str] {
-        &["dep_inputs", "dep_auto", "output_dir", "batch", "max_jobs"]
-    }
-    fn output_fields() -> &'static [&'static str] {
-        &["output_dir"]
-    }
-    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
-        &[
-            ("output_dir", "Directory where converted JSON files are written"),
-        ]
-    }
-}
-
-fn default_isass_output_dir() -> String { "out/isass".into() }
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct IsassConfig {
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_isass_output_dir")]
-    pub output_dir: String,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
-    #[serde(flatten)]
-    pub scan: ScanConfig,
-}
-
-impl Default for IsassConfig {
-    fn default() -> Self {
-        Self {
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            output_dir: "out/isass".into(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
-        }
-    }
-}
-
-impl KnownFields for IsassConfig {
-    fn known_fields() -> &'static [&'static str] {
-        &["dep_inputs", "dep_auto", "output_dir", "batch", "max_jobs"]
-    }
-    fn output_fields() -> &'static [&'static str] {
-        &["output_dir"]
-    }
-    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
-        &[
-            ("output_dir", "Directory where compiled CSS files are written"),
-        ]
-    }
-}
 
 fn default_rustc() -> String { "rustc".into() }
 fn default_rust_single_file_output_suffix() -> String { ".elf".into() }
@@ -2419,58 +2197,6 @@ pub type CpplintConfig = CheckerConfig;
 
 pub type CheckpatchConfig = CheckerConfig;
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct ObjdumpConfig {
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default = "default_objdump_output_dir")]
-    pub output_dir: String,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
-    #[serde(flatten)]
-    pub scan: ScanConfig,
-}
-
-fn default_objdump_output_dir() -> String {
-    "out/objdump".into()
-}
-
-impl Default for ObjdumpConfig {
-    fn default() -> Self {
-        Self {
-            args: Vec::new(),
-            dep_inputs: Vec::new(),
-            output_dir: default_objdump_output_dir(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
-        }
-    }
-}
-
-impl KnownFields for ObjdumpConfig {
-    fn known_fields() -> &'static [&'static str] {
-        &[
-            "args", "dep_inputs", "output_dir", "batch", "max_jobs",
-        ]
-    }
-    fn output_fields() -> &'static [&'static str] {
-        &["args", "output_dir"]
-    }
-    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
-        &[
-            ("args",       "Extra arguments passed to objdump"),
-            ("output_dir", "Directory where disassembly output files are written"),
-        ]
-    }
-}
-
-
-
 
 // --- tidy (HTML validator) ---
 
@@ -2559,3 +2285,4 @@ impl KnownFields for LicenseHeaderConfig {
     }
 
 }
+

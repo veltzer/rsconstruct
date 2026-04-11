@@ -41,6 +41,7 @@ pulldown-cmark = { version = "0.13.3", default-features = false, features = ["ht
 jsonschema = { version = "0.45.1", default-features = false, features = ["resolve-file"] }
 tabled = "0.20.0"
 ureq = "3"
+strum = { version = "0.28.0", features = ["derive"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

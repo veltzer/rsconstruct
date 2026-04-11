@@ -15,7 +15,7 @@ pub struct SphinxProcessor {
 impl SphinxProcessor {
     pub fn new(config: SphinxConfig) -> Self {
         Self {
-            base: ProcessorBase::mass_generator(
+            base: ProcessorBase::creator(
                 crate::processors::names::SPHINX,
                 "Build Sphinx documentation",
             ),

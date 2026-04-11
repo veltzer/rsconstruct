@@ -348,7 +348,7 @@ impl ProductDiscovery for LuaProcessor {
                 .unwrap_or_else(|_| "checker".to_string());
             match type_str.to_lowercase().as_str() {
                 "generator" => super::ProcessorType::Generator,
-                "mass_generator" => super::ProcessorType::MassGenerator,
+                "creator" | "mass_generator" => super::ProcessorType::Creator,
                 "explicit" => super::ProcessorType::Explicit,
                 _ => super::ProcessorType::Checker,
             }

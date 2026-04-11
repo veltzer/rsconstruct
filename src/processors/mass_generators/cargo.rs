@@ -15,7 +15,7 @@ pub struct CargoProcessor {
 impl CargoProcessor {
     pub fn new(config: CargoConfig) -> Self {
         Self {
-            base: ProcessorBase::mass_generator(
+            base: ProcessorBase::creator(
                 crate::processors::names::CARGO,
                 "Build Rust projects using Cargo",
             ),

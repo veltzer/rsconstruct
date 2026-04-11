@@ -63,7 +63,7 @@ fn explain_input_change() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("BUILD"), "Expected BUILD in explain output, got: {}", stdout);
-    assert!(stdout.contains("inputs changed"), "Expected 'inputs changed' reason, got: {}", stdout);
+    assert!(stdout.contains("no cache entry"), "Expected 'no cache entry' reason (inputs changed = new key), got: {}", stdout);
 }
 
 #[test]

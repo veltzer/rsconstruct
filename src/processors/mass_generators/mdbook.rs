@@ -15,7 +15,7 @@ pub struct MdbookProcessor {
 impl MdbookProcessor {
     pub fn new(config: MdbookConfig) -> Self {
         Self {
-            base: ProcessorBase::mass_generator(
+            base: ProcessorBase::creator(
                 crate::processors::names::MDBOOK,
                 "Build mdbook documentation",
             ),

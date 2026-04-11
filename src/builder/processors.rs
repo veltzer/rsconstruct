@@ -200,7 +200,7 @@ impl Builder {
         let proc_names = sorted_keys(&processors);
 
         match action {
-            ProcessorAction::List | ProcessorAction::Recommend => unreachable!("handled before Builder is constructed"),
+            ProcessorAction::List | ProcessorAction::Recommend | ProcessorAction::Types => unreachable!("handled before Builder is constructed"),
             ProcessorAction::Used => {
                 let mut builder = TableBuilder::new();
                 builder.push_record(["Name", "Type", "Detected", "Description"]);
@@ -406,7 +406,7 @@ impl Builder {
                         .map(|proc| proc.processor_type());
                     if product.outputs.is_empty() {
                         let label = match proc_type {
-                            Some(crate::processors::ProcessorType::MassGenerator) => "(mass_generator)",
+                            Some(crate::processors::ProcessorType::Creator) => "(creator)",
                             _ => "(checker)",
                         };
                         println!("{} \u{2192} {}", inputs.join(", "), color::dim(label));

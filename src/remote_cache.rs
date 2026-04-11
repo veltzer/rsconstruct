@@ -19,6 +19,7 @@ pub trait RemoteCache: Send + Sync {
     fn exists(&self, key: &str) -> Result<bool>;
 
     /// Download an object from remote cache to local path
+    #[allow(dead_code)]
     fn download(&self, key: &str, dest: &Path) -> Result<bool>;
 
     /// Upload a local file to remote cache

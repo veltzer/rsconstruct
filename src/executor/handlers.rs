@@ -89,11 +89,8 @@ impl<'a> Executor<'a> {
         if force {
             return RestoreOutcome::NotRestorable;
         }
-        let restore_result = if let Some(ref output_dir) = ctx.product.output_dir {
-            object_store.restore_output_dir(&ctx.cache_key, ctx.input_checksum, output_dir)
-        } else {
-            object_store.restore_from_cache(&ctx.cache_key, ctx.input_checksum, &ctx.product.outputs)
-        };
+        let desc_key = crate::object_store::ObjectStore::descriptor_key(&ctx.cache_key, ctx.input_checksum);
+        let restore_result = object_store.restore_from_descriptor(&desc_key);
         match restore_result {
             Ok(true) => {
                 if self.verbose {
@@ -162,10 +159,15 @@ impl<'a> Executor<'a> {
         object_store: &crate::object_store::ObjectStore,
         duration: Option<std::time::Duration>,
     ) -> bool {
-        let cache_result = if let Some(ref output_dir) = ctx.product.output_dir {
-            object_store.cache_output_dir(&ctx.cache_key, ctx.input_checksum, output_dir)
+        let desc_key = crate::object_store::ObjectStore::descriptor_key(&ctx.cache_key, ctx.input_checksum);
+        let cache_result = if ctx.product.has_output_dirs() {
+            object_store.store_tree_descriptor(&desc_key, &ctx.product.output_dirs, &ctx.product.outputs)
+        } else if ctx.product.outputs.is_empty() {
+            object_store.store_marker(&desc_key).map(|()| false)
+        } else if ctx.product.outputs.len() == 1 {
+            object_store.store_blob_descriptor(&desc_key, &ctx.product.outputs[0])
         } else {
-            object_store.cache_outputs(&ctx.cache_key, ctx.input_checksum, &ctx.product.outputs)
+            object_store.store_tree_descriptor(&desc_key, &[], &ctx.product.outputs)
         };
         match cache_result {
             Ok(changed) => {

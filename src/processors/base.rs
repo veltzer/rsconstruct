@@ -21,8 +21,8 @@ impl ProcessorBase {
         Self { name, description, processor_type: ProcessorType::Generator }
     }
 
-    pub fn mass_generator(name: &'static str, description: &'static str) -> Self {
-        Self { name, description, processor_type: ProcessorType::MassGenerator }
+    pub fn creator(name: &'static str, description: &'static str) -> Self {
+        Self { name, description, processor_type: ProcessorType::Creator }
     }
 
     pub fn checker(name: &'static str, description: &'static str) -> Self {

@@ -287,6 +287,12 @@ fn run() -> Result<()> {
                 cli::ProcessorAction::List => {
                     builder::processors::list_processors_no_config(cli.verbose)?;
                 }
+                cli::ProcessorAction::Types => {
+                    use strum::IntoEnumIterator;
+                    for pt in processors::ProcessorType::iter() {
+                        println!("{:<16} {}", pt.as_str(), pt.description());
+                    }
+                }
                 cli::ProcessorAction::Recommend => {
                     builder::processors::list_recommendations();
                 }

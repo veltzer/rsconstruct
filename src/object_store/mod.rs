@@ -38,6 +38,7 @@ fn walk_files(dir: &Path) -> Vec<PathBuf> {
 
 const RSBUILD_DIR: &str = ".rsconstruct";
 const OBJECTS_DIR: &str = "objects";
+const DESCRIPTORS_DIR: &str = "descriptors";
 const DB_FILE: &str = "db.redb";
 
 const CACHE_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("cache");
@@ -55,10 +56,8 @@ struct MtimeEntry {
 /// Reason why a product needs to be rebuilt.
 #[derive(Debug)]
 pub enum RebuildReason {
-    /// No cache entry exists for this product
+    /// No cache entry exists for this product (new or inputs changed)
     NoCacheEntry,
-    /// Input files have changed since last build
-    InputsChanged,
     /// An output file is missing (and can't be restored from cache)
     OutputMissing(String),
     /// Build was forced with --force flag
@@ -69,7 +68,6 @@ impl std::fmt::Display for RebuildReason {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RebuildReason::NoCacheEntry => write!(f, "no cache entry"),
-            RebuildReason::InputsChanged => write!(f, "inputs changed"),
             RebuildReason::OutputMissing(path) => write!(f, "output missing: {}", path),
             RebuildReason::Force => write!(f, "forced"),
         }
@@ -101,9 +99,11 @@ impl std::fmt::Display for ExplainAction {
 /// Uses git-like object storage: .rsconstruct/objects/[2 chars]/[rest of hash]
 /// Index is stored in a redb embedded key/value database at .rsconstruct/db.redb
 pub struct ObjectStore {
-    /// Path to objects directory
+    /// Path to objects directory (content-addressed blobs)
     objects_dir: PathBuf,
-    /// redb database for cache index
+    /// Path to descriptors directory (cache descriptors keyed by cache key hash)
+    descriptors_dir: PathBuf,
+    /// redb database for mtime cache and config tracking
     db: Database,
     /// Method to restore files from cache
     restore_method: RestoreMethod,
@@ -114,28 +114,61 @@ pub struct ObjectStore {
     /// Whether to push to remote cache
     remote_push: bool,
     /// Whether to pull from remote cache
+    #[allow(dead_code)]
     remote_pull: bool,
     /// Whether to use mtime pre-check to skip unchanged file checksums
     mtime_check: bool,
 }
 
-/// Information about a cached product
+/// A cache descriptor stored in the object store at the cache key path.
+/// This is the top-level object that describes what a product produced.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type")]
+enum CacheDescriptor {
+    /// Checker: no outputs. Presence means the check passed.
+    #[serde(rename = "marker")]
+    Marker,
+    /// Generator: single output file. Points to a content-addressed blob.
+    #[serde(rename = "blob")]
+    Blob {
+        checksum: String,
+        path: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        mode: Option<u32>,
+    },
+    /// Creator/mass generator: multiple output files.
+    #[serde(rename = "tree")]
+    Tree {
+        entries: Vec<TreeEntry>,
+    },
+}
+
+/// A single file entry in a tree descriptor.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct TreeEntry {
+    /// Path of the output file (relative to project root)
+    path: String,
+    /// Checksum of the file content (blob key in object store)
+    checksum: String,
+    /// Unix file permissions
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    mode: Option<u32>,
+}
+
+// --- Legacy types kept temporarily for migration ---
+
+/// Information about a cached product (legacy DB format)
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct CacheEntry {
-    /// Combined checksum of all inputs at time of caching
     input_checksum: String,
-    /// List of output files and their checksums
     outputs: Vec<OutputEntry>,
 }
 
-/// Information about a single cached output file
+/// Information about a single cached output file (legacy DB format)
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct OutputEntry {
-    /// Original path of the output file (relative to project root)
     path: String,
-    /// Checksum of the output content (used as object store key)
     checksum: String,
-    /// Unix file permissions (e.g., 0o755). Used for directory cache restore.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     mode: Option<u32>,
 }
@@ -152,7 +185,6 @@ pub struct ProcessorCacheStats {
 #[derive(Debug, Serialize)]
 pub struct CacheListEntry {
     pub cache_key: String,
-    pub input_checksum: String,
     /// Output paths and whether the object exists in the store
     pub outputs: Vec<CacheListOutput>,
 }
@@ -186,8 +218,11 @@ impl ObjectStore {
 
         let db = crate::db::open_or_recreate(&db_path, "Cache database")?;
 
+        let descriptors_dir = rsconstruct_dir.join(DESCRIPTORS_DIR);
+
         Ok(Self {
             objects_dir,
+            descriptors_dir,
             db,
             restore_method: opts.restore_method,
             compression: opts.compression,
@@ -216,22 +251,277 @@ impl ObjectStore {
         serde_json::from_slice(data.value()).ok()
     }
 
-    /// Insert a cache entry into the database
-    fn insert_entry(&self, cache_key: &str, entry: &CacheEntry) -> Result<()> {
-        let value = serde_json::to_vec(entry)
-            .context("Failed to serialize cache entry")?;
-        let write_txn = self.db.begin_write()
-            .context("Failed to begin write transaction")?;
-        {
-            let mut table = write_txn.open_table(CACHE_TABLE)
-                .context("Failed to open cache table")?;
-            table.insert(cache_key, value.as_slice())
-                .context("Failed to insert cache entry")?;
+
+
+    // --- Descriptor-based cache (new system) ---
+
+    /// Compute a content-addressed descriptor key from the structural cache key
+    /// and the input content checksum. This key changes when either the product
+    /// structure or the input content changes.
+    pub fn descriptor_key(cache_key: &str, input_checksum: &str) -> String {
+        Self::calculate_checksum_bytes(format!("{}:{}", cache_key, input_checksum).as_bytes())
+    }
+
+    /// Path for a cache descriptor, sharded like objects.
+    fn descriptor_path(&self, descriptor_key: &str) -> PathBuf {
+        let (prefix, rest) = descriptor_key.split_at(CHECKSUM_PREFIX_LEN.min(descriptor_key.len()));
+        self.descriptors_dir.join(prefix).join(rest)
+    }
+
+    /// Store a cache descriptor for a cache key.
+    fn store_descriptor(&self, cache_key: &str, descriptor: &CacheDescriptor) -> Result<()> {
+        let path = self.descriptor_path(cache_key);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .context("Failed to create descriptor directory")?;
         }
-        write_txn.commit()
-            .context("Failed to commit cache entry")?;
+        let data = serde_json::to_vec(descriptor)
+            .context("Failed to serialize cache descriptor")?;
+        // Remove existing file if read-only (from a previous build)
+        if path.exists() {
+            let mut perms = fs::metadata(&path)?.permissions();
+            perms.set_readonly(false);
+            fs::set_permissions(&path, perms)?;
+        }
+        fs::write(&path, &data)
+            .context("Failed to write cache descriptor")?;
+        let mut perms = fs::metadata(&path)?.permissions();
+        perms.set_readonly(true);
+        fs::set_permissions(&path, perms)?;
         Ok(())
     }
+
+    /// Read a cache descriptor for a cache key. Returns None if not found.
+    fn get_descriptor(&self, cache_key: &str) -> Option<CacheDescriptor> {
+        let path = self.descriptor_path(cache_key);
+        let data = fs::read(&path).ok()?;
+        serde_json::from_slice(&data).ok()
+    }
+
+    /// Store a marker descriptor (checker passed).
+    pub fn store_marker(&self, cache_key: &str) -> Result<()> {
+        self.store_descriptor(cache_key, &CacheDescriptor::Marker)
+    }
+
+    /// Store a blob descriptor (generator produced a single output).
+    pub fn store_blob_descriptor(&self, cache_key: &str, output_path: &Path) -> Result<bool> {
+        let content = fs::read(output_path)
+            .with_context(|| format!("Failed to read output: {}", output_path.display()))?;
+        let checksum = self.store_object(&content)?;
+        let mode = fs::metadata(output_path).ok()
+            .and_then(|m| crate::platform::get_mode(&m));
+
+        // Check if changed vs previous descriptor
+        let changed = match self.get_descriptor(cache_key) {
+            Some(CacheDescriptor::Blob { checksum: prev, .. }) => prev != checksum,
+            _ => true,
+        };
+
+        if self.remote_push {
+            self.try_push_object_to_remote(&checksum)?;
+        }
+
+        self.store_descriptor(cache_key, &CacheDescriptor::Blob {
+            checksum,
+            path: Self::path_string(output_path),
+            mode,
+        })?;
+
+        Ok(changed)
+    }
+
+    /// Store a tree descriptor (creator/mass generator produced multiple outputs).
+    /// Walks all output_dirs and collects output_files.
+    pub fn store_tree_descriptor(
+        &self,
+        cache_key: &str,
+        output_dirs: &[std::sync::Arc<PathBuf>],
+        output_files: &[PathBuf],
+    ) -> Result<bool> {
+        let prev = self.get_descriptor(cache_key);
+        let mut entries = Vec::new();
+
+        // Walk output directories
+        for dir in output_dirs {
+            let dir: &Path = dir;
+            anyhow::ensure!(dir.exists() && dir.is_dir(),
+                "Expected output directory not produced: {}", dir.display());
+            for file_path in walk_files(dir) {
+                let content = fs::read(&file_path)
+                    .with_context(|| format!("Failed to read: {}", file_path.display()))?;
+                let checksum = self.store_object(&content)?;
+                let mode = fs::metadata(&file_path).ok()
+                    .and_then(|m| crate::platform::get_mode(&m));
+                if self.remote_push {
+                    self.try_push_object_to_remote(&checksum)?;
+                }
+                entries.push(TreeEntry {
+                    path: file_path.display().to_string(),
+                    checksum,
+                    mode,
+                });
+            }
+        }
+
+        // Individual output files
+        for file_path in output_files {
+            anyhow::ensure!(file_path.exists(),
+                "Expected output file not produced: {}", file_path.display());
+            let content = fs::read(file_path)
+                .with_context(|| format!("Failed to read: {}", file_path.display()))?;
+            let checksum = self.store_object(&content)?;
+            let mode = fs::metadata(file_path).ok()
+                .and_then(|m| crate::platform::get_mode(&m));
+            if self.remote_push {
+                self.try_push_object_to_remote(&checksum)?;
+            }
+            entries.push(TreeEntry {
+                path: Self::path_string(file_path),
+                checksum,
+                mode,
+            });
+        }
+
+        // Detect changes
+        let changed = match prev {
+            Some(CacheDescriptor::Tree { entries: ref prev_entries }) => {
+                entries.len() != prev_entries.len()
+                    || entries.iter().zip(prev_entries.iter()).any(|(a, b)| a.checksum != b.checksum || a.path != b.path)
+            }
+            _ => true,
+        };
+
+        self.store_descriptor(cache_key, &CacheDescriptor::Tree { entries })?;
+        Ok(changed)
+    }
+
+    /// Restore outputs from a cache descriptor. Returns Ok(true) if restored.
+    pub fn restore_from_descriptor(&self, cache_key: &str) -> Result<bool> {
+        let descriptor = match self.get_descriptor(cache_key) {
+            Some(d) => d,
+            None => return Ok(false),
+        };
+        match descriptor {
+            CacheDescriptor::Marker => Ok(true),
+            CacheDescriptor::Blob { checksum, path, mode } => {
+                let output_path = Path::new(&path);
+                if output_path.exists() {
+                    return Ok(true);
+                }
+                if !self.has_object(&checksum) {
+                    return Ok(false);
+                }
+                if let Some(parent) = output_path.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                self.restore_file(&checksum, output_path)?;
+                if let Some(m) = mode {
+                    crate::platform::set_permissions_mode(output_path, m)?;
+                }
+                Ok(true)
+            }
+            CacheDescriptor::Tree { entries } => {
+                for entry in &entries {
+                    let file_path = Path::new(&entry.path);
+                    // Skip files that exist with the correct checksum
+                    if file_path.exists() {
+                        if let Ok(existing) = Self::calculate_checksum(file_path) {
+                            if existing == entry.checksum {
+                                continue;
+                            }
+                        }
+                        // Wrong checksum — remove and re-restore
+                        let _ = fs::remove_file(file_path);
+                    }
+                    if !self.has_object(&entry.checksum) {
+                        return Ok(false);
+                    }
+                    if let Some(parent) = file_path.parent() {
+                        fs::create_dir_all(parent)?;
+                    }
+                    self.restore_file(&entry.checksum, file_path)?;
+                    if let Some(m) = entry.mode {
+                        crate::platform::set_permissions_mode(file_path, m)?;
+                    }
+                }
+                Ok(true)
+            }
+        }
+    }
+
+    /// Check if a product needs rebuilding based on its descriptor.
+    /// Returns true if no descriptor exists or any output is missing.
+    pub fn needs_rebuild_descriptor(&self, cache_key: &str) -> bool {
+        let descriptor = match self.get_descriptor(cache_key) {
+            Some(d) => d,
+            None => return true,
+        };
+        match descriptor {
+            CacheDescriptor::Marker => false,
+            CacheDescriptor::Blob { path, .. } => !Path::new(&path).exists(),
+            CacheDescriptor::Tree { entries } => {
+                entries.iter().any(|e| {
+                    let p = Path::new(&e.path);
+                    !p.exists() || Self::calculate_checksum(p).ok().as_ref() != Some(&e.checksum)
+                })
+            }
+        }
+    }
+
+    /// Check if outputs can be restored from a descriptor.
+    pub fn can_restore_descriptor(&self, cache_key: &str) -> bool {
+        let descriptor = match self.get_descriptor(cache_key) {
+            Some(d) => d,
+            None => return false,
+        };
+        match descriptor {
+            CacheDescriptor::Marker => true,
+            CacheDescriptor::Blob { checksum, .. } => self.has_object(&checksum),
+            CacheDescriptor::Tree { entries } => {
+                entries.iter().all(|e| self.has_object(&e.checksum))
+            }
+        }
+    }
+
+    /// Explain what action will be taken based on descriptor state.
+    pub fn explain_descriptor(&self, descriptor_key: &str, force: bool) -> ExplainAction {
+        if force {
+            return ExplainAction::Rebuild(RebuildReason::Force);
+        }
+        let descriptor = match self.get_descriptor(descriptor_key) {
+            Some(d) => d,
+            None => return ExplainAction::Rebuild(RebuildReason::NoCacheEntry),
+        };
+        match descriptor {
+            CacheDescriptor::Marker => ExplainAction::Skip,
+            CacheDescriptor::Blob { checksum, path, .. } => {
+                if Path::new(&path).exists() {
+                    ExplainAction::Skip
+                } else if self.has_object(&checksum) {
+                    ExplainAction::Restore(RebuildReason::OutputMissing(path))
+                } else {
+                    ExplainAction::Rebuild(RebuildReason::OutputMissing(path))
+                }
+            }
+            CacheDescriptor::Tree { entries } => {
+                for entry in &entries {
+                    let p = Path::new(&entry.path);
+                    let needs_restore = !p.exists()
+                        || Self::calculate_checksum(p).ok().as_ref() != Some(&entry.checksum);
+                    if needs_restore {
+                        if self.has_object(&entry.checksum) {
+                            return ExplainAction::Restore(RebuildReason::OutputMissing(entry.path.clone()));
+                        } else {
+                            return ExplainAction::Rebuild(RebuildReason::OutputMissing(entry.path.clone()));
+                        }
+                    }
+                }
+                ExplainAction::Skip
+            }
+        }
+    }
+
+    // --- End descriptor-based cache ---
 
     /// Calculate SHA-256 checksum of a file
     pub fn calculate_checksum(file_path: &Path) -> Result<String> {

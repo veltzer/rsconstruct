@@ -116,17 +116,9 @@ pub fn classify_products(
             }
         };
 
-        let needs_rebuild = if let Some(ref output_dir) = product.output_dir {
-            object_store.needs_rebuild_output_dir(&cache_key, &input_checksum, output_dir)
-        } else {
-            object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs)
-        };
-
-        let can_restore = if let Some(ref _output_dir) = product.output_dir {
-            object_store.can_restore_output_dir(&cache_key, &input_checksum)
-        } else {
-            object_store.can_restore(&cache_key, &input_checksum, &product.outputs)
-        };
+        let desc_key = crate::object_store::ObjectStore::descriptor_key(&cache_key, &input_checksum);
+        let needs_rebuild = object_store.needs_rebuild_descriptor(&desc_key);
+        let can_restore = object_store.can_restore_descriptor(&desc_key);
 
         if !force && !dep_changed && !needs_rebuild {
             skip_count += 1;

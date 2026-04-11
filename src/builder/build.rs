@@ -13,7 +13,7 @@ use super::{Builder, ProductStatusLabels, StatusPrintOptions, phases_debug};
 /// Expand `@`-prefixed shortcuts in the processor filter.
 ///
 /// Three categories of shortcuts:
-/// - **By type**: `@checkers`, `@generators`, `@mass_generators`
+/// - **By type**: `@checkers`, `@generators`, `@creators`
 /// - **By tool**: `@python3`, `@node`, etc. — matches processors whose `required_tools()` contains the name
 /// - **By processor name**: `@ruff` → `"ruff"` — strips the `@` prefix
 fn expand_aliases(filter: &[String], processors: &ProcessorMap) -> Vec<String> {
@@ -35,10 +35,10 @@ fn expand_aliases(filter: &[String], processors: &ProcessorMap) -> Vec<String> {
                             .map(|(n, _)| n.clone())
                     );
                 }
-                "mass_generators" => {
+                "creators" | "mass_generators" => {
                     expanded.extend(
                         processors.iter()
-                            .filter(|(_, p)| p.processor_type() == ProcessorType::MassGenerator)
+                            .filter(|(_, p)| p.processor_type() == ProcessorType::Creator)
                             .map(|(n, _)| n.clone())
                     );
                 }
@@ -438,8 +438,9 @@ impl Builder {
                 }
             };
 
+            let desc_key = crate::object_store::ObjectStore::descriptor_key(&cache_key, &input_checksum);
             let (status_idx, reason) = if opts.explain {
-                let action = self.object_store.explain_action(&cache_key, &input_checksum, &product.outputs, opts.force);
+                let action = self.object_store.explain_descriptor(&desc_key, opts.force);
                 let reason = format!(" ({})", action);
                 let idx = match action {
                     ExplainAction::Skip => 0,
@@ -448,9 +449,9 @@ impl Builder {
                     ExplainAction::Rebuild(_) => 2,
                 };
                 (idx, reason)
-            } else if !opts.force && !self.object_store.needs_rebuild(&cache_key, &input_checksum, &product.outputs) {
+            } else if !opts.force && !self.object_store.needs_rebuild_descriptor(&desc_key) {
                 (0, String::new())
-            } else if !opts.force && self.object_store.can_restore(&cache_key, &input_checksum, &product.outputs) {
+            } else if !opts.force && self.object_store.can_restore_descriptor(&desc_key) {
                 (1, String::new())
             } else if self.object_store.has_cache_entry(&cache_key) {
                 (2, String::new()) // stale: was built before

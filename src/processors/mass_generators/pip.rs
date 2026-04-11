@@ -15,7 +15,7 @@ pub struct PipProcessor {
 impl PipProcessor {
     pub fn new(config: PipConfig) -> Self {
         Self {
-            base: ProcessorBase::mass_generator(
+            base: ProcessorBase::creator(
                 crate::processors::names::PIP,
                 "Install Python dependencies using pip",
             ),

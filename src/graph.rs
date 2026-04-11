@@ -24,9 +24,9 @@ pub struct Product {
     pub config_hash: Option<String>,
     /// Optional variant/profile name (e.g., compiler profile name)
     pub variant: Option<String>,
-    /// Optional output directory for mass generators (relative to project root).
-    /// When set, the executor caches/restores the entire directory instead of individual output files.
-    pub output_dir: Option<Arc<PathBuf>>,
+    /// Output directories for mass generators / creators (relative to project root).
+    /// When non-empty, the executor caches/restores these directories instead of individual output files.
+    pub output_dirs: Vec<Arc<PathBuf>>,
 }
 
 impl Product {
@@ -38,7 +38,7 @@ impl Product {
             id,
             config_hash,
             variant: None,
-            output_dir: None,
+            output_dirs: Vec::new(),
         }
     }
 
@@ -51,7 +51,7 @@ impl Product {
             id,
             config_hash,
             variant: Some(variant.to_string()),
-            output_dir: None,
+            output_dirs: Vec::new(),
         }
     }
 
@@ -65,6 +65,11 @@ impl Product {
     /// Panics if the product has no outputs (a programming error — every generator product must have at least one).
     pub fn primary_output(&self) -> &Path {
         self.outputs.first().expect(errors::EMPTY_PRODUCT_OUTPUTS)
+    }
+
+    /// Whether this product has output directories to cache.
+    pub fn has_output_dirs(&self) -> bool {
+        !self.output_dirs.is_empty()
     }
 
     /// Format a path according to the given format
@@ -252,13 +257,18 @@ impl BuildGraph {
     /// Add a product with an output directory for mass generator caching.
     /// The output_dir is the directory whose contents will be cached/restored as a whole.
     pub fn add_product_with_output_dir(&mut self, inputs: Vec<PathBuf>, outputs: Vec<PathBuf>, processor: &str, config_hash: Option<String>, output_dir: PathBuf) -> Result<usize> {
-        self.add_product_with_output_dir_and_variant(inputs, outputs, processor, config_hash, output_dir, None)
+        self.add_product_with_output_dirs_and_variant(inputs, outputs, processor, config_hash, vec![output_dir], None)
     }
 
     /// Add a product with an output directory and an optional variant/profile name.
     pub fn add_product_with_output_dir_and_variant(&mut self, inputs: Vec<PathBuf>, outputs: Vec<PathBuf>, processor: &str, config_hash: Option<String>, output_dir: PathBuf, variant: Option<&str>) -> Result<usize> {
+        self.add_product_with_output_dirs_and_variant(inputs, outputs, processor, config_hash, vec![output_dir], variant)
+    }
+
+    /// Add a product with multiple output directories and an optional variant/profile name.
+    pub fn add_product_with_output_dirs_and_variant(&mut self, inputs: Vec<PathBuf>, outputs: Vec<PathBuf>, processor: &str, config_hash: Option<String>, output_dirs: Vec<PathBuf>, variant: Option<&str>) -> Result<usize> {
         let id = self.add_product_with_variant(inputs, outputs, processor, config_hash, variant)?;
-        self.products[id].output_dir = Some(Arc::new(output_dir));
+        self.products[id].output_dirs = output_dirs.into_iter().map(Arc::new).collect();
         Ok(id)
     }
 

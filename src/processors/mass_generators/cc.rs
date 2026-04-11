@@ -16,7 +16,7 @@ pub struct CcProcessor {
 impl CcProcessor {
     pub fn new(config: CcConfig) -> Self {
         Self {
-            base: ProcessorBase::mass_generator(
+            base: ProcessorBase::creator(
                 crate::processors::names::CC,
                 "Build C/C++ projects from cc.yaml manifests",
             ),

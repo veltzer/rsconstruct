@@ -2,7 +2,8 @@ mod base;
 pub use base::ProcessorBase;
 
 mod checkers;
-mod generators;
+mod creator;
+pub(crate) mod generators;
 mod mass_generators;
 pub mod lua_processor;
 pub(crate) mod word_manager;
@@ -32,15 +33,10 @@ pub mod names {
     pub const TERA: &str = "tera";
     pub const CC_SINGLE_FILE: &str = "cc_single_file";
     pub const CC: &str = "cc";
-    pub const CPPCHECK: &str = "cppcheck";
-    pub const CLANG_TIDY: &str = "clang_tidy";
     pub const ZSPELL: &str = "zspell";
-    pub const SHELLCHECK: &str = "shellcheck";
-    pub const LUACHECK: &str = "luacheck";
     pub const MAKE: &str = "make";
     pub const CARGO: &str = "cargo";
     pub const CLIPPY: &str = "clippy";
-    pub const JSON_SCHEMA: &str = "json_schema";
     pub const TAGS: &str = "tags";
     pub const PIP: &str = "pip";
     pub const SPHINX: &str = "sphinx";
@@ -50,44 +46,17 @@ pub mod names {
     pub const MDL: &str = "mdl";
     pub const MARKDOWNLINT: &str = "markdownlint";
     pub const ASPELL: &str = "aspell";
-    pub const MARP: &str = "marp";
-    pub const PANDOC: &str = "pandoc";
-    pub const MARKDOWN2HTML: &str = "markdown2html";
     pub const PDFLATEX: &str = "pdflatex";
-    pub const A2X: &str = "a2x";
-    pub const ASCII: &str = "ascii";
-    pub const TERMS: &str = "terms";
-    pub const CHROMIUM: &str = "chromium";
     pub const MAKO: &str = "mako";
     pub const JINJA2: &str = "jinja2";
-    pub const MERMAID: &str = "mermaid";
-    pub const DRAWIO: &str = "drawio";
-    pub const LIBREOFFICE: &str = "libreoffice";
-    pub const PROTOBUF: &str = "protobuf";
     pub const PDFUNITE: &str = "pdfunite";
     pub const IPDFUNITE: &str = "ipdfunite";
     pub const SCRIPT: &str = "script";
     pub const GENERATOR: &str = "generator";
     pub const EXPLICIT: &str = "explicit";
     pub const LINUX_MODULE: &str = "linux_module";
-    pub const CPPLINT: &str = "cpplint";
-    pub const CHECKPATCH: &str = "checkpatch";
-    pub const OBJDUMP: &str = "objdump";
     pub const JEKYLL: &str = "jekyll";
-    pub const SASS: &str = "sass";
-    pub const IJQ: &str = "ijq";
-    pub const IJSONLINT: &str = "ijsonlint";
-    pub const IYAMLLINT: &str = "iyamllint";
-    pub const IYAMLSCHEMA: &str = "iyamlschema";
-    pub const ITAPLO: &str = "itaplo";
-    pub const IMARKDOWN2HTML: &str = "imarkdown2html";
-    pub const ISASS: &str = "isass";
-    pub const YAML2JSON: &str = "yaml2json";
     pub const RUST_SINGLE_FILE: &str = "rust_single_file";
-    pub const ENCODING: &str = "encoding";
-    pub const DUPLICATE_FILES: &str = "duplicate_files";
-    pub const MARP_IMAGES: &str = "marp_images";
-    pub const LICENSE_HEADER: &str = "license_header";
 }
 
 /// Global flag: set to true on Ctrl+C so subprocesses can be killed promptly.
@@ -450,19 +419,20 @@ pub(crate) fn ensure_output_dir(output: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Remove the output_dir of a product. Used by mass generator clean() methods.
-/// Returns 1 if the directory was removed, 0 otherwise.
+/// Remove the output_dirs of a product. Used by mass generator clean() methods.
+/// Returns the number of directories removed.
 pub(crate) fn clean_output_dir(product: &Product, processor_name: &str, verbose: bool) -> Result<usize> {
-    if let Some(ref output_dir) = product.output_dir
-        && output_dir.exists()
-    {
-        if verbose {
-            println!("Removing {} output directory: {}", processor_name, output_dir.display());
+    let mut count = 0;
+    for output_dir in &product.output_dirs {
+        if output_dir.exists() {
+            if verbose {
+                println!("Removing {} output directory: {}", processor_name, output_dir.display());
+            }
+            fs::remove_dir_all(output_dir.as_ref())?;
+            count += 1;
         }
-        fs::remove_dir_all(output_dir.as_ref())?;
-        return Ok(1);
     }
-    Ok(0)
+    Ok(count)
 }
 
 /// Build the input list for mass generators: anchor first, then sibling files
@@ -811,7 +781,8 @@ pub use checkers::{
    
     TermsProcessor,
 };
-pub use generators::{A2xProcessor, CcSingleFileProcessor, ChromiumProcessor, DrawioProcessor, ExplicitProcessor, GeneratorProcessor, Imarkdown2htmlProcessor, IpdfuniteProcessor, IsassProcessor, Jinja2Processor, LibreofficeProcessor, LinuxModuleProcessor, MakoProcessor, MarpProcessor, Markdown2htmlProcessor, MermaidProcessor, ObjdumpProcessor, PandocProcessor, PdflatexProcessor, PdfuniteProcessor, ProtobufProcessor, RustSingleFileProcessor, SassProcessor, TagsProcessor, TeraProcessor, Yaml2jsonProcessor};
+pub use generators::{CcSingleFileProcessor, ExplicitProcessor, GeneratorProcessor, IpdfuniteProcessor, Jinja2Processor, LinuxModuleProcessor, MakoProcessor, PdflatexProcessor, PdfuniteProcessor, RustSingleFileProcessor, SimpleGenerator, TagsProcessor, TeraProcessor};
+pub use creator::CreatorProcessor;
 pub use mass_generators::{CargoProcessor, CcProcessor, GemProcessor, JekyllProcessor, MdbookProcessor, NpmProcessor, PipProcessor, SphinxProcessor};
 pub(crate) use generators::tags as tags_cmd;
 pub(crate) use checkers::terms;
@@ -844,6 +815,7 @@ pub type ProcessorMap = HashMap<String, Box<dyn ProductDiscovery>>;
 /// This design ensures that `rsconstruct clean && rsconstruct build` is fast for all types - generators
 /// restore from cache, checkers skip entirely, mass generators re-run only when inputs change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(strum::EnumIter)]
 pub enum ProcessorType {
     /// Generates new output files from input files (e.g., tera, cc_single_file).
     /// Products have non-empty `outputs` which are cached and can be restored.
@@ -851,13 +823,11 @@ pub enum ProcessorType {
     /// Checks/validates input files without producing output files (e.g., ruff, pylint, shellcheck).
     /// Products have empty `outputs`; the cache entry serves as the success marker.
     Checker,
-    /// Produces a mass of output files in a directory without enumerating them individually
-    /// (e.g., pip → site-packages, npm → node_modules, cargo → target).
-    /// May use stamp files for cache tracking.
-    MassGenerator,
-    /// Explicitly declared inputs and outputs — many inputs aggregated into few outputs.
+    /// Runs a command and caches declared output files and directories
+    /// (e.g., cargo, pip, npm, sphinx, mdbook, user-defined creators).
+    Creator,
+    /// Many inputs aggregated into (possibly) many output files and/or directories.
     /// Unlike Generator (one product per input file), creates a single product.
-    /// Outputs are cached and can be restored, like Generator.
     Explicit,
 }
 
@@ -867,10 +837,21 @@ impl ProcessorType {
         match self {
             ProcessorType::Generator => "generator",
             ProcessorType::Checker => "checker",
-            ProcessorType::MassGenerator => "mass_generator",
+            ProcessorType::Creator => "creator",
             ProcessorType::Explicit => "explicit",
         }
     }
+
+    /// Returns a human-readable description of this processor type.
+    pub fn description(&self) -> &'static str {
+        match self {
+            ProcessorType::Generator => "Generates output files from input files (1 input -> 1 output per format)",
+            ProcessorType::Checker => "Validates input files without producing outputs",
+            ProcessorType::Creator => "Runs a command and caches declared output files and directories",
+            ProcessorType::Explicit => "Many inputs aggregated into (possibly) many output files and/or directories",
+        }
+    }
+
 }
 
 /// Trait for processors that can discover products for the build graph.

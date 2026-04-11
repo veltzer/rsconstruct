@@ -1,34 +1,34 @@
-use anyhow::{Context, Result};
-use redb::{ReadableDatabase, ReadableTable};
+use anyhow::Result;
 use std::collections::BTreeMap;
 use std::fs;
 
 use super::{
-    walk_files, CacheEntry, CacheListEntry, CacheListOutput, ObjectStore,
-    ProcessorCacheStats, CACHE_TABLE,
+    walk_files, CacheDescriptor, CacheListEntry, CacheListOutput, ObjectStore,
+    ProcessorCacheStats,
 };
 
 impl ObjectStore {
-    /// Get cache size in bytes and number of objects
+    /// Get cache size in bytes and number of objects (blobs + descriptors)
     pub fn size(&self) -> Result<(u64, usize)> {
         let mut total_bytes = 0u64;
         let mut object_count = 0usize;
 
-        if !self.objects_dir.exists() {
-            return Ok((0, 0));
-        }
-
-        for path in walk_files(&self.objects_dir) {
-            if let Ok(metadata) = fs::metadata(&path) {
-                total_bytes += metadata.len();
-                object_count += 1;
+        for dir in [&self.objects_dir, &self.descriptors_dir] {
+            if !dir.exists() {
+                continue;
+            }
+            for path in walk_files(dir) {
+                if let Ok(metadata) = fs::metadata(&path) {
+                    total_bytes += metadata.len();
+                    object_count += 1;
+                }
             }
         }
 
         Ok((total_bytes, object_count))
     }
 
-    /// Trim cache by removing objects not referenced in the index
+    /// Trim cache by removing blob objects not referenced by any descriptor.
     pub fn trim(&self) -> Result<(u64, usize)> {
         let mut removed_bytes = 0u64;
         let mut removed_count = 0usize;
@@ -37,28 +37,31 @@ impl ObjectStore {
             return Ok((0, 0));
         }
 
-        // Collect all referenced checksums
+        // Collect all referenced blob checksums from descriptors
         let mut referenced: std::collections::HashSet<String> = std::collections::HashSet::new();
-        {
-            let read_txn = self.db.begin_read()
-                .context("Failed to begin read transaction for trim")?;
-            if let Ok(table) = read_txn.open_table(CACHE_TABLE)
-                && let Ok(iter) = table.iter() {
-                    for result in iter {
-                        let (_, value) = result.context("Failed to read cache entry during trim")?;
-                        if let Ok(entry) = serde_json::from_slice::<CacheEntry>(value.value()) {
-                            for output in &entry.outputs {
-                                referenced.insert(output.checksum.clone());
+        if self.descriptors_dir.exists() {
+            for path in walk_files(&self.descriptors_dir) {
+                if let Ok(data) = fs::read(&path) {
+                    if let Ok(desc) = serde_json::from_slice::<CacheDescriptor>(&data) {
+                        match desc {
+                            CacheDescriptor::Marker => {}
+                            CacheDescriptor::Blob { checksum, .. } => {
+                                referenced.insert(checksum);
+                            }
+                            CacheDescriptor::Tree { entries } => {
+                                for entry in entries {
+                                    referenced.insert(entry.checksum);
+                                }
                             }
                         }
                     }
                 }
+            }
         }
 
-        // Find and remove unreferenced objects
+        // Find and remove unreferenced blob objects
         let mut to_remove = Vec::new();
         for path in walk_files(&self.objects_dir) {
-            // Reconstruct checksum from path
             if let (Some(prefix), Some(rest)) = (
                 path.parent().and_then(|p| p.file_name()).and_then(|n| n.to_str()),
                 path.file_name().and_then(|n| n.to_str())
@@ -74,138 +77,134 @@ impl ObjectStore {
             }
         }
 
-        // Remove unreferenced objects
         for path in to_remove {
-            fs::remove_file(&path)?;
-            // Try to remove empty parent directory
+            // Make writable before removing (objects are read-only)
+            if let Ok(mut perms) = fs::metadata(&path).map(|m| m.permissions()) {
+                perms.set_readonly(false);
+                let _ = fs::set_permissions(&path, perms);
+            }
+            let _ = fs::remove_file(&path);
             if let Some(parent) = path.parent() {
-                let _ = fs::remove_dir(parent); // Ignore error if not empty
+                let _ = fs::remove_dir(parent);
             }
         }
 
         Ok((removed_bytes, removed_count))
     }
 
-    /// Remove stale index entries whose cache keys are not in the valid set.
+    /// Remove stale descriptor entries whose cache keys are not in the valid set.
     /// Returns the number of entries removed.
-    pub fn remove_stale(&self, valid_keys: &std::collections::HashSet<String>) -> usize {
+    pub fn remove_stale(&self, valid_descriptor_keys: &std::collections::HashSet<String>) -> usize {
         let mut count = 0;
 
-        // First, collect stale keys
-        let stale_keys: Vec<String> = {
-            let read_txn = match self.db.begin_read() {
-                Ok(t) => t,
-                Err(_) => return 0,
-            };
-            let table = match read_txn.open_table(CACHE_TABLE) {
-                Ok(t) => t,
-                Err(_) => return 0,
-            };
-            let iter = match table.iter() {
-                Ok(i) => i,
-                Err(_) => return 0,
-            };
-            iter.filter_map(|result| {
-                let (key, _) = result.ok()?;
-                let key_str = key.value().to_string();
-                if !valid_keys.contains(&key_str) {
-                    Some(key_str)
-                } else {
-                    None
-                }
-            })
-            .collect()
-        };
+        if !self.descriptors_dir.exists() {
+            return 0;
+        }
 
-        // Then remove them in a write transaction
-        if !stale_keys.is_empty()
-            && let Ok(write_txn) = self.db.begin_write() {
-                if let Ok(mut table) = write_txn.open_table(CACHE_TABLE) {
-                    for key in &stale_keys {
-                        if table.remove(key.as_str()).is_ok() {
-                            count += 1;
-                        }
+        for path in walk_files(&self.descriptors_dir) {
+            // Reconstruct descriptor key from path
+            if let (Some(prefix), Some(rest)) = (
+                path.parent().and_then(|p| p.file_name()).and_then(|n| n.to_str()),
+                path.file_name().and_then(|n| n.to_str())
+            ) {
+                let key = format!("{}{}", prefix, rest);
+                if !valid_descriptor_keys.contains(&key) {
+                    if let Ok(mut perms) = fs::metadata(&path).map(|m| m.permissions()) {
+                        perms.set_readonly(false);
+                        let _ = fs::set_permissions(&path, perms);
+                    }
+                    if fs::remove_file(&path).is_ok() {
+                        count += 1;
+                    }
+                    if let Some(parent) = path.parent() {
+                        let _ = fs::remove_dir(parent);
                     }
                 }
-                if write_txn.commit().is_err() {
-                    count = 0;
-                }
             }
+        }
 
         count
     }
 
-    /// List all cache entries with their status
+    /// List all cache descriptors
     pub fn list(&self) -> Vec<CacheListEntry> {
-        let read_txn = match self.db.begin_read() {
-            Ok(t) => t,
-            Err(_) => return Vec::new(),
-        };
-        let table = match read_txn.open_table(CACHE_TABLE) {
-            Ok(t) => t,
-            Err(_) => return Vec::new(),
-        };
-        let iter = match table.iter() {
-            Ok(i) => i,
-            Err(_) => return Vec::new(),
-        };
-        let mut entries: Vec<CacheListEntry> = iter
-            .filter_map(|result| {
-                let (key, value) = result.ok()?;
-                let key_str = key.value().to_string();
-                let entry: CacheEntry = serde_json::from_slice(value.value()).ok()?;
-                let outputs = entry.outputs.iter().map(|o| {
-                    CacheListOutput {
-                        path: o.path.clone(),
-                        exists: self.has_object(&o.checksum),
+        if !self.descriptors_dir.exists() {
+            return Vec::new();
+        }
+
+        let mut entries: Vec<CacheListEntry> = walk_files(&self.descriptors_dir)
+            .into_iter()
+            .filter_map(|path| {
+                let data = fs::read(&path).ok()?;
+                let desc: CacheDescriptor = serde_json::from_slice(&data).ok()?;
+
+                // Reconstruct descriptor key from path
+                let prefix = path.parent()?.file_name()?.to_str()?;
+                let rest = path.file_name()?.to_str()?;
+                let cache_key = format!("{}{}", prefix, rest);
+
+                let outputs = match desc {
+                    CacheDescriptor::Marker => Vec::new(),
+                    CacheDescriptor::Blob { checksum, path, .. } => {
+                        vec![CacheListOutput { path, exists: self.has_object(&checksum) }]
                     }
-                }).collect();
-                Some(CacheListEntry {
-                    cache_key: key_str,
-                    input_checksum: entry.input_checksum,
-                    outputs,
-                })
+                    CacheDescriptor::Tree { entries } => {
+                        entries.iter().map(|e| CacheListOutput {
+                            path: e.path.clone(),
+                            exists: self.has_object(&e.checksum),
+                        }).collect()
+                    }
+                };
+
+                Some(CacheListEntry { cache_key, outputs })
             })
             .collect();
+
         entries.sort_by(|a, b| a.cache_key.cmp(&b.cache_key));
         entries
     }
 
     /// Get per-processor cache statistics.
-    /// Extracts the processor name from the cache key prefix (before first ":").
+    /// Extracts processor name by scanning descriptor keys.
     pub fn stats_by_processor(&self) -> BTreeMap<String, ProcessorCacheStats> {
         let mut stats: BTreeMap<String, ProcessorCacheStats> = BTreeMap::new();
 
-        let read_txn = match self.db.begin_read() {
-            Ok(t) => t,
-            Err(_) => return stats,
-        };
-        let table = match read_txn.open_table(CACHE_TABLE) {
-            Ok(t) => t,
-            Err(_) => return stats,
-        };
-        let iter = match table.iter() {
-            Ok(i) => i,
-            Err(_) => return stats,
-        };
+        if !self.descriptors_dir.exists() {
+            return stats;
+        }
 
-        for result in iter {
-            let (key, value) = match result {
-                Ok(kv) => kv,
+        for path in walk_files(&self.descriptors_dir) {
+            let data = match fs::read(&path) {
+                Ok(d) => d,
                 Err(_) => continue,
             };
-            let key_str = key.value().to_string();
-            let processor = key_str.split(':').next().unwrap_or(&key_str).to_string();
+            let desc: CacheDescriptor = match serde_json::from_slice(&data) {
+                Ok(d) => d,
+                Err(_) => continue,
+            };
 
+            // We can't extract processor name from a hashed descriptor key.
+            // Use "all" as a single bucket for now.
+            let processor = "all".to_string();
             let proc_stats = stats.entry(processor).or_default();
             proc_stats.entry_count += 1;
 
-            if let Ok(entry) = serde_json::from_slice::<CacheEntry>(value.value()) {
-                proc_stats.output_count += entry.outputs.len();
-                for output in &entry.outputs {
-                    let obj_path = self.object_path(&output.checksum);
+            match desc {
+                CacheDescriptor::Marker => {}
+                CacheDescriptor::Blob { ref checksum, .. } => {
+                    proc_stats.output_count += 1;
+                    let obj_path = self.object_path(checksum);
                     if let Ok(metadata) = fs::metadata(&obj_path) {
                         proc_stats.output_bytes += metadata.len();
+                    }
+                }
+                CacheDescriptor::Tree { ref entries } => {
+                    proc_stats.output_count += entries.len();
+                    for entry in entries {
+                        let obj_path = self.object_path(&entry.checksum);
+                        if let Ok(metadata) = fs::metadata(&obj_path) {
+                            proc_stats.output_bytes += metadata.len();
+                        }
                     }
                 }
             }
