@@ -3,7 +3,6 @@ use std::collections::HashMap;
 
 use super::{default_true, default_cc_compiler, default_cxx_compiler, default_output_suffix, KnownFields, ScanConfig,};
 
-/// Standard checker config without a configurable command.
 /// Universal processor config with all standard fields.
 /// Checkers, generators, and simple processors all use this.
 /// Fields not relevant to a given processor type are simply ignored.
@@ -25,6 +24,10 @@ pub struct StandardConfig {
     pub batch: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_jobs: Option<usize>,
+    /// Whether to cache this processor's outputs. Default true.
+    /// Set to false to always rebuild and never store results.
+    #[serde(default = "default_true")]
+    pub cache: bool,
     #[serde(flatten)]
     pub scan: ScanConfig,
 }
@@ -40,6 +43,7 @@ impl Default for StandardConfig {
             output_dir: String::new(),
             batch: true,
             max_jobs: None,
+            cache: true,
             scan: ScanConfig::default(),
         }
     }
@@ -123,125 +127,19 @@ impl KnownFields for CreatorConfig {
         ]
     }
 }
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct TeraConfig {
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
-    #[serde(flatten)]
-    pub scan: ScanConfig,
-}
+/// Tera template processor config.
+/// Uses StandardConfig. Unused fields: command, formats, output_dir.
+pub type TeraConfig = StandardConfig;
 
-impl Default for TeraConfig {
-    fn default() -> Self {
-        Self {
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
-        }
-    }
-}
+/// Mako template processor config.
+/// Uses StandardConfig. Unused fields: command, formats, output_dir.
+pub type MakoConfig = StandardConfig;
 
-impl KnownFields for TeraConfig {
-    fn known_fields() -> &'static [&'static str] {
-        &[
-            "dep_inputs", "dep_auto", "batch", "max_jobs",
-        ]
-    }
-    fn output_fields() -> &'static [&'static str] {
-        &[]
-    }
-    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
-        &[]
-    }
-}
+/// Jinja2 template processor config.
+/// Uses StandardConfig. Unused fields: command, formats, output_dir.
+pub type Jinja2Config = StandardConfig;
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct MakoConfig {
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
-    #[serde(flatten)]
-    pub scan: ScanConfig,
-}
-
-impl Default for MakoConfig {
-    fn default() -> Self {
-        Self {
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
-        }
-    }
-}
-
-impl KnownFields for MakoConfig {
-    fn known_fields() -> &'static [&'static str] {
-        &[
-            "dep_inputs", "dep_auto", "batch", "max_jobs",
-        ]
-    }
-    fn output_fields() -> &'static [&'static str] {
-        &[]
-    }
-    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
-        &[]
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Jinja2Config {
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
-    #[serde(flatten)]
-    pub scan: ScanConfig,
-}
-
-impl Default for Jinja2Config {
-    fn default() -> Self {
-        Self {
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
-        }
-    }
-}
-
-impl KnownFields for Jinja2Config {
-    fn known_fields() -> &'static [&'static str] {
-        &[
-            "dep_inputs", "dep_auto", "batch", "max_jobs",
-        ]
-    }
-    fn output_fields() -> &'static [&'static str] {
-        &[]
-    }
-    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
-        &[]
-    }
-}
+// Jinja2Config KnownFields — inherited from StandardConfig via type alias
 
 
 

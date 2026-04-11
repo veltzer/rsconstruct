@@ -25,3 +25,13 @@ python files dependency analysis:
 - do a command "rsconstruct errors" which prints name of errors and their error code (BUILD_ERROR=1 etc)
 
 - do we have a test that checks that we get an error if we have two processors in the same tmpl file without differentiating between then with a different name.
+
+- do "rsconstruct processors list" and you will see that many processors do not have descriptions. A desciption should be printed only with the --verbose flag.
+
+- rsconstruct processors types should print out a table. --json will emit json output.
+
+- explciit processor command should be none and a must field.
+
+- rsconstruct processors defconfig explicit should print only the table.
+    description should be printed only under --verbose.
+    I want to see other columns like must etc.
