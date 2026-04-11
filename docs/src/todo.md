@@ -2,10 +2,10 @@
 
 ## StandardConfig refactoring (IN PROGRESS)
 
-Convert remaining config structs to embed `StandardConfig` via `#[serde(flatten)]`. Done so far: CheckerConfig, TeraConfig, MakoConfig, Jinja2Config, LinuxModuleConfig, ScriptConfig, CreatorConfig, ClangTidyConfig, ZspellConfig, CcSingleFileConfig, CcConfig.
+Convert remaining config structs to embed `StandardConfig` via `#[serde(flatten)]`. Done: CheckerConfig, TeraConfig, MakoConfig, Jinja2Config, LinuxModuleConfig, ScriptConfig, CreatorConfig, ClangTidyConfig, ZspellConfig, CcSingleFileConfig, CcConfig, CargoConfig, ClippyConfig, MakeConfig, TagsConfig, GeneratorConfig, ExplicitConfig, PipConfig, SphinxConfig, MdbookConfig, NpmConfig.
 
-Remaining configs to convert (18):
-CargoConfig, ClippyConfig, MakeConfig, TagsConfig, GeneratorConfig, ExplicitConfig, PipConfig, SphinxConfig, MdbookConfig, NpmConfig, MdlConfig, MarkdownlintConfig, AspellConfig, TermsConfig, PdflatexConfig, GemConfig, IyamlschemaConfig, RustSingleFileConfig, PdfuniteConfig, IpdfuniteConfig, LicenseHeaderConfig
+Remaining configs to convert (11):
+MdlConfig, MarkdownlintConfig, AspellConfig, TermsConfig, PdflatexConfig, GemConfig, IyamlschemaConfig, RustSingleFileConfig, PdfuniteConfig, IpdfuniteConfig, LicenseHeaderConfig
 
 For each:
 1. Replace standard fields (batch, max_jobs, scan, dep_inputs, dep_auto, args, command, output_dir, formats) with `#[serde(flatten)] pub standard: StandardConfig`
