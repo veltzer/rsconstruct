@@ -59,7 +59,7 @@ or:
 {"type": "marker"}
 ```
 
-The actual file content lives in separate content-addressed blob objects. The cache entry is just a pointer (for generators) or a manifest (for creators/mass generators).
+The actual file content lives in separate content-addressed blob objects. The cache entry is just a pointer (for generators) or a manifest (for creators).
 
 ### Object store layout
 
@@ -117,7 +117,7 @@ hash(processor_name, config_hash, input_content_hash, input_path)
 1. Store the output file content as a content-addressed blob
 2. Store a `{"type": "blob", "checksum": "..."}` entry at the cache key
 
-**Creator / Mass generator (multiple outputs):**
+**Creator (multiple outputs):**
 1. Walk all output directories and files
 2. Store each file as a content-addressed blob
 3. Build the tree entries: `[{"path": "...", "checksum": "...", "mode": ...}, ...]`
@@ -131,7 +131,7 @@ hash(processor_name, config_hash, input_content_hash, input_path)
 1. Read the cache entry, get the blob checksum
 2. Hardlink or copy the blob to the output path
 
-**Creator / Mass generator:**
+**Creator:**
 1. Read the cache entry, get the tree entries
 2. For each `(path, checksum, mode)`: restore the blob to the path, set permissions
 
@@ -179,7 +179,7 @@ Hardlinks work because blob objects contain raw file content (not wrapped in a d
 
 - **Generators**: Output files deleted. Next build restores via hardlink/copy.
 - **Checkers**: Nothing to delete. Next build skips.
-- **Creators/Mass generators**: Output directories deleted. Next build restores from tree.
+- **Creators**: Output directories deleted. Next build restores from tree.
 
 **`rsconstruct cache clear`** wipes everything — descriptors and blobs. A cleared cache means "forget everything, rebuild from scratch." The entire `.rsconstruct/` directory is removed. If only blobs were cleared but descriptors survived, the cache would think outputs are available but fail to restore them. Clearing both together avoids this inconsistency.
 

@@ -35,7 +35,7 @@ fn expand_aliases(filter: &[String], processors: &ProcessorMap) -> Vec<String> {
                             .map(|(n, _)| n.clone())
                     );
                 }
-                "creators" | "mass_generators" => {
+                "creators" => {
                     expanded.extend(
                         processors.iter()
                             .filter(|(_, p)| p.processor_type() == ProcessorType::Creator)

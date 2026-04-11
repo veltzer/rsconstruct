@@ -48,22 +48,22 @@ previously-passing product to fail).
 ## Execution isolation
 
 A processor's `execute()` must only write to the declared output paths
-(or, for mass generators, to the expected output directory).
+(or, for creators, to the expected output directory).
 It must not modify source files, other products' outputs, or global state.
 
-## Output directory caching (mass generators)
+## Output directory caching (creators)
 
-Mass generators that set `output_dir` on their products get automatic
+Creators that set `output_dir` on their products get automatic
 directory-level caching. After successful execution, the executor walks
 the output directory, stores every file as a content-addressed object,
 and records a manifest with paths, checksums, and Unix permissions.
 On restore, the entire directory is recreated from cache.
 
 The `cache_output_dir` config option (default `true`) controls this.
-When disabled, mass generators fall back to stamp-file or empty-output
+When disabled, creators fall back to stamp-file or empty-output
 caching (no directory restore on `rsconstruct clean && rsconstruct build`).
 
-Mass generators that use output_dir caching must implement `clean()` to
+Creators that use output_dir caching must implement `clean()` to
 remove the output directory so it can be restored from cache.
 
 ## Error reporting

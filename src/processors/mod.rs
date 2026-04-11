@@ -4,7 +4,7 @@ pub use base::ProcessorBase;
 mod checkers;
 mod creator;
 pub(crate) mod generators;
-mod mass_generators;
+mod creators;
 pub mod lua_processor;
 
 use anyhow::{Context, Result};
@@ -418,7 +418,7 @@ pub(crate) fn ensure_output_dir(output: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Remove the output_dirs of a product. Used by mass generator clean() methods.
+/// Remove the output_dirs of a product. Used by creator clean() methods.
 /// Returns the number of directories removed.
 pub(crate) fn clean_output_dir(product: &Product, processor_name: &str, verbose: bool) -> Result<usize> {
     let mut count = 0;
@@ -434,7 +434,7 @@ pub(crate) fn clean_output_dir(product: &Product, processor_name: &str, verbose:
     Ok(count)
 }
 
-/// Build the input list for mass generators: anchor first, then sibling files
+/// Build the input list for creators: anchor first, then sibling files
 /// (excluding the anchor to avoid duplicates), then extra inputs.
 pub(crate) fn build_anchor_inputs(anchor: &Path, sibling_files: &[PathBuf], extra: &[PathBuf]) -> Vec<PathBuf> {
     let mut inputs: Vec<PathBuf> = Vec::with_capacity(1 + sibling_files.len() + extra.len());
@@ -448,7 +448,7 @@ pub(crate) fn build_anchor_inputs(anchor: &Path, sibling_files: &[PathBuf], extr
     inputs
 }
 
-/// Combine the scan_root_valid check, scan, and empty check that mass generators
+/// Combine the scan_root_valid check, scan, and empty check that creators
 /// repeat in their discover() methods. Returns None if the scan root is invalid
 /// or no files were found, otherwise returns the list of files.
 pub(crate) fn scan_or_skip(scan: &crate::config::ScanConfig, file_index: &FileIndex) -> Option<Vec<PathBuf>> {
@@ -508,7 +508,7 @@ pub(crate) struct DirectoryProductOpts<'a, H: serde::Serialize> {
 /// All paths are relative to project root.
 ///
 /// When `output_dir_name` is `Some("dir_name")`, the product gets an `output_dir` set to
-/// `anchor_parent/dir_name`, enabling directory-level caching for mass generators.
+/// `anchor_parent/dir_name`, enabling directory-level caching for creators.
 pub(crate) fn discover_directory_products(
     graph: &mut BuildGraph,
     opts: DirectoryProductOpts<'_, impl serde::Serialize>,
@@ -788,12 +788,12 @@ pub type ProcessorMap = HashMap<String, Box<dyn Processor>>;
 ///   `rsconstruct build`, if the cache entry exists and inputs haven't changed, the check is skipped
 ///   entirely (instant).
 ///
-/// - **Mass generators** produce a mass of output files in a directory but don't enumerate
+/// - **Creators** produce a mass of output files in a directory but don't enumerate
 ///   those outputs individually (e.g., pip → site-packages, npm → node_modules, cargo → target).
 ///   They use stamp files or empty outputs for cache tracking, similar to checkers.
 ///
 /// This design ensures that `rsconstruct clean && rsconstruct build` is fast for all types - generators
-/// restore from cache, checkers skip entirely, mass generators re-run only when inputs change.
+/// restore from cache, checkers skip entirely, creators re-run only when inputs change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[derive(strum::EnumIter)]
 pub enum ProcessorType {
@@ -839,7 +839,7 @@ impl ProcessorType {
 /// Processors come in three types (see [`ProcessorType`]):
 /// - **Generators**: Create output files from inputs (must override `clean()`)
 /// - **Checkers**: Validate inputs without producing outputs (use default `clean()`)
-/// - **Mass generators**: Produce a mass of output files in a directory without enumerating them
+/// - **Creators**: Produce a mass of output files in a directory without enumerating them
 ///
 /// # Implementing a Checker
 ///

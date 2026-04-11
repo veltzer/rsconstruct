@@ -83,7 +83,7 @@ A product represents a single build unit with:
 
 - **Inputs** — source files that the product depends on
 - **Outputs** — files that the product generates
-- **Output directory** (optional) — for mass generators, the directory whose entire contents are cached and restored as a unit
+- **Output directory** (optional) — for creators, the directory whose entire contents are cached and restored as a unit
 
 ### BuildGraph
 

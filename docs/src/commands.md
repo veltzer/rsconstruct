@@ -74,7 +74,7 @@ The `-p` flag supports `@`-prefixed shortcuts that expand to groups of processor
 **By type:**
 - `@checkers` — all checker processors (ruff, pylint, shellcheck, etc.)
 - `@generators` — all generator processors (tera, cc_single_file, etc.)
-- `@mass_generators` — all mass generator processors (pip, npm, cargo, etc.)
+- `@creators` — all creator processors (pip, npm, cargo, etc.)
 
 **By tool:**
 - `@python3` — all processors that require `python3`

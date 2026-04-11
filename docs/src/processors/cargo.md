@@ -31,7 +31,7 @@ member directories, or configure `src_dirs` to limit discovery.
 ## Source Files
 
 - Input: `Cargo.toml` plus all `.rs` and `.toml` files in the project tree
-- Output: None (mass_generator — produces output in `target` directory)
+- Output: None (creator — produces output in `target` directory)
 
 ## Configuration
 

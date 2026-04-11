@@ -52,7 +52,7 @@ construction can fail, defer the failure to `execute()` or `discover()`.
 ## Processor directory layout
 
 Each processor category directory (`src/processors/checkers/`,
-`src/processors/generators/`, `src/processors/mass_generators/`) must contain
+`src/processors/generators/`, `src/processors/creators/`) must contain
 only processor implementation files — one processor per `.rs` file (plus
 `mod.rs`). Shared utilities, helpers, or supporting code used by multiple
 processors must live in `src/processors/` directly, not inside a category

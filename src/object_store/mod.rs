@@ -124,7 +124,7 @@ enum CacheDescriptor {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         mode: Option<u32>,
     },
-    /// Creator/mass generator: multiple output files.
+    /// Creator/creator: multiple output files.
     #[serde(rename = "tree")]
     Tree {
         entries: Vec<TreeEntry>,
@@ -303,7 +303,7 @@ impl ObjectStore {
         Ok(changed)
     }
 
-    /// Store a tree descriptor (creator/mass generator produced multiple outputs).
+    /// Store a tree descriptor (creator/creator produced multiple outputs).
     /// Walks all output_dirs and collects output_files.
     pub fn store_tree_descriptor(
         &self,

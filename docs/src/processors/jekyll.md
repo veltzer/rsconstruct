@@ -13,7 +13,7 @@ directories). For each one, runs `jekyll build` in that directory.
 ## Source Files
 
 - Input: `**/_config.yml`
-- Output: none (mass generator)
+- Output: none (creator)
 
 ## Configuration
 

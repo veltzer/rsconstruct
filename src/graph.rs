@@ -24,7 +24,7 @@ pub struct Product {
     pub config_hash: Option<String>,
     /// Optional variant/profile name (e.g., compiler profile name)
     pub variant: Option<String>,
-    /// Output directories for mass generators / creators (relative to project root).
+    /// Output directories for creators / creators (relative to project root).
     /// When non-empty, the executor caches/restores these directories instead of individual output files.
     pub output_dirs: Vec<Arc<PathBuf>>,
 }
@@ -274,7 +274,7 @@ impl BuildGraph {
         Ok(id)
     }
 
-    /// Add a product with an output directory for mass generator caching.
+    /// Add a product with an output directory for creator caching.
     /// The output_dir is the directory whose contents will be cached/restored as a whole.
     pub fn add_product_with_output_dir(&mut self, inputs: Vec<PathBuf>, outputs: Vec<PathBuf>, processor: &str, config_hash: Option<String>, output_dir: PathBuf) -> Result<usize> {
         self.add_product_with_output_dirs_and_variant(inputs, outputs, processor, config_hash, vec![output_dir], None)
