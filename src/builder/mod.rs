@@ -183,13 +183,13 @@ impl Builder {
             None => None,
         };
 
+        crate::checksum::set_mtime_check(config.cache.mtime_check);
         let object_store = ObjectStore::new(ObjectStoreOptions {
             restore_method,
             compression: config.cache.compression,
             remote: remote_backend,
             remote_push: config.cache.remote_push,
             remote_pull: config.cache.remote_pull,
-            mtime_check: config.cache.mtime_check,
         })?;
         let file_index = FileIndex::build()?;
 

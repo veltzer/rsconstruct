@@ -43,15 +43,6 @@ const DB_FILE: &str = "db.redb";
 
 const CACHE_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("cache");
 const CONFIGS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("processor_configs");
-const MTIME_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("mtime_cache");
-
-/// Cached mtime-to-checksum mapping for a single file
-#[derive(Serialize, Deserialize)]
-struct MtimeEntry {
-    mtime_secs: i64,
-    mtime_nanos: u32,
-    checksum: String,
-}
 
 /// Reason why a product needs to be rebuilt.
 #[derive(Debug)]
@@ -116,8 +107,6 @@ pub struct ObjectStore {
     /// Whether to pull from remote cache
     #[allow(dead_code)]
     remote_pull: bool,
-    /// Whether to use mtime pre-check to skip unchanged file checksums
-    mtime_check: bool,
 }
 
 /// A cache descriptor stored in the object store at the cache key path.
@@ -202,7 +191,6 @@ pub struct ObjectStoreOptions {
     pub remote: Option<Box<dyn RemoteCache>>,
     pub remote_push: bool,
     pub remote_pull: bool,
-    pub mtime_check: bool,
 }
 
 impl ObjectStore {
@@ -228,13 +216,7 @@ impl ObjectStore {
             remote: opts.remote,
             remote_push: opts.remote_push,
             remote_pull: opts.remote_pull,
-            mtime_check: opts.mtime_check,
         })
-    }
-
-    /// Set whether mtime pre-check is enabled.
-    pub fn set_mtime_check(&mut self, enabled: bool) {
-        self.mtime_check = enabled;
     }
 
     /// Check if a cache entry exists for the given key (i.e. the product has been built before).

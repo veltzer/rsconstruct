@@ -105,7 +105,7 @@ pub fn classify_products(
         // If any dependency will change, this product must rebuild
         let dep_changed = graph.get_dependencies(id).iter().any(|d| will_change.contains(d));
 
-        let input_checksum = match object_store.combined_input_checksum_fast(&product.inputs) {
+        let input_checksum = match crate::checksum::combined_input_checksum(&product.inputs) {
             Ok(cs) => cs,
             Err(_) => {
                 build_count += 1;

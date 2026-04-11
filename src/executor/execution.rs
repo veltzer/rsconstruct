@@ -659,24 +659,8 @@ impl<'a> Executor<'a> {
                     shared.failed_products.lock().insert(id);
                     continue;
                 }
-                let cache_key = product.cache_key();
-
-                // Early cutoff: if all dependencies produced identical outputs,
                 // reuse the cached input checksum instead of recomputing
-                let deps = graph.get_dependencies(id);
-                let input_checksum = {
-                    let unchanged_guard = shared.unchanged_products.lock();
-                    let all_deps_unchanged = !deps.is_empty()
-                        && deps.iter().all(|d| unchanged_guard.contains(d));
-                    if all_deps_unchanged {
-                        match object_store.get_cached_input_checksum(&cache_key) {
-                            Some(cs) => Ok(cs),
-                            None => object_store.combined_input_checksum_fast(&product.inputs),
-                        }
-                    } else {
-                        object_store.combined_input_checksum_fast(&product.inputs)
-                    }
-                };
+                let input_checksum = crate::checksum::combined_input_checksum(&product.inputs);
 
                 let input_checksum = match input_checksum {
                     Ok(cs) => cs,

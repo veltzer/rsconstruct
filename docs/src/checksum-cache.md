@@ -1,0 +1,67 @@
+# Checksum Cache
+
+RSConstruct uses a centralized checksum system (`src/checksum.rs`) for all file hashing. It has two layers of caching to avoid redundant I/O and computation.
+
+## Architecture
+
+All file checksum operations go through a single entry point: `checksum::file_checksum(path)`. This function never computes the same hash twice.
+
+### Layer 1: In-memory cache (per build run)
+
+A global `HashMap<PathBuf, String>` stores checksums computed during the current build. When a file is checksummed for the first time, the result is cached. Any subsequent request for the same file returns the cached value without reading the file again.
+
+This handles the common case where the same file appears as an input to multiple products (e.g., a shared header file), or when the checksum is needed both for classification (skip/restore/build) and for cache storage.
+
+The in-memory cache lives for the duration of the process and is not persisted.
+
+### Layer 2: Mtime database (across builds)
+
+A persistent redb database at `.rsconstruct/mtime.redb` maps file paths to `(mtime, checksum)` pairs. Before reading a file to compute its checksum, the system checks:
+
+1. Has this file been checksummed in a previous build?
+2. Has the file's modification time changed since then?
+
+If the mtime matches, the cached checksum is returned without reading the file. This avoids I/O for files that haven't been modified between builds — the common case in incremental builds where most files are unchanged.
+
+When the mtime differs (file was modified), the file is read, the new checksum is computed, and both the in-memory cache and the mtime database are updated.
+
+Dirty mtime entries are flushed to the database in a single batch transaction at the end of each checksum computation pass, minimizing database writes.
+
+### Why two layers
+
+| Layer | Scope | Avoids | Cost |
+|---|---|---|---|
+| In-memory cache | Single build run | Re-reading + re-hashing the same file | HashMap lookup |
+| Mtime database | Across builds | Reading unchanged files from disk | `stat()` + DB lookup |
+
+For the first build, every file must be read and hashed. The mtime database is populated as a side effect. On subsequent builds, most files are unchanged — the mtime check skips reading them entirely, and the in-memory cache prevents redundant lookups within the run.
+
+## Configuration
+
+The mtime pre-check can be disabled via `rsconstruct.toml`:
+
+```toml
+[cache]
+mtime_check = false
+```
+
+When disabled, every file is read and hashed on every build (the in-memory cache still prevents redundant reads within a single run). This is useful for debugging cache issues or when the filesystem doesn't provide reliable mtimes.
+
+The `rsconstruct status` command automatically disables mtime checking to ensure accurate classification.
+
+## Database location
+
+The mtime database is stored at `.rsconstruct/mtime.redb`, separate from the build cache (`objects/` and `descriptors/`) and the config tracking database. This separation means:
+
+- `rsconstruct cache clear` removes the build cache but preserves the mtime database (the next build will still benefit from mtime-based skipping)
+- The mtime database can be deleted independently without affecting cached build outputs
+
+## Combined input checksum
+
+The `combined_input_checksum(inputs)` function computes a single hash representing all input files for a product. It:
+
+1. Checksums each input file (using the two-layer cache)
+2. Joins all checksums with `:`
+3. Hashes the combined string to produce a fixed-length result
+
+Missing files get a `MISSING:<path>` sentinel so that different sets of missing files produce different combined checksums.

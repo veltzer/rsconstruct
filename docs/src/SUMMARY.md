@@ -7,6 +7,7 @@
 - [Commands](commands.md)
 - [Configuration](configuration.md)
 - [Cache System](cache.md)
+- [Checksum Cache](checksum-cache.md)
 - [Remote Caching](remote-caching.md)
 - [Dependency Caching](dependency-caching.md)
 - [Project Structure](project-structure.md)

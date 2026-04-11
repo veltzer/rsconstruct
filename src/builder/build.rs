@@ -84,7 +84,7 @@ impl Builder {
 
         // CLI override for mtime pre-check
         if opts.no_mtime {
-            self.object_store.set_mtime_check(false);
+            crate::checksum::set_mtime_check(false);
         }
 
         // Create processors
@@ -424,7 +424,7 @@ impl Builder {
             let cache_key = product.cache_key();
             let display = product.display(opts.display_opts);
 
-            let input_checksum = match self.object_store.combined_input_checksum_fast(&product.inputs) {
+            let input_checksum = match crate::checksum::combined_input_checksum(&product.inputs) {
                 Ok(cs) => cs,
                 Err(_) => {
                     // Can't compute checksum — classify as new or stale based on cache
