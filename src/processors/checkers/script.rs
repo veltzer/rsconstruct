@@ -23,13 +23,13 @@ impl ScriptProcessor {
     }
 
     fn check_files(&self, files: &[&Path]) -> Result<()> {
-        run_checker(&self.config.command, None, &self.config.args, files)
+        run_checker(&self.config.standard.command, None, &self.config.standard.args, files)
     }
 }
 
 impl Processor for ScriptProcessor {
     fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.scan
+        &self.config.standard.scan
     }
 
 
@@ -47,32 +47,32 @@ impl Processor for ScriptProcessor {
     }
 
     fn max_jobs(&self) -> Option<usize> {
-        self.config.max_jobs
+        self.config.standard.max_jobs
     }
 
     fn required_tools(&self) -> Vec<String> {
-        if self.config.command.is_empty() {
+        if self.config.standard.command.is_empty() {
             Vec::new()
         } else {
-            vec![self.config.command.clone()]
+            vec![self.config.standard.command.clone()]
         }
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
-        if self.config.command.is_empty() {
+        if self.config.standard.command.is_empty() {
             return Ok(());
         }
-        let files = file_index.scan(&self.config.scan, true);
+        let files = file_index.scan(&self.config.standard.scan, true);
         if files.is_empty() {
             return Ok(());
         }
         let hash = Some(output_config_hash(&self.config, &[]));
-        let mut dep_inputs = self.config.dep_inputs.clone();
-        for ai in &self.config.dep_auto {
+        let mut dep_inputs = self.config.standard.dep_inputs.clone();
+        for ai in &self.config.standard.dep_auto {
             dep_inputs.extend(config_file_inputs(ai));
         }
         // If the command is a local file, depend on its contents
-        dep_inputs.extend(config_file_inputs(&self.config.command));
+        dep_inputs.extend(config_file_inputs(&self.config.standard.command));
         let extra = resolve_extra_inputs(&dep_inputs)?;
         for file in files {
             let mut inputs = Vec::with_capacity(1 + extra.len());
@@ -88,7 +88,7 @@ impl Processor for ScriptProcessor {
     }
 
     fn supports_batch(&self) -> bool {
-        self.config.batch
+        self.config.standard.batch
     }
 
     fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {

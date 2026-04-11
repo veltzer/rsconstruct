@@ -35,3 +35,8 @@ python files dependency analysis:
 - rsconstruct processors defconfig explicit should print only the table.
     description should be printed only under --verbose.
     I want to see other columns like must etc.
+
+
+- make "rsconstruct deps list" --json emit json
+
+- "rsconstruct deps used" still uses color. Have a global color flag and turn it off for now because it is causing problems with tables.

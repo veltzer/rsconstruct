@@ -63,11 +63,11 @@ impl MarpImagesProcessor {
 
 impl crate::processors::Processor for MarpImagesProcessor {
     fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.scan
+        &self.config.standard.scan
     }
 
     fn standard_config(&self) -> Option<&crate::config::StandardConfig> {
-        Some(&self.config)
+        Some(&self.config.standard)
     }
 
     fn description(&self) -> &str {
@@ -90,7 +90,7 @@ impl crate::processors::Processor for MarpImagesProcessor {
 
 
 
-    fn supports_batch(&self) -> bool { self.config.batch }
+    fn supports_batch(&self) -> bool { self.config.standard.batch }
 
     fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
         crate::processors::execute_checker_batch(products, |files| self.check_files(files))

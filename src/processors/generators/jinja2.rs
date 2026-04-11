@@ -55,7 +55,7 @@ impl Jinja2Processor {
 
 impl Processor for Jinja2Processor {
     fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.scan
+        &self.config.standard.scan
     }
 
 
@@ -72,7 +72,7 @@ impl Processor for Jinja2Processor {
     }
 
     fn max_jobs(&self) -> Option<usize> {
-        self.config.max_jobs
+        self.config.standard.max_jobs
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
@@ -80,7 +80,7 @@ impl Processor for Jinja2Processor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        super::find_templates(&self.config.scan, file_index).is_ok_and(|t| !t.is_empty())
+        super::find_templates(&self.config.standard.scan, file_index).is_ok_and(|t| !t.is_empty())
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -88,8 +88,8 @@ impl Processor for Jinja2Processor {
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
-        let items = super::find_templates(&self.config.scan, file_index)?;
-        let extra = resolve_extra_inputs(&self.config.dep_inputs)?;
+        let items = super::find_templates(&self.config.standard.scan, file_index)?;
+        let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
         for item in items {
             let mut inputs = Vec::with_capacity(1 + extra.len());

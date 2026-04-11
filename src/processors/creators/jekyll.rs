@@ -24,13 +24,13 @@ impl JekyllProcessor {
     }
 
     fn should_process(&self) -> bool {
-        scan_root_valid(&self.config.scan)
+        scan_root_valid(&self.config.standard.scan)
     }
 
     fn execute_jekyll(&self, config_yml: &Path) -> Result<()> {
         let mut cmd = Command::new("jekyll");
         cmd.arg("build");
-        for arg in &self.config.args {
+        for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
         let output = run_in_anchor_dir(&mut cmd, config_yml)?;
@@ -40,11 +40,11 @@ impl JekyllProcessor {
 
 impl Processor for JekyllProcessor {
     fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.scan
+        &self.config.standard.scan
     }
 
     fn standard_config(&self) -> Option<&crate::config::StandardConfig> {
-        Some(&self.config)
+        Some(&self.config.standard)
     }
 
     fn description(&self) -> &str {
@@ -65,7 +65,7 @@ impl Processor for JekyllProcessor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        self.should_process() && !file_index.scan(&self.config.scan, true).is_empty()
+        self.should_process() && !file_index.scan(&self.config.standard.scan, true).is_empty()
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -78,9 +78,9 @@ impl Processor for JekyllProcessor {
         }
 
         discover_directory_products(graph, DirectoryProductOpts {
-            scan: &self.config.scan,
+            scan: &self.config.standard.scan,
             file_index,
-            dep_inputs: &self.config.dep_inputs,
+            dep_inputs: &self.config.standard.dep_inputs,
             cfg_hash: &self.config,
             siblings: &SiblingFilter {
                 extensions: &[""],

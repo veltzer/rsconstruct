@@ -97,11 +97,11 @@ fn check_property_ordering(value: &Value, path: &str, errors: &mut Vec<String>) 
 
 impl crate::processors::Processor for JsonSchemaProcessor {
     fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.scan
+        &self.config.standard.scan
     }
 
     fn standard_config(&self) -> Option<&crate::config::StandardConfig> {
-        Some(&self.config)
+        Some(&self.config.standard)
     }
 
     fn description(&self) -> &str {
