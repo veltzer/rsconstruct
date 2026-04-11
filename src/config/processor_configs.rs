@@ -689,38 +689,20 @@ impl KnownFields for ClippyConfig {
     }
 }
 
+/// Make config. Custom: make, target.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct MakeConfig {
     #[serde(default = "default_make")]
     pub make: String,
     #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
     pub target: String,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
     #[serde(flatten)]
-    pub scan: ScanConfig,
+    pub standard: StandardConfig,
 }
 
 impl Default for MakeConfig {
     fn default() -> Self {
-        Self {
-            make: "make".into(),
-            args: Vec::new(),
-            target: String::new(),
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
-        }
+        Self { make: "make".into(), target: String::new(), standard: StandardConfig::default() }
     }
 }
 
@@ -789,16 +771,8 @@ pub struct TagsConfig {
     /// Fail the build when tags in the allowlist are not used by any file.
     #[serde(default)]
     pub check_unused: bool,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
     #[serde(flatten)]
-    pub scan: ScanConfig,
+    pub standard: StandardConfig,
 }
 
 impl Default for TagsConfig {
@@ -813,11 +787,7 @@ impl Default for TagsConfig {
             required_field_groups: Vec::new(),
             sorted_tags: false,
             check_unused: false,
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
+            standard: StandardConfig::default(),
         }
     }
 }

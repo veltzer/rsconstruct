@@ -23,7 +23,7 @@ impl MakeProcessor {
     /// Run make in the Makefile's directory
     fn execute_make(&self, makefile: &Path) -> Result<()> {
         let mut cmd = Command::new(&self.config.make);
-        for arg in &self.config.args {
+        for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
         if !self.config.target.is_empty() {
@@ -36,7 +36,7 @@ impl MakeProcessor {
 
 impl Processor for MakeProcessor {
     fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.scan
+        &self.config.standard.scan
     }
 
 
@@ -54,7 +54,7 @@ impl Processor for MakeProcessor {
     }
 
     fn max_jobs(&self) -> Option<usize> {
-        self.config.max_jobs
+        self.config.standard.max_jobs
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -62,14 +62,14 @@ impl Processor for MakeProcessor {
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
-        if !crate::processors::scan_root_valid(&self.config.scan) {
+        if !crate::processors::scan_root_valid(&self.config.standard.scan) {
             return Ok(());
         }
 
         discover_directory_products(graph, DirectoryProductOpts {
-            scan: &self.config.scan,
+            scan: &self.config.standard.scan,
             file_index,
-            dep_inputs: &self.config.dep_inputs,
+            dep_inputs: &self.config.standard.dep_inputs,
             cfg_hash: &self.config,
             siblings: &SiblingFilter {
                 extensions: &[""],

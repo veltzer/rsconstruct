@@ -33,7 +33,7 @@ impl TagsProcessor {
 
 impl Processor for TagsProcessor {
     fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.scan
+        &self.config.standard.scan
     }
 
 
@@ -60,8 +60,8 @@ impl Processor for TagsProcessor {
     fn is_native(&self) -> bool { true }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        if !scan_root_valid(&self.config.scan)
-            || file_index.scan(&self.config.scan, true).is_empty()
+        if !scan_root_valid(&self.config.standard.scan)
+            || file_index.scan(&self.config.standard.scan, true).is_empty()
         {
             return false;
         }
@@ -74,7 +74,7 @@ impl Processor for TagsProcessor {
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
-        let files = file_index.scan(&self.config.scan, true);
+        let files = file_index.scan(&self.config.standard.scan, true);
         if files.is_empty() {
             return Ok(());
         }
