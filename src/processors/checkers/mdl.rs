@@ -23,9 +23,12 @@ impl MdlProcessor {
 
 impl Processor for MdlProcessor {
     fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.scan
+        &self.config.standard.scan
     }
 
+    fn standard_config(&self) -> Option<&crate::config::StandardConfig> {
+        Some(&self.config.standard)
+    }
 
     fn description(&self) -> &str {
         self.base.description()
@@ -35,27 +38,18 @@ impl Processor for MdlProcessor {
         self.base.processor_type()
     }
 
-
-    fn config_json(&self) -> Option<String> {
-        crate::processors::ProcessorBase::config_json(&self.config)
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.max_jobs
-    }
-
     fn required_tools(&self) -> Vec<String> {
         vec![self.config.mdl_bin.clone(), "ruby".to_string()]
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
-        let files = file_index.scan(&self.config.scan, true);
+        let files = file_index.scan(&self.config.standard.scan, true);
         if files.is_empty() {
             return Ok(());
         }
         let hash = Some(output_config_hash(&self.config, &[]));
-        let mut dep_inputs = self.config.dep_inputs.clone();
-        for ai in &self.config.dep_auto {
+        let mut dep_inputs = self.config.standard.dep_inputs.clone();
+        for ai in &self.config.standard.dep_auto {
             dep_inputs.extend(config_file_inputs(ai));
         }
         let extra = resolve_extra_inputs(&dep_inputs)?;
@@ -84,7 +78,7 @@ impl Processor for MdlProcessor {
     fn execute(&self, product: &Product) -> Result<()> {
         let file = product.primary_input();
         let mut cmd = Command::new(&self.config.mdl_bin);
-        for arg in &self.config.args {
+        for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
         cmd.arg(file);

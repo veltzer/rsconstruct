@@ -26,22 +26,25 @@ impl GemProcessor {
     /// Run bundle install in the Gemfile's directory
     fn execute_gem(&self, gemfile: &Path) -> Result<()> {
         let mut cmd = Command::new(&self.config.bundler);
-        cmd.arg(&self.config.command);
+        cmd.arg(&self.config.standard.command);
         cmd.env("GEM_HOME", &self.config.gem_home);
         cmd.env("GEM_PATH", &self.config.gem_home);
-        for arg in &self.config.args {
+        for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
         let output = run_in_anchor_dir(&mut cmd, gemfile)?;
-        check_command_output(&output, format_args!("bundle {} in {}", self.config.command, anchor_display_dir(gemfile)))
+        check_command_output(&output, format_args!("bundle {} in {}", self.config.standard.command, anchor_display_dir(gemfile)))
     }
 }
 
 impl Processor for GemProcessor {
     fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.scan
+        &self.config.standard.scan
     }
 
+    fn standard_config(&self) -> Option<&crate::config::StandardConfig> {
+        Some(&self.config.standard)
+    }
 
     fn description(&self) -> &str {
         self.base.description()
@@ -49,15 +52,6 @@ impl Processor for GemProcessor {
 
     fn processor_type(&self) -> crate::processors::ProcessorType {
         self.base.processor_type()
-    }
-
-
-    fn config_json(&self) -> Option<String> {
-        crate::processors::ProcessorBase::config_json(&self.config)
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.max_jobs
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
@@ -69,12 +63,12 @@ impl Processor for GemProcessor {
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
-        let Some(files) = crate::processors::scan_or_skip(&self.config.scan, file_index) else {
+        let Some(files) = crate::processors::scan_or_skip(&self.config.standard.scan, file_index) else {
             return Ok(());
         };
 
         let hash = Some(output_config_hash(&self.config, &[]));
-        let extra = resolve_extra_inputs(&self.config.dep_inputs)?;
+        let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
         let siblings = SiblingFilter {
             extensions: &[".gemspec"],

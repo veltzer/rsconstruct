@@ -681,6 +681,17 @@ pub(crate) fn processor_defaults_for(type_name: &str) -> Option<ProcessorDefault
         "imarkdown2html" => ProcessorDefaults { output_dir: "out/imarkdown2html", formats: &[], args: &[], command: "", dep_auto: &[] },
         "isass" => ProcessorDefaults { output_dir: "out/isass", formats: &[], args: &[], command: "", dep_auto: &[] },
         "yaml2json" => ProcessorDefaults { output_dir: "out/yaml2json", formats: &[], args: &[], command: "", dep_auto: &[] },
+        // Checkers with custom dep_auto
+        "mdl" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "", dep_auto: &[".mdlrc"] },
+        "markdownlint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "", dep_auto: &[".markdownlint.json", ".markdownlint.jsonc", ".markdownlint.yaml"] },
+        "aspell" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "", dep_auto: &[".aspell.conf", ".aspell.en.pws", ".aspell.en.prepl"] },
+        // Generators with custom output_dir
+        "pdflatex" => ProcessorDefaults { output_dir: "out/pdflatex", formats: &[], args: &[], command: "", dep_auto: &[] },
+        "rust_single_file" => ProcessorDefaults { output_dir: "out/rust_single_file", formats: &[], args: &[], command: "", dep_auto: &[] },
+        "pdfunite" => ProcessorDefaults { output_dir: "out/pdfunite", formats: &[], args: &[], command: "", dep_auto: &[] },
+        "ipdfunite" => ProcessorDefaults { output_dir: "out/ipdfunite", formats: &[], args: &[], command: "", dep_auto: &[] },
+        // Creators with custom command
+        "gem" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "install", dep_auto: &[] },
         _ => return None,
     })
 }

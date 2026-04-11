@@ -151,9 +151,12 @@ fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
 
 impl Processor for IpdfuniteProcessor {
     fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.scan
+        &self.config.standard.scan
     }
 
+    fn standard_config(&self) -> Option<&crate::config::StandardConfig> {
+        Some(&self.config.standard)
+    }
 
     fn description(&self) -> &str {
         self.base.description()
@@ -161,14 +164,6 @@ impl Processor for IpdfuniteProcessor {
 
     fn processor_type(&self) -> crate::processors::ProcessorType {
         self.base.processor_type()
-    }
-
-    fn config_json(&self) -> Option<String> {
-        crate::processors::ProcessorBase::config_json(&self.config)
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.max_jobs
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
@@ -197,7 +192,7 @@ impl Processor for IpdfuniteProcessor {
         }
 
         let hash = Some(output_config_hash(&self.config, &[]));
-        let extra = resolve_extra_inputs(&self.config.dep_inputs)?;
+        let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
         let ext = self.config.source_ext.strip_prefix('.').unwrap_or(&self.config.source_ext);
 
         let dirs = find_dirs_with_ext(base, ext);
@@ -228,7 +223,7 @@ impl Processor for IpdfuniteProcessor {
             let parent = relative.parent().unwrap_or(Path::new(""));
             let leaf = relative.file_name().unwrap_or(relative.as_os_str());
             let outputs = vec![
-                Path::new(&self.config.output_dir).join(parent).join(format!("{}.pdf", leaf.to_string_lossy())),
+                Path::new(&self.config.standard.output_dir).join(parent).join(format!("{}.pdf", leaf.to_string_lossy())),
             ];
 
             graph.add_product(inputs, outputs, instance_name, hash.clone())?;

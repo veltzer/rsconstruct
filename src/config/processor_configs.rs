@@ -1115,10 +1115,6 @@ fn default_gem_stamp() -> String {
     "out/gem/root.stamp".into()
 }
 
-fn default_mdl_auto_inputs() -> Vec<String> {
-    vec![".mdlrc".into(), ".mdl.style.rb".into()]
-}
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct MdlConfig {
     #[serde(default)]
@@ -1127,20 +1123,10 @@ pub struct MdlConfig {
     pub gem_home: String,
     #[serde(default = "default_mdl_bin")]
     pub mdl_bin: String,
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default = "default_mdl_auto_inputs")]
-    pub dep_auto: Vec<String>,
     #[serde(default = "default_gem_stamp")]
     pub gem_stamp: String,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
     #[serde(flatten)]
-    pub scan: ScanConfig,
+    pub standard: StandardConfig,
 }
 
 impl Default for MdlConfig {
@@ -1149,13 +1135,8 @@ impl Default for MdlConfig {
             local_repo: false,
             gem_home: "gems".into(),
             mdl_bin: "mdl".into(),
-            args: Vec::new(),
-            dep_inputs: Vec::new(),
-            dep_auto: default_mdl_auto_inputs(),
             gem_stamp: "out/gem/root.stamp".into(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
+            standard: StandardConfig::default(),
         }
     }
 }
@@ -1180,6 +1161,8 @@ impl KnownFields for MdlConfig {
     }
 }
 
+
+
 fn default_markdownlint_bin() -> String {
     "markdownlint".into()
 }
@@ -1188,30 +1171,16 @@ fn default_npm_stamp() -> String {
     "out/npm/root.stamp".into()
 }
 
-fn default_markdownlint_auto_inputs() -> Vec<String> {
-    vec![".markdownlint.json".into(), ".markdownlint.jsonc".into(), ".markdownlint.yaml".into()]
-}
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct MarkdownlintConfig {
     #[serde(default)]
     pub local_repo: bool,
     #[serde(default = "default_markdownlint_bin")]
     pub markdownlint_bin: String,
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default = "default_markdownlint_auto_inputs")]
-    pub dep_auto: Vec<String>,
     #[serde(default = "default_npm_stamp")]
     pub npm_stamp: String,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
     #[serde(flatten)]
-    pub scan: ScanConfig,
+    pub standard: StandardConfig,
 }
 
 impl Default for MarkdownlintConfig {
@@ -1219,13 +1188,8 @@ impl Default for MarkdownlintConfig {
         Self {
             local_repo: false,
             markdownlint_bin: "markdownlint".into(),
-            args: Vec::new(),
-            dep_inputs: Vec::new(),
-            dep_auto: default_markdownlint_auto_inputs(),
             npm_stamp: "out/npm/root.stamp".into(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
+            standard: StandardConfig::default(),
         }
     }
 }
@@ -1249,6 +1213,7 @@ impl KnownFields for MarkdownlintConfig {
     }
 }
 
+
 fn default_aspell() -> String {
     "aspell".into()
 }
@@ -1261,47 +1226,28 @@ fn default_aspell_words_file() -> String {
     ".aspell.en.pws".into()
 }
 
-fn default_aspell_auto_inputs() -> Vec<String> {
-    vec![".aspell.conf".into(), ".aspell.en.pws".into(), ".aspell.en.prepl".into()]
-}
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AspellConfig {
     #[serde(default = "default_aspell")]
     pub aspell: String,
-    #[serde(default)]
-    pub args: Vec<String>,
     #[serde(default = "default_aspell_conf")]
     pub conf: String,
     #[serde(default)]
     pub auto_add_words: bool,
     #[serde(default = "default_aspell_words_file")]
     pub words_file: String,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default = "default_aspell_auto_inputs")]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
     #[serde(flatten)]
-    pub scan: ScanConfig,
+    pub standard: StandardConfig,
 }
 
 impl Default for AspellConfig {
     fn default() -> Self {
         Self {
             aspell: "aspell".into(),
-            args: Vec::new(),
             conf: ".aspell.conf".into(),
             auto_add_words: false,
             words_file: ".aspell.en.pws".into(),
-            dep_inputs: Vec::new(),
-            dep_auto: default_aspell_auto_inputs(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
+            standard: StandardConfig::default(),
         }
     }
 }
@@ -1326,6 +1272,7 @@ impl KnownFields for AspellConfig {
     }
 }
 
+
 pub type AsciiConfig = CheckerConfig;
 
 fn default_terms_dir() -> String {
@@ -1336,27 +1283,15 @@ fn default_terms_dir() -> String {
 pub struct TermsConfig {
     #[serde(default = "default_terms_dir")]
     pub terms_dir: String,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
     #[serde(flatten)]
-    pub scan: ScanConfig,
+    pub standard: StandardConfig,
 }
 
 impl Default for TermsConfig {
     fn default() -> Self {
         Self {
             terms_dir: "terms".into(),
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
+            standard: StandardConfig::default(),
         }
     }
 }
@@ -1377,6 +1312,7 @@ impl KnownFields for TermsConfig {
 
 
 
+
 fn default_pdflatex() -> String {
     "pdflatex".into()
 }
@@ -1385,47 +1321,25 @@ fn default_pdflatex_runs() -> usize {
     2
 }
 
-fn default_pdflatex_output_dir() -> String {
-    "out/pdflatex".into()
-}
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PdflatexConfig {
     #[serde(default = "default_pdflatex")]
     pub pdflatex: String,
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
     #[serde(default = "default_pdflatex_runs")]
     pub runs: usize,
     #[serde(default = "default_true")]
     pub qpdf: bool,
-    #[serde(default = "default_pdflatex_output_dir")]
-    pub output_dir: String,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
     #[serde(flatten)]
-    pub scan: ScanConfig,
+    pub standard: StandardConfig,
 }
 
 impl Default for PdflatexConfig {
     fn default() -> Self {
         Self {
             pdflatex: "pdflatex".into(),
-            args: Vec::new(),
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
             runs: 2,
             qpdf: true,
-            output_dir: "out/pdflatex".into(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
+            standard: StandardConfig { output_dir: "out/pdflatex".into(), ..StandardConfig::default() },
         }
     }
 }
@@ -1452,48 +1366,30 @@ impl KnownFields for PdflatexConfig {
 
 
 
+
 fn default_bundler() -> String {
     "bundle".into()
-}
-
-fn default_bundler_command() -> String {
-    "install".into()
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct GemConfig {
     #[serde(default = "default_bundler")]
     pub bundler: String,
-    #[serde(default = "default_bundler_command")]
-    pub command: String,
     #[serde(default = "default_gem_home")]
     pub gem_home: String,
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
     #[serde(default = "default_true")]
     pub cache_output_dir: bool,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
     #[serde(flatten)]
-    pub scan: ScanConfig,
+    pub standard: StandardConfig,
 }
 
 impl Default for GemConfig {
     fn default() -> Self {
         Self {
             bundler: "bundle".into(),
-            command: "install".into(),
             gem_home: "gems".into(),
-            args: Vec::new(),
-            dep_inputs: Vec::new(),
             cache_output_dir: true,
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
+            standard: StandardConfig { command: "install".into(), ..StandardConfig::default() },
         }
     }
 }
@@ -1522,6 +1418,7 @@ impl KnownFields for GemConfig {
 
 
 
+
 pub type IjqConfig = CheckerConfig;
 
 pub type IjsonlintConfig = CheckerConfig;
@@ -1532,27 +1429,15 @@ pub type IyamllintConfig = CheckerConfig;
 pub struct IyamlschemaConfig {
     #[serde(default = "default_true")]
     pub check_ordering: bool,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
     #[serde(flatten)]
-    pub scan: ScanConfig,
+    pub standard: StandardConfig,
 }
 
 impl Default for IyamlschemaConfig {
     fn default() -> Self {
         Self {
             check_ordering: true,
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
+            standard: StandardConfig::default(),
         }
     }
 }
@@ -1571,12 +1456,11 @@ impl KnownFields for IyamlschemaConfig {
     }
 }
 
+
 pub type ItaploConfig = CheckerConfig;
 
 fn default_rustc() -> String { "rustc".into() }
 fn default_rust_single_file_output_suffix() -> String { ".elf".into() }
-fn default_rust_single_file_output_dir() -> String { "out/rust_single_file".into() }
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct RustSingleFileConfig {
     #[serde(default = "default_rustc")]
@@ -1585,18 +1469,8 @@ pub struct RustSingleFileConfig {
     pub flags: Vec<String>,
     #[serde(default = "default_rust_single_file_output_suffix")]
     pub output_suffix: String,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_rust_single_file_output_dir")]
-    pub output_dir: String,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
     #[serde(flatten)]
-    pub scan: ScanConfig,
+    pub standard: StandardConfig,
 }
 
 impl Default for RustSingleFileConfig {
@@ -1605,12 +1479,7 @@ impl Default for RustSingleFileConfig {
             rustc: "rustc".into(),
             flags: Vec::new(),
             output_suffix: ".elf".into(),
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            output_dir: "out/rust_single_file".into(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
+            standard: StandardConfig { output_dir: "out/rust_single_file".into(), ..StandardConfig::default() },
         }
     }
 }
@@ -1632,6 +1501,7 @@ impl KnownFields for RustSingleFileConfig {
     }
 }
 
+
 fn default_pdfunite_bin() -> String {
     "pdfunite".into()
 }
@@ -1648,10 +1518,6 @@ fn default_pdfunite_source_output_dir() -> String {
     "out/marp".into()
 }
 
-fn default_pdfunite_output_dir() -> String {
-    "out/pdfunite".into()
-}
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PdfuniteConfig {
     #[serde(default = "default_pdfunite_bin")]
@@ -1662,20 +1528,8 @@ pub struct PdfuniteConfig {
     pub source_ext: String,
     #[serde(default = "default_pdfunite_source_output_dir")]
     pub source_output_dir: String,
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_pdfunite_output_dir")]
-    pub output_dir: String,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
     #[serde(flatten)]
-    pub scan: ScanConfig,
+    pub standard: StandardConfig,
 }
 
 impl Default for PdfuniteConfig {
@@ -1685,13 +1539,7 @@ impl Default for PdfuniteConfig {
             source_dir: "marp/courses".into(),
             source_ext: ".md".into(),
             source_output_dir: "out/marp".into(),
-            args: Vec::new(),
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            output_dir: "out/pdfunite".into(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
+            standard: StandardConfig { output_dir: "out/pdfunite".into(), ..StandardConfig::default() },
         }
     }
 }
@@ -1721,6 +1569,7 @@ impl KnownFields for PdfuniteConfig {
     }
 }
 
+
 // --- ipdfunite (internal PDF merge, no external binary) ---
 
 fn default_ipdfunite_source_dir() -> String {
@@ -1735,10 +1584,6 @@ fn default_ipdfunite_source_output_dir() -> String {
     "out/marp".into()
 }
 
-fn default_ipdfunite_output_dir() -> String {
-    "out/ipdfunite".into()
-}
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct IpdfuniteConfig {
     #[serde(default = "default_ipdfunite_source_dir")]
@@ -1747,18 +1592,8 @@ pub struct IpdfuniteConfig {
     pub source_ext: String,
     #[serde(default = "default_ipdfunite_source_output_dir")]
     pub source_output_dir: String,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_ipdfunite_output_dir")]
-    pub output_dir: String,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
     #[serde(flatten)]
-    pub scan: ScanConfig,
+    pub standard: StandardConfig,
 }
 
 impl Default for IpdfuniteConfig {
@@ -1767,12 +1602,7 @@ impl Default for IpdfuniteConfig {
             source_dir: "marp/courses".into(),
             source_ext: ".md".into(),
             source_output_dir: "out/marp".into(),
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            output_dir: "out/ipdfunite".into(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
+            standard: StandardConfig { output_dir: "out/ipdfunite".into(), ..StandardConfig::default() },
         }
     }
 }
@@ -1798,6 +1628,7 @@ impl KnownFields for IpdfuniteConfig {
         ]
     }
 }
+
 
 
 
@@ -1844,31 +1675,16 @@ pub type DuplicateFilesConfig = CheckerConfig;
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct LicenseHeaderConfig {
     #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default)]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
-    #[serde(default)]
     pub header_lines: Vec<String>,
     #[serde(flatten)]
-    pub scan: ScanConfig,
+    pub standard: StandardConfig,
 }
 
 impl Default for LicenseHeaderConfig {
     fn default() -> Self {
         Self {
-            args: Vec::new(),
-            dep_inputs: Vec::new(),
-            dep_auto: Vec::new(),
-            batch: true,
-            max_jobs: None,
             header_lines: Vec::new(),
-            scan: ScanConfig::default(),
+            standard: StandardConfig::default(),
         }
     }
 }
@@ -1886,6 +1702,5 @@ impl KnownFields for LicenseHeaderConfig {
             ("header_lines", "Lines of the license header that must appear at the top of each file"),
         ]
     }
-
 }
 

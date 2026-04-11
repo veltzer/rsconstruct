@@ -54,7 +54,7 @@ impl AspellProcessor {
 
         let mut cmd = Command::new(&self.config.aspell);
         cmd.arg("--conf").arg(&self.config.conf);
-        for arg in &self.config.args {
+        for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
         cmd.arg("list");
@@ -93,9 +93,12 @@ impl AspellProcessor {
 
 impl Processor for AspellProcessor {
     fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.scan
+        &self.config.standard.scan
     }
 
+    fn standard_config(&self) -> Option<&crate::config::StandardConfig> {
+        Some(&self.config.standard)
+    }
 
     fn description(&self) -> &str {
         self.base.description()
@@ -103,15 +106,6 @@ impl Processor for AspellProcessor {
 
     fn processor_type(&self) -> crate::processors::ProcessorType {
         self.base.processor_type()
-    }
-
-
-    fn config_json(&self) -> Option<String> {
-        crate::processors::ProcessorBase::config_json(&self.config)
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.max_jobs
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -124,17 +118,17 @@ impl Processor for AspellProcessor {
         file_index: &FileIndex,
         instance_name: &str,
     ) -> Result<()> {
-        if !scan_root_valid(&self.config.scan) {
+        if !scan_root_valid(&self.config.standard.scan) {
             return Ok(());
         }
 
-        let mut dep_inputs = self.config.dep_inputs.clone();
-        for ai in &self.config.dep_auto {
+        let mut dep_inputs = self.config.standard.dep_inputs.clone();
+        for ai in &self.config.standard.dep_auto {
             dep_inputs.extend(config_file_inputs(ai));
         }
         crate::processors::discover_checker_products(
             graph,
-            &self.config.scan,
+            &self.config.standard.scan,
             file_index,
             &dep_inputs,
             &self.config,

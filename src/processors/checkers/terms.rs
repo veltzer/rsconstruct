@@ -56,9 +56,12 @@ impl TermsProcessor {
 
 impl crate::processors::Processor for TermsProcessor {
     fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.scan
+        &self.config.standard.scan
     }
 
+    fn standard_config(&self) -> Option<&crate::config::StandardConfig> {
+        Some(&self.config.standard)
+    }
 
     fn description(&self) -> &str {
         "Check that technical terms are backtick-quoted in markdown files"
@@ -68,7 +71,7 @@ impl crate::processors::Processor for TermsProcessor {
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         Path::new(&self.config.terms_dir).is_dir()
-            && !file_index.scan(&self.config.scan, true).is_empty()
+            && !file_index.scan(&self.config.standard.scan, true).is_empty()
     }
 
     fn discover(
@@ -81,7 +84,7 @@ impl crate::processors::Processor for TermsProcessor {
             return Ok(());
         }
         // Collect all .txt files from terms_dir as extra inputs
-        let mut dep_inputs = self.config.dep_inputs.clone();
+        let mut dep_inputs = self.config.standard.dep_inputs.clone();
         for entry in fs::read_dir(&self.config.terms_dir)? {
             let entry = entry?;
             let path = entry.path();
@@ -89,11 +92,11 @@ impl crate::processors::Processor for TermsProcessor {
                 dep_inputs.push(path.to_string_lossy().into_owned());
             }
         }
-        for ai in &self.config.dep_auto {
+        for ai in &self.config.standard.dep_auto {
             dep_inputs.extend(crate::processors::config_file_inputs(ai));
         }
         discover_checker_products(
-            graph, &self.config.scan, file_index, &dep_inputs, &self.config,
+            graph, &self.config.standard.scan, file_index, &dep_inputs, &self.config,
             instance_name,
         )
     }
@@ -103,15 +106,11 @@ impl crate::processors::Processor for TermsProcessor {
     }
 
     fn supports_batch(&self) -> bool {
-        self.config.batch
+        self.config.standard.batch
     }
 
     fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
         execute_checker_batch(products, |files| self.check_files(files))
-    }
-
-    fn config_json(&self) -> Option<String> {
-        serde_json::to_string(&self.config).ok()
     }
 }
 
@@ -539,7 +538,7 @@ pub fn fix_all(config: &TermsConfig, remove_non_terms: bool) -> Result<()> {
     let sorted = sorted_terms(&terms);
 
     let file_index = FileIndex::build()?;
-    let md_files = file_index.scan(&config.scan, true);
+    let md_files = file_index.scan(&config.standard.scan, true);
 
     if md_files.is_empty() {
         println!("No markdown files found");

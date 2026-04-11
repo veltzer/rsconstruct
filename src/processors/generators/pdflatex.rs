@@ -40,9 +40,12 @@ impl PdflatexProcessor {
 
 impl Processor for PdflatexProcessor {
     fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.scan
+        &self.config.standard.scan
     }
 
+    fn standard_config(&self) -> Option<&crate::config::StandardConfig> {
+        Some(&self.config.standard)
+    }
 
     fn description(&self) -> &str {
         self.base.description()
@@ -50,15 +53,6 @@ impl Processor for PdflatexProcessor {
 
     fn processor_type(&self) -> crate::processors::ProcessorType {
         self.base.processor_type()
-    }
-
-
-    fn config_json(&self) -> Option<String> {
-        crate::processors::ProcessorBase::config_json(&self.config)
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.max_jobs
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
@@ -75,10 +69,10 @@ impl Processor for PdflatexProcessor {
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
         let params = DiscoverParams {
-            scan: &self.config.scan,
-            dep_inputs: &self.config.dep_inputs,
+            scan: &self.config.standard.scan,
+            dep_inputs: &self.config.standard.dep_inputs,
             config: &self.config,
-            output_dir: &self.config.output_dir,
+            output_dir: &self.config.standard.output_dir,
             processor_name: instance_name,
         };
         super::discover_single_format(graph, file_index, &params, "pdf")
@@ -114,7 +108,7 @@ impl Processor for PdflatexProcessor {
             cmd.arg("-interaction=nonstopmode");
             cmd.arg("-halt-on-error");
             cmd.arg(format!("-output-directory={}", build_dir.display()));
-            for arg in &self.config.args {
+            for arg in &self.config.standard.args {
                 cmd.arg(arg);
             }
             cmd.arg(input);

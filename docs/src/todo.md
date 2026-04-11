@@ -1,18 +1,8 @@
 # TODO
 
-## StandardConfig refactoring (IN PROGRESS)
+## StandardConfig refactoring (DONE)
 
-Convert remaining config structs to embed `StandardConfig` via `#[serde(flatten)]`. Done: CheckerConfig, TeraConfig, MakoConfig, Jinja2Config, LinuxModuleConfig, ScriptConfig, CreatorConfig, ClangTidyConfig, ZspellConfig, CcSingleFileConfig, CcConfig, CargoConfig, ClippyConfig, MakeConfig, TagsConfig, GeneratorConfig, ExplicitConfig, PipConfig, SphinxConfig, MdbookConfig, NpmConfig.
-
-Remaining configs to convert (11):
-MdlConfig, MarkdownlintConfig, AspellConfig, TermsConfig, PdflatexConfig, GemConfig, IyamlschemaConfig, RustSingleFileConfig, PdfuniteConfig, IpdfuniteConfig, LicenseHeaderConfig
-
-For each:
-1. Replace standard fields (batch, max_jobs, scan, dep_inputs, dep_auto, args, command, output_dir, formats) with `#[serde(flatten)] pub standard: StandardConfig`
-2. Simplify Default impl to use `standard: StandardConfig { specific_default: ..., ..StandardConfig::default() }`
-3. Move per-field serde defaults (like `output_dir = "out/xyz"`) to `processor_defaults_for()` in config/mod.rs
-4. Update processor file: `self.config.X` → `self.config.standard.X` for all standard fields
-5. Update `standard_config()` to return `Some(&self.config.standard)`
+All config structs now embed `StandardConfig` via `#[serde(flatten)]`.
 
 ## Cache cleanup
 

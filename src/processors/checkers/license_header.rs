@@ -66,16 +66,19 @@ impl LicenseHeaderProcessor {
 
 impl crate::processors::Processor for LicenseHeaderProcessor {
     fn scan_config(&self) -> &crate::config::ScanConfig {
-        &self.config.scan
+        &self.config.standard.scan
     }
 
+    fn standard_config(&self) -> Option<&crate::config::StandardConfig> {
+        Some(&self.config.standard)
+    }
 
     fn description(&self) -> &str {
         "Verify source files contain required license headers"
     }
 
     fn auto_detect(&self, file_index: &crate::file_index::FileIndex) -> bool {
-        crate::processors::checker_auto_detect(&self.config.scan, file_index)
+        crate::processors::checker_auto_detect(&self.config.standard.scan, file_index)
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -89,8 +92,8 @@ impl crate::processors::Processor for LicenseHeaderProcessor {
         instance_name: &str,
     ) -> anyhow::Result<()> {
         crate::processors::checker_discover(
-            graph, &self.config.scan, file_index,
-            &self.config.dep_inputs, &self.config.dep_auto,
+            graph, &self.config.standard.scan, file_index,
+            &self.config.standard.dep_inputs, &self.config.standard.dep_auto,
             &self.config, instance_name,
         )
     }
@@ -99,20 +102,12 @@ impl crate::processors::Processor for LicenseHeaderProcessor {
         self.execute_product(product)
     }
 
-    fn config_json(&self) -> Option<String> {
-        serde_json::to_string(&self.config).ok()
-    }
-
     fn is_native(&self) -> bool { true }
 
-    fn supports_batch(&self) -> bool { self.config.batch }
+    fn supports_batch(&self) -> bool { self.config.standard.batch }
 
     fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
         crate::processors::execute_checker_batch(products, |files| self.check_files(files))
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.max_jobs
     }
 }
 
