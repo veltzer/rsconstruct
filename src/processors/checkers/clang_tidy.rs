@@ -79,3 +79,9 @@ impl crate::processors::ProductDiscovery for ClangTidyProcessor {
         self.config.max_jobs
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::ClangTidyConfig>(
+        "clang_tidy", |cfg| Box::new(ClangTidyProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

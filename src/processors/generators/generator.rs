@@ -137,3 +137,9 @@ impl ProductDiscovery for GeneratorProcessor {
         execute_generator_batch(products, |pairs| self.run_pairs(pairs))
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::GeneratorConfig>(
+        "generator", |cfg| Box::new(GeneratorProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

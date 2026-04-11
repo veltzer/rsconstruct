@@ -139,3 +139,9 @@ impl ProductDiscovery for PdfuniteProcessor {
     }
 
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::PdfuniteConfig>(
+        "pdfunite", |cfg| Box::new(PdfuniteProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

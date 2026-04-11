@@ -113,3 +113,9 @@ impl ProductDiscovery for RustSingleFileProcessor {
     }
 
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::RustSingleFileConfig>(
+        "rust_single_file", |cfg| Box::new(RustSingleFileProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

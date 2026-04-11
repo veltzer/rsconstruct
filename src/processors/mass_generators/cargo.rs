@@ -131,3 +131,9 @@ impl ProductDiscovery for CargoProcessor {
         self.execute_cargo(product.primary_input(), profile)
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::CargoConfig>(
+        "cargo", |cfg| Box::new(CargoProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

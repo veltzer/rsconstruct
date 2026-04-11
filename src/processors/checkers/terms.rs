@@ -662,3 +662,9 @@ pub fn stats(config: &TermsConfig) -> Result<()> {
     println!("{} term file(s), {} total terms", file_count, total_terms);
     Ok(())
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::TermsConfig>(
+        "terms", |cfg| Box::new(TermsProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

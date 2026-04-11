@@ -90,3 +90,9 @@ impl crate::processors::ProductDiscovery for EncodingProcessor {
         crate::processors::execute_checker_batch(products, |files| self.check_files(files))
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::EncodingConfig>(
+        "encoding", |cfg| Box::new(EncodingProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

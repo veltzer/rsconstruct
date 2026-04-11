@@ -124,3 +124,9 @@ impl ProductDiscovery for CreatorProcessor {
         check_command_output(&output, format_args!("{} in {}", self.config.command, anchor_display_dir(anchor)))
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::CreatorConfig>(
+        "creator", |cfg| Box::new(CreatorProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

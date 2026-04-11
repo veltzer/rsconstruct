@@ -256,3 +256,9 @@ impl ProductDiscovery for IpdfuniteProcessor {
     }
 
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::IpdfuniteConfig>(
+        "ipdfunite", |cfg| Box::new(IpdfuniteProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

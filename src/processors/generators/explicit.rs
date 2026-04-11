@@ -157,3 +157,9 @@ impl ProductDiscovery for ExplicitProcessor {
         ProcessorBase::config_json(&self.config)
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::ExplicitConfig>(
+        "explicit", |cfg| Box::new(ExplicitProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

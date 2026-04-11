@@ -346,3 +346,9 @@ impl ProductDiscovery for CcProcessor {
             .with_context(|| format!("cc build failed in {}", display_dir))
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::CcConfig>(
+        "cc", |cfg| Box::new(CcProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

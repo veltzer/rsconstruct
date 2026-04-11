@@ -245,3 +245,9 @@ impl ProductDiscovery for CcSingleFileProcessor {
     }
 
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::CcSingleFileConfig>(
+        "cc_single_file", |cfg| Box::new(CcSingleFileProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

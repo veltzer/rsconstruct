@@ -94,3 +94,9 @@ impl ProductDiscovery for ScriptProcessor {
     }
 
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::ScriptConfig>(
+        "script", |cfg| Box::new(ScriptProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

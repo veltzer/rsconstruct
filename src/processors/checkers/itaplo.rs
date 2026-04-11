@@ -71,3 +71,9 @@ impl crate::processors::ProductDiscovery for ItaploProcessor {
         crate::processors::execute_checker_batch(products, |files| self.check_files(files))
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::ItaploConfig>(
+        "itaplo", |cfg| Box::new(ItaploProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

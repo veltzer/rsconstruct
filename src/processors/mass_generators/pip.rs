@@ -96,3 +96,9 @@ impl ProductDiscovery for PipProcessor {
         self.execute_pip(product.primary_input())
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::PipConfig>(
+        "pip", |cfg| Box::new(PipProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

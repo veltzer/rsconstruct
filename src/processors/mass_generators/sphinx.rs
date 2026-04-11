@@ -112,3 +112,9 @@ impl ProductDiscovery for SphinxProcessor {
         self.execute_sphinx(product.primary_input())
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::SphinxConfig>(
+        "sphinx", |cfg| Box::new(SphinxProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

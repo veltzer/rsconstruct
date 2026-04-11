@@ -72,6 +72,7 @@ pub(crate) struct ProcessorDefaults {
 }
 
 /// Parameters for a simple checker processor — pure data, no macros.
+#[derive(Copy, Clone)]
 pub(crate) struct SimpleCheckerParams {
     /// Human-readable description
     pub description: &'static str,
@@ -81,59 +82,6 @@ pub(crate) struct SimpleCheckerParams {
     pub prepend_args: &'static [&'static str],
     /// Additional tools required beyond the command (e.g., ["python3", "node"])
     pub extra_tools: &'static [&'static str],
-}
-
-/// Return SimpleChecker parameters for a processor, or None if not a simple checker.
-pub(crate) fn simple_checker_params(type_name: &str) -> Option<SimpleCheckerParams> {
-    Some(match type_name {
-        "ruff" => SimpleCheckerParams { description: "Lint Python files with ruff", subcommand: Some("check"), prepend_args: &[], extra_tools: &[] },
-        "pylint" => SimpleCheckerParams { description: "Lint Python files with pylint", subcommand: None, prepend_args: &[], extra_tools: &["python3"] },
-        "pytest" => SimpleCheckerParams { description: "Run Python tests with pytest", subcommand: None, prepend_args: &[], extra_tools: &["python3"] },
-        "black" => SimpleCheckerParams { description: "Check Python formatting with black", subcommand: None, prepend_args: &["--check"], extra_tools: &["python3"] },
-        "doctest" => SimpleCheckerParams { description: "Run Python doctests", subcommand: None, prepend_args: &["-m", "doctest"], extra_tools: &[] },
-        "mypy" => SimpleCheckerParams { description: "Type-check Python files with mypy", subcommand: None, prepend_args: &[], extra_tools: &["python3"] },
-        "pyrefly" => SimpleCheckerParams { description: "Type-check Python files with pyrefly", subcommand: Some("check"), prepend_args: &["--disable-project-excludes-heuristics"], extra_tools: &[] },
-        "rumdl" => SimpleCheckerParams { description: "Lint Markdown files using rumdl", subcommand: Some("check"), prepend_args: &[], extra_tools: &[] },
-        "yamllint" => SimpleCheckerParams { description: "Lint YAML files with yamllint", subcommand: None, prepend_args: &[], extra_tools: &["python3"] },
-        "jq" => SimpleCheckerParams { description: "Validate JSON files with jq", subcommand: None, prepend_args: &["empty"], extra_tools: &[] },
-        "jsonlint" => SimpleCheckerParams { description: "Lint JSON files with jsonlint", subcommand: None, prepend_args: &[], extra_tools: &["python3"] },
-        "taplo" => SimpleCheckerParams { description: "Check TOML files with taplo", subcommand: Some("check"), prepend_args: &[], extra_tools: &[] },
-        "eslint" => SimpleCheckerParams { description: "Lint JavaScript/TypeScript files with eslint", subcommand: None, prepend_args: &[], extra_tools: &["node"] },
-        "jshint" => SimpleCheckerParams { description: "Lint JavaScript files with jshint", subcommand: None, prepend_args: &[], extra_tools: &["node"] },
-        "htmlhint" => SimpleCheckerParams { description: "Lint HTML files with htmlhint", subcommand: None, prepend_args: &[], extra_tools: &["node"] },
-        "stylelint" => SimpleCheckerParams { description: "Lint CSS/SCSS files with stylelint", subcommand: None, prepend_args: &[], extra_tools: &["node"] },
-        "checkstyle" => SimpleCheckerParams { description: "Check Java code style with checkstyle", subcommand: None, prepend_args: &[], extra_tools: &[] },
-        "cmake" => SimpleCheckerParams { description: "Lint CMakeLists.txt files with cmake --lint", subcommand: Some("--lint"), prepend_args: &[], extra_tools: &[] },
-        "hadolint" => SimpleCheckerParams { description: "Lint Dockerfiles with hadolint", subcommand: None, prepend_args: &[], extra_tools: &[] },
-        "htmllint" => SimpleCheckerParams { description: "Lint HTML files with htmllint", subcommand: None, prepend_args: &[], extra_tools: &["node"] },
-        "jslint" => SimpleCheckerParams { description: "Lint JavaScript files with jslint", subcommand: None, prepend_args: &[], extra_tools: &["node"] },
-        "perlcritic" => SimpleCheckerParams { description: "Analyze Perl code with perlcritic", subcommand: None, prepend_args: &[], extra_tools: &["perl"] },
-        "php_lint" => SimpleCheckerParams { description: "Check PHP syntax with php -l", subcommand: Some("-l"), prepend_args: &[], extra_tools: &[] },
-        "slidev" => SimpleCheckerParams { description: "Build Slidev presentations", subcommand: Some("build"), prepend_args: &[], extra_tools: &["node"] },
-        "standard" => SimpleCheckerParams { description: "Check JavaScript style with standard", subcommand: None, prepend_args: &[], extra_tools: &["node"] },
-        "svglint" => SimpleCheckerParams { description: "Lint SVG files with svglint", subcommand: None, prepend_args: &[], extra_tools: &[] },
-        "tidy" => SimpleCheckerParams { description: "Validate HTML files with tidy", subcommand: Some("-errors"), prepend_args: &[], extra_tools: &[] },
-        "xmllint" => SimpleCheckerParams { description: "Validate XML files with xmllint", subcommand: Some("--noout"), prepend_args: &[], extra_tools: &[] },
-        "yq" => SimpleCheckerParams { description: "Validate YAML files with yq", subcommand: Some("."), prepend_args: &[], extra_tools: &[] },
-        "cppcheck" => SimpleCheckerParams { description: "Run cppcheck static analysis on C/C++ source files", subcommand: None, prepend_args: &[], extra_tools: &[] },
-        "cpplint" => SimpleCheckerParams { description: "Run cpplint (Google C++ style checker) on C/C++ source files", subcommand: None, prepend_args: &[], extra_tools: &[] },
-        "checkpatch" => SimpleCheckerParams { description: "Run kernel checkpatch.pl on C source files", subcommand: None, prepend_args: &["--no-tree", "-f"], extra_tools: &["perl"] },
-        "shellcheck" => SimpleCheckerParams { description: "Lint shell scripts using shellcheck", subcommand: None, prepend_args: &[], extra_tools: &[] },
-        "luacheck" => SimpleCheckerParams { description: "Lint Lua scripts using luacheck", subcommand: None, prepend_args: &[], extra_tools: &[] },
-        _ => return None,
-    })
-}
-
-/// Return all simple checker type names.
-pub(crate) fn simple_checker_type_names() -> &'static [&'static str] {
-    &[
-        "ruff", "pylint", "pytest", "black", "doctest", "mypy", "pyrefly",
-        "rumdl", "yamllint", "jq", "jsonlint", "taplo", "eslint", "jshint",
-        "htmlhint", "stylelint", "checkstyle", "cmake", "hadolint", "htmllint",
-        "jslint", "perlcritic", "php_lint", "slidev", "standard", "svglint",
-        "tidy", "xmllint", "yq",
-        "cppcheck", "cpplint", "checkpatch", "shellcheck", "luacheck",
-    ]
 }
 
 /// Validate dep_inputs paths exist and return them as PathBufs.
@@ -498,46 +446,29 @@ pub(crate) struct ProcessorInstance {
     pub config_toml: toml::Value,
 }
 
-/// Auto-generate `ProcessorConfig` and all per-processor wiring
-/// from the central registry in `src/registry.rs`.
-use std::sync::LazyLock;
-use crate::processors::generators::simple::{simple_generator_params, simple_generator_type_names};
 use crate::registry::{self, RegistryOps};
 
-static REGISTRY: LazyLock<Vec<Box<dyn RegistryOps>>> = LazyLock::new(registry::build_registry);
-
-pub(crate) fn find_registry_entry(type_name: &str) -> Option<&dyn RegistryOps> {
-    REGISTRY.iter().find(|e| e.name() == type_name).map(|e| e.as_ref())
+pub(crate) fn find_registry_entry(type_name: &str) -> Option<&'static dyn RegistryOps> {
+    registry::all_plugins().find(|e| e.name() == type_name).map(|e| *e)
 }
 
-pub(crate) fn registry_entries() -> &'static [Box<dyn RegistryOps>] {
-    &REGISTRY
+/// Return all registered processor plugins.
+pub(crate) fn registry_entries() -> impl Iterator<Item = &'static dyn RegistryOps> {
+    registry::all_plugins().map(|e| *e)
 }
 
 /// Return all known builtin processor type names.
 pub(crate) fn all_type_names() -> Vec<&'static str> {
-    let mut names: Vec<&str> = REGISTRY.iter().map(|e| e.name()).collect();
-    names.extend(simple_checker_type_names());
-    names.extend(simple_generator_type_names());
-    names
+    registry::all_plugins().map(|e| e.name()).collect()
 }
 
 /// Check if a name is a known builtin processor type.
 pub(crate) fn is_builtin_type(name: &str) -> bool {
     find_registry_entry(name).is_some()
-        || simple_checker_params(name).is_some()
-        || simple_generator_params(name).is_some()
 }
 
 /// Resolve scan and processor defaults for an instance config in-place.
 pub(crate) fn resolve_instance_defaults(type_name: &str, value: &mut toml::Value) -> anyhow::Result<()> {
-    if simple_checker_params(type_name).is_some() || simple_generator_params(type_name).is_some() {
-        apply_processor_defaults(type_name, value);
-        apply_scan_defaults(type_name, value);
-        let cfg: StandardConfig = toml::from_str(&toml::to_string(value)?)?;
-        *value = toml::Value::try_from(&cfg)?;
-        return Ok(());
-    }
     if let Some(entry) = find_registry_entry(type_name) {
         return entry.resolve_defaults(value);
     }
@@ -561,40 +492,23 @@ impl ProcessorConfig {
         dirs
     }
 
-    /// Check if a type uses StandardConfig (simple checkers and simple generators).
-    fn is_standard_config_type(type_name: &str) -> bool {
-        simple_checker_params(type_name).is_some() || simple_generator_params(type_name).is_some()
-    }
-
     /// Return known fields for a builtin processor type, or None for Lua plugins.
     pub(crate) fn known_fields_for(type_name: &str) -> Option<&'static [&'static str]> {
-        if Self::is_standard_config_type(type_name) {
-            return Some(<StandardConfig as KnownFields>::known_fields());
-        }
         find_registry_entry(type_name).map(|e| e.known_fields())
     }
 
     /// Return output-affecting fields for a builtin processor type, or None for Lua plugins.
     pub(crate) fn output_fields_for(type_name: &str) -> Option<&'static [&'static str]> {
-        if Self::is_standard_config_type(type_name) {
-            return Some(<StandardConfig as KnownFields>::output_fields());
-        }
         find_registry_entry(type_name).map(|e| e.output_fields())
     }
 
     /// Return must fields (required non-empty fields) for a builtin processor type, or None for Lua plugins.
     pub(crate) fn must_fields_for(type_name: &str) -> Option<&'static [&'static str]> {
-        if Self::is_standard_config_type(type_name) {
-            return Some(<StandardConfig as KnownFields>::must_fields());
-        }
         find_registry_entry(type_name).map(|e| e.must_fields())
     }
 
     /// Return (field, description) pairs for a builtin processor type, or None for Lua plugins.
     pub(crate) fn field_descriptions_for(type_name: &str) -> Option<&'static [(&'static str, &'static str)]> {
-        if Self::is_standard_config_type(type_name) {
-            return Some(<StandardConfig as KnownFields>::field_descriptions());
-        }
         find_registry_entry(type_name).map(|e| e.field_descriptions())
     }
 
@@ -605,14 +519,6 @@ impl ProcessorConfig {
 
     /// Return the default config for a processor type as pretty JSON, or None if unknown.
     pub(crate) fn defconfig_json(type_name: &str) -> Option<String> {
-        if Self::is_standard_config_type(type_name) {
-            let mut config_val = toml::Value::Table(toml::map::Map::new());
-            apply_processor_defaults(type_name, &mut config_val);
-            apply_scan_defaults(type_name, &mut config_val);
-            let cfg: StandardConfig = toml::from_str(&toml::to_string(&config_val).ok()?).ok()?;
-            let json = serde_json::to_value(cfg).ok()?;
-            return serde_json::to_string_pretty(&json).ok();
-        }
         find_registry_entry(type_name)?.defconfig_json()
     }
 }
@@ -728,7 +634,7 @@ pub(crate) fn processor_defaults_for(type_name: &str) -> Option<ProcessorDefault
         "jq" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "jq", dep_auto: &[] },
         "jsonlint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "jsonlint", dep_auto: &[] },
         "taplo" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "taplo", dep_auto: &["taplo.toml", ".taplo.toml"] },
-        "cppcheck" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "cppcheck", dep_auto: &[] },
+        "cppcheck" => ProcessorDefaults { output_dir: "", formats: &[], args: &["--error-exitcode=1", "--enable=warning,style,performance,portability"], command: "cppcheck", dep_auto: &[".cppcheck"] },
         "cpplint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "cpplint", dep_auto: &[] },
         "checkpatch" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "checkpatch.pl", dep_auto: &[] },
         "shellcheck" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "shellcheck", dep_auto: &[".shellcheckrc"] },

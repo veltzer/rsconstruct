@@ -250,62 +250,6 @@ impl KnownFields for Jinja2Config {
 
 pub type MarpImagesConfig = CheckerConfig;
 
-fn default_cppcheck_args() -> Vec<String> {
-    vec![
-        "--error-exitcode=1".into(),
-        "--enable=warning,style,performance,portability".into(),
-    ]
-}
-
-fn default_cppcheck_auto_inputs() -> Vec<String> {
-    vec![".cppcheck".into()]
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct CppcheckConfig {
-    #[serde(default = "default_cppcheck_args")]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub dep_inputs: Vec<String>,
-    #[serde(default = "default_cppcheck_auto_inputs")]
-    pub dep_auto: Vec<String>,
-    #[serde(default = "default_true")]
-    pub batch: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_jobs: Option<usize>,
-    #[serde(flatten)]
-    pub scan: ScanConfig,
-}
-
-impl Default for CppcheckConfig {
-    fn default() -> Self {
-        Self {
-            args: default_cppcheck_args(),
-            dep_inputs: Vec::new(),
-            dep_auto: default_cppcheck_auto_inputs(),
-            batch: true,
-            max_jobs: None,
-            scan: ScanConfig::default(),
-        }
-    }
-}
-
-impl KnownFields for CppcheckConfig {
-    fn known_fields() -> &'static [&'static str] {
-        &[
-            "args", "dep_inputs", "dep_auto", "batch", "max_jobs",
-        ]
-    }
-    fn output_fields() -> &'static [&'static str] {
-        &["args"]
-    }
-    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
-        &[
-            ("args", "Extra arguments passed to cppcheck"),
-        ]
-    }
-}
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ClangTidyConfig {
     #[serde(default)]
@@ -1081,9 +1025,6 @@ impl KnownFields for TagsConfig {
     }
 }
 
-pub type ShellcheckConfig = CheckerConfigWithCommand;
-
-pub type LuacheckConfig = CheckerConfigWithCommand;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ScriptConfig {
@@ -2193,9 +2134,6 @@ impl KnownFields for IpdfuniteConfig {
     }
 }
 
-pub type CpplintConfig = CheckerConfig;
-
-pub type CheckpatchConfig = CheckerConfig;
 
 
 // --- tidy (HTML validator) ---

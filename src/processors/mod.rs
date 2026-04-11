@@ -765,27 +765,11 @@ where
     }
 }
 
-// Re-export from subdirectories
-pub use checkers::{
-    SimpleChecker, AsciiProcessor, AspellProcessor,
-    CheckpatchProcessor, ClippyProcessor, ClangTidyProcessor, CppcheckProcessor, CpplintProcessor,
-    DuplicateFilesProcessor,
-    EncodingProcessor,
-   
-    IjqProcessor, IjsonlintProcessor, ItaploProcessor, IyamllintProcessor, IyamlschemaProcessor,
-    JsonSchemaProcessor,
-    LicenseHeaderProcessor, LuacheckProcessor, MakeProcessor, MarpImagesProcessor,
-    MarkdownlintProcessor, MdlProcessor,
-   
-    ScriptProcessor, ShellcheckProcessor, ZspellProcessor,
-   
-    TermsProcessor,
-};
-pub use generators::{CcSingleFileProcessor, ExplicitProcessor, GeneratorProcessor, IpdfuniteProcessor, Jinja2Processor, LinuxModuleProcessor, MakoProcessor, PdflatexProcessor, PdfuniteProcessor, RustSingleFileProcessor, SimpleGenerator, TagsProcessor, TeraProcessor};
-pub use creator::CreatorProcessor;
-pub use mass_generators::{CargoProcessor, CcProcessor, GemProcessor, JekyllProcessor, MdbookProcessor, NpmProcessor, PipProcessor, SphinxProcessor};
-pub(crate) use generators::tags as tags_cmd;
+// Re-export types used by the registry and external code
+pub use checkers::SimpleChecker;
+pub use generators::SimpleGenerator;
 pub(crate) use checkers::terms;
+pub(crate) use generators::tags as tags_cmd;
 pub use lua_processor::LuaProcessor;
 
 /// Map from processor name to processor instance. Used throughout the build pipeline.

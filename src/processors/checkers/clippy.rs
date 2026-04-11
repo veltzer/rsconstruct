@@ -84,3 +84,9 @@ impl ProductDiscovery for ClippyProcessor {
         self.execute_clippy(product.primary_input())
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::ClippyConfig>(
+        "clippy", |cfg| Box::new(ClippyProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

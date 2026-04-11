@@ -89,3 +89,9 @@ impl crate::processors::ProductDiscovery for AsciiProcessor {
         crate::processors::execute_checker_batch(products, |files| self.check_files(files))
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::AsciiConfig>(
+        "ascii", |cfg| Box::new(AsciiProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

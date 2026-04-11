@@ -11,6 +11,7 @@ use crate::processors::{ProcessorBase, ProductDiscovery, ProcessorType,
 use super::DiscoverParams;
 
 /// How a simple generator discovers its products.
+#[derive(Copy, Clone)]
 pub(crate) enum DiscoverMode {
     /// Discover one product per source x format (uses config.formats).
     MultiFormat,
@@ -26,6 +27,7 @@ pub struct SimpleGenerator {
     params: SimpleGeneratorParams,
 }
 
+#[derive(Copy, Clone)]
 pub(crate) struct SimpleGeneratorParams {
     pub description: &'static str,
     pub extra_tools: &'static [&'static str],
@@ -365,116 +367,19 @@ fn execute_yaml2json(_config: &StandardConfig, product: &Product) -> Result<()> 
     Ok(())
 }
 
-// --- Params lookup ---
+// --- Plugin registrations (auto-discovered via inventory) ---
 
-pub(crate) fn simple_generator_params(type_name: &str) -> Option<SimpleGeneratorParams> {
-    Some(match type_name {
-        "mermaid" => SimpleGeneratorParams {
-            description: "Convert Mermaid diagrams to PNG/SVG/PDF",
-            extra_tools: &["node"],
-            discover_mode: DiscoverMode::MultiFormat,
-            execute_fn: execute_mermaid,
-            is_native: false,
-        },
-        "drawio" => SimpleGeneratorParams {
-            description: "Convert Draw.io diagrams to PNG/SVG/PDF",
-            extra_tools: &[],
-            discover_mode: DiscoverMode::MultiFormat,
-            execute_fn: execute_drawio,
-            is_native: false,
-        },
-        "sass" => SimpleGeneratorParams {
-            description: "Compile SCSS/SASS files to CSS",
-            extra_tools: &[],
-            discover_mode: DiscoverMode::SingleFormat("css"),
-            execute_fn: execute_sass,
-            is_native: false,
-        },
-        "protobuf" => SimpleGeneratorParams {
-            description: "Compile Protocol Buffer files",
-            extra_tools: &[],
-            discover_mode: DiscoverMode::SingleFormat("pb.cc"),
-            execute_fn: execute_protobuf,
-            is_native: false,
-        },
-        "chromium" => SimpleGeneratorParams {
-            description: "Convert HTML to PDF using headless Chromium",
-            extra_tools: &[],
-            discover_mode: DiscoverMode::SingleFormat("pdf"),
-            execute_fn: execute_chromium,
-            is_native: false,
-        },
-        "markdown2html" => SimpleGeneratorParams {
-            description: "Convert Markdown to HTML using markdown",
-            extra_tools: &["perl"],
-            discover_mode: DiscoverMode::SingleFormat("html"),
-            execute_fn: execute_markdown2html,
-            is_native: false,
-        },
-        "libreoffice" => SimpleGeneratorParams {
-            description: "Convert LibreOffice documents to PDF/PPTX",
-            extra_tools: &["flock"],
-            discover_mode: DiscoverMode::MultiFormat,
-            execute_fn: execute_libreoffice,
-            is_native: false,
-        },
-        "marp" => SimpleGeneratorParams {
-            description: "Convert Marp slides to PDF/PPTX/HTML",
-            extra_tools: &["node"],
-            discover_mode: DiscoverMode::MultiFormat,
-            execute_fn: execute_marp,
-            is_native: false,
-        },
-        "pandoc" => SimpleGeneratorParams {
-            description: "Convert documents using pandoc",
-            extra_tools: &[],
-            discover_mode: DiscoverMode::MultiFormat,
-            execute_fn: execute_pandoc,
-            is_native: false,
-        },
-        "a2x" => SimpleGeneratorParams {
-            description: "Convert AsciiDoc to PDF using a2x",
-            extra_tools: &["python3"],
-            discover_mode: DiscoverMode::SingleFormat("pdf"),
-            execute_fn: execute_a2x,
-            is_native: false,
-        },
-        "objdump" => SimpleGeneratorParams {
-            description: "Disassemble binaries using objdump",
-            extra_tools: &[],
-            discover_mode: DiscoverMode::SingleFormat("dis"),
-            execute_fn: execute_objdump,
-            is_native: false,
-        },
-        "imarkdown2html" => SimpleGeneratorParams {
-            description: "Convert Markdown to HTML (in-process)",
-            extra_tools: &[],
-            discover_mode: DiscoverMode::SingleFormat("html"),
-            execute_fn: execute_imarkdown2html,
-            is_native: true,
-        },
-        "isass" => SimpleGeneratorParams {
-            description: "Compile SCSS/SASS files to CSS (in-process)",
-            extra_tools: &[],
-            discover_mode: DiscoverMode::SingleFormat("css"),
-            execute_fn: execute_isass,
-            is_native: true,
-        },
-        "yaml2json" => SimpleGeneratorParams {
-            description: "Convert YAML to JSON (in-process)",
-            extra_tools: &[],
-            discover_mode: DiscoverMode::SingleFormat("json"),
-            execute_fn: execute_yaml2json,
-            is_native: true,
-        },
-        _ => return None,
-    })
-}
-
-pub(crate) fn simple_generator_type_names() -> &'static [&'static str] {
-    &[
-        "mermaid", "drawio", "sass", "protobuf", "chromium", "markdown2html",
-        "libreoffice", "marp", "pandoc", "a2x", "objdump",
-        "imarkdown2html", "isass", "yaml2json",
-    ]
-}
+inventory::submit! { &crate::registry::simple_generator_plugin("mermaid", SimpleGeneratorParams { description: "Convert Mermaid diagrams to PNG/SVG/PDF", extra_tools: &["node"], discover_mode: DiscoverMode::MultiFormat, execute_fn: execute_mermaid, is_native: false }) as &dyn crate::registry::RegistryOps }
+inventory::submit! { &crate::registry::simple_generator_plugin("drawio", SimpleGeneratorParams { description: "Convert Draw.io diagrams to PNG/SVG/PDF", extra_tools: &[], discover_mode: DiscoverMode::MultiFormat, execute_fn: execute_drawio, is_native: false }) as &dyn crate::registry::RegistryOps }
+inventory::submit! { &crate::registry::simple_generator_plugin("sass", SimpleGeneratorParams { description: "Compile SCSS/SASS files to CSS", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("css"), execute_fn: execute_sass, is_native: false }) as &dyn crate::registry::RegistryOps }
+inventory::submit! { &crate::registry::simple_generator_plugin("protobuf", SimpleGeneratorParams { description: "Compile Protocol Buffer files", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("pb.cc"), execute_fn: execute_protobuf, is_native: false }) as &dyn crate::registry::RegistryOps }
+inventory::submit! { &crate::registry::simple_generator_plugin("chromium", SimpleGeneratorParams { description: "Convert HTML to PDF using headless Chromium", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("pdf"), execute_fn: execute_chromium, is_native: false }) as &dyn crate::registry::RegistryOps }
+inventory::submit! { &crate::registry::simple_generator_plugin("markdown2html", SimpleGeneratorParams { description: "Convert Markdown to HTML using markdown", extra_tools: &["perl"], discover_mode: DiscoverMode::SingleFormat("html"), execute_fn: execute_markdown2html, is_native: false }) as &dyn crate::registry::RegistryOps }
+inventory::submit! { &crate::registry::simple_generator_plugin("libreoffice", SimpleGeneratorParams { description: "Convert LibreOffice documents to PDF/PPTX", extra_tools: &["flock"], discover_mode: DiscoverMode::MultiFormat, execute_fn: execute_libreoffice, is_native: false }) as &dyn crate::registry::RegistryOps }
+inventory::submit! { &crate::registry::simple_generator_plugin("marp", SimpleGeneratorParams { description: "Convert Marp slides to PDF/PPTX/HTML", extra_tools: &["node"], discover_mode: DiscoverMode::MultiFormat, execute_fn: execute_marp, is_native: false }) as &dyn crate::registry::RegistryOps }
+inventory::submit! { &crate::registry::simple_generator_plugin("pandoc", SimpleGeneratorParams { description: "Convert documents using pandoc", extra_tools: &[], discover_mode: DiscoverMode::MultiFormat, execute_fn: execute_pandoc, is_native: false }) as &dyn crate::registry::RegistryOps }
+inventory::submit! { &crate::registry::simple_generator_plugin("a2x", SimpleGeneratorParams { description: "Convert AsciiDoc to PDF using a2x", extra_tools: &["python3"], discover_mode: DiscoverMode::SingleFormat("pdf"), execute_fn: execute_a2x, is_native: false }) as &dyn crate::registry::RegistryOps }
+inventory::submit! { &crate::registry::simple_generator_plugin("objdump", SimpleGeneratorParams { description: "Disassemble binaries using objdump", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("dis"), execute_fn: execute_objdump, is_native: false }) as &dyn crate::registry::RegistryOps }
+inventory::submit! { &crate::registry::simple_generator_plugin("imarkdown2html", SimpleGeneratorParams { description: "Convert Markdown to HTML (in-process)", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("html"), execute_fn: execute_imarkdown2html, is_native: true }) as &dyn crate::registry::RegistryOps }
+inventory::submit! { &crate::registry::simple_generator_plugin("isass", SimpleGeneratorParams { description: "Compile SCSS/SASS files to CSS (in-process)", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("css"), execute_fn: execute_isass, is_native: true }) as &dyn crate::registry::RegistryOps }
+inventory::submit! { &crate::registry::simple_generator_plugin("yaml2json", SimpleGeneratorParams { description: "Convert YAML to JSON (in-process)", extra_tools: &[], discover_mode: DiscoverMode::SingleFormat("json"), execute_fn: execute_yaml2json, is_native: true }) as &dyn crate::registry::RegistryOps }

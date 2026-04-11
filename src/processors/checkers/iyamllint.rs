@@ -71,3 +71,9 @@ impl crate::processors::ProductDiscovery for IyamllintProcessor {
         crate::processors::execute_checker_batch(products, |files| self.check_files(files))
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::IyamllintConfig>(
+        "iyamllint", |cfg| Box::new(IyamllintProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

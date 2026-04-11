@@ -115,3 +115,9 @@ impl crate::processors::ProductDiscovery for LicenseHeaderProcessor {
         self.config.max_jobs
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::LicenseHeaderConfig>(
+        "license_header", |cfg| Box::new(LicenseHeaderProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

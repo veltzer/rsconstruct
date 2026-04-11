@@ -96,3 +96,9 @@ impl crate::processors::ProductDiscovery for MarpImagesProcessor {
         crate::processors::execute_checker_batch(products, |files| self.check_files(files))
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::MarpImagesConfig>(
+        "marp_images", |cfg| Box::new(MarpImagesProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

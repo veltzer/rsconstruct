@@ -86,3 +86,9 @@ impl ProductDiscovery for MakeProcessor {
         self.execute_make(product.primary_input())
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::MakeConfig>(
+        "make", |cfg| Box::new(MakeProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

@@ -97,3 +97,9 @@ impl ProductDiscovery for JekyllProcessor {
         self.execute_jekyll(product.primary_input())
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::JekyllConfig>(
+        "jekyll", |cfg| Box::new(JekyllProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

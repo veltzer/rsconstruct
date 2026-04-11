@@ -85,3 +85,9 @@ impl crate::processors::ProductDiscovery for DuplicateFilesProcessor {
         crate::processors::execute_checker_batch(products, |files| self.check_files(files))
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::DuplicateFilesConfig>(
+        "duplicate_files", |cfg| Box::new(DuplicateFilesProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

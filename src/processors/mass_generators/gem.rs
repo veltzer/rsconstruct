@@ -116,3 +116,9 @@ impl ProductDiscovery for GemProcessor {
         self.execute_gem(product.primary_input())
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::GemConfig>(
+        "gem", |cfg| Box::new(GemProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

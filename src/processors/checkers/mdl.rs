@@ -96,3 +96,9 @@ impl ProductDiscovery for MdlProcessor {
         check_command_output(&output, format_args!("mdl {}", file.display()))
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::MdlConfig>(
+        "mdl", |cfg| Box::new(MdlProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

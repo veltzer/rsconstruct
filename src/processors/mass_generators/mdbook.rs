@@ -96,3 +96,9 @@ impl ProductDiscovery for MdbookProcessor {
         self.execute_mdbook(product.primary_input())
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::MdbookConfig>(
+        "mdbook", |cfg| Box::new(MdbookProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

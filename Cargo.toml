@@ -41,6 +41,7 @@ jsonschema = { version = "0.45.1", default-features = false, features = ["resolv
 tabled = "0.20.0"
 ureq = "3"
 strum = { version = "0.28.0", features = ["derive"] }
+inventory = "0.3.24"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

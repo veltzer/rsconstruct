@@ -149,3 +149,9 @@ impl ProductDiscovery for PdflatexProcessor {
     }
 
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::PdflatexConfig>(
+        "pdflatex", |cfg| Box::new(PdflatexProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

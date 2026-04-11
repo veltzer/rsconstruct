@@ -20,13 +20,11 @@ use crate::cli::{BuildPhase, DisplayOptions};
 use crate::color;
 #[allow(unused_imports)]
 use crate::config::*;
-use crate::processors::generators::simple::{simple_generator_params, simple_generator_type_names};
 use crate::deps_cache::DepsCache;
 use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
 use crate::object_store::{ObjectStore, ObjectStoreOptions};
-use crate::processors as proc_mod;
 use crate::processors::{LuaProcessor, ProcessorMap, ProductDiscovery};
 use crate::remote_cache;
 use crate::tool_lock;
@@ -92,12 +90,6 @@ pub(crate) fn create_processor_for_instance(
     type_name: &str,
     config_toml: &toml::Value,
 ) -> anyhow::Result<Option<Box<dyn ProductDiscovery>>> {
-    if let Some(proc) = try_create_simple_checker(type_name, config_toml)? {
-        return Ok(Some(proc));
-    }
-    if let Some(proc) = try_create_simple_generator(type_name, config_toml)? {
-        return Ok(Some(proc));
-    }
     if let Some(entry) = find_registry_entry(type_name) {
         return entry.create(config_toml).map(Some);
     }
@@ -107,54 +99,11 @@ pub(crate) fn create_processor_for_instance(
 /// Create all builtin processors with default configs.
 pub(crate) fn create_all_default_processors() -> ProcessorMap {
     let mut processors: ProcessorMap = HashMap::new();
-    let empty_toml = toml::Value::Table(toml::map::Map::new());
     for entry in registry_entries() {
         let proc = entry.create_default();
         processors.insert(entry.name().to_string(), proc);
     }
-    for name in simple_checker_type_names() {
-        if let Ok(Some(proc)) = try_create_simple_checker(name, &empty_toml) {
-            processors.insert(name.to_string(), proc);
-        }
-    }
-    for name in simple_generator_type_names() {
-        if let Ok(Some(proc)) = try_create_simple_generator(name, &empty_toml) {
-            processors.insert(name.to_string(), proc);
-        }
-    }
     processors
-}
-
-/// Try to create a simple checker processor from type name and config TOML.
-fn try_create_simple_checker(
-    type_name: &str,
-    config_toml: &toml::Value,
-) -> anyhow::Result<Option<Box<dyn ProductDiscovery>>> {
-    let params = match simple_checker_params(type_name) {
-        Some(p) => p,
-        None => return Ok(None),
-    };
-    let mut config_val = config_toml.clone();
-    apply_processor_defaults(type_name, &mut config_val);
-    apply_scan_defaults(type_name, &mut config_val);
-    let cfg: CheckerConfigWithCommand = toml::from_str(&toml::to_string(&config_val)?)?;
-    Ok(Some(Box::new(proc_mod::SimpleChecker::new(cfg, params))))
-}
-
-/// Try to create a simple generator processor from type name and config TOML.
-fn try_create_simple_generator(
-    type_name: &str,
-    config_toml: &toml::Value,
-) -> anyhow::Result<Option<Box<dyn ProductDiscovery>>> {
-    let params = match simple_generator_params(type_name) {
-        Some(p) => p,
-        None => return Ok(None),
-    };
-    let mut config_val = config_toml.clone();
-    apply_processor_defaults(type_name, &mut config_val);
-    apply_scan_defaults(type_name, &mut config_val);
-    let cfg: StandardConfig = toml::from_str(&toml::to_string(&config_val)?)?;
-    Ok(Some(Box::new(proc_mod::SimpleGenerator::new(cfg, params))))
 }
 
 pub struct Builder {

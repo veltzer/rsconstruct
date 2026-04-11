@@ -12,19 +12,7 @@ pub(crate) mod simple;
 pub mod tags;
 mod tera;
 
-pub use cc_single_file::CcSingleFileProcessor;
-pub use explicit::ExplicitProcessor;
-pub use generator::GeneratorProcessor;
-pub use ipdfunite::IpdfuniteProcessor;
-pub use jinja2::Jinja2Processor;
-pub use linux_module::LinuxModuleProcessor;
-pub use mako::MakoProcessor;
-pub use pdflatex::PdflatexProcessor;
-pub use pdfunite::PdfuniteProcessor;
-pub use rust_single_file::RustSingleFileProcessor;
 pub use simple::SimpleGenerator;
-pub use tags::TagsProcessor;
-pub use tera::TeraProcessor;
 
 use std::path::{Path, PathBuf};
 use anyhow::Result;

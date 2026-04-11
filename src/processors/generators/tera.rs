@@ -498,3 +498,9 @@ fn load_lua_config(lua_file: &Path) -> Result<Map<String, Value>> {
 
     Ok(result)
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::TeraConfig>(
+        "tera", |cfg| Box::new(TeraProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

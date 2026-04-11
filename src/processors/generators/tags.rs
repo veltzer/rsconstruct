@@ -1953,3 +1953,9 @@ mod tests {
     }
 
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::TagsConfig>(
+        "tags", |cfg| Box::new(TagsProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}

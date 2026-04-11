@@ -164,3 +164,9 @@ impl ProductDiscovery for AspellProcessor {
         )
     }
 }
+
+inventory::submit! {
+    &crate::registry::typed_plugin::<crate::config::AspellConfig>(
+        "aspell", |cfg| Box::new(AspellProcessor::new(cfg))
+    ) as &dyn crate::registry::RegistryOps
+}
