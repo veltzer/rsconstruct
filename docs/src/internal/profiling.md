@@ -184,8 +184,87 @@ on-disk-format changes.
   above. Removed afterwards — regenerate via the methodology section if
   needed.
 
+## Run: 2026-04-12 (later) — HEAD after HashMap dedup fix
+
+### Wall-clock and counters
+
+| Metric | Value | vs. 0.8.1 tag |
+|---|---|---|
+| Wall time | 0.265 s | **4.1× faster** |
+| Instructions | 2.05 B | -90 % |
+| Cycles | 0.88 B | -83 % |
+| IPC | 2.34 | was 3.98 |
+| L1-dcache miss rate | 1.34 % | was 4.13 % |
+
+The quadratic path-equality peak is gone. What remains is the normal cost
+of using `PathBuf` as HashMap keys.
+
+### Hot spots (self-time, user-space, 9,948 samples, 10 iterations)
+
+| % | Function | Category |
+|---|---|---|
+| 5.42 | `core::str::converts::from_utf8` | UTF-8 validation |
+| 3.52 | `sip::Hasher::write` | HashMap hashing |
+| 3.51 | `<Path as Hash>::hash` | HashMap hashing |
+| 3.39 | `sha2::sha256::digest_blocks` | Checksumming |
+| 2.09 | `Components::next` | Path iteration |
+| 2.00 | `_int_malloc` | Allocator |
+| 1.92 | `parse_next_component_back` | Path iteration |
+| 1.60 | `compare_components` | Path comparison |
+| 1.19 | `combined_input_checksum` | Checksumming |
+| 1.12 | `Product::cache_key` | Cache keys |
+
+## Run: 2026-04-12 (later still) — HEAD after path interning
+
+### Context
+
+`BuildGraph`'s three hot HashMaps (`output_to_product`, `input_to_products`,
+`checker_dedup`) switched from `PathBuf` keys to a private `PathId(u32)`
+backed by an in-memory `PathInterner`. See
+[Path Interning](path-interning.md) for design.
+
+### Wall-clock and counters
+
+| Metric | Value | vs. previous |
+|---|---|---|
+| Wall time | 0.245 s | -8 % |
+| Instructions | 2.04 B | ~flat |
+| Cycles | 0.91 B | ~flat |
+
+### Hot spots (self-time, user-space, 9,925 samples, 10 iterations)
+
+| % | Function | Notes |
+|---|---|---|
+| 4.34 | `core::str::converts::from_utf8` | unchanged |
+| 3.21 | `sha2::sha256::digest_blocks` | unchanged |
+| 2.60 | `Components::next` | unchanged |
+| **2.39** | `sip::Hasher::write` | **down from 3.52 %** |
+| **2.25** | `<Path as Hash>::hash` | **down from 3.51 %** |
+| 2.06 | `_int_malloc` | unchanged |
+| 1.52 | `resolve_dependencies` | new — attribution shift |
+| **1.19** | `compare_components` | **down from 1.60 %** |
+| 1.09 | `combined_input_checksum` | unchanged |
+
+Interning paid off exactly where predicted — the hashing/compare columns
+dropped, and `resolve_dependencies` appears because its inner loop is now
+small enough to self-attribute rather than vanish inside the stdlib path
+functions. The total gain is modest (~8 %) because after the HashMap dedup
+fix, HashMap key cost was only ~7 % of total, and interning cuts that in
+half.
+
+### Candidate next targets (not yet implemented)
+
+1. **UTF-8 validation** (~6 %) — from `display().to_string()` in cache-key
+   building. Cache the string form per product or build keys from raw bytes.
+2. **`Product::cache_key` + hex encoding** (~2 % combined) — precompute and
+   memoize per product.
+3. **SHA-256** (~3 %) — already hardware-accelerated; the only lever is
+   fewer calls, via memoized `input_checksum` or better batch reuse.
+
 ## See also
 
+- [Path Interning](path-interning.md) — the optimization applied in the
+  most recent run.
 - [Per-Processor Statistics](per-processor-stats.md) — the previous perf
   discussion; describes why `cache stats` is slow (O(N descriptor reads)).
   That's independent of this graph-construction finding.

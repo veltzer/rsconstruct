@@ -191,20 +191,59 @@ impl Product {
     }
 }
 
+/// Per-process integer ID assigned to a path by `PathInterner`.
+/// IDs are only meaningful within a single `BuildGraph` — never persisted
+/// to disk or logs. See docs/src/internal/path-interning.md.
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+struct PathId(u32);
+
+/// Interns `PathBuf`s into small integer IDs for use as HashMap keys in
+/// `BuildGraph`'s hot lookup tables. Hashing and comparing `u32` is one
+/// instruction each, versus walking every component of a path.
+#[derive(Default)]
+struct PathInterner {
+    to_id: HashMap<PathBuf, PathId>,
+}
+
+impl PathInterner {
+    /// Return the id for `path`, inserting if new.
+    fn intern(&mut self, path: &Path) -> PathId {
+        if let Some(&id) = self.to_id.get(path) {
+            return id;
+        }
+        let id = PathId(self.to_id.len() as u32);
+        self.to_id.insert(path.to_path_buf(), id);
+        id
+    }
+
+    /// Return the id for `path` if it has been interned, without inserting.
+    /// Used by read-only lookups so we don't create spurious entries.
+    fn get(&self, path: &Path) -> Option<PathId> {
+        self.to_id.get(path).copied()
+    }
+
+    fn clear(&mut self) {
+        self.to_id.clear();
+    }
+}
+
 /// Build graph with dependency resolution
 #[derive(Default)]
 pub struct BuildGraph {
     products: Vec<Product>,
-    /// Map from output path to the single product id that produces it.
+    /// In-memory path interner backing the PathId-keyed maps below.
+    /// Never persisted. See docs/src/internal/path-interning.md.
+    interner: PathInterner,
+    /// Map from output path (interned) to the single product id that produces it.
     /// One path has at most one owner by construction (output-conflict check).
-    output_to_product: HashMap<PathBuf, usize>,
-    /// Map from input path to every product id that consumes it.
+    output_to_product: HashMap<PathId, usize>,
+    /// Map from input path (interned) to every product id that consumes it.
     /// One path may feed many products (e.g. a shared header).
-    input_to_products: HashMap<PathBuf, Vec<usize>>,
+    input_to_products: HashMap<PathId, Vec<usize>>,
     /// Dedup index for checker products (outputs empty): maps
-    /// (processor, primary_input, variant) → product id. Replaces an O(N)
+    /// (processor, primary_input_id, variant) → product id. Replaces an O(N)
     /// linear scan that dominated `status` wall time on large projects.
-    checker_dedup: HashMap<(String, PathBuf, Option<String>), usize>,
+    checker_dedup: HashMap<(String, PathId, Option<String>), usize>,
     /// Adjacency list: product id -> list of product ids that depend on it
     dependents: Vec<Vec<usize>>,
     /// Reverse: product id -> list of product ids it depends on
@@ -234,15 +273,21 @@ impl BuildGraph {
         // Deduplicate by matching on processor name, primary input, and variant.
         // Indexed via `checker_dedup` — O(1) average.
         if outputs.is_empty() && !inputs.is_empty() {
-            let key = (processor.to_string(), inputs[0].clone(), variant.map(str::to_string));
-            if let Some(&existing_id) = self.checker_dedup.get(&key) {
-                return Ok(existing_id);
+            if let Some(primary_id) = self.interner.get(&inputs[0]) {
+                let key = (processor.to_string(), primary_id, variant.map(str::to_string));
+                if let Some(&existing_id) = self.checker_dedup.get(&key) {
+                    return Ok(existing_id);
+                }
             }
         }
 
         // For generators: check output conflicts and deduplicate re-declarations.
         for output in &outputs {
-            if let Some(&existing_id) = self.output_to_product.get(output) {
+            let output_id = match self.interner.get(output) {
+                Some(id) => id,
+                None => continue,
+            };
+            if let Some(&existing_id) = self.output_to_product.get(&output_id) {
                 let existing = self.products.get(existing_id).expect(crate::errors::INVALID_PRODUCT_ID);
                 let same_processor = existing.processor == processor;
                 // Same processor re-declaring the same outputs: update inputs if
@@ -263,15 +308,18 @@ impl BuildGraph {
                         let old_set: HashSet<&PathBuf> = old_inputs.iter().collect();
                         for old in &old_inputs {
                             if !new_set.contains(old) {
-                                if let Some(ids) = self.input_to_products.get_mut(old) {
-                                    ids.retain(|&x| x != existing_id);
+                                if let Some(old_id) = self.interner.get(old) {
+                                    if let Some(ids) = self.input_to_products.get_mut(&old_id) {
+                                        ids.retain(|&x| x != existing_id);
+                                    }
                                 }
                             }
                         }
                         // Add index entries for the new inputs that weren't there before.
                         for new in &inputs {
                             if !old_set.contains(new) {
-                                self.input_to_products.entry(new.clone()).or_default().push(existing_id);
+                                let new_id = self.interner.intern(new);
+                                self.input_to_products.entry(new_id).or_default().push(existing_id);
                             }
                         }
                     }
@@ -291,18 +339,21 @@ impl BuildGraph {
 
         // Register outputs before moving outputs into the product
         for output in &outputs {
-            self.output_to_product.insert(output.clone(), id);
+            let output_id = self.interner.intern(output);
+            self.output_to_product.insert(output_id, id);
         }
 
         // Register inputs in the input index
         for input in &inputs {
-            self.input_to_products.entry(input.clone()).or_default().push(id);
+            let input_id = self.interner.intern(input);
+            self.input_to_products.entry(input_id).or_default().push(id);
         }
 
         // For checker products, populate the dedup index so a future re-declaration
         // with the same (processor, primary_input, variant) returns this id.
         if outputs.is_empty() && !inputs.is_empty() {
-            let key = (processor.to_string(), inputs[0].clone(), variant.map(str::to_string));
+            let primary_id = self.interner.intern(&inputs[0]);
+            let key = (processor.to_string(), primary_id, variant.map(str::to_string));
             self.checker_dedup.insert(key, id);
         }
 
@@ -356,7 +407,8 @@ impl BuildGraph {
         let edges: Vec<(usize, usize)> = self.products.iter()
             .flat_map(|product| {
                 product.inputs.iter().filter_map(|input| {
-                    self.output_to_product.get(input)
+                    let input_id = self.interner.get(input)?;
+                    self.output_to_product.get(&input_id)
                         .copied()
                         .filter(|&producer_id| producer_id != product.id)
                         .map(|producer_id| (producer_id, product.id))
@@ -425,14 +477,18 @@ impl BuildGraph {
     /// different product must be excluded from this Creator's tree so restore
     /// never clobbers another processor's file.
     pub fn path_owner(&self, path: &Path) -> Option<usize> {
-        self.output_to_product.get(path).copied()
+        let id = self.interner.get(path)?;
+        self.output_to_product.get(&id).copied()
     }
 
     /// Return every product id that lists `path` as an input. O(1) average — backed
     /// by a hashmap index. Returns an empty slice if the path is not an input to
     /// any product.
     pub fn products_consuming(&self, path: &Path) -> &[usize] {
-        self.input_to_products.get(path).map(Vec::as_slice).unwrap_or(&[])
+        match self.interner.get(path) {
+            Some(id) => self.input_to_products.get(&id).map(Vec::as_slice).unwrap_or(&[]),
+            None => &[],
+        }
     }
 
     /// Get dependencies of a product (products that must be built before this one)
@@ -485,8 +541,10 @@ impl BuildGraph {
         // Remove products that don't match (clear their inputs/outputs so they become no-ops)
         // We can't actually remove elements because IDs are indices, so we rebuild the graph
         let old_products = std::mem::take(&mut self.products);
+        self.interner.clear();
         self.output_to_product.clear();
         self.input_to_products.clear();
+        self.checker_dedup.clear();
         self.dependents.clear();
         self.dependencies.clear();
 
@@ -494,10 +552,17 @@ impl BuildGraph {
             if keep.contains(&product.id) {
                 let id = self.products.len();
                 for output in &product.outputs {
-                    self.output_to_product.insert(output.clone(), id);
+                    let output_id = self.interner.intern(output);
+                    self.output_to_product.insert(output_id, id);
                 }
                 for input in &product.inputs {
-                    self.input_to_products.entry(input.clone()).or_default().push(id);
+                    let input_id = self.interner.intern(input);
+                    self.input_to_products.entry(input_id).or_default().push(id);
+                }
+                if product.outputs.is_empty() && !product.inputs.is_empty() {
+                    let primary_id = self.interner.intern(&product.inputs[0]);
+                    let key = (product.processor.clone(), primary_id, product.variant.clone());
+                    self.checker_dedup.insert(key, id);
                 }
                 let mut p = product;
                 p.id = id;
