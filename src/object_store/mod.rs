@@ -441,7 +441,8 @@ impl ObjectStore {
                             }
                         }
                         // Wrong checksum — remove and re-restore
-                        let _ = fs::remove_file(file_path);
+                        fs::remove_file(file_path)
+                            .with_context(|| format!("Failed to remove stale cached file: {}", file_path.display()))?;
                     }
                     if !self.has_object(&entry.checksum) {
                         return Ok(false);

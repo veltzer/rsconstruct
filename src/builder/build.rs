@@ -165,7 +165,7 @@ impl Builder {
 
         // Filter by target patterns if specified
         if let Some(ref targets) = opts.targets {
-            graph.filter_by_targets(targets);
+            graph.filter_by_targets(targets)?;
         }
 
         // Prepend create_processors and init timings

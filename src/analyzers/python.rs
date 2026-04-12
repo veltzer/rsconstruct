@@ -139,10 +139,7 @@ impl DepAnalyzer for PythonDepAnalyzer {
                     None
                 }
             },
-            |source| {
-                // Python analyzer swallows scan errors (unwrap_or_default in original)
-                Ok(self.scan_imports(source, file_index).unwrap_or_default())
-            },
+            |source| self.scan_imports(source, file_index),
             verbose,
         )
     }

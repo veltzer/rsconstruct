@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
@@ -519,12 +519,13 @@ impl BuildGraph {
 
     /// Filter the graph to only include products whose input files match any of the target patterns.
     /// Uses glob matching. Products not matching any pattern are removed.
-    pub fn filter_by_targets(&mut self, patterns: &[String]) {
+    pub fn filter_by_targets(&mut self, patterns: &[String]) -> anyhow::Result<()> {
         let compiled: Vec<glob::Pattern> = patterns.iter()
-            .filter_map(|p| glob::Pattern::new(p).ok())
-            .collect();
+            .map(|p| glob::Pattern::new(p)
+                .with_context(|| format!("Invalid glob pattern: {}", p)))
+            .collect::<anyhow::Result<_>>()?;
         if compiled.is_empty() {
-            return;
+            return Ok(());
         }
 
         // Collect IDs to keep
@@ -571,6 +572,7 @@ impl BuildGraph {
                 self.dependencies.push(Vec::new());
             }
         }
+        Ok(())
     }
 }
 

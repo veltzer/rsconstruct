@@ -166,7 +166,7 @@ fn run() -> Result<()> {
                 CacheAction::RemoveStale => {
                     let builder = Builder::new()?;
                     let valid_keys = builder.valid_cache_keys()?;
-                    let stale_count = builder.object_store().remove_stale(&valid_keys);
+                    let stale_count = builder.object_store().remove_stale(&valid_keys)?;
                     let (bytes, trim_count) = builder.object_store().trim()?;
                     println!("Removed {} stale index entries", stale_count);
                     if trim_count > 0 {

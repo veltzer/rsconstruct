@@ -766,7 +766,7 @@ impl ProcessorConfig {
                     for (name, inst_val) in sub_table {
                         let instance_name = format!("{}.{}", key, name);
                         let mut config = inst_val.clone();
-                        resolve_instance_defaults(key, &mut config).ok();
+                        resolve_instance_defaults(key, &mut config)?;
                         instances.push(ProcessorInstance {
                             instance_name,
                             type_name: key.clone(),
@@ -776,7 +776,7 @@ impl ProcessorConfig {
                 } else {
                     // Single instance: [processor.pylint]
                     let mut config = val.clone();
-                    resolve_instance_defaults(key, &mut config).ok();
+                    resolve_instance_defaults(key, &mut config)?;
                     instances.push(ProcessorInstance {
                         instance_name: key.clone(),
                         type_name: key.clone(),

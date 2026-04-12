@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -64,7 +64,7 @@ fn remove_stale_outputs(
     product: &Product,
     object_store: &ObjectStore,
     input_checksum: &str,
-) {
+) -> anyhow::Result<()> {
     if !product.output_dirs.is_empty() {
         // Creator-style: remove only files we owned in the previous run.
         // Files that belong to other processors (sharing the same directory)
@@ -72,19 +72,23 @@ fn remove_stale_outputs(
         let cache_key = product.descriptor_key(input_checksum);
         for file in object_store.previous_tree_paths(&cache_key) {
             if file.exists() {
-                let _ = fs::remove_file(&file);
+                fs::remove_file(&file)
+                    .with_context(|| format!("Failed to remove stale output: {}", file.display()))?;
             }
         }
         // Ensure output dirs still exist (the tool may assume they do)
         for output_dir in &product.output_dirs {
-            let _ = fs::create_dir_all(output_dir.as_ref());
+            fs::create_dir_all(output_dir.as_ref())
+                .with_context(|| format!("Failed to create output directory: {}", output_dir.display()))?;
         }
     }
     for output in &product.outputs {
         if output.exists() {
-            let _ = fs::remove_file(output);
+            fs::remove_file(output)
+                .with_context(|| format!("Failed to remove stale output: {}", output.display()))?;
         }
     }
+    Ok(())
 }
 
 /// Per-processor progress counters shared across non-batch threads.
@@ -385,9 +389,21 @@ impl<'a> Executor<'a> {
                 lctx.pb.set_message(format!("[{}] batch {} files", proc_name, product_refs.len()));
             }
 
+            let mut cleanup_failed = false;
             for (p, item) in product_refs.iter().zip(chunk.iter()) {
                 json_output::emit_product_start(&self.product_display(p), &p.processor);
-                remove_stale_outputs(p, lctx.object_store, &item.input_checksum);
+                if let Err(e) = remove_stale_outputs(p, lctx.object_store, &item.input_checksum) {
+                    let ctx = HandlerContext {
+                        product: p, id: item.product_id, input_checksum: &item.input_checksum,
+                        proc_name, keep_going: lctx.keep_going, shared: lctx.shared, pb: lctx.pb,
+                    };
+                    self.handle_error(&ctx, e, None);
+                    Self::inc_progress(lctx.pb, lctx.shared);
+                    cleanup_failed = true;
+                }
+            }
+            if cleanup_failed {
+                break;
             }
             let batch_start = Instant::now();
             crate::processors::set_declared_tools(Some(processor.required_tools()));
@@ -501,7 +517,12 @@ impl<'a> Executor<'a> {
                 }
 
                 json_output::emit_product_start(&self.product_display(product), &product.processor);
-                remove_stale_outputs(product, lctx.object_store, &item.input_checksum);
+                match remove_stale_outputs(product, lctx.object_store, &item.input_checksum) {
+                    Err(e) => {
+                        self.handle_error(&ctx, e, None);
+                        Self::inc_progress(lctx.pb, lctx.shared);
+                    }
+                    Ok(()) => {
                 let product_start = Instant::now();
                 let mut last_error = None;
                 let max_attempts = 1 + self.retry;
@@ -576,6 +597,8 @@ impl<'a> Executor<'a> {
                 }
                 crate::processors::set_declared_tools(None);
                 Self::inc_progress(lctx.pb, lctx.shared);
+                    } // Ok(())
+                } // match remove_stale_outputs
             }
 
             // Release per-processor semaphore permit

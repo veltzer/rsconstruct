@@ -87,7 +87,7 @@ fn install_dir(source_dir: &Path, target_root: &Path, source_root: &Path) -> Res
             let abs_source = fs::canonicalize(&source_path)
                 .with_context(|| format!("Failed to resolve absolute path: {}", source_path.display()))?;
 
-            match install_symlink(&abs_source, &target_path) {
+            match install_symlink(&abs_source, &target_path)? {
                 LinkResult::Created => {
                     println!("  {} {}", color::green("created"), relative.display());
                     created += 1;
@@ -113,22 +113,26 @@ enum LinkResult {
 }
 
 /// Create or update a single symlink.
-fn install_symlink(source: &Path, target: &Path) -> LinkResult {
+fn install_symlink(source: &Path, target: &Path) -> Result<LinkResult> {
     if target.is_symlink() {
         if let Ok(existing) = fs::read_link(target)
             && existing == source
         {
-            return LinkResult::Unchanged;
+            return Ok(LinkResult::Unchanged);
         }
-        let _ = fs::remove_file(target);
-        let _ = symlink(source, target);
-        return LinkResult::Updated;
+        fs::remove_file(target)
+            .with_context(|| format!("Failed to remove existing symlink: {}", target.display()))?;
+        symlink(source, target)
+            .with_context(|| format!("Failed to create symlink: {} -> {}", target.display(), source.display()))?;
+        return Ok(LinkResult::Updated);
     }
 
     if target.exists() {
-        let _ = fs::remove_file(target);
+        fs::remove_file(target)
+            .with_context(|| format!("Failed to remove existing file: {}", target.display()))?;
     }
 
-    let _ = symlink(source, target);
-    LinkResult::Created
+    symlink(source, target)
+        .with_context(|| format!("Failed to create symlink: {} -> {}", target.display(), source.display()))?;
+    Ok(LinkResult::Created)
 }

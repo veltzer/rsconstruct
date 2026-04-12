@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::collections::BTreeMap;
 use std::fs;
 
@@ -81,10 +81,13 @@ impl ObjectStore {
             // Make writable before removing (objects are read-only)
             if let Ok(mut perms) = fs::metadata(&path).map(|m| m.permissions()) {
                 perms.set_readonly(false);
-                let _ = fs::set_permissions(&path, perms);
+                fs::set_permissions(&path, perms)
+                    .with_context(|| format!("Failed to make cache object writable: {}", path.display()))?;
             }
-            let _ = fs::remove_file(&path);
+            fs::remove_file(&path)
+                .with_context(|| format!("Failed to remove cache object: {}", path.display()))?;
             if let Some(parent) = path.parent() {
+                // Best-effort: remove empty parent dir (fails silently if not empty)
                 let _ = fs::remove_dir(parent);
             }
         }
@@ -94,11 +97,11 @@ impl ObjectStore {
 
     /// Remove stale descriptor entries whose cache keys are not in the valid set.
     /// Returns the number of entries removed.
-    pub fn remove_stale(&self, valid_descriptor_keys: &std::collections::HashSet<String>) -> usize {
+    pub fn remove_stale(&self, valid_descriptor_keys: &std::collections::HashSet<String>) -> Result<usize> {
         let mut count = 0;
 
         if !self.descriptors_dir.exists() {
-            return 0;
+            return Ok(0);
         }
 
         for path in walk_files(&self.descriptors_dir) {
@@ -111,19 +114,21 @@ impl ObjectStore {
                 if !valid_descriptor_keys.contains(&key) {
                     if let Ok(mut perms) = fs::metadata(&path).map(|m| m.permissions()) {
                         perms.set_readonly(false);
-                        let _ = fs::set_permissions(&path, perms);
+                        fs::set_permissions(&path, perms)
+                            .with_context(|| format!("Failed to make stale descriptor writable: {}", path.display()))?;
                     }
-                    if fs::remove_file(&path).is_ok() {
-                        count += 1;
-                    }
+                    fs::remove_file(&path)
+                        .with_context(|| format!("Failed to remove stale descriptor: {}", path.display()))?;
+                    count += 1;
                     if let Some(parent) = path.parent() {
+                        // Best-effort: remove empty parent dir (fails silently if not empty)
                         let _ = fs::remove_dir(parent);
                     }
                 }
             }
         }
 
-        count
+        Ok(count)
     }
 
     /// List all cache descriptors
