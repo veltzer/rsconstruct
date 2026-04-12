@@ -8,25 +8,23 @@ use super::{Builder, sorted_keys};
 
 /// List all available dependency analyzers (works without rsconstruct.toml).
 pub fn list_analyzers(verbose: bool) {
-    use crate::analyzers::{CppDepAnalyzer, MarkdownDepAnalyzer, PythonDepAnalyzer, TeraDepAnalyzer, DepAnalyzer};
-    let analyzers: Vec<(&str, Box<dyn DepAnalyzer>)> = vec![
-        ("cpp", Box::new(CppDepAnalyzer::new(Default::default(), false))),
-        ("markdown", Box::new(MarkdownDepAnalyzer::new())),
-        ("python", Box::new(PythonDepAnalyzer::new())),
-        ("tera", Box::new(TeraDepAnalyzer::new())),
-    ];
+    use crate::registry;
+
+    let mut plugins: Vec<_> = registry::all_analyzer_plugins().collect();
+    plugins.sort_by_key(|p| p.name);
+
     let mut builder = TableBuilder::new();
     if verbose {
         builder.push_record(["Name", "Native", "Description"]);
-        for (name, analyzer) in &analyzers {
-            let native_tag = if analyzer.is_native() { "native" } else { "external" };
-            builder.push_record([name.to_string(), native_tag.to_string(), analyzer.description().to_string()]);
+        for plugin in &plugins {
+            let native_tag = if plugin.is_native { "native" } else { "external" };
+            builder.push_record([plugin.name, native_tag, plugin.description]);
         }
     } else {
         builder.push_record(["Name", "Native"]);
-        for (name, analyzer) in &analyzers {
-            let native_tag = if analyzer.is_native() { "native" } else { "external" };
-            builder.push_record([name.to_string(), native_tag.to_string()]);
+        for plugin in &plugins {
+            let native_tag = if plugin.is_native { "native" } else { "external" };
+            builder.push_record([plugin.name, native_tag]);
         }
     }
     color::print_table(builder.build());
@@ -34,30 +32,15 @@ pub fn list_analyzers(verbose: bool) {
 
 /// Show default analyzer configuration (works without rsconstruct.toml).
 pub fn analyzer_defconfig(name: Option<&str>) -> Result<()> {
-    use crate::config::{CppAnalyzerConfig, PythonAnalyzerConfig};
-
-    fn print_analyzer(name: &str, toml_str: &str) {
-        println!("[analyzer.{}]", name);
-        print!("{}", toml_str);
-    }
+    use crate::registry;
 
     let print_one = |name: &str| -> Result<()> {
-        match name {
-            "cpp" => {
-                let toml = toml::to_string_pretty(&CppAnalyzerConfig::default())
-                    .context("Failed to serialize cpp analyzer default config")?;
-                print_analyzer("cpp", &toml);
-            }
-            "python" => {
-                let toml = toml::to_string_pretty(&PythonAnalyzerConfig::default())
-                    .context("Failed to serialize python analyzer default config")?;
-                print_analyzer("python", &toml);
-            }
-            "markdown" | "tera" => {
-                println!("[analyzer.{}]", name);
-                println!("# no configuration options");
-            }
-            _ => bail!("Unknown analyzer '{}'. Run 'rsconstruct analyzers list' to see available analyzers.", name),
+        let plugin = registry::find_analyzer_plugin(name)
+            .ok_or_else(|| anyhow::anyhow!("Unknown analyzer '{}'. Run 'rsconstruct analyzers list' to see available analyzers.", name))?;
+        println!("[analyzer.{}]", name);
+        match (plugin.defconfig_toml)() {
+            Some(toml) => print!("{}", toml),
+            None => println!("# no configuration options"),
         }
         Ok(())
     };
@@ -65,9 +48,10 @@ pub fn analyzer_defconfig(name: Option<&str>) -> Result<()> {
     if let Some(name) = name {
         print_one(name)?;
     } else {
-        for name in &["cpp", "markdown", "python", "tera"] {
+        let names = registry::all_analyzer_names();
+        for (i, name) in names.iter().enumerate() {
+            if i > 0 { println!(); }
             print_one(name)?;
-            println!();
         }
     }
     Ok(())

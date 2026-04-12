@@ -2,7 +2,8 @@ use anyhow::Result;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::config::KnownFields;
+use crate::analyzers::DepAnalyzer;
+use crate::config::{AnalyzerConfig, KnownFields};
 use crate::processors::{Processor, ProcessorType};
 
 /// A processor plugin. One struct for all processor types.
@@ -36,6 +37,44 @@ inventory::collect!(ProcessorPlugin);
 
 pub(crate) fn all_plugins() -> impl Iterator<Item = &'static ProcessorPlugin> {
     inventory::iter::<ProcessorPlugin>.into_iter()
+}
+
+// --- Analyzer registry ---
+
+/// An analyzer plugin. Each analyzer file submits one via `inventory::submit!`.
+pub struct AnalyzerPlugin {
+    pub name: &'static str,
+    pub description: &'static str,
+    pub is_native: bool,
+    /// Create an analyzer from the project's analyzer config.
+    pub create: fn(&AnalyzerConfig, bool) -> Box<dyn DepAnalyzer>,
+    /// Return the default config as a TOML string, or None if the analyzer has no config.
+    pub defconfig_toml: fn() -> Option<String>,
+}
+
+unsafe impl Sync for AnalyzerPlugin {}
+
+inventory::collect!(AnalyzerPlugin);
+
+pub(crate) fn all_analyzer_plugins() -> impl Iterator<Item = &'static AnalyzerPlugin> {
+    inventory::iter::<AnalyzerPlugin>.into_iter()
+}
+
+/// Return sorted analyzer names from the registry.
+pub(crate) fn all_analyzer_names() -> Vec<&'static str> {
+    let mut names: Vec<&str> = all_analyzer_plugins().map(|p| p.name).collect();
+    names.sort();
+    names
+}
+
+/// Find an analyzer plugin by name.
+pub(crate) fn find_analyzer_plugin(name: &str) -> Option<&'static AnalyzerPlugin> {
+    all_analyzer_plugins().find(|p| p.name == name)
+}
+
+/// Build a clap value parser that accepts any registered analyzer name.
+pub(crate) fn analyzer_name_parser() -> clap::builder::PossibleValuesParser {
+    clap::builder::PossibleValuesParser::new(all_analyzer_names())
 }
 
 /// Apply both processor defaults and scan defaults to a TOML value.

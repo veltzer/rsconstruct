@@ -522,13 +522,13 @@ pub enum AnalyzersAction {
     /// Show default analyzer configuration (no config needed)
     Defconfig {
         /// Analyzer name; omit to show all
-        #[arg(value_parser = ["cpp", "markdown", "python", "tera"])]
+        #[arg(value_parser = crate::registry::analyzer_name_parser())]
         name: Option<String>,
     },
     /// Show analyzer configuration (requires config)
     Config {
         /// Analyzer name (e.g., "cpp", "python"); omit to show all
-        #[arg(value_parser = ["cpp", "markdown", "python", "tera"])]
+        #[arg(value_parser = crate::registry::analyzer_name_parser())]
         name: Option<String>,
     },
     /// Show cached dependencies (requires config)
@@ -541,7 +541,7 @@ pub enum AnalyzersAction {
     /// Clear the dependency cache (requires config)
     Clean {
         /// Only clear entries from this analyzer (e.g., "cpp", "python")
-        #[arg(long, value_parser = ["cpp", "markdown", "python", "tera"])]
+        #[arg(long, value_parser = crate::registry::analyzer_name_parser())]
         analyzer: Option<String>,
     },
 }

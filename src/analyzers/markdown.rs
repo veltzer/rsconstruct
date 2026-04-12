@@ -113,3 +113,13 @@ impl DepAnalyzer for MarkdownDepAnalyzer {
         )
     }
 }
+
+inventory::submit! {
+    crate::registry::AnalyzerPlugin {
+        name: "markdown",
+        description: "Scan Markdown files for local file dependencies",
+        is_native: true,
+        create: |_, _| Box::new(MarkdownDepAnalyzer::new()),
+        defconfig_toml: || None,
+    }
+}

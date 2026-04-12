@@ -145,3 +145,13 @@ impl DepAnalyzer for PythonDepAnalyzer {
         )
     }
 }
+
+inventory::submit! {
+    crate::registry::AnalyzerPlugin {
+        name: "python",
+        description: "Scan Python files for local import dependencies",
+        is_native: true,
+        create: |_, _| Box::new(PythonDepAnalyzer::new()),
+        defconfig_toml: || None,
+    }
+}

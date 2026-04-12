@@ -112,3 +112,13 @@ impl DepAnalyzer for TeraDepAnalyzer {
         )
     }
 }
+
+inventory::submit! {
+    crate::registry::AnalyzerPlugin {
+        name: "tera",
+        description: "Scan Tera templates for include/import/extends dependencies",
+        is_native: true,
+        create: |_, _| Box::new(TeraDepAnalyzer::new()),
+        defconfig_toml: || None,
+    }
+}

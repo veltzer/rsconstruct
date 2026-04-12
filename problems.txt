@@ -26,3 +26,5 @@ python files dependency analysis:
 - make "rsconstruct deps list" --json emit json
 
 - "rsconstruct deps used" still uses color. Have a global color flag and turn it off for now because it is causing problems with tables.
+
+  rsconstruct processors defconfig explicit shouldnt show descripting (unless --verbose)

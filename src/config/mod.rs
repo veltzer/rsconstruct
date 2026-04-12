@@ -884,7 +884,7 @@ impl Default for CompletionsConfig {
 }
 
 fn default_analyzers() -> Vec<String> {
-    vec!["cpp".into(), "markdown".into(), "python".into(), "tera".into()]
+    crate::registry::all_analyzer_names().iter().map(|s| s.to_string()).collect()
 }
 
 /// Configuration for dependency analyzers

@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use anyhow::Result;
-use crate::analyzers::{CppDepAnalyzer, DepAnalyzer, MarkdownDepAnalyzer, PythonDepAnalyzer, TeraDepAnalyzer};
+use crate::analyzers::DepAnalyzer;
 use crate::cli::{BuildPhase, DisplayOptions};
 use crate::color;
 #[allow(unused_imports)]
@@ -259,26 +259,10 @@ impl Builder {
     /// Create all available dependency analyzers
     fn create_analyzers(&self, verbose: bool) -> HashMap<String, Box<dyn DepAnalyzer>> {
         let mut analyzers: HashMap<String, Box<dyn DepAnalyzer>> = HashMap::new();
-
-        // C/C++ dependency analyzer
-        let cpp_analyzer = CppDepAnalyzer::new(
-            self.config.analyzer.cpp.clone(),
-            verbose,
-        );
-        analyzers.insert("cpp".to_string(), Box::new(cpp_analyzer));
-
-        // Python dependency analyzer
-        let python_analyzer = PythonDepAnalyzer::new();
-        analyzers.insert("python".to_string(), Box::new(python_analyzer));
-
-        // Markdown dependency analyzer (image/link references)
-        let markdown_analyzer = MarkdownDepAnalyzer::new();
-        analyzers.insert("markdown".to_string(), Box::new(markdown_analyzer));
-
-        // Tera template dependency analyzer (include/import/extends)
-        let tera_analyzer = TeraDepAnalyzer::new();
-        analyzers.insert("tera".to_string(), Box::new(tera_analyzer));
-
+        for plugin in crate::registry::all_analyzer_plugins() {
+            let analyzer = (plugin.create)(&self.config.analyzer, verbose);
+            analyzers.insert(plugin.name.to_string(), analyzer);
+        }
         analyzers
     }
 

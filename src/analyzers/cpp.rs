@@ -548,8 +548,6 @@ impl DepAnalyzer for CppDepAnalyzer {
         "Scan C/C++ source files for #include dependencies"
     }
 
-    fn is_native(&self) -> bool { false }
-
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         // Check if there are any C/C++ source files
         let extensions = [".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"];
@@ -591,5 +589,17 @@ impl DepAnalyzer for CppDepAnalyzer {
             },
             verbose,
         )
+    }
+}
+
+inventory::submit! {
+    crate::registry::AnalyzerPlugin {
+        name: "cpp",
+        description: "Scan C/C++ source files for #include dependencies",
+        is_native: false,
+        create: |config, verbose| Box::new(CppDepAnalyzer::new(config.cpp.clone(), verbose)),
+        defconfig_toml: || {
+            toml::to_string_pretty(&crate::config::CppAnalyzerConfig::default()).ok()
+        },
     }
 }
