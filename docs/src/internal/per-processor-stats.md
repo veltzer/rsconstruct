@@ -212,6 +212,67 @@ Option C is attractive if the only query we cared about was a single summary,
 but the sidecar's consistency burden is real and tends to surface as bugs in
 edge cases (remote-cache sync, partial writes, manual cleanup).
 
+### On Option B's "cost"
+
+The only new artifact on disk is **N extra directory entries at the top level
+of `descriptors/`**, where N is the number of distinct processors that have
+ever cached anything. In practice that's 10–30 directories. Filesystems handle
+that trivially — both ext4 and btrfs are fine with thousands of top-level
+entries, let alone tens.
+
+In return we get:
+
+- `stats_by_processor` in O(N readdirs) instead of O(cache_size reads).
+- Honest "declared-but-empty" rows in `cache stats` (empty dir = 0 entries,
+  and there is no drift to reconcile).
+- Fast "list cache entries for processor X" — a single `readdir`.
+- A self-describing cache: `ls .rsconstruct/cache/descriptors/` tells you at a
+  glance which processors have cached anything.
+
+The cost is negligible; the payoff is across the board.
+
+## Implementation plan (Option B)
+
+1. **Cache insert path.** Change the descriptor write to
+   `descriptors/<processor>/<hash>.json` (replacing the current
+   `descriptors/<hash-prefix>/<hash-suffix>/<hash>.json` sharding). The
+   processor name is already known at insert time — it's on the product.
+
+2. **Cache read path.** Descriptor lookups happen by cache key. If the lookup
+   caller already has the processor name, read directly. Otherwise scan the
+   processor subdirs (rare path — most lookups come from a build graph where
+   the processor is known).
+
+3. **`stats_by_processor` rewrite.** Iterate subdirs of `descriptors/`; each
+   subdir name is a processor. Count files within. For the "bytes" axis,
+   continue to stat the corresponding blob objects.
+
+4. **Migration.** On startup, if old-layout descriptor files exist (files
+   directly under sharded `ab/cd/` subdirs, or anywhere that isn't a
+   recognized processor name), wipe `descriptors/`. Cache is regenerable by
+   definition; next build repopulates under the new layout. Users pay one
+   slower build post-upgrade, no data loss.
+
+5. **`cache stats` UX.** Once grouping is real, enumerate declared processors
+   from `rsconstruct.toml` and union them with processors present in
+   `descriptors/`. Show a 0-row for anything declared-but-empty (mirrors the
+   `analyzers stats` treatment already implemented in `builder/analyzers.rs`).
+
+### Scope
+
+Most of the work lives in `src/object_store/`:
+
+- `management.rs` — `stats_by_processor` rewrite.
+- The insert/read paths (split across `object_store.rs` and neighbors) —
+  path-construction change.
+- The cache-clean / trim paths — updated to walk the new layout.
+
+Followed by a small change in `src/main.rs` (`CacheAction::Stats`) to
+consume the new grouped output and render a table with the declared-union
+treatment.
+
+Estimated: a couple hundred lines, concentrated in a single module.
+
 ## Secondary cleanup — graph-level helpers
 
 Every caller that wants per-processor grouping over the current graph
