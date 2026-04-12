@@ -279,6 +279,9 @@ fn run() -> Result<()> {
             let builder = Builder::new()?;
             builder.doctor()?;
         }
+        Commands::Errors => {
+            list_exit_codes(cli.verbose)?;
+        }
         Commands::Graph { action } => {
             let builder = Builder::new()?;
             builder.graph(action)?;
@@ -500,6 +503,37 @@ fn run() -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+/// List all exit codes and their meanings.
+fn list_exit_codes(verbose: bool) -> Result<()> {
+    use strum::IntoEnumIterator;
+    use exit_code::RsconstructExitCode;
+
+    if json_output::is_json_mode() {
+        #[derive(serde::Serialize)]
+        struct Entry { code: u8, name: &'static str, description: &'static str }
+        let entries: Vec<Entry> = RsconstructExitCode::iter()
+            .map(|e| Entry { code: e.code(), name: e.name(), description: e.description() })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&entries)?);
+        return Ok(());
+    }
+
+    let mut builder = tabled::builder::Builder::new();
+    if verbose {
+        builder.push_record(["Code", "Name", "Description"]);
+        for e in RsconstructExitCode::iter() {
+            builder.push_record([&e.code().to_string(), e.name(), e.description()]);
+        }
+    } else {
+        builder.push_record(["Code", "Name"]);
+        for e in RsconstructExitCode::iter() {
+            builder.push_record([&e.code().to_string(), e.name()]);
+        }
+    }
+    color::print_table(builder.build());
     Ok(())
 }
 

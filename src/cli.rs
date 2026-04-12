@@ -219,6 +219,8 @@ pub enum Commands {
     },
     /// Check build environment (requires config)
     Doctor,
+    /// List all exit codes and their meanings (no config needed)
+    Errors,
     /// Display the build dependency graph
     Graph {
         #[command(subcommand)]
