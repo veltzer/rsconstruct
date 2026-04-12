@@ -101,4 +101,5 @@ mod processors {
     pub mod hadolint;
     pub mod jekyll;
     pub mod slidev;
+    pub mod shared_output_dir;
 }
