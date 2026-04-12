@@ -9,8 +9,6 @@ python files dependency analysis:
 
 - rsconstruct processors types should print out a table. --json will emit json output.
 
-- explciit processor command should be none and a must field.
-
   - I want rscontrcut processor add [TAB] -> name of processor that will add the processor to my toml file with all the must fill variables already there with default values and comments to fill them correctly.
     and the same for analyzers.
 
