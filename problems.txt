@@ -12,7 +12,3 @@ python files dependency analysis:
 - rsconstruct processors types should print out a table. --json will emit json output.
 
 - explciit processor command should be none and a must field.
-
-- rsconstruct processors defconfig explicit should print only the table.
-    description should be printed only under --verbose.
-    I want to see other columns like must etc.

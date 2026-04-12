@@ -10,6 +10,7 @@
 - [Configuration](configuration.md)
 - [Cache System](cache.md)
 - [Checksum Cache](checksum-cache.md)
+- [Processor Versioning](processor-versioning.md)
 - [Remote Caching](remote-caching.md)
 - [Dependency Caching](dependency-caching.md)
 - [Project Structure](project-structure.md)
