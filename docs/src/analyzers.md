@@ -57,6 +57,8 @@ Use the `analyzers` and `deps` commands to inspect the cache:
 ```bash
 rsconstruct analyzers list            # list available analyzers
 rsconstruct analyzers defconfig cpp   # show default config for an analyzer
+rsconstruct analyzers add cpp         # append [analyzer.cpp] to rsconstruct.toml with comments
+rsconstruct analyzers add cpp --dry-run  # preview without writing
 rsconstruct deps all                  # show all cached dependencies
 rsconstruct deps for src/main.c       # show dependencies for specific files
 rsconstruct deps clean                # clear the dependency cache

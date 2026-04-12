@@ -281,6 +281,9 @@ fn run() -> Result<()> {
                 cli::AnalyzersAction::Defconfig { name } => {
                     builder::analyzers::analyzer_defconfig(name.as_deref())?;
                 }
+                cli::AnalyzersAction::Add { name, dry_run } => {
+                    builder::add_analyzer(name, *dry_run)?;
+                }
                 _ => {
                     let builder = Builder::new()?;
                     builder.analyzers(action, cli.verbose)?;
@@ -323,6 +326,9 @@ fn run() -> Result<()> {
                 }
                 cli::ProcessorAction::Defconfig { ref pname } => {
                     builder::processors::processor_defconfig(pname, cli.verbose)?;
+                }
+                cli::ProcessorAction::Add { ref pname, dry_run } => {
+                    builder::add_processor(pname, dry_run)?;
                 }
                 cli::ProcessorAction::Config { .. } if !has_config => {
                     bail!("No rsconstruct.toml found. Use 'processors defconfig <name>' to see default config without a project.");

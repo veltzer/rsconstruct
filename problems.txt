@@ -23,9 +23,6 @@ python files dependency analysis:
 
 - do a pass of making the code more strict (whenever we relax strictness try to figure out if we can return the strictness)
 
-- add "analyzer" to the nomenclature dociumentation. and add all processor types.
-
-
 - also lets start writing a document about distributed execution.
     The problems, the design, how other tools do it etc.
 

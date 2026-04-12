@@ -1,3 +1,4 @@
+mod add_config;
 mod build;
 mod clean;
 mod config_cmd;
@@ -9,6 +10,8 @@ pub(crate) mod sloc;
 pub(crate) mod smart;
 pub(crate) mod symlink_install;
 pub(crate) mod tools;
+
+pub(crate) use add_config::{add_processor, add_analyzer};
 
 use std::borrow::Cow;
 use std::collections::HashMap;

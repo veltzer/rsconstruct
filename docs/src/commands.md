@@ -361,6 +361,8 @@ rsconstruct processors files              # Show files for enabled processors
 rsconstruct processors config ruff       # Show resolved configuration for a processor
 rsconstruct processors config --diff     # Show only fields that differ from defaults
 rsconstruct processors defconfig ruff    # Show default configuration for a processor
+rsconstruct processors add ruff          # Append [processor.ruff] to rsconstruct.toml (fields pre-populated + comments)
+rsconstruct processors add ruff --dry-run  # Preview the snippet without writing
 rsconstruct processors allowlist         # Show the current processor allowlist
 rsconstruct processors graph             # Show inter-processor dependencies
 rsconstruct processors graph --format dot    # Graphviz DOT format

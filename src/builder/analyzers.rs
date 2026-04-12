@@ -130,7 +130,7 @@ impl Builder {
         use crate::cli::AnalyzersAction;
 
         match action {
-            AnalyzersAction::List | AnalyzersAction::Defconfig { .. } => unreachable!("handled in main.rs"),
+            AnalyzersAction::List | AnalyzersAction::Defconfig { .. } | AnalyzersAction::Add { .. } => unreachable!("handled in main.rs"),
             AnalyzersAction::Used => {
                 let analyzers = self.create_analyzers(false)?;
                 let mut builder = TableBuilder::new();

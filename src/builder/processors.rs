@@ -262,7 +262,7 @@ impl Builder {
         let proc_names = sorted_keys(&processors);
 
         match action {
-            ProcessorAction::List | ProcessorAction::Recommend | ProcessorAction::Types => unreachable!("handled before Builder is constructed"),
+            ProcessorAction::List | ProcessorAction::Recommend | ProcessorAction::Types | ProcessorAction::Add { .. } => unreachable!("handled before Builder is constructed"),
             ProcessorAction::Used => {
                 let mut builder = TableBuilder::new();
                 if verbose {

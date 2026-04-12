@@ -477,6 +477,15 @@ pub enum ProcessorAction {
         #[arg(value_parser = crate::registries::processor_name_parser())]
         pname: String,
     },
+    /// Add a processor to rsconstruct.toml with must-fill fields pre-populated and comments
+    Add {
+        /// Processor name (pname) — the type name (e.g., ruff, pip, tera)
+        #[arg(value_parser = crate::registries::processor_name_parser())]
+        pname: String,
+        /// Print the generated TOML snippet to stdout instead of writing to rsconstruct.toml
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Show the current processor allowlist (requires config)
     Allowlist,
     /// Show names of all enabled processors (one per line, requires config)
@@ -554,6 +563,15 @@ pub enum AnalyzersAction {
         /// Analyzer name; omit to show all
         #[arg(value_parser = crate::registries::analyzer_name_parser())]
         name: Option<String>,
+    },
+    /// Add an analyzer to rsconstruct.toml with must-fill fields pre-populated and comments
+    Add {
+        /// Analyzer name (e.g., cpp, icpp, python, markdown, tera)
+        #[arg(value_parser = crate::registries::analyzer_name_parser())]
+        name: String,
+        /// Print the generated TOML snippet to stdout instead of writing to rsconstruct.toml
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Show analyzer configuration (requires config)
     Config {
