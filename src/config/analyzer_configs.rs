@@ -49,13 +49,18 @@ impl Default for CppAnalyzerConfig {
 }
 
 /// Configuration for the in-process C/C++ dependency analyzer (`icpp`) — native regex scanner.
-/// Native analyzer: pure Rust, no external commands.
+/// Native analyzer by default: pure Rust, no external commands.
+/// Setting `pkg_config` will invoke `pkg-config` once at startup to discover additional
+/// include paths, but dependency scanning itself remains in-process.
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 #[serde(deny_unknown_fields)]
 pub struct IcppAnalyzerConfig {
     /// Additional include paths for header search
     #[serde(default)]
     pub include_paths: Vec<String>,
+    /// pkg-config packages to query for include paths (optional; invokes pkg-config if set)
+    #[serde(default)]
+    pub pkg_config: Vec<String>,
     /// Directory path segments to exclude from analysis
     #[serde(default)]
     pub src_exclude_dirs: Vec<String>,
