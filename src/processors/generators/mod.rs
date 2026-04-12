@@ -155,7 +155,7 @@ pub(super) fn discover_multi_format(
             inputs.push(source.clone());
             inputs.extend_from_slice(&extra);
 
-            graph.add_product(inputs, vec![output], params.processor_name, hash.clone())?;
+            graph.add_product_with_variant(inputs, vec![output], params.processor_name, hash.clone(), Some(format))?;
         }
     }
 
