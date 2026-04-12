@@ -138,14 +138,14 @@ impl Builder {
                     builder.push_record(["Name", "Detected", "Description"]);
                     for name in sorted_keys(&analyzers) {
                         let analyzer = &analyzers[name];
-                        let detected = if analyzer.auto_detect(&self.file_index) { "yes" } else { "no" };
+                        let detected = color::yes_no(analyzer.auto_detect(&self.file_index));
                         builder.push_record([name.as_str(), detected, analyzer.description()]);
                     }
                 } else {
                     builder.push_record(["Name", "Detected"]);
                     for name in sorted_keys(&analyzers) {
                         let analyzer = &analyzers[name];
-                        let detected = if analyzer.auto_detect(&self.file_index) { "yes" } else { "no" };
+                        let detected = color::yes_no(analyzer.auto_detect(&self.file_index));
                         builder.push_record([name.as_str(), detected]);
                     }
                 }

@@ -227,8 +227,8 @@ fn print_processor_metadata(name: &str, verbose: bool) {
                 None    => "(none)".to_string(),
             }
         };
-        let required = if must_fields.contains(*field) { "Yes" } else { "No" };
-        let output = if output_fields.contains(*field) { "Yes" } else { "No" };
+        let required = color::yes_no(must_fields.contains(*field));
+        let output = color::yes_no(output_fields.contains(*field));
         if verbose {
             builder.push_record([field, type_str, &default_str, required, output, desc]);
         } else {
@@ -269,14 +269,14 @@ impl Builder {
                     builder.push_record(["Name", "Type", "Detected", "Description"]);
                     for name in &proc_names {
                         let proc = &processors[name.as_str()];
-                        let detected_str = if proc.auto_detect(&self.file_index) { "yes" } else { "no" };
+                        let detected_str = color::yes_no(proc.auto_detect(&self.file_index));
                         builder.push_record([name.as_str(), proc.processor_type().as_str(), detected_str, proc.description()]);
                     }
                 } else {
                     builder.push_record(["Name", "Type", "Detected"]);
                     for name in &proc_names {
                         let proc = &processors[name.as_str()];
-                        let detected_str = if proc.auto_detect(&self.file_index) { "yes" } else { "no" };
+                        let detected_str = color::yes_no(proc.auto_detect(&self.file_index));
                         builder.push_record([name.as_str(), proc.processor_type().as_str(), detected_str]);
                     }
                 }

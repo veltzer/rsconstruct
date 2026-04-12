@@ -16,3 +16,11 @@ python files dependency analysis:
 - rsconstruct processors defconfig explicit should print only the table.
     description should be printed only under --verbose.
     I want to see other columns like must etc.
+
+
+- here is a deep problem with rsconstruct:
+    Lets say we have a folder that two processors write too (e.g. _site and pandoc and mkdocs both write into it)
+    mkdocs creates many files so it needs to cache the entire folder.
+    but pandoc caches specific files in that folder.
+    who owns the folder?
+    What are the solutoins?

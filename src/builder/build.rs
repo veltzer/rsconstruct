@@ -478,7 +478,7 @@ impl Builder {
         let mut builder = TableBuilder::new();
         builder.push_record(["Processor", col_labels[0], col_labels[1], col_labels[2], col_labels[3], "native"]);
         for (name, pc) in &per_processor {
-            let native = if opts.native_processors.contains(name) { "yes" } else { "" };
+            let native = crate::color::yes_no(opts.native_processors.contains(name));
             builder.push_record([
                 name.to_string(),
                 pc[0].to_string(), pc[1].to_string(), pc[2].to_string(), pc[3].to_string(),

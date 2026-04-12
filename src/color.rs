@@ -49,3 +49,9 @@ pub fn dim(text: &str) -> Cow<'_, str> {
 pub fn print_table(mut table: Table) {
     println!("{}", table.with(Style::rounded()));
 }
+
+/// Render a boolean as "Yes" or "No" — the canonical formatting used in tables.
+/// Change this in one place to rename/translate the representation everywhere.
+pub fn yes_no(b: bool) -> &'static str {
+    if b { "Yes" } else { "No" }
+}
