@@ -7,13 +7,7 @@ python files dependency analysis:
 
 - do we have a test that checks that we get an error if we have two processors in the same tmpl file without differentiating between then with a different name.
 
-  - I want rscontrcut processor add [TAB] -> name of processor that will add the processor to my toml file with all the must fill variables already there with default values and comments to fill them correctly.
-    and the same for analyzers.
-
 - do a pass of making the code more strict (whenever we relax strictness try to figure out if we can return the strictness)
-
-- also lets start writing a document about distributed execution.
-    The problems, the design, how other tools do it etc.
 
 - error handling.
     This is a big one.

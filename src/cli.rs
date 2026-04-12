@@ -500,6 +500,21 @@ pub enum ProcessorAction {
     },
     /// List all processor types with descriptions
     Types,
+    /// Remove a processor stanza from rsconstruct.toml entirely (requires config)
+    Delete {
+        /// Instance name (iname) as declared in rsconstruct.toml
+        iname: String,
+    },
+    /// Set enabled = false on a processor stanza in rsconstruct.toml (requires config)
+    Disable {
+        /// Instance name (iname) as declared in rsconstruct.toml
+        iname: String,
+    },
+    /// Set enabled = true on a processor stanza in rsconstruct.toml (requires config)
+    Enable {
+        /// Instance name (iname) as declared in rsconstruct.toml
+        iname: String,
+    },
 }
 
 #[derive(Subcommand)]
