@@ -78,6 +78,13 @@ pub(crate) fn analyzer_name_parser() -> clap::builder::PossibleValuesParser {
     clap::builder::PossibleValuesParser::new(all_analyzer_names())
 }
 
+/// Build a clap value parser that accepts any registered processor type name (pname).
+pub(crate) fn processor_name_parser() -> clap::builder::PossibleValuesParser {
+    let mut names: Vec<&'static str> = all_plugins().map(|p| p.name).collect();
+    names.sort();
+    clap::builder::PossibleValuesParser::new(names)
+}
+
 /// Apply both processor defaults and scan defaults to a TOML value.
 pub fn apply_all_defaults(name: &str, value: &mut toml::Value) {
     crate::config::apply_processor_defaults(name, value);

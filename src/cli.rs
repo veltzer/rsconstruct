@@ -447,6 +447,7 @@ pub enum ProcessorAction {
     /// Show default configuration for a processor type (no config needed)
     Defconfig {
         /// Processor name (pname) — the type name (e.g., ruff, pip, tera)
+        #[arg(value_parser = crate::registry::processor_name_parser())]
         pname: String,
     },
     /// Show the current processor allowlist (requires config)
@@ -808,48 +809,68 @@ pub fn print_completions(shell: Shell) {
     }
 }
 
-/// Inject processor name completions into a bash completion script.
-/// Replaces the empty `COMPREPLY=()` in the defconfig/config/files cases
-/// with processor name suggestions.
+/// Inject processor completion into a bash completion script.
+///
+/// - `processors config` and `processors files` complete with **instance names** (inames)
+///   read from the project's `rsconstruct.toml` at tab time via a helper function.
+/// - `--processors` / `-p` flags in `build`/`watch` complete with static type names (pnames).
+/// - `processors defconfig` is handled automatically by clap via `#[arg(value_parser = ...)]`.
 fn inject_bash_processor_completions(script: &str) -> String {
     let names = crate::config::all_type_names();
     let names_str = names.join(" ");
 
-    // For each of these commands, inject processor names into the opts variable
-    // so they appear as completions.
-    // Process from last to first in the script so position shifts don't affect earlier sections.
-    let targets = [
-        "rsconstruct__processors__files)",
-        "rsconstruct__processors__defconfig)",
-        "rsconstruct__processors__config)",
+    // Bash helper: extract instance names from rsconstruct.toml.
+    // Matches [processor.NAME] and [processor.NAME.SUBNAME] headings.
+    let helper = r#"
+_rsconstruct_inames() {
+    local toml="rsconstruct.toml"
+    [[ -f "$toml" ]] || return
+    # Match [processor.NAME] -> NAME; [processor.NAME.SUB] -> NAME.SUB
+    grep -E '^\[processor\.' "$toml" | sed -E 's/^\[processor\.([^]]+)\].*/\1/'
+}
+"#;
+
+    // Replace instance-name targets to call _rsconstruct_inames at tab time.
+    // For each target section, replace the early-return COMPREPLY with a call to our helper.
+    let iname_targets = [
+        ("rsconstruct__processors__files)", 3),
+        ("rsconstruct__processors__config)", 3),
     ];
 
     let mut result = script.to_string();
-    for target in &targets {
+    for (target, _) in &iname_targets {
         if let Some(section_start) = result.find(target) {
             let after_start = section_start + target.len();
-            // Section ends at the next command case
             let section_len = result[after_start..]
                 .find("\n        rsconstruct__")
                 .unwrap_or(result.len() - after_start);
             let section_end = after_start + section_len;
 
-            // The generated bash completion has an early-return `if` that checks
-            // `COMP_CWORD -eq N` and only offers flags. We need to inject processor
-            // names into the `opts` variable so they appear in that early-return path.
+            // Replace the early COMPREPLY line with one that calls our helper.
+            // The generated code looks like:
+            //   if [[ ${cur} == -* || ${COMP_CWORD} -eq N ]] ; then
+            //       COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            //       return 0
+            //   fi
+            // We inject a check: if it's a positional (not a flag), use our helper.
             let section_slice = &result[section_start..section_end];
-            if let Some(opts_pos) = section_slice.find("opts=\"") {
-                let abs_opts = section_start + opts_pos + "opts=\"".len();
-                result.insert_str(abs_opts, &format!("{} ", names_str));
+            let needle = "COMPREPLY=( $(compgen -W \"${opts}\" -- \"${cur}\") )";
+            if let Some(rel_pos) = section_slice.find(needle) {
+                let abs_pos = section_start + rel_pos;
+                let replacement = "if [[ ${cur} != -* ]] ; then\n                    COMPREPLY=( $(compgen -W \"$(_rsconstruct_inames)\" -- \"${cur}\") )\n                else\n                    COMPREPLY=( $(compgen -W \"${opts}\" -- \"${cur}\") )\n                fi";
+                result.replace_range(abs_pos..abs_pos + needle.len(), replacement);
             }
         }
     }
 
-    // Inject static processor names for --processors/-p flags in build/watch commands.
+    // Inject static processor type names for --processors/-p flags in build/watch commands.
     let old_processors = "                --processors)\n                    COMPREPLY=($(compgen -f \"${cur}\"))";
     let new_processors = format!("                --processors)\n                    COMPREPLY=($(compgen -W \"{names_str}\" -- \"${{cur}}\"))");
     let old_p = "                -p)\n                    COMPREPLY=($(compgen -f \"${cur}\"))";
     let new_p = format!("                -p)\n                    COMPREPLY=($(compgen -W \"{names_str}\" -- \"${{cur}}\"))");
 
-    result.replace(old_processors, &new_processors).replace(old_p, &new_p)
+    let result = result.replace(old_processors, &new_processors).replace(old_p, &new_p);
+
+    // Prepend the helper function before the completion function is defined.
+    format!("{}{}", helper, result)
 }

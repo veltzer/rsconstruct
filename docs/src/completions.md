@@ -42,17 +42,24 @@ shells = ["bash"]
 
 All top-level commands (`build`, `processors`, `analyzers`, `config`, etc.) and their subcommands complete automatically via clap.
 
-### Processor names
+### Processor type names (pnames)
 
-These commands complete processor names (e.g., `ruff`, `pylint`, `cc_single_file`):
+These commands complete with processor type names from the plugin registry (e.g., `ruff`, `pylint`, `cc_single_file`):
 
-- `rsconstruct processors config <TAB>`
 - `rsconstruct processors defconfig <TAB>`
-- `rsconstruct processors fields <TAB>`
 - `rsconstruct build --processors <TAB>` / `rsconstruct build -p <TAB>`
 - `rsconstruct watch --processors <TAB>` / `rsconstruct watch -p <TAB>`
 
-Processor names are drawn from the plugin registry at compile time. The list includes all built-in processors but not Lua plugins (those are discovered at runtime).
+The list is drawn from the plugin registry at compile time.
+
+### Processor instance names (inames)
+
+These commands complete with instance names declared in the current project's `rsconstruct.toml` (e.g., `pylint`, `pylint.tests`, `cc_single_file`):
+
+- `rsconstruct processors config <TAB>`
+- `rsconstruct processors files <TAB>`
+
+Instance names are extracted from `[processor.NAME]` and `[processor.NAME.SUBNAME]` headings in `rsconstruct.toml` at tab-completion time. Requires a project config in the current directory. Bash only.
 
 ### Analyzer names
 
