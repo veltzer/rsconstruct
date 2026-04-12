@@ -33,3 +33,5 @@ python files dependency analysis:
     and it will launch an editors of my choice on all the previous errors.
     Internal processros will surely be able to collect all the errors into that predefined structure with no problems.
     rsconstruct errors show  will show the latest errors
+
+- are we sure we are releasing the "release" profile on github and not the "dev" or "profile" profile?

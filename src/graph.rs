@@ -201,6 +201,10 @@ pub struct BuildGraph {
     /// Map from input path to every product id that consumes it.
     /// One path may feed many products (e.g. a shared header).
     input_to_products: HashMap<PathBuf, Vec<usize>>,
+    /// Dedup index for checker products (outputs empty): maps
+    /// (processor, primary_input, variant) → product id. Replaces an O(N)
+    /// linear scan that dominated `status` wall time on large projects.
+    checker_dedup: HashMap<(String, PathBuf, Option<String>), usize>,
     /// Adjacency list: product id -> list of product ids that depend on it
     dependents: Vec<Vec<usize>>,
     /// Reverse: product id -> list of product ids it depends on
@@ -228,17 +232,11 @@ impl BuildGraph {
 
         // Checkers have no outputs, so the output-based dedup below won't catch them.
         // Deduplicate by matching on processor name, primary input, and variant.
+        // Indexed via `checker_dedup` — O(1) average.
         if outputs.is_empty() && !inputs.is_empty() {
-            for existing in &self.products {
-                if !existing.outputs.is_empty() || existing.inputs.is_empty() {
-                    continue;
-                }
-                let same_processor = existing.processor == processor;
-                if same_processor && existing.inputs[0] == inputs[0]
-                    && existing.variant.as_deref() == variant
-                {
-                    return Ok(existing.id);
-                }
+            let key = (processor.to_string(), inputs[0].clone(), variant.map(str::to_string));
+            if let Some(&existing_id) = self.checker_dedup.get(&key) {
+                return Ok(existing_id);
             }
         }
 
@@ -249,15 +247,22 @@ impl BuildGraph {
                 let same_processor = existing.processor == processor;
                 // Same processor re-declaring the same outputs: update inputs if
                 // they grew (virtual files from upstream generators were added).
-                let is_superset = same_processor && existing.outputs == outputs
-                    && existing.inputs.iter().all(|i| inputs.contains(i));
+                // Use a HashSet for the superset check to avoid O(M*N) PathBuf equality.
+                let is_superset = if same_processor && existing.outputs == outputs {
+                    let new_set: HashSet<&PathBuf> = inputs.iter().collect();
+                    existing.inputs.iter().all(|i| new_set.contains(i))
+                } else {
+                    false
+                };
                 if is_superset {
                     if existing.inputs != inputs {
+                        let new_set: HashSet<&PathBuf> = inputs.iter().collect();
                         // Remove stale index entries for any old inputs that disappeared
                         // (shouldn't happen with superset, but keep the index honest).
                         let old_inputs = std::mem::replace(&mut self.products[existing_id].inputs, inputs.clone());
+                        let old_set: HashSet<&PathBuf> = old_inputs.iter().collect();
                         for old in &old_inputs {
-                            if !inputs.contains(old) {
+                            if !new_set.contains(old) {
                                 if let Some(ids) = self.input_to_products.get_mut(old) {
                                     ids.retain(|&x| x != existing_id);
                                 }
@@ -265,7 +270,7 @@ impl BuildGraph {
                         }
                         // Add index entries for the new inputs that weren't there before.
                         for new in &inputs {
-                            if !old_inputs.contains(new) {
+                            if !old_set.contains(new) {
                                 self.input_to_products.entry(new.clone()).or_default().push(existing_id);
                             }
                         }
@@ -292,6 +297,13 @@ impl BuildGraph {
         // Register inputs in the input index
         for input in &inputs {
             self.input_to_products.entry(input.clone()).or_default().push(id);
+        }
+
+        // For checker products, populate the dedup index so a future re-declaration
+        // with the same (processor, primary_input, variant) returns this id.
+        if outputs.is_empty() && !inputs.is_empty() {
+            let key = (processor.to_string(), inputs[0].clone(), variant.map(str::to_string));
+            self.checker_dedup.insert(key, id);
         }
 
         let product = match variant {
