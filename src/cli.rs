@@ -883,23 +883,31 @@ pub fn print_completions(shell: Shell) {
     }
 }
 
-/// Inject processor completion into a bash completion script.
+/// Inject processor/analyzer completion into a bash completion script.
 ///
-/// - `processors config` and `processors files` complete with **instance names** (inames)
-///   read from the project's `rsconstruct.toml` at tab time via a helper function.
+/// - `processors config`, `processors files`, `processors delete`, `processors disable`,
+///   `processors enable` complete with **processor instance names** (inames) from
+///   `rsconstruct.toml`.
+/// - `analyzers delete`, `analyzers disable`, `analyzers enable` complete with **analyzer
+///   instance names** (inames) from `rsconstruct.toml`.
 /// - `--processors` / `-p` flags in `build`/`watch` complete with **instance
 ///   names** (inames) from `rsconstruct.toml` — you can only build a processor
 ///   that is declared in the project.
 /// - `processors defconfig` is handled automatically by clap via `#[arg(value_parser = ...)]`.
 fn inject_bash_processor_completions(script: &str) -> String {
-    // Bash helper: extract instance names from rsconstruct.toml.
-    // Matches [processor.NAME] and [processor.NAME.SUBNAME] headings.
+    // Bash helpers: extract instance names from rsconstruct.toml.
     let helper = r#"
 _rsconstruct_inames() {
     local toml="rsconstruct.toml"
     [[ -f "$toml" ]] || return
     # Match [processor.NAME] -> NAME; [processor.NAME.SUB] -> NAME.SUB
     grep -E '^\[processor\.' "$toml" | sed -E 's/^\[processor\.([^]]+)\].*/\1/'
+}
+_rsconstruct_analyzer_inames() {
+    local toml="rsconstruct.toml"
+    [[ -f "$toml" ]] || return
+    # Match [analyzer.NAME] -> NAME; [analyzer.NAME.SUB] -> NAME.SUB
+    grep -E '^\[analyzer\.' "$toml" | sed -E 's/^\[analyzer\.([^]]+)\].*/\1/'
 }
 "#;
 
@@ -908,6 +916,9 @@ _rsconstruct_inames() {
     let iname_targets = [
         ("rsconstruct__processors__files)", 3),
         ("rsconstruct__processors__config)", 3),
+        ("rsconstruct__processors__delete)", 3),
+        ("rsconstruct__processors__disable)", 3),
+        ("rsconstruct__processors__enable)", 3),
     ];
 
     let mut result = script.to_string();
@@ -931,6 +942,29 @@ _rsconstruct_inames() {
             if let Some(rel_pos) = section_slice.find(needle) {
                 let abs_pos = section_start + rel_pos;
                 let replacement = "if [[ ${cur} != -* ]] ; then\n                    COMPREPLY=( $(compgen -W \"$(_rsconstruct_inames)\" -- \"${cur}\") )\n                else\n                    COMPREPLY=( $(compgen -W \"${opts}\" -- \"${cur}\") )\n                fi";
+                result.replace_range(abs_pos..abs_pos + needle.len(), replacement);
+            }
+        }
+    }
+
+    // Inject analyzer iname completion for delete/disable/enable.
+    let analyzer_iname_targets = [
+        "rsconstruct__analyzers__delete)",
+        "rsconstruct__analyzers__disable)",
+        "rsconstruct__analyzers__enable)",
+    ];
+    for target in &analyzer_iname_targets {
+        if let Some(section_start) = result.find(target) {
+            let after_start = section_start + target.len();
+            let section_len = result[after_start..]
+                .find("\n        rsconstruct__")
+                .unwrap_or(result.len() - after_start);
+            let section_end = after_start + section_len;
+            let section_slice = &result[section_start..section_end];
+            let needle = "COMPREPLY=( $(compgen -W \"${opts}\" -- \"${cur}\") )";
+            if let Some(rel_pos) = section_slice.find(needle) {
+                let abs_pos = section_start + rel_pos;
+                let replacement = "if [[ ${cur} != -* ]] ; then\n                    COMPREPLY=( $(compgen -W \"$(_rsconstruct_analyzer_inames)\" -- \"${cur}\") )\n                else\n                    COMPREPLY=( $(compgen -W \"${opts}\" -- \"${cur}\") )\n                fi";
                 result.replace_range(abs_pos..abs_pos + needle.len(), replacement);
             }
         }
