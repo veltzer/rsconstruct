@@ -7,8 +7,6 @@ python files dependency analysis:
 
 - do we have a test that checks that we get an error if we have two processors in the same tmpl file without differentiating between then with a different name.
 
-- do "rsconstruct processors list" and you will see that many processors do not have descriptions. A desciption should be printed only with the --verbose flag.
-
 - rsconstruct processors types should print out a table. --json will emit json output.
 
 - explciit processor command should be none and a must field.
