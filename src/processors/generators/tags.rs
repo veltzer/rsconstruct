@@ -479,7 +479,7 @@ impl Processor for TagsProcessor {
                     .context("Failed to insert tag index")?;
             }
         }
-        write_txn.commit().context("Failed to commit tags database")?;
+        ctx!(write_txn.commit(), "Failed to commit tags database")?;
 
         Ok(())
     }

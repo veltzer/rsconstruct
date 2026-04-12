@@ -425,7 +425,7 @@ print(json.dumps(result))
     // Parse the JSON output
     let stdout = String::from_utf8_lossy(&output.stdout);
     let variables: Map<String, Value> =
-        serde_json::from_str(&stdout).context("Failed to parse Python config output")?;
+        ctx!(serde_json::from_str(&stdout), "Failed to parse Python config output")?;
 
     Ok(variables)
 }

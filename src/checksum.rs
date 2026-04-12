@@ -38,7 +38,7 @@ fn get_mtime_db() -> Result<std::sync::MutexGuard<'static, Option<Database>>> {
     let mut guard = MTIME_DB.lock().unwrap();
     if guard.is_none() {
         let dir = PathBuf::from(".rsconstruct");
-        fs::create_dir_all(&dir).context("Failed to create .rsconstruct directory")?;
+        ctx!(fs::create_dir_all(&dir), "Failed to create .rsconstruct directory")?;
         let db = crate::db::open_or_recreate(&dir.join("mtime.redb"), "Mtime cache")?;
         *guard = Some(db);
     }
@@ -130,7 +130,7 @@ fn flush_mtime_entries(dirty: Vec<(String, MtimeEntry)>) -> Result<()> {
                 .context("Failed to insert mtime entry")?;
         }
     }
-    write_txn.commit().context("Failed to commit mtime cache entries")?;
+    ctx!(write_txn.commit(), "Failed to commit mtime cache entries")?;
     Ok(())
 }
 
