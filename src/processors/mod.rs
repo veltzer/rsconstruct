@@ -1391,7 +1391,7 @@ impl SimpleChecker {
     }
 
     fn check_files(&self, files: &[&Path]) -> Result<()> {
-        let tool = &self.config.standard.command;
+        let tool = self.config.standard.require_command(self.params.description)?;
         if self.params.prepend_args.is_empty() {
             run_checker(tool, self.params.subcommand, &self.config.standard.args, files)
         } else {

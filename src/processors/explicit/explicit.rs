@@ -128,7 +128,8 @@ impl Processor for ExplicitProcessor {
             ensure_output_dir(output)?;
         }
 
-        let mut cmd = Command::new(&self.config.standard.command);
+        let command = self.config.standard.require_command(crate::processors::names::EXPLICIT)?;
+        let mut cmd = Command::new(command);
         for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
@@ -153,7 +154,7 @@ impl Processor for ExplicitProcessor {
         check_command_output(
             &out,
             format_args!("{} ({} inputs)",
-                self.config.standard.command,
+                command,
                 product.inputs.len(),
             ),
         )

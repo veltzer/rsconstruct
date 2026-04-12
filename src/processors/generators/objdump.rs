@@ -14,7 +14,8 @@ fn execute_objdump(config: &StandardConfig, product: &Product) -> Result<()> {
     let input = product.primary_input();
     let output = product.primary_output();
     ensure_output_dir(output)?;
-    let mut cmd = Command::new(&config.command);
+    let command = config.require_command("objdump")?;
+    let mut cmd = Command::new(command);
     cmd.arg("--disassemble").arg("--source");
     for arg in &config.args { cmd.arg(arg); }
     cmd.arg(input);

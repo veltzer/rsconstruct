@@ -41,7 +41,7 @@ impl GeneratorProcessor {
             crate::processors::ensure_output_dir(pair.1)?;
         }
 
-        let command = &self.config.standard.command;
+        let command = self.config.standard.require_command(crate::processors::names::GENERATOR)?;
         let mut cmd = Command::new(command);
         for arg in &self.config.standard.args {
             cmd.arg(arg);

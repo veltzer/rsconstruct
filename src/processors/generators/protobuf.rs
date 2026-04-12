@@ -14,7 +14,8 @@ fn execute_protobuf(config: &StandardConfig, product: &Product) -> Result<()> {
     let output = product.primary_output();
     let output_dir = output.parent().unwrap_or(std::path::Path::new("."));
     ensure_output_dir(output)?;
-    let mut cmd = Command::new(&config.command);
+    let command = config.require_command("protobuf")?;
+    let mut cmd = Command::new(command);
     if let Some(parent) = input.parent() {
         cmd.arg(format!("--proto_path={}", parent.display()));
     }

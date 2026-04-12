@@ -14,7 +14,8 @@ fn execute_a2x(config: &StandardConfig, product: &Product) -> Result<()> {
     let input = product.primary_input();
     let output = product.primary_output();
     ensure_output_dir(output)?;
-    let mut cmd = Command::new(&config.command);
+    let command = config.require_command("a2x")?;
+    let mut cmd = Command::new(command);
     for arg in &config.args { cmd.arg(arg); }
     cmd.arg(input);
     let out = run_command(&mut cmd)?;

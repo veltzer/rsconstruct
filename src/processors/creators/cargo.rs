@@ -25,14 +25,15 @@ impl CargoProcessor {
 
     /// Run cargo build in the Cargo.toml's directory with the given profile
     fn execute_cargo(&self, cargo_toml: &Path, profile: &str) -> Result<()> {
+        let subcommand = self.config.standard.require_command(crate::processors::names::CARGO)?;
         let mut cmd = Command::new(&self.config.cargo);
-        cmd.arg(&self.config.standard.command);
+        cmd.arg(subcommand);
         cmd.args(["--profile", profile]);
         for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
         let output = run_in_anchor_dir(&mut cmd, cargo_toml)?;
-        check_command_output(&output, format_args!("cargo {} --profile {} in {}", self.config.standard.command, profile, anchor_display_dir(cargo_toml)))
+        check_command_output(&output, format_args!("cargo {} --profile {} in {}", subcommand, profile, anchor_display_dir(cargo_toml)))
     }
 }
 

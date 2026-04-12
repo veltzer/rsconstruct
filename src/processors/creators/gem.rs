@@ -25,15 +25,16 @@ impl GemProcessor {
 
     /// Run bundle install in the Gemfile's directory
     fn execute_gem(&self, gemfile: &Path) -> Result<()> {
+        let subcommand = self.config.standard.require_command(crate::processors::names::GEM)?;
         let mut cmd = Command::new(&self.config.bundler);
-        cmd.arg(&self.config.standard.command);
+        cmd.arg(subcommand);
         cmd.env("GEM_HOME", &self.config.gem_home);
         cmd.env("GEM_PATH", &self.config.gem_home);
         for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
         let output = run_in_anchor_dir(&mut cmd, gemfile)?;
-        check_command_output(&output, format_args!("bundle {} in {}", self.config.standard.command, anchor_display_dir(gemfile)))
+        check_command_output(&output, format_args!("bundle {} in {}", subcommand, anchor_display_dir(gemfile)))
     }
 }
 

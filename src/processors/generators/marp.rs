@@ -26,7 +26,8 @@ fn execute_marp(config: &StandardConfig, product: &Product) -> Result<()> {
         .context("marp output has no extension")?
         .to_string_lossy();
     ensure_output_dir(output)?;
-    let mut cmd = Command::new(&config.command);
+    let command = config.require_command("marp")?;
+    let mut cmd = Command::new(command);
     if format != "html" {
         cmd.arg(format!("--{}", format));
     }

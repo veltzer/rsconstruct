@@ -14,7 +14,8 @@ fn execute_markdown2html(config: &StandardConfig, product: &Product) -> Result<(
     let input = product.primary_input();
     let output = product.primary_output();
     ensure_output_dir(output)?;
-    let mut cmd = Command::new(&config.command);
+    let command = config.require_command("markdown2html")?;
+    let mut cmd = Command::new(command);
     for arg in &config.args { cmd.arg(arg); }
     cmd.arg(input);
     let out = run_command_capture(&mut cmd)?;

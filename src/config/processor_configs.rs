@@ -106,6 +106,14 @@ impl StandardConfig {
     pub(crate) fn src_files(&self) -> &[String] {
         self.src_files.as_deref().expect(crate::errors::SCAN_CONFIG_NOT_RESOLVED)
     }
+
+    /// Return the command string, or error with context if it was never set.
+    pub(crate) fn require_command(&self, context: &str) -> anyhow::Result<&str> {
+        if self.command.is_empty() {
+            anyhow::bail!("'command' is not set for processor '{}'", context);
+        }
+        Ok(&self.command)
+    }
 }
 
 impl KnownFields for StandardConfig {

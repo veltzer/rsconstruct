@@ -16,7 +16,8 @@ fn execute_drawio(config: &StandardConfig, product: &Product) -> Result<()> {
         .context("drawio output has no extension")?
         .to_string_lossy();
     ensure_output_dir(output)?;
-    let mut cmd = Command::new(&config.command);
+    let command = config.require_command("drawio")?;
+    let mut cmd = Command::new(command);
     cmd.arg("--export");
     cmd.arg("--format").arg(format.as_ref());
     cmd.arg("--output").arg(output);

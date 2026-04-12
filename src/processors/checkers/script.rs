@@ -23,7 +23,8 @@ impl ScriptProcessor {
     }
 
     fn check_files(&self, files: &[&Path]) -> Result<()> {
-        run_checker(&self.config.standard.command, None, &self.config.standard.args, files)
+        let command = self.config.standard.require_command(crate::processors::names::SCRIPT)?;
+        run_checker(command, None, &self.config.standard.args, files)
     }
 }
 

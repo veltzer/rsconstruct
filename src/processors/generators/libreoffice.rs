@@ -20,9 +20,10 @@ fn execute_libreoffice(config: &StandardConfig, product: &Product) -> Result<()>
         .context("libreoffice output has no parent directory")?;
     fs::create_dir_all(output_dir)
         .with_context(|| format!("Failed to create libreoffice output directory: {}", output_dir.display()))?;
+    let command = config.require_command("libreoffice")?;
     let mut cmd = Command::new("flock");
     cmd.arg("/tmp/rsconstruct_libreoffice");
-    cmd.arg(&config.command);
+    cmd.arg(command);
     cmd.arg("--headless");
     cmd.arg("--convert-to").arg(format.as_ref());
     cmd.arg("--outdir").arg(output_dir);

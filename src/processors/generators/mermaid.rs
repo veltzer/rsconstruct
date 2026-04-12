@@ -13,7 +13,8 @@ fn execute_mermaid(config: &StandardConfig, product: &Product) -> Result<()> {
     let input = product.primary_input();
     let output = product.primary_output();
     ensure_output_dir(output)?;
-    let mut cmd = Command::new(&config.command);
+    let command = config.require_command("mermaid")?;
+    let mut cmd = Command::new(command);
     cmd.arg("-i").arg(input);
     cmd.arg("-o").arg(output);
     for arg in &config.args { cmd.arg(arg); }

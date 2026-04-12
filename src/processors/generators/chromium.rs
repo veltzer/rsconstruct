@@ -17,7 +17,8 @@ fn execute_chromium(config: &StandardConfig, product: &Product) -> Result<()> {
     let abs_input = fs::canonicalize(input)
         .with_context(|| format!("Failed to resolve absolute path for: {}", input.display()))?;
     let input_url = format!("file://{}", abs_input.display());
-    let mut cmd = Command::new(&config.command);
+    let command = config.require_command("chromium")?;
+    let mut cmd = Command::new(command);
     cmd.arg("--headless");
     cmd.arg("--disable-gpu");
     cmd.arg("--no-sandbox");

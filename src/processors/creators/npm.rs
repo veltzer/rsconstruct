@@ -25,13 +25,14 @@ impl NpmProcessor {
 
     /// Run npm install in the package.json's directory
     fn execute_npm(&self, package_json: &Path) -> Result<()> {
+        let subcommand = self.config.standard.require_command(crate::processors::names::NPM)?;
         let mut cmd = Command::new(&self.config.npm);
-        cmd.arg(&self.config.standard.command);
+        cmd.arg(subcommand);
         for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
         let output = run_in_anchor_dir(&mut cmd, package_json)?;
-        check_command_output(&output, format_args!("npm {} in {}", self.config.standard.command, anchor_display_dir(package_json)))
+        check_command_output(&output, format_args!("npm {} in {}", subcommand, anchor_display_dir(package_json)))
     }
 }
 

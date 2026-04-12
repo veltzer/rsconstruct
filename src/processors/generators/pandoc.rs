@@ -16,7 +16,8 @@ fn execute_pandoc(config: &StandardConfig, product: &Product) -> Result<()> {
         .context("pandoc output has no extension")?
         .to_string_lossy();
     ensure_output_dir(output)?;
-    let mut cmd = Command::new(&config.command);
+    let command = config.require_command("pandoc")?;
+    let mut cmd = Command::new(command);
     cmd.env("SOURCE_DATE_EPOCH", "0");
     cmd.arg("--to").arg(format.as_ref());
     if format.as_ref() == "pdf" {
