@@ -297,7 +297,7 @@ pub fn run_sloc(file_index: &FileIndex, cocomo: bool, salary: u64) -> Result<()>
             "Total".to_string(), total_files.to_string(), total_blank.to_string(),
             total_comment.to_string(), total_code.to_string(),
         ]);
-        color::print_table(builder.build());
+        color::print_table_with_total(builder.build());
 
         if let Some(ref est) = cocomo_estimate {
             println!();

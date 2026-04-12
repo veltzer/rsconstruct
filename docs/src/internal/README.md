@@ -59,6 +59,7 @@ See the table of contents in the sidebar. Brief one-line summaries:
 - **Shared Output Directory** — handling multiple processors that write into the same folder.
 - **Processor Ordering** — why rsconstruct does NOT have explicit ordering primitives.
 - **Output Prediction** — the MassGenerator design: tools that enumerate their outputs in advance.
+- **Per-Processor Statistics** — why cache stats can't group by processor today, options for fixing it.
 - **Unreferenced Files** — detecting files on disk that no product references.
 - **Internal Processors** — pure-Rust processors that do not shell out.
 - **Missing Processors** — tools we don't yet wrap but should.

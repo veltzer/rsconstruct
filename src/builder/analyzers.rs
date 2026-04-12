@@ -109,19 +109,32 @@ fn print_config_table(toml_str: &str) -> Result<()> {
 }
 
 /// Print per-analyzer dependency stats with a total line.
-fn print_deps_stats(stats: &std::collections::HashMap<String, (usize, usize)>) {
+/// `declared` is the list of analyzer names declared in rsconstruct.toml; any
+/// declared analyzer missing from `stats` is shown as a zero row so users can
+/// spot silent no-ops.
+fn print_deps_stats(
+    stats: &std::collections::HashMap<String, (usize, usize)>,
+    declared: &[String],
+) {
+    let mut all: std::collections::BTreeMap<String, (usize, usize)> = std::collections::BTreeMap::new();
+    for name in declared {
+        all.insert(name.clone(), (0, 0));
+    }
+    for (name, &v) in stats {
+        all.insert(name.clone(), v);
+    }
+
     let mut total_files = 0;
     let mut total_deps = 0;
     let mut builder = TableBuilder::new();
     builder.push_record(["Analyzer", "Files", "Dependencies"]);
-    for name in sorted_keys(stats) {
-        let (files, deps) = stats[name];
+    for (name, (files, deps)) in &all {
         total_files += files;
         total_deps += deps;
-        builder.push_record([name.to_string(), files.to_string(), deps.to_string()]);
+        builder.push_record([name.clone(), files.to_string(), deps.to_string()]);
     }
     builder.push_record(["Total".to_string(), total_files.to_string(), total_deps.to_string()]);
-    color::print_table(builder.build());
+    color::print_table_with_total(builder.build());
 }
 
 impl Builder {
@@ -174,8 +187,10 @@ impl Builder {
                 // Show summary from cache
                 let deps_cache = DepsCache::open()?;
                 let stats = deps_cache.stats_by_analyzer();
-                if !stats.is_empty() {
-                    print_deps_stats(&stats);
+                let declared: Vec<String> = self.config.analyzer.instances.iter()
+                    .map(|i| i.name.clone()).collect();
+                if !stats.is_empty() || !declared.is_empty() {
+                    print_deps_stats(&stats, &declared);
                 }
             }
             AnalyzersAction::Config { name } => {
@@ -224,11 +239,13 @@ impl Builder {
                 // Show statistics by analyzer
                 let deps_cache = DepsCache::open()?;
                 let stats = deps_cache.stats_by_analyzer();
-                if stats.is_empty() {
+                let declared: Vec<String> = self.config.analyzer.instances.iter()
+                    .map(|i| i.name.clone()).collect();
+                if stats.is_empty() && declared.is_empty() {
                     println!("Dependency cache is empty. Run a build first.");
                     return Ok(());
                 }
-                print_deps_stats(&stats);
+                print_deps_stats(&stats, &declared);
             }
             AnalyzersAction::Show { filter } => {
                 use crate::cli::AnalyzersShowFilter;

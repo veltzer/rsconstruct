@@ -490,7 +490,7 @@ impl Builder {
             counts[0].to_string(), counts[1].to_string(), counts[2].to_string(), counts[3].to_string(),
             String::new(),
         ]);
-        color::print_table(builder.build());
+        color::print_table_with_total(builder.build());
     }
 }
 

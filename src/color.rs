@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use tabled::Table;
 use tabled::settings::Style;
+use tabled::settings::style::HorizontalLine;
 
 /// Color is enabled based on the global runtime flag (--color auto|always|never).
 /// Default resolution: off unless `--color always`, or `--color auto` with a tty
@@ -48,6 +49,17 @@ pub fn dim(text: &str) -> Cow<'_, str> {
 /// Apply the standard rsconstruct table style and print to stdout.
 pub fn print_table(mut table: Table) {
     println!("{}", table.with(Style::rounded()));
+}
+
+/// Print a table whose last row is a summary ("Total") row. A horizontal
+/// separator is drawn between the data rows and the total row so the total
+/// visually stands apart. Caller must have pushed the total row last.
+pub fn print_table_with_total(mut table: Table) {
+    let n_rows = table.count_rows();
+    let style = Style::rounded().horizontals([
+        (n_rows - 1, HorizontalLine::inherit(Style::modern()))
+    ]);
+    println!("{}", table.with(style));
 }
 
 /// Render a boolean as "Yes" or "No" — the canonical formatting used in tables.
