@@ -307,7 +307,7 @@ fn run() -> Result<()> {
                     builder::processors::list_recommendations();
                 }
                 cli::ProcessorAction::Defconfig { ref pname } => {
-                    builder::processors::processor_defconfig(pname)?;
+                    builder::processors::processor_defconfig(pname, cli.verbose)?;
                 }
                 cli::ProcessorAction::Config { .. } if !has_config => {
                     bail!("No rsconstruct.toml found. Use 'processors defconfig <name>' to see default config without a project.");

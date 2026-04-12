@@ -167,7 +167,7 @@ fn config_diff(name: &str, current: &serde_json::Value) -> serde_json::Value {
 
 /// Print metadata annotations (required fields and output-affecting fields) for a processor.
 /// Only shown in text mode (not JSON mode).
-fn print_processor_metadata(name: &str) {
+fn print_processor_metadata(name: &str, verbose: bool) {
     use crate::config::{SCAN_FIELD_DESCRIPTIONS, SHARED_FIELD_DESCRIPTIONS};
 
     let proc_descs = crate::config::ProcessorConfig::field_descriptions_for(name)
@@ -178,7 +178,11 @@ fn print_processor_metadata(name: &str) {
         .unwrap_or(serde_json::Value::Null);
 
     let mut builder = TableBuilder::new();
-    builder.push_record(["Field", "Type", "Default", "Description"]);
+    if verbose {
+        builder.push_record(["Field", "Type", "Default", "Description"]);
+    } else {
+        builder.push_record(["Field", "Type", "Default"]);
+    }
 
     // Processor-specific fields first, then shared dep/exec, then scan fields
     let all_descs: Vec<(&str, &str)> = proc_descs.iter()
@@ -205,7 +209,11 @@ fn print_processor_metadata(name: &str) {
                 None    => "(none)".to_string(),
             }
         };
-        builder.push_record([field, type_str, &default_str, desc]);
+        if verbose {
+            builder.push_record([field, type_str, &default_str, desc]);
+        } else {
+            builder.push_record([field, type_str, &default_str]);
+        }
     }
 
     println!("\nParameters:");
@@ -213,12 +221,12 @@ fn print_processor_metadata(name: &str) {
 }
 
 /// Show default configuration for a processor (works without rsconstruct.toml).
-pub fn processor_defconfig(name: &str) -> Result<()> {
+pub fn processor_defconfig(name: &str, verbose: bool) -> Result<()> {
     match ProcessorConfig::defconfig_json(name) {
         Some(json) => {
             println!("{}", json);
             if !crate::json_output::is_json_mode() {
-                print_processor_metadata(name);
+                print_processor_metadata(name, verbose);
             }
             Ok(())
         }
@@ -300,7 +308,7 @@ impl Builder {
                         // Show the processor's type name for metadata lookup.
                         // Multi-instance names are like "explicit.report" — strip the instance suffix.
                         let type_name = n.split('.').next().unwrap_or(n);
-                        print_processor_metadata(type_name);
+                        print_processor_metadata(type_name, verbose);
                         if i + 1 < names.len() {
                             println!();
                         }
@@ -310,7 +318,7 @@ impl Builder {
                 }
             }
             ProcessorAction::Defconfig { ref pname } => {
-                processor_defconfig(pname)?;
+                processor_defconfig(pname, verbose)?;
             }
             ProcessorAction::Allowlist => {
                 let enabled: Vec<&str> = proc_names.iter()
