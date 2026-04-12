@@ -69,6 +69,21 @@ pub(crate) struct ProcessorDefaults {
     pub formats: &'static [&'static str],
     /// Default args. Empty if not applicable.
     pub args: &'static [&'static str],
+    /// Override for batch. None means leave the StandardConfig default (true).
+    pub batch: Option<bool>,
+}
+
+impl Default for ProcessorDefaults {
+    fn default() -> Self {
+        Self {
+            command: "",
+            dep_auto: &[],
+            output_dir: "",
+            formats: &[],
+            args: &[],
+            batch: None,
+        }
+    }
 }
 
 /// Parameters for a simple checker processor — pure data, no macros.
@@ -535,79 +550,80 @@ pub(crate) fn scan_defaults_for(type_name: &str) -> Option<ScanDefaultsData> {
     })
 }
 
-/// Return per-processor default values (command, dep_auto).
+/// Return per-processor default values (command, dep_auto, batch override).
 /// Only needed for processors whose defaults differ from the struct's Default impl.
 pub(crate) fn processor_defaults_for(type_name: &str) -> Option<ProcessorDefaults> {
+    let d = ProcessorDefaults::default();
     Some(match type_name {
-        "ruff" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "ruff", dep_auto: &["ruff.toml", ".ruff.toml", "pyproject.toml"] },
-        "pylint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "pylint", dep_auto: &[".pylintrc"] },
-        "pytest" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "pytest", dep_auto: &["conftest.py", "pytest.ini", "pyproject.toml"] },
-        "black" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "black", dep_auto: &["pyproject.toml"] },
-        "mypy" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "mypy", dep_auto: &["mypy.ini"] },
-        "pyrefly" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "pyrefly", dep_auto: &["pyproject.toml"] },
-        "rumdl" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "rumdl", dep_auto: &[".rumdl.toml"] },
-        "yamllint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "yamllint", dep_auto: &[".yamllint", ".yamllint.yml", ".yamllint.yaml"] },
-        "jq" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "jq", dep_auto: &[] },
-        "jsonlint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "jsonlint", dep_auto: &[] },
-        "taplo" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "taplo", dep_auto: &["taplo.toml", ".taplo.toml"] },
-        "cppcheck" => ProcessorDefaults { output_dir: "", formats: &[], args: &["--error-exitcode=1", "--enable=warning,style,performance,portability"], command: "cppcheck", dep_auto: &[".cppcheck"] },
-        "cpplint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "cpplint", dep_auto: &[] },
-        "checkpatch" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "checkpatch.pl", dep_auto: &[] },
-        "shellcheck" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "shellcheck", dep_auto: &[".shellcheckrc"] },
-        "luacheck" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "luacheck", dep_auto: &[".luacheckrc"] },
-        "eslint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "eslint", dep_auto: &[".eslintrc", ".eslintrc.json", ".eslintrc.js", ".eslintrc.yml", ".eslintrc.yaml", ".eslintrc.cjs", "eslint.config.js", "eslint.config.mjs", "eslint.config.cjs"] },
-        "jshint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "jshint", dep_auto: &[".jshintrc"] },
-        "htmlhint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "htmlhint", dep_auto: &[".htmlhintrc"] },
-        "stylelint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "stylelint", dep_auto: &[".stylelintrc", ".stylelintrc.json", ".stylelintrc.yml", ".stylelintrc.yaml", ".stylelintrc.js", ".stylelintrc.cjs", "stylelint.config.js", "stylelint.config.cjs"] },
-        "perlcritic" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "perlcritic", dep_auto: &[".perlcriticrc"] },
-        "svglint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "svglint", dep_auto: &[".svglintrc.js"] },
-        "svgo" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "svgo", dep_auto: &["svgo.config.js", "svgo.config.mjs", "svgo.config.cjs"] },
-        "checkstyle" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "checkstyle", dep_auto: &["checkstyle.xml"] },
-        "cmake" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "cmake", dep_auto: &[] },
-        "doctest" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "python3", dep_auto: &[] },
-        "hadolint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "hadolint", dep_auto: &[] },
-        "htmllint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "htmllint", dep_auto: &[] },
-        "jslint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "jslint", dep_auto: &[] },
-        "php_lint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "php", dep_auto: &[] },
-        "slidev" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "slidev", dep_auto: &[] },
-        "standard" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "standard", dep_auto: &[] },
-        "tidy" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "tidy", dep_auto: &[] },
-        "xmllint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "xmllint", dep_auto: &[] },
-        "yq" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "yq", dep_auto: &[] },
+        "ruff" => ProcessorDefaults { command: "ruff", dep_auto: &["ruff.toml", ".ruff.toml", "pyproject.toml"], ..d },
+        "pylint" => ProcessorDefaults { command: "pylint", dep_auto: &[".pylintrc"], ..d },
+        "pytest" => ProcessorDefaults { command: "pytest", dep_auto: &["conftest.py", "pytest.ini", "pyproject.toml"], ..d },
+        "black" => ProcessorDefaults { command: "black", dep_auto: &["pyproject.toml"], ..d },
+        "mypy" => ProcessorDefaults { command: "mypy", dep_auto: &["mypy.ini"], ..d },
+        "pyrefly" => ProcessorDefaults { command: "pyrefly", dep_auto: &["pyproject.toml"], ..d },
+        "rumdl" => ProcessorDefaults { command: "rumdl", dep_auto: &[".rumdl.toml"], ..d },
+        "yamllint" => ProcessorDefaults { command: "yamllint", dep_auto: &[".yamllint", ".yamllint.yml", ".yamllint.yaml"], ..d },
+        "jq" => ProcessorDefaults { command: "jq", ..d },
+        "jsonlint" => ProcessorDefaults { command: "jsonlint", ..d },
+        "taplo" => ProcessorDefaults { command: "taplo", dep_auto: &["taplo.toml", ".taplo.toml"], ..d },
+        "cppcheck" => ProcessorDefaults { command: "cppcheck", args: &["--error-exitcode=1", "--enable=warning,style,performance,portability"], dep_auto: &[".cppcheck"], batch: Some(false), ..d },
+        "cpplint" => ProcessorDefaults { command: "cpplint", ..d },
+        "checkpatch" => ProcessorDefaults { command: "checkpatch.pl", ..d },
+        "shellcheck" => ProcessorDefaults { command: "shellcheck", dep_auto: &[".shellcheckrc"], ..d },
+        "luacheck" => ProcessorDefaults { command: "luacheck", dep_auto: &[".luacheckrc"], ..d },
+        "eslint" => ProcessorDefaults { command: "eslint", dep_auto: &[".eslintrc", ".eslintrc.json", ".eslintrc.js", ".eslintrc.yml", ".eslintrc.yaml", ".eslintrc.cjs", "eslint.config.js", "eslint.config.mjs", "eslint.config.cjs"], ..d },
+        "jshint" => ProcessorDefaults { command: "jshint", dep_auto: &[".jshintrc"], ..d },
+        "htmlhint" => ProcessorDefaults { command: "htmlhint", dep_auto: &[".htmlhintrc"], ..d },
+        "stylelint" => ProcessorDefaults { command: "stylelint", dep_auto: &[".stylelintrc", ".stylelintrc.json", ".stylelintrc.yml", ".stylelintrc.yaml", ".stylelintrc.js", ".stylelintrc.cjs", "stylelint.config.js", "stylelint.config.cjs"], ..d },
+        "perlcritic" => ProcessorDefaults { command: "perlcritic", dep_auto: &[".perlcriticrc"], ..d },
+        "svglint" => ProcessorDefaults { command: "svglint", dep_auto: &[".svglintrc.js"], ..d },
+        "svgo" => ProcessorDefaults { command: "svgo", dep_auto: &["svgo.config.js", "svgo.config.mjs", "svgo.config.cjs"], ..d },
+        "checkstyle" => ProcessorDefaults { command: "checkstyle", dep_auto: &["checkstyle.xml"], ..d },
+        "cmake" => ProcessorDefaults { command: "cmake", ..d },
+        "doctest" => ProcessorDefaults { command: "python3", ..d },
+        "hadolint" => ProcessorDefaults { command: "hadolint", ..d },
+        "htmllint" => ProcessorDefaults { command: "htmllint", ..d },
+        "jslint" => ProcessorDefaults { command: "jslint", ..d },
+        "php_lint" => ProcessorDefaults { command: "php", ..d },
+        "slidev" => ProcessorDefaults { command: "slidev", ..d },
+        "standard" => ProcessorDefaults { command: "standard", ..d },
+        "tidy" => ProcessorDefaults { command: "tidy", ..d },
+        "xmllint" => ProcessorDefaults { command: "xmllint", ..d },
+        "yq" => ProcessorDefaults { command: "yq", ..d },
         // Generators
-        "marp" => ProcessorDefaults { output_dir: "out/marp", formats: &["pdf"], args: &["--html", "--allow-local-files"], command: "marp", dep_auto: &[] },
-        "markdown2html" => ProcessorDefaults { output_dir: "out/markdown2html", formats: &[], args: &[], command: "markdown", dep_auto: &[] },
-        "chromium" => ProcessorDefaults { output_dir: "out/chromium", formats: &[], args: &[], command: "google-chrome", dep_auto: &[] },
-        "mermaid" => ProcessorDefaults { output_dir: "out/mermaid", formats: &["png"], args: &[], command: "mmdc", dep_auto: &[] },
-        "drawio" => ProcessorDefaults { output_dir: "out/drawio", formats: &["png"], args: &[], command: "drawio", dep_auto: &[] },
-        "libreoffice" => ProcessorDefaults { output_dir: "out/libreoffice", formats: &["pdf"], args: &[], command: "libreoffice", dep_auto: &[] },
-        "protobuf" => ProcessorDefaults { output_dir: "out/protobuf", formats: &[], args: &[], command: "protoc", dep_auto: &[] },
-        "cc_single_file" => ProcessorDefaults { output_dir: "out/cc_single_file", formats: &[], args: &[], command: "", dep_auto: &[] },
-        "cargo" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "build", dep_auto: &[] },
-        "clippy" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "clippy", dep_auto: &[] },
-        "generator" => ProcessorDefaults { output_dir: "out/generator", formats: &[], args: &[], command: "", dep_auto: &[] },
-        "explicit" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "", dep_auto: &[] },
-        "sphinx" => ProcessorDefaults { output_dir: "docs", formats: &[], args: &[], command: "", dep_auto: &[] },
-        "mdbook" => ProcessorDefaults { output_dir: "book", formats: &[], args: &[], command: "", dep_auto: &[] },
-        "npm" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "install", dep_auto: &[] },
-        "sass" => ProcessorDefaults { output_dir: "out/sass", formats: &[], args: &[], command: "sass", dep_auto: &[] },
-        "pandoc" => ProcessorDefaults { output_dir: "out/pandoc", formats: &["pdf", "html", "docx"], args: &[], command: "pandoc", dep_auto: &[] },
-        "a2x" => ProcessorDefaults { output_dir: "out/a2x", formats: &[], args: &[], command: "a2x", dep_auto: &[] },
-        "objdump" => ProcessorDefaults { output_dir: "out/objdump", formats: &[], args: &[], command: "objdump", dep_auto: &[] },
-        "imarkdown2html" => ProcessorDefaults { output_dir: "out/imarkdown2html", formats: &[], args: &[], command: "", dep_auto: &[] },
-        "isass" => ProcessorDefaults { output_dir: "out/isass", formats: &[], args: &[], command: "", dep_auto: &[] },
-        "yaml2json" => ProcessorDefaults { output_dir: "out/yaml2json", formats: &[], args: &[], command: "", dep_auto: &[] },
+        "marp" => ProcessorDefaults { output_dir: "out/marp", formats: &["pdf"], args: &["--html", "--allow-local-files"], command: "marp", ..d },
+        "markdown2html" => ProcessorDefaults { output_dir: "out/markdown2html", command: "markdown", ..d },
+        "chromium" => ProcessorDefaults { output_dir: "out/chromium", command: "google-chrome", ..d },
+        "mermaid" => ProcessorDefaults { output_dir: "out/mermaid", formats: &["png"], command: "mmdc", ..d },
+        "drawio" => ProcessorDefaults { output_dir: "out/drawio", formats: &["png"], command: "drawio", ..d },
+        "libreoffice" => ProcessorDefaults { output_dir: "out/libreoffice", formats: &["pdf"], command: "libreoffice", ..d },
+        "protobuf" => ProcessorDefaults { output_dir: "out/protobuf", command: "protoc", ..d },
+        "cc_single_file" => ProcessorDefaults { output_dir: "out/cc_single_file", ..d },
+        "cargo" => ProcessorDefaults { command: "build", ..d },
+        "clippy" => ProcessorDefaults { command: "clippy", ..d },
+        "generator" => ProcessorDefaults { output_dir: "out/generator", ..d },
+        "explicit" => ProcessorDefaults { ..d },
+        "sphinx" => ProcessorDefaults { output_dir: "docs", ..d },
+        "mdbook" => ProcessorDefaults { output_dir: "book", ..d },
+        "npm" => ProcessorDefaults { command: "install", ..d },
+        "sass" => ProcessorDefaults { output_dir: "out/sass", command: "sass", ..d },
+        "pandoc" => ProcessorDefaults { output_dir: "out/pandoc", formats: &["pdf", "html", "docx"], command: "pandoc", ..d },
+        "a2x" => ProcessorDefaults { output_dir: "out/a2x", command: "a2x", ..d },
+        "objdump" => ProcessorDefaults { output_dir: "out/objdump", command: "objdump", ..d },
+        "imarkdown2html" => ProcessorDefaults { output_dir: "out/imarkdown2html", ..d },
+        "isass" => ProcessorDefaults { output_dir: "out/isass", ..d },
+        "yaml2json" => ProcessorDefaults { output_dir: "out/yaml2json", ..d },
         // Checkers with custom dep_auto
-        "mdl" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "", dep_auto: &[".mdlrc"] },
-        "markdownlint" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "", dep_auto: &[".markdownlint.json", ".markdownlint.jsonc", ".markdownlint.yaml"] },
-        "aspell" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "", dep_auto: &[".aspell.conf", ".aspell.en.pws", ".aspell.en.prepl"] },
+        "mdl" => ProcessorDefaults { dep_auto: &[".mdlrc"], ..d },
+        "markdownlint" => ProcessorDefaults { dep_auto: &[".markdownlint.json", ".markdownlint.jsonc", ".markdownlint.yaml"], ..d },
+        "aspell" => ProcessorDefaults { dep_auto: &[".aspell.conf", ".aspell.en.pws", ".aspell.en.prepl"], ..d },
         // Generators with custom output_dir
-        "pdflatex" => ProcessorDefaults { output_dir: "out/pdflatex", formats: &[], args: &[], command: "", dep_auto: &[] },
-        "rust_single_file" => ProcessorDefaults { output_dir: "out/rust_single_file", formats: &[], args: &[], command: "", dep_auto: &[] },
-        "pdfunite" => ProcessorDefaults { output_dir: "out/pdfunite", formats: &[], args: &[], command: "", dep_auto: &[] },
-        "ipdfunite" => ProcessorDefaults { output_dir: "out/ipdfunite", formats: &[], args: &[], command: "", dep_auto: &[] },
+        "pdflatex" => ProcessorDefaults { output_dir: "out/pdflatex", ..d },
+        "rust_single_file" => ProcessorDefaults { output_dir: "out/rust_single_file", ..d },
+        "pdfunite" => ProcessorDefaults { output_dir: "out/pdfunite", ..d },
+        "ipdfunite" => ProcessorDefaults { output_dir: "out/ipdfunite", ..d },
         // Creators with custom command
-        "gem" => ProcessorDefaults { output_dir: "", formats: &[], args: &[], command: "install", dep_auto: &[] },
+        "gem" => ProcessorDefaults { command: "install", ..d },
         _ => return None,
     })
 }
@@ -636,6 +652,11 @@ pub(crate) fn apply_processor_defaults(type_name: &str, value: &mut toml::Value)
         set_array(table, "dep_auto", defaults.dep_auto);
         set_array(table, "formats", defaults.formats);
         set_array(table, "args", defaults.args);
+        if let Some(batch) = defaults.batch {
+            if !table.contains_key("batch") {
+                table.insert("batch".into(), toml::Value::Boolean(batch));
+            }
+        }
     }
 }
 
