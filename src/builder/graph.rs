@@ -16,6 +16,8 @@ impl Builder {
             GraphAction::View { viewer } => self.view_graph(viewer),
             GraphAction::Stats => self.graph_stats(),
             GraphAction::Unreferenced { extensions, rm } => self.graph_unreferenced(extensions, rm),
+            GraphAction::LookupFwd { files } => self.graph_lookup_fwd(files),
+            GraphAction::LookupRev { files } => self.graph_lookup_rev(files),
         }
     }
 
@@ -195,6 +197,122 @@ impl Builder {
 
         Ok(())
     }
+
+    /// Forward lookup: for each given file, find products where it appears in `inputs`.
+    /// Shows: the queried file → each consuming product's processor + outputs.
+    ///
+    /// Reports per file. Files that are not inputs to any product are listed as such.
+    fn graph_lookup_fwd(&self, files: Vec<String>) -> Result<()> {
+        let graph = self.build_graph()?;
+        let queries = normalize_query_paths(&files);
+
+        if json_output::is_json_mode() {
+            #[derive(serde::Serialize)]
+            struct Consumer<'a> {
+                processor: &'a str,
+                outputs: Vec<String>,
+            }
+            #[derive(serde::Serialize)]
+            struct Entry<'a> {
+                file: String,
+                consumers: Vec<Consumer<'a>>,
+            }
+            let entries: Vec<Entry> = queries.iter().map(|q| {
+                let consumers: Vec<Consumer> = graph.products_consuming(q).iter()
+                    .map(|&id| &graph.products()[id])
+                    .map(|p| Consumer {
+                        processor: &p.processor,
+                        outputs: p.outputs.iter().map(|o| o.display().to_string()).collect(),
+                    })
+                    .collect();
+                Entry { file: q.display().to_string(), consumers }
+            }).collect();
+            println!("{}", serde_json::to_string_pretty(&entries)?);
+            return Ok(());
+        }
+
+        for query in &queries {
+            println!("{}", query.display());
+            let consumers = graph.products_consuming(query);
+            if consumers.is_empty() {
+                println!("  (not consumed by any product)");
+            } else {
+                for &id in consumers {
+                    let product = &graph.products()[id];
+                    if product.outputs.is_empty() {
+                        println!("  [{}] (no outputs — checker)", product.processor);
+                    } else {
+                        let outs: Vec<String> = product.outputs.iter()
+                            .map(|o| o.display().to_string()).collect();
+                        println!("  [{}] -> {}", product.processor, outs.join(", "));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Reverse lookup: for each given file, find the single product where it appears
+    /// in `outputs`. Shows: the queried file → the producing processor + its inputs.
+    ///
+    /// By construction every declared output belongs to exactly one product
+    /// (enforced at graph-build time via the output-conflict check).
+    fn graph_lookup_rev(&self, files: Vec<String>) -> Result<()> {
+        let graph = self.build_graph()?;
+        let queries = normalize_query_paths(&files);
+
+        if json_output::is_json_mode() {
+            #[derive(serde::Serialize)]
+            struct Producer<'a> {
+                processor: &'a str,
+                inputs: Vec<String>,
+            }
+            #[derive(serde::Serialize)]
+            struct Entry<'a> {
+                file: String,
+                producer: Option<Producer<'a>>,
+            }
+            let entries: Vec<Entry> = queries.iter().map(|q| {
+                let producer = graph.path_owner(q).map(|id| {
+                    let p = &graph.products()[id];
+                    Producer {
+                        processor: &p.processor,
+                        inputs: p.inputs.iter().map(|i| i.display().to_string()).collect(),
+                    }
+                });
+                Entry { file: q.display().to_string(), producer }
+            }).collect();
+            println!("{}", serde_json::to_string_pretty(&entries)?);
+            return Ok(());
+        }
+
+        for query in &queries {
+            println!("{}", query.display());
+            match graph.path_owner(query) {
+                Some(id) => {
+                    let p = &graph.products()[id];
+                    if p.inputs.is_empty() {
+                        println!("  [{}] (no inputs declared)", p.processor);
+                    } else {
+                        let ins: Vec<String> = p.inputs.iter()
+                            .map(|i| i.display().to_string()).collect();
+                        println!("  [{}] <- {}", p.processor, ins.join(", "));
+                    }
+                }
+                None => println!("  (not produced by any product)"),
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Normalize user-supplied paths: strip a leading `./` so queries match graph paths
+/// which are stored without that prefix.
+fn normalize_query_paths(files: &[String]) -> Vec<PathBuf> {
+    files.iter().map(|s| {
+        let p = Path::new(s);
+        p.strip_prefix("./").unwrap_or(p).to_path_buf()
+    }).collect()
 }
 
 /// Recursively collect files whose extension matches `exts` and are not in `referenced`.

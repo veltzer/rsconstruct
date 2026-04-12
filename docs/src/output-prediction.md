@@ -1,8 +1,19 @@
-# Output Prediction for Mass Generators
+# Output Prediction & MassGenerator
 
-A Creator (mkdocs, Sphinx, Jekyll, Hugo, etc.) declares `output_dirs = ["_site"]` — "I produce something in here, don't ask me what until I've run." This document explores an alternative design where we ask those tools *in advance* what they will produce, turning opaque Creators into transparent per-file generators.
+A Creator (mkdocs, Sphinx, Jekyll, Hugo, etc.) declares `output_dirs = ["_site"]` — "I produce something in here, don't ask me what until I've run." This chapter specifies a new processor type, **MassGenerator**, that makes those tools **transparent**: the tool is asked in advance what it will produce, and each planned file is promoted to a declared product output.
 
-## The idea
+Once outputs are known up front, per-file caching, precise incremental rebuilds, cross-processor dependencies on generated files, and safe output-conflict detection all come for free.
+
+## Status
+
+**Designed, not yet implemented.** This document is the design spec that guides the implementation.
+
+Related designs:
+
+- [Shared Output Directory](shared-output-directory.md) — the fallback mechanism for tools that can't predict outputs.
+- [Processor Ordering](processor-ordering.md) — the sibling design discussion about explicit ordering knobs.
+
+## The core idea
 
 Today we treat tools like mkdocs as a black box:
 
@@ -12,168 +23,249 @@ command     = "mkdocs build --site-dir _site"
 output_dirs = ["_site"]   # opaque — we only know the directory
 ```
 
-The proposal: add a mechanism to discover the exact list of files the tool will produce *before* it runs. Two shapes:
+The new approach asks the tool to emit a manifest before running:
 
-### Shape A — Per-tool predictors built into rsconstruct
+```toml
+[processor.mass_generator.mkdocs]
+command         = "mkdocs build --site-dir _site"
+predict_command = "mkdocs-plan"                  # prints a JSON manifest on stdout
+output_dirs     = ["_site"]
+```
 
-For each supported tool, write a Rust function:
+rsconstruct invokes `predict_command` at graph-build time, parses its JSON output, and creates one product per planned file. Each product has its own `inputs` (taken from the manifest's `sources` field) and a single `outputs` entry (the planned path). From that point on, the product is a regular per-file Generator — caching, dependency tracking, and cross-processor wiring all work uniformly.
 
-```rust
-fn predict_mkdocs_outputs(config: &Path, site_dir: &Path) -> Result<Vec<PathBuf>> {
-    // Parse mkdocs.yml, walk docs/, apply use_directory_urls rule,
-    // return ["_site/index.html", "_site/api/overview/index.html", ...]
+## Manifest format
+
+`predict_command` must print a single JSON document to stdout in this shape:
+
+```json
+{
+  "version": 1,
+  "outputs": [
+    {
+      "path": "_site/index.html",
+      "sources": ["docs/index.md", "templates/default.html", "mysite.toml"]
+    },
+    {
+      "path": "_site/about/index.html",
+      "sources": ["docs/about.md", "templates/default.html", "mysite.toml"]
+    },
+    {
+      "path": "_site/assets/style.css",
+      "sources": ["assets/style.scss", "assets/_vars.scss"]
+    }
+  ]
 }
 ```
 
-Called at graph-build time. The predicted list becomes the product's declared `outputs`, and the Creator is promoted to a per-file Mass Generator.
+- **`version`** — integer. Schema version (1 for now). Allows future evolution without breaking existing tools.
+- **`outputs`** — array, one entry per file the tool will produce.
+- **`outputs[].path`** — output file path relative to the project root. Must fall within one of the processor's `output_dirs` (enforced).
+- **`outputs[].sources`** — array of input paths whose changes should trigger rebuilding this output. Used as the product's `inputs`, which feed into cache-key computation.
 
-### Shape B — Generic predict command
+Order within `outputs` must be deterministic (sorted by path). The `sources` array should be minimal — only the files whose content genuinely affects this specific output.
 
-Add a config field that points to a script the user (or tool plugin) provides:
+## Lifecycle
 
-```toml
-[processor.creator.mkdocs]
-command        = "mkdocs build --site-dir _site"
-predict_command = "./list-mkdocs-outputs.sh"
-output_dirs    = ["_site"]
+### 1. Plan phase (at graph-build time)
+
+Once per MassGenerator instance declared in `rsconstruct.toml`:
+
+1. Run `predict_command`. Capture stdout and exit status.
+2. Exit status non-zero → fail the graph build with the tool's stderr in the error message.
+3. Parse stdout as JSON. Malformed → fail the graph build.
+4. Reject manifest if any `outputs[].path` falls outside the declared `output_dirs`.
+5. For each manifest entry, add one product to the build graph:
+   - `inputs` = entry's `sources`
+   - `outputs` = [entry's `path`]
+   - `processor` = this instance's name
+6. Cache the manifest itself in the object store, keyed on a hash of `(config + input_checksum_of(source_tree))`. Re-planning is skipped when the hash matches.
+
+The plan phase runs BEFORE the existing product-discovery phase, so predicted outputs are known to all downstream processors (linters, compressors, etc.) via the normal file-index/cross-processor-dependency mechanisms.
+
+### 2. Build phase
+
+When one or more MassGenerator products are dirty:
+
+1. rsconstruct groups all dirty products belonging to the same MassGenerator instance into a **single execution batch**.
+2. It invokes `command` exactly once per batch (not per product).
+3. The tool produces all its output files in that one invocation.
+4. Each product caches its own output file as a blob descriptor, independently.
+5. In **strict mode** (default): after the tool exits, rsconstruct verifies that every predicted file in the batch was produced and no unexpected files appeared in `output_dirs`. A mismatch fails the build.
+6. In **loose mode** (`--loose-manifest` CLI flag): divergence is a warning only.
+
+The "one invocation, many products" idiom is this type's defining execution shape — distinct from both Generator (one invocation per product) and Creator (one invocation, one product).
+
+### 3. Restore phase
+
+When all MassGenerator products for an instance are cache-clean:
+
+1. Each product is restored from its blob descriptor independently — no tool invocation at all.
+2. Partial restoration is natural: if 47 of 50 files are clean, only 3 products go through the build phase (which still triggers one tool invocation, but the 47 unchanged files are either untouched on disk or silently overwritten with identical content).
+
+### 4. Verification (strict mode)
+
+After build:
+
+- Every manifest entry → file exists with the right path.
+- Every file in `output_dirs` → appears in the manifest OR belongs to another processor (via the existing `path_owner` query).
+
+Violations are hard errors; partial output is left on disk for debugging.
+
+## Graph shape
+
+With a MassGenerator producing N planned files, the graph looks like this:
+
+```
+  source files (markdown, templates, config)
+         |
+         | (as inputs to each planned file's product)
+         v
+  [product: _site/index.html]
+  [product: _site/about/index.html]
+  [product: _site/assets/style.css]
+  ... (N products, all with processor = "mass_generator.mkdocs")
 ```
 
-rsconstruct runs `predict_command` once per build, parses its stdout as a file list, treats those paths as declared `outputs`.
+Each product is a first-class citizen in the graph. A downstream linter can depend on `_site/index.html` like any other generated file.
 
-Shape B is the scalable form — it pushes tool-specific knowledge out of rsconstruct and into the user's/community's configuration. Shape A is the "batteries included" form for a few blessed tools.
+## Execution: one tool invocation for many products
 
-## What prediction buys you
+Today's executor assumes "one product = one invocation of `processor.execute(product)`." MassGenerator violates that. The cleanest implementation (per the design discussion) uses a two-level graph:
 
-Once outputs are known in advance, the hard problems of opaque Creators evaporate into well-understood Generator territory.
+1. **Phase product** (internal, not user-visible): one synthetic product per MassGenerator instance whose `execute` is the actual tool invocation. It has no declared outputs; its job is to populate the output_dir.
+2. **File products** (the N planned files): each depends on the phase product, meaning the tool must have run before any file product can be cached/restored. Each file product's `execute` is a no-op (tool already ran); it just caches its output.
 
-### 1. Shared-directory ownership is trivial
+The dependency system then naturally orders: phase product runs once (if any file product is dirty), then every dirty file product caches its output. Clean file products skip both phases.
 
-The [Shared Output Directory](shared-output-directory.md) chapter explains a whole mechanism (path_owner queries, tree filtering, previous-tree-based cleanup) to handle the case where mkdocs and pandoc both write into `_site/`. With prediction, every file has a declared owner at graph-build time, and the existing output-conflict detection catches overlaps.
+This shape keeps the executor simple and reuses all existing caching, skipping, and restore logic without modification.
 
-Collisions become graph errors instead of silent runtime bugs:
+## Config reference
 
-> `Output conflict: _site/about.html is produced by both [creator.mkdocs] and [explicit.pandoc]`
+```toml
+[processor.mass_generator.<INSTANCE>]
+
+# The tool's build command. Runs once per batch of dirty file products.
+command = "mkdocs build --site-dir _site"
+
+# The tool's plan command. Must print the JSON manifest to stdout.
+# May be the same binary with a different flag or a separate script.
+predict_command = "mkdocs-plan"
+
+# Where the tool will produce its outputs. Every manifest entry's path
+# must fall inside one of these directories. Used for verification.
+output_dirs = ["_site"]
+
+# Standard scan fields still apply — they bound which source changes
+# trigger a replan.
+src_dirs = ["docs", "templates"]
+src_extensions = [".md", ".html", ".yaml"]
+
+# Optional: skip strict output verification for this instance.
+# Useful during development of the tool itself. Default: false.
+loose_manifest = false
+```
+
+## Interaction with the shared-output-directory design
+
+This new processor type does not replace the Creator / shared-output-directory mechanism. Both coexist:
+
+| User declares                   | Treated as       | Caching                    | Cross-processor deps    |
+|---------------------------------|------------------|----------------------------|-------------------------|
+| `output_dirs` only              | Creator (opaque) | One tree per build         | Only via declared files |
+| `output_dirs` + `predict_command` | MassGenerator    | Per file                   | Full — all files known  |
+
+Choose Creator when the tool can't enumerate its outputs. Choose MassGenerator when it can.
+
+## Design invariants (for tool authors)
+
+For a tool to be consumed as a MassGenerator, `predict_command` must uphold:
+
+1. **Pure function of config + source tree.** Same inputs → same manifest, bit for bit.
+2. **Cheap or cached.** rsconstruct calls this on every graph build. Slow predict_command means slow rsconstruct invocations.
+3. **Matches the build command's actual outputs.** Predicted paths = actual paths. Violations are hard errors in strict mode.
+4. **Deterministic variable outputs.** If the tool produces tag pages or archive pages or anything else content-derived, `predict_command` must compute them from the same source inspection pass.
+
+The [rssite README](https://github.com/veltzer/rssite) spells out a concrete contract that meets these invariants.
+
+## Advantages
+
+### 1. Shared-directory ownership becomes trivial
+
+Every generated file has a declared owner at graph-build time. The existing output-conflict check catches overlaps instantly:
+
+> `Output conflict: _site/about.html is produced by both [mass_generator.mkdocs] and [explicit.pandoc]`
+
+The complex `path_owner` + tree filtering + previous-tree cleanup mechanism (see [Shared Output Directory](shared-output-directory.md)) is still there as a safety net, but for MassGenerators it's mostly unnecessary.
 
 ### 2. True cross-processor dependencies
 
-Today, downstream processors cannot depend on a Creator's outputs because those outputs are unknown at scan time. If a linter wants to validate every `_site/*.html` file that mkdocs produces, it can't — those files don't appear in the `FileIndex` yet.
-
-With prediction, `_site/index.html` etc. are known products. A linter (or ipdfunite, or an image optimizer) declares them as inputs, and the dependency graph connects correctly. See [Cross-Processor Dependencies](cross-processor-dependencies.md) for why this matters.
+Downstream processors (linters, compressors, sitemap builders) can declare the MassGenerator's outputs as inputs. The graph connects properly. Impossible with opaque Creators.
 
 ### 3. Per-file caching
 
-A Creator's cache today is one big tree. Change any input → the whole tree is considered potentially dirty. With per-file products, each generated page has its own cache entry keyed by its own inputs. A docs fix in `docs/tutorial.md` rebuilds only `_site/tutorial.html`.
+Change `docs/tutorial.md` → rebuild only `_site/tutorial.html`. On a large site this is the difference between "rebuild in 50ms" and "rebuild in 30s."
 
-This is a **major** incremental-build win for sites with hundreds of pages.
+Note: the per-file caching on the rsconstruct side only saves the tool invocation when ALL file products are clean. If any one is dirty, the tool runs once and produces everything — then clean files are still cached individually (useful across different invocations). True per-file build speed requires the tool itself to support partial builds. rssite will; most existing tools won't.
 
-### 4. Parallelism
+### 4. Parallel file caching
 
-Per-file products could in principle run in parallel — shard the work across cores. Whether this translates to actual parallelism depends on whether the underlying tool supports partial builds (most don't, see costs below).
+With per-file products, different files can be cached to the object store in parallel after the build. Minor win, but free.
 
-### 5. Precise clean and restore
+### 5. Precise clean, precise restore, real dep graphs
 
-Cleaning a single stale page, restoring a subset from cache, showing a dependency graph with real edges — all of these become possible.
+Every downstream feature that relies on declared outputs — `clean outputs <path>`, graph visualization, dry-run, watch mode — works correctly for MassGenerator outputs without special cases.
 
-## What prediction costs
-
-The idea is seductive; the costs are real.
+## Disadvantages
 
 ### 1. Predictor drift
 
-A predictor must exactly match the tool's actual behavior. When `mkdocs` changes its URL scheme in v2.0, introduces a new `use_directory_urls` mode, or ships plugins that rewrite output paths, our predictor lies. The cache restores the wrong paths and the actual build produces different ones — producing orphan files on disk and corrupting the cache.
+If `predict_command` lies (or gets out of sync with the tool), the cache can be corrupted silently: predicted paths get restored, actual build produces different paths, orphan files accumulate. Strict-mode verification after each build is the guardrail — it catches drift at build time rather than at next-restore time.
 
-Mitigating this requires either:
-- Strict version pinning per tool (fragile, painful to maintain).
-- A validation step that compares predicted vs. actual after each build, and errors on mismatch.
-- Degrading gracefully to the current opaque Creator behavior when prediction fails.
+### 2. Predict-time cost
 
-None is free.
+Every graph build runs `predict_command`. For large sites this may mean parsing every source file to enumerate outputs. The manifest cache (keyed on source-tree hash) mitigates but doesn't eliminate this.
 
-### 2. Plugin ecosystems
+### 3. Partial build support
 
-Most site generators have plugin ecosystems that rewrite outputs. mkdocs has ~50 plugins touching paths (navigation, search indices, social cards, i18n). Sphinx extensions add entirely new output formats. A predictor must either replicate plugin logic (impossibly fragile) or concede that prediction only works for plain vanilla configurations (limiting).
+The per-product caching model wants "rebuild just this one file" but most tools rebuild everything per invocation. With `mkdocs`, `hugo`, `jekyll`, you pay full build cost whenever anything is dirty, regardless of how many files changed. rssite is being designed to support partial builds from day one; existing tools would need patches.
 
-### 3. Partial build invocation
+### 4. Engineering cost
 
-Even if we predict `_site/about.html` is stale and rebuild just that one file, most tools don't support partial builds:
+The MassGenerator type is a new processor class with new execution semantics ("one invocation for many products"). That's real implementation work in the executor, plus a new config schema, plus manifest parsing, plus verification logic.
 
-- `mkdocs build` rebuilds the whole site each invocation.
-- Sphinx has incremental builds but at the project level, not the file level.
-- Hugo rebuilds everything in one pass by design.
+### 5. Variable outputs may require heavy parsing
 
-So per-file parallelism buys nothing — one invocation still produces every file. The caching wins are real; the parallelism wins are mostly illusory for this class of tool.
+Tag pages, archive indices, RSS feeds — all content-derived. `predict_command` has to do enough source parsing to enumerate them. For well-designed tools this is cheap (the same parsing feeds both plan and build). For retrofitted tools it's often duplicate work.
 
-### 4. What if prediction is wrong?
+## Open questions
 
-Two failure modes:
+These should be resolved during implementation:
 
-- **Under-prediction**: the actual run produces files we didn't predict. Are those files orphans? Do we add them to the cache retroactively? Error on "unexpected outputs"? Each answer breaks some use case.
-- **Over-prediction**: we predicted a file that the run doesn't produce. Now the cache claims the file exists (with some checksum) but there's nothing to cache. Restore writes phantom files.
-
-Both cases are silent data corruption unless detected. Detection requires comparing predicted vs. actual after every run, adding I/O and complexity.
-
-### 5. Engineering cost per tool
-
-Shape A (built-in predictors) means writing and maintaining a predictor per tool. mkdocs alone needs YAML parsing + docs/ walk + permalink logic + plugin awareness. Sphinx's `conf.py` is literal Python — we'd need a Python interpreter to evaluate it, or settle for crude text parsing. Jekyll applies Liquid permalinks. Each tool is weeks of careful work.
-
-Shape B (generic predict command) dodges this by making it the user's problem — but then each user either writes their own predictor or depends on a community-maintained one, which shifts fragility rather than eliminating it.
-
-### 6. Cache invalidation for the predictor itself
-
-The predict command is itself an input to the build graph. If `list-mkdocs-outputs.sh` changes, every downstream product that depended on its outputs might need invalidation. If mkdocs's config file changes (affecting predicted paths), the predictor must rerun before graph construction. This adds a pre-graph phase that has its own caching problem.
-
-### 7. "Declare what you produce" defeats tools that produce variably
-
-Some tools genuinely produce different files depending on runtime content. A Sphinx build with `todo` extension adds a `todo` page only if todos exist. A Hugo site with tag aggregation produces a page per tag discovered in content. Neither can be known without running the tool (or running a tool nearly as complex as the tool itself).
-
-For these, prediction is either incomplete or a reimplementation of the tool.
-
-## How this relates to what we have
-
-The [Shared Output Directory](shared-output-directory.md) design is the **fallback for tools without a predictor**. `output_dirs` + `path_owner` + tree filtering + safe cleanup is the "I don't know your outputs, so I'll respect other processors' files and cache what I find afterward" story.
-
-Both mechanisms would coexist:
-
-| Creator declares              | Treated as             | Caching                       | Cross-processor deps    |
-|-------------------------------|------------------------|-------------------------------|-------------------------|
-| `output_dirs = [...]` only    | Opaque Creator         | One tree per build           | Only via declared files |
-| `predict_command = "..."` or built-in predictor | Promoted to Mass Generator | Per-file, precise | Full — all files known  |
-
-A user can start with `output_dirs` (zero config), then add a `predict_command` later if they want tighter caching.
-
-## Comparison with the "explicit ordering" alternative
-
-The [processor-ordering](processor-ordering.md) doc discusses adding `after = [...]` ordering knobs. Prediction is a fundamentally different answer:
-
-- **Explicit ordering** says "we can't model this; let the user pin the order manually."
-- **Prediction** says "we can model this if we know the outputs; let's discover them."
-
-Prediction is principled (the graph tells the truth, as it should), but expensive to do well. Explicit ordering is cheap to add but lies about the dependency graph.
-
-Neither is strictly better. They solve different problems:
-- Prediction solves **"we don't know what will be produced."**
-- Ordering solves **"we know what will be produced, but there's a side effect we can't express as a file."**
-
-## Open questions if we ever build this
-
-1. **Shape A or Shape B first?** Probably B — lower core-code cost, lets the ecosystem handle tool specifics.
-2. **How strict is the predict/actual check?** Warn? Error? Silently accept divergence? Each choice has costs.
-3. **What does a bad prediction do to the cache?** Can we detect and purge polluted entries, or do we require a clean?
-4. **Should predict run on every build, or be cached like a regular input?** If cached, what invalidates it?
-5. **Does the predicted output list flow into `processors files`, `--dry-run`, and `graph`?** Users will expect yes; that's engineering work.
+1. **Single-pass mode**: should we support a `--print-manifest` flag on `command` itself, so one invocation does both plan and build? Faster for full rebuilds, slightly uglier config. Probably yes, optional.
+2. **Manifest schema evolution**: how do we handle `version: 2`? Support both for a transition period, or hard-require upgrade? Probably both-for-N-releases.
+3. **Incremental invalidation**: when the manifest changes between builds (e.g., a new page added), how is the old cache cleaned? The existing descriptor-based cache handles this automatically (unreferenced cache entries are eventually pruned), but the behavior deserves explicit documentation.
+4. **Interaction with `file_index`**: predicted outputs need to appear in the file index so downstream processors can discover them during their own scan phases. Must be registered before discover_products runs.
+5. **Watch mode**: when a source file changes, do we re-run `predict_command` or reuse the last manifest? The hash-based cache mostly handles this, but edge cases around plugin-rewritten outputs need thinking.
 
 ## Recommendation
 
-**Don't build this yet.** The shared-directory design handles the 80% case without tool-specific code. Prediction is a big feature with many edges — worth doing only if:
+Build this once rssite (or any other cooperating tool) is far enough along to drive concrete requirements. Implementing it against a hypothetical tool wastes work — we'd guess at features. Implementing against rssite (where we control both sides) grounds the design in reality.
 
-- Multiple concrete use cases demonstrate that `output_dirs` + shared-directory semantics is insufficient.
-- At least one target tool (probably mkdocs or Sphinx) has a stable, scriptable way to list its outputs — so Shape B has a working reference case.
-- The predict/actual validation story is designed before the feature ships.
+When implemented, do it in this order:
 
-If and when we build it: start with Shape B (`predict_command` field), implement it for one tool as a proof of concept, and iterate.
+1. New processor type `mass_generator` registered in the plugin registry.
+2. Config schema (`predict_command`, `loose_manifest`).
+3. Plan phase: invoke `predict_command`, parse JSON, create products.
+4. Execution phase: batching logic — one invocation per instance, per build.
+5. Strict verification after build.
+6. Manifest caching (skip re-plan when source tree unchanged).
+7. Documentation in `docs/src/processors/mass_generator.md` once it's real.
 
 ## See also
 
+- [MassGenerator processor type](processors/mass_generator.md) — processor-type documentation (forthcoming)
 - [Shared Output Directory](shared-output-directory.md) — how we handle opaque Creators today
 - [Processor Ordering](processor-ordering.md) — the sibling discussion about explicit ordering
 - [Cross-Processor Dependencies](cross-processor-dependencies.md) — why per-file outputs enable proper dependency graphs
+- [rssite](https://github.com/veltzer/rssite) — static site generator built to implement the MassGenerator contract

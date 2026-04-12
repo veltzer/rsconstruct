@@ -53,6 +53,7 @@
     - [Make](processors/make.md)
     - [Mako](processors/mako.md)
     - [Markdown](processors/markdown.md)
+    - [MassGenerator](processors/mass_generator.md)
     - [Markdownlint](processors/markdownlint.md)
     - [Marp](processors/marp.md)
     - [Mdbook](processors/mdbook.md)

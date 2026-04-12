@@ -378,6 +378,18 @@ pub enum GraphAction {
         #[arg(long)]
         rm: bool,
     },
+    /// For each input file, show the products that consume it (forward lookup: source → outputs)
+    LookupFwd {
+        /// One or more file paths (relative to project root)
+        #[arg(required = true)]
+        files: Vec<String>,
+    },
+    /// For each output file, show the product that produced it (reverse lookup: output → sources)
+    LookupRev {
+        /// One or more file paths (relative to project root)
+        #[arg(required = true)]
+        files: Vec<String>,
+    },
 }
 
 #[derive(Subcommand)]

@@ -187,8 +187,12 @@ impl Product {
 #[derive(Default)]
 pub struct BuildGraph {
     products: Vec<Product>,
-    /// Map from output path to product id
+    /// Map from output path to the single product id that produces it.
+    /// One path has at most one owner by construction (output-conflict check).
     output_to_product: HashMap<PathBuf, usize>,
+    /// Map from input path to every product id that consumes it.
+    /// One path may feed many products (e.g. a shared header).
+    input_to_products: HashMap<PathBuf, Vec<usize>>,
     /// Adjacency list: product id -> list of product ids that depend on it
     dependents: Vec<Vec<usize>>,
     /// Reverse: product id -> list of product ids it depends on
@@ -241,7 +245,22 @@ impl BuildGraph {
                     && existing.inputs.iter().all(|i| inputs.contains(i));
                 if is_superset {
                     if existing.inputs != inputs {
-                        self.products[existing_id].inputs = inputs;
+                        // Remove stale index entries for any old inputs that disappeared
+                        // (shouldn't happen with superset, but keep the index honest).
+                        let old_inputs = std::mem::replace(&mut self.products[existing_id].inputs, inputs.clone());
+                        for old in &old_inputs {
+                            if !inputs.contains(old) {
+                                if let Some(ids) = self.input_to_products.get_mut(old) {
+                                    ids.retain(|&x| x != existing_id);
+                                }
+                            }
+                        }
+                        // Add index entries for the new inputs that weren't there before.
+                        for new in &inputs {
+                            if !old_inputs.contains(new) {
+                                self.input_to_products.entry(new.clone()).or_default().push(existing_id);
+                            }
+                        }
                     }
                     return Ok(existing_id);
                 }
@@ -260,6 +279,11 @@ impl BuildGraph {
         // Register outputs before moving outputs into the product
         for output in &outputs {
             self.output_to_product.insert(output.clone(), id);
+        }
+
+        // Register inputs in the input index
+        for input in &inputs {
+            self.input_to_products.entry(input.clone()).or_default().push(id);
         }
 
         let product = match variant {
@@ -375,14 +399,20 @@ impl BuildGraph {
     }
 
     /// Return the id of the product that declares `path` as one of its outputs,
-    /// or None if no product owns it.
+    /// or None if no product owns it. O(1) average — backed by a hashmap index.
+    ///
     /// Used by Creators caching a shared output directory: any path owned by a
     /// different product must be excluded from this Creator's tree so restore
     /// never clobbers another processor's file.
     pub fn path_owner(&self, path: &Path) -> Option<usize> {
-        self.products.iter()
-            .find(|p| p.outputs.iter().any(|o| o.as_path() == path))
-            .map(|p| p.id)
+        self.output_to_product.get(path).copied()
+    }
+
+    /// Return every product id that lists `path` as an input. O(1) average — backed
+    /// by a hashmap index. Returns an empty slice if the path is not an input to
+    /// any product.
+    pub fn products_consuming(&self, path: &Path) -> &[usize] {
+        self.input_to_products.get(path).map(Vec::as_slice).unwrap_or(&[])
     }
 
     /// Get dependencies of a product (products that must be built before this one)
@@ -436,6 +466,7 @@ impl BuildGraph {
         // We can't actually remove elements because IDs are indices, so we rebuild the graph
         let old_products = std::mem::take(&mut self.products);
         self.output_to_product.clear();
+        self.input_to_products.clear();
         self.dependents.clear();
         self.dependencies.clear();
 
@@ -444,6 +475,9 @@ impl BuildGraph {
                 let id = self.products.len();
                 for output in &product.outputs {
                     self.output_to_product.insert(output.clone(), id);
+                }
+                for input in &product.inputs {
+                    self.input_to_products.entry(input.clone()).or_default().push(id);
                 }
                 let mut p = product;
                 p.id = id;
