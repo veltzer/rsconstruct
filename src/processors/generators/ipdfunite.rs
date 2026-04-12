@@ -205,7 +205,7 @@ impl Processor for IpdfuniteProcessor {
         let upstream_scan_dirs = [upstream_scan_dir];
 
         for dir_path in dirs {
-            let mut source_files: Vec<PathBuf> = fs::read_dir(&dir_path)?
+            let mut source_files: Vec<PathBuf> = ctx!(fs::read_dir(&dir_path), format!("Failed to read directory {}", dir_path.display()))?
                 .filter_map(|e| e.ok())
                 .map(|e| e.path())
                 .filter(|p| p.extension().is_some_and(|e| e == ext))

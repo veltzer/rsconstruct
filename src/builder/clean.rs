@@ -34,7 +34,7 @@ impl Builder {
         let mut dirs_removed = 0usize;
         let out_dir = std::path::PathBuf::from("out");
         if out_dir.is_dir() {
-            for entry in fs::read_dir(&out_dir)? {
+            for entry in ctx!(fs::read_dir(&out_dir), format!("Failed to read directory {}", out_dir.display()))? {
                 let entry = entry?;
                 let path = entry.path();
                 if path.is_dir()

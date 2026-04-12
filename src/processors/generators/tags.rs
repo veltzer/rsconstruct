@@ -1624,7 +1624,7 @@ pub fn merge_tags(tags_dir: &str, source_dir: &str) -> Result<()> {
     let mut merged_count = 0;
     let mut copied_count = 0;
 
-    for entry in fs::read_dir(src)? {
+    for entry in ctx!(fs::read_dir(src), format!("Failed to read source directory {}", src.display()))? {
         let entry = entry?;
         let path = entry.path();
         if path.extension().is_none_or(|e| e != "txt") {
@@ -1667,7 +1667,7 @@ pub fn merge_tags(tags_dir: &str, source_dir: &str) -> Result<()> {
     }
 
     // Copy files that exist in destination but not in source back to source
-    for entry in fs::read_dir(dest)? {
+    for entry in ctx!(fs::read_dir(dest), format!("Failed to read destination directory {}", dest.display()))? {
         let entry = entry?;
         let path = entry.path();
         if path.extension().is_none_or(|e| e != "txt") {

@@ -85,7 +85,7 @@ impl crate::processors::Processor for TermsProcessor {
         }
         // Collect all .txt files from terms_dir as extra inputs
         let mut dep_inputs = self.config.standard.dep_inputs.clone();
-        for entry in fs::read_dir(&self.config.terms_dir)? {
+        for entry in ctx!(fs::read_dir(&self.config.terms_dir), format!("Failed to read terms directory {}", self.config.terms_dir))? {
             let entry = entry?;
             let path = entry.path();
             if path.extension().is_some_and(|e| e == "txt") {
@@ -128,7 +128,7 @@ pub fn load_terms(terms_dir: &str) -> Result<HashSet<String>> {
     let mut seen: std::collections::HashMap<String, (String, usize)> = std::collections::HashMap::new();
     let mut duplicates = Vec::new();
 
-    let mut entries: Vec<_> = fs::read_dir(dir)?
+    let mut entries: Vec<_> = ctx!(fs::read_dir(dir), format!("Failed to read terms directory {}", dir.display()))?
         .filter_map(|e| e.ok())
         .collect();
     entries.sort_by_key(|e| e.path());
@@ -576,7 +576,7 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
     let mut merged_count = 0;
     let mut copied_count = 0;
 
-    for entry in fs::read_dir(src)? {
+    for entry in ctx!(fs::read_dir(src), format!("Failed to read source directory {}", src.display()))? {
         let entry = entry?;
         let path = entry.path();
         if path.extension().is_none_or(|e| e != "txt") {
@@ -623,7 +623,7 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
     }
 
     // Copy files that exist in destination but not in source back to source
-    for entry in fs::read_dir(dest)? {
+    for entry in ctx!(fs::read_dir(dest), format!("Failed to read destination directory {}", dest.display()))? {
         let entry = entry?;
         let path = entry.path();
         if path.extension().is_none_or(|e| e != "txt") {
@@ -650,7 +650,7 @@ pub fn stats(config: &TermsConfig) -> Result<()> {
     }
     let mut file_count = 0;
     let mut total_terms = 0;
-    for entry in fs::read_dir(dir)? {
+    for entry in ctx!(fs::read_dir(dir), format!("Failed to read terms directory {}", dir.display()))? {
         let entry = entry?;
         if entry.path().extension().is_some_and(|e| e == "txt") {
             file_count += 1;
