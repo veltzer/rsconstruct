@@ -13,6 +13,16 @@ pub fn list_analyzers(verbose: bool) {
     let mut plugins: Vec<_> = registry::all_analyzer_plugins().collect();
     plugins.sort_by_key(|p| p.name);
 
+    if crate::json_output::is_json_mode() {
+        #[derive(serde::Serialize)]
+        struct Entry { name: &'static str, native: bool, description: &'static str }
+        let entries: Vec<Entry> = plugins.iter()
+            .map(|p| Entry { name: p.name, native: p.is_native, description: p.description })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&entries).expect("JSON serialize"));
+        return;
+    }
+
     let mut builder = TableBuilder::new();
     if verbose {
         builder.push_record(["Name", "Native", "Description"]);
