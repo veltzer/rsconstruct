@@ -5,9 +5,6 @@ python files dependency analysis:
 
 - when doing batch processing we are not using multi core. What can we do about it?
 
-- want rsconstruct processors config [TAB] to complete inames
-- want rsconstruct processors defconfig [TAB] to complete pnames
-
 - do we have a test that checks that we get an error if we have two processors in the same tmpl file without differentiating between then with a different name.
 
 - do "rsconstruct processors list" and you will see that many processors do not have descriptions. A desciption should be printed only with the --verbose flag.
