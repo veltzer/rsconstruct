@@ -76,5 +76,11 @@ pub struct IcppAnalyzerConfig {
     /// followed like quoted includes, but missing ones are still tolerated.
     #[serde(default)]
     pub follow_angle_brackets: bool,
+    /// Whether to silently skip includes that cannot be resolved.
+    /// When false (default), a quoted include (`#include "foo.h"`) that does not
+    /// resolve produces a hard error. When true, unresolved includes of any kind
+    /// are skipped without error.
+    #[serde(default)]
+    pub skip_not_found: bool,
 }
 

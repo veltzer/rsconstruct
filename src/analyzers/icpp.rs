@@ -110,13 +110,13 @@ impl IcppDepAnalyzer {
                 }
                 match self.resolve_include(include, parent) {
                     Some(resolved) => deps.push(resolved),
-                    None if is_quoted => {
+                    None if is_quoted && !self.config.skip_not_found => {
                         anyhow::bail!(
                             "Include not found: #include \"{}\" in {}",
                             include, source.display()
                         );
                     }
-                    None => {} // <angle> include not resolved — likely a system header
+                    None => {}
                 }
             }
         }
