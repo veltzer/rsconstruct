@@ -105,6 +105,9 @@ impl IcppDepAnalyzer {
             if let Some(caps) = re.captures(line) {
                 let is_quoted = &caps[1] == "\"";
                 let include = &caps[2];
+                if !is_quoted && !self.config.follow_angle_brackets {
+                    continue;
+                }
                 match self.resolve_include(include, parent) {
                     Some(resolved) => deps.push(resolved),
                     None if is_quoted => {

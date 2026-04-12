@@ -69,5 +69,12 @@ pub struct IcppAnalyzerConfig {
     /// Directory path segments to exclude from analysis
     #[serde(default)]
     pub src_exclude_dirs: Vec<String>,
+    /// Whether to follow angle-bracket includes (`#include <foo.h>`).
+    /// When false (default), `<angle>` includes are skipped entirely — even if they
+    /// resolve through configured include paths — so system headers do not bloat
+    /// the dependency graph. When true, angle-bracket includes are resolved and
+    /// followed like quoted includes, but missing ones are still tolerated.
+    #[serde(default)]
+    pub follow_angle_brackets: bool,
 }
 

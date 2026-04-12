@@ -18,9 +18,19 @@ Prefer [cpp](cpp.md) if you need compiler-discovered system include paths or pkg
 
 ```toml
 [analyzer.icpp]
-include_paths    = ["include", "src"]
-src_exclude_dirs = ["/kernel/", "/vendor/"]
+include_paths          = ["include", "src"]
+src_exclude_dirs       = ["/kernel/", "/vendor/"]
+follow_angle_brackets  = false
 ```
+
+### `follow_angle_brackets` (default: `false`)
+
+Controls whether `#include <foo.h>` directives are followed.
+
+- `false` (default) — angle-bracket includes are skipped entirely. System headers never enter the dependency graph, even when they resolve through configured include paths.
+- `true` — angle-bracket includes are resolved and followed the same way as quoted includes. Unresolved angles are still tolerated (not an error), so missing system headers don't break analysis.
+
+Quoted includes (`#include "foo.h"`) always resolve and must be found — this setting does not affect them.
 
 ## See also
 
