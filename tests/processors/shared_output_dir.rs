@@ -192,3 +192,68 @@ fn creator_tree_does_not_include_foreign_outputs() {
          — it is owned by the explicit.pandoc processor and must not \
          appear in the Creator's tree descriptor.");
 }
+
+/// Ownership is exclusive: if two processors declare the same literal output path,
+/// the graph-build phase MUST fail with an "Output conflict" error. Without this
+/// guarantee the shared-folder logic would be unsound (two "owners" of one path).
+#[test]
+#[cfg(unix)]
+fn two_processors_declaring_same_output_file_errors() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    // Two explicit processors, both claiming _site/index.html as an output.
+    fs::write(project_path.join("a.manifest"), "a\n").unwrap();
+    fs::write(project_path.join("b.manifest"), "b\n").unwrap();
+
+    let script = project_path.join("touch.sh");
+    fs::write(&script, "#!/bin/bash\ntouch \"$1\"\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        concat!(
+            "[processor.explicit.a]\n",
+            "command = \"./touch.sh\"\n",
+            "args = [\"_site/index.html\"]\n",
+            "inputs = [\"a.manifest\"]\n",
+            "output_files = [\"_site/index.html\"]\n",
+            "src_dirs = [\".\"]\n",
+            "\n",
+            "[processor.explicit.b]\n",
+            "command = \"./touch.sh\"\n",
+            "args = [\"_site/index.html\"]\n",
+            "inputs = [\"b.manifest\"]\n",
+            "output_files = [\"_site/index.html\"]\n",
+            "src_dirs = [\".\"]\n",
+        ),
+    ).unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        !output.status.success(),
+        "Build must fail when two products declare the same output path. \
+         stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    // Error must mention the conflict. The exact classified exit code is GraphError (4).
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        combined.to_lowercase().contains("output conflict"),
+        "Expected an 'Output conflict' error in the output, got: {}",
+        combined,
+    );
+    assert_eq!(output.status.code(), Some(4),
+        "Expected GraphError exit code (4), got {:?}. Output: {}",
+        output.status.code(), combined);
+}

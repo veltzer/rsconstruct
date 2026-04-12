@@ -24,3 +24,6 @@ python files dependency analysis:
     but pandoc caches specific files in that folder.
     who owns the folder?
     What are the solutoins?
+
+
+- I want each processor to sit in its own file and a mechanism that if a processors code is updated it will regeneate it's outputs and discard the cache.
