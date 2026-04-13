@@ -255,6 +255,47 @@ impl BuildGraph {
         Self::default()
     }
 
+    /// If `new_inputs` is a superset of the existing product's inputs, replace
+    /// them and update the `input_to_products` index. This happens during
+    /// fixed-point discovery when a later pass resolves more virtual files
+    /// (e.g. globs that matched nothing on pass 0 now match upstream outputs).
+    /// If the inputs are identical or not a superset, this is a no-op.
+    /// Returns true if the inputs were accepted (identical or superset),
+    /// false if the new inputs are not a superset of the existing ones.
+    fn try_update_inputs(&mut self, product_id: usize, new_inputs: Vec<PathBuf>) -> bool {
+        let existing = &self.products[product_id];
+        if existing.inputs == new_inputs {
+            return true;
+        }
+        let new_set: HashSet<&PathBuf> = new_inputs.iter().collect();
+        if !existing.inputs.iter().all(|i| new_set.contains(i)) {
+            return false;
+        }
+        let old_set: HashSet<&PathBuf> = existing.inputs.iter().collect();
+        // Collect index updates before mutating products, to satisfy the borrow checker.
+        let to_remove: Vec<PathBuf> = existing.inputs.iter()
+            .filter(|p| !new_set.contains(p))
+            .cloned()
+            .collect();
+        let to_add: Vec<PathBuf> = new_inputs.iter()
+            .filter(|p| !old_set.contains(p))
+            .cloned()
+            .collect();
+        self.products[product_id].inputs = new_inputs;
+        for path in &to_remove {
+            if let Some(path_id) = self.interner.get(path) {
+                if let Some(ids) = self.input_to_products.get_mut(&path_id) {
+                    ids.retain(|&x| x != product_id);
+                }
+            }
+        }
+        for path in &to_add {
+            let path_id = self.interner.intern(path);
+            self.input_to_products.entry(path_id).or_default().push(product_id);
+        }
+        true
+    }
+
     /// Add a product to the graph.
     /// Returns an error if any output path is already claimed by another product.
     pub fn add_product(&mut self, inputs: Vec<PathBuf>, outputs: Vec<PathBuf>, processor: &str, config_hash: Option<String>) -> Result<usize> {
@@ -278,30 +319,7 @@ impl BuildGraph {
             if let Some(primary_id) = self.interner.get(&inputs[0]) {
                 let key = (processor.to_string(), primary_id, variant.map(str::to_string));
                 if let Some(&existing_id) = self.checker_dedup.get(&key) {
-                    let existing = &self.products[existing_id];
-                    if existing.inputs != inputs {
-                        let new_set: HashSet<&PathBuf> = inputs.iter().collect();
-                        let is_superset = existing.inputs.iter().all(|i| new_set.contains(i));
-                        if is_superset {
-                            let old_inputs = std::mem::replace(&mut self.products[existing_id].inputs, inputs.clone());
-                            let old_set: HashSet<&PathBuf> = old_inputs.iter().collect();
-                            for old in &old_inputs {
-                                if !new_set.contains(old) {
-                                    if let Some(old_id) = self.interner.get(old) {
-                                        if let Some(ids) = self.input_to_products.get_mut(&old_id) {
-                                            ids.retain(|&x| x != existing_id);
-                                        }
-                                    }
-                                }
-                            }
-                            for new in &inputs {
-                                if !old_set.contains(new) {
-                                    let new_id = self.interner.intern(new);
-                                    self.input_to_products.entry(new_id).or_default().push(existing_id);
-                                }
-                            }
-                        }
-                    }
+                    self.try_update_inputs(existing_id, inputs);
                     return Ok(existing_id);
                 }
             }
@@ -316,39 +334,13 @@ impl BuildGraph {
             if let Some(&existing_id) = self.output_to_product.get(&output_id) {
                 let existing = self.products.get(existing_id).expect(crate::errors::INVALID_PRODUCT_ID);
                 let same_processor = existing.processor == processor;
+                let same_outputs = existing.outputs == outputs;
+                let existing_proc_name = existing.processor.clone();
                 // Same processor re-declaring the same outputs: update inputs if
                 // they grew (virtual files from upstream generators were added).
-                // Use a HashSet for the superset check to avoid O(M*N) PathBuf equality.
-                let is_superset = if same_processor && existing.outputs == outputs {
-                    let new_set: HashSet<&PathBuf> = inputs.iter().collect();
-                    existing.inputs.iter().all(|i| new_set.contains(i))
-                } else {
-                    false
-                };
-                if is_superset {
-                    if existing.inputs != inputs {
-                        let new_set: HashSet<&PathBuf> = inputs.iter().collect();
-                        // Remove stale index entries for any old inputs that disappeared
-                        // (shouldn't happen with superset, but keep the index honest).
-                        let old_inputs = std::mem::replace(&mut self.products[existing_id].inputs, inputs.clone());
-                        let old_set: HashSet<&PathBuf> = old_inputs.iter().collect();
-                        for old in &old_inputs {
-                            if !new_set.contains(old) {
-                                if let Some(old_id) = self.interner.get(old) {
-                                    if let Some(ids) = self.input_to_products.get_mut(&old_id) {
-                                        ids.retain(|&x| x != existing_id);
-                                    }
-                                }
-                            }
-                        }
-                        // Add index entries for the new inputs that weren't there before.
-                        for new in &inputs {
-                            if !old_set.contains(new) {
-                                let new_id = self.interner.intern(new);
-                                self.input_to_products.entry(new_id).or_default().push(existing_id);
-                            }
-                        }
-                    }
+                if same_processor && same_outputs
+                    && self.try_update_inputs(existing_id, inputs)
+                {
                     return Ok(existing_id);
                 }
                 return Err(crate::exit_code::RsconstructError::new(
@@ -356,7 +348,7 @@ impl BuildGraph {
                     format!(
                         "Output conflict: {} is produced by both [{}] and [{}]",
                         output.display(),
-                        existing.processor,
+                        existing_proc_name,
                         processor,
                     ),
                 ).into());
@@ -1163,5 +1155,49 @@ mod tests {
         ).unwrap();
         assert_ne!(id1, id2);
         assert_eq!(g.products().len(), 2);
+    }
+
+    /// Generator dedup: same processor re-declaring the same outputs with
+    /// expanded inputs should update the product (not conflict).
+    #[test]
+    fn generator_dedup_updates_inputs_on_superset() {
+        let mut g = BuildGraph::new();
+        let id1 = g.add_product(
+            vec!["a.md".into()],
+            vec!["out/a.html".into()],
+            "pandoc",
+            None,
+        ).unwrap();
+        // Re-declare with a superset of inputs (e.g. dep_inputs resolved more files)
+        let id2 = g.add_product(
+            vec!["a.md".into(), "style.css".into()],
+            vec!["out/a.html".into()],
+            "pandoc",
+            None,
+        ).unwrap();
+        assert_eq!(id1, id2);
+        assert_eq!(g.products().len(), 1);
+        assert_eq!(g.get_product(id1).unwrap().inputs.len(), 2);
+    }
+
+    /// Generator dedup: same processor, same outputs, but non-superset inputs
+    /// must produce an output conflict error.
+    #[test]
+    fn generator_dedup_non_superset_is_conflict() {
+        let mut g = BuildGraph::new();
+        g.add_product(
+            vec!["a.c".into()],
+            vec!["out.o".into()],
+            "cc",
+            None,
+        ).unwrap();
+        let result = g.add_product(
+            vec!["b.c".into()],
+            vec!["out.o".into()],
+            "cc",
+            None,
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Output conflict"));
     }
 }
