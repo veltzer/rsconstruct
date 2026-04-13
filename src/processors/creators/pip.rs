@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -27,7 +27,9 @@ impl PipProcessor {
     fn execute_pip(&self, requirements_txt: &Path) -> Result<()> {
         let mut cmd = Command::new(&self.config.pip);
         cmd.arg("install");
-        cmd.arg("-r").arg(requirements_txt.file_name().unwrap_or_default());
+        cmd.arg("-r").arg(requirements_txt.file_name()
+            .context("requirements.txt path has no filename")?
+        );
         for arg in &self.config.standard.args {
             cmd.arg(arg);
         }

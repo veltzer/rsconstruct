@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -78,7 +78,7 @@ impl Processor for PdfuniteProcessor {
             .components()
             .next()
             .map(|c| c.as_os_str().to_string_lossy().into_owned())
-            .unwrap_or_default();
+            .context("source_dir is empty")?;
         let upstream_scan_dirs = [upstream_scan_dir];
 
         for dir_path in dirs {
@@ -101,7 +101,8 @@ impl Processor for PdfuniteProcessor {
             // naming each merged PDF after its leaf directory.
             let relative = dir_path.strip_prefix(base).unwrap_or(&dir_path);
             let parent = relative.parent().unwrap_or(Path::new(""));
-            let leaf = relative.file_name().unwrap_or(relative.as_os_str());
+            let leaf = relative.file_name()
+                .with_context(|| format!("Cannot extract leaf directory name from {}", dir_path.display()))?;
             let outputs = vec![
                 Path::new(&self.config.standard.output_dir).join(parent).join(format!("{}.pdf", leaf.to_string_lossy())),
             ];

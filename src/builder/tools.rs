@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::process::Command;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use tabled::builder::Builder as TableBuilder;
 use crate::cli::{GraphFormat, ToolsAction};
 use crate::color;
@@ -777,7 +777,6 @@ fn tools_graph_html(tool_map: &BTreeMap<String, Vec<String>>) -> String {
 
 fn tools_graph_svg(tool_map: &BTreeMap<String, Vec<String>>) -> Result<String> {
     use std::process::Stdio;
-    use crate::errors;
     use crate::processors::{check_command_output, log_command};
 
     let dot_content = tools_graph_dot(tool_map);
@@ -792,7 +791,9 @@ fn tools_graph_svg(tool_map: &BTreeMap<String, Vec<String>>) -> Result<String> {
         .spawn()
         .map_err(|_| anyhow::anyhow!("Graphviz 'dot' command not found. Install Graphviz to use SVG format"))?;
 
-    child.stdin.take().expect(errors::STDIN_PIPED).write_all(dot_content.as_bytes())?;
+    child.stdin.take()
+        .context("stdin was not piped to dot command")?
+        .write_all(dot_content.as_bytes())?;
 
     let output = child.wait_with_output()?;
     check_command_output(&output, "dot")?;

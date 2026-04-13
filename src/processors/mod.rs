@@ -353,7 +353,9 @@ pub(crate) fn dot_to_svg(dot_content: &str) -> Result<String> {
     let mut child = cmd
         .spawn()
         .map_err(|_| anyhow::anyhow!("Graphviz 'dot' command not found. Install Graphviz to use SVG format"))?;
-    child.stdin.take().expect(crate::errors::STDIN_PIPED).write_all(dot_content.as_bytes())?;
+    child.stdin.take()
+        .context("stdin was not piped to dot command")?
+        .write_all(dot_content.as_bytes())?;
     let output = child.wait_with_output()?;
     check_command_output(&output, "dot")?;
     Ok(String::from_utf8(output.stdout)?)

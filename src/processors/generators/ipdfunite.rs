@@ -49,13 +49,12 @@ fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
         doc.renumber_objects_with(max_id);
         max_id = doc.max_id + 1;
 
-        documents_pages.extend(
-            doc.get_pages()
-                .into_values()
-                .map(|object_id| {
-                    (object_id, doc.get_object(object_id).unwrap().to_owned())
-                })
-        );
+        for object_id in doc.get_pages().into_values() {
+            let obj = doc.get_object(object_id)
+                .with_context(|| format!("PDF object {:?} referenced by Pages tree not found in document", object_id))?
+                .to_owned();
+            documents_pages.insert(object_id, obj);
+        }
         documents_objects.extend(doc.objects);
     }
 
@@ -201,7 +200,7 @@ impl Processor for IpdfuniteProcessor {
             .components()
             .next()
             .map(|c| c.as_os_str().to_string_lossy().into_owned())
-            .unwrap_or_default();
+            .context("source_dir is empty")?;
         let upstream_scan_dirs = [upstream_scan_dir];
 
         for dir_path in dirs {
@@ -221,7 +220,8 @@ impl Processor for IpdfuniteProcessor {
 
             let relative = dir_path.strip_prefix(base).unwrap_or(&dir_path);
             let parent = relative.parent().unwrap_or(Path::new(""));
-            let leaf = relative.file_name().unwrap_or(relative.as_os_str());
+            let leaf = relative.file_name()
+                .with_context(|| format!("Cannot extract leaf directory name from {}", dir_path.display()))?;
             let outputs = vec![
                 Path::new(&self.config.standard.output_dir).join(parent).join(format!("{}.pdf", leaf.to_string_lossy())),
             ];

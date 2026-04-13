@@ -845,7 +845,9 @@ impl BuildGraph {
             .spawn()
             .map_err(|_| anyhow::anyhow!("Graphviz 'dot' command not found. Install Graphviz to use SVG format"))?;
 
-        child.stdin.take().expect(errors::STDIN_PIPED).write_all(dot_content.as_bytes())?;
+        child.stdin.take()
+            .context("stdin was not piped to dot command")?
+            .write_all(dot_content.as_bytes())?;
 
         let output = child.wait_with_output()?;
         check_command_output(&output, "dot")?;

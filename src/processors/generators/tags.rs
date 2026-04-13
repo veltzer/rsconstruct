@@ -67,7 +67,7 @@ impl Processor for TagsProcessor {
         }
         // Require a tags_dir with at least one .txt file
         let dir = Path::new(&self.config.tags_dir);
-        dir.is_dir() && fs::read_dir(dir).ok().is_some_and(|entries| {
+        dir.is_dir() && fs::read_dir(dir).is_ok_and(|entries| {
             entries.filter_map(|e| e.ok())
                 .any(|e| e.path().extension().and_then(|x| x.to_str()) == Some("txt"))
         })

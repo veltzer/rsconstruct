@@ -57,4 +57,3 @@ pub const TOKIO_RUNTIME: &str = "internal error: failed to create tokio runtime"
 pub const SIGNAL_HANDLER_RUNTIME: &str = "internal error: failed to create signal handler runtime";
 pub const SIGNAL_LISTEN: &str = "internal error: failed to listen for Ctrl+C";
 pub const SYSTEM_CLOCK: &str = "internal error: system clock before UNIX epoch";
-pub const STDIN_PIPED: &str = "internal error: stdin was piped";
