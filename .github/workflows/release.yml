@@ -37,11 +37,7 @@ jobs:
         shell: bash
         run: |
           REPO="${{ github.event.repository.name }}"
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            echo "ARTIFACT=${REPO}-${{ matrix.suffix }}.exe" >> "$GITHUB_ENV"
-          else
-            echo "ARTIFACT=${REPO}-${{ matrix.suffix }}" >> "$GITHUB_ENV"
-          fi
+          echo "ARTIFACT=${REPO}-${{ matrix.suffix }}" >> "$GITHUB_ENV"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -59,13 +55,8 @@ jobs:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Rename binary (Unix)
-        if: runner.os != 'Windows'
+      - name: Rename binary
         run: cp target/${{ matrix.target }}/release/${{ github.event.repository.name }} ${{ env.ARTIFACT }}
-
-      - name: Rename binary (Windows)
-        if: runner.os == 'Windows'
-        run: cp target/${{ matrix.target }}/release/${{ github.event.repository.name }}.exe ${{ env.ARTIFACT }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

@@ -1,6 +1,9 @@
 # Testing
 
-RSConstruct uses integration tests exclusively. All tests live in the `tests/` directory and exercise the compiled `rsconstruct` binary as a black box — no unit tests are embedded in `src/`.
+RSConstruct uses two kinds of tests:
+
+1. **Integration tests** in `tests/` — the primary test suite. These exercise the compiled `rsconstruct` binary as a black box, building fake projects in temp directories and asserting on CLI output and side effects.
+2. **Unit tests** in `src/` (`#[cfg(test)] mod tests`) — used sparingly, only for self-contained modules whose internals cannot be exercised adequately through the CLI. Currently this is `src/graph.rs` (dedup and topological-sort logic).
 
 ## Running tests
 
@@ -9,6 +12,22 @@ cargo test              # Run all tests
 cargo test rsconstructignore    # Run tests matching a name
 cargo test -- --nocapture  # Show stdout/stderr from tests
 ```
+
+## Why unit tests live in `src/` (not `tests/`)
+
+There is a recurring question: should unit tests move to `tests/` to keep source files shorter and more readable? The short answer is no, for a structural reason specific to this crate.
+
+**This crate is a binary only — there is no `src/lib.rs`.** Integration tests under `tests/` can only link against a *library* crate; against a binary crate they can only do what `tests/main.rs` does today: spawn the `rsconstruct` binary as a subprocess and assert on its output. So there are only three real options for testing internal logic like `BuildGraph`:
+
+| Option | Cost |
+|---|---|
+| Unit tests inline in `src/` (current) | Longer source files (mitigated by `#[cfg(test)]` stripping them from release builds, and by editor folding) |
+| Move tests to `tests/` as end-to-end tests | Far more code per test, much slower, indirect — can't isolate a specific dedup branch without building a whole fake project |
+| Add a `src/lib.rs` exposing modules | Architectural change — the crate becomes both a library and a binary. Forces decisions about what is public API |
+
+The third option is the "clean" fix but it has ongoing costs (API surface to maintain, semver implications if we ever publish the library). The first option has only a readability cost, and it's the idiomatic Rust approach for binary crates.
+
+**Rule:** default to writing integration tests in `tests/`. Only add a `#[cfg(test)] mod tests` block in `src/` when the thing under test is genuinely hard to exercise through the CLI (e.g. a specific branch of a dedup helper that requires setting up graph state that would take dozens of real products to reproduce end-to-end). When a source file grows large enough that its inline test module dominates the file, split the tests into a sibling file via `#[cfg(test)] mod tests;` + `src/MODULE/tests.rs`, rather than moving them out of `src/` entirely.
 
 ## Test directory layout
 
