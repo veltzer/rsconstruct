@@ -302,8 +302,17 @@ impl Builder {
             .map(|name| analyzers[*name].count_matches(graph))
             .sum();
 
-        // Hide in verbose/JSON mode, matching executor style. We still want the
-        // final summary line, so we draw it conditionally below.
+        let suppress = crate::json_output::is_json_mode() || crate::runtime_flags::quiet();
+
+        // Forward-looking header, mirroring the "N products (...)" line emitted
+        // before the build phase. We only know the total up front; the hit/miss
+        // breakdown is computed during the scan and reported in the summary.
+        if total > 0 && !suppress {
+            println!("{} files to scan for dependencies", total);
+        }
+
+        // Hide in verbose/JSON mode, matching executor style. The summary is
+        // always printed below — independent of whether the bar was visible.
         let hidden = verbose || crate::json_output::is_json_mode() || crate::runtime_flags::quiet();
         let pb = crate::progress::create_bar(total as u64, hidden);
 
@@ -311,16 +320,13 @@ impl Builder {
             analyzers[*name].analyze(graph, &mut deps_cache, &self.file_index, verbose, &pb)?;
         }
 
-        // Finalize: always clear the bar first, then print the summary as its
-        // own line. If we leave the bar on screen (e.g. via `finish_with_message`)
-        // the next write lands on the bar's row and the two run together.
+        // Clear the bar so it doesn't run together with the summary on TTY.
         let stats = deps_cache.stats();
         pb.finish_and_clear();
-        let suppress = crate::json_output::is_json_mode() || crate::runtime_flags::quiet();
         if total > 0 && !suppress {
-            eprintln!(
-                "dependency scan: {} files ({} cache hits, {} rescanned)",
-                total, stats.hits, stats.misses,
+            println!(
+                "Dependency summary: {} cache hits, {} rescanned",
+                stats.hits, stats.misses,
             );
         }
 

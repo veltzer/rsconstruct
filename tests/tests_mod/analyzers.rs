@@ -214,7 +214,8 @@ src_dirs = ["."]
     assert!(out2.status.success(), "second status failed: {}", String::from_utf8_lossy(&out2.stderr));
     let combined = format!("{}{}", String::from_utf8_lossy(&out2.stdout), String::from_utf8_lossy(&out2.stderr));
     assert!(
-        combined.contains("dependency scan: 3 files (3 cache hits, 0 rescanned)"),
+        combined.contains("3 files to scan for dependencies")
+            && combined.contains("Dependency summary: 3 cache hits, 0 rescanned"),
         "unchanged files should all hit the cache: {}", combined
     );
 }
@@ -258,7 +259,8 @@ src_dirs = ["."]
     assert!(out.status.success());
     let combined = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
     assert!(
-        combined.contains("dependency scan: 3 files (2 cache hits, 1 rescanned)"),
+        combined.contains("3 files to scan for dependencies")
+            && combined.contains("Dependency summary: 2 cache hits, 1 rescanned"),
         "modified file should trigger exactly one rescan: {}", combined
     );
 }
