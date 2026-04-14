@@ -19,32 +19,6 @@ python files dependency analysis:
     could we store the checksum next to the file on disk as extra data?
     are we using mmap when doing the checksum? Maybe we could speed up the checksum calculation this way.
 
-
-- deps in source code design.
-    A user can put "deps: url"
-    in any file and we will scan for it and deduce dependency on something.
-
-    e.g.
-    in foo.py:
-    // deps: data.yaml
-    with open("data.yaml") as handle:
-      ...
-
-    Actually we need types of deps: runtime deps, compilation deps, ...
-
-    This is a dependency scanner
-
-    depenencies can be on other things, like:
-      secret keys in pass
-      external modules (import yaml)
-      other ideas?
-
-    A dependency scanner can deduce depenencies of various types
-    for instance: a cpp dependency scanner can deduce dependency on a h file (thats compilet dependency)
-    or a dependency on an external library (link dependency)
-    or some other deependency in the code (on a secret key)
-
-
 - I want to add a variant feature to every process.
     - what is the difference between two variants and the same processor twice in the same file?
     - the cargo processors seems to have variants, what does that mean?
