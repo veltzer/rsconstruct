@@ -31,6 +31,10 @@ pub trait DepAnalyzer: Sync + Send {
     /// Human-readable description of what this analyzer does.
     fn description(&self) -> &str;
 
+    /// Whether this analyzer is active. Default true; override to respect
+    /// the `enabled` field on an analyzer's config struct.
+    fn enabled(&self) -> bool { true }
+
     /// Auto-detect if this analyzer is relevant for the project.
     /// Called with the file index to check for relevant file types.
     fn auto_detect(&self, file_index: &FileIndex) -> bool;

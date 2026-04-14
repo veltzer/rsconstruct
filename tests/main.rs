@@ -1,6 +1,8 @@
 #[macro_use]
 mod common;
 
+#[path = "tests_mod/analyzers.rs"]
+mod analyzers;
 #[path = "tests_mod/build.rs"]
 mod build;
 #[path = "tests_mod/cache.rs"]

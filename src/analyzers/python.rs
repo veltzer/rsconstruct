@@ -10,6 +10,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+use crate::config::PythonAnalyzerConfig;
 use crate::deps_cache::DepsCache;
 use crate::errors;
 use crate::file_index::FileIndex;
@@ -20,11 +21,12 @@ use super::DepAnalyzer;
 /// Python dependency analyzer that scans source files for import statements.
 pub struct PythonDepAnalyzer {
     iname: String,
+    config: PythonAnalyzerConfig,
 }
 
 impl PythonDepAnalyzer {
-    pub fn new(iname: &str) -> Self {
-        Self { iname: iname.to_string() }
+    pub fn new(iname: &str, config: PythonAnalyzerConfig) -> Self {
+        Self { iname: iname.to_string(), config }
     }
 
     /// Scan a Python file for import statements.
@@ -117,6 +119,10 @@ impl DepAnalyzer for PythonDepAnalyzer {
         "Scan Python source files for import dependencies"
     }
 
+    fn enabled(&self) -> bool {
+        self.config.enabled
+    }
+
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         // Check if there are any Python files
         file_index.has_extension(".py")
@@ -150,7 +156,12 @@ inventory::submit! {
         name: "python",
         description: "Scan Python files for local import dependencies",
         is_native: true,
-        create: |iname, _, _| Ok(Box::new(PythonDepAnalyzer::new(iname))),
-        defconfig_toml: || None,
+        create: |iname, toml_value, _| {
+            let cfg: PythonAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
+            Ok(Box::new(PythonDepAnalyzer::new(iname, cfg)))
+        },
+        defconfig_toml: || {
+            toml::to_string_pretty(&PythonAnalyzerConfig::default()).ok()
+        },
     }
 }

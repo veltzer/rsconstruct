@@ -152,6 +152,10 @@ impl DepAnalyzer for IcppDepAnalyzer {
         "Scan C/C++ source files for #include dependencies (in-process, regex-based)"
     }
 
+    fn enabled(&self) -> bool {
+        self.config.enabled
+    }
+
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         let extensions = [".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"];
         for ext in extensions {

@@ -1,12 +1,16 @@
 use serde::{Deserialize, Serialize};
 
-use super::{default_cc_compiler, default_cxx_compiler};
+use super::{default_cc_compiler, default_cxx_compiler, default_true};
 
 /// Configuration for the C/C++ dependency analyzer (`cpp`) — uses compiler -MM scanning.
 /// External analyzer: runs gcc/g++ -MM and optional pkg-config/include_path_commands.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct CppAnalyzerConfig {
+    /// Whether this analyzer is active. Set to false to disable without
+    /// removing the stanza from rsconstruct.toml.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     /// Additional include paths for header search
     #[serde(default)]
     pub include_paths: Vec<String>,
@@ -36,6 +40,7 @@ pub struct CppAnalyzerConfig {
 impl Default for CppAnalyzerConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             include_paths: Vec::new(),
             pkg_config: Vec::new(),
             include_path_commands: Vec::new(),
@@ -53,9 +58,13 @@ impl Default for CppAnalyzerConfig {
 /// Setting `pkg_config` or `include_path_commands` will invoke external tools once at
 /// startup to discover additional include paths, but dependency scanning itself
 /// remains in-process.
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct IcppAnalyzerConfig {
+    /// Whether this analyzer is active. Set to false to disable without
+    /// removing the stanza from rsconstruct.toml.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     /// Additional include paths for header search
     #[serde(default)]
     pub include_paths: Vec<String>,
@@ -82,5 +91,70 @@ pub struct IcppAnalyzerConfig {
     /// are skipped without error.
     #[serde(default)]
     pub skip_not_found: bool,
+}
+
+impl Default for IcppAnalyzerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            include_paths: Vec::new(),
+            pkg_config: Vec::new(),
+            include_path_commands: Vec::new(),
+            src_exclude_dirs: Vec::new(),
+            follow_angle_brackets: false,
+            skip_not_found: false,
+        }
+    }
+}
+
+/// Configuration for the Python dependency analyzer (`python`).
+/// Scans Python source files for `import` statements.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct PythonAnalyzerConfig {
+    /// Whether this analyzer is active. Set to false to disable without
+    /// removing the stanza from rsconstruct.toml.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+impl Default for PythonAnalyzerConfig {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
+/// Configuration for the Markdown dependency analyzer (`markdown`).
+/// Scans Markdown source files for image references.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct MarkdownAnalyzerConfig {
+    /// Whether this analyzer is active. Set to false to disable without
+    /// removing the stanza from rsconstruct.toml.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+impl Default for MarkdownAnalyzerConfig {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
+/// Configuration for the Tera template dependency analyzer (`tera`).
+/// Scans Tera template source files for includes.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct TeraAnalyzerConfig {
+    /// Whether this analyzer is active. Set to false to disable without
+    /// removing the stanza from rsconstruct.toml.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+impl Default for TeraAnalyzerConfig {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
 }
 

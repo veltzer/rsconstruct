@@ -259,13 +259,18 @@ impl Builder {
     }
 
     /// Create dependency analyzers for each declared instance in `[analyzer.*]`.
-    /// Only analyzers that appear in the config are instantiated.
+    /// Only analyzers that appear in the config and have `enabled = true` are
+    /// instantiated. Setting `enabled = false` lets a user disable an analyzer
+    /// without removing its `[analyzer.X]` section.
     fn create_analyzers(&self, verbose: bool) -> Result<HashMap<String, Box<dyn DepAnalyzer>>> {
         let mut analyzers: HashMap<String, Box<dyn DepAnalyzer>> = HashMap::new();
         for inst in &self.config.analyzer.instances {
             let plugin = crate::registries::find_analyzer_plugin(&inst.type_name)
                 .ok_or_else(|| anyhow::anyhow!("Unknown analyzer type '{}'", inst.type_name))?;
             let analyzer = (plugin.create)(&inst.instance_name, &inst.config_toml, verbose)?;
+            if !analyzer.enabled() {
+                continue;
+            }
             analyzers.insert(inst.instance_name.clone(), analyzer);
         }
         Ok(analyzers)

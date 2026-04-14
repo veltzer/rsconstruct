@@ -10,6 +10,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+use crate::config::TeraAnalyzerConfig;
 use crate::deps_cache::DepsCache;
 use crate::errors;
 use crate::file_index::FileIndex;
@@ -20,11 +21,12 @@ use super::DepAnalyzer;
 /// Tera template dependency analyzer that scans for include/import/extends directives.
 pub struct TeraDepAnalyzer {
     iname: String,
+    config: TeraAnalyzerConfig,
 }
 
 impl TeraDepAnalyzer {
-    pub fn new(iname: &str) -> Self {
-        Self { iname: iname.to_string() }
+    pub fn new(iname: &str, config: TeraAnalyzerConfig) -> Self {
+        Self { iname: iname.to_string(), config }
     }
 
     /// Scan a Tera template file for include, import, and extends references.
@@ -88,6 +90,10 @@ impl DepAnalyzer for TeraDepAnalyzer {
         "Scan Tera templates for include/import/extends dependencies"
     }
 
+    fn enabled(&self) -> bool {
+        self.config.enabled
+    }
+
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         file_index.has_extension(".tera")
     }
@@ -120,7 +126,12 @@ inventory::submit! {
         name: "tera",
         description: "Scan Tera templates for include/import/extends dependencies",
         is_native: true,
-        create: |iname, _, _| Ok(Box::new(TeraDepAnalyzer::new(iname))),
-        defconfig_toml: || None,
+        create: |iname, toml_value, _| {
+            let cfg: TeraAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
+            Ok(Box::new(TeraDepAnalyzer::new(iname, cfg)))
+        },
+        defconfig_toml: || {
+            toml::to_string_pretty(&TeraAnalyzerConfig::default()).ok()
+        },
     }
 }

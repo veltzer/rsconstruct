@@ -10,6 +10,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+use crate::config::MarkdownAnalyzerConfig;
 use crate::deps_cache::DepsCache;
 use crate::errors;
 use crate::file_index::FileIndex;
@@ -20,11 +21,12 @@ use super::DepAnalyzer;
 /// Markdown dependency analyzer that scans source files for image and link references.
 pub struct MarkdownDepAnalyzer {
     iname: String,
+    config: MarkdownAnalyzerConfig,
 }
 
 impl MarkdownDepAnalyzer {
-    pub fn new(iname: &str) -> Self {
-        Self { iname: iname.to_string() }
+    pub fn new(iname: &str, config: MarkdownAnalyzerConfig) -> Self {
+        Self { iname: iname.to_string(), config }
     }
 
     /// Scan a Markdown file for local file references.
@@ -89,6 +91,10 @@ impl DepAnalyzer for MarkdownDepAnalyzer {
         "Scan Markdown files for local file dependencies"
     }
 
+    fn enabled(&self) -> bool {
+        self.config.enabled
+    }
+
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         file_index.has_extension(".md")
     }
@@ -121,7 +127,12 @@ inventory::submit! {
         name: "markdown",
         description: "Scan Markdown files for local file dependencies",
         is_native: true,
-        create: |iname, _, _| Ok(Box::new(MarkdownDepAnalyzer::new(iname))),
-        defconfig_toml: || None,
+        create: |iname, toml_value, _| {
+            let cfg: MarkdownAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
+            Ok(Box::new(MarkdownDepAnalyzer::new(iname, cfg)))
+        },
+        defconfig_toml: || {
+            toml::to_string_pretty(&MarkdownAnalyzerConfig::default()).ok()
+        },
     }
 }
