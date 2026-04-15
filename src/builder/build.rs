@@ -8,7 +8,7 @@ use crate::color;
 use crate::errors;
 use crate::executor::{Executor, ExecutorOptions};
 use crate::processors::{BuildStats, ProcessorMap, ProcessorType};
-use super::{Builder, ProductStatusLabels, StatusPrintOptions, phases_debug};
+use super::{Builder, GraphSnapshot, ProductStatusLabels, StatusPrintOptions, phases_debug, print_graph_stats};
 
 /// Expand `@`-prefixed shortcuts in the processor filter.
 ///
@@ -238,6 +238,7 @@ impl Builder {
             println!("[build] {} to build, {} to restore ({} up-to-date)",
                 build_count, restore_count, skip_count);
         }
+        print_graph_stats(GraphSnapshot::AfterClassify, &graph);
 
         if opts.stop_after == BuildPhase::Classify {
             return Ok(());
@@ -263,6 +264,7 @@ impl Builder {
         let collect_timings = opts.timings || opts.trace.is_some();
         let result = executor.execute(&graph, &self.object_store, opts.force, collect_timings, opts.keep_going);
         let build_dur = t.elapsed();
+        print_graph_stats(GraphSnapshot::AfterExecute, &graph);
 
         // Exit if interrupted
         if interrupted.load(std::sync::atomic::Ordering::SeqCst) {

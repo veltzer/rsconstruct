@@ -67,35 +67,52 @@ fn phases_debug() -> bool {
     crate::runtime_flags::phases_debug()
 }
 
-/// A point in the build-graph construction pipeline at which `print_graph_stats`
-/// can snapshot the graph's size. One variant per observable transition.
-/// Kept as an enum (not a free-form label) so adding a new stage is a
-/// type-checked change, not a string typo waiting to happen.
+/// A named point in the build pipeline at which `print_graph_stats` can
+/// snapshot the graph. Each variant maps to a specific call site; adding a
+/// new snapshot point means adding a variant here and a `print_graph_stats`
+/// call at the site — the type checker keeps the two in sync.
+///
+/// The variant name (`SNAPSHOT_NAME` in SCREAMING_SNAKE_CASE) is printed
+/// verbatim next to the counts so the user can grep for a specific point
+/// or feed the symbolic name back into future CLI flags (e.g. stop-at).
 #[derive(Debug, Clone, Copy)]
-enum BuildStage {
+pub(crate) enum GraphSnapshot {
+    /// Before any phase runs — empty graph.
     Start,
+    /// After product discovery.
     AfterDiscover,
+    /// After analyzer-driven dependency scanning.
     AfterAddDependencies,
+    /// After tool-version hashes are folded into config hashes.
     AfterApplyToolHashes,
+    /// After graph-wide dependency edge resolution.
     AfterResolve,
+    /// After pre-build classify (skip/restore/build decision).
+    AfterClassify,
+    /// After the build has finished executing all products.
+    AfterExecute,
 }
 
-impl BuildStage {
-    fn label(self) -> &'static str {
+impl GraphSnapshot {
+    /// Symbolic name shown in graph-stats output. Matches the enum variant
+    /// in SCREAMING_SNAKE_CASE.
+    fn name(self) -> &'static str {
         match self {
-            BuildStage::Start => "start",
-            BuildStage::AfterDiscover => "after discover",
-            BuildStage::AfterAddDependencies => "after add_dependencies",
-            BuildStage::AfterApplyToolHashes => "after apply_tool_hashes",
-            BuildStage::AfterResolve => "after resolve",
+            GraphSnapshot::Start => "START",
+            GraphSnapshot::AfterDiscover => "AFTER_DISCOVER",
+            GraphSnapshot::AfterAddDependencies => "AFTER_ADD_DEPENDENCIES",
+            GraphSnapshot::AfterApplyToolHashes => "AFTER_APPLY_TOOL_HASHES",
+            GraphSnapshot::AfterResolve => "AFTER_RESOLVE",
+            GraphSnapshot::AfterClassify => "AFTER_CLASSIFY",
+            GraphSnapshot::AfterExecute => "AFTER_EXECUTE",
         }
     }
 }
 
-/// Emit a one-line snapshot of the graph's size at a named stage.
+/// Emit a one-line snapshot of the graph's size at a named point.
 /// No-op unless `--graph-stats` is set. Output goes to stderr so it can't
 /// corrupt stdout piping (e.g., `rsconstruct graph --format=dot`).
-fn print_graph_stats(stage: BuildStage, graph: &BuildGraph) {
+pub(crate) fn print_graph_stats(snapshot: GraphSnapshot, graph: &BuildGraph) {
     if !crate::runtime_flags::graph_stats() {
         return;
     }
@@ -107,8 +124,8 @@ fn print_graph_stats(stage: BuildStage, graph: &BuildGraph) {
         .map(|p| graph.get_dependencies(p.id).len())
         .sum();
     eprintln!(
-        "[graph-stats] {:<26} products={}  edges={}",
-        stage.label(), products, edges,
+        "[graph-stats] {:<24}  products={}  edges={}",
+        snapshot.name(), products, edges,
     );
 }
 
@@ -539,7 +556,7 @@ impl Builder {
         }
         let mut graph = BuildGraph::new();
         let mut phase_timings = PhaseTimings::new();
-        print_graph_stats(BuildStage::Start, &graph);
+        print_graph_stats(GraphSnapshot::Start, &graph);
 
         // Collect which processors should run
         let active_processors: Vec<&String> = sorted_keys(processors).into_iter()
@@ -559,7 +576,7 @@ impl Builder {
         let t = Instant::now();
         self.discover_products(&mut graph, processors, &active_processors, mode == GraphBuildMode::ForClean)?;
         phase_timings.push(("discover".to_string(), t.elapsed()));
-        print_graph_stats(BuildStage::AfterDiscover, &graph);
+        print_graph_stats(GraphSnapshot::AfterDiscover, &graph);
 
         if stop_after == BuildPhase::Discover {
             return Ok((graph, phase_timings));
@@ -573,7 +590,7 @@ impl Builder {
             let t = Instant::now();
             self.run_analyzers(&mut graph, verbose)?;
             phase_timings.push(("add_dependencies".to_string(), t.elapsed()));
-            print_graph_stats(BuildStage::AfterAddDependencies, &graph);
+            print_graph_stats(GraphSnapshot::AfterAddDependencies, &graph);
         }
 
         if stop_after == BuildPhase::AddDependencies {
@@ -593,7 +610,7 @@ impl Builder {
             graph.apply_tool_version_hashes(&tool_hashes);
         }
         phase_timings.push(("tool_version_hashes".to_string(), t.elapsed()));
-        print_graph_stats(BuildStage::AfterApplyToolHashes, &graph);
+        print_graph_stats(GraphSnapshot::AfterApplyToolHashes, &graph);
 
         // Phase 4: Resolve dependencies
         if phases_debug() {
@@ -602,7 +619,7 @@ impl Builder {
         let t = Instant::now();
         graph.resolve_dependencies();
         phase_timings.push(("resolve".to_string(), t.elapsed()));
-        print_graph_stats(BuildStage::AfterResolve, &graph);
+        print_graph_stats(GraphSnapshot::AfterResolve, &graph);
 
         // Note: BuildPhase::Resolve and BuildPhase::Build both complete the graph
         Ok((graph, phase_timings))
