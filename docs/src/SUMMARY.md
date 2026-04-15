@@ -109,6 +109,7 @@ The chapters below cover the internal design and implementation of rsconstruct. 
 
 - [Internal Docs Overview](internal/README.md)
 - [Architecture](internal/architecture.md)
+- [Architecture Observations](internal/architecture-observations.md)
 - [Design Notes](internal/design.md)
 - [Coding Standards](internal/coding-standards.md)
 - [Strictness](internal/strictness.md)
