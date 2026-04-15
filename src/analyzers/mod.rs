@@ -52,6 +52,14 @@ pub trait DepAnalyzer: Sync + Send {
         graph.products().iter().filter(|p| self.match_product(p).is_some()).count()
     }
 
+    /// Return the set of source paths this analyzer would scan. Used by the
+    /// pre-scan classify pass to predict cache-hit / rescan counts before any
+    /// work runs. Default impl iterates over products and collects each
+    /// `match_product` result.
+    fn matching_sources(&self, graph: &BuildGraph) -> Vec<PathBuf> {
+        graph.products().iter().filter_map(|p| self.match_product(p)).collect()
+    }
+
     /// Analyze dependencies and add them to products in the graph.
     ///
     /// The analyzer should:
@@ -215,11 +223,11 @@ where
         progress.set_message(format!("[{}] {}", analyzer_name, source.display()));
 
         // Try to get cached dependencies, otherwise scan
-        let deps = if let Some(cached) = deps_cache.get(source) {
+        let deps = if let Some(cached) = deps_cache.get(analyzer_name, source) {
             cached
         } else {
             let scanned = scan_deps(source)?;
-            if let Err(e) = deps_cache.set(source, &scanned, analyzer_name) {
+            if let Err(e) = deps_cache.set(analyzer_name, source, &scanned) {
                 eprintln!("Warning: failed to cache dependencies for {}: {}", source.display(), e);
             }
             scanned

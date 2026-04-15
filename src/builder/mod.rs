@@ -322,13 +322,19 @@ impl Builder {
     }
 
     /// Run all declared dependency analyzers on the graph.
-    /// Only analyzers with `[analyzer.NAME]` sections in rsconstruct.toml run;
-    /// they are further filtered to those that detect relevant files.
     ///
-    /// A single shared progress bar is drawn across all analyzers — sized to the
-    /// total count of products all active analyzers would scan, advancing once
-    /// per product. The finished bar is left on screen with a summary of cache
-    /// hits vs rescans.
+    /// Three-stage output matching the build phase's shape:
+    ///   1. Forward total — how many files would be scanned if nothing is cached.
+    ///   2. Pre-scan classify breakdown — how many are expected to hit the cache
+    ///      vs need rescanning, based on a cheap dry-run of the validity check
+    ///      (mtime shortcut where possible, full read + hash when mtime changed).
+    ///   3. Post-scan summary — what actually happened.
+    ///
+    /// The pre-scan classify pass is observable separately (a place the user
+    /// can stop and inspect state). It does the same work the scan would do
+    /// anyway, but reads the result instead of acting on it — and the
+    /// in-memory checksum cache in `checksum.rs` dedupes work across the two
+    /// passes, so nothing is read+hashed twice.
     fn run_analyzers(&self, graph: &mut BuildGraph, verbose: bool) -> Result<()> {
         let analyzers = self.create_analyzers(verbose)?;
         let mut deps_cache = DepsCache::open()?;
@@ -342,32 +348,47 @@ impl Builder {
             return Ok(());
         }
 
-        // Total = sum of matches across active analyzers.
+        // Collect the matching sources per analyzer once; reuse for both the
+        // classify pass and the summary logic.
         let total: usize = active_analyzers.iter()
             .map(|name| analyzers[*name].count_matches(graph))
             .sum();
 
         let suppress = crate::json_output::is_json_mode() || crate::runtime_flags::quiet();
 
-        // Forward-looking header, mirroring the "N products (...)" line emitted
-        // before the build phase. We only know the total up front; the hit/miss
-        // breakdown is computed during the scan and reported in the summary.
+        // Stage 1: forward total.
         if total > 0 && !suppress {
-            println!("[deps] {} files to scan for dependencies", total);
+            println!("[deps] {} files to check for dependencies", total);
         }
 
-        // Hide in verbose/JSON mode, matching executor style. The summary is
-        // always printed below — independent of whether the bar was visible.
+        // Stage 2: pre-scan classify. Predict hit/miss for every candidate
+        // (analyzer, source) pair without mutating the cache's stats counters.
+        // The pair-level split matters because two analyzers can legitimately
+        // both scan the same source and store separate entries.
+        let mut predicted_hits: usize = 0;
+        let mut predicted_misses: usize = 0;
+        for name in &active_analyzers {
+            for source in analyzers[*name].matching_sources(graph) {
+                if deps_cache.classify(name, &source) {
+                    predicted_hits += 1;
+                } else {
+                    predicted_misses += 1;
+                }
+            }
+        }
+        if total > 0 && !suppress {
+            println!("[deps] {} cached ({} to rescan)", predicted_hits, predicted_misses);
+        }
+
+        // Stage 3: actual scan. Same shape as before.
         let hidden = verbose || crate::json_output::is_json_mode() || crate::runtime_flags::quiet();
         let pb = crate::progress::create_bar(total as u64, hidden);
-
         for name in &active_analyzers {
             analyzers[*name].analyze(graph, &mut deps_cache, &self.file_index, verbose, &pb)?;
         }
-
-        // Clear the bar so it doesn't run together with the summary on TTY.
-        let stats = deps_cache.stats();
         pb.finish_and_clear();
+
+        let stats = deps_cache.stats();
         if total > 0 && !suppress {
             println!(
                 "[deps] summary: {} rescanned ({} cache hits)",

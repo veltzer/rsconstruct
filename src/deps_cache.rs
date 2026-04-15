@@ -3,7 +3,11 @@
 //! Uses a redb key/value store to cache dependency information discovered
 //! from source files. This avoids re-scanning files that haven't changed.
 //!
-//! Cache key: source file path
+//! Cache key: `"<analyzer>\0<source path>"` — analyzer name is part of the
+//! key so two analyzers scanning the same file (e.g. a future `python` +
+//! `mypy-imports` pair) never overwrite each other's entries. The NUL
+//! separator is safe: neither analyzer inames nor paths can contain NUL.
+//!
 //! Cache value: (source_checksum, dependencies)
 //!
 //! The cache is invalidated when the source file's checksum changes.
@@ -63,18 +67,28 @@ impl DepsCache {
         Ok(Self { db, stats: DepsCacheStats::default() })
     }
 
-    /// Get cached dependencies for a source file if the cache is valid.
-    /// Returns None if the file has changed or isn't cached.
-    /// Updates internal statistics (hits/misses).
-    pub fn get(&mut self, source: &Path) -> Option<Vec<PathBuf>> {
-        let key = path_to_key(source);
+    /// Get cached dependencies for a (analyzer, source) pair if the cache is
+    /// valid. Returns None if the file has changed or isn't cached.
+    /// Updates internal statistics (hits/misses). Every caller hits exactly
+    /// one of the two counters — no silent path that leaves both unchanged,
+    /// so `hits + misses` always equals the number of `get` calls.
+    pub fn get(&mut self, analyzer: &str, source: &Path) -> Option<Vec<PathBuf>> {
+        let key = key_for(analyzer, source);
 
-        // Get cached entry
-        let read_txn = self.db.begin_read().ok()?;
-        let table = read_txn.open_table(DEPS_TABLE).ok()?;
-        let data = match table.get(key.as_str()).ok()? {
-            Some(d) => d,
-            None => {
+        // Any failure to reach the stored entry — DB not yet created, table
+        // missing, deserialization error, stat failure — counts as a miss.
+        // These paths all mean "we can't trust the cache for this file."
+        let Ok(read_txn) = self.db.begin_read() else {
+            self.stats.misses += 1;
+            return None;
+        };
+        let Ok(table) = read_txn.open_table(DEPS_TABLE) else {
+            self.stats.misses += 1;
+            return None;
+        };
+        let data = match table.get(key.as_str()) {
+            Ok(Some(d)) => d,
+            _ => {
                 self.stats.misses += 1;
                 return None;
             }
@@ -117,11 +131,30 @@ impl DepsCache {
         Some(deps)
     }
 
-    /// Store dependencies for a source file with analyzer tag.
+    /// Dry-run of `get`: predict whether this (analyzer, source) pair would
+    /// hit the cache, without updating stats and without allocating the dep
+    /// list. Used by the pre-scan classify pass to count expected hits vs
+    /// rescans before the actual scan runs. Identical validity rules to `get`:
+    /// entry exists, source checksum matches (via mtime shortcut), and every
+    /// recorded dep still exists on disk.
+    pub fn classify(&self, analyzer: &str, source: &Path) -> bool {
+        let key = key_for(analyzer, source);
+        let Ok(read_txn) = self.db.begin_read() else { return false };
+        let Ok(table) = read_txn.open_table(DEPS_TABLE) else { return false };
+        let Ok(Some(data)) = table.get(key.as_str()) else { return false };
+        let Ok(entry) = serde_json::from_slice::<DepsEntry>(data.value()) else { return false };
+        let Ok(current_checksum) = checksum_fast(source) else { return false };
+        if entry.source_checksum != current_checksum {
+            return false;
+        }
+        entry.dependencies.iter().all(|d| Path::new(d).exists())
+    }
+
+    /// Store dependencies for a (analyzer, source) pair.
     /// Uses `checksum_fast` so the mtime cache is populated alongside the
     /// deps entry — subsequent `get()` calls can then short-circuit on mtime.
-    pub fn set(&self, source: &Path, dependencies: &[PathBuf], analyzer: &str) -> Result<()> {
-        let key = path_to_key(source);
+    pub fn set(&self, analyzer: &str, source: &Path, dependencies: &[PathBuf]) -> Result<()> {
+        let key = key_for(analyzer, source);
         let source_checksum = checksum_fast(source)?;
 
         let entry = DepsEntry {
@@ -154,9 +187,11 @@ impl DepsCache {
         &self.stats
     }
 
-    /// Collect all entries from the database as (key, DepsEntry) pairs.
+    /// Collect all entries from the database as (analyzer, source_path, DepsEntry) triples.
     /// Returns an empty Vec on any error (missing table, etc.).
-    fn collect_entries(&self) -> Vec<(String, DepsEntry)> {
+    /// Entries with malformed keys (no NUL separator) are skipped — that would
+    /// be a pre-key-format-change entry from an older build, effectively invalid.
+    fn collect_entries(&self) -> Vec<(String, PathBuf, DepsEntry)> {
         let read_txn = match self.db.begin_read() {
             Ok(t) => t,
             Err(_) => return Vec::new(),
@@ -171,25 +206,27 @@ impl DepsCache {
         };
         iter.filter_map(|item| {
             let (key, value) = item.ok()?;
+            let (analyzer, source) = parse_key(key.value())?;
             let entry: DepsEntry = serde_json::from_slice(value.value()).ok()?;
-            Some((key.value().to_string(), entry))
+            Some((analyzer, source, entry))
         })
         .collect()
     }
 
-    /// Get raw cached dependencies for a source file without validation.
-    /// Returns None if the file isn't in the cache.
-    /// Returns (dependencies, analyzer_name).
-    pub fn get_raw(&self, source: &Path) -> Option<(Vec<PathBuf>, String)> {
-        let key = path_to_key(source);
-        let read_txn = self.db.begin_read().ok()?;
-        let table = read_txn.open_table(DEPS_TABLE).ok()?;
-        let data = table.get(key.as_str()).ok()??;
-        let entry: DepsEntry = serde_json::from_slice(data.value()).ok()?;
-        Some((
-            entry.dependencies.iter().map(PathBuf::from).collect(),
-            entry.analyzer,
-        ))
+    /// Get all raw cached entries for a given source path, across every
+    /// analyzer that has scanned it. Each returned tuple is (dependencies,
+    /// analyzer_name). Returns an empty Vec if the source has no entries.
+    /// Used by `analyzers show files <path>`, where the user gives a path and
+    /// expects to see every analyzer's view of it.
+    pub fn get_raw_for_path(&self, source: &Path) -> Vec<(Vec<PathBuf>, String)> {
+        self.collect_entries()
+            .into_iter()
+            .filter(|(_a, s, _e)| s == source)
+            .map(|(analyzer, _s, entry)| {
+                let deps = entry.dependencies.iter().map(PathBuf::from).collect();
+                (deps, analyzer)
+            })
+            .collect()
     }
 
     /// List all cached source files and their dependencies.
@@ -197,10 +234,9 @@ impl DepsCache {
     pub fn list_all(&self) -> Vec<(PathBuf, Vec<PathBuf>, String)> {
         self.collect_entries()
             .into_iter()
-            .map(|(key, entry)| {
-                let source = PathBuf::from(key);
+            .map(|(analyzer, source, entry)| {
                 let deps: Vec<PathBuf> = entry.dependencies.iter().map(PathBuf::from).collect();
-                (source, deps, entry.analyzer)
+                (source, deps, analyzer)
             })
             .collect()
     }
@@ -209,9 +245,9 @@ impl DepsCache {
     /// Returns a map of analyzer_name -> (file_count, total_dep_count).
     pub fn stats_by_analyzer(&self) -> std::collections::HashMap<String, (usize, usize)> {
         let mut stats: std::collections::HashMap<String, (usize, usize)> = std::collections::HashMap::new();
-        for (_key, entry) in self.collect_entries() {
-            let analyzer = if entry.analyzer.is_empty() { "unknown".to_string() } else { entry.analyzer };
-            let (files, deps) = stats.entry(analyzer).or_insert((0, 0));
+        for (analyzer, _source, entry) in self.collect_entries() {
+            let name = if analyzer.is_empty() { "unknown".to_string() } else { analyzer };
+            let (files, deps) = stats.entry(name).or_insert((0, 0));
             *files += 1;
             *deps += entry.dependencies.len();
         }
@@ -223,13 +259,12 @@ impl DepsCache {
     pub fn list_by_analyzers(&self, analyzers: &[String]) -> Vec<(PathBuf, Vec<PathBuf>, String)> {
         self.collect_entries()
             .into_iter()
-            .filter_map(|(key, entry)| {
-                if !analyzers.contains(&entry.analyzer) {
+            .filter_map(|(analyzer, source, entry)| {
+                if !analyzers.contains(&analyzer) {
                     return None;
                 }
-                let source = PathBuf::from(key);
                 let deps: Vec<PathBuf> = entry.dependencies.iter().map(PathBuf::from).collect();
-                Some((source, deps, entry.analyzer))
+                Some((source, deps, analyzer))
             })
             .collect()
     }
@@ -237,15 +272,11 @@ impl DepsCache {
     /// Remove all cached entries created by a specific analyzer.
     /// Returns the number of entries removed.
     pub fn remove_by_analyzer(&self, analyzer: &str) -> Result<usize> {
-        // First, collect keys to remove by reading
+        // Collect raw keys to remove by re-encoding (analyzer, source) → key.
         let keys_to_remove: Vec<String> = self.collect_entries()
             .into_iter()
-            .filter_map(|(key, entry)| {
-                if entry.analyzer == analyzer {
-                    Some(key)
-                } else {
-                    None
-                }
+            .filter_map(|(a, source, _entry)| {
+                if a == analyzer { Some(key_for(&a, &source)) } else { None }
             })
             .collect();
 
@@ -270,7 +301,98 @@ impl DepsCache {
     }
 }
 
-/// Convert a path to a cache key
-fn path_to_key(path: &Path) -> String {
-    path.display().to_string()
+/// Build the composite cache key for an (analyzer, source) pair. NUL is used
+/// as the separator because neither analyzer inames nor filesystem paths can
+/// contain NUL bytes, so there's no possible ambiguity.
+fn key_for(analyzer: &str, path: &Path) -> String {
+    let mut s = String::with_capacity(analyzer.len() + 1 + path.as_os_str().len());
+    s.push_str(analyzer);
+    s.push('\0');
+    s.push_str(&path.display().to_string());
+    s
+}
+
+/// Split a composite key back into (analyzer, source path). Returns None if
+/// the key predates the composite format (no NUL separator) or is otherwise
+/// malformed — such entries are treated as stale and ignored.
+fn parse_key(key: &str) -> Option<(String, PathBuf)> {
+    let (analyzer, path) = key.split_once('\0')?;
+    Some((analyzer.to_string(), PathBuf::from(path)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn key_and_parse_roundtrip() {
+        let key = key_for("python", Path::new("src/foo/bar.py"));
+        assert_eq!(key, "python\0src/foo/bar.py");
+        let (analyzer, path) = parse_key(&key).expect("must parse");
+        assert_eq!(analyzer, "python");
+        assert_eq!(path, PathBuf::from("src/foo/bar.py"));
+    }
+
+    #[test]
+    fn keys_differ_by_analyzer() {
+        // The whole point of the composite key: two analyzers scanning the
+        // same file must produce distinct cache entries.
+        let k1 = key_for("python", Path::new("foo.py"));
+        let k2 = key_for("mypy", Path::new("foo.py"));
+        assert_ne!(k1, k2);
+    }
+
+    #[test]
+    fn keys_differ_by_instance_name() {
+        // Multi-instance analyzers (e.g. cpp.kernel vs cpp.userspace) must
+        // also produce distinct keys.
+        let k1 = key_for("cpp.kernel", Path::new("foo.c"));
+        let k2 = key_for("cpp.userspace", Path::new("foo.c"));
+        assert_ne!(k1, k2);
+    }
+
+    #[test]
+    fn parse_rejects_key_without_separator() {
+        // Pre-composite-format entries (just a bare path) must not parse —
+        // they're treated as stale and dropped from listings.
+        assert!(parse_key("just/a/path.py").is_none());
+    }
+
+    #[test]
+    fn parse_handles_path_with_colons() {
+        // The separator is NUL specifically because paths can contain every
+        // other punctuation character. A path with colons must parse cleanly.
+        let key = key_for("cpp", Path::new("src/a:b.c"));
+        let (analyzer, path) = parse_key(&key).unwrap();
+        assert_eq!(analyzer, "cpp");
+        assert_eq!(path, PathBuf::from("src/a:b.c"));
+    }
+
+    /// Regression guard: every `get` call must increment exactly one counter.
+    /// The earlier implementation used `.ok()?` on `begin_read` and
+    /// `open_table`, which silently returned None without counting — so on a
+    /// fresh DB the first call was statistically invisible and the predict
+    /// pass's numbers wouldn't match the summary's. Calling `get` against a
+    /// nonexistent source file (in a fresh tempdir, no cache yet) must count
+    /// as a miss.
+    #[test]
+    fn get_counts_miss_even_when_db_is_fresh() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        // Open a DeCache rooted in the tempdir so the global .rsconstruct
+        // isn't touched. Since `DepsCache::open` uses a fixed path, we set
+        // the current dir for the duration of the test.
+        let orig = std::env::current_dir().unwrap();
+        std::env::set_current_dir(tmp.path()).unwrap();
+        let mut cache = DepsCache::open().expect("open fresh cache");
+        let nonexistent = tmp.path().join("does_not_exist.py");
+        let result = cache.get("python", &nonexistent);
+        std::env::set_current_dir(orig).unwrap();
+
+        assert!(result.is_none(), "missing entry must return None");
+        let stats = cache.stats();
+        assert_eq!(stats.hits + stats.misses, 1,
+            "exactly one of hits/misses must advance per get call (hits={}, misses={})",
+            stats.hits, stats.misses);
+        assert_eq!(stats.misses, 1, "missing entry counts as a miss");
+    }
 }

@@ -267,15 +267,19 @@ impl Builder {
                         }
                     }
                     AnalyzersShowFilter::Files { files } => {
-                        // Query specific files
+                        // Query specific files. One path can have multiple
+                        // entries — one per analyzer that scanned it.
                         let mut found_any = false;
                         for file_arg in &files {
                             let file_path = PathBuf::from(file_arg);
-                            if let Some((deps, analyzer)) = deps_cache.get_raw(&file_path) {
-                                found_any = true;
-                                Self::print_deps(&file_path, &deps, &analyzer);
-                            } else {
+                            let entries = deps_cache.get_raw_for_path(&file_path);
+                            if entries.is_empty() {
                                 eprintln!("{}: '{}' not in dependency cache", color::yellow("Warning"), file_arg);
+                            } else {
+                                found_any = true;
+                                for (deps, analyzer) in entries {
+                                    Self::print_deps(&file_path, &deps, &analyzer);
+                                }
                             }
                         }
                         if !found_any {
