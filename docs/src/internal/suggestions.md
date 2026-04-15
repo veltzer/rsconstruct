@@ -198,6 +198,42 @@ Grades:
 - Useful for deployment, packaging, and containerization.
 - **Urgency**: low | **Complexity**: high
 
+### On-demand processors (`build_by_default = false`)
+- Today every declared processor runs on every `rsconstruct build`. The only per-invocation escape hatches are `-x name` (remember every time) or `enabled = false` in the config (remember to flip back). Neither fits the "this processor exists, don't run it unless I ask" use case — common for slow lifecycle processors like `python_package`, `docker_build`, `publish`, `release_tarball`.
+- Add a per-processor boolean field defaulting to true: `build_by_default = false` on a processor means it's discovered and classified like any other, but its products are filtered out of the default run.
+- Prior art: meson's `build_by_default: false`, Bazel's `tags = ["manual"]`, buck2's `tags = ["manual"]`. All use the same shape — declarative opt-out on the rule, per-invocation opt-in via target naming.
+- CLI semantics map cleanly onto existing `-p`/`-x` machinery:
+  - `rsconstruct build` → excludes `build_by_default = false` processors (new behaviour).
+  - `rsconstruct build -p python_package` → includes only `python_package`; the `-p` explicit inclusion overrides the default-off flag.
+  - `rsconstruct build -p ruff,python_package` → includes both, including the opt-in one.
+  - `rsconstruct build --all` (new flag) → includes everything including on-demand processors. Useful for CI that wants to verify the opt-in path doesn't bitrot.
+- Example config:
+  ```toml
+  [processor.python_package]
+  build_by_default = false
+  src_dirs = ["."]
+  ```
+- Design considerations:
+  - **`@all` meta-shortcut:** the existing `@checkers` / `@generators` aliases should continue to mean "all of that type, subject to the default-off filter." Users who want "all checkers including on-demand ones" would say `rsconstruct build --all -p @checkers` — rare enough that the composition is fine.
+  - **Error on contradiction:** `-p X -x X` already errors; `-p X` where X has `build_by_default = false` should just work (explicit opt-in wins over declarative opt-out).
+  - **Watch mode:** `rsconstruct watch` should honour the same default — don't rebuild the package processor on every file save. Users who want watch-mode packaging can add `-p python_package` to the watch invocation.
+  - **Discovery cost:** on-demand processors still run discovery every build, because we need to know what their products would be (for output-conflict detection, graph completeness, and `--all` support). This is negligible — discovery is O(files matched), not O(cost of running).
+- Follow-up idea: **named goals** (meson-style aggregated targets or npm-style scripts) for the "I want a lint goal / deploy goal / ci goal" pattern. That's Pattern B, layered above per-processor config — not needed to solve the basic on-demand case.
+- **Urgency**: medium | **Complexity**: low
+
+### Decomposed cache key for richer `--explain`
+- Today every product has a single descriptor key that mixes input checksum + config hash + tool-version hash + variant. A miss tells us "the key changed" but not *which component*. `--explain` can only say `BUILD (no cache entry)` / `BUILD (output missing)` — not "your cflags changed" or "an input file changed".
+- Store the three sub-hashes (input, config, tool) in a new redb table keyed by stable product identity — `(processor_iname, primary_path)` where `primary_path` is the first output for generators or the first input for checkers.
+- Schema: `product_components: (processor, primary_path) -> { input_hash, config_hash, tool_hash, timestamp }`. ~100 bytes per product, so ~500KB extra disk for a 5000-product project.
+- **Reads only on `--explain`.** `classify_products` already routes through `explain_descriptor`; extend that to look up the prior components row, recompute current components, diff the three, and return a richer reason like `BUILD (config changed: cflags, include_paths)`.
+- **Writes only when explicitly tracking.** Two reasonable gates:
+  - **Option A (single flag):** `--explain` enables both write and read. CI runs without `--explain` → zero overhead. Trade-off: the first explain run after enabling has no prior row → reports "no prior state" generically. Subsequent runs work fully.
+  - **Option B (separate `--track-changes` / `[build] track_changes = true`):** decouples capture from query. CI omits the flag → zero overhead. Devs opt in permanently via config.
+  - Lean Option A: fewer flags, the existing `--explain` carries both ends of the lifecycle, and CI/CD pays nothing by default since neither flag is set.
+- **Tier 1 only.** Says "input bucket changed" but not which file. For a `.cc` file with 100 headers, the user still doesn't know which header. A future Tier 2 (per-input-file checksums) would resolve that at ~5-10x storage cost; defer until users ask.
+- **Caveats:** adds a third source of truth (alongside `descriptors` and the in-memory graph) to keep in sync. Stale entries (products dropped from config) accumulate harmlessly until `cache clear`.
+- **Urgency**: medium | **Complexity**: medium
+
 ## Caching & Performance
 
 ### Deferred materialization
