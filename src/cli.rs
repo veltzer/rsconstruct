@@ -756,6 +756,13 @@ pub struct SharedBuildArgs {
     #[arg(short, long, value_delimiter = ',')]
     pub processors: Option<Vec<String>>,
 
+    /// Exclude specific processors by instance name (comma-separated list).
+    /// Mirrors `-p` and accepts the same shortcuts (e.g. `@checkers`, `@python3`).
+    /// When combined with `-p`, excludes are subtracted from the included set;
+    /// a processor appearing in both is an error.
+    #[arg(short = 'x', long = "exclude-processors", value_delimiter = ',')]
+    pub exclude_processors: Option<Vec<String>>,
+
     /// Automatically add misspelled words to words files instead of failing (zspell + aspell)
     #[arg(long)]
     pub auto_add_words: bool,
@@ -814,6 +821,7 @@ impl SharedBuildArgs {
             batch_size: self.batch_size.map(|n| if n < 0 { None } else { Some(n as usize) }),
             stop_after,
             processor_filter: self.processors.clone(),
+            exclude_filter: self.exclude_processors.clone(),
             auto_add_words: self.auto_add_words,
             explain: self.explain,
             no_mtime: self.no_mtime,
@@ -838,6 +846,7 @@ pub struct BuildOptions {
     pub batch_size: Option<Option<usize>>,
     pub stop_after: BuildPhase,
     pub processor_filter: Option<Vec<String>>,
+    pub exclude_filter: Option<Vec<String>>,
     pub auto_add_words: bool,
     pub explain: bool,
     pub no_mtime: bool,
@@ -981,8 +990,16 @@ _rsconstruct_analyzer_inames() {
     let new_processors = "                --processors)\n                    COMPREPLY=($(compgen -W \"$(_rsconstruct_inames)\" -- \"${cur}\"))".to_string();
     let old_p = "                -p)\n                    COMPREPLY=($(compgen -f \"${cur}\"))";
     let new_p = "                -p)\n                    COMPREPLY=($(compgen -W \"$(_rsconstruct_inames)\" -- \"${cur}\"))".to_string();
+    let old_exclude = "                --exclude-processors)\n                    COMPREPLY=($(compgen -f \"${cur}\"))";
+    let new_exclude = "                --exclude-processors)\n                    COMPREPLY=($(compgen -W \"$(_rsconstruct_inames)\" -- \"${cur}\"))".to_string();
+    let old_x = "                -x)\n                    COMPREPLY=($(compgen -f \"${cur}\"))";
+    let new_x = "                -x)\n                    COMPREPLY=($(compgen -W \"$(_rsconstruct_inames)\" -- \"${cur}\"))".to_string();
 
-    let result = result.replace(old_processors, &new_processors).replace(old_p, &new_p);
+    let result = result
+        .replace(old_processors, &new_processors)
+        .replace(old_p, &new_p)
+        .replace(old_exclude, &new_exclude)
+        .replace(old_x, &new_x);
 
     // Prepend the helper function before the completion function is defined.
     format!("{}{}", helper, result)

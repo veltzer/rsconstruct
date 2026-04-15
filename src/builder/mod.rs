@@ -370,8 +370,8 @@ impl Builder {
         pb.finish_and_clear();
         if total > 0 && !suppress {
             println!(
-                "[deps] summary: {} cache hits ({} rescanned)",
-                stats.hits, stats.misses,
+                "[deps] summary: {} rescanned ({} cache hits)",
+                stats.misses, stats.hits,
             );
         }
 

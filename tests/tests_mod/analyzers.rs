@@ -215,7 +215,7 @@ src_dirs = ["."]
     let combined = format!("{}{}", String::from_utf8_lossy(&out2.stdout), String::from_utf8_lossy(&out2.stderr));
     assert!(
         combined.contains("[deps] 3 files to scan for dependencies")
-            && combined.contains("[deps] summary: 3 cache hits (0 rescanned)"),
+            && combined.contains("[deps] summary: 0 rescanned (3 cache hits)"),
         "unchanged files should all hit the cache: {}", combined
     );
 }
@@ -260,7 +260,7 @@ src_dirs = ["."]
     let combined = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
     assert!(
         combined.contains("[deps] 3 files to scan for dependencies")
-            && combined.contains("[deps] summary: 2 cache hits (1 rescanned)"),
+            && combined.contains("[deps] summary: 1 rescanned (2 cache hits)"),
         "modified file should trigger exactly one rescan: {}", combined
     );
 }

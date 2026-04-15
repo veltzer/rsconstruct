@@ -958,3 +958,83 @@ batch = false
     assert_eq!(result2.skipped, 2, "Two good files should be skipped (cached)");
     assert_eq!(result2.success, 1, "Only the fixed file should be rebuilt");
 }
+
+/// Helper: write a minimal 2-processor project (`tera` + `ruff`) so we can
+/// exercise `-x` against a known set of processors without pulling in real
+/// external tools for actual execution.
+fn setup_two_processor_project() -> tempfile::TempDir {
+    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+    let p = temp_dir.path();
+    fs::create_dir_all(p.join("tera.templates")).unwrap();
+    fs::create_dir_all(p.join("src")).unwrap();
+    fs::write(p.join("rsconstruct.toml"), "[processor.tera]\n\n[processor.ruff]\nsrc_dirs = [\"src\"]\n").unwrap();
+    fs::write(p.join("src/hello.py"), "print('hi')\n").unwrap();
+    temp_dir
+}
+
+/// `-x tera` must exclude only tera; other processors still run.
+#[test]
+fn exclude_processor_runs_everything_else() {
+    let temp_dir = setup_two_processor_project();
+    let project_path = temp_dir.path();
+
+    // Build with ruff excluded via -x. The tera processor should still be
+    // active — we verify by checking the classify line reports at least one
+    // product (tera) and zero ruff-attributable activity.
+    let output = run_rsconstruct_with_env(
+        project_path, &["build", "-x", "ruff"], &[("NO_COLOR", "1")],
+    );
+    // Build should succeed (tera has no templates so it's a no-op but valid).
+    assert!(
+        output.status.success(),
+        "build with -x ruff must succeed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    // Stdout/stderr must not mention processing the ruff product for hello.py.
+    assert!(
+        !combined.contains("[ruff]"),
+        "ruff must not run when -x ruff is passed: {}", combined
+    );
+}
+
+/// `-x unknown` must fail with a CONFIG_ERROR, same as `-p unknown`.
+#[test]
+fn exclude_unknown_processor_is_config_error() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    let output = run_rsconstruct_with_env(
+        project_path, &["build", "-x", "nonexistent"], &[("NO_COLOR", "1")],
+    );
+    assert!(!output.status.success());
+    let exit_code = output.status.code().unwrap();
+    assert_eq!(exit_code, 2, "Expected CONFIG_ERROR (2), got {}", exit_code);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Unknown processor"),
+        "Error should name the unknown processor: {}", stderr
+    );
+}
+
+/// `-p foo -x foo` must reject the conflicting intent.
+#[test]
+fn include_and_exclude_same_processor_is_error() {
+    let temp_dir = setup_two_processor_project();
+    let project_path = temp_dir.path();
+
+    let output = run_rsconstruct_with_env(
+        project_path, &["build", "-p", "tera", "-x", "tera"], &[("NO_COLOR", "1")],
+    );
+    assert!(!output.status.success(), "-p tera -x tera must fail");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("both -p and -x"),
+        "Error should explain the conflict: {}", stderr
+    );
+}

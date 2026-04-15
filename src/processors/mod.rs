@@ -1297,36 +1297,44 @@ impl BuildStats {
             let total_files_created = self.total_files_created();
             let total_files_restored = self.total_files_restored();
 
-            let mut parts = Vec::new();
-            if total_processed > 0 {
-                if total_files_created > 0 {
-                    parts.push(format!("{} processed ({} files created)", total_processed, total_files_created));
-                } else {
-                    parts.push(format!("{} processed", total_processed));
-                }
-            }
-            if total_restored > 0 {
-                if total_files_restored > 0 {
-                    parts.push(format!("{} restored ({} files)", total_restored, total_files_restored));
-                } else {
-                    parts.push(format!("{} restored", total_restored));
-                }
-            }
             let total_flaky = self.total_flaky();
-            if total_flaky > 0 {
-                parts.push(format!("{} flaky", total_flaky));
-            }
-            if total_failed > 0 {
-                parts.push(format!("{} failed", total_failed));
-            }
-            if total_skipped > 0 {
-                parts.push(format!("{} unchanged", total_skipped));
-            }
-
-            if parts.is_empty() {
+            // Lead with what was actually done (built + failed), put the
+            // less-important idle counts (unchanged, restored, flaky) in
+            // parentheses. Zero-valued entries are dropped from the paren list
+            // to keep the line readable.
+            let total_any = total_processed + total_restored + total_failed + total_skipped;
+            if total_any == 0 {
                 println!("{}", color::dim("[build] nothing to build."));
             } else {
-                let line = format!("[build] summary: {}", parts.join(", "));
+                let lead = if total_files_created > 0 {
+                    format!("{} built ({} files created)", total_processed, total_files_created)
+                } else {
+                    format!("{} built", total_processed)
+                };
+
+                let mut aside: Vec<String> = Vec::new();
+                if total_failed > 0 {
+                    aside.push(format!("{} failed", total_failed));
+                }
+                if total_restored > 0 {
+                    if total_files_restored > 0 {
+                        aside.push(format!("{} restored: {} files", total_restored, total_files_restored));
+                    } else {
+                        aside.push(format!("{} restored", total_restored));
+                    }
+                }
+                if total_flaky > 0 {
+                    aside.push(format!("{} flaky", total_flaky));
+                }
+                if total_skipped > 0 {
+                    aside.push(format!("{} unchanged", total_skipped));
+                }
+
+                let line = if aside.is_empty() {
+                    format!("[build] summary: {}", lead)
+                } else {
+                    format!("[build] summary: {} ({})", lead, aside.join(", "))
+                };
                 if total_failed > 0 {
                     println!("{}", color::red(&line));
                 } else {

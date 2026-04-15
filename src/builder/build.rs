@@ -99,23 +99,59 @@ impl Builder {
         let processors = self.create_processors()?;
         let create_processors_dur = t.elapsed();
 
-        // Expand @-prefixed shortcuts in the processor filter
-        let expanded_filter = opts.processor_filter.as_ref()
+        // Expand @-prefixed shortcuts in both filters, then compute the final
+        // set of processors to run:
+        //   - if -p is given: start from that set (else all processors)
+        //   - if -x is given: remove those from the set
+        //   - conflict (same name in both) → error
+        //   - unknown names in either filter → error
+        let include_expanded = opts.processor_filter.as_ref()
             .map(|f| expand_aliases(f, &processors));
-        let processor_filter = expanded_filter.as_deref();
+        let exclude_expanded = opts.exclude_filter.as_ref()
+            .map(|f| expand_aliases(f, &processors));
 
-        // Validate processor filter against available processors
-        if let Some(filter) = processor_filter {
+        // Validate unknown names in either filter, pooling both error reports.
+        let mut unknown: Vec<String> = Vec::new();
+        for filter in [&include_expanded, &exclude_expanded].iter().copied().flatten() {
             for name in filter {
                 if !processors.contains_key(name) {
-                    let available: Vec<_> = processors.keys().collect();
-                    return Err(crate::exit_code::RsconstructError::new(
-                        crate::exit_code::RsconstructExitCode::ConfigError,
-                        format!("Unknown processor '{}'. Available: {:?}", name, available),
-                    ).into());
+                    unknown.push(name.clone());
                 }
             }
         }
+        if !unknown.is_empty() {
+            let mut available: Vec<&String> = processors.keys().collect();
+            available.sort();
+            return Err(crate::exit_code::RsconstructError::new(
+                crate::exit_code::RsconstructExitCode::ConfigError,
+                format!("Unknown processor(s): {:?}. Available: {:?}", unknown, available),
+            ).into());
+        }
+
+        // Reject overlap between -p and -x: contradictory intent should fail
+        // loudly rather than silently picking one side.
+        if let (Some(inc), Some(exc)) = (&include_expanded, &exclude_expanded) {
+            let conflicts: Vec<&String> = exc.iter().filter(|e| inc.contains(e)).collect();
+            if !conflicts.is_empty() {
+                return Err(crate::exit_code::RsconstructError::new(
+                    crate::exit_code::RsconstructExitCode::ConfigError,
+                    format!("Processor(s) {:?} appear in both -p and -x", conflicts),
+                ).into());
+            }
+        }
+
+        // Build the final filter. When -x is the only filter, synthesize an
+        // include list from "all processors minus excludes" so downstream code
+        // can treat it as a regular allow-list.
+        let expanded_filter: Option<Vec<String>> = match (include_expanded, exclude_expanded) {
+            (Some(inc), Some(exc)) => Some(inc.into_iter().filter(|n| !exc.contains(n)).collect()),
+            (Some(inc), None) => Some(inc),
+            (None, Some(exc)) => Some(
+                processors.keys().filter(|n| !exc.contains(n)).cloned().collect()
+            ),
+            (None, None) => None,
+        };
+        let processor_filter = expanded_filter.as_deref();
 
         // Pre-flight: verify all required tools are available for declared processors
         {
