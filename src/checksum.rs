@@ -140,6 +140,17 @@ fn hash_checksums(checksums: &[String]) -> String {
     bytes_checksum(combined.as_bytes())
 }
 
+/// Outcome of a `checksum_fast` call, surfacing whether the mtime cache
+/// succeeded in avoiding a file read. Used by the deps cache to report
+/// mtime-vs-content cache-hit splits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ChecksumPath {
+    /// mtime matched the stored entry → cached checksum returned, no I/O.
+    MtimeShortcut,
+    /// mtime was stale or disabled → file was read and re-hashed.
+    FullRead,
+}
+
 /// Compute a file's checksum, consulting the persistent mtime cache first.
 /// When the file's mtime matches the cached entry, returns the cached checksum
 /// without re-reading the file — avoiding the I/O + SHA cost across builds.
@@ -147,20 +158,26 @@ fn hash_checksums(checksums: &[String]) -> String {
 /// `--no-mtime-cache` flag), falls back to a full read + hash via
 /// `file_checksum`.
 ///
-/// Dirty mtime entries (new files or changed mtimes) are flushed inline, so
-/// callers don't need to batch flushes themselves. For hot loops that compute
-/// many checksums at once (like `combined_input_checksum`), prefer the
-/// internal `fast_checksum` + `flush_mtime_entries` pattern to amortize the
-/// write transaction.
-pub(crate) fn checksum_fast(path: &Path) -> Result<String> {
+/// Returns the checksum and which path was taken. Dirty mtime entries (new
+/// files or changed mtimes) are flushed inline, so callers don't need to
+/// batch flushes themselves. For hot loops that compute many checksums at
+/// once (like `combined_input_checksum`), prefer the internal
+/// `fast_checksum` + `flush_mtime_entries` pattern to amortize the write
+/// transaction.
+pub(crate) fn checksum_fast(path: &Path) -> Result<(String, ChecksumPath)> {
     if !MTIME_ENABLED.load(std::sync::atomic::Ordering::Relaxed) {
-        return file_checksum(path);
+        return Ok((file_checksum(path)?, ChecksumPath::FullRead));
     }
     let (checksum, dirty) = fast_checksum(path)?;
+    let path_taken = if dirty.is_some() {
+        ChecksumPath::FullRead
+    } else {
+        ChecksumPath::MtimeShortcut
+    };
     if let Some(entry) = dirty {
         flush_mtime_entries(vec![entry])?;
     }
-    Ok(checksum)
+    Ok((checksum, path_taken))
 }
 
 /// Get the combined input checksum for a list of input files, using mtime

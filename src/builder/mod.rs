@@ -361,23 +361,30 @@ impl Builder {
             println!("[deps] {} files to check for dependencies", total);
         }
 
-        // Stage 2: pre-scan classify. Predict hit/miss for every candidate
-        // (analyzer, source) pair without mutating the cache's stats counters.
-        // The pair-level split matters because two analyzers can legitimately
-        // both scan the same source and store separate entries.
-        let mut predicted_hits: usize = 0;
-        let mut predicted_misses: usize = 0;
+        // Stage 2: pre-scan classify. Predict mtime-hit / content-hit / miss
+        // for every candidate (analyzer, source) pair without mutating the
+        // cache's stats counters. Splitting the hit count into mtime vs
+        // checksum tells the user how much of the cache work was I/O-free
+        // (mtime matched) vs had to re-hash the file (mtime stale but
+        // content unchanged, e.g. a touched file).
+        let mut mtime_hits: usize = 0;
+        let mut content_hits: usize = 0;
+        let mut misses: usize = 0;
         for name in &active_analyzers {
             for source in analyzers[*name].matching_sources(graph) {
-                if deps_cache.classify(name, &source) {
-                    predicted_hits += 1;
-                } else {
-                    predicted_misses += 1;
+                match deps_cache.classify(name, &source) {
+                    crate::deps_cache::ClassifyResult::MtimeHit => mtime_hits += 1,
+                    crate::deps_cache::ClassifyResult::ContentHit => content_hits += 1,
+                    crate::deps_cache::ClassifyResult::Miss => misses += 1,
                 }
             }
         }
         if total > 0 && !suppress {
-            println!("[deps] {} to rescan ({} cached)", predicted_misses, predicted_hits);
+            let cached = mtime_hits + content_hits;
+            println!(
+                "[deps] {} to rescan ({} cached: {} mtime, {} checksum)",
+                misses, cached, mtime_hits, content_hits,
+            );
         }
 
         // Stage 3: actual scan. Same shape as before.
@@ -391,8 +398,8 @@ impl Builder {
         let stats = deps_cache.stats();
         if total > 0 && !suppress {
             println!(
-                "[deps] summary: {} rescanned ({} cache hits)",
-                stats.misses, stats.hits,
+                "[deps] summary: {} rescanned ({} cache hits: {} mtime, {} checksum)",
+                stats.misses, stats.hits, stats.mtime_hits, stats.content_hits,
             );
         }
 

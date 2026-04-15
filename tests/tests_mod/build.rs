@@ -414,7 +414,7 @@ fn classify_propagates_through_dependencies() {
     );
     assert!(output3.status.success());
     let stdout3 = String::from_utf8_lossy(&output3.stdout);
-    assert!(stdout3.contains("0 to build (2 up-to-date, 0 to restore)"),
+    assert!(stdout3.contains("0 to build, 0 to restore (2 up-to-date)"),
         "Both products should be up-to-date: {}", stdout3);
 
     // Wait so mtime differs

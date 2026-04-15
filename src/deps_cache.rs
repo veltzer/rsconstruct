@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::checksum::checksum_fast;
+use crate::checksum::{checksum_fast, ChecksumPath};
 
 const RSBUILD_DIR: &str = ".rsconstruct";
 const DEPS_DB_FILE: &str = "deps.redb";
@@ -37,12 +37,32 @@ struct DepsEntry {
     analyzer: String,
 }
 
-/// Statistics about dependency cache usage
+/// Result of a `classify` call — the predict-pass analogue of `DepsCacheStats`.
+/// MtimeHit + ContentHit = a hit that `get` would also report; Miss means
+/// `get` would rescan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClassifyResult {
+    /// Cache valid, mtime-cache shortcut applied (no I/O needed).
+    MtimeHit,
+    /// Cache valid, but mtime was stale so the file was read and re-hashed.
+    ContentHit,
+    /// Cache invalid or absent.
+    Miss,
+}
+
+/// Statistics about dependency cache usage.
+/// `mtime_hits + content_hits == hits` always holds.
 #[derive(Debug, Default, Clone)]
 pub struct DepsCacheStats {
-    /// Number of cache hits
+    /// Total number of cache hits (mtime_hits + content_hits).
     pub hits: usize,
-    /// Number of cache misses
+    /// Hits where the mtime cache shortcut succeeded — no file I/O was done.
+    pub mtime_hits: usize,
+    /// Hits where the mtime was stale so the file had to be re-read and
+    /// re-hashed, but the content checksum still matched the stored one
+    /// (e.g. a touched-but-unchanged file).
+    pub content_hits: usize,
+    /// Number of cache misses.
     pub misses: usize,
 }
 
@@ -103,7 +123,7 @@ impl DepsCache {
 
         // Verify source file hasn't changed. `checksum_fast` consults the
         // persistent mtime cache so unchanged files skip the full read + hash.
-        let current_checksum = match checksum_fast(source) {
+        let (current_checksum, checksum_path) = match checksum_fast(source) {
             Ok(c) => c,
             Err(_) => {
                 self.stats.misses += 1;
@@ -128,26 +148,35 @@ impl DepsCache {
         }
 
         self.stats.hits += 1;
+        match checksum_path {
+            ChecksumPath::MtimeShortcut => self.stats.mtime_hits += 1,
+            ChecksumPath::FullRead => self.stats.content_hits += 1,
+        }
         Some(deps)
     }
 
     /// Dry-run of `get`: predict whether this (analyzer, source) pair would
-    /// hit the cache, without updating stats and without allocating the dep
-    /// list. Used by the pre-scan classify pass to count expected hits vs
-    /// rescans before the actual scan runs. Identical validity rules to `get`:
-    /// entry exists, source checksum matches (via mtime shortcut), and every
-    /// recorded dep still exists on disk.
-    pub fn classify(&self, analyzer: &str, source: &Path) -> bool {
+    /// hit the cache, and if so whether the mtime shortcut would apply.
+    /// Used by the pre-scan classify pass to count expected hits vs rescans
+    /// before the actual scan runs. Identical validity rules to `get`.
+    /// Does not touch stats.
+    pub fn classify(&self, analyzer: &str, source: &Path) -> ClassifyResult {
         let key = key_for(analyzer, source);
-        let Ok(read_txn) = self.db.begin_read() else { return false };
-        let Ok(table) = read_txn.open_table(DEPS_TABLE) else { return false };
-        let Ok(Some(data)) = table.get(key.as_str()) else { return false };
-        let Ok(entry) = serde_json::from_slice::<DepsEntry>(data.value()) else { return false };
-        let Ok(current_checksum) = checksum_fast(source) else { return false };
+        let Ok(read_txn) = self.db.begin_read() else { return ClassifyResult::Miss };
+        let Ok(table) = read_txn.open_table(DEPS_TABLE) else { return ClassifyResult::Miss };
+        let Ok(Some(data)) = table.get(key.as_str()) else { return ClassifyResult::Miss };
+        let Ok(entry) = serde_json::from_slice::<DepsEntry>(data.value()) else { return ClassifyResult::Miss };
+        let Ok((current_checksum, checksum_path)) = checksum_fast(source) else { return ClassifyResult::Miss };
         if entry.source_checksum != current_checksum {
-            return false;
+            return ClassifyResult::Miss;
         }
-        entry.dependencies.iter().all(|d| Path::new(d).exists())
+        if !entry.dependencies.iter().all(|d| Path::new(d).exists()) {
+            return ClassifyResult::Miss;
+        }
+        match checksum_path {
+            ChecksumPath::MtimeShortcut => ClassifyResult::MtimeHit,
+            ChecksumPath::FullRead => ClassifyResult::ContentHit,
+        }
     }
 
     /// Store dependencies for a (analyzer, source) pair.
@@ -155,7 +184,7 @@ impl DepsCache {
     /// deps entry — subsequent `get()` calls can then short-circuit on mtime.
     pub fn set(&self, analyzer: &str, source: &Path, dependencies: &[PathBuf]) -> Result<()> {
         let key = key_for(analyzer, source);
-        let source_checksum = checksum_fast(source)?;
+        let (source_checksum, _) = checksum_fast(source)?;
 
         let entry = DepsEntry {
             source_checksum,

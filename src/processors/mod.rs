@@ -1298,31 +1298,33 @@ impl BuildStats {
             let total_files_restored = self.total_files_restored();
 
             let total_flaky = self.total_flaky();
-            // Lead with what was actually done (built + failed), put the
-            // less-important idle counts (unchanged, restored, flaky) in
-            // parentheses. Zero-valued entries are dropped from the paren list
-            // to keep the line readable.
+            // Work done (built, restored, failed) leads the line; idle counts
+            // (unchanged, flaky) go in parentheses. "restored" is work — files
+            // got written from cache — so it belongs with "built", not with
+            // "unchanged".
             let total_any = total_processed + total_restored + total_failed + total_skipped;
             if total_any == 0 {
                 println!("{}", color::dim("[build] nothing to build."));
             } else {
-                let lead = if total_files_created > 0 {
-                    format!("{} built ({} files created)", total_processed, total_files_created)
+                let mut lead_parts: Vec<String> = Vec::new();
+                if total_files_created > 0 {
+                    lead_parts.push(format!("{} built ({} files created)", total_processed, total_files_created));
                 } else {
-                    format!("{} built", total_processed)
-                };
-
-                let mut aside: Vec<String> = Vec::new();
-                if total_failed > 0 {
-                    aside.push(format!("{} failed", total_failed));
+                    lead_parts.push(format!("{} built", total_processed));
                 }
                 if total_restored > 0 {
                     if total_files_restored > 0 {
-                        aside.push(format!("{} restored: {} files", total_restored, total_files_restored));
+                        lead_parts.push(format!("{} restored ({} files)", total_restored, total_files_restored));
                     } else {
-                        aside.push(format!("{} restored", total_restored));
+                        lead_parts.push(format!("{} restored", total_restored));
                     }
                 }
+                if total_failed > 0 {
+                    lead_parts.push(format!("{} failed", total_failed));
+                }
+                let lead = lead_parts.join(", ");
+
+                let mut aside: Vec<String> = Vec::new();
                 if total_flaky > 0 {
                     aside.push(format!("{} flaky", total_flaky));
                 }
