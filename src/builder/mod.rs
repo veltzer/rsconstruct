@@ -377,7 +377,7 @@ impl Builder {
             }
         }
         if total > 0 && !suppress {
-            println!("[deps] {} cached ({} to rescan)", predicted_hits, predicted_misses);
+            println!("[deps] {} to rescan ({} cached)", predicted_misses, predicted_hits);
         }
 
         // Stage 3: actual scan. Same shape as before.

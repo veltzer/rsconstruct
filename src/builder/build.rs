@@ -235,8 +235,8 @@ impl Builder {
             crate::executor::classify_products(&graph, &order, &self.object_store, opts.force);
         phase_timings.push(("classify".to_string(), t.elapsed()));
         if !crate::runtime_flags::quiet() {
-            println!("[build] {} up-to-date ({} to restore, {} to build)",
-                skip_count, restore_count, build_count);
+            println!("[build] {} to build ({} up-to-date, {} to restore)",
+                build_count, skip_count, restore_count);
         }
 
         if opts.stop_after == BuildPhase::Classify {
