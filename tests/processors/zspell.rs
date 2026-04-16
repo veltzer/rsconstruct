@@ -162,7 +162,7 @@ fn zspell_stops_after_first_error() {
         "[processor.zspell]\nsrc_dirs = [\".\"]\n"
     ).unwrap();
 
-    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["build", "-j", "1"], &[("NO_COLOR", "1")]);
     assert!(!output.status.success(),
         "Build should fail with misspelled words");
 

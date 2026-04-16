@@ -297,7 +297,7 @@ pub(crate) struct BuildConfig {
 }
 
 fn default_parallel() -> usize {
-    1
+    0
 }
 
 fn default_output_dir() -> String {
@@ -307,7 +307,7 @@ fn default_output_dir() -> String {
 impl Default for BuildConfig {
     fn default() -> Self {
         Self {
-            parallel: 1,
+            parallel: 0,
             batch_size: Some(0), // Default: batching enabled, no size limit
             output_dir: "out".into(),
         }

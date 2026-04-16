@@ -342,7 +342,7 @@ fn deterministic_build_order() {
             ).unwrap();
         }
 
-        let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+        let output = run_rsconstruct_with_env(project_path, &["build", "-v", "-j", "1"], &[("NO_COLOR", "1")]);
         assert!(output.status.success(),
             "Build failed: {}",
             String::from_utf8_lossy(&output.stderr));

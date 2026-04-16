@@ -249,10 +249,18 @@ impl Builder {
         let parallel = opts.jobs
             .or_else(|| std::env::var("RSCONSTRUCT_THREADS").ok().and_then(|v| v.parse().ok()))
             .unwrap_or(self.config.build.parallel);
+        let effective_parallel = if parallel == 0 {
+            std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1)
+        } else {
+            parallel
+        };
+        if !crate::runtime_flags::quiet() {
+            println!("[rsconstruct] using {} threads", effective_parallel);
+        }
         // CLI overrides config for batch_size
         let batch_size = opts.batch_size.unwrap_or(self.config.build.batch_size);
         let executor = Executor::new(&processors, ctx, &policy, ExecutorOptions {
-            parallel,
+            parallel: effective_parallel,
             verbose: opts.verbose,
             display_opts: opts.display_opts,
             batch_size,

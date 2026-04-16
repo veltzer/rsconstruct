@@ -654,8 +654,8 @@ fn init_project() -> Result<()> {
 # For multiple instances: [processor.pylint.core] and [processor.pylint.tests]
 
 [build]
-# Number of parallel jobs (1 = sequential, 0 = auto-detect CPU cores)
-# parallel = 1
+# Number of parallel jobs (0 = auto-detect CPU cores, 1 = sequential)
+# parallel = 0
 # Max files per batch for batch-capable processors (0 = no limit, omit to disable batching)
 # batch_size = 0
 
