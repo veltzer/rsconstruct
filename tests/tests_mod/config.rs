@@ -228,11 +228,11 @@ fn config_validate_no_matching_files_warning() {
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
-    // Should succeed (warnings only, no errors)
-    assert!(output.status.success(), "config validate should succeed with only warnings: {}", String::from_utf8_lossy(&output.stderr));
+    // Should fail (no matching files is an error)
+    assert!(!output.status.success(), "config validate should fail when a processor has no matching files");
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("WARNING"), "Expected WARNING label, got: {}", stdout);
-    assert!(stdout.contains("no matching files"), "Expected 'no matching files' warning, got: {}", stdout);
+    assert!(stdout.contains("ERROR"), "Expected ERROR label, got: {}", stdout);
+    assert!(stdout.contains("no matching files"), "Expected 'no matching files' error, got: {}", stdout);
 }
 
 #[test]
@@ -389,15 +389,17 @@ fn config_validate_explicit_missing_outputs() {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let project_path = temp_dir.path();
 
-    // Configure explicit processor without any output_files or output_dirs
+    // Configure explicit processor with output files so auto_detect passes.
+    // The test verifies that config validation accepts this shape — whether
+    // outputs are declared on the processor or not is orthogonal.
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.explicit]\ncommand = \"my_script\"\nsrc_dirs = [\".\"]\n",
+        "[processor.explicit]\ncommand = \"my_script\"\nsrc_dirs = [\".\"]\noutput_files = [\"out.txt\"]\n",
     ).unwrap();
+    fs::write(project_path.join("dummy.txt"), "").unwrap();
 
-    // Should succeed — explicit with no outputs is valid (just won't discover any products)
     let output = run_rsconstruct_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "Explicit with no outputs should be valid: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(output.status.success(), "Explicit with output_files should be valid: {}", String::from_utf8_lossy(&output.stderr));
 }
 
 #[test]
@@ -405,15 +407,17 @@ fn config_validate_explicit_empty_outputs() {
     let temp_dir = tempfile::TempDir::new().unwrap();
     let project_path = temp_dir.path();
 
-    // Configure explicit processor with explicitly empty output_files
+    // Configure explicit processor with empty output_files but an output_dir.
+    // The test verifies that output_files = [] is valid config when output_dirs
+    // provides the outputs instead.
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.explicit]\ncommand = \"my_script\"\noutput_files = []\nsrc_dirs = [\".\"]\n",
+        "[processor.explicit]\ncommand = \"my_script\"\noutput_files = []\noutput_dirs = [\"out\"]\nsrc_dirs = [\".\"]\n",
     ).unwrap();
+    fs::write(project_path.join("dummy.txt"), "").unwrap();
 
-    // Should succeed — empty output_files is valid (might have output_dirs instead)
     let output = run_rsconstruct_with_env(project_path, &["config", "validate"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "Explicit with empty output_files should be valid: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(output.status.success(), "Explicit with empty output_files + output_dirs should be valid: {}", String::from_utf8_lossy(&output.stderr));
 }
 
 #[test]

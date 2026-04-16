@@ -360,17 +360,6 @@ Grades:
 
 ## CLI & UX
 
-### `rsconstruct processors search <keyword>`
-- Search the processor list by name or description substring.
-- With 85+ processors, scrolling through `processors list` is unwieldy.
-- **Urgency**: medium | **Complexity**: low
-
-### Config validation warnings
-- Warn about common mistakes during build: processor enabled but no matching files, unknown fields, deprecated options.
-- Passive warnings (not errors) shown before the build starts.
-- We have `smart remove-no-file-processors` for cleanup, but no passive heads-up.
-- **Urgency**: medium | **Complexity**: low
-
 ## Configuration
 
 ### Environment variable expansion in config

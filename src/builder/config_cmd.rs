@@ -114,7 +114,7 @@ impl Builder {
             let processor = &processors[name];
             if !processor.auto_detect(&self.file_index) {
                 issues.push(ValidationIssue {
-                    severity: ValidationSeverity::Warning,
+                    severity: ValidationSeverity::Error,
                     message: format!("Processor '{}' is declared but no matching files detected", name),
                 });
             }
