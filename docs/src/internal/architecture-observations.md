@@ -77,7 +77,7 @@ have to expose more schema information than it does today.
 
 ---
 
-### 3. Config defaults are scattered, not composed
+### 3. Config defaults are scattered, not composed — PARTIALLY ADDRESSED
 
 Three sources of defaults apply in sequence:
 1. Per-processor defaults (e.g. `ruff` → `command = "ruff"`) in a giant
@@ -87,20 +87,20 @@ Three sources of defaults apply in sequence:
 3. User TOML overrides both.
 
 The order matters, but it's encoded across `apply_processor_defaults`,
-`apply_scan_defaults`, and the serde deserialization. To understand "what
-happens when I leave `command` blank for my custom processor?", you trace
-four files.
+`apply_scan_defaults`, and the serde deserialization.
 
-**Implication:** adding a new kind of default (e.g., "environment-derived"
-defaults, or project-level defaults in `~/.config/rsconstruct/`) means
-inserting another layer into an already-opaque chain. The right shape would
-be a single `ConfigResolver` that applies layers in declared order and lets
-you ask it "show me the effective config and where each field came from."
-This would also make `rsconstruct config show` (which already exists)
-richer — it could annotate each field with its source.
+**Update:** config provenance tracking (`src/config/provenance.rs`) now
+records where each field came from (`UserToml { line }`, `ProcessorDefault`,
+`ScanDefault`, `OutputDirDefault`, `SerdeDefault`). `rsconstruct config show`
+annotates every field with its source. The defaults pipeline still applies
+layers across multiple functions, but the provenance map makes it possible
+to answer "where did this value come from?" without tracing the code.
 
-**Load-bearing:** medium. Doesn't shape execution, but shapes every
-config-related user interaction.
+The remaining gap: adding a new defaults layer (env-derived, user-global)
+still means inserting into the existing function chain rather than a
+declarative resolver.
+
+**Load-bearing:** medium.
 
 ---
 
