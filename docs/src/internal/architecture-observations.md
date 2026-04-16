@@ -380,21 +380,27 @@ Likely a small refactor, but requires aligning on the output shape.
 
 ## Summary of architectural recommendations
 
-If someone were to plan a refactor, the highest-leverage items are:
+All four highest-leverage refactors are now complete:
 
-1. **Extract a `BuildPolicy` trait from the executor** (entry 4) — unlocks
-   pluggable caching, demand-driven mode, deterministic simulation, and
-   richer `--explain`.
-2. **Decompose `ObjectStore`** (entry 11) — enables remote cache
-   completion, alternate backends, cleaner restoration logic.
+1. ~~**Extract a `BuildPolicy` trait from the executor**~~ — **done**.
+   `classify_products` delegates per-product skip/restore/rebuild decisions
+   to a `&dyn BuildPolicy`. `IncrementalPolicy` implements the current
+   logic. Future policies (dry-run, always-rebuild, time-windowed) are a
+   single trait impl. See `src/executor/policy.rs`.
+2. ~~**Decompose `ObjectStore`**~~ — **done**. `mod.rs` split from 664 →
+   223 lines into focused submodules: `blobs.rs` (content-addressed
+   storage), `descriptors.rs` (cache descriptor CRUD), `restore.rs`
+   (restore/needs_rebuild/can_restore/explain). Existing `management.rs`,
+   `operations.rs`, `config_diff.rs` unchanged.
 3. ~~**Consolidate config resolution with provenance tracking**~~ — **done**.
    Config fields now carry `FieldProvenance` (user TOML with line number,
    processor default, scan default, serde default). `config show` annotates
-   every field with its source.
+   every field with its source. See `src/config/provenance.rs`.
 4. ~~**Introduce a `BuildContext` struct replacing process globals**~~ —
    **done**. The three process globals (`INTERRUPTED`, `RUNTIME`,
    `INTERRUPT_SENDER`) are replaced by a `BuildContext` struct threaded
    through the `Processor` trait, executor, analyzers, and remote cache.
+   See `src/build_context.rs`.
 
 Entries 1, 2, 5, 9, 10 are observations about the shape — not necessarily
 problems to fix, but things a new contributor should understand before
