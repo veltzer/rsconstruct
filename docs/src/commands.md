@@ -292,22 +292,6 @@ This command is useful for:
 - Viewing statistics about cached dependencies by analyzer
 - Clearing dependencies for a specific analyzer without affecting others
 
-## `rsconstruct config`
-
-Show or inspect the configuration.
-
-| Subcommand | Config required? |
-|------------|-----------------|
-| `show` | Yes |
-| `show-default` | Yes |
-| `validate` | Yes |
-
-```bash
-rsconstruct config show           # Show the active configuration (defaults merged with rsconstruct.toml)
-rsconstruct config show-default   # Show the default configuration (without rsconstruct.toml overrides)
-rsconstruct config validate       # Validate the configuration for errors and warnings
-```
-
 ## `rsconstruct smart`
 
 Smart config manipulation commands for managing processor sections in `rsconstruct.toml`.

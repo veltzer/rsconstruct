@@ -25,8 +25,8 @@ impl GemProcessor {
 
     /// Run bundle install in the Gemfile's directory
     fn execute_gem(&self, ctx: &crate::build_context::BuildContext, gemfile: &Path) -> Result<()> {
-        let subcommand = self.config.standard.require_command(crate::processors::names::GEM)?;
-        let mut cmd = Command::new(&self.config.bundler);
+        let subcommand = "install";
+        let mut cmd = Command::new(&self.config.standard.command);
         cmd.arg(subcommand);
         cmd.env("GEM_HOME", &self.config.gem_home);
         cmd.env("GEM_PATH", &self.config.gem_home);
@@ -60,7 +60,7 @@ impl Processor for GemProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.bundler.clone(), "ruby".to_string()]
+        vec![self.config.standard.command.clone(), "ruby".to_string()]
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {

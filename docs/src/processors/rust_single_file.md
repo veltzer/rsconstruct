@@ -27,7 +27,7 @@ src/exercises/ex1.rs  →  out/rust_single_file/exercises/ex1.elf
 
 ```toml
 [processor.rust_single_file]
-rustc = "rustc"                           # Rust compiler (default: "rustc")
+command = "rustc"                         # Rust compiler (default: "rustc")
 flags = []                                # Additional compiler flags
 output_suffix = ".elf"                    # Output file suffix (default: ".elf")
 output_dir = "out/rust_single_file"       # Output directory
@@ -36,7 +36,7 @@ dep_inputs = []                         # Additional files that trigger rebuilds
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `rustc` | string | `"rustc"` | Path to Rust compiler |
+| `command` | string | `"rustc"` | Path to Rust compiler |
 | `flags` | string[] | `[]` | Additional compiler flags |
 | `output_suffix` | string | `".elf"` | Suffix for output executables |
 | `output_dir` | string | `"out/rust_single_file"` | Output directory |

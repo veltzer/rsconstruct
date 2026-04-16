@@ -19,7 +19,7 @@ table of contents. Optionally uses `qpdf` to linearize the output PDF.
 
 ```toml
 [processor.pdflatex]
-pdflatex = "pdflatex"                  # The pdflatex command to run
+command = "pdflatex"                   # The pdflatex command to run
 runs = 2                               # Number of compilation passes
 qpdf = true                           # Use qpdf to linearize output PDF
 args = []                              # Additional arguments to pass to pdflatex
@@ -29,7 +29,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `pdflatex` | string | `"pdflatex"` | The pdflatex executable to run |
+| `command` | string | `"pdflatex"` | The pdflatex executable to run |
 | `runs` | integer | `2` | Number of compilation passes (for cross-references) |
 | `qpdf` | bool | `true` | Use qpdf to linearize the output PDF |
 | `args` | string[] | `[]` | Extra arguments passed to pdflatex |

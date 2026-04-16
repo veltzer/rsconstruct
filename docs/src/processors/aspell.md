@@ -18,7 +18,7 @@ configured aspell configuration file. A non-zero exit code fails the product.
 
 ```toml
 [processor.aspell]
-aspell = "aspell"                      # The aspell command to run
+command = "aspell"                     # The aspell command to run
 conf = ".aspell.conf"                  # Aspell configuration file
 args = []                              # Additional arguments to pass to aspell
 dep_inputs = []                      # Additional files that trigger rebuilds when changed
@@ -26,7 +26,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `aspell` | string | `"aspell"` | The aspell executable to run |
+| `command` | string | `"aspell"` | The aspell executable to run |
 | `conf` | string | `".aspell.conf"` | Aspell configuration file |
 | `args` | string[] | `[]` | Extra arguments passed to aspell |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

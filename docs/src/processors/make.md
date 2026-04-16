@@ -77,7 +77,7 @@ which file changed.
 
 ```toml
 [processor.make]
-make = "make"        # Make binary to use
+command = "make"     # Make binary to use
 args = []            # Extra arguments passed to make
 target = ""          # Make target (empty = default target)
 src_dirs = [""]        # Directory to scan ("" = project root)
@@ -87,7 +87,7 @@ dep_inputs = []    # Additional files that trigger rebuilds when changed
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `make` | string | `"make"` | Path or name of the make binary |
+| `command` | string | `"make"` | Path or name of the make binary |
 | `args` | string[] | `[]` | Extra arguments passed to every make invocation |
 | `target` | string | `""` | Make target to build (empty = default target) |
 | `src_dirs` | string[] | `[""]` | Directory to scan for Makefiles |

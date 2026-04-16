@@ -23,7 +23,7 @@ subdirectories are combined into course bundles.
 
 ```toml
 [processor.pdfunite]
-pdfunite_bin = "pdfunite"              # The pdfunite command to run
+command = "pdfunite"                   # The pdfunite command to run
 source_dir = "marp/courses"           # Base directory containing course subdirectories
 source_ext = ".md"                     # Extension of source files in subdirectories
 source_output_dir = "out/marp/pdf"     # Where the upstream processor puts PDFs
@@ -34,7 +34,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `pdfunite_bin` | string | `"pdfunite"` | The pdfunite executable to run |
+| `command` | string | `"pdfunite"` | The pdfunite executable to run |
 | `source_dir` | string | `"marp/courses"` | Directory containing course subdirectories |
 | `source_ext` | string | `".md"` | Extension of source files to look for |
 | `source_output_dir` | string | `"out/marp/pdf"` | Directory where the upstream processor outputs PDFs |

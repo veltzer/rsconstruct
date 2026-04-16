@@ -58,7 +58,7 @@ impl Processor for PdfuniteProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.pdfunite_bin.clone()]
+        vec![self.config.standard.command.clone()]
     }
 
     fn discover(&self, graph: &mut BuildGraph, _file_index: &FileIndex, instance_name: &str) -> Result<()> {
@@ -120,7 +120,7 @@ impl Processor for PdfuniteProcessor {
 
         crate::processors::ensure_output_dir(output)?;
 
-        let mut cmd = Command::new(&self.config.pdfunite_bin);
+        let mut cmd = Command::new(&self.config.standard.command);
         for arg in &self.config.standard.args {
             cmd.arg(arg);
         }

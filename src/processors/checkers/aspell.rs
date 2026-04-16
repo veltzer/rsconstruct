@@ -52,7 +52,7 @@ impl AspellProcessor {
         let content = std::fs::read_to_string(file)
             .with_context(|| format!("Failed to read file: {}", file.display()))?;
 
-        let mut cmd = Command::new(&self.config.aspell);
+        let mut cmd = Command::new(&self.config.standard.command);
         cmd.arg("--conf").arg(&self.config.conf);
         for arg in &self.config.standard.args {
             cmd.arg(arg);
@@ -109,7 +109,7 @@ impl Processor for AspellProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.aspell.clone()]
+        vec![self.config.standard.command.clone()]
     }
 
     fn discover(

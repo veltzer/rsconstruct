@@ -60,7 +60,7 @@ impl Processor for PdflatexProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        let mut tools = vec![self.config.pdflatex.clone()];
+        let mut tools = vec![self.config.standard.command.clone()];
         if self.config.qpdf {
             tools.push("qpdf".to_string());
         }
@@ -103,7 +103,7 @@ impl Processor for PdflatexProcessor {
                 self.clean_temp_files(&input_stem, build_dir);
             }
 
-            let mut cmd = Command::new(&self.config.pdflatex);
+            let mut cmd = Command::new(&self.config.standard.command);
             cmd.arg("-shell-escape");
             cmd.arg("-interaction=nonstopmode");
             cmd.arg("-halt-on-error");

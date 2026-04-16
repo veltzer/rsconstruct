@@ -670,10 +670,6 @@ impl KnownFields for ZspellConfig {
     }
 }
 
-fn default_make() -> String {
-    "make".into()
-}
-
 fn default_cargo() -> String {
     "cargo".into()
 }
@@ -767,11 +763,9 @@ impl KnownFields for ClippyConfig {
     }
 }
 
-/// Make config. Custom: make, target.
+/// Make config. Custom: target.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct MakeConfig {
-    #[serde(default = "default_make")]
-    pub make: String,
     #[serde(default)]
     pub target: String,
     #[serde(flatten)]
@@ -780,22 +774,25 @@ pub struct MakeConfig {
 
 impl Default for MakeConfig {
     fn default() -> Self {
-        Self { make: "make".into(), target: String::new(), standard: StandardConfig::default() }
+        Self {
+            target: String::new(),
+            standard: StandardConfig { command: "make".into(), ..StandardConfig::default() },
+        }
     }
 }
 
 impl KnownFields for MakeConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "make", "args", "target", "dep_inputs", "dep_auto", "batch", "max_jobs",
+            "command", "args", "target", "dep_inputs", "dep_auto", "batch", "max_jobs",
         ]
     }
     fn output_fields() -> &'static [&'static str] {
-        &["make", "args", "target"]
+        &["command", "args", "target"]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
         &[
-            ("make",   "Path to the make executable"),
+            ("command", "Path to the make executable"),
             ("args",   "Extra arguments passed to make"),
             ("target", "Make target to build"),
         ]
@@ -1041,52 +1038,39 @@ impl KnownFields for ExplicitConfig {
     }
 }
 
-fn default_pip() -> String {
-    "pip".into()
-}
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
-/// Pip config. Custom: pip.
+/// Pip config. Custom: none (uses standard.command as the pip executable).
 pub struct PipConfig {
-    #[serde(default = "default_pip")]
-    pub pip: String,
     #[serde(flatten)]
     pub standard: StandardConfig,
 }
 
 impl Default for PipConfig {
     fn default() -> Self {
-        Self { pip: "pip".into(), standard: StandardConfig::default() }
+        Self { standard: StandardConfig { command: "pip".into(), ..StandardConfig::default() } }
     }
 }
 
 impl KnownFields for PipConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "pip", "args", "dep_inputs", "batch", "max_jobs",
+            "command", "args", "dep_inputs", "batch", "max_jobs",
         ]
     }
     fn output_fields() -> &'static [&'static str] {
-        &["pip", "args"]
+        &["command", "args"]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
         &[
-            ("pip",  "Path to the pip executable"),
-            ("args", "Extra arguments passed to pip install"),
+            ("command", "Path to the pip executable"),
+            ("args",    "Extra arguments passed to pip install"),
         ]
     }
 }
 
-fn default_sphinx_build() -> String {
-    "sphinx-build".into()
-}
-
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
-/// Sphinx config. Custom: sphinx_build, working_dir, cache_output_dir.
+/// Sphinx config. Custom: working_dir, cache_output_dir.
 pub struct SphinxConfig {
-    #[serde(default = "default_sphinx_build")]
-    pub sphinx_build: String,
     #[serde(default)]
     pub working_dir: Option<String>,
     #[serde(default = "default_true")]
@@ -1098,10 +1082,13 @@ pub struct SphinxConfig {
 impl Default for SphinxConfig {
     fn default() -> Self {
         Self {
-            sphinx_build: "sphinx-build".into(),
             working_dir: None,
             cache_output_dir: true,
-            standard: StandardConfig { output_dir: "docs".into(), ..StandardConfig::default() },
+            standard: StandardConfig {
+                command: "sphinx-build".into(),
+                output_dir: "docs".into(),
+                ..StandardConfig::default()
+            },
         }
     }
 }
@@ -1109,32 +1096,25 @@ impl Default for SphinxConfig {
 impl KnownFields for SphinxConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "sphinx_build", "output_dir", "working_dir", "args", "dep_inputs", "cache_output_dir", "batch", "max_jobs",
+            "command", "output_dir", "working_dir", "args", "dep_inputs", "cache_output_dir", "batch", "max_jobs",
         ]
     }
     fn output_fields() -> &'static [&'static str] {
-        &["sphinx_build", "output_dir", "working_dir", "args"]
+        &["command", "output_dir", "working_dir", "args"]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
         &[
-            ("sphinx_build", "Path to the sphinx-build executable"),
-            ("output_dir",   "Directory where built docs are written"),
-            ("working_dir",  "Working directory for sphinx-build (defaults to conf.py location)"),
-            ("args",         "Extra arguments passed to sphinx-build"),
+            ("command",     "Path to the sphinx-build executable"),
+            ("output_dir",  "Directory where built docs are written"),
+            ("working_dir", "Working directory for sphinx-build (defaults to conf.py location)"),
+            ("args",        "Extra arguments passed to sphinx-build"),
         ]
     }
 }
 
-fn default_mdbook() -> String {
-    "mdbook".into()
-}
-
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
-/// Mdbook config. Custom: mdbook, cache_output_dir.
+/// Mdbook config. Custom: cache_output_dir.
 pub struct MdbookConfig {
-    #[serde(default = "default_mdbook")]
-    pub mdbook: String,
     #[serde(default = "default_true")]
     pub cache_output_dir: bool,
     #[serde(flatten)]
@@ -1144,9 +1124,12 @@ pub struct MdbookConfig {
 impl Default for MdbookConfig {
     fn default() -> Self {
         Self {
-            mdbook: "mdbook".into(),
             cache_output_dir: true,
-            standard: StandardConfig { output_dir: "book".into(), ..StandardConfig::default() },
+            standard: StandardConfig {
+                command: "mdbook".into(),
+                output_dir: "book".into(),
+                ..StandardConfig::default()
+            },
         }
     }
 }
@@ -1154,31 +1137,24 @@ impl Default for MdbookConfig {
 impl KnownFields for MdbookConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "mdbook", "output_dir", "args", "dep_inputs", "cache_output_dir", "batch", "max_jobs",
+            "command", "output_dir", "args", "dep_inputs", "cache_output_dir", "batch", "max_jobs",
         ]
     }
     fn output_fields() -> &'static [&'static str] {
-        &["mdbook", "output_dir", "args"]
+        &["command", "output_dir", "args"]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
         &[
-            ("mdbook",     "Path to the mdbook executable"),
+            ("command",    "Path to the mdbook executable"),
             ("output_dir", "Directory where the built book is written"),
             ("args",       "Extra arguments passed to mdbook build"),
         ]
     }
 }
 
-fn default_npm() -> String {
-    "npm".into()
-}
-
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
-/// Npm config. Custom: npm, cache_output_dir.
+/// Npm config. Custom: cache_output_dir.
 pub struct NpmConfig {
-    #[serde(default = "default_npm")]
-    pub npm: String,
     #[serde(default = "default_true")]
     pub cache_output_dir: bool,
     #[serde(flatten)]
@@ -1188,9 +1164,8 @@ pub struct NpmConfig {
 impl Default for NpmConfig {
     fn default() -> Self {
         Self {
-            npm: "npm".into(),
             cache_output_dir: true,
-            standard: StandardConfig { command: "install".into(), ..StandardConfig::default() },
+            standard: StandardConfig { command: "npm".into(), ..StandardConfig::default() },
         }
     }
 }
@@ -1198,23 +1173,18 @@ impl Default for NpmConfig {
 impl KnownFields for NpmConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "npm", "command", "args", "dep_inputs", "cache_output_dir", "batch", "max_jobs",
+            "command", "args", "dep_inputs", "cache_output_dir", "batch", "max_jobs",
         ]
     }
     fn output_fields() -> &'static [&'static str] {
-        &["npm", "command", "args"]
+        &["command", "args"]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
         &[
-            ("npm",     "Path to the npm executable"),
-            ("command", "npm command to run (e.g. install, run)"),
-            ("args",    "Arguments passed to the npm command"),
+            ("command", "Path to the npm executable"),
+            ("args",    "Arguments passed to npm install"),
         ]
     }
-}
-
-fn default_mdl_bin() -> String {
-    "mdl".into()
 }
 
 fn default_gem_home() -> String {
@@ -1231,8 +1201,6 @@ pub struct MdlConfig {
     pub local_repo: bool,
     #[serde(default = "default_gem_home")]
     pub gem_home: String,
-    #[serde(default = "default_mdl_bin")]
-    pub mdl_bin: String,
     #[serde(default = "default_gem_stamp")]
     pub gem_stamp: String,
     #[serde(flatten)]
@@ -1244,9 +1212,8 @@ impl Default for MdlConfig {
         Self {
             local_repo: false,
             gem_home: "gems".into(),
-            mdl_bin: "mdl".into(),
             gem_stamp: "out/gem/root.stamp".into(),
-            standard: StandardConfig::default(),
+            standard: StandardConfig { command: "mdl".into(), ..StandardConfig::default() },
         }
     }
 }
@@ -1254,17 +1221,17 @@ impl Default for MdlConfig {
 impl KnownFields for MdlConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "local_repo", "gem_home", "mdl_bin", "args", "dep_inputs", "dep_auto", "gem_stamp", "batch", "max_jobs",
+            "local_repo", "gem_home", "command", "args", "dep_inputs", "dep_auto", "gem_stamp", "batch", "max_jobs",
         ]
     }
     fn output_fields() -> &'static [&'static str] {
-        &["local_repo", "gem_home", "mdl_bin", "args", "gem_stamp"]
+        &["local_repo", "gem_home", "command", "args", "gem_stamp"]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
         &[
             ("local_repo", "Use a local gem repository instead of system install"),
             ("gem_home",   "Path to the local gem repository"),
-            ("mdl_bin",    "Path to the mdl executable"),
+            ("command",    "Path to the mdl executable"),
             ("args",       "Extra arguments passed to mdl"),
             ("gem_stamp",  "Stamp file tracking the local gem installation"),
         ]
@@ -1308,10 +1275,6 @@ impl KnownFields for MarkdownlintConfig {
 }
 
 
-fn default_aspell() -> String {
-    "aspell".into()
-}
-
 fn default_aspell_conf() -> String {
     ".aspell.conf".into()
 }
@@ -1322,8 +1285,6 @@ fn default_aspell_words_file() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AspellConfig {
-    #[serde(default = "default_aspell")]
-    pub aspell: String,
     #[serde(default = "default_aspell_conf")]
     pub conf: String,
     #[serde(default)]
@@ -1337,11 +1298,10 @@ pub struct AspellConfig {
 impl Default for AspellConfig {
     fn default() -> Self {
         Self {
-            aspell: "aspell".into(),
             conf: ".aspell.conf".into(),
             auto_add_words: false,
             words_file: ".aspell.en.pws".into(),
-            standard: StandardConfig::default(),
+            standard: StandardConfig { command: "aspell".into(), ..StandardConfig::default() },
         }
     }
 }
@@ -1349,15 +1309,15 @@ impl Default for AspellConfig {
 impl KnownFields for AspellConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "aspell", "args", "conf", "auto_add_words", "words_file", "dep_inputs", "dep_auto", "batch", "max_jobs",
+            "command", "args", "conf", "auto_add_words", "words_file", "dep_inputs", "dep_auto", "batch", "max_jobs",
         ]
     }
     fn output_fields() -> &'static [&'static str] {
-        &["aspell", "args", "conf", "auto_add_words"]
+        &["command", "args", "conf", "auto_add_words"]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
         &[
-            ("aspell",         "Path to the aspell executable"),
+            ("command",        "Path to the aspell executable"),
             ("args",           "Extra arguments passed to aspell"),
             ("conf",           "Path to the aspell configuration file"),
             ("auto_add_words", "When true, automatically add misspelled words to words_file instead of failing"),
@@ -1407,18 +1367,12 @@ impl KnownFields for TermsConfig {
 
 
 
-fn default_pdflatex() -> String {
-    "pdflatex".into()
-}
-
 fn default_pdflatex_runs() -> usize {
     2
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PdflatexConfig {
-    #[serde(default = "default_pdflatex")]
-    pub pdflatex: String,
     #[serde(default = "default_pdflatex_runs")]
     pub runs: usize,
     #[serde(default = "default_true")]
@@ -1430,10 +1384,13 @@ pub struct PdflatexConfig {
 impl Default for PdflatexConfig {
     fn default() -> Self {
         Self {
-            pdflatex: "pdflatex".into(),
             runs: 2,
             qpdf: true,
-            standard: StandardConfig { output_dir: "out/pdflatex".into(), ..StandardConfig::default() },
+            standard: StandardConfig {
+                command: "pdflatex".into(),
+                output_dir: "out/pdflatex".into(),
+                ..StandardConfig::default()
+            },
         }
     }
 }
@@ -1441,15 +1398,15 @@ impl Default for PdflatexConfig {
 impl KnownFields for PdflatexConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "pdflatex", "args", "dep_inputs", "dep_auto", "runs", "qpdf", "output_dir", "batch", "max_jobs",
+            "command", "args", "dep_inputs", "dep_auto", "runs", "qpdf", "output_dir", "batch", "max_jobs",
         ]
     }
     fn output_fields() -> &'static [&'static str] {
-        &["pdflatex", "args", "runs", "qpdf", "output_dir"]
+        &["command", "args", "runs", "qpdf", "output_dir"]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
         &[
-            ("pdflatex",  "Path to the pdflatex executable"),
+            ("command",   "Path to the pdflatex executable"),
             ("args",      "Extra arguments passed to pdflatex"),
             ("runs",      "Number of pdflatex compilation passes"),
             ("qpdf",      "Run qpdf to optimize the output PDF"),
@@ -1461,14 +1418,8 @@ impl KnownFields for PdflatexConfig {
 
 
 
-fn default_bundler() -> String {
-    "bundle".into()
-}
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct GemConfig {
-    #[serde(default = "default_bundler")]
-    pub bundler: String,
     #[serde(default = "default_gem_home")]
     pub gem_home: String,
     #[serde(default = "default_true")]
@@ -1480,10 +1431,9 @@ pub struct GemConfig {
 impl Default for GemConfig {
     fn default() -> Self {
         Self {
-            bundler: "bundle".into(),
             gem_home: "gems".into(),
             cache_output_dir: true,
-            standard: StandardConfig { command: "install".into(), ..StandardConfig::default() },
+            standard: StandardConfig { command: "bundle".into(), ..StandardConfig::default() },
         }
     }
 }
@@ -1491,18 +1441,17 @@ impl Default for GemConfig {
 impl KnownFields for GemConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "bundler", "command", "gem_home", "args", "dep_inputs", "cache_output_dir", "batch", "max_jobs",
+            "command", "gem_home", "args", "dep_inputs", "cache_output_dir", "batch", "max_jobs",
         ]
     }
     fn output_fields() -> &'static [&'static str] {
-        &["bundler", "command", "gem_home", "args"]
+        &["command", "gem_home", "args"]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
         &[
-            ("bundler",  "Path to the bundle executable"),
-            ("command",  "Bundler subcommand to run (e.g. install, exec)"),
+            ("command",  "Path to the bundler executable"),
             ("gem_home", "Directory where gems are installed"),
-            ("args",     "Extra arguments passed to bundler"),
+            ("args",     "Extra arguments passed to bundler install"),
         ]
     }
 }
@@ -1553,12 +1502,9 @@ impl KnownFields for IyamlschemaConfig {
 
 pub type ItaploConfig = CheckerConfig;
 
-fn default_rustc() -> String { "rustc".into() }
 fn default_rust_single_file_output_suffix() -> String { ".elf".into() }
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct RustSingleFileConfig {
-    #[serde(default = "default_rustc")]
-    pub rustc: String,
     #[serde(default)]
     pub flags: Vec<String>,
     #[serde(default = "default_rust_single_file_output_suffix")]
@@ -1570,24 +1516,27 @@ pub struct RustSingleFileConfig {
 impl Default for RustSingleFileConfig {
     fn default() -> Self {
         Self {
-            rustc: "rustc".into(),
             flags: Vec::new(),
             output_suffix: ".elf".into(),
-            standard: StandardConfig { output_dir: "out/rust_single_file".into(), ..StandardConfig::default() },
+            standard: StandardConfig {
+                command: "rustc".into(),
+                output_dir: "out/rust_single_file".into(),
+                ..StandardConfig::default()
+            },
         }
     }
 }
 
 impl KnownFields for RustSingleFileConfig {
     fn known_fields() -> &'static [&'static str] {
-        &["rustc", "flags", "output_suffix", "dep_inputs", "dep_auto", "output_dir", "batch", "max_jobs"]
+        &["command", "flags", "output_suffix", "dep_inputs", "dep_auto", "output_dir", "batch", "max_jobs"]
     }
     fn output_fields() -> &'static [&'static str] {
-        &["rustc", "flags", "output_suffix", "output_dir"]
+        &["command", "flags", "output_suffix", "output_dir"]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
         &[
-            ("rustc",         "Path to the rustc executable"),
+            ("command",       "Path to the rustc executable"),
             ("flags",         "Extra flags passed to rustc"),
             ("output_suffix", "Suffix appended to output binary names"),
             ("output_dir",    "Directory where compiled binaries are written"),
@@ -1595,10 +1544,6 @@ impl KnownFields for RustSingleFileConfig {
     }
 }
 
-
-fn default_pdfunite_bin() -> String {
-    "pdfunite".into()
-}
 
 fn default_pdfunite_source_dir() -> String {
     "marp/courses".into()
@@ -1614,8 +1559,6 @@ fn default_pdfunite_source_output_dir() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PdfuniteConfig {
-    #[serde(default = "default_pdfunite_bin")]
-    pub pdfunite_bin: String,
     #[serde(default = "default_pdfunite_source_dir")]
     pub source_dir: String,
     #[serde(default = "default_pdfunite_source_ext")]
@@ -1629,11 +1572,14 @@ pub struct PdfuniteConfig {
 impl Default for PdfuniteConfig {
     fn default() -> Self {
         Self {
-            pdfunite_bin: "pdfunite".into(),
             source_dir: "marp/courses".into(),
             source_ext: ".md".into(),
             source_output_dir: "out/marp".into(),
-            standard: StandardConfig { output_dir: "out/pdfunite".into(), ..StandardConfig::default() },
+            standard: StandardConfig {
+                command: "pdfunite".into(),
+                output_dir: "out/pdfunite".into(),
+                ..StandardConfig::default()
+            },
         }
     }
 }
@@ -1641,19 +1587,19 @@ impl Default for PdfuniteConfig {
 impl KnownFields for PdfuniteConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "pdfunite_bin", "source_dir", "source_ext", "source_output_dir",
+            "command", "source_dir", "source_ext", "source_output_dir",
             "args", "dep_inputs", "dep_auto", "output_dir", "batch", "max_jobs",
         ]
     }
     fn output_fields() -> &'static [&'static str] {
         &[
-            "pdfunite_bin", "source_dir", "source_ext", "source_output_dir",
+            "command", "source_dir", "source_ext", "source_output_dir",
             "args", "output_dir",
         ]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
         &[
-            ("pdfunite_bin",      "Path to the pdfunite executable"),
+            ("command",           "Path to the pdfunite executable"),
             ("source_dir",        "Directory containing course YAML files listing PDFs to merge"),
             ("source_ext",        "Extension of source files used to find PDFs"),
             ("source_output_dir", "Directory where source PDFs (to be merged) are located"),

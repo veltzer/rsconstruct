@@ -309,10 +309,6 @@ fn run() -> (Result<()>, bool) {
                 print_completions(shell);
             }
         }
-        Commands::Config { action } => {
-            let builder = Builder::new()?;
-            builder.config(action)?;
-        }
         Commands::Analyzers { action } => {
             match &action {
                 cli::AnalyzersAction::List => {

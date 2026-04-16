@@ -19,7 +19,7 @@ state so dependencies are only reinstalled when `requirements.txt` changes.
 
 ```toml
 [processor.pip]
-pip = "pip"                            # The pip command to run
+command = "pip"                        # The pip command to run
 args = []                              # Additional arguments to pass to pip
 dep_inputs = []                      # Additional files that trigger rebuilds when changed
 cache_output_dir = true                # Cache the stamp directory for fast restore after clean
@@ -27,7 +27,7 @@ cache_output_dir = true                # Cache the stamp directory for fast rest
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `pip` | string | `"pip"` | The pip executable to run |
+| `command` | string | `"pip"` | The pip executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to pip |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `cache_output_dir` | boolean | `true` | Cache the `out/pip/` directory so `rsconstruct clean && rsconstruct build` restores from cache |

@@ -25,7 +25,7 @@ impl PipProcessor {
 
     /// Run pip install -r requirements.txt in the file's directory
     fn execute_pip(&self, ctx: &crate::build_context::BuildContext, requirements_txt: &Path) -> Result<()> {
-        let mut cmd = Command::new(&self.config.pip);
+        let mut cmd = Command::new(&self.config.standard.command);
         cmd.arg("install");
         cmd.arg("-r").arg(requirements_txt.file_name()
             .context("requirements.txt path has no filename")?
@@ -65,7 +65,7 @@ impl Processor for PipProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.pip.clone(), "python3".to_string()]
+        vec![self.config.standard.command.clone(), "python3".to_string()]
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {

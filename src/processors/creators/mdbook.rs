@@ -25,7 +25,7 @@ impl MdbookProcessor {
 
     /// Run mdbook build in the book.toml's directory
     fn execute_mdbook(&self, ctx: &crate::build_context::BuildContext, book_toml: &Path) -> Result<()> {
-        let mut cmd = Command::new(&self.config.mdbook);
+        let mut cmd = Command::new(&self.config.standard.command);
         cmd.arg("build");
         cmd.arg(".");
         for arg in &self.config.standard.args {
@@ -64,7 +64,7 @@ impl Processor for MdbookProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.mdbook.clone()]
+        vec![self.config.standard.command.clone()]
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {

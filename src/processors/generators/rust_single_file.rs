@@ -58,7 +58,7 @@ impl Processor for RustSingleFileProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.rustc.clone()]
+        vec![self.config.standard.command.clone()]
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
@@ -96,7 +96,7 @@ impl Processor for RustSingleFileProcessor {
 
         crate::processors::ensure_output_dir(output)?;
 
-        let mut cmd = Command::new(&self.config.rustc);
+        let mut cmd = Command::new(&self.config.standard.command);
         for flag in &self.config.flags {
             cmd.arg(flag);
         }

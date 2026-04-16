@@ -27,7 +27,7 @@ impl SphinxProcessor {
     /// Source dir is the directory containing conf.py (e.g. "sphinx"),
     /// output dir is at project root level (e.g. "docs").
     fn execute_sphinx(&self, ctx: &crate::build_context::BuildContext, conf_py: &Path) -> Result<()> {
-        let mut cmd = Command::new(&self.config.sphinx_build);
+        let mut cmd = Command::new(&self.config.standard.command);
         let anchor_dir = conf_py.parent().unwrap_or(Path::new(""));
         // Source dir is the directory containing conf.py (e.g. "sphinx")
         if anchor_dir.as_os_str().is_empty() {
@@ -76,7 +76,7 @@ impl Processor for SphinxProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.sphinx_build.clone(), "python3".to_string()]
+        vec![self.config.standard.command.clone(), "python3".to_string()]
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {

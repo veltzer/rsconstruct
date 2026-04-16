@@ -646,9 +646,9 @@ pub(crate) fn processor_defaults_for(type_name: &str) -> Option<ProcessorDefault
         "clippy" => ProcessorDefaults { command: "clippy", ..d },
         "generator" => ProcessorDefaults { output_dir: "out/generator", ..d },
         "explicit" => ProcessorDefaults { ..d },
-        "sphinx" => ProcessorDefaults { output_dir: "docs", ..d },
-        "mdbook" => ProcessorDefaults { output_dir: "book", ..d },
-        "npm" => ProcessorDefaults { command: "install", ..d },
+        "sphinx" => ProcessorDefaults { command: "sphinx-build", output_dir: "docs", ..d },
+        "mdbook" => ProcessorDefaults { command: "mdbook", output_dir: "book", ..d },
+        "npm" => ProcessorDefaults { command: "npm", ..d },
         "sass" => ProcessorDefaults { output_dir: "out/sass", command: "sass", ..d },
         "pandoc" => ProcessorDefaults { output_dir: "out/pandoc", formats: &["pdf", "html", "docx"], command: "pandoc", ..d },
         "a2x" => ProcessorDefaults { output_dir: "out/a2x", command: "a2x", ..d },
@@ -657,16 +657,18 @@ pub(crate) fn processor_defaults_for(type_name: &str) -> Option<ProcessorDefault
         "isass" => ProcessorDefaults { output_dir: "out/isass", ..d },
         "yaml2json" => ProcessorDefaults { output_dir: "out/yaml2json", ..d },
         // Checkers with custom dep_auto
-        "mdl" => ProcessorDefaults { dep_auto: &[".mdlrc"], ..d },
+        "mdl" => ProcessorDefaults { command: "mdl", dep_auto: &[".mdlrc"], ..d },
         "markdownlint" => ProcessorDefaults { command: "markdownlint", dep_auto: &[".markdownlint.json", ".markdownlint.jsonc", ".markdownlint.yaml"], ..d },
-        "aspell" => ProcessorDefaults { dep_auto: &[".aspell.conf", ".aspell.en.pws", ".aspell.en.prepl"], ..d },
+        "aspell" => ProcessorDefaults { command: "aspell", dep_auto: &[".aspell.conf", ".aspell.en.pws", ".aspell.en.prepl"], ..d },
         // Generators with custom output_dir
-        "pdflatex" => ProcessorDefaults { output_dir: "out/pdflatex", ..d },
-        "rust_single_file" => ProcessorDefaults { output_dir: "out/rust_single_file", ..d },
-        "pdfunite" => ProcessorDefaults { output_dir: "out/pdfunite", ..d },
+        "pdflatex" => ProcessorDefaults { command: "pdflatex", output_dir: "out/pdflatex", ..d },
+        "rust_single_file" => ProcessorDefaults { command: "rustc", output_dir: "out/rust_single_file", ..d },
+        "pdfunite" => ProcessorDefaults { command: "pdfunite", output_dir: "out/pdfunite", ..d },
         "ipdfunite" => ProcessorDefaults { output_dir: "out/ipdfunite", ..d },
         // Creators with custom command
-        "gem" => ProcessorDefaults { command: "install", ..d },
+        "gem" => ProcessorDefaults { command: "bundle", ..d },
+        "pip" => ProcessorDefaults { command: "pip", ..d },
+        "make" => ProcessorDefaults { command: "make", ..d },
         _ => return None,
     })
 }
@@ -1231,7 +1233,7 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
         ("zspell", "language" | "words_file") => Some(FieldType::String),
         ("zspell", "auto_add_words") => Some(FieldType::Bool),
         // make
-        ("make", "make" | "target") => Some(FieldType::String),
+        ("make", "command" | "target") => Some(FieldType::String),
         // cargo / clippy
         ("cargo", "profiles") => Some(FieldType::StringArray),
         ("cargo" | "clippy", "cargo" | "command") => Some(FieldType::String),
@@ -1242,23 +1244,23 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
         // tags
         ("tags", "output" | "tags_dir") => Some(FieldType::String),
         // pip
-        ("pip", "pip") => Some(FieldType::String),
+        ("pip", "command") => Some(FieldType::String),
         // sphinx
-        ("sphinx", "sphinx_build" | "output_dir" | "working_dir") => Some(FieldType::String),
+        ("sphinx", "command" | "output_dir" | "working_dir") => Some(FieldType::String),
         // mdbook
-        ("mdbook", "mdbook" | "output_dir") => Some(FieldType::String),
+        ("mdbook", "command" | "output_dir") => Some(FieldType::String),
         // npm
-        ("npm", "npm" | "command") => Some(FieldType::String),
+        ("npm", "command") => Some(FieldType::String),
         // gem
-        ("gem", "bundler" | "command" | "gem_home") => Some(FieldType::String),
+        ("gem", "command" | "gem_home") => Some(FieldType::String),
         // mdl
-        ("mdl", "gem_home" | "mdl_bin" | "gem_stamp") => Some(FieldType::String),
+        ("mdl", "gem_home" | "command" | "gem_stamp") => Some(FieldType::String),
         ("mdl", "local_repo") => Some(FieldType::Bool),
         // markdownlint
         ("markdownlint", "command" | "npm_stamp") => Some(FieldType::String),
         ("markdownlint", "local_repo") => Some(FieldType::Bool),
         // aspell
-        ("aspell", "aspell" | "conf" | "words_file") => Some(FieldType::String),
+        ("aspell", "command" | "conf" | "words_file") => Some(FieldType::String),
         ("aspell", "auto_add_words") => Some(FieldType::Bool),
         // marp
         ("marp", "marp_bin" | "output_dir") => Some(FieldType::String),
@@ -1269,7 +1271,7 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
         // markdown
         ("markdown2html", "markdown_bin" | "output_dir") => Some(FieldType::String),
         // pdflatex
-        ("pdflatex", "pdflatex" | "output_dir") => Some(FieldType::String),
+        ("pdflatex", "command" | "output_dir") => Some(FieldType::String),
         ("pdflatex", "runs") => Some(FieldType::Integer),
         ("pdflatex", "qpdf") => Some(FieldType::Bool),
         // a2x
@@ -1285,7 +1287,7 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
         ("libreoffice", "libreoffice_bin" | "output_dir") => Some(FieldType::String),
         ("libreoffice", "formats") => Some(FieldType::StringArray),
         // pdfunite
-        ("pdfunite", "pdfunite_bin" | "source_dir" | "source_ext" | "source_output_dir" | "output_dir") => Some(FieldType::String),
+        ("pdfunite", "command" | "source_dir" | "source_ext" | "source_output_dir" | "output_dir") => Some(FieldType::String),
         // objdump
         ("objdump", "output_dir") => Some(FieldType::String),
         // cache_output_dir — shared by creators

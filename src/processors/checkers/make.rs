@@ -22,7 +22,7 @@ impl MakeProcessor {
 
     /// Run make in the Makefile's directory
     fn execute_make(&self, ctx: &crate::build_context::BuildContext, makefile: &Path) -> Result<()> {
-        let mut cmd = Command::new(&self.config.make);
+        let mut cmd = Command::new(&self.config.standard.command);
         for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
@@ -58,7 +58,7 @@ impl Processor for MakeProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.make.clone()]
+        vec![self.config.standard.command.clone()]
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {

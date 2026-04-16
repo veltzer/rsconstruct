@@ -1,7 +1,6 @@
 mod add_config;
 mod build;
 mod clean;
-mod config_cmd;
 mod fix;
 pub(crate) mod analyzers;
 mod doctor;
@@ -34,18 +33,6 @@ use crate::tool_lock;
 
 /// Phase timing data collected during graph building.
 pub(crate) type PhaseTimings = Vec<(String, Duration)>;
-
-/// Severity level for validation issues.
-pub enum ValidationSeverity {
-    Error,
-    Warning,
-}
-
-/// A single validation issue found during config validation.
-pub struct ValidationIssue {
-    pub severity: ValidationSeverity,
-    pub message: String,
-}
 
 /// Controls which graph-building variant to use.
 #[derive(Clone, Copy, PartialEq, Eq)]

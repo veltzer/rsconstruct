@@ -19,18 +19,16 @@ directory, and creates a stamp file on success. Sibling `.json`, `.js`, and
 
 ```toml
 [processor.npm]
-npm = "npm"                            # The npm command to run
-command = "install"                    # The npm subcommand to execute
-args = []                              # Additional arguments to pass to npm
+command = "npm"                        # The npm command to run
+args = []                              # Additional arguments to pass to npm install
 dep_inputs = []                      # Additional files that trigger rebuilds when changed
 cache_output_dir = true                # Cache the node_modules directory for fast restore after clean
 ```
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `npm` | string | `"npm"` | The npm executable to run |
-| `command` | string | `"install"` | The npm subcommand to execute |
-| `args` | string[] | `[]` | Extra arguments passed to npm |
+| `command` | string | `"npm"` | The npm executable to run |
+| `args` | string[] | `[]` | Extra arguments passed to npm install |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `cache_output_dir` | boolean | `true` | Cache the `node_modules/` directory so `rsconstruct clean && rsconstruct build` restores from cache |
 

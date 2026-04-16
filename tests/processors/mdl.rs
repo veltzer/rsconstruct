@@ -12,10 +12,10 @@ fn mdl_valid_file() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
-    // Point mdl_bin to the system mdl, skip gem dependency
+    // Point command to the system mdl, skip gem dependency
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.mdl]\nmdl_bin = \"mdl\"\nsrc_dirs = [\".\"]\n",
+        "[processor.mdl]\ncommand = \"mdl\"\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
 

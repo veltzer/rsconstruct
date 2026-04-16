@@ -226,11 +226,6 @@ pub enum Commands {
         #[arg(value_enum)]
         shells: Vec<Shell>,
     },
-    /// Show or inspect configuration
-    Config {
-        #[command(subcommand)]
-        action: ConfigAction,
-    },
     /// Manage dependency analyzers
     Analyzers {
         #[command(subcommand)]
@@ -462,16 +457,6 @@ pub enum WebCacheAction {
     Stats,
     /// List all cached entries (no config needed)
     List,
-}
-
-#[derive(Subcommand)]
-pub enum ConfigAction {
-    /// Show the active configuration (requires config)
-    Show,
-    /// Show the default configuration (requires config)
-    ShowDefault,
-    /// Validate the configuration for errors and warnings (requires config)
-    Validate,
 }
 
 #[derive(Subcommand)]

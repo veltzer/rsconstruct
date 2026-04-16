@@ -39,7 +39,7 @@ impl Processor for MdlProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.mdl_bin.clone(), "ruby".to_string()]
+        vec![self.config.standard.command.clone(), "ruby".to_string()]
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
@@ -77,7 +77,7 @@ impl Processor for MdlProcessor {
 
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let file = product.primary_input();
-        let mut cmd = Command::new(&self.config.mdl_bin);
+        let mut cmd = Command::new(&self.config.standard.command);
         for arg in &self.config.standard.args {
             cmd.arg(arg);
         }

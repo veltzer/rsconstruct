@@ -25,8 +25,8 @@ impl NpmProcessor {
 
     /// Run npm install in the package.json's directory
     fn execute_npm(&self, ctx: &crate::build_context::BuildContext, package_json: &Path) -> Result<()> {
-        let subcommand = self.config.standard.require_command(crate::processors::names::NPM)?;
-        let mut cmd = Command::new(&self.config.npm);
+        let subcommand = "install";
+        let mut cmd = Command::new(&self.config.standard.command);
         cmd.arg(subcommand);
         for arg in &self.config.standard.args {
             cmd.arg(arg);
@@ -64,7 +64,7 @@ impl Processor for NpmProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.npm.clone(), "node".to_string()]
+        vec![self.config.standard.command.clone(), "node".to_string()]
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
