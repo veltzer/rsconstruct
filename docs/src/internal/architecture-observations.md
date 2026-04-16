@@ -104,34 +104,15 @@ declarative resolver.
 
 ---
 
-### 4. The executor owns too much policy
+### 4. The executor owns too much policy — RESOLVED
 
-`classify_products` in `src/executor/mod.rs` is the brain of incremental
-building: it decides skip vs. restore vs. rebuild, computes cache keys,
-propagates dep-change invalidation. It knows about:
-- The `ObjectStore` (cache lookups)
-- `Product` internals (config_hash, variant, output_dirs)
-- The `Force` CLI flag
-- Topological ordering
-- Mtime cache semantics (indirectly via `combined_input_checksum`)
+**Update:** a `BuildPolicy` trait has been extracted to `src/executor/policy.rs`.
+`classify_products` now delegates per-product decisions to `&dyn BuildPolicy`.
+`IncrementalPolicy` implements the current skip/restore/rebuild logic.
+Alternate policies (dry-run, always-rebuild, time-windowed) are now a single
+trait implementation away — no executor changes needed.
 
-If we wanted a different cache policy — time-based expiry, distributed
-cache with fallback, content-addressable pruning — the change lands in the
-executor. If we wanted an alternate execution mode — dry-run with
-explanations, deterministic simulation, demand-driven — same.
-
-**Implication:** the executor is the unintended home of *every* build
-policy. A healthier split would extract a `BuildPolicy` (or `Scheduler`)
-trait that the executor consults:
-- `fn classify(&self, product, cache) -> Action`
-- `fn reason(&self, product, action) -> String` (for `--explain`)
-
-Today that logic is hardcoded. With a trait, alternate policies become
-pluggable — a dry-run policy that always returns "skip", a paranoid policy
-that always rebuilds, a time-windowed policy that uses a real-time clock.
-
-**Load-bearing:** very high. The executor is performance-critical *and*
-policy-central. This is the biggest architectural tension in the codebase.
+**Load-bearing:** very high, but the tension is resolved.
 
 ---
 
