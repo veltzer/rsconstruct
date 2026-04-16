@@ -272,10 +272,13 @@ fn cargo_multi_profile() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
-    // Default profiles: dev + release
+    // Default profiles: dev + release. Serialize with max_jobs=1 so the two
+    // cargo invocations don't race on the shared mylib/target/ directory.
+    // This test verifies product discovery (dev + release = 2 products), not
+    // concurrent execution — the race is a separate concern.
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.cargo]\nsrc_dirs = [\".\"]\n",
+        "[processor.cargo]\nsrc_dirs = [\".\"]\nmax_jobs = 1\n",
     )
     .unwrap();
 
