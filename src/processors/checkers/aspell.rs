@@ -7,7 +7,7 @@ use std::io::Write;
 use crate::config::AspellConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProcessorBase, Processor, config_file_inputs, scan_root_valid, log_command, format_command};
+use crate::processors::{ProcessorBase, Processor, scan_root_valid, log_command, format_command};
 use crate::word_manager::WordManager;
 
 pub struct AspellProcessor {
@@ -122,15 +122,12 @@ impl Processor for AspellProcessor {
             return Ok(());
         }
 
-        let mut dep_inputs = self.config.standard.dep_inputs.clone();
-        for ai in &self.config.standard.dep_auto {
-            dep_inputs.extend(config_file_inputs(ai));
-        }
         crate::processors::discover_checker_products(
             graph,
             &self.config.standard,
             file_index,
-            &dep_inputs,
+            &self.config.standard.dep_inputs,
+            &self.config.standard.dep_auto,
             &self.config,
             instance_name,
         )

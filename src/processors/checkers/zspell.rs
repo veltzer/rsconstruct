@@ -9,7 +9,7 @@ use crate::config::ZspellConfig;
 use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProcessorBase, Processor, config_file_inputs, discover_checker_products};
+use crate::processors::{ProcessorBase, Processor, discover_checker_products};
 use crate::word_manager::WordManager;
 
 const DICT_DIR: &str = "/usr/share/hunspell";
@@ -196,15 +196,12 @@ impl Processor for ZspellProcessor {
     fn is_native(&self) -> bool { true }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
-        let mut dep_inputs = self.config.standard.dep_inputs.clone();
-        for ai in &self.config.standard.dep_auto {
-            dep_inputs.extend(config_file_inputs(ai));
-        }
         discover_checker_products(
             graph,
             &self.config.standard,
             file_index,
-            &dep_inputs,
+            &self.config.standard.dep_inputs,
+            &self.config.standard.dep_auto,
             &self.config,
             instance_name,
         )

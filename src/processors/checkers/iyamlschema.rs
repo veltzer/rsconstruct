@@ -202,7 +202,7 @@ impl crate::processors::Processor for IyamlschemaProcessor {
         file_index: &crate::file_index::FileIndex,
         instance_name: &str,
     ) -> anyhow::Result<()> {
-        crate::processors::checker_discover(
+        crate::processors::discover_checker_products(
             graph, &self.config.standard, file_index,
             &self.config.standard.dep_inputs, &self.config.standard.dep_auto,
             &self.config, instance_name,

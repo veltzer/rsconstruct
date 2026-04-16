@@ -92,12 +92,9 @@ impl crate::processors::Processor for TermsProcessor {
                 dep_inputs.push(path.to_string_lossy().into_owned());
             }
         }
-        for ai in &self.config.standard.dep_auto {
-            dep_inputs.extend(crate::processors::config_file_inputs(ai));
-        }
         discover_checker_products(
-            graph, &self.config.standard, file_index, &dep_inputs, &self.config,
-            instance_name,
+            graph, &self.config.standard, file_index, &dep_inputs,
+            &self.config.standard.dep_auto, &self.config, instance_name,
         )
     }
 

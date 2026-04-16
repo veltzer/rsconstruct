@@ -502,42 +502,17 @@ pub(crate) fn discover_directory_products(
     Ok(())
 }
 
-/// Discover checker products: no output files, cache entry serves as success marker.
+/// Discover checker products: one product per source file, empty outputs.
 ///
-/// Creates one product per source file with empty outputs. When executed successfully,
-/// the cache stores the input checksum. On subsequent builds, if the checksum matches,
-/// the check is skipped entirely without running the external tool.
+/// This is the single entry point for checker discovery. It merges
+/// `dep_inputs` (explicit extra inputs) with `dep_auto` (config file
+/// patterns like `"ruff.toml"` that expand to existing files). Both are
+/// from `StandardConfig`.
 ///
-/// This is the standard way to implement checker discovery. See [`ProcessorType::Checker`]
-/// for details on the caching behavior.
-/// All paths are relative to project root.
+/// Replaces the former `discover_checker_products` (no dep_auto merge)
+/// and `checker_discover` (with dep_auto merge) — the split was a
+/// correctness hazard since picking the wrong one silently lost dep_auto.
 pub(crate) fn discover_checker_products(
-    graph: &mut BuildGraph,
-    scan: &crate::config::StandardConfig,
-    file_index: &FileIndex,
-    dep_inputs: &[String],
-    cfg_hash: &impl serde::Serialize,
-    processor_name: &str,
-) -> Result<()> {
-    let files = file_index.scan(scan, true);
-    if files.is_empty() {
-        return Ok(());
-    }
-    let hash = Some(output_config_hash(cfg_hash, &[]));
-    let extra = resolve_extra_inputs(dep_inputs)?;
-    for file in files {
-        let mut inputs = Vec::with_capacity(1 + extra.len());
-        inputs.push(file);
-        inputs.extend_from_slice(&extra);
-        // Empty outputs: cache entry = success record
-        graph.add_product(inputs, vec![], processor_name, hash.clone())?;
-    }
-    Ok(())
-}
-
-/// Standard checker discover: merge dep_inputs + dep_auto, then call discover_checker_products.
-/// Used by all checkers that follow the standard discover pattern.
-pub(crate) fn checker_discover(
     graph: &mut BuildGraph,
     scan: &crate::config::StandardConfig,
     file_index: &FileIndex,
@@ -546,21 +521,35 @@ pub(crate) fn checker_discover(
     cfg_hash: &impl serde::Serialize,
     processor_name: &str,
 ) -> Result<()> {
+    let files = file_index.scan(scan, true);
+    if files.is_empty() {
+        return Ok(());
+    }
     let mut all_dep_inputs = dep_inputs.to_vec();
     for ai in dep_auto {
         all_dep_inputs.extend(config_file_inputs(ai));
     }
-    discover_checker_products(graph, scan, file_index, &all_dep_inputs, cfg_hash, processor_name)
+    let hash = Some(output_config_hash(cfg_hash, &[]));
+    let extra = resolve_extra_inputs(&all_dep_inputs)?;
+    for file in files {
+        let mut inputs = Vec::with_capacity(1 + extra.len());
+        inputs.push(file);
+        inputs.extend_from_slice(&extra);
+        graph.add_product(inputs, vec![], processor_name, hash.clone())?;
+    }
+    Ok(())
 }
 
 /// Standard checker auto_detect: check if scan finds any files.
+/// When `check_scan_root` is true, also validates that the scan root
+/// directory exists (used by processors like clang_tidy that have a
+/// meaningful scan_root guard).
 pub(crate) fn checker_auto_detect(scan: &crate::config::StandardConfig, file_index: &FileIndex) -> bool {
     !file_index.scan(scan, true).is_empty()
 }
 
-/// Standard checker auto_detect with scan_root guard.
 pub(crate) fn checker_auto_detect_with_scan_root(scan: &crate::config::StandardConfig, file_index: &FileIndex) -> bool {
-    scan_root_valid(scan) && !file_index.scan(scan, true).is_empty()
+    scan_root_valid(scan) && checker_auto_detect(scan, file_index)
 }
 
 /// Run a command in the parent directory of an anchor file (e.g., Makefile, Cargo.toml).
@@ -894,7 +883,7 @@ pub trait Processor: Sync + Send {
     /// Default: standard checker discover using dep_inputs/dep_auto from standard_config.
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
         let cfg = self.standard_config().expect("discover() requires standard_config() or must be overridden");
-        checker_discover(graph, cfg, file_index, &cfg.dep_inputs, &cfg.dep_auto, cfg, instance_name)
+        discover_checker_products(graph, cfg, file_index, &cfg.dep_inputs, &cfg.dep_auto, cfg, instance_name)
     }
 
     /// Discover products for clean operation (outputs only, skip expensive dependency scanning).
@@ -1361,12 +1350,10 @@ impl Processor for SimpleChecker {
         file_index: &FileIndex,
         instance_name: &str,
     ) -> Result<()> {
-        let mut dep_inputs = self.config.standard.dep_inputs.clone();
-        for ai in &self.config.standard.dep_auto {
-            dep_inputs.extend(config_file_inputs(ai));
-        }
         discover_checker_products(
-            graph, &self.config.standard, file_index, &dep_inputs, &self.config, instance_name,
+            graph, &self.config.standard, file_index,
+            &self.config.standard.dep_inputs, &self.config.standard.dep_auto,
+            &self.config, instance_name,
         )
     }
 

@@ -58,7 +58,7 @@ impl crate::processors::Processor for ClangTidyProcessor {
         if !crate::processors::scan_root_valid(&self.config.standard) {
             return Ok(());
         }
-        crate::processors::checker_discover(
+        crate::processors::discover_checker_products(
             graph, &self.config.standard, file_index,
             &self.config.standard.dep_inputs, &self.config.standard.dep_auto,
             &self.config, instance_name,
