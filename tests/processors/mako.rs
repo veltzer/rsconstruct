@@ -127,7 +127,7 @@ fn mako_clean() {
     assert!(project_path.join("output.txt").exists());
 
     // Clean
-    let output = run_rsconstruct(project_path, &["clean"]);
+    let output = run_rsconstruct(project_path, &["clean", "outputs"]);
     assert!(output.status.success());
     assert!(!project_path.join("output.txt").exists(), "Output should be removed after clean");
 }

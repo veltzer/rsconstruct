@@ -89,7 +89,7 @@ message Clean {
     assert!(output.status.success());
     assert!(project_path.join("out/protobuf/clean.pb.cc").exists());
 
-    let output = run_rsconstruct(project_path, &["clean"]);
+    let output = run_rsconstruct(project_path, &["clean", "outputs"]);
     assert!(output.status.success());
     assert!(!project_path.join("out/protobuf/clean.pb.cc").exists());
 }

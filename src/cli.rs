@@ -399,7 +399,11 @@ pub enum GraphAction {
 #[derive(Subcommand)]
 pub enum CleanAction {
     /// Remove build output files, preserves cache (requires config) [default]
-    Outputs,
+    Outputs {
+        /// Only clean outputs from these processors (comma-separated)
+        #[arg(short, long, value_delimiter = ',')]
+        processors: Vec<String>,
+    },
     /// Remove all build outputs and cache directories (requires config)
     All,
     /// Hard clean using git clean (requires config)

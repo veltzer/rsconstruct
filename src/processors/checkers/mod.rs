@@ -23,6 +23,7 @@ mod perlcritic;
 mod php_lint;
 mod slidev;
 mod standard;
+mod prettier;
 mod svglint;
 mod svgo;
 mod tidy;

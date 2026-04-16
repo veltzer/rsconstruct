@@ -520,6 +520,32 @@ impl Builder {
             per_processor.entry(&product.processor).or_default()[status_idx] += 1;
         }
 
+        if crate::json_output::is_json_mode() {
+            let processors_json: Vec<serde_json::Value> = per_processor.iter().map(|(name, pc)| {
+                serde_json::json!({
+                    "name": name,
+                    "up_to_date": pc[0],
+                    "restorable": pc[1],
+                    "stale": pc[2],
+                    "new": pc[3],
+                    "total": pc[0] + pc[1] + pc[2] + pc[3],
+                    "native": opts.native_processors.contains(name),
+                })
+            }).collect();
+            let json = serde_json::json!({
+                "processors": processors_json,
+                "totals": {
+                    "up_to_date": counts[0],
+                    "restorable": counts[1],
+                    "stale": counts[2],
+                    "new": counts[3],
+                    "total": counts[0] + counts[1] + counts[2] + counts[3],
+                },
+            });
+            println!("{}", serde_json::to_string_pretty(&json).expect(crate::errors::JSON_SERIALIZE));
+            return;
+        }
+
         // Per-processor table
         let col_labels = [
             opts.labels.current.1,

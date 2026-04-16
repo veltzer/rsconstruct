@@ -488,6 +488,14 @@ impl BuildGraph {
         &self.products
     }
 
+    /// Remove products that don't match the predicate. Used by selective
+    /// cleaning to limit which processors' outputs are cleaned.
+    /// Does NOT rebuild indexes — only suitable for read-only iteration
+    /// (e.g. `executor.clean()`) after filtering.
+    pub fn retain_products(&mut self, f: impl Fn(&Product) -> bool) {
+        self.products.retain(f);
+    }
+
     /// Return the id of the product that declares `path` as one of its outputs,
     /// or None if no product owns it. O(1) average — backed by a hashmap index.
     ///

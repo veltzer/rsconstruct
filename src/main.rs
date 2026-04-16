@@ -264,10 +264,14 @@ fn run() -> (Result<()>, bool) {
             }
         }
         Commands::Clean { action } => {
-            match action.unwrap_or(CleanAction::Outputs) {
-                CleanAction::Outputs => {
+            let action = action.ok_or_else(|| anyhow::anyhow!(
+                "Missing subcommand. Usage: rsconstruct clean <outputs|all|git|unknown>"
+            ))?;
+            match action {
+                CleanAction::Outputs { processors } => {
                     let builder = Builder::new()?;
-                    builder.clean(&ctx, cli.verbose)?;
+                    let filter = if processors.is_empty() { None } else { Some(processors) };
+                    builder.clean(&ctx, cli.verbose, filter.as_deref())?;
                 }
                 CleanAction::All => {
                     let builder = Builder::new()?;

@@ -9,13 +9,24 @@ use crate::executor::{Executor, ExecutorOptions};
 use super::Builder;
 
 impl Builder {
-    /// Clean all build artifacts using the dependency graph
-    pub fn clean(&self, ctx: &crate::build_context::BuildContext, verbose: bool) -> Result<()> {
-        println!("{}", color::bold("Cleaning build artifacts..."));
+    /// Clean build artifacts using the dependency graph.
+    /// If `processor_filter` is `Some`, only clean outputs from the listed processors.
+    pub fn clean(&self, ctx: &crate::build_context::BuildContext, verbose: bool, processor_filter: Option<&[String]>) -> Result<()> {
+        if let Some(names) = processor_filter {
+            println!("{}", color::bold(&format!("Cleaning outputs for: {}", names.join(", "))));
+        } else {
+            println!("{}", color::bold("Cleaning build artifacts..."));
+        }
 
         // Create processors and build graph (fast path: skip dependency scanning)
         let processors = self.create_processors()?;
-        let graph = self.build_graph_for_clean_with_processors(ctx, &processors)?;
+        let mut graph = self.build_graph_for_clean_with_processors(ctx, &processors)?;
+
+        // Filter the graph to only include products from the specified processors
+        if let Some(names) = processor_filter {
+            let filter_set: HashSet<&str> = names.iter().map(|s| s.as_str()).collect();
+            graph.retain_products(|p| filter_set.contains(p.processor.as_str()));
+        }
 
         // Use executor to clean (batch_size doesn't matter for clean)
         let policy = crate::executor::IncrementalPolicy;

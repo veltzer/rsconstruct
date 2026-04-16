@@ -104,7 +104,7 @@ fn explain_after_clean() {
     assert!(output.status.success());
 
     // Clean outputs
-    let output = run_rsconstruct(project_path, &["clean"]);
+    let output = run_rsconstruct(project_path, &["clean", "outputs"]);
     assert!(output.status.success());
 
     // Build with explain — should show RESTORE
