@@ -4,7 +4,7 @@ use crate::processors::SimpleChecker;
 use crate::config::SimpleCheckerParams;
 
 fn create_pyrefly(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registries::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Type-check Python files using pyrefly", subcommand: Some("check"), prepend_args: &["--disable-project-excludes-heuristics"], extra_tools: &[] })))
+    crate::registries::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Type-check Python files using pyrefly", subcommand: Some("check"), prepend_args: &["--disable-project-excludes-heuristics"], extra_tools: &[], fix_subcommand: None, fix_prepend_args: &[], fix_batch: None })))
 }
 inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,

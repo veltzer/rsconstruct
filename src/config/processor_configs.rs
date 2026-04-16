@@ -908,15 +908,44 @@ impl KnownFields for TagsConfig {
 pub struct ScriptConfig {
     #[serde(flatten)]
     pub standard: StandardConfig,
+    /// Command to run in fix mode (`rsconstruct fix`). Empty means no fix capability.
+    #[serde(default)]
+    pub fix_command: String,
+    /// Arguments for the fix command (prepended before file paths).
+    #[serde(default)]
+    pub fix_args: Vec<String>,
+    /// Whether fix mode supports batch execution (multiple files per invocation).
+    /// Defaults to the same value as `batch`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix_batch: Option<bool>,
 }
 impl Default for ScriptConfig {
-    fn default() -> Self { Self { standard: StandardConfig::default() } }
+    fn default() -> Self {
+        Self {
+            standard: StandardConfig::default(),
+            fix_command: String::new(),
+            fix_args: Vec::new(),
+            fix_batch: None,
+        }
+    }
 }
 impl KnownFields for ScriptConfig {
-    fn known_fields() -> &'static [&'static str] { StandardConfig::known_fields() }
+    fn known_fields() -> &'static [&'static str] {
+        &["command", "formats", "args", "dep_inputs", "dep_auto", "output_dir", "batch", "max_jobs", "enabled",
+          "fix_command", "fix_args", "fix_batch"]
+    }
     fn output_fields() -> &'static [&'static str] { StandardConfig::output_fields() }
     fn must_fields() -> &'static [&'static str] { StandardConfig::must_fields() }
-    fn field_descriptions() -> &'static [(&'static str, &'static str)] { StandardConfig::field_descriptions() }
+    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
+        &[
+            ("command",     "Path to the checker tool executable"),
+            ("args",        "Extra arguments passed to the checker tool"),
+            ("enabled",     "Set to false to disable this processor without removing the stanza"),
+            ("fix_command", "Path to the fixer tool executable (empty = no fix capability)"),
+            ("fix_args",    "Arguments for the fixer (prepended before file paths)"),
+            ("fix_batch",   "Whether fix mode supports batch execution (default: same as batch)"),
+        ]
+    }
 }
 
 fn default_generator_output_extension() -> String {

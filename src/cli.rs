@@ -240,6 +240,12 @@ pub enum Commands {
     Doctor,
     /// List all exit codes and their meanings (no config needed)
     Errors,
+    /// Run fixers on source files (auto-format, auto-fix lint issues)
+    Fix {
+        /// Only fix using these processors (comma-separated)
+        #[arg(short, long, value_delimiter = ',')]
+        processors: Vec<String>,
+    },
     /// Display the build dependency graph
     Graph {
         #[command(subcommand)]
@@ -916,6 +922,32 @@ pub fn print_completions(shell: Shell) {
 ///   names** (inames) from `rsconstruct.toml` — you can only build a processor
 ///   that is declared in the project.
 /// - `processors defconfig` is handled automatically by clap via `#[arg(value_parser = ...)]`.
+/// Replace file-completion for a specific flag within a specific section
+/// of the generated bash completion script with a call to a helper function.
+fn inject_flag_completion(script: &str, section_marker: &str, flag: &str, helper: &str) -> String {
+    let Some(section_start) = script.find(section_marker) else {
+        return script.to_string();
+    };
+    let after_start = section_start + section_marker.len();
+    let section_len = script[after_start..]
+        .find("\n        rsconstruct__")
+        .unwrap_or(script.len() - after_start);
+    let section_end = after_start + section_len;
+    let section = &script[section_start..section_end];
+
+    let old = format!("                {})\n                    COMPREPLY=($(compgen -f \"${{cur}}\"))", flag);
+    let new = format!("                {})\n                    COMPREPLY=($(compgen -W \"$({})\" -- \"${{cur}}\"))", flag, helper);
+
+    if let Some(rel_pos) = section.find(&old) {
+        let abs_pos = section_start + rel_pos;
+        let mut result = script.to_string();
+        result.replace_range(abs_pos..abs_pos + old.len(), &new);
+        result
+    } else {
+        script.to_string()
+    }
+}
+
 fn inject_bash_processor_completions(script: &str) -> String {
     // Bash helpers: extract instance names from rsconstruct.toml.
     let helper = r#"
@@ -930,6 +962,25 @@ _rsconstruct_analyzer_inames() {
     [[ -f "$toml" ]] || return
     # Match [analyzer.NAME] -> NAME; [analyzer.NAME.SUB] -> NAME.SUB
     grep -E '^\[analyzer\.' "$toml" | sed -E 's/^\[analyzer\.([^]]+)\].*/\1/'
+}
+_rsconstruct_fixer_inames() {
+    # Filter inames to only processors with fix capability.
+    # Types with built-in fix: ruff, black, prettier, eslint, stylelint, standard, taplo, rumdl, markdownlint.
+    # For script processors: check if fix_command is set in the toml section.
+    local toml="rsconstruct.toml"
+    [[ -f "$toml" ]] || return
+    local fixers="ruff|black|prettier|eslint|stylelint|standard|taplo|rumdl|markdownlint"
+    for iname in $(_rsconstruct_inames); do
+        local pname="${iname%%.*}"
+        if echo "$pname" | grep -qE "^($fixers)$"; then
+            echo "$iname"
+        elif [ "$pname" = "script" ]; then
+            # Check if fix_command is set in this script section
+            if sed -n "/^\[processor\.$iname\]/,/^\[/p" "$toml" | grep -q 'fix_command'; then
+                echo "$iname"
+            fi
+        fi
+    done
 }
 "#;
 
@@ -1009,6 +1060,13 @@ _rsconstruct_analyzer_inames() {
         .replace(old_p, &new_p)
         .replace(old_exclude, &new_exclude)
         .replace(old_x, &new_x);
+
+    // Inject completion for fix --processors/-p: only fixer inames.
+    // The fix command's -p section in the generated script uses the same
+    // pattern as build's — we replace file completion with our fixer helper.
+    // We target the rsconstruct__fix section specifically.
+    let result = inject_flag_completion(&result, "rsconstruct__fix)", "--processors", "_rsconstruct_fixer_inames");
+    let result = inject_flag_completion(&result, "rsconstruct__fix)", "-p", "_rsconstruct_fixer_inames");
 
     // Prepend the helper function before the completion function is defined.
     format!("{}{}", helper, result)

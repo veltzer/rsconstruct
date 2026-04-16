@@ -162,12 +162,6 @@ Grades:
 - Still needed: explicit bearer token support, GCS backend, and environment variable substitution for secrets in config.
 - **Urgency**: medium | **Complexity**: medium
 
-### `rsconstruct fmt` — Auto-format source files
-- Run formatters (black, isort, clang-format, rustfmt) that modify files in-place.
-- Distinct from checkers which only verify — formatters actually fix formatting.
-- Could be a new processor type (`Formatter`) or a convenience command that runs formatter processors.
-- **Urgency**: medium | **Complexity**: medium
-
 ### `rsconstruct lint` — Run only checkers
 - Convenience command to run only checker processors.
 - Equivalent to `rsconstruct build -p ruff,pylint,...` but shorter.
@@ -297,7 +291,6 @@ Grades:
 
 ### `rsconstruct fmt`  — Auto-format rsconstruct.toml
 - Sort `[processor.*]` sections alphabetically, align values, remove redundant defaults.
-- Distinct from the existing `rsconstruct fmt` suggestion about formatting source files.
 - **Urgency**: low | **Complexity**: low
 
 ### Cross-project term sync
@@ -375,11 +368,6 @@ Grades:
 - **Urgency**: medium | **Complexity**: low
 
 ## Processor Ecosystem
-
-### Isort (Python import sorter)
-- Complements ruff/black for complete Python formatting pipeline.
-- Checker processor using `isort --check-only --diff`. Batch-capable.
-- **Urgency**: medium | **Complexity**: low
 
 ### Flake8 (Python linter)
 - Many projects still use flake8 over ruff. Widely adopted.

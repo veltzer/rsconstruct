@@ -2,6 +2,7 @@ mod add_config;
 mod build;
 mod clean;
 mod config_cmd;
+mod fix;
 pub(crate) mod analyzers;
 mod doctor;
 mod graph;

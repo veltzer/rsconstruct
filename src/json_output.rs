@@ -98,6 +98,7 @@ pub struct ProcessorListEntry {
     pub detected: bool,
     pub batch: bool,
     pub native: bool,
+    pub fix: bool,
     pub description: String,
 }
 

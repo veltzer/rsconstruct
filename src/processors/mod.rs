@@ -934,6 +934,30 @@ pub trait Processor: Sync + Send {
         products.iter().map(|p| self.execute(ctx, p)).collect()
     }
 
+    /// Whether this processor can fix issues (not just check).
+    /// Processors with fix capability can be invoked via `rsconstruct fix`.
+    fn can_fix(&self) -> bool {
+        false
+    }
+
+    /// Fix a single product (modify source files in place).
+    /// Only called when can_fix() returns true.
+    fn fix(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+        let _ = (ctx, product);
+        anyhow::bail!("fix not implemented for this processor")
+    }
+
+    /// Whether fix mode supports batch execution.
+    fn supports_fix_batch(&self) -> bool {
+        false
+    }
+
+    /// Fix multiple products in one invocation.
+    /// Only called when supports_fix_batch() returns true.
+    fn fix_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
+        products.iter().map(|p| self.fix(ctx, p)).collect()
+    }
+
     /// Return the processor's configuration as JSON for config change detection.
     /// Default: serialize standard_config if available.
     fn config_json(&self) -> Option<String> {
@@ -1317,6 +1341,22 @@ impl SimpleChecker {
             run_checker(ctx, tool, self.params.subcommand, &combined_args, files)
         }
     }
+
+    fn has_fix(&self) -> bool {
+        self.params.fix_subcommand.is_some() || !self.params.fix_prepend_args.is_empty()
+    }
+
+    fn fix_files(&self, ctx: &crate::build_context::BuildContext, files: &[&Path]) -> Result<()> {
+        let tool = self.config.standard.require_command(self.params.description)?;
+        let subcommand = self.params.fix_subcommand.or(self.params.subcommand);
+        if self.params.fix_prepend_args.is_empty() {
+            run_checker(ctx, tool, subcommand, &self.config.standard.args, files)
+        } else {
+            let mut combined_args: Vec<String> = self.params.fix_prepend_args.iter().map(|s| s.to_string()).collect();
+            combined_args.extend_from_slice(&self.config.standard.args);
+            run_checker(ctx, tool, subcommand, &combined_args, files)
+        }
+    }
 }
 
 impl Processor for SimpleChecker {
@@ -1367,6 +1407,22 @@ impl Processor for SimpleChecker {
 
     fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
         execute_checker_batch(ctx, products, |ctx, files| self.check_files(ctx, files))
+    }
+
+    fn can_fix(&self) -> bool {
+        self.has_fix()
+    }
+
+    fn fix(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+        self.fix_files(ctx, &[product.primary_input()])
+    }
+
+    fn supports_fix_batch(&self) -> bool {
+        self.has_fix() && self.params.fix_batch.unwrap_or(self.config.standard.batch)
+    }
+
+    fn fix_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
+        execute_checker_batch(ctx, products, |ctx, files| self.fix_files(ctx, files))
     }
 }
 

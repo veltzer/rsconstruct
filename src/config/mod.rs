@@ -99,6 +99,16 @@ pub(crate) struct SimpleCheckerParams {
     pub prepend_args: &'static [&'static str],
     /// Additional tools required beyond the command (e.g., ["python3", "node"])
     pub extra_tools: &'static [&'static str],
+    /// Fix mode: subcommand to use (e.g., Some("format") for ruff).
+    /// None means same command/subcommand as check but with different args.
+    /// If both `fix_subcommand` and `fix_prepend_args` are unset, the
+    /// processor has no fix capability.
+    pub fix_subcommand: Option<&'static str>,
+    /// Args prepended in fix mode (e.g., &["--write"] for prettier, &["--fix"] for eslint).
+    /// Empty means no fix capability (unless fix_subcommand is set).
+    pub fix_prepend_args: &'static [&'static str],
+    /// Whether fix mode supports batch execution. Defaults follow check batch.
+    pub fix_batch: Option<bool>,
 }
 
 /// Validate dep_inputs paths exist and return them as PathBufs.

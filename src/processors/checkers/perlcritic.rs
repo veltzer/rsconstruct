@@ -4,7 +4,7 @@ use crate::processors::SimpleChecker;
 use crate::config::SimpleCheckerParams;
 
 fn create_perlcritic(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registries::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Analyze Perl code using perlcritic", subcommand: None, prepend_args: &[], extra_tools: &["perl"] })))
+    crate::registries::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Analyze Perl code using perlcritic", subcommand: None, prepend_args: &[], extra_tools: &["perl"], fix_subcommand: None, fix_prepend_args: &[], fix_batch: None })))
 }
 inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,

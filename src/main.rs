@@ -145,7 +145,7 @@ fn run() -> (Result<()>, bool) {
     let init_dur = t.elapsed();
 
     let show_status = matches!(cli.command,
-        Commands::Build { .. } | Commands::Watch { .. } | Commands::Clean { .. }
+        Commands::Build { .. } | Commands::Watch { .. } | Commands::Clean { .. } | Commands::Fix { .. }
     );
 
     // Wrap the body in a closure so `?` works naturally inside, then pair the
@@ -345,6 +345,12 @@ fn run() -> (Result<()>, bool) {
         }
         Commands::Errors => {
             list_exit_codes(cli.verbose)?;
+        }
+        Commands::Fix { processors } => {
+            let builder = Builder::new()?;
+            builder.apply_config_to_context(&ctx);
+            let filter = if processors.is_empty() { None } else { Some(processors) };
+            builder.fix(&ctx, filter.as_deref())?;
         }
         Commands::Graph { action } => {
             let builder = Builder::new()?;

@@ -4,7 +4,7 @@ use crate::processors::SimpleChecker;
 use crate::config::SimpleCheckerParams;
 
 fn create_ruff(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registries::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint and format Python files using ruff", subcommand: Some("check"), prepend_args: &[], extra_tools: &[] })))
+    crate::registries::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint and format Python files using ruff", subcommand: Some("check"), prepend_args: &[], extra_tools: &[], fix_subcommand: Some("check"), fix_prepend_args: &["--fix"], fix_batch: None })))
 }
 inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,

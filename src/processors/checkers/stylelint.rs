@@ -4,7 +4,7 @@ use crate::processors::SimpleChecker;
 use crate::config::SimpleCheckerParams;
 
 fn create_stylelint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registries::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint CSS/SCSS files using stylelint", subcommand: None, prepend_args: &[], extra_tools: &["node"] })))
+    crate::registries::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint CSS/SCSS files using stylelint", subcommand: None, prepend_args: &[], extra_tools: &["node"], fix_subcommand: None, fix_prepend_args: &["--fix"], fix_batch: None })))
 }
 inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,

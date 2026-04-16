@@ -26,6 +26,14 @@ impl ScriptProcessor {
         let command = self.config.standard.require_command(crate::processors::names::SCRIPT)?;
         run_checker(ctx, command, None, &self.config.standard.args, files)
     }
+
+    fn has_fix(&self) -> bool {
+        !self.config.fix_command.is_empty()
+    }
+
+    fn fix_files(&self, ctx: &crate::build_context::BuildContext, files: &[&Path]) -> Result<()> {
+        run_checker(ctx, &self.config.fix_command, None, &self.config.fix_args, files)
+    }
 }
 
 impl Processor for ScriptProcessor {
@@ -96,6 +104,21 @@ impl Processor for ScriptProcessor {
         execute_checker_batch(ctx, products, |ctx, files| self.check_files(ctx, files))
     }
 
+    fn can_fix(&self) -> bool {
+        self.has_fix()
+    }
+
+    fn fix(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+        self.fix_files(ctx, &[product.primary_input()])
+    }
+
+    fn supports_fix_batch(&self) -> bool {
+        self.has_fix() && self.config.fix_batch.unwrap_or(self.config.standard.batch)
+    }
+
+    fn fix_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
+        execute_checker_batch(ctx, products, |ctx, files| self.fix_files(ctx, files))
+    }
 }
 
 fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {

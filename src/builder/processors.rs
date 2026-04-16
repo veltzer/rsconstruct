@@ -112,6 +112,7 @@ pub fn list_processors_no_config(verbose: bool) -> Result<()> {
                     detected: false,
                     batch: proc.supports_batch(),
                     native: proc.is_native(),
+                    fix: proc.can_fix(),
                     description: proc.description().to_string(),
                 }
             })
@@ -122,20 +123,22 @@ pub fn list_processors_no_config(verbose: bool) -> Result<()> {
 
     let mut builder = TableBuilder::new();
     if verbose {
-        builder.push_record(["Name", "Type", "Native", "Batch", "Description"]);
+        builder.push_record(["Name", "Type", "Native", "Batch", "Fix", "Description"]);
         for name in &proc_names {
             let proc = &processors[name.as_str()];
             let native_tag = if proc.is_native() { "native" } else { "external" };
             let batch_tag = if proc.supports_batch() { "batch" } else { "single" };
-            builder.push_record([name, proc.processor_type().as_str(), native_tag, batch_tag, proc.description()]);
+            let fix_tag = color::yes_no(proc.can_fix());
+            builder.push_record([name.as_str(), proc.processor_type().as_str(), native_tag, batch_tag, fix_tag, proc.description()]);
         }
     } else {
-        builder.push_record(["Name", "Type", "Native", "Batch"]);
+        builder.push_record(["Name", "Type", "Native", "Batch", "Fix"]);
         for name in &proc_names {
             let proc = &processors[name.as_str()];
             let native_tag = if proc.is_native() { "native" } else { "external" };
             let batch_tag = if proc.supports_batch() { "batch" } else { "single" };
-            builder.push_record([name.as_str(), proc.processor_type().as_str(), native_tag, batch_tag]);
+            let fix_tag = color::yes_no(proc.can_fix());
+            builder.push_record([name.as_str(), proc.processor_type().as_str(), native_tag, batch_tag, fix_tag]);
         }
     }
     color::print_table(builder.build());
