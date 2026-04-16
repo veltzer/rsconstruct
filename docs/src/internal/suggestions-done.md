@@ -87,3 +87,19 @@ Items from `suggestions.md` that have been implemented.
 - **`cc_single_file` output_dir from config** — The `cc_single_file` processor now reads its output directory from the config `output_dir` field instead of hardcoding `out/cc_single_file`. This fixes named instances (e.g., `cc_single_file.gcc` and `cc_single_file.clang`) which previously collided on the same output directory.
 - **`clean unknown` respects .gitignore** — `rsconstruct clean unknown` now skips gitignored files. Previously it disabled .gitignore handling, causing intentionally ignored files (IDE configs, virtualenvs, `*.pyc`, etc.) to be flagged as unknown. RSConstruct outputs are still correctly identified via the build graph, so nothing is missed. Use `--no-gitignore` to include gitignored files.
 - **Cross-processor dependencies (fixed-point discovery)** — Generator outputs are now visible to downstream processors on the first build. Discovery runs in a fixed-point loop: after each pass, declared outputs are injected as virtual files into the FileIndex, and discovery re-runs until no new products are found. This means a generator that creates `.md` files can feed pandoc/tags/spell-checkers in a single build, without needing a second build.
+
+## Completed Architecture Refactors
+
+- **Config provenance tracking** — Every config field now carries `FieldProvenance` (UserToml with line number, ProcessorDefault, ScanDefault, OutputDirDefault, SerdeDefault). `rsconstruct config show` annotates every field with its source. Uses `toml_edit::Document` for span capture.
+- **`BuildContext` replacing process globals** — The three process globals (`INTERRUPTED`, `RUNTIME`, `INTERRUPT_SENDER`) are replaced by a `BuildContext` struct threaded through the `Processor` trait's `execute()`/`execute_batch()`, the executor, analyzers, and remote cache. Signal handler uses `Arc<BuildContext>`.
+- **`BuildPolicy` trait** — Extracted from the executor. `classify_products` delegates per-product skip/restore/rebuild decisions to a `&dyn BuildPolicy`. `IncrementalPolicy` implements the current logic. Future policies (dry-run, always-rebuild, time-windowed) are a single trait impl.
+- **`ObjectStore` decomposition** — `mod.rs` split from 664 → 223 lines into focused submodules: `blobs.rs` (content-addressed storage), `descriptors.rs` (cache descriptor CRUD), `restore.rs` (restore/needs_rebuild/can_restore/explain).
+
+## Completed Features (latest)
+
+- **`rsconstruct status --json`** — JSON output with per-processor counts (`up_to_date`, `restorable`, `stale`, `new`, `total`, `native`) and totals. Activated by `--json` flag.
+- **Selective processor cleaning** — `rsconstruct clean outputs -p ruff,pylint` cleans only those processors' outputs. Without `-p`, cleans everything.
+- **Prettier processor** — Checker using `prettier --check`. Batch-capable. Scans `.js/.jsx/.ts/.tsx/.mjs/.cjs/.css/.scss/.less/.html/.json/.md/.yaml/.yml`. `src/processors/checkers/prettier.rs`.
+- **Bare `clean` requires subcommand** — `rsconstruct clean` now errors with usage hint instead of silently defaulting to `clean outputs`.
+- **Nondeterministic test race fix** — Fixed TOCTOU race in `store_descriptor` where parallel writers could get `Permission denied`. Now retries after forcing writable on first failure.
+- **Suppress status line for non-build commands** — The `Exited with SUCCESS/ERROR` footer only shows for `build`, `watch`, and `clean`.

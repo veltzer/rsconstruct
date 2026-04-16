@@ -346,12 +346,6 @@ Grades:
 
 ## Cleaning & Cache
 
-### Selective processor cleaning
-- `rsconstruct clean outputs --processors ruff,pylint` to clean only specific processors' outputs.
-- Currently `clean outputs` is all-or-nothing. Multi-processor projects need granular control.
-- Filter products in the clean loop by processor name.
-- **Urgency**: high | **Complexity**: low
-
 ### Time-based cache purge
 - `rsconstruct cache purge --older-than=7d` to remove cache entries older than a given duration.
 - Currently only `cache clear` exists which removes everything.
@@ -365,12 +359,6 @@ Grades:
 - **Urgency**: medium | **Complexity**: medium
 
 ## CLI & UX
-
-### `rsconstruct status --json`
-- The status command has no JSON output mode, unlike most other commands.
-- CI systems can't parse the current human-readable output.
-- Add JSON output with per-processor and total counts.
-- **Urgency**: high | **Complexity**: low
 
 ### `rsconstruct processors search <keyword>`
 - Search the processor list by name or description substring.
@@ -398,11 +386,6 @@ Grades:
 - **Urgency**: medium | **Complexity**: low
 
 ## Processor Ecosystem
-
-### Prettier (JavaScript/TypeScript/CSS/HTML formatter)
-- The most popular web formatter. Industry standard for frontend projects.
-- Checker processor using `prettier --check`. Batch-capable.
-- **Urgency**: high | **Complexity**: low
 
 ### Isort (Python import sorter)
 - Complements ruff/black for complete Python formatting pipeline.
