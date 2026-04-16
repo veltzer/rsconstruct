@@ -45,7 +45,8 @@ use std::time::Instant;
 fn main() -> std::process::ExitCode {
     platform::reset_sigpipe();
 
-    let exit_code = match run() {
+    let (result, show_status) = run();
+    let exit_code = match result {
         Ok(()) => RsconstructExitCode::Success,
         Err(err) => {
             let exit_code = classify_error(&err);
@@ -64,11 +65,9 @@ fn main() -> std::process::ExitCode {
         }
     };
 
-    // Final status line. Green on Success, red on any error. Suppressed in
-    // quiet mode and JSON mode (the JSON error event above already carries
-    // exit-code info). Uses non-panicking flag accessors because CLI parse
-    // errors can reach this point without `runtime_flags::init` having run.
-    if !runtime_flags::quiet_or_default() && !runtime_flags::json_mode_or_default() {
+    // Final status line — only for build/watch/clean where pass/fail matters.
+    // Suppressed in quiet mode, JSON mode, and for informational commands.
+    if show_status && !runtime_flags::quiet_or_default() && !runtime_flags::json_mode_or_default() {
         let line = format!(
             "Exited with {} ({})",
             exit_code.name(),
@@ -84,7 +83,9 @@ fn main() -> std::process::ExitCode {
     std::process::ExitCode::from(exit_code.code())
 }
 
-fn run() -> Result<()> {
+/// Returns (result, show_status_line). The status line is only shown for
+/// build, watch, and clean — commands where pass/fail matters to the user.
+fn run() -> (Result<()>, bool) {
     let t_start = Instant::now();
     let cli = cli::parse_cli();
     let cli_parse_dur = t_start.elapsed();
@@ -142,6 +143,14 @@ fn run() -> Result<()> {
         });
     }
     let init_dur = t.elapsed();
+
+    let show_status = matches!(cli.command,
+        Commands::Build { .. } | Commands::Watch { .. } | Commands::Clean { .. }
+    );
+
+    // Wrap the body in a closure so `?` works naturally inside, then pair the
+    // result with show_status at the end.
+    let result = (|| -> Result<()> {
 
     match cli.command {
         Commands::Build { force, dry_run, verify_tool_versions, stop_after, ref shared } => {
@@ -565,6 +574,9 @@ fn run() -> Result<()> {
     }
 
     Ok(())
+
+    })(); // end closure
+    (result, show_status)
 }
 
 /// List all exit codes and their meanings.
