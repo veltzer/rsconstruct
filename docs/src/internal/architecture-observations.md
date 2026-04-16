@@ -320,28 +320,9 @@ impact.
 
 ---
 
-### 12. Batch execution as an optional performance optimization
-
-Processors declare `supports_batch() -> bool`. If true, the executor
-groups products of that processor within a level and calls `execute_batch`
-instead of `execute` per product. Only some processors opt in (ruff,
-mypy, tera). Most don't.
-
-**Implication:** forgetting to set `supports_batch()` for a
-batch-capable tool silently regresses performance. There's no feedback
-mechanism; profiling might not catch it if the tool is fast per-file.
-The contract is also asymmetric — `execute_batch` *may* do something
-smarter than N calls to `execute`, but it also may not. Callers can't
-know without reading the implementation.
-
-**Load-bearing:** low-medium. Matters for large-project performance but
-doesn't shape much else.
-
----
-
 ## What's absent that one might expect
 
-### 13. No abstraction for "tool invocation"
+### 12. No abstraction for "tool invocation"
 
 Every processor that shells out to a subprocess rolls its own `Command`
 building: env vars, arg construction, timeout, output capture, error
@@ -363,7 +344,7 @@ than it needs to be.
 
 ---
 
-### 14. No pluggable reporting / event stream
+### 13. No pluggable reporting / event stream
 
 Today reporting is hardcoded: `println!` during execution, colored summary
 at the end, `--json` mode emits structured events, `--trace` emits Chrome
@@ -380,7 +361,7 @@ events, subscribers render them — would make this a two-file change
 
 ---
 
-### 15. No formal dry-run execution
+### 14. No formal dry-run execution
 
 There's `--stop-after classify`, which stops after classification, and
 there's `dry_run()` (different from `--dry-run` which is a flag on build),
@@ -406,11 +387,14 @@ If someone were to plan a refactor, the highest-leverage items are:
    richer `--explain`.
 2. **Decompose `ObjectStore`** (entry 11) — enables remote cache
    completion, alternate backends, cleaner restoration logic.
-3. **Consolidate config resolution with provenance tracking** (entries 3,
-   7) — enables better user-facing config tools and removes the
-   declaration↔runtime disconnect.
-4. **Introduce a `BuildContext` struct replacing process globals** (entry 8)
-   — required groundwork for daemon mode, LSP, multi-project workflows.
+3. ~~**Consolidate config resolution with provenance tracking**~~ — **done**.
+   Config fields now carry `FieldProvenance` (user TOML with line number,
+   processor default, scan default, serde default). `config show` annotates
+   every field with its source.
+4. ~~**Introduce a `BuildContext` struct replacing process globals**~~ —
+   **done**. The three process globals (`INTERRUPTED`, `RUNTIME`,
+   `INTERRUPT_SENDER`) are replaced by a `BuildContext` struct threaded
+   through the `Processor` trait, executor, analyzers, and remote cache.
 
 Entries 1, 2, 5, 9, 10 are observations about the shape — not necessarily
 problems to fix, but things a new contributor should understand before
