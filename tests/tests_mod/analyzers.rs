@@ -214,7 +214,7 @@ src_dirs = ["."]
     assert!(out2.status.success(), "second status failed: {}", String::from_utf8_lossy(&out2.stderr));
     let combined = format!("{}{}", String::from_utf8_lossy(&out2.stdout), String::from_utf8_lossy(&out2.stderr));
     assert!(
-        combined.contains("[deps] 3 files to check for dependencies")
+        combined.contains("[deps] 3 files to check")
             && combined.contains("[deps] summary: 0 rescanned (3 cache hits:"),
         "unchanged files should all hit the cache: {}", combined
     );
@@ -259,7 +259,7 @@ src_dirs = ["."]
     assert!(out.status.success());
     let combined = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
     assert!(
-        combined.contains("[deps] 3 files to check for dependencies")
+        combined.contains("[deps] 3 files to check")
             && combined.contains("[deps] summary: 1 rescanned (2 cache hits:"),
         "modified file should trigger exactly one rescan: {}", combined
     );
@@ -269,9 +269,9 @@ src_dirs = ["."]
 /// scan that file ONCE — not once per consuming product. The pre-scan classify
 /// pass and the actual scan both used to iterate `(analyzer, source)` per
 /// product, doing redundant cache lookups and (on a miss) redundant file reads
-/// for the same source. The user-facing "files to check" count still reflects
-/// per-product work, but the underlying cache `get`/`set` calls (visible in the
-/// summary line) must equal the number of UNIQUE source files.
+/// for the same source. The display reports unique sources with the per-product
+/// fan-out shown in parentheses, and the underlying cache `get`/`set` calls
+/// (visible in the summary line) must equal the number of UNIQUE source files.
 #[test]
 fn analyzer_dedupes_shared_source_across_processors() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -301,15 +301,15 @@ src_dirs = ["."]
     // Prime the cache.
     let _ = run_rsconstruct_with_env(project_path, &["status"], &[("NO_COLOR", "1")]);
 
-    // Second run: every product still appears in the per-product display total
-    // (3 files to check), but the underlying cache should see only 1 hit —
-    // the source was scanned once and fanned out to all 3 products.
+    // Second run: display shows 1 unique file with fan-out (consumed by 3
+    // products), and the cache sees exactly 1 hit — the source was scanned
+    // once and fanned out to all 3 products.
     let out = run_rsconstruct_with_env(project_path, &["status"], &[("NO_COLOR", "1")]);
     assert!(out.status.success(), "second status failed: {}", String::from_utf8_lossy(&out.stderr));
     let combined = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
     assert!(
-        combined.contains("[deps] 3 files to check for dependencies"),
-        "user-facing total should still count per-product (3 products): {}", combined
+        combined.contains("[deps] 1 files to check (consumed by 3 products)"),
+        "display should show unique-source count with per-product fan-out: {}", combined
     );
     assert!(
         combined.contains("[deps] summary: 0 rescanned (1 cache hits:"),

@@ -376,49 +376,56 @@ impl Builder {
             return Ok(());
         }
 
-        // Collect the matching sources per analyzer once; reuse for both the
-        // classify pass and the summary logic.
-        let total: usize = active_analyzers.iter()
+        // Per-product reference count: every matching product becomes one
+        // reference, even when many products share the same source. Used
+        // to drive the progress bar (which ticks once per product) and to
+        // surface fan-out in the user-facing total.
+        let product_refs: usize = active_analyzers.iter()
             .map(|name| analyzers[*name].count_matches(graph))
             .sum();
 
+        // Unique source count: dedup (analyzer, source) pairs. This matches
+        // what the cache and the scanner actually see — one cache key and one
+        // file read per pair, regardless of how many products reference it.
+        let mut unique_pairs: std::collections::HashSet<(&str, PathBuf)> = std::collections::HashSet::new();
+        for name in &active_analyzers {
+            for source in analyzers[*name].matching_sources(graph) {
+                unique_pairs.insert((name.as_str(), source));
+            }
+        }
+        let unique_count = unique_pairs.len();
+
         let suppress = crate::json_output::is_json_mode() || crate::runtime_flags::quiet();
 
-        // Stage 1: forward total.
-        if total > 0 && !suppress {
-            println!("[deps] {} files to check for dependencies", total);
+        // Stage 1: announce the work in unique-source units, with the fan-out
+        // shown in parentheses when products outnumber unique sources.
+        if unique_count > 0 && !suppress {
+            if product_refs > unique_count {
+                println!(
+                    "[deps] {} files to check (consumed by {} products)",
+                    unique_count, product_refs,
+                );
+            } else {
+                println!("[deps] {} files to check", unique_count);
+            }
         }
 
-        // Stage 2: pre-scan classify. Predict mtime-hit / content-hit / miss
-        // for every candidate (analyzer, source) pair without mutating the
-        // cache's stats counters. Splitting the hit count into mtime vs
-        // checksum tells the user how much of the cache work was I/O-free
-        // (mtime matched) vs had to re-hash the file (mtime stale but
+        // Stage 2: pre-scan classify. Walk the deduped (analyzer, source) set
+        // and classify each pair exactly once. Splits the hit count into mtime
+        // vs checksum so the user can see how much of the cache work was
+        // I/O-free (mtime matched) vs had to re-hash the file (mtime stale but
         // content unchanged, e.g. a touched file).
-        // Dedup (analyzer, source) pairs: multiple products can share the same
-        // primary input (e.g. one .md file consumed by markdownlint, marp,
-        // zspell, and a script processor). The cache key is (analyzer, source),
-        // so classifying the same pair multiple times does redundant I/O and
-        // inflates hit/miss counts. We still want the user-facing total to
-        // reflect work-per-product, so each unique classify result is multiplied
-        // by the number of products that reference that source.
         let mut mtime_hits: usize = 0;
         let mut content_hits: usize = 0;
         let mut misses: usize = 0;
-        for name in &active_analyzers {
-            let mut by_source: std::collections::HashMap<PathBuf, usize> = std::collections::HashMap::new();
-            for source in analyzers[*name].matching_sources(graph) {
-                *by_source.entry(source).or_insert(0) += 1;
-            }
-            for (source, count) in &by_source {
-                match deps_cache.classify(ctx, name, source) {
-                    crate::deps_cache::ClassifyResult::MtimeHit => mtime_hits += count,
-                    crate::deps_cache::ClassifyResult::ContentHit => content_hits += count,
-                    crate::deps_cache::ClassifyResult::Miss => misses += count,
-                }
+        for (name, source) in &unique_pairs {
+            match deps_cache.classify(ctx, name, source) {
+                crate::deps_cache::ClassifyResult::MtimeHit => mtime_hits += 1,
+                crate::deps_cache::ClassifyResult::ContentHit => content_hits += 1,
+                crate::deps_cache::ClassifyResult::Miss => misses += 1,
             }
         }
-        if total > 0 && !suppress {
+        if unique_count > 0 && !suppress {
             let cached = mtime_hits + content_hits;
             println!(
                 "[deps] {} to rescan ({} cached: {} mtime, {} checksum)",
@@ -426,16 +433,18 @@ impl Builder {
             );
         }
 
-        // Stage 3: actual scan. Same shape as before.
+        // Stage 3: actual scan. Progress bar still ticks per-product since
+        // `analyze_with_scanner` ticks once per consuming product (so the bar
+        // matches what users expect from the build graph).
         let hidden = verbose || crate::json_output::is_json_mode() || crate::runtime_flags::quiet();
-        let pb = crate::progress::create_bar(total as u64, hidden);
+        let pb = crate::progress::create_bar(product_refs as u64, hidden);
         for name in &active_analyzers {
             analyzers[*name].analyze(ctx, graph, &mut deps_cache, &self.file_index, verbose, &pb)?;
         }
         pb.finish_and_clear();
 
         let stats = deps_cache.stats();
-        if total > 0 && !suppress {
+        if unique_count > 0 && !suppress {
             println!(
                 "[deps] summary: {} rescanned ({} cache hits: {} mtime, {} checksum)",
                 stats.misses, stats.hits, stats.mtime_hits, stats.content_hits,
