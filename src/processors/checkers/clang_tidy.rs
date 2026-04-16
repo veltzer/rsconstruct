@@ -14,7 +14,7 @@ impl ClangTidyProcessor {
         Self { config }
     }
 
-    fn execute_product(&self, product: &Product) -> Result<()> {
+    fn execute_product(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let mut cmd = Command::new("clang-tidy");
         for arg in &self.config.standard.args {
             cmd.arg(arg);
@@ -26,7 +26,7 @@ impl ClangTidyProcessor {
             cmd.arg(arg);
         }
 
-        let output = run_command(&mut cmd)?;
+        let output = run_command(ctx, &mut cmd)?;
         check_command_output(&output, "clang-tidy")
     }
 }
@@ -67,8 +67,8 @@ impl crate::processors::Processor for ClangTidyProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
-        self.execute_product(product)
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+        self.execute_product(ctx, product)
     }
 
     fn config_json(&self) -> Option<String> {

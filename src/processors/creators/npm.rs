@@ -24,14 +24,14 @@ impl NpmProcessor {
     }
 
     /// Run npm install in the package.json's directory
-    fn execute_npm(&self, package_json: &Path) -> Result<()> {
+    fn execute_npm(&self, ctx: &crate::build_context::BuildContext, package_json: &Path) -> Result<()> {
         let subcommand = self.config.standard.require_command(crate::processors::names::NPM)?;
         let mut cmd = Command::new(&self.config.npm);
         cmd.arg(subcommand);
         for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
-        let output = run_in_anchor_dir(&mut cmd, package_json)?;
+        let output = run_in_anchor_dir(ctx, &mut cmd, package_json)?;
         check_command_output(&output, format_args!("npm {} in {}", subcommand, anchor_display_dir(package_json)))
     }
 }
@@ -111,8 +111,8 @@ impl Processor for NpmProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
-        self.execute_npm(product.primary_input())
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+        self.execute_npm(ctx, product.primary_input())
     }
 }
 

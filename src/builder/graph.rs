@@ -10,20 +10,20 @@ use super::Builder;
 
 impl Builder {
     /// Dispatch graph subcommands
-    pub fn graph(&self, action: GraphAction) -> Result<()> {
+    pub fn graph(&self, ctx: &crate::build_context::BuildContext, action: GraphAction) -> Result<()> {
         match action {
-            GraphAction::Show { format } => self.print_graph(format),
-            GraphAction::View { viewer } => self.view_graph(viewer),
-            GraphAction::Stats => self.graph_stats(),
-            GraphAction::Unreferenced { extensions, rm } => self.graph_unreferenced(extensions, rm),
-            GraphAction::LookupFwd { files } => self.graph_lookup_fwd(files),
-            GraphAction::LookupRev { files } => self.graph_lookup_rev(files),
+            GraphAction::Show { format } => self.print_graph(ctx, format),
+            GraphAction::View { viewer } => self.view_graph(ctx, viewer),
+            GraphAction::Stats => self.graph_stats(ctx),
+            GraphAction::Unreferenced { extensions, rm } => self.graph_unreferenced(ctx, extensions, rm),
+            GraphAction::LookupFwd { files } => self.graph_lookup_fwd(ctx, files),
+            GraphAction::LookupRev { files } => self.graph_lookup_rev(ctx, files),
         }
     }
 
     /// Print the dependency graph in the specified format
-    fn print_graph(&self, format: GraphFormat) -> Result<()> {
-        let graph = self.build_graph()?;
+    fn print_graph(&self, ctx: &crate::build_context::BuildContext, format: GraphFormat) -> Result<()> {
+        let graph = self.build_graph(ctx)?;
 
         // Output in the requested format
         let output = match format {
@@ -39,10 +39,10 @@ impl Builder {
     }
 
     /// View the dependency graph in a viewer
-    fn view_graph(&self, viewer: GraphViewer) -> Result<()> {
+    fn view_graph(&self, ctx: &crate::build_context::BuildContext, viewer: GraphViewer) -> Result<()> {
         use std::process::Command;
 
-        let graph = self.build_graph()?;
+        let graph = self.build_graph(ctx)?;
 
         // Create temp file
         let temp_dir = std::env::temp_dir();
@@ -99,8 +99,8 @@ impl Builder {
     }
 
     /// Show graph statistics (products, processors, dependencies)
-    fn graph_stats(&self) -> Result<()> {
-        let graph = self.build_graph()?;
+    fn graph_stats(&self, ctx: &crate::build_context::BuildContext) -> Result<()> {
+        let graph = self.build_graph(ctx)?;
         let products = graph.products();
 
         // Aggregate per-processor stats
@@ -144,8 +144,8 @@ impl Builder {
     }
 
     /// List files on disk not referenced by any product input (primary or dependency).
-    fn graph_unreferenced(&self, extensions: Vec<String>, rm: bool) -> Result<()> {
-        let graph = self.build_graph()?;
+    fn graph_unreferenced(&self, ctx: &crate::build_context::BuildContext, extensions: Vec<String>, rm: bool) -> Result<()> {
+        let graph = self.build_graph(ctx)?;
 
         // Collect every file that appears in any product's inputs
         let referenced: HashSet<PathBuf> = graph.products()
@@ -202,8 +202,8 @@ impl Builder {
     /// Shows: the queried file → each consuming product's processor + outputs.
     ///
     /// Reports per file. Files that are not inputs to any product are listed as such.
-    fn graph_lookup_fwd(&self, files: Vec<String>) -> Result<()> {
-        let graph = self.build_graph()?;
+    fn graph_lookup_fwd(&self, ctx: &crate::build_context::BuildContext, files: Vec<String>) -> Result<()> {
+        let graph = self.build_graph(ctx)?;
         let queries = normalize_query_paths(&files);
 
         if json_output::is_json_mode() {
@@ -257,8 +257,8 @@ impl Builder {
     ///
     /// By construction every declared output belongs to exactly one product
     /// (enforced at graph-build time via the output-conflict check).
-    fn graph_lookup_rev(&self, files: Vec<String>) -> Result<()> {
-        let graph = self.build_graph()?;
+    fn graph_lookup_rev(&self, ctx: &crate::build_context::BuildContext, files: Vec<String>) -> Result<()> {
+        let graph = self.build_graph(ctx)?;
         let queries = normalize_query_paths(&files);
 
         if json_output::is_json_mode() {

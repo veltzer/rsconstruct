@@ -365,7 +365,7 @@ impl Builder {
     /// anyway, but reads the result instead of acting on it — and the
     /// in-memory checksum cache in `checksum.rs` dedupes work across the two
     /// passes, so nothing is read+hashed twice.
-    fn run_analyzers(&self, graph: &mut BuildGraph, verbose: bool) -> Result<()> {
+    fn run_analyzers(&self, ctx: &crate::build_context::BuildContext, graph: &mut BuildGraph, verbose: bool) -> Result<()> {
         let analyzers = self.create_analyzers(verbose)?;
         let mut deps_cache = DepsCache::open()?;
 
@@ -421,7 +421,7 @@ impl Builder {
         let hidden = verbose || crate::json_output::is_json_mode() || crate::runtime_flags::quiet();
         let pb = crate::progress::create_bar(total as u64, hidden);
         for name in &active_analyzers {
-            analyzers[*name].analyze(graph, &mut deps_cache, &self.file_index, verbose, &pb)?;
+            analyzers[*name].analyze(ctx, graph, &mut deps_cache, &self.file_index, verbose, &pb)?;
         }
         pb.finish_and_clear();
 
@@ -437,19 +437,19 @@ impl Builder {
     }
 
     /// Build the dependency graph using provided processors
-    fn build_graph_with_processors(&self, processors: &ProcessorMap) -> Result<BuildGraph> {
-        let (graph, _) = self.build_graph_with_processors_impl(processors, GraphBuildMode::Normal, BuildPhase::Build, None, false)?;
+    fn build_graph_with_processors(&self, ctx: &crate::build_context::BuildContext, processors: &ProcessorMap) -> Result<BuildGraph> {
+        let (graph, _) = self.build_graph_with_processors_impl(ctx, processors, GraphBuildMode::Normal, BuildPhase::Build, None, false)?;
         Ok(graph)
     }
 
     /// Build the dependency graph with optional early stopping
-    fn build_graph_with_processors_and_phase(&self, processors: &ProcessorMap, stop_after: BuildPhase, processor_filter: Option<&[String]>, verbose: bool) -> Result<(BuildGraph, PhaseTimings)> {
-        self.build_graph_with_processors_impl(processors, GraphBuildMode::Normal, stop_after, processor_filter, verbose)
+    fn build_graph_with_processors_and_phase(&self, ctx: &crate::build_context::BuildContext, processors: &ProcessorMap, stop_after: BuildPhase, processor_filter: Option<&[String]>, verbose: bool) -> Result<(BuildGraph, PhaseTimings)> {
+        self.build_graph_with_processors_impl(ctx, processors, GraphBuildMode::Normal, stop_after, processor_filter, verbose)
     }
 
     /// Build the dependency graph for clean (skip expensive dependency scanning)
-    fn build_graph_for_clean_with_processors(&self, processors: &ProcessorMap) -> Result<BuildGraph> {
-        let (graph, _) = self.build_graph_with_processors_impl(processors, GraphBuildMode::ForClean, BuildPhase::Build, None, false)?;
+    fn build_graph_for_clean_with_processors(&self, ctx: &crate::build_context::BuildContext, processors: &ProcessorMap) -> Result<BuildGraph> {
+        let (graph, _) = self.build_graph_with_processors_impl(ctx, processors, GraphBuildMode::ForClean, BuildPhase::Build, None, false)?;
         Ok(graph)
     }
 
@@ -485,9 +485,9 @@ impl Builder {
 
     /// Return the set of configured processor instance names that have 0 products
     /// (i.e., don't match any files).
-    pub fn no_file_processors(&self) -> Result<Vec<String>> {
+    pub fn no_file_processors(&self, ctx: &crate::build_context::BuildContext) -> Result<Vec<String>> {
         let processors = self.create_processors()?;
-        let graph = self.build_graph_with_processors(&processors)?;
+        let graph = self.build_graph_with_processors(ctx, &processors)?;
 
         let mut has_products: std::collections::HashSet<&str> = std::collections::HashSet::new();
         for product in graph.products() {
@@ -563,7 +563,7 @@ impl Builder {
 
     /// Build the dependency graph using provided processors
     /// processor_filter: if Some, only run processors in this list (in addition to enabled check)
-    fn build_graph_with_processors_impl(&self, processors: &ProcessorMap, mode: GraphBuildMode, stop_after: BuildPhase, processor_filter: Option<&[String]>, verbose: bool) -> Result<(BuildGraph, PhaseTimings)> {
+    fn build_graph_with_processors_impl(&self, ctx: &crate::build_context::BuildContext, processors: &ProcessorMap, mode: GraphBuildMode, stop_after: BuildPhase, processor_filter: Option<&[String]>, verbose: bool) -> Result<(BuildGraph, PhaseTimings)> {
         if phases_debug() {
             eprintln!("{}", color::bold("Phase: Building dependency graph..."));
         }
@@ -601,7 +601,7 @@ impl Builder {
                 eprintln!("{}", color::dim("  Phase: add_dependencies"));
             }
             let t = Instant::now();
-            self.run_analyzers(&mut graph, verbose)?;
+            self.run_analyzers(ctx, &mut graph, verbose)?;
             phase_timings.push(("add_dependencies".to_string(), t.elapsed()));
             print_graph_stats(GraphSnapshot::AfterAddDependencies, &graph);
         }
@@ -642,6 +642,7 @@ impl Builder {
     /// If `include_all` is true, skip enabled/auto-detect checks.
     pub fn build_graph_filtered(
         &self,
+        ctx: &crate::build_context::BuildContext,
         filter_name: Option<&str>,
         include_all: bool,
     ) -> Result<BuildGraph> {
@@ -663,26 +664,26 @@ impl Builder {
         self.discover_products(&mut graph, &processors, &active_processors, false)?;
 
         // Phase 2: Run dependency analyzers
-        self.run_analyzers(&mut graph, false)?;
+        self.run_analyzers(ctx, &mut graph, false)?;
 
         graph.resolve_dependencies();
         Ok(graph)
     }
 
     /// Build the dependency graph (creates processors internally)
-    fn build_graph(&self) -> Result<BuildGraph> {
+    fn build_graph(&self, ctx: &crate::build_context::BuildContext) -> Result<BuildGraph> {
         let processors = self.create_processors()?;
-        self.build_graph_with_processors(&processors)
+        self.build_graph_with_processors(ctx, &processors)
     }
 
     /// Build the dependency graph for cache operations (public).
-    pub fn build_graph_for_cache(&self) -> Result<BuildGraph> {
-        self.build_graph()
+    pub fn build_graph_for_cache(&self, ctx: &crate::build_context::BuildContext) -> Result<BuildGraph> {
+        self.build_graph(ctx)
     }
 
     /// Compute the set of valid cache keys from the current build graph.
-    pub fn valid_cache_keys(&self) -> Result<std::collections::HashSet<String>> {
-        let graph = self.build_graph_for_cache()?;
+    pub fn valid_cache_keys(&self, ctx: &crate::build_context::BuildContext) -> Result<std::collections::HashSet<String>> {
+        let graph = self.build_graph_for_cache(ctx)?;
         Ok(graph.products().iter().map(|p| p.cache_key()).collect())
     }
 

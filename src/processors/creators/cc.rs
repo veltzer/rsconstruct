@@ -61,7 +61,7 @@ impl CcProcessor {
 
     /// Compile a single source file to an object file.
     /// All paths are relative to the project root.
-    fn compile_object(manifest: &CcManifest, source: &Path, obj: &Path, extra_cflags: &[String]) -> Result<()> {
+    fn compile_object(ctx: &crate::build_context::BuildContext, manifest: &CcManifest, source: &Path, obj: &Path, extra_cflags: &[String]) -> Result<()> {
         crate::processors::ensure_output_dir(obj)?;
         let compiler = Self::compiler_for(manifest, source);
         let mut cmd = Command::new(&compiler);
@@ -73,24 +73,24 @@ impl CcProcessor {
             cmd.arg(flag);
         }
         cmd.arg("-o").arg(obj).arg(source);
-        let output = run_command(&mut cmd)?;
+        let output = run_command(ctx, &mut cmd)?;
         check_command_output(&output, format_args!("{} -c {}", compiler, source.display()))
     }
 
     /// Build a static library from object files.
-    fn build_static_lib(lib_path: &Path, objects: &[PathBuf]) -> Result<()> {
+    fn build_static_lib(ctx: &crate::build_context::BuildContext, lib_path: &Path, objects: &[PathBuf]) -> Result<()> {
         crate::processors::ensure_output_dir(lib_path)?;
         let mut cmd = Command::new("ar");
         cmd.arg("rcs").arg(lib_path);
         for obj in objects {
             cmd.arg(obj);
         }
-        let output = run_command(&mut cmd)?;
+        let output = run_command(ctx, &mut cmd)?;
         check_command_output(&output, format_args!("ar rcs {}", lib_path.display()))
     }
 
     /// Build a shared library from object files.
-    fn build_shared_lib(manifest: &CcManifest, lib_path: &Path, objects: &[PathBuf], ldflags: &[String]) -> Result<()> {
+    fn build_shared_lib(ctx: &crate::build_context::BuildContext, manifest: &CcManifest, lib_path: &Path, objects: &[PathBuf], ldflags: &[String]) -> Result<()> {
         crate::processors::ensure_output_dir(lib_path)?;
         let compiler = &manifest.cc;
         let mut cmd = Command::new(compiler);
@@ -104,12 +104,12 @@ impl CcProcessor {
         for flag in ldflags {
             cmd.arg(flag);
         }
-        let output = run_command(&mut cmd)?;
+        let output = run_command(ctx, &mut cmd)?;
         check_command_output(&output, format_args!("{} -shared -o {}", compiler, lib_path.display()))
     }
 
     /// Link object files into an executable.
-    fn link_program(manifest: &CcManifest, exe_path: &Path, objects: &[PathBuf], lib_dir: &Path, link_libs: &[String], ldflags: &[String]) -> Result<()> {
+    fn link_program(ctx: &crate::build_context::BuildContext, manifest: &CcManifest, exe_path: &Path, objects: &[PathBuf], lib_dir: &Path, link_libs: &[String], ldflags: &[String]) -> Result<()> {
         crate::processors::ensure_output_dir(exe_path)?;
         let compiler = &manifest.cc;
         let mut cmd = Command::new(compiler);
@@ -129,12 +129,12 @@ impl CcProcessor {
         for flag in ldflags {
             cmd.arg(flag);
         }
-        let output = run_command(&mut cmd)?;
+        let output = run_command(ctx, &mut cmd)?;
         check_command_output(&output, format_args!("{} -o {}", compiler, exe_path.display()))
     }
 
     /// Single-invocation build for a program (all sources in one command).
-    fn single_invocation_program(manifest: &CcManifest, exe_path: &Path, sources: &[PathBuf], lib_dir: &Path, link_libs: &[String], ldflags: &[String]) -> Result<()> {
+    fn single_invocation_program(ctx: &crate::build_context::BuildContext, manifest: &CcManifest, exe_path: &Path, sources: &[PathBuf], lib_dir: &Path, link_libs: &[String], ldflags: &[String]) -> Result<()> {
         crate::processors::ensure_output_dir(exe_path)?;
         let has_cxx = sources.iter().any(|s| Self::is_cxx(s));
         let compiler = if has_cxx { &manifest.cxx } else { &manifest.cc };
@@ -159,7 +159,7 @@ impl CcProcessor {
         for flag in ldflags {
             cmd.arg(flag);
         }
-        let output = run_command(&mut cmd)?;
+        let output = run_command(ctx, &mut cmd)?;
         check_command_output(&output, format_args!("{} -o {}", compiler, exe_path.display()))
     }
 
@@ -177,7 +177,7 @@ impl CcProcessor {
     /// Execute a full cc.yaml build.
     /// All commands run from the project root. Manifest paths are resolved
     /// to project-root-relative paths using the cc.yaml's parent directory.
-    fn execute_build(&self, yaml_path: &Path) -> Result<()> {
+    fn execute_build(&self, ctx: &crate::build_context::BuildContext, yaml_path: &Path) -> Result<()> {
         let manifest = Self::parse_manifest(yaml_path)?;
         let anchor_dir = yaml_path.parent().unwrap_or(Path::new(""));
         let output_dir = Self::output_dir_for(yaml_path);
@@ -210,17 +210,17 @@ impl CcProcessor {
                 let source = crate::processors::resolve_anchor_path(anchor_dir, source_str);
                 let obj_name = format!("{}.o", source.file_stem().context("source has no stem")?.to_string_lossy());
                 let obj = target_obj_dir.join(&obj_name);
-                Self::compile_object(&manifest, &source, &obj, &extra_cflags)?;
+                Self::compile_object(ctx, &manifest, &source, &obj, &extra_cflags)?;
                 objects.push(obj);
             }
 
             if build_static {
                 let lib_path = lib_dir.join(format!("lib{}.a", lib.name));
-                Self::build_static_lib(&lib_path, &objects)?;
+                Self::build_static_lib(ctx, &lib_path, &objects)?;
             }
             if build_shared {
                 let lib_path = lib_dir.join(format!("lib{}.so", lib.name));
-                Self::build_shared_lib(&manifest, &lib_path, &objects, &lib.ldflags)?;
+                Self::build_shared_lib(ctx, &manifest, &lib_path, &objects, &lib.ldflags)?;
             }
         }
 
@@ -234,7 +234,7 @@ impl CcProcessor {
                 .collect();
 
             if self.config.single_invocation {
-                Self::single_invocation_program(&manifest, &exe_path, &sources, &lib_dir, &prog.link, &prog.ldflags)?;
+                Self::single_invocation_program(ctx, &manifest, &exe_path, &sources, &lib_dir, &prog.link, &prog.ldflags)?;
             } else {
                 let target_obj_dir = obj_dir.join(&prog.name);
                 let mut objects = Vec::new();
@@ -248,10 +248,10 @@ impl CcProcessor {
                 for source in &sources {
                     let obj_name = format!("{}.o", source.file_stem().context("source has no stem")?.to_string_lossy());
                     let obj = target_obj_dir.join(&obj_name);
-                    Self::compile_object(&manifest, source, &obj, &extra_cflags)?;
+                    Self::compile_object(ctx, &manifest, source, &obj, &extra_cflags)?;
                     objects.push(obj);
                 }
-                Self::link_program(&manifest, &exe_path, &objects, &lib_dir, &prog.link, &prog.ldflags)?;
+                Self::link_program(ctx, &manifest, &exe_path, &objects, &lib_dir, &prog.link, &prog.ldflags)?;
             }
         }
 
@@ -339,10 +339,10 @@ impl Processor for CcProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let yaml_path = product.primary_input();
         let display_dir = anchor_display_dir(yaml_path);
-        self.execute_build(yaml_path)
+        self.execute_build(ctx, yaml_path)
             .with_context(|| format!("cc build failed in {}", display_dir))
     }
 }

@@ -24,14 +24,14 @@ impl MdbookProcessor {
     }
 
     /// Run mdbook build in the book.toml's directory
-    fn execute_mdbook(&self, book_toml: &Path) -> Result<()> {
+    fn execute_mdbook(&self, ctx: &crate::build_context::BuildContext, book_toml: &Path) -> Result<()> {
         let mut cmd = Command::new(&self.config.mdbook);
         cmd.arg("build");
         cmd.arg(".");
         for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
-        let output = run_in_anchor_dir(&mut cmd, book_toml)?;
+        let output = run_in_anchor_dir(ctx, &mut cmd, book_toml)?;
         check_command_output(&output, format_args!("mdbook build in {}", anchor_display_dir(book_toml)))
     }
 }
@@ -92,8 +92,8 @@ impl Processor for MdbookProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
-        self.execute_mdbook(product.primary_input())
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+        self.execute_mdbook(ctx, product.primary_input())
     }
 }
 

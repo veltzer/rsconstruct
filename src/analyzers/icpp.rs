@@ -50,23 +50,23 @@ impl IcppDepAnalyzer {
     }
 
     /// Query pkg-config for include paths (lazy, cached).
-    fn get_pkg_config_include_paths(&self) -> &[PathBuf] {
+    fn get_pkg_config_include_paths(&self, ctx: &crate::build_context::BuildContext) -> &[PathBuf] {
         self.pkg_config_include_paths.get_or_init(|| {
-            super::query_pkg_config_include_paths("icpp", &self.config.pkg_config, self.verbose)
+            super::query_pkg_config_include_paths(ctx, "icpp", &self.config.pkg_config, self.verbose)
         })
     }
 
     /// Run configured include_path_commands to get additional include paths (lazy, cached).
-    fn get_command_include_paths(&self) -> &[PathBuf] {
+    fn get_command_include_paths(&self, ctx: &crate::build_context::BuildContext) -> &[PathBuf] {
         self.command_include_paths.get_or_init(|| {
-            super::run_include_path_commands("icpp", &self.config.include_path_commands, self.verbose)
+            super::run_include_path_commands(ctx, "icpp", &self.config.include_path_commands, self.verbose)
         })
     }
 
     /// Resolve a single `#include` directive to a file, if any.
     /// Searches in order: including file's directory, configured include_paths,
     /// pkg-config-discovered include paths, then include paths from configured commands.
-    fn resolve_include(&self, include: &str, including_dir: &Path) -> Option<PathBuf> {
+    fn resolve_include(&self, ctx: &crate::build_context::BuildContext, include: &str, including_dir: &Path) -> Option<PathBuf> {
         let candidate = including_dir.join(include);
         if candidate.is_file() {
             return Some(candidate);
@@ -77,13 +77,13 @@ impl IcppDepAnalyzer {
                 return Some(candidate);
             }
         }
-        for inc_dir in self.get_pkg_config_include_paths() {
+        for inc_dir in self.get_pkg_config_include_paths(ctx) {
             let candidate = inc_dir.join(include);
             if candidate.is_file() {
                 return Some(candidate);
             }
         }
-        for inc_dir in self.get_command_include_paths() {
+        for inc_dir in self.get_command_include_paths(ctx) {
             let candidate = inc_dir.join(include);
             if candidate.is_file() {
                 return Some(candidate);
@@ -95,7 +95,7 @@ impl IcppDepAnalyzer {
     /// Scan a single file for `#include` directives. Returns resolved dep paths.
     /// Errors if a `"quoted"` include can't be resolved (system headers via `<angle>`
     /// are allowed to be unresolved — they may live in system include paths).
-    fn scan_file_includes(&self, source: &Path) -> Result<Vec<PathBuf>> {
+    fn scan_file_includes(&self, ctx: &crate::build_context::BuildContext, source: &Path) -> Result<Vec<PathBuf>> {
         let content = errors::ctx(fs::read_to_string(source), &format!("Failed to read {}", source.display()))?;
 
         static INCLUDE_RE: OnceLock<Regex> = OnceLock::new();
@@ -113,7 +113,7 @@ impl IcppDepAnalyzer {
                 if !is_quoted && !self.config.follow_angle_brackets {
                     continue;
                 }
-                match self.resolve_include(include, parent) {
+                match self.resolve_include(ctx, include, parent) {
                     Some(resolved) => deps.push(resolved),
                     None if is_quoted && !self.config.skip_not_found => {
                         anyhow::bail!(
@@ -131,13 +131,13 @@ impl IcppDepAnalyzer {
     /// Recursively scan `source` for transitive includes. Returns the full set
     /// of project-local header files it depends on (excluding the source itself).
     /// Propagates errors from `scan_file_includes` (including "Include not found").
-    fn scan_includes(&self, source: &Path) -> Result<Vec<PathBuf>> {
+    fn scan_includes(&self, ctx: &crate::build_context::BuildContext, source: &Path) -> Result<Vec<PathBuf>> {
         let mut seen: HashSet<PathBuf> = HashSet::new();
         let mut headers: Vec<PathBuf> = Vec::new();
         let mut queue: Vec<PathBuf> = vec![source.to_path_buf()];
 
         while let Some(file) = queue.pop() {
-            let direct_deps = self.scan_file_includes(&file)?;
+            let direct_deps = self.scan_file_includes(ctx, &file)?;
             for dep in direct_deps {
                 if seen.insert(dep.clone()) {
                     headers.push(dep.clone());
@@ -183,6 +183,7 @@ impl DepAnalyzer for IcppDepAnalyzer {
 
     fn analyze(
         &self,
+        ctx: &crate::build_context::BuildContext,
         graph: &mut BuildGraph,
         deps_cache: &mut DepsCache,
         _file_index: &FileIndex,
@@ -190,11 +191,12 @@ impl DepAnalyzer for IcppDepAnalyzer {
         progress: &ProgressBar,
     ) -> Result<()> {
         super::analyze_with_scanner(
+            ctx,
             graph,
             deps_cache,
             &self.iname,
             |p| self.match_product(p),
-            |source| self.scan_includes(source),
+            |source| self.scan_includes(ctx, source),
             progress,
         )
     }

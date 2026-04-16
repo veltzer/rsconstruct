@@ -7,6 +7,7 @@ mod registries;
 #[macro_use]
 mod errors;
 mod analyzers;
+mod build_context;
 mod builder;
 mod checksum;
 mod cli;
@@ -137,12 +138,13 @@ fn run() -> Result<()> {
         });
     }
     let init_dur = t.elapsed();
+    let ctx = build_context::BuildContext::new();
 
     match cli.command {
         Commands::Build { force, dry_run, verify_tool_versions, stop_after, ref shared } => {
             if dry_run {
                 let builder = Builder::new()?;
-                builder.dry_run(force, shared.explain)?;
+                builder.dry_run(&ctx, force, shared.explain)?;
             } else {
                 let t = Instant::now();
                 let mut builder = Builder::new()?;
@@ -159,7 +161,7 @@ fn run() -> Result<()> {
                     ("verify_tools".to_string(), verify_tools_dur),
                 ];
                 let opts = shared.to_build_options(&cli, force, stop_after);
-                builder.build(&opts, Arc::clone(&interrupted), init_timings)?;
+                builder.build(&ctx, &opts, Arc::clone(&interrupted), init_timings)?;
             }
         }
         Commands::Cache { action } => {
@@ -185,7 +187,7 @@ fn run() -> Result<()> {
                 }
                 CacheAction::RemoveStale => {
                     let builder = Builder::new()?;
-                    let valid_keys = builder.valid_cache_keys()?;
+                    let valid_keys = builder.valid_cache_keys(&ctx)?;
                     let stale_count = builder.object_store().remove_stale(&valid_keys)?;
                     let (bytes, trim_count) = builder.object_store().trim()?;
                     println!("Removed {} stale index entries", stale_count);
@@ -230,7 +232,7 @@ fn run() -> Result<()> {
                 }
                 CacheAction::Stale => {
                     let builder = Builder::new()?;
-                    let valid_keys = builder.valid_cache_keys()?;
+                    let valid_keys = builder.valid_cache_keys(&ctx)?;
                     let entries = builder.object_store().list();
                     let mut current_count = 0usize;
                     let mut stale_count = 0usize;

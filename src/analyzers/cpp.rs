@@ -52,16 +52,16 @@ impl CppDepAnalyzer {
     }
 
     /// Query pkg-config for include paths (lazy, cached).
-    fn get_pkg_config_include_paths(&self) -> &[PathBuf] {
+    fn get_pkg_config_include_paths(&self, ctx: &crate::build_context::BuildContext) -> &[PathBuf] {
         self.pkg_config_include_paths.get_or_init(|| {
-            super::query_pkg_config_include_paths("cpp", &self.config.pkg_config, self.verbose)
+            super::query_pkg_config_include_paths(ctx, "cpp", &self.config.pkg_config, self.verbose)
         })
     }
 
     /// Run configured include_path_commands to get additional include paths (lazy, cached).
-    fn get_command_include_paths(&self) -> &[PathBuf] {
+    fn get_command_include_paths(&self, ctx: &crate::build_context::BuildContext) -> &[PathBuf] {
         self.command_include_paths.get_or_init(|| {
-            super::run_include_path_commands("cpp", &self.config.include_path_commands, self.verbose)
+            super::run_include_path_commands(ctx, "cpp", &self.config.include_path_commands, self.verbose)
         })
     }
 
@@ -82,7 +82,7 @@ impl CppDepAnalyzer {
     }
 
     /// Run gcc/g++ -MM to scan dependencies for a source file.
-    fn scan_dependencies_compiler(&self, source: &Path, is_cpp: bool) -> Result<Vec<PathBuf>> {
+    fn scan_dependencies_compiler(&self, ctx: &crate::build_context::BuildContext, source: &Path, is_cpp: bool) -> Result<Vec<PathBuf>> {
         let compiler = if is_cpp { &self.config.cxx } else { &self.config.cc };
 
         let mut cmd = Command::new(compiler);
@@ -94,12 +94,12 @@ impl CppDepAnalyzer {
         }
 
         // Add pkg-config include paths
-        for inc in self.get_pkg_config_include_paths() {
+        for inc in self.get_pkg_config_include_paths(ctx) {
             cmd.arg(format!("-I{}", inc.display()));
         }
 
         // Add include paths from commands
-        for inc in self.get_command_include_paths() {
+        for inc in self.get_command_include_paths(ctx) {
             cmd.arg(format!("-I{}", inc.display()));
         }
 
@@ -115,7 +115,7 @@ impl CppDepAnalyzer {
             eprintln!("[cpp] {}", format_command(&cmd));
         }
 
-        let output = run_command_capture(&mut cmd)?;
+        let output = run_command_capture(ctx, &mut cmd)?;
         check_command_output(&output, format_args!("Dependency scan of {}", source.display()))?;
 
         let content = String::from_utf8_lossy(&output.stdout).to_string();
@@ -175,8 +175,8 @@ impl CppDepAnalyzer {
     }
 
     /// Scan dependencies using compiler -MM method.
-    fn scan_dependencies(&self, source: &Path, is_cpp: bool) -> Result<Vec<PathBuf>> {
-        self.scan_dependencies_compiler(source, is_cpp)
+    fn scan_dependencies(&self, ctx: &crate::build_context::BuildContext, source: &Path, is_cpp: bool) -> Result<Vec<PathBuf>> {
+        self.scan_dependencies_compiler(ctx, source, is_cpp)
     }
 }
 
@@ -214,6 +214,7 @@ impl DepAnalyzer for CppDepAnalyzer {
 
     fn analyze(
         &self,
+        ctx: &crate::build_context::BuildContext,
         graph: &mut BuildGraph,
         deps_cache: &mut DepsCache,
         _file_index: &FileIndex,
@@ -221,6 +222,7 @@ impl DepAnalyzer for CppDepAnalyzer {
         progress: &ProgressBar,
     ) -> Result<()> {
         super::analyze_with_scanner(
+            ctx,
             graph,
             deps_cache,
             &self.iname,
@@ -228,7 +230,7 @@ impl DepAnalyzer for CppDepAnalyzer {
             |source| {
                 let ext = source.extension().and_then(|s| s.to_str()).unwrap_or("");
                 let is_cpp = ext == "cc" || ext == "cpp" || ext == "cxx";
-                self.scan_dependencies(source, is_cpp)
+                self.scan_dependencies(ctx, source, is_cpp)
             },
             progress,
         )

@@ -32,11 +32,11 @@ impl GeneratorProcessor {
         scan_root_valid(&self.config.standard) && !self.config.standard.command.is_empty()
     }
 
-    fn execute_product(&self, product: &Product) -> Result<()> {
-        self.run_pairs(&[(product.primary_input(), product.primary_output())])
+    fn execute_product(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+        self.run_pairs(ctx, &[(product.primary_input(), product.primary_output())])
     }
 
-    fn run_pairs(&self, pairs: &[(&Path, &Path)]) -> Result<()> {
+    fn run_pairs(&self, ctx: &crate::build_context::BuildContext, pairs: &[(&Path, &Path)]) -> Result<()> {
         for pair in pairs {
             crate::processors::ensure_output_dir(pair.1)?;
         }
@@ -51,7 +51,7 @@ impl GeneratorProcessor {
             cmd.arg(output);
         }
 
-        let out = run_command(&mut cmd)?;
+        let out = run_command(ctx, &mut cmd)?;
         check_command_output(&out, format_args!("{} ({} file(s))", command, pairs.len()))
     }
 }
@@ -126,16 +126,16 @@ impl Processor for GeneratorProcessor {
         Ok(())
     }
 
-    fn execute(&self, product: &Product) -> Result<()> {
-        self.execute_product(product)
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+        self.execute_product(ctx, product)
     }
 
     fn supports_batch(&self) -> bool {
         self.config.standard.batch
     }
 
-    fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
-        execute_generator_batch(products, |pairs| self.run_pairs(pairs))
+    fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
+        execute_generator_batch(ctx, products, |ctx, pairs| self.run_pairs(ctx, pairs))
     }
 }
 

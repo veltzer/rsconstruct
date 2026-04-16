@@ -140,6 +140,7 @@ impl DepAnalyzer for PythonDepAnalyzer {
 
     fn analyze(
         &self,
+        ctx: &crate::build_context::BuildContext,
         graph: &mut BuildGraph,
         deps_cache: &mut DepsCache,
         file_index: &FileIndex,
@@ -147,6 +148,7 @@ impl DepAnalyzer for PythonDepAnalyzer {
         progress: &ProgressBar,
     ) -> Result<()> {
         super::analyze_with_scanner(
+            ctx,
             graph,
             deps_cache,
             &self.iname,

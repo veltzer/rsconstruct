@@ -22,9 +22,9 @@ impl ScriptProcessor {
         }
     }
 
-    fn check_files(&self, files: &[&Path]) -> Result<()> {
+    fn check_files(&self, ctx: &crate::build_context::BuildContext, files: &[&Path]) -> Result<()> {
         let command = self.config.standard.require_command(crate::processors::names::SCRIPT)?;
-        run_checker(command, None, &self.config.standard.args, files)
+        run_checker(ctx, command, None, &self.config.standard.args, files)
     }
 }
 
@@ -84,16 +84,16 @@ impl Processor for ScriptProcessor {
         Ok(())
     }
 
-    fn execute(&self, product: &Product) -> Result<()> {
-        self.check_files(&[product.primary_input()])
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+        self.check_files(ctx, &[product.primary_input()])
     }
 
     fn supports_batch(&self) -> bool {
         self.config.standard.batch
     }
 
-    fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
-        execute_checker_batch(products, |files| self.check_files(files))
+    fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
+        execute_checker_batch(ctx, products, |ctx, files| self.check_files(ctx, files))
     }
 
 }

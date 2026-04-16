@@ -80,7 +80,7 @@ impl Processor for PdflatexProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let input = product.primary_input();
         let final_output = product.primary_output();
 
@@ -113,7 +113,7 @@ impl Processor for PdflatexProcessor {
             }
             cmd.arg(input);
 
-            let out = run_command(&mut cmd)?;
+            let out = run_command(ctx, &mut cmd)?;
             check_command_output(&out, format_args!("pdflatex run {} of {}", run + 1, input.display()))?;
         }
 
@@ -128,7 +128,7 @@ impl Processor for PdflatexProcessor {
             cmd.arg(&pdf_in_build);
             cmd.arg(&qpdf_tmp);
 
-            let out = run_command(&mut cmd)?;
+            let out = run_command(ctx, &mut cmd)?;
             check_command_output(&out, format_args!("qpdf {}", pdf_in_build.display()))?;
 
             // Replace original with linearized version

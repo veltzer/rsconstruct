@@ -114,14 +114,14 @@ impl Processor for CreatorProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let anchor = product.primary_input();
         let command = self.config.standard.require_command("creator")?;
         let mut cmd = Command::new(command);
         for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
-        let output = run_in_anchor_dir(&mut cmd, anchor)?;
+        let output = run_in_anchor_dir(ctx, &mut cmd, anchor)?;
         check_command_output(&output, format_args!("{} in {}", command, anchor_display_dir(anchor)))
     }
 }

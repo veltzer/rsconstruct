@@ -27,13 +27,13 @@ impl JekyllProcessor {
         scan_root_valid(&self.config.standard)
     }
 
-    fn execute_jekyll(&self, config_yml: &Path) -> Result<()> {
+    fn execute_jekyll(&self, ctx: &crate::build_context::BuildContext, config_yml: &Path) -> Result<()> {
         let mut cmd = Command::new("jekyll");
         cmd.arg("build");
         for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
-        let output = run_in_anchor_dir(&mut cmd, config_yml)?;
+        let output = run_in_anchor_dir(ctx, &mut cmd, config_yml)?;
         check_command_output(&output, format_args!("jekyll build in {}", anchor_display_dir(config_yml)))
     }
 }
@@ -93,8 +93,8 @@ impl Processor for JekyllProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
-        self.execute_jekyll(product.primary_input())
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+        self.execute_jekyll(ctx, product.primary_input())
     }
 }
 

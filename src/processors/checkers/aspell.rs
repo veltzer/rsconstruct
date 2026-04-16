@@ -136,7 +136,7 @@ impl Processor for AspellProcessor {
         )
     }
 
-    fn execute(&self, product: &Product) -> Result<()> {
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         self.words.execute_with_flush(
             product,
             self.config.auto_add_words,
@@ -149,7 +149,7 @@ impl Processor for AspellProcessor {
         self.config.auto_add_words
     }
 
-    fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
+    fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
         self.words.execute_batch_with_flush(
             products,
             self.config.auto_add_words,

@@ -24,7 +24,7 @@ impl CargoProcessor {
     }
 
     /// Run cargo build in the Cargo.toml's directory with the given profile
-    fn execute_cargo(&self, cargo_toml: &Path, profile: &str) -> Result<()> {
+    fn execute_cargo(&self, ctx: &crate::build_context::BuildContext, cargo_toml: &Path, profile: &str) -> Result<()> {
         let subcommand = self.config.standard.require_command(crate::processors::names::CARGO)?;
         let mut cmd = Command::new(&self.config.cargo);
         cmd.arg(subcommand);
@@ -32,7 +32,7 @@ impl CargoProcessor {
         for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
-        let output = run_in_anchor_dir(&mut cmd, cargo_toml)?;
+        let output = run_in_anchor_dir(ctx, &mut cmd, cargo_toml)?;
         check_command_output(&output, format_args!("cargo {} --profile {} in {}", subcommand, profile, anchor_display_dir(cargo_toml)))
     }
 }
@@ -127,9 +127,9 @@ impl Processor for CargoProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let profile = product.variant.as_deref().unwrap_or("dev");
-        self.execute_cargo(product.primary_input(), profile)
+        self.execute_cargo(ctx, product.primary_input(), profile)
     }
 }
 

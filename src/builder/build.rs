@@ -77,7 +77,7 @@ fn expand_aliases(filter: &[String], processors: &ProcessorMap) -> Vec<String> {
 
 impl Builder {
     /// Execute an incremental build using the dependency graph
-    pub fn build(&mut self, opts: &BuildOptions, interrupted: Arc<std::sync::atomic::AtomicBool>, init_timings: Vec<(String, Duration)>) -> Result<(), anyhow::Error> {
+    pub fn build(&mut self, ctx: &crate::build_context::BuildContext, opts: &BuildOptions, interrupted: Arc<std::sync::atomic::AtomicBool>, init_timings: Vec<(String, Duration)>) -> Result<(), anyhow::Error> {
         // CLI override for zspell and aspell auto_add_words
         if opts.auto_add_words {
             for inst in &mut self.config.processor.instances {
@@ -197,7 +197,7 @@ impl Builder {
         self.detect_config_changes(&processors, opts.show_all_config_changes);
 
         // Build the dependency graph (may stop early based on stop_after)
-        let (mut graph, mut phase_timings) = self.build_graph_with_processors_and_phase(&processors, opts.stop_after, processor_filter, opts.verbose)?;
+        let (mut graph, mut phase_timings) = self.build_graph_with_processors_and_phase(ctx, &processors, opts.stop_after, processor_filter, opts.verbose)?;
 
         // Filter by target patterns if specified
         if let Some(ref targets) = opts.targets {
@@ -250,7 +250,7 @@ impl Builder {
             .unwrap_or(self.config.build.parallel);
         // CLI overrides config for batch_size
         let batch_size = opts.batch_size.unwrap_or(self.config.build.batch_size);
-        let executor = Executor::new(&processors, ExecutorOptions {
+        let executor = Executor::new(&processors, ctx, ExecutorOptions {
             parallel,
             verbose: opts.verbose,
             display_opts: opts.display_opts,
@@ -300,9 +300,9 @@ impl Builder {
     }
 
     /// Show what would happen without executing anything
-    pub fn dry_run(&self, force: bool, explain: bool) -> anyhow::Result<()> {
+    pub fn dry_run(&self, ctx: &crate::build_context::BuildContext, force: bool, explain: bool) -> anyhow::Result<()> {
         let processors = self.create_processors()?;
-        let graph = self.build_graph_with_processors(&processors)?;
+        let graph = self.build_graph_with_processors(ctx, &processors)?;
 
         let order = graph.topological_sort()?;
         if order.is_empty() {
@@ -331,9 +331,9 @@ impl Builder {
     }
 
     /// Show the status of each product in the build graph
-    pub fn status(&self, verbose: bool, breakdown: bool) -> anyhow::Result<()> {
+    pub fn status(&self, ctx: &crate::build_context::BuildContext, verbose: bool, breakdown: bool) -> anyhow::Result<()> {
         let processors = self.create_processors()?;
-        let graph = self.build_graph_with_processors(&processors)?;
+        let graph = self.build_graph_with_processors(ctx, &processors)?;
 
         let products: Vec<&_> = graph.products().iter().collect();
         if products.is_empty() && processors.is_empty() {
@@ -410,9 +410,9 @@ impl Builder {
     }
 
     /// Show source file counts by extension.
-    pub fn info_source(&self) -> anyhow::Result<()> {
+    pub fn info_source(&self, ctx: &crate::build_context::BuildContext) -> anyhow::Result<()> {
         let processors = self.create_processors()?;
-        let graph = self.build_graph_with_processors(&processors)?;
+        let graph = self.build_graph_with_processors(ctx, &processors)?;
 
         let products = graph.products();
         let mut all_inputs: std::collections::HashSet<&std::path::Path> = std::collections::HashSet::new();

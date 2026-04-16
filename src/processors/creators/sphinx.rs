@@ -26,7 +26,7 @@ impl SphinxProcessor {
     /// Run sphinx-build from the project root.
     /// Source dir is the directory containing conf.py (e.g. "sphinx"),
     /// output dir is at project root level (e.g. "docs").
-    fn execute_sphinx(&self, conf_py: &Path) -> Result<()> {
+    fn execute_sphinx(&self, ctx: &crate::build_context::BuildContext, conf_py: &Path) -> Result<()> {
         let mut cmd = Command::new(&self.config.sphinx_build);
         let anchor_dir = conf_py.parent().unwrap_or(Path::new(""));
         // Source dir is the directory containing conf.py (e.g. "sphinx")
@@ -43,7 +43,7 @@ impl SphinxProcessor {
         if let Some(ref dir) = self.config.working_dir {
             cmd.current_dir(dir);
         }
-        let output = run_command(&mut cmd)?;
+        let output = run_command(ctx, &mut cmd)?;
         check_command_output(&output, format_args!("sphinx-build in {}", anchor_display_dir(conf_py)))
     }
 }
@@ -108,8 +108,8 @@ impl Processor for SphinxProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
-        self.execute_sphinx(product.primary_input())
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+        self.execute_sphinx(ctx, product.primary_input())
     }
 }
 

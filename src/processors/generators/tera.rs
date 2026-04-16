@@ -16,8 +16,26 @@ use crate::processors::{ProcessorBase, Processor, run_command_capture};
 
 use super::TemplateItem;
 
+/// Wrapper around a `&BuildContext` reference that can be stored in Tera function structs.
+/// Tera's `Function` trait requires `Send + Sync + 'static`, so we cannot use a borrow.
+/// Safety: the pointer is only dereferenced during `render_template`, which holds the
+/// original `&BuildContext` reference for the entire duration of the Tera render call.
+#[derive(Clone, Copy)]
+struct CtxPtr(*const crate::build_context::BuildContext);
+
+// SAFETY: BuildContext is Sync + Send; the pointer is only live while render_template runs.
+unsafe impl Send for CtxPtr {}
+unsafe impl Sync for CtxPtr {}
+
+impl CtxPtr {
+    fn get(&self) -> &crate::build_context::BuildContext {
+        // SAFETY: caller guarantees the BuildContext outlives all uses of CtxPtr.
+        unsafe { &*self.0 }
+    }
+}
+
 /// Render a template item and write to output
-fn render_template(item: &TemplateItem) -> Result<()> {
+fn render_template(ctx: &crate::build_context::BuildContext, item: &TemplateItem) -> Result<()> {
     // Ensure parent directory of output exists
     crate::processors::ensure_output_dir(&item.output_path)?;
 
@@ -28,13 +46,14 @@ fn render_template(item: &TemplateItem) -> Result<()> {
     let mut tera = Tera::default();
 
     // Register template functions
-    tera.register_function("load_python", LoadPythonFunction);
+    let ctx_ptr = CtxPtr(ctx as *const _);
+    tera.register_function("load_python", LoadPythonFunction { ctx: ctx_ptr });
     tera.register_function("load_lua", LoadLuaFunction);
-    tera.register_function("version_str", VersionStrFunction);
-    tera.register_function("copyright_years", CopyrightYearsFunction);
-    tera.register_function("git_count_files", GitCountFilesFunction);
+    tera.register_function("version_str", VersionStrFunction { ctx: ctx_ptr });
+    tera.register_function("copyright_years", CopyrightYearsFunction { ctx: ctx_ptr });
+    tera.register_function("git_count_files", GitCountFilesFunction { ctx: ctx_ptr });
     tera.register_function("workflow_names", WorkflowNamesFunction);
-    tera.register_function("shell_output", ShellOutputFunction);
+    tera.register_function("shell_output", ShellOutputFunction { ctx: ctx_ptr });
 
     // Add the template
     tera.add_raw_template("template", &template_content)
@@ -147,17 +166,17 @@ impl Processor for TeraProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let item = TemplateItem::new(
             product.primary_input().to_path_buf(),
             product.primary_output().to_path_buf(),
         );
-        render_template(&item)
+        render_template(ctx, &item)
     }
 }
 
 /// Custom Tera function to load Python configuration files
-struct LoadPythonFunction;
+struct LoadPythonFunction { ctx: CtxPtr }
 
 impl Function for LoadPythonFunction {
     fn call(&self, args: &HashMap<String, TeraValue>) -> tera::Result<TeraValue> {
@@ -168,7 +187,7 @@ impl Function for LoadPythonFunction {
             .ok_or_else(|| tera::Error::msg("load_python requires a 'path' argument"))?;
 
         // Execute Python and load the config
-        let result = load_python_config(Path::new(path))
+        let result = load_python_config(self.ctx.get(), Path::new(path))
             .map_err(|e| tera::Error::msg(format!("Failed to load Python config: {}", e)))?;
 
         to_value(result).map_err(|e| tera::Error::msg(format!("Failed to convert Python config to template value: {e}")))
@@ -194,7 +213,7 @@ impl Function for LoadLuaFunction {
 
 /// Load a Python file containing a `tup` variable and return a dot-joined version string.
 /// e.g. `tup = (0, 0, 1)` → `"0.0.1"`
-struct VersionStrFunction;
+struct VersionStrFunction { ctx: CtxPtr }
 
 impl Function for VersionStrFunction {
     fn call(&self, args: &HashMap<String, TeraValue>) -> tera::Result<TeraValue> {
@@ -206,7 +225,7 @@ impl Function for VersionStrFunction {
         let config = if path.ends_with(".lua") {
             load_lua_config(Path::new(path))
         } else {
-            load_python_config(Path::new(path))
+            load_python_config(self.ctx.get(), Path::new(path))
         }
         .map_err(|e| tera::Error::msg(format!("version_str: failed to load {path}: {e}")))?;
 
@@ -232,13 +251,13 @@ impl Function for VersionStrFunction {
 
 /// Return a comma-separated range of years from the first git commit year to the current year.
 /// e.g. `"2013, 2014, 2015, ..., 2026"`
-struct CopyrightYearsFunction;
+struct CopyrightYearsFunction { ctx: CtxPtr }
 
 impl Function for CopyrightYearsFunction {
     fn call(&self, _args: &HashMap<String, TeraValue>) -> tera::Result<TeraValue> {
         let mut cmd = Command::new("git");
         cmd.args(["log", "--reverse", "--format=%ad", "--date=format:%Y"]);
-        let output = run_command_capture(&mut cmd)
+        let output = run_command_capture(self.ctx.get(), &mut cmd)
             .map_err(|e| tera::Error::msg(format!("copyright_years: {e}")))?;
 
         if !output.status.success() {
@@ -261,7 +280,7 @@ impl Function for CopyrightYearsFunction {
 }
 
 /// Run `git ls-files -- "{pattern}"` and return the count of matching files.
-struct GitCountFilesFunction;
+struct GitCountFilesFunction { ctx: CtxPtr }
 
 impl Function for GitCountFilesFunction {
     fn call(&self, args: &HashMap<String, TeraValue>) -> tera::Result<TeraValue> {
@@ -272,7 +291,7 @@ impl Function for GitCountFilesFunction {
 
         let mut cmd = Command::new("git");
         cmd.args(["ls-files", "--", pattern]);
-        let output = run_command_capture(&mut cmd)
+        let output = run_command_capture(self.ctx.get(), &mut cmd)
             .map_err(|e| tera::Error::msg(format!("git_count_files: {e}")))?;
 
         if !output.status.success() {
@@ -332,7 +351,7 @@ impl Function for WorkflowNamesFunction {
 }
 
 /// Run a shell command and return its trimmed stdout.
-struct ShellOutputFunction;
+struct ShellOutputFunction { ctx: CtxPtr }
 
 impl Function for ShellOutputFunction {
     fn call(&self, args: &HashMap<String, TeraValue>) -> tera::Result<TeraValue> {
@@ -343,7 +362,7 @@ impl Function for ShellOutputFunction {
 
         let mut cmd = Command::new("sh");
         cmd.args(["-c", command]);
-        let output = run_command_capture(&mut cmd)
+        let output = run_command_capture(self.ctx.get(), &mut cmd)
             .map_err(|e| tera::Error::msg(format!("shell_output: {e}")))?;
 
         if !output.status.success() {
@@ -358,7 +377,7 @@ impl Function for ShellOutputFunction {
 }
 
 /// Load configuration from a Python file
-fn load_python_config(python_file: &Path) -> Result<Map<String, Value>> {
+fn load_python_config(ctx: &crate::build_context::BuildContext, python_file: &Path) -> Result<Map<String, Value>> {
     // Resolve the path relative to current working directory
     let absolute_path = if python_file.is_absolute() {
         python_file.to_path_buf()
@@ -415,7 +434,7 @@ print(json.dumps(result))
     // Execute Python and capture output
     let mut cmd = Command::new("python3");
     cmd.arg("-c").arg(&python_script);
-    let output = run_command_capture(&mut cmd)?;
+    let output = run_command_capture(ctx, &mut cmd)?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

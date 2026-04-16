@@ -69,7 +69,7 @@ impl crate::processors::Processor for DuplicateFilesProcessor {
     }
 
 
-    fn execute(&self, product: &Product) -> Result<()> {
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         self.execute_product(product)
     }
 
@@ -81,8 +81,8 @@ impl crate::processors::Processor for DuplicateFilesProcessor {
 
     fn supports_batch(&self) -> bool { self.config.standard.batch }
 
-    fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
-        crate::processors::execute_checker_batch(products, |files| self.check_files(files))
+    fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
+        crate::processors::execute_checker_batch(ctx, products, |ctx, files| self.check_files(files))
     }
 }
 

@@ -24,7 +24,7 @@ impl PipProcessor {
     }
 
     /// Run pip install -r requirements.txt in the file's directory
-    fn execute_pip(&self, requirements_txt: &Path) -> Result<()> {
+    fn execute_pip(&self, ctx: &crate::build_context::BuildContext, requirements_txt: &Path) -> Result<()> {
         let mut cmd = Command::new(&self.config.pip);
         cmd.arg("install");
         cmd.arg("-r").arg(requirements_txt.file_name()
@@ -33,7 +33,7 @@ impl PipProcessor {
         for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
-        let output = run_in_anchor_dir(&mut cmd, requirements_txt)?;
+        let output = run_in_anchor_dir(ctx, &mut cmd, requirements_txt)?;
         check_command_output(&output, format_args!("pip install in {}", anchor_display_dir(requirements_txt)))
     }
 }
@@ -94,8 +94,8 @@ impl Processor for PipProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
-        self.execute_pip(product.primary_input())
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+        self.execute_pip(ctx, product.primary_input())
     }
 }
 

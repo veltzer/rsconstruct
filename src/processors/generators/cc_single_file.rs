@@ -13,7 +13,7 @@ use crate::processors::{check_command_output, run_command_capture};
 static SHELL_COMMAND_CACHE: Mutex<Option<HashMap<String, Vec<String>>>> = Mutex::new(None);
 
 /// Get or compute flags from a shell command, caching the result.
-fn cached_shell_command(cmd_line: &str, runner: impl FnOnce(&str) -> Result<Vec<String>>) -> Result<Vec<String>> {
+fn cached_shell_command(cmd_line: &str, runner: impl FnOnce(&crate::build_context::BuildContext, &str) -> Result<Vec<String>>, ctx: &crate::build_context::BuildContext) -> Result<Vec<String>> {
     let mut guard = SHELL_COMMAND_CACHE.lock();
     let cache = guard.get_or_insert_with(HashMap::new);
 
@@ -21,7 +21,7 @@ fn cached_shell_command(cmd_line: &str, runner: impl FnOnce(&str) -> Result<Vec<
         return Ok(cached.clone());
     }
 
-    let result = runner(cmd_line)?;
+    let result = runner(ctx, cmd_line)?;
     cache.insert(cmd_line.to_string(), result.clone());
     Ok(result)
 }
@@ -125,7 +125,7 @@ fn should_exclude_for_profile(source: &Path, profile_name: &str) -> bool {
 /// The `profile_name` parameter specifies the current compiler profile name.
 /// Directives without a profile suffix apply to all profiles.
 /// Directives with a profile suffix (e.g., `[gcc]`) only apply when that profile is active.
-fn parse_source_flags(source: &Path, profile_name: &str) -> Result<SourceFlags> {
+fn parse_source_flags(ctx: &crate::build_context::BuildContext, source: &Path, profile_name: &str) -> Result<SourceFlags> {
     let content = fs::read_to_string(source)
         .with_context(|| format!("Failed to read source file: {}", source.display()))?;
 
@@ -157,7 +157,7 @@ fn parse_source_flags(source: &Path, profile_name: &str) -> Result<SourceFlags> 
             if let Some((rest, applies)) = match_directive_with_profile(value_part, var_name, profile_name)
                 && applies
                     && let Some(raw_value) = rest.strip_prefix('=') {
-                        let expanded = expand_backticks(raw_value.trim())?;
+                        let expanded = expand_backticks(ctx, raw_value.trim())?;
                         let args: Vec<String> = expanded
                             .split_whitespace()
                             .map(String::from)
@@ -177,7 +177,7 @@ fn parse_source_flags(source: &Path, profile_name: &str) -> Result<SourceFlags> 
                 && applies
                     && let Some(raw_value) = rest.strip_prefix('=') {
                         let cmd = raw_value.trim();
-                        let args = cached_shell_command(cmd, run_command_for_flags)?;
+                        let args = cached_shell_command(cmd, run_command_for_flags, ctx)?;
                         match *var_name {
                             "EXTRA_COMPILE_CMD" => flags.compile_args_after.extend(args),
                             "EXTRA_LINK_CMD" => flags.link_args_after.extend(args),
@@ -191,7 +191,7 @@ fn parse_source_flags(source: &Path, profile_name: &str) -> Result<SourceFlags> 
                 && applies
                     && let Some(raw_value) = rest.strip_prefix('=') {
                         let cmd = raw_value.trim();
-                        let args = cached_shell_command(cmd, run_shell_for_flags)?;
+                        let args = cached_shell_command(cmd, run_shell_for_flags, ctx)?;
                         match *var_name {
                             "EXTRA_COMPILE_SHELL" => flags.compile_args_after.extend(args),
                             "EXTRA_LINK_SHELL" => flags.link_args_after.extend(args),
@@ -241,7 +241,7 @@ fn match_directive_with_profile<'a>(line: &'a str, directive: &str, profile_name
 ///
 /// These are user-specified commands (EXTRA_*_CMD directives), so we temporarily
 /// suspend the declared tools check to allow arbitrary programs.
-fn run_command_for_flags(cmd_line: &str) -> Result<Vec<String>> {
+fn run_command_for_flags(ctx: &crate::build_context::BuildContext, cmd_line: &str) -> Result<Vec<String>> {
     let parts: Vec<&str> = cmd_line.split_whitespace().collect();
     if parts.is_empty() {
         return Ok(Vec::new());
@@ -252,7 +252,7 @@ fn run_command_for_flags(cmd_line: &str) -> Result<Vec<String>> {
     let mut cmd = Command::new(program);
     cmd.args(args);
     let _guard = crate::processors::suspend_tool_check();
-    let output = run_command_capture(&mut cmd)?;
+    let output = run_command_capture(ctx, &mut cmd)?;
     check_command_output(&output, cmd_line)?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
@@ -263,7 +263,7 @@ fn run_command_for_flags(cmd_line: &str) -> Result<Vec<String>> {
 ///
 /// These are user-specified commands (EXTRA_*_SHELL directives), so we temporarily
 /// suspend the declared tools check to allow arbitrary programs.
-fn run_shell_for_flags(cmd_line: &str) -> Result<Vec<String>> {
+fn run_shell_for_flags(ctx: &crate::build_context::BuildContext, cmd_line: &str) -> Result<Vec<String>> {
     if cmd_line.is_empty() {
         return Ok(Vec::new());
     }
@@ -271,7 +271,7 @@ fn run_shell_for_flags(cmd_line: &str) -> Result<Vec<String>> {
     let mut cmd = Command::new("sh");
     cmd.arg("-c").arg(cmd_line);
     let _guard = crate::processors::suspend_tool_check();
-    let output = run_command_capture(&mut cmd)?;
+    let output = run_command_capture(ctx, &mut cmd)?;
     check_command_output(&output, cmd_line)?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
@@ -282,11 +282,11 @@ fn run_shell_for_flags(cmd_line: &str) -> Result<Vec<String>> {
 ///
 /// These are user-specified commands (backtick expansion), so we temporarily
 /// suspend the declared tools check to allow arbitrary programs.
-fn run_backtick_command(cmd_str: &str) -> Result<Vec<String>> {
+fn run_backtick_command(ctx: &crate::build_context::BuildContext, cmd_str: &str) -> Result<Vec<String>> {
     let mut cmd = Command::new("sh");
     cmd.arg("-c").arg(cmd_str);
     let _guard = crate::processors::suspend_tool_check();
-    let output = run_command_capture(&mut cmd)?;
+    let output = run_command_capture(ctx, &mut cmd)?;
     check_command_output(&output, cmd_str)?;
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     // Return as single-element vec so caching works uniformly
@@ -296,7 +296,7 @@ fn run_backtick_command(cmd_str: &str) -> Result<Vec<String>> {
 /// Expand backtick-wrapped portions in a string by running them as shell commands.
 /// E.g. "`pkg-config --cflags gtk+-3.0`" → the stdout of that command.
 /// Results are cached to avoid running the same command multiple times.
-fn expand_backticks(value: &str) -> Result<String> {
+fn expand_backticks(ctx: &crate::build_context::BuildContext, value: &str) -> Result<String> {
     if !value.contains('`') {
         return Ok(value.to_string());
     }
@@ -312,7 +312,7 @@ fn expand_backticks(value: &str) -> Result<String> {
         })?;
         let cmd_str = &after_start[..end];
         // Use cache for backtick commands too
-        let cached = cached_shell_command(cmd_str, run_backtick_command)?;
+        let cached = cached_shell_command(cmd_str, run_backtick_command, ctx)?;
         let stdout = cached.first().map(|s| s.as_str()).unwrap_or("");
         result.push_str(stdout);
         rest = &after_start[end + 1..];
@@ -414,9 +414,9 @@ impl CcSingleFileProcessor {
     }
 
     /// Compile a single source file directly to an executable using a specific profile.
-    fn compile_source(&self, source: &Path, executable: &Path, profile: &CompilerProfile, is_cpp: bool) -> Result<()> {
+    fn compile_source(&self, ctx: &crate::build_context::BuildContext, source: &Path, executable: &Path, profile: &CompilerProfile, is_cpp: bool) -> Result<()> {
         let compiler = if is_cpp { &profile.cxx } else { &profile.cc };
-        let source_flags = parse_source_flags(source, &profile.name)?;
+        let source_flags = parse_source_flags(ctx, source, &profile.name)?;
 
         // Ensure output directory exists
         crate::processors::ensure_output_dir(executable)?;
@@ -439,7 +439,7 @@ impl CcSingleFileProcessor {
             println!("[{}{}] {}", crate::processors::names::CC_SINGLE_FILE, profile_tag, format_command(&cmd));
         }
 
-        let output = run_command(&mut cmd)?;
+        let output = run_command(ctx, &mut cmd)?;
         check_command_output(&output, format_args!("Compilation of {}", source.display()))
     }
 
@@ -556,12 +556,12 @@ impl Processor for CcSingleFileProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let source = product.primary_input();
         let executable = product.primary_output();
         let is_cpp = source.extension().and_then(|s| s.to_str()) == Some("cc");
         let profile = self.get_profile_from_product(product)?;
-        self.compile_source(source, executable, profile, is_cpp)
+        self.compile_source(ctx, source, executable, profile, is_cpp)
     }
 
 }

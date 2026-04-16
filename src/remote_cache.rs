@@ -16,25 +16,25 @@ use crate::processors::{check_command_output, run_command_capture};
 /// Remote cache backend trait
 pub trait RemoteCache: Send + Sync {
     /// Check if an object exists in the remote cache
-    fn exists(&self, key: &str) -> Result<bool>;
+    fn exists(&self, ctx: &crate::build_context::BuildContext, key: &str) -> Result<bool>;
 
     /// Download an object from remote cache to local path
-    fn download(&self, key: &str, dest: &Path) -> Result<bool>;
+    fn download(&self, ctx: &crate::build_context::BuildContext, key: &str, dest: &Path) -> Result<bool>;
 
     /// Upload a local file to remote cache
-    fn upload(&self, key: &str, src: &Path) -> Result<()>;
+    fn upload(&self, ctx: &crate::build_context::BuildContext, key: &str, src: &Path) -> Result<()>;
 
     /// Download raw bytes (for index entries)
-    fn download_bytes(&self, key: &str) -> Result<Option<Vec<u8>>>;
+    fn download_bytes(&self, ctx: &crate::build_context::BuildContext, key: &str) -> Result<Option<Vec<u8>>>;
 
     /// Upload raw bytes (for index entries).
     /// Default implementation writes to a temp file and delegates to upload().
-    fn upload_bytes(&self, key: &str, data: &[u8]) -> Result<()> {
+    fn upload_bytes(&self, ctx: &crate::build_context::BuildContext, key: &str, data: &[u8]) -> Result<()> {
         let temp_dir = std::env::temp_dir();
         let temp_file = temp_dir.join(format!("rsconstruct-upload-{}", uuid_simple()));
         fs::write(&temp_file, data)
             .with_context(|| format!("Failed to write temp upload file: {}", temp_file.display()))?;
-        let result = self.upload(key, &temp_file);
+        let result = self.upload(ctx, key, &temp_file);
         let _ = fs::remove_file(&temp_file);
         result
     }
@@ -96,14 +96,14 @@ impl S3Backend {
 }
 
 impl RemoteCache for S3Backend {
-    fn exists(&self, key: &str) -> Result<bool> {
+    fn exists(&self, ctx: &crate::build_context::BuildContext, key: &str) -> Result<bool> {
         let mut cmd = Command::new("aws");
         cmd.args(["s3", "ls", &self.s3_uri(key)]);
-        let output = run_command_capture(&mut cmd)?;
+        let output = run_command_capture(ctx, &mut cmd)?;
         Ok(output.status.success())
     }
 
-    fn download(&self, key: &str, dest: &Path) -> Result<bool> {
+    fn download(&self, ctx: &crate::build_context::BuildContext, key: &str, dest: &Path) -> Result<bool> {
         // Ensure parent directory exists
         if let Some(parent) = dest.parent() {
             fs::create_dir_all(parent)
@@ -117,11 +117,11 @@ impl RemoteCache for S3Backend {
             &dest.display().to_string(),
             "--only-show-errors",
         ]);
-        let output = run_command_capture(&mut cmd)?;
+        let output = run_command_capture(ctx, &mut cmd)?;
         Ok(output.status.success())
     }
 
-    fn upload(&self, key: &str, src: &Path) -> Result<()> {
+    fn upload(&self, ctx: &crate::build_context::BuildContext, key: &str, src: &Path) -> Result<()> {
         let mut cmd = Command::new("aws");
         cmd.args([
             "s3", "cp",
@@ -129,14 +129,14 @@ impl RemoteCache for S3Backend {
             &self.s3_uri(key),
             "--only-show-errors",
         ]);
-        let output = run_command_capture(&mut cmd)?;
+        let output = run_command_capture(ctx, &mut cmd)?;
         check_command_output(&output, "S3 upload")
     }
 
-    fn download_bytes(&self, key: &str) -> Result<Option<Vec<u8>>> {
+    fn download_bytes(&self, ctx: &crate::build_context::BuildContext, key: &str) -> Result<Option<Vec<u8>>> {
         let mut cmd = Command::new("aws");
         cmd.args(["s3", "cp", &self.s3_uri(key), "-"]);
-        let output = run_command_capture(&mut cmd)?;
+        let output = run_command_capture(ctx, &mut cmd)?;
 
         if output.status.success() {
             Ok(Some(output.stdout))
@@ -164,18 +164,18 @@ impl HttpBackend {
 }
 
 impl RemoteCache for HttpBackend {
-    fn exists(&self, key: &str) -> Result<bool> {
+    fn exists(&self, ctx: &crate::build_context::BuildContext, key: &str) -> Result<bool> {
         let mut cmd = Command::new("curl");
         cmd.args([
             "-s", "-o", "/dev/null", "-w", "%{http_code}", "--head",
             &self.full_url(key),
         ]);
-        let output = run_command_capture(&mut cmd)?;
+        let output = run_command_capture(ctx, &mut cmd)?;
         let status_code = String::from_utf8_lossy(&output.stdout);
         Ok(status_code.trim() == "200")
     }
 
-    fn download(&self, key: &str, dest: &Path) -> Result<bool> {
+    fn download(&self, ctx: &crate::build_context::BuildContext, key: &str, dest: &Path) -> Result<bool> {
         if let Some(parent) = dest.parent() {
             fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create directory for remote download: {}", parent.display()))?;
@@ -187,25 +187,25 @@ impl RemoteCache for HttpBackend {
             "-o", &dest.display().to_string(),
             &self.full_url(key),
         ]);
-        let output = run_command_capture(&mut cmd)?;
+        let output = run_command_capture(ctx, &mut cmd)?;
         Ok(output.status.success())
     }
 
-    fn upload(&self, key: &str, src: &Path) -> Result<()> {
+    fn upload(&self, ctx: &crate::build_context::BuildContext, key: &str, src: &Path) -> Result<()> {
         let mut cmd = Command::new("curl");
         cmd.args([
             "-s", "-f", "-X", "PUT",
             "--data-binary", &format!("@{}", src.display()),
             &self.full_url(key),
         ]);
-        let output = run_command_capture(&mut cmd)?;
+        let output = run_command_capture(ctx, &mut cmd)?;
         check_command_output(&output, "HTTP upload")
     }
 
-    fn download_bytes(&self, key: &str) -> Result<Option<Vec<u8>>> {
+    fn download_bytes(&self, ctx: &crate::build_context::BuildContext, key: &str) -> Result<Option<Vec<u8>>> {
         let mut cmd = Command::new("curl");
         cmd.args(["-s", "-f", &self.full_url(key)]);
-        let output = run_command_capture(&mut cmd)?;
+        let output = run_command_capture(ctx, &mut cmd)?;
 
         if output.status.success() {
             Ok(Some(output.stdout))
@@ -242,11 +242,11 @@ impl FileBackend {
 }
 
 impl RemoteCache for FileBackend {
-    fn exists(&self, key: &str) -> Result<bool> {
+    fn exists(&self, _ctx: &crate::build_context::BuildContext, key: &str) -> Result<bool> {
         Ok(self.full_path(key).exists())
     }
 
-    fn download(&self, key: &str, dest: &Path) -> Result<bool> {
+    fn download(&self, _ctx: &crate::build_context::BuildContext, key: &str, dest: &Path) -> Result<bool> {
         let src = self.full_path(key);
         if !src.exists() {
             return Ok(false);
@@ -263,7 +263,7 @@ impl RemoteCache for FileBackend {
         Ok(true)
     }
 
-    fn upload(&self, key: &str, src: &Path) -> Result<()> {
+    fn upload(&self, _ctx: &crate::build_context::BuildContext, key: &str, src: &Path) -> Result<()> {
         let dest = self.full_path(key);
 
         if let Some(parent) = dest.parent() {
@@ -281,7 +281,7 @@ impl RemoteCache for FileBackend {
         Ok(())
     }
 
-    fn download_bytes(&self, key: &str) -> Result<Option<Vec<u8>>> {
+    fn download_bytes(&self, _ctx: &crate::build_context::BuildContext, key: &str) -> Result<Option<Vec<u8>>> {
         let path = self.full_path(key);
         if !path.exists() {
             return Ok(None);
@@ -293,7 +293,7 @@ impl RemoteCache for FileBackend {
         Ok(Some(data))
     }
 
-    fn upload_bytes(&self, key: &str, data: &[u8]) -> Result<()> {
+    fn upload_bytes(&self, _ctx: &crate::build_context::BuildContext, key: &str, data: &[u8]) -> Result<()> {
         let path = self.full_path(key);
 
         if let Some(parent) = path.parent() {

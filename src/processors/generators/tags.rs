@@ -114,7 +114,7 @@ impl Processor for TagsProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let output_path = product.primary_output();
 
         // Ensure output directory exists

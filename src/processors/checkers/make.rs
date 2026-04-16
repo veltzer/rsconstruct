@@ -21,7 +21,7 @@ impl MakeProcessor {
     }
 
     /// Run make in the Makefile's directory
-    fn execute_make(&self, makefile: &Path) -> Result<()> {
+    fn execute_make(&self, ctx: &crate::build_context::BuildContext, makefile: &Path) -> Result<()> {
         let mut cmd = Command::new(&self.config.make);
         for arg in &self.config.standard.args {
             cmd.arg(arg);
@@ -29,7 +29,7 @@ impl MakeProcessor {
         if !self.config.target.is_empty() {
             cmd.arg(&self.config.target);
         }
-        let output = run_in_anchor_dir(&mut cmd, makefile)?;
+        let output = run_in_anchor_dir(ctx, &mut cmd, makefile)?;
         check_command_output(&output, format_args!("make in {}", anchor_display_dir(makefile)))
     }
 }
@@ -82,8 +82,8 @@ impl Processor for MakeProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
-        self.execute_make(product.primary_input())
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+        self.execute_make(ctx, product.primary_input())
     }
 }
 

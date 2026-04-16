@@ -19,7 +19,7 @@ fn cleanup_marp_tmp_dirs() {
     }
 }
 
-fn execute_marp(config: &StandardConfig, product: &Product) -> Result<()> {
+fn execute_marp(ctx: &crate::build_context::BuildContext, config: &StandardConfig, product: &Product) -> Result<()> {
     let input = product.primary_input();
     let output = product.primary_output();
     let format = output.extension()
@@ -34,7 +34,7 @@ fn execute_marp(config: &StandardConfig, product: &Product) -> Result<()> {
     cmd.arg("--output").arg(output);
     for arg in &config.args { cmd.arg(arg); }
     cmd.arg(input);
-    let out = run_command(&mut cmd)?;
+    let out = run_command(ctx, &mut cmd)?;
     let result = check_command_output(&out, format_args!("marp {}", input.display()));
     cleanup_marp_tmp_dirs();
     result

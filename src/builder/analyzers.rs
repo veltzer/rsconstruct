@@ -139,7 +139,7 @@ fn print_deps_stats(
 
 impl Builder {
     /// Handle `rsconstruct analyzers` subcommands
-    pub fn analyzers(&self, action: crate::cli::AnalyzersAction, verbose: bool) -> Result<()> {
+    pub fn analyzers(&self, ctx: &crate::build_context::BuildContext, action: crate::cli::AnalyzersAction, verbose: bool) -> Result<()> {
         use crate::cli::AnalyzersAction;
 
         match action {
@@ -183,7 +183,7 @@ impl Builder {
                 }
 
                 // Phase 2: Run dependency analyzers
-                self.run_analyzers(&mut graph, true)?;
+                self.run_analyzers(ctx, &mut graph, true)?;
 
                 // Show summary from cache
                 let deps_cache = DepsCache::open()?;

@@ -9,7 +9,7 @@ use crate::processors::{ProcessorBase, Processor, run_command, check_command_out
 use super::TemplateItem;
 
 /// Render a Jinja2 template via python3 and write to output
-fn render_jinja2(item: &TemplateItem) -> Result<()> {
+fn render_jinja2(ctx: &crate::build_context::BuildContext, item: &TemplateItem) -> Result<()> {
     crate::processors::ensure_output_dir(&item.output_path)?;
 
     let source = item.source_path.display().to_string()
@@ -32,7 +32,7 @@ with open('{}', 'w') as f:
 
     let mut cmd = Command::new("python3");
     cmd.arg("-c").arg(&python_script);
-    let output = run_command(&mut cmd)?;
+    let output = run_command(ctx, &mut cmd)?;
     check_command_output(&output, format!("jinja2 render {}", item.source_path.display()))
 }
 
@@ -108,12 +108,12 @@ impl Processor for Jinja2Processor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let item = TemplateItem::new(
             product.primary_input().to_path_buf(),
             product.primary_output().to_path_buf(),
         );
-        render_jinja2(&item)
+        render_jinja2(ctx, &item)
     }
 }
 

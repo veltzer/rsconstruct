@@ -115,7 +115,7 @@ impl Processor for PdfuniteProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let output = product.primary_output();
 
         crate::processors::ensure_output_dir(output)?;
@@ -130,7 +130,7 @@ impl Processor for PdfuniteProcessor {
         }
         cmd.arg(output);
 
-        let out = run_command(&mut cmd)?;
+        let out = run_command(ctx, &mut cmd)?;
         check_command_output(&out, format_args!("pdfunite {}", output.display()))
     }
 

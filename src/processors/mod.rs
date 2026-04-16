@@ -193,7 +193,7 @@ pub(crate) fn log_command(cmd: &Command) {
 ///
 /// - `inherit_stdio`: if true, inherit stdout/stderr (for --show-output mode);
 ///   if false, always capture via pipes.
-fn run_command_inner(cmd: &mut Command, inherit_stdio: bool) -> Result<Output> {
+fn run_command_inner(ctx: &crate::build_context::BuildContext, cmd: &mut Command, inherit_stdio: bool) -> Result<Output> {
     log_command(cmd);
 
     #[cfg(debug_assertions)]
@@ -211,12 +211,10 @@ fn run_command_inner(cmd: &mut Command, inherit_stdio: bool) -> Result<Output> {
         }
     });
 
-    // Check if already interrupted before spawning
-    if INTERRUPTED.load(Ordering::SeqCst) {
+    if ctx.is_interrupted() {
         anyhow::bail!("Interrupted");
     }
 
-    // Build a tokio command from std::process::Command
     let program = cmd.get_program().to_os_string();
     let args: Vec<_> = cmd.get_args().map(|a| a.to_os_string()).collect();
     let current_dir = cmd.get_current_dir().map(|p| p.to_path_buf());
@@ -224,8 +222,7 @@ fn run_command_inner(cmd: &mut Command, inherit_stdio: bool) -> Result<Output> {
         .filter_map(|(k, v)| v.map(|val| (k.to_os_string(), val.to_os_string())))
         .collect();
 
-    let rt = get_runtime();
-    rt.block_on(async {
+    ctx.runtime().block_on(async {
         let mut tokio_cmd = tokio::process::Command::new(&program);
         tokio_cmd.args(&args);
         if let Some(dir) = &current_dir {
@@ -262,11 +259,9 @@ fn run_command_inner(cmd: &mut Command, inherit_stdio: bool) -> Result<Output> {
                 }
             })?;
 
-        let mut interrupt_rx = get_interrupt_receiver();
+        let mut interrupt_rx = ctx.interrupt_receiver();
 
-        // Close race window: re-check after subscribing, since an interrupt
-        // between the INTERRUPTED check above and subscribe() would be missed.
-        if INTERRUPTED.load(Ordering::SeqCst) {
+        if ctx.is_interrupted() {
             anyhow::bail!("Interrupted");
         }
 
@@ -284,21 +279,13 @@ fn run_command_inner(cmd: &mut Command, inherit_stdio: bool) -> Result<Output> {
     })
 }
 
-/// Run a command interruptibly using tokio. If Ctrl+C is detected, the child
-/// process is killed immediately via async select.
-///
-/// By default, output is captured and only shown on failure. Use `--show-output`
-/// to always show tool output.
-pub(crate) fn run_command(cmd: &mut Command) -> Result<Output> {
+pub(crate) fn run_command(ctx: &crate::build_context::BuildContext, cmd: &mut Command) -> Result<Output> {
     let show = crate::runtime_flags::show_output();
-    run_command_inner(cmd, show)
+    run_command_inner(ctx, cmd, show)
 }
 
-/// Run a command and capture its stdout/stderr output.
-/// Use this only when you need to parse the output.
-/// For commands where output should go to terminal, use run_command() instead.
-pub(crate) fn run_command_capture(cmd: &mut Command) -> Result<Output> {
-    run_command_inner(cmd, false)
+pub(crate) fn run_command_capture(ctx: &crate::build_context::BuildContext, cmd: &mut Command) -> Result<Output> {
+    run_command_inner(ctx, cmd, false)
 }
 
 
@@ -620,13 +607,13 @@ pub(crate) fn checker_auto_detect_with_scan_root(scan: &crate::config::StandardC
 /// Run a command in the parent directory of an anchor file (e.g., Makefile, Cargo.toml).
 /// Sets `current_dir` to the parent directory (unless it's the project root).
 /// Returns a display-friendly directory name for error messages.
-pub(crate) fn run_in_anchor_dir(cmd: &mut Command, anchor: &Path) -> Result<Output> {
+pub(crate) fn run_in_anchor_dir(ctx: &crate::build_context::BuildContext, cmd: &mut Command, anchor: &Path) -> Result<Output> {
     let anchor_dir = anchor.parent()
         .context("Anchor file has no parent directory")?;
     if !anchor_dir.as_os_str().is_empty() {
         cmd.current_dir(anchor_dir);
     }
-    run_command(cmd)
+    run_command(ctx, cmd)
 }
 
 /// Format the parent directory of an anchor file for display.
@@ -656,30 +643,26 @@ pub(crate) fn ensure_stub_dir(stub_dir: &Path, processor_name: &str) -> Result<(
 const MAX_ARG_LEN: usize = 1_000_000;
 
 pub(crate) fn run_checker(
+    ctx: &crate::build_context::BuildContext,
     tool: &str,
     subcommand: Option<&str>,
     args: &[String],
     files: &[&Path],
 ) -> Result<()> {
-    // Deduplicate files — the same file can appear in multiple products
-    // (e.g., a script that is both a normal scan result and a generator dependency)
     let mut files: Vec<&Path> = files.to_vec();
     files.sort();
     files.dedup();
     let files = &files[..];
 
-    // Calculate the base command length (tool + subcommand + args)
     let base_len: usize = tool.len()
         + subcommand.map_or(0, |s| s.len() + 1)
         + args.iter().map(|a| a.len() + 1).sum::<usize>();
 
-    // Check if all files fit in a single invocation
     let files_len: usize = files.iter().map(|f| f.as_os_str().len() + 1).sum();
     if base_len + files_len <= MAX_ARG_LEN {
-        return run_checker_once(tool, subcommand, args, files);
+        return run_checker_once(ctx, tool, subcommand, args, files);
     }
 
-    // Split files into chunks that fit within the limit
     let mut chunk_start = 0;
     while chunk_start < files.len() {
         let mut chunk_len = base_len;
@@ -692,13 +675,14 @@ pub(crate) fn run_checker(
             chunk_len += file_len;
             chunk_end += 1;
         }
-        run_checker_once(tool, subcommand, args, &files[chunk_start..chunk_end])?;
+        run_checker_once(ctx, tool, subcommand, args, &files[chunk_start..chunk_end])?;
         chunk_start = chunk_end;
     }
     Ok(())
 }
 
 fn run_checker_once(
+    ctx: &crate::build_context::BuildContext,
     tool: &str,
     subcommand: Option<&str>,
     args: &[String],
@@ -714,26 +698,23 @@ fn run_checker_once(
     for file in files {
         cmd.arg(file);
     }
-    let output = run_command(&mut cmd)?;
+    let output = run_command(ctx, &mut cmd)?;
     check_command_output(&output, tool)
 }
 
-/// Shared helper for checker processors that support batch execution (no stub files).
-///
-/// Runs `batch_fn` with all input paths at once. On success, returns Ok for all products.
-/// On failure, the batch error is returned for all products (the tool's output shows the errors).
 pub(crate) fn execute_checker_batch<F>(
+    ctx: &crate::build_context::BuildContext,
     products: &[&Product],
     batch_fn: F,
 ) -> Vec<Result<()>>
 where
-    F: Fn(&[&Path]) -> Result<()>,
+    F: Fn(&crate::build_context::BuildContext, &[&Path]) -> Result<()>,
 {
     let input_paths: Vec<&Path> = products.iter()
         .map(|p| p.primary_input())
         .collect();
 
-    match batch_fn(&input_paths) {
+    match batch_fn(ctx, &input_paths) {
         Ok(()) => products.iter().map(|_| Ok(())).collect(),
         Err(e) => {
             let err_msg = e.to_string();
@@ -742,23 +723,19 @@ where
     }
 }
 
-/// Shared helper for generator processors that support batch execution.
-///
-/// Passes (input, output) path pairs to `batch_fn`. On success, returns Ok for all products.
-/// On failure, the batch error is returned for all products.
-///
 pub(crate) fn execute_generator_batch<F>(
+    ctx: &crate::build_context::BuildContext,
     products: &[&Product],
     batch_fn: F,
 ) -> Vec<Result<()>>
 where
-    F: Fn(&[(&Path, &Path)]) -> Result<()>,
+    F: Fn(&crate::build_context::BuildContext, &[(&Path, &Path)]) -> Result<()>,
 {
     let pairs: Vec<(&Path, &Path)> = products.iter()
         .map(|p| (p.primary_input(), p.primary_output()))
         .collect();
 
-    match batch_fn(&pairs) {
+    match batch_fn(ctx, &pairs) {
         Ok(()) => products.iter().map(|_| Ok(())).collect(),
         Err(e) => {
             let err_msg = e.to_string();
@@ -967,7 +944,7 @@ pub trait Processor: Sync + Send {
     }
 
     /// Execute a single product
-    fn execute(&self, product: &Product) -> Result<()>;
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()>;
 
     /// Clean outputs for a product. Checkers: default does nothing. Generators: override.
     fn clean(&self, _product: &Product, _verbose: bool) -> Result<usize> {
@@ -1005,8 +982,8 @@ pub trait Processor: Sync + Send {
 
     /// Execute multiple products in one invocation.
     /// Only called when supports_batch() returns true.
-    fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
-        products.iter().map(|p| self.execute(p)).collect()
+    fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
+        products.iter().map(|p| self.execute(ctx, p)).collect()
     }
 
     /// Return the processor's configuration as JSON for config change detection.
@@ -1381,14 +1358,14 @@ impl SimpleChecker {
         Self { config, params }
     }
 
-    fn check_files(&self, files: &[&Path]) -> Result<()> {
+    fn check_files(&self, ctx: &crate::build_context::BuildContext, files: &[&Path]) -> Result<()> {
         let tool = self.config.standard.require_command(self.params.description)?;
         if self.params.prepend_args.is_empty() {
-            run_checker(tool, self.params.subcommand, &self.config.standard.args, files)
+            run_checker(ctx, tool, self.params.subcommand, &self.config.standard.args, files)
         } else {
             let mut combined_args: Vec<String> = self.params.prepend_args.iter().map(|s| s.to_string()).collect();
             combined_args.extend_from_slice(&self.config.standard.args);
-            run_checker(tool, self.params.subcommand, &combined_args, files)
+            run_checker(ctx, tool, self.params.subcommand, &combined_args, files)
         }
     }
 }
@@ -1433,16 +1410,16 @@ impl Processor for SimpleChecker {
         )
     }
 
-    fn execute(&self, product: &Product) -> Result<()> {
-        self.check_files(&[product.primary_input()])
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+        self.check_files(ctx, &[product.primary_input()])
     }
 
     fn supports_batch(&self) -> bool {
         self.config.standard.batch
     }
 
-    fn execute_batch(&self, products: &[&Product]) -> Vec<Result<()>> {
-        execute_checker_batch(products, |files| self.check_files(files))
+    fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
+        execute_checker_batch(ctx, products, |ctx, files| self.check_files(ctx, files))
     }
 }
 
@@ -1463,7 +1440,7 @@ pub(crate) struct SimpleGeneratorParams {
     pub description: &'static str,
     pub extra_tools: &'static [&'static str],
     pub discover_mode: DiscoverMode,
-    pub execute_fn: fn(&StandardConfig, &Product) -> Result<()>,
+    pub execute_fn: fn(&crate::build_context::BuildContext, &StandardConfig, &Product) -> Result<()>,
     pub is_native: bool,
 }
 
@@ -1550,8 +1527,8 @@ impl Processor for SimpleGenerator {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
-        (self.params.execute_fn)(&self.config, product)
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+        (self.params.execute_fn)(ctx, &self.config, product)
     }
 }
 

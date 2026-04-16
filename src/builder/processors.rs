@@ -256,7 +256,7 @@ pub fn processor_defconfig(name: &str, verbose: bool) -> Result<()> {
 
 impl Builder {
     /// Handle `rsconstruct processor` subcommands
-    pub fn processor(&self, action: ProcessorAction, verbose: bool) -> Result<()> {
+    pub fn processor(&self, ctx: &crate::build_context::BuildContext, action: ProcessorAction, verbose: bool) -> Result<()> {
         let processors = self.create_processors()?;
 
         let proc_names = sorted_keys(&processors);
@@ -361,7 +361,7 @@ impl Builder {
                 }
             }
             ProcessorAction::Graph { format } => {
-                let graph = self.build_graph()?;
+                let graph = self.build_graph(ctx)?;
                 let proc_deps = graph.processor_dependencies();
                 match format {
                     crate::cli::GraphFormat::Text => {
@@ -414,7 +414,7 @@ impl Builder {
                         bail!("Unknown processor: '{}'. Run 'rsconstruct processors list' to see available processors.", n);
                     }
 
-                let graph = self.build_graph_filtered(name.as_deref(), false)?;
+                let graph = self.build_graph_filtered(ctx, name.as_deref(), false)?;
 
                 let products = graph.products();
 

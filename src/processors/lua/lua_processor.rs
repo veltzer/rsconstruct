@@ -15,6 +15,29 @@ fn lua_context<T>(result: LuaResult<T>, msg: impl std::fmt::Display) -> Result<T
     result.map_err(|e| anyhow::anyhow!("{}: {}", msg, e))
 }
 
+/// Wrapper around a `&BuildContext` pointer stored in Lua app data.
+/// Safety: the pointer is only dereferenced during `execute()`, which holds the
+/// original `&BuildContext` reference for the entire duration of the Lua call.
+#[derive(Clone, Copy)]
+struct CtxPtr(*const crate::build_context::BuildContext);
+
+unsafe impl Send for CtxPtr {}
+unsafe impl Sync for CtxPtr {}
+
+impl CtxPtr {
+    fn get(&self) -> &crate::build_context::BuildContext {
+        // SAFETY: caller guarantees the BuildContext outlives all uses.
+        unsafe { &*self.0 }
+    }
+}
+
+/// Retrieve the BuildContext from Lua app data. Panics if not set (programming error).
+fn get_ctx_from_lua(lua: &Lua) -> &crate::build_context::BuildContext {
+    let ptr = *lua.app_data_ref::<CtxPtr>()
+        .expect("BuildContext not set in Lua app data");
+    ptr.get()
+}
+
 pub struct LuaProcessor {
     name: String,
     description: String,
@@ -133,13 +156,14 @@ impl LuaProcessor {
 
         // rsconstruct.run_command(program, args)
         let run_cmd_fn = lua_context(
-            lua.create_function(|_, (program, args): (String, LuaTable)| {
+            lua.create_function(|lua, (program, args): (String, LuaTable)| {
+                let ctx = get_ctx_from_lua(lua);
                 let mut cmd = Command::new(&program);
                 for i in 1..=args.len()? {
                     let arg: String = args.get(i)?;
                     cmd.arg(&arg);
                 }
-                let output = run_command(&mut cmd).map_err(|e| {
+                let output = run_command(ctx, &mut cmd).map_err(|e| {
                     LuaError::external(format!("Failed to run '{}': {}", program, e))
                 })?;
                 if !output.status.success() {
@@ -161,14 +185,15 @@ impl LuaProcessor {
 
         // rsconstruct.run_command_cwd(program, args, cwd)
         let run_cmd_cwd_fn = lua_context(
-            lua.create_function(|_, (program, args, cwd): (String, LuaTable, String)| {
+            lua.create_function(|lua, (program, args, cwd): (String, LuaTable, String)| {
+                let ctx = get_ctx_from_lua(lua);
                 let mut cmd = Command::new(&program);
                 for i in 1..=args.len()? {
                     let arg: String = args.get(i)?;
                     cmd.arg(&arg);
                 }
                 cmd.current_dir(&cwd);
-                let output = run_command(&mut cmd).map_err(|e| {
+                let output = run_command(ctx, &mut cmd).map_err(|e| {
                     LuaError::external(format!("Failed to run '{}': {}", program, e))
                 })?;
                 if !output.status.success() {
@@ -427,10 +452,11 @@ impl Processor for LuaProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         ensure_stub_dir(&self.stub_dir, &self.name)?;
 
         let lua = self.lua.lock();
+        lua.set_app_data(CtxPtr(ctx as *const _));
         let product_table = Self::product_to_lua(&lua, product)?;
 
         // Call Lua execute(product)

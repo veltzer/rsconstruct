@@ -24,7 +24,7 @@ impl GemProcessor {
     }
 
     /// Run bundle install in the Gemfile's directory
-    fn execute_gem(&self, gemfile: &Path) -> Result<()> {
+    fn execute_gem(&self, ctx: &crate::build_context::BuildContext, gemfile: &Path) -> Result<()> {
         let subcommand = self.config.standard.require_command(crate::processors::names::GEM)?;
         let mut cmd = Command::new(&self.config.bundler);
         cmd.arg(subcommand);
@@ -33,7 +33,7 @@ impl GemProcessor {
         for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
-        let output = run_in_anchor_dir(&mut cmd, gemfile)?;
+        let output = run_in_anchor_dir(ctx, &mut cmd, gemfile)?;
         check_command_output(&output, format_args!("bundle {} in {}", subcommand, anchor_display_dir(gemfile)))
     }
 }
@@ -107,8 +107,8 @@ impl Processor for GemProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
-        self.execute_gem(product.primary_input())
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+        self.execute_gem(ctx, product.primary_input())
     }
 }
 

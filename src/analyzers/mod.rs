@@ -70,6 +70,7 @@ pub trait DepAnalyzer: Sync + Send {
     /// 5. Tick `progress` once per product it processed (whether cache hit or miss)
     fn analyze(
         &self,
+        ctx: &crate::build_context::BuildContext,
         graph: &mut BuildGraph,
         deps_cache: &mut DepsCache,
         file_index: &FileIndex,
@@ -85,7 +86,7 @@ pub trait DepAnalyzer: Sync + Send {
 /// - `tag`: prefix for log messages (e.g., "cpp" or "icpp")
 /// - `packages`: pkg-config package names to query
 /// - `verbose`: whether to emit diagnostic messages to stderr
-pub fn query_pkg_config_include_paths(tag: &str, packages: &[String], verbose: bool) -> Vec<PathBuf> {
+pub fn query_pkg_config_include_paths(ctx: &crate::build_context::BuildContext, tag: &str, packages: &[String], verbose: bool) -> Vec<PathBuf> {
     if packages.is_empty() {
         return Vec::new();
     }
@@ -98,7 +99,7 @@ pub fn query_pkg_config_include_paths(tag: &str, packages: &[String], verbose: b
         eprintln!("[{}] Querying pkg-config: {}", tag, format_command(&cmd));
     }
 
-    let output = match run_command_capture(&mut cmd) {
+    let output = match run_command_capture(ctx, &mut cmd) {
         Ok(o) => o,
         Err(e) => {
             eprintln!("[{}] Failed to query pkg-config: {}", tag, e);
@@ -130,7 +131,7 @@ pub fn query_pkg_config_include_paths(tag: &str, packages: &[String], verbose: b
 /// - `tag`: prefix for log messages (e.g., "cpp" or "icpp")
 /// - `commands`: shell command strings to run
 /// - `verbose`: whether to emit diagnostic messages to stderr
-pub fn run_include_path_commands(tag: &str, commands: &[String], verbose: bool) -> Vec<PathBuf> {
+pub fn run_include_path_commands(ctx: &crate::build_context::BuildContext, tag: &str, commands: &[String], verbose: bool) -> Vec<PathBuf> {
     if commands.is_empty() {
         return Vec::new();
     }
@@ -150,7 +151,7 @@ pub fn run_include_path_commands(tag: &str, commands: &[String], verbose: bool) 
             eprintln!("[{}] Running include path command: sh -c '{}'", tag, cmd_str);
         }
 
-        let output = match run_command_capture(&mut cmd) {
+        let output = match run_command_capture(ctx, &mut cmd) {
             Ok(o) => o,
             Err(e) => {
                 eprintln!("[{}] Failed to run '{}': {}", tag, cmd_str, e);
@@ -196,6 +197,7 @@ pub fn run_include_path_commands(tag: &str, commands: &[String], verbose: bool) 
 /// - `match_product`: given a product, returns `Some(source_path)` if the product is relevant
 /// - `scan_deps`: given a source path, returns the list of dependency paths
 pub fn analyze_with_scanner<F, G>(
+    ctx: &crate::build_context::BuildContext,
     graph: &mut BuildGraph,
     deps_cache: &mut DepsCache,
     analyzer_name: &str,

@@ -21,14 +21,14 @@ impl ClippyProcessor {
     }
 
     /// Run cargo clippy in the Cargo.toml's directory
-    fn execute_clippy(&self, cargo_toml: &Path) -> Result<()> {
+    fn execute_clippy(&self, ctx: &crate::build_context::BuildContext, cargo_toml: &Path) -> Result<()> {
         let subcommand = self.config.standard.require_command(crate::processors::names::CLIPPY)?;
         let mut cmd = Command::new(&self.config.cargo);
         cmd.arg(subcommand);
         for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
-        let output = run_in_anchor_dir(&mut cmd, cargo_toml)?;
+        let output = run_in_anchor_dir(ctx, &mut cmd, cargo_toml)?;
         check_command_output(&output, format_args!("cargo {} in {}", subcommand, anchor_display_dir(cargo_toml)))
     }
 }
@@ -81,8 +81,8 @@ impl Processor for ClippyProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
-        self.execute_clippy(product.primary_input())
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+        self.execute_clippy(ctx, product.primary_input())
     }
 }
 

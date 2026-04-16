@@ -407,7 +407,7 @@ impl<'a> Executor<'a> {
             }
             let batch_start = Instant::now();
             crate::processors::set_declared_tools(Some(processor.required_tools()));
-            let results = processor.execute_batch(&product_refs);
+            let results = processor.execute_batch(self.build_ctx, &product_refs);
             crate::processors::set_declared_tools(None);
             let batch_duration = batch_start.elapsed();
 
@@ -528,7 +528,7 @@ impl<'a> Executor<'a> {
                 let max_attempts = 1 + self.retry;
                 crate::processors::set_declared_tools(Some(processor.required_tools()));
                 for attempt in 1..=max_attempts {
-                    match processor.execute(product) {
+                    match processor.execute(self.build_ctx, product) {
                         Ok(()) => {
                             let duration = product_start.elapsed();
                             last_error = None; // Clear before handle_success to avoid double-failure if caching fails

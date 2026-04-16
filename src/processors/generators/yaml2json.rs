@@ -9,7 +9,7 @@ use crate::processors::ensure_output_dir;
 
 use crate::processors::{SimpleGenerator, SimpleGeneratorParams, DiscoverMode};
 
-fn execute_yaml2json(_config: &StandardConfig, product: &Product) -> Result<()> {
+fn execute_yaml2json(_ctx: &crate::build_context::BuildContext, _config: &StandardConfig, product: &Product) -> Result<()> {
     let input = product.primary_input();
     let output = product.primary_output();
     ensure_output_dir(output)?;

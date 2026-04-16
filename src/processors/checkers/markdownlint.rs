@@ -75,14 +75,14 @@ impl Processor for MarkdownlintProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let file = product.primary_input();
         let mut cmd = Command::new(&self.config.markdownlint_bin);
         for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
         cmd.arg(file);
-        let output = run_command(&mut cmd)?;
+        let output = run_command(ctx, &mut cmd)?;
         check_command_output(&output, format_args!("markdownlint {}", file.display()))
     }
 }

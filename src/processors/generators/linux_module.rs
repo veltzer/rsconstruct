@@ -78,7 +78,7 @@ impl LinuxModuleProcessor {
     }
 
     /// Build a single kernel module. Runs make in the module's source directory.
-    fn build_module(manifest: &LinuxModuleManifest, anchor_dir: &Path, module: &crate::config::LinuxModuleModuleDef, output_dir: &Path) -> Result<()> {
+    fn build_module(ctx: &crate::build_context::BuildContext, manifest: &LinuxModuleManifest, anchor_dir: &Path, module: &crate::config::LinuxModuleModuleDef, output_dir: &Path) -> Result<()> {
         let module_dir = if anchor_dir.as_os_str().is_empty() {
             std::env::current_dir()?
         } else {
@@ -103,7 +103,7 @@ impl LinuxModuleProcessor {
         cmd.arg("modules");
         cmd.current_dir(&module_dir);
 
-        let output = run_command(&mut cmd)?;
+        let output = run_command(ctx, &mut cmd)?;
         check_command_output(&output, format_args!("make modules for {}", module.name))?;
 
         // Copy the .ko file to the output directory
@@ -127,7 +127,7 @@ impl LinuxModuleProcessor {
         clean_cmd.arg(format!("M={}", module_dir.display()));
         clean_cmd.arg("clean");
         clean_cmd.current_dir(&module_dir);
-        let _ = run_command(&mut clean_cmd);
+        let _ = run_command(ctx, &mut clean_cmd);
 
         // Remove the Kbuild we generated
         let _ = fs::remove_file(module_dir.join("Kbuild"));
@@ -136,13 +136,13 @@ impl LinuxModuleProcessor {
     }
 
     /// Execute a full linux-module.yaml build.
-    fn execute_build(&self, yaml_path: &Path) -> Result<()> {
+    fn execute_build(&self, ctx: &crate::build_context::BuildContext, yaml_path: &Path) -> Result<()> {
         let manifest = Self::parse_manifest(yaml_path)?;
         let anchor_dir = yaml_path.parent().unwrap_or(Path::new(""));
         let output_dir = Self::output_dir_for(yaml_path);
 
         for module in &manifest.modules {
-            Self::build_module(&manifest, anchor_dir, module, &output_dir)?;
+            Self::build_module(ctx, &manifest, anchor_dir, module, &output_dir)?;
         }
 
         Ok(())
@@ -219,10 +219,10 @@ impl Processor for LinuxModuleProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let yaml_path = product.primary_input();
         let display_dir = anchor_display_dir(yaml_path);
-        self.execute_build(yaml_path)
+        self.execute_build(ctx, yaml_path)
             .with_context(|| format!("linux_module build failed in {}", display_dir))
     }
 

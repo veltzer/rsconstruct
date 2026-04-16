@@ -9,7 +9,7 @@ use crate::processors::{run_command, check_command_output, ensure_output_dir};
 
 use crate::processors::{SimpleGenerator, SimpleGeneratorParams, DiscoverMode};
 
-fn execute_sass(config: &StandardConfig, product: &Product) -> Result<()> {
+fn execute_sass(ctx: &crate::build_context::BuildContext, config: &StandardConfig, product: &Product) -> Result<()> {
     let input = product.primary_input();
     let output = product.primary_output();
     ensure_output_dir(output)?;
@@ -17,7 +17,7 @@ fn execute_sass(config: &StandardConfig, product: &Product) -> Result<()> {
     let mut cmd = Command::new(command);
     for arg in &config.args { cmd.arg(arg); }
     cmd.arg(input).arg(output);
-    let out = run_command(&mut cmd)?;
+    let out = run_command(ctx, &mut cmd)?;
     check_command_output(&out, format_args!("sass {}", input.display()))
 }
 

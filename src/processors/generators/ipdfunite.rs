@@ -234,7 +234,7 @@ impl Processor for IpdfuniteProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let output = product.primary_output();
         crate::processors::ensure_output_dir(output)?;
 

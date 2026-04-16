@@ -122,7 +122,7 @@ impl Processor for ExplicitProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         // Ensure output file directories exist
         for output in &product.outputs {
             ensure_output_dir(output)?;
@@ -150,7 +150,7 @@ impl Processor for ExplicitProcessor {
             }
         }
 
-        let out = run_command(&mut cmd)?;
+        let out = run_command(ctx, &mut cmd)?;
         check_command_output(
             &out,
             format_args!("{} ({} inputs)",

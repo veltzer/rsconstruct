@@ -75,7 +75,7 @@ impl Processor for MdlProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let file = product.primary_input();
         let mut cmd = Command::new(&self.config.mdl_bin);
         for arg in &self.config.standard.args {
@@ -86,7 +86,7 @@ impl Processor for MdlProcessor {
             cmd.env("GEM_HOME", &self.config.gem_home);
             cmd.env("GEM_PATH", &self.config.gem_home);
         }
-        let output = run_command(&mut cmd)?;
+        let output = run_command(ctx, &mut cmd)?;
         check_command_output(&output, format_args!("mdl {}", file.display()))
     }
 }

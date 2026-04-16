@@ -90,7 +90,7 @@ impl Processor for RustSingleFileProcessor {
 
     fn supports_batch(&self) -> bool { false }
 
-    fn execute(&self, product: &Product) -> Result<()> {
+    fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let source = product.primary_input();
         let output = product.primary_output();
 
@@ -102,7 +102,7 @@ impl Processor for RustSingleFileProcessor {
         }
         cmd.arg("-o").arg(output).arg(source);
 
-        let out = run_command(&mut cmd)?;
+        let out = run_command(ctx, &mut cmd)?;
         check_command_output(&out, format_args!("rustc {}", source.display()))
     }
 

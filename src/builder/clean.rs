@@ -10,15 +10,15 @@ use super::Builder;
 
 impl Builder {
     /// Clean all build artifacts using the dependency graph
-    pub fn clean(&self, verbose: bool) -> Result<()> {
+    pub fn clean(&self, ctx: &crate::build_context::BuildContext, verbose: bool) -> Result<()> {
         println!("{}", color::bold("Cleaning build artifacts..."));
 
         // Create processors and build graph (fast path: skip dependency scanning)
         let processors = self.create_processors()?;
-        let graph = self.build_graph_for_clean_with_processors(&processors)?;
+        let graph = self.build_graph_for_clean_with_processors(ctx, &processors)?;
 
         // Use executor to clean (batch_size doesn't matter for clean)
-        let executor = Executor::new(&processors, ExecutorOptions {
+        let executor = Executor::new(&processors, ctx, ExecutorOptions {
             parallel: 1,
             verbose: false,
             display_opts: DisplayOptions::minimal(),
@@ -124,7 +124,7 @@ impl Builder {
 
     /// Remove files not tracked by git and not known as RSConstruct build outputs.
     /// Dry-run by default (lists files); use `force` to actually delete.
-    pub fn clean_unknown(&self, force: bool, verbose: bool, respect_gitignore: bool) -> Result<()> {
+    pub fn clean_unknown(&self, ctx: &crate::build_context::BuildContext, force: bool, verbose: bool, respect_gitignore: bool) -> Result<()> {
         use ignore::WalkBuilder;
         use std::process::Command;
 
@@ -134,7 +134,7 @@ impl Builder {
 
         // Build graph to discover RSConstruct outputs
         let processors = self.create_processors()?;
-        let graph = self.build_graph_for_clean_with_processors(&processors)?;
+        let graph = self.build_graph_for_clean_with_processors(ctx, &processors)?;
 
         // Collect RSConstruct-known output files
         let mut rsconstruct_outputs: HashSet<PathBuf> = HashSet::new();

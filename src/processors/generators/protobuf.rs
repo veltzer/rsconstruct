@@ -9,7 +9,7 @@ use crate::processors::{run_command, check_command_output, ensure_output_dir};
 
 use crate::processors::{SimpleGenerator, SimpleGeneratorParams, DiscoverMode};
 
-fn execute_protobuf(config: &StandardConfig, product: &Product) -> Result<()> {
+fn execute_protobuf(ctx: &crate::build_context::BuildContext, config: &StandardConfig, product: &Product) -> Result<()> {
     let input = product.primary_input();
     let output = product.primary_output();
     let output_dir = output.parent().unwrap_or(std::path::Path::new("."));
@@ -22,7 +22,7 @@ fn execute_protobuf(config: &StandardConfig, product: &Product) -> Result<()> {
     cmd.arg(format!("--cpp_out={}", output_dir.display()));
     for arg in &config.args { cmd.arg(arg); }
     cmd.arg(input);
-    let out = run_command(&mut cmd)?;
+    let out = run_command(ctx, &mut cmd)?;
     check_command_output(&out, format_args!("protoc {}", input.display()))
 }
 

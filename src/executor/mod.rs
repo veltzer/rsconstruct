@@ -136,26 +136,26 @@ pub fn classify_products(
 /// It respects dependency order and can parallelize independent products
 pub struct Executor<'a> {
     processors: &'a ProcessorMap,
+    build_ctx: &'a crate::build_context::BuildContext,
     parallel: usize,
     verbose: bool,
     display_opts: DisplayOptions,
     interrupted: Arc<AtomicBool>,
-    /// Batch size setting: None = disable batching, Some(0) = no limit, Some(n) = max n files per batch
     batch_size: Option<usize>,
-    /// Whether to show explain reasons for skip/restore/rebuild decisions
     explain: bool,
-    /// Number of times to retry failed products (0 = no retries)
     retry: usize,
 }
 
 impl<'a> Executor<'a> {
     pub fn new(
         processors: &'a ProcessorMap,
+        build_ctx: &'a crate::build_context::BuildContext,
         opts: ExecutorOptions,
         interrupted: Arc<AtomicBool>,
     ) -> Self {
         Self {
             processors,
+            build_ctx,
             parallel: opts.parallel,
             verbose: opts.verbose,
             display_opts: opts.display_opts,
