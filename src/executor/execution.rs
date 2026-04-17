@@ -18,6 +18,28 @@ use crate::progress;
 
 use super::{Executor, HandlerContext, LevelWork, PreCheckResult, RestoreOutcome, SharedState, WorkItem};
 
+/// Compute the effective max_jobs for a processor instance. The config
+/// field is capped by the plugin's static `max_jobs_cap`; `None` on either
+/// side means no limit on that side.
+fn effective_max_jobs(name: &str, proc: &dyn crate::processors::Processor) -> Option<usize> {
+    let config = proc.scan_config().max_jobs;
+    let cap = crate::registries::processor::find_plugin(name).and_then(|p| p.max_jobs_cap);
+    match (config, cap) {
+        (Some(c), Some(m)) => Some(c.min(m)),
+        (Some(c), None) => Some(c),
+        (None, Some(m)) => Some(m),
+        (None, None) => None,
+    }
+}
+
+/// Compute the effective `supports_batch` for a processor instance: the
+/// plugin's static capability flag must be true, AND the user config must
+/// request batching.
+fn effective_supports_batch(name: &str, proc: &dyn crate::processors::Processor) -> bool {
+    let plugin_ok = crate::registries::processor::find_plugin(name).is_some_and(|p| p.supports_batch);
+    plugin_ok && proc.scan_config().batch
+}
+
 /// A simple counting semaphore for limiting per-processor concurrency.
 struct Semaphore {
     state: Mutex<usize>,
@@ -214,7 +236,7 @@ impl<'a> Executor<'a> {
         // Build per-processor semaphores for max_jobs limits
         let semaphores: HashMap<String, Arc<Semaphore>> = self.processors.iter()
             .filter_map(|(name, proc)| {
-                proc.max_jobs().map(|max| (name.clone(), Arc::new(Semaphore::new(max))))
+                effective_max_jobs(name, proc.as_ref()).map(|max| (name.clone(), Arc::new(Semaphore::new(max))))
             })
             .collect();
 
@@ -740,7 +762,7 @@ impl<'a> Executor<'a> {
         let batching_enabled = self.batch_size.is_some();
         for (proc_name, items) in by_processor {
             let processor = self.processors.get(&proc_name);
-            let supports_batch = processor.is_some_and(|p| p.supports_batch());
+            let supports_batch = processor.is_some_and(|p| effective_supports_batch(&proc_name, p.as_ref()));
             // Count items that actually need rebuild (not just cache-skip)
             let rebuild_count = items.iter().filter(|item| item.needs_rebuild).count();
 

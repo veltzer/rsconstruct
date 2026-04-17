@@ -18,4 +18,6 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     description: "Check kernel patches using checkpatch.pl",
     is_native: false,
     can_fix: false,
+    supports_batch: true,
+    max_jobs_cap: None,
 } }

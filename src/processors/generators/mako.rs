@@ -37,17 +37,12 @@ with open('{}', 'w') as f:
 }
 
 pub struct MakoProcessor {
-    base: ProcessorBase,
     config: MakoConfig,
 }
 
 impl MakoProcessor {
     pub fn new(config: MakoConfig) -> Self {
         Self {
-            base: ProcessorBase::generator(
-                crate::processors::names::MAKO,
-                "Render Mako templates into output files",
-            ),
             config,
         }
     }
@@ -59,20 +54,8 @@ impl Processor for MakoProcessor {
     }
 
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
-    }
-
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.standard.max_jobs
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
@@ -106,8 +89,6 @@ impl Processor for MakoProcessor {
         Ok(())
     }
 
-    fn supports_batch(&self) -> bool { false }
-
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let item = TemplateItem::new(
             product.primary_input().to_path_buf(),
@@ -135,5 +116,7 @@ inventory::submit! {
         description: "Render Mako templates into output files",
         is_native: false,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: None,
     }
 }

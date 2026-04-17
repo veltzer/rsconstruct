@@ -37,10 +37,6 @@ impl crate::processors::Processor for ClangTidyProcessor {
     }
 
 
-    fn description(&self) -> &str {
-        "Run clang-tidy static analysis on C/C++ source files"
-    }
-
     fn auto_detect(&self, file_index: &crate::file_index::FileIndex) -> bool {
         crate::processors::checker_auto_detect_with_scan_root(&self.config.standard, file_index)
     }
@@ -67,18 +63,12 @@ impl crate::processors::Processor for ClangTidyProcessor {
         )
     }
 
-    fn supports_batch(&self) -> bool { false }
-
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         self.execute_product(ctx, product)
     }
 
     fn config_json(&self) -> Option<String> {
         serde_json::to_string(&self.config).ok()
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.standard.max_jobs
     }
 }
 
@@ -100,5 +90,7 @@ inventory::submit! {
         description: "Run clang-tidy static analysis on C/C++ source files",
         is_native: false,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: None,
     }
 }

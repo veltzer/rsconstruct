@@ -9,17 +9,12 @@ use crate::graph::{BuildGraph, Product};
 use crate::processors::{ProcessorBase, Processor, run_command, check_command_output, anchor_display_dir};
 
 pub struct LinuxModuleProcessor {
-    base: ProcessorBase,
     config: LinuxModuleConfig,
 }
 
 impl LinuxModuleProcessor {
     pub fn new(config: LinuxModuleConfig) -> Self {
         Self {
-            base: ProcessorBase::generator(
-                crate::processors::names::LINUX_MODULE,
-                "Build Linux kernel modules from linux-module.yaml manifests",
-            ),
             config,
         }
     }
@@ -155,21 +150,8 @@ impl Processor for LinuxModuleProcessor {
     }
 
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
-    }
-
-
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.standard.max_jobs
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
@@ -217,8 +199,6 @@ impl Processor for LinuxModuleProcessor {
         Ok(())
     }
 
-    fn supports_batch(&self) -> bool { false }
-
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let yaml_path = product.primary_input();
         let display_dir = anchor_display_dir(yaml_path);
@@ -246,5 +226,7 @@ inventory::submit! {
         description: "Build Linux kernel modules from linux-module.yaml manifests",
         is_native: false,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: None,
     }
 }

@@ -22,17 +22,12 @@ use super::python_distribution_map;
 use super::python_stdlib;
 
 pub struct RequirementsProcessor {
-    base: ProcessorBase,
     config: RequirementsConfig,
 }
 
 impl RequirementsProcessor {
     pub fn new(config: RequirementsConfig) -> Self {
         Self {
-            base: ProcessorBase::generator(
-                crate::processors::names::REQUIREMENTS,
-                "Generate requirements.txt from Python import statements",
-            ),
             config,
         }
     }
@@ -52,27 +47,13 @@ impl Processor for RequirementsProcessor {
         &self.config.standard
     }
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
-    }
-
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.standard.max_jobs
     }
 
     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
         crate::processors::ProcessorBase::clean(product, &product.processor, verbose)
     }
-
-    fn is_native(&self) -> bool { true }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         scan_root_valid(&self.config.standard)
@@ -99,8 +80,6 @@ impl Processor for RequirementsProcessor {
         )?;
         Ok(())
     }
-
-    fn supports_batch(&self) -> bool { false }
 
     fn execute(&self, _ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let output_path = product.primary_output();
@@ -213,5 +192,7 @@ inventory::submit! {
         description: "Generate requirements.txt from Python import statements",
         is_native: true,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: Some(1),
     }
 }

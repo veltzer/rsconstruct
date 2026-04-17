@@ -6,7 +6,7 @@ use std::process::Command;
 use crate::config::PdflatexConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProcessorBase, Processor, run_command, check_command_output};
+use crate::processors::{Processor, run_command, check_command_output};
 
 use super::DiscoverParams;
 
@@ -14,17 +14,12 @@ use super::DiscoverParams;
 const PDFLATEX_TEMP_EXTENSIONS: &[&str] = &[".log", ".out", ".toc", ".aux", ".nav", ".snm", ".vrb"];
 
 pub struct PdflatexProcessor {
-    base: ProcessorBase,
     config: PdflatexConfig,
 }
 
 impl PdflatexProcessor {
     pub fn new(config: PdflatexConfig) -> Self {
         Self {
-            base: ProcessorBase::generator(
-                crate::processors::names::PDFLATEX,
-                "Compile LaTeX documents using pdflatex",
-            ),
             config,
         }
     }
@@ -45,14 +40,6 @@ impl Processor for PdflatexProcessor {
 
     fn standard_config(&self) -> Option<&crate::config::StandardConfig> {
         Some(&self.config.standard)
-    }
-
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
@@ -78,8 +65,6 @@ impl Processor for PdflatexProcessor {
         };
         super::discover_single_format(graph, file_index, &params, "pdf")
     }
-
-    fn supports_batch(&self) -> bool { false }
 
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let input = product.primary_input();
@@ -163,5 +148,7 @@ inventory::submit! {
         description: "Compile LaTeX documents using pdflatex",
         is_native: false,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: None,
     }
 }

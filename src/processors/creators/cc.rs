@@ -9,17 +9,12 @@ use crate::graph::{BuildGraph, Product};
 use crate::processors::{ProcessorBase, Processor, run_command, check_command_output, anchor_display_dir};
 
 pub struct CcProcessor {
-    base: ProcessorBase,
     config: CcConfig,
 }
 
 impl CcProcessor {
     pub fn new(config: CcConfig) -> Self {
         Self {
-            base: ProcessorBase::creator(
-                crate::processors::names::CC,
-                "Build C/C++ projects from cc.yaml manifests",
-            ),
             config,
         }
     }
@@ -265,21 +260,8 @@ impl Processor for CcProcessor {
     }
 
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
-    }
-
-
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.standard.max_jobs
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
@@ -337,8 +319,6 @@ impl Processor for CcProcessor {
         Ok(())
     }
 
-    fn supports_batch(&self) -> bool { false }
-
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let yaml_path = product.primary_input();
         let display_dir = anchor_display_dir(yaml_path);
@@ -365,5 +345,7 @@ inventory::submit! {
         description: "Build C/C++ projects from cc.yaml manifests",
         is_native: false,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: Some(1),
     }
 }

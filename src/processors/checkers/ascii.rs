@@ -63,11 +63,6 @@ impl crate::processors::Processor for AsciiProcessor {
         Some(&self.config.standard)
     }
 
-    fn description(&self) -> &str {
-        "Check files for non-ASCII characters"
-    }
-
-
     fn required_tools(&self) -> Vec<String> {
         Vec::new()
     }
@@ -77,13 +72,6 @@ impl crate::processors::Processor for AsciiProcessor {
         self.execute_product(product)
     }
 
-
-    fn is_native(&self) -> bool { true }
-
-
-
-
-    fn supports_batch(&self) -> bool { self.config.standard.batch }
 
     fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
         crate::processors::execute_checker_batch(ctx, products, |_ctx, files| self.check_files(files))
@@ -108,5 +96,7 @@ inventory::submit! {
         description: "Check files for non-ASCII characters",
         is_native: true,
         can_fix: false,
+        supports_batch: true,
+        max_jobs_cap: None,
     }
 }

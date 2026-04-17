@@ -14,17 +14,12 @@ const FRONTMATTER: TableDefinition<&str, &str> = TableDefinition::new("frontmatt
 const TAG_INDEX: TableDefinition<&str, &str> = TableDefinition::new("tag_index");
 
 pub struct TagsProcessor {
-    base: ProcessorBase,
     config: TagsConfig,
 }
 
 impl TagsProcessor {
     pub fn new(config: TagsConfig) -> Self {
         Self {
-            base: ProcessorBase::generator(
-                crate::processors::names::TAGS,
-                "Extract YAML frontmatter tags from markdown files into a searchable database",
-            ),
             config,
         }
     }
@@ -36,27 +31,13 @@ impl Processor for TagsProcessor {
     }
 
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
-    }
-
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.standard.max_jobs
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
         crate::processors::ProcessorBase::clean(product, &product.processor, verbose)
     }
-
-    fn is_native(&self) -> bool { true }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         if !scan_root_valid(&self.config.standard)
@@ -107,8 +88,6 @@ impl Processor for TagsProcessor {
 
         Ok(())
     }
-
-    fn supports_batch(&self) -> bool { false }
 
     fn execute(&self, _ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let output_path = product.primary_output();
@@ -1960,5 +1939,7 @@ inventory::submit! {
         description: "Extract YAML frontmatter tags from markdown files into a searchable database",
         is_native: true,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: Some(1),
     }
 }

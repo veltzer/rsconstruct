@@ -51,6 +51,14 @@ pub struct ProcessorPlugin {
     pub is_native: bool,
     /// Whether this processor has fix capability (`rsconstruct fix`).
     pub can_fix: bool,
+    /// Whether this processor can execute multiple products in one invocation.
+    /// Static capability — if false, the `batch` config field has no effect at runtime.
+    pub supports_batch: bool,
+    /// Hard cap on parallel jobs for this processor. `None` means no cap.
+    /// `Some(1)` means the processor must run one product at a time (e.g. package
+    /// managers, whole-project aggregators). The effective max_jobs is
+    /// `min(config.max_jobs, max_jobs_cap)` with `None` treated as unlimited.
+    pub max_jobs_cap: Option<usize>,
 }
 
 unsafe impl Sync for ProcessorPlugin {}
@@ -59,6 +67,35 @@ inventory::collect!(ProcessorPlugin);
 
 pub(crate) fn all_plugins() -> impl Iterator<Item = &'static ProcessorPlugin> {
     inventory::iter::<ProcessorPlugin>.into_iter()
+}
+
+/// Look up a processor plugin by type name (e.g. "marp"). For multi-instance
+/// names (e.g. "explicit.foo"), strip the instance suffix before lookup.
+pub(crate) fn find_plugin(name: &str) -> Option<&'static ProcessorPlugin> {
+    let type_name = name.split('.').next().unwrap_or(name);
+    all_plugins().find(|p| p.name == type_name)
+}
+
+/// Return the static description for a processor by instance name, or `""` if unknown.
+pub(crate) fn description_of(name: &str) -> &'static str {
+    find_plugin(name).map(|p| p.description).unwrap_or("")
+}
+
+/// Return the processor type for a processor by instance name, or `Checker` if unknown.
+pub(crate) fn processor_type_of(name: &str) -> crate::processors::ProcessorType {
+    find_plugin(name)
+        .map(|p| p.processor_type)
+        .unwrap_or(crate::processors::ProcessorType::Checker)
+}
+
+/// Return whether a processor is native (pure Rust) by instance name.
+pub(crate) fn is_native(name: &str) -> bool {
+    find_plugin(name).is_some_and(|p| p.is_native)
+}
+
+/// Return whether a processor can fix by instance name.
+pub(crate) fn can_fix(name: &str) -> bool {
+    find_plugin(name).is_some_and(|p| p.can_fix)
 }
 
 /// Look up a processor's implementation version by name.

@@ -18,4 +18,6 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     description: "Validate JSON files using jq",
     is_native: false,
     can_fix: false,
+    supports_batch: true,
+    max_jobs_cap: None,
 } }

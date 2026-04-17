@@ -332,7 +332,6 @@ use crate::processors::{ProcessorBase, Processor, format_command, run_command};
 
 
 pub struct CcSingleFileProcessor {
-    base: ProcessorBase,
     config: CcSingleFileConfig,
     profiles: Vec<CompilerProfile>,
     output_dir: PathBuf,
@@ -343,10 +342,6 @@ impl CcSingleFileProcessor {
         let profiles = config.get_compiler_profiles();
         let output_dir = PathBuf::from(&config.standard.output_dir);
         Self {
-            base: ProcessorBase::generator(
-                crate::processors::names::CC_SINGLE_FILE,
-                "Compile C/C++ source files into executables (single-file)",
-            ),
             config,
             profiles,
             output_dir,
@@ -511,20 +506,8 @@ impl Processor for CcSingleFileProcessor {
     }
 
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
-    }
-
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.standard.max_jobs
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
@@ -554,8 +537,6 @@ impl Processor for CcSingleFileProcessor {
         self.discover_impl(graph, file_index, true, instance_name)
     }
 
-    fn supports_batch(&self) -> bool { false }
-
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let source = product.primary_input();
         let executable = product.primary_output();
@@ -584,5 +565,7 @@ inventory::submit! {
         description: "Compile C/C++ source files into executables (single-file)",
         is_native: false,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: None,
     }
 }

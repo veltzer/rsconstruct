@@ -6,22 +6,17 @@ use std::path::{Path, PathBuf};
 use crate::config::{IpdfuniteConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProcessorBase, Processor};
+use crate::processors::Processor;
 
 use super::find_dirs_with_ext;
 
 pub struct IpdfuniteProcessor {
-    base: ProcessorBase,
     config: IpdfuniteConfig,
 }
 
 impl IpdfuniteProcessor {
     pub fn new(config: IpdfuniteConfig) -> Self {
         Self {
-            base: ProcessorBase::generator(
-                crate::processors::names::IPDFUNITE,
-                "Merge PDFs from subdirectories into course bundles (in-process)",
-            ),
             config,
         }
     }
@@ -157,19 +152,9 @@ impl Processor for IpdfuniteProcessor {
         Some(&self.config.standard)
     }
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
-    }
-
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
         crate::processors::ProcessorBase::clean(product, &product.processor, verbose)
     }
-
-    fn is_native(&self) -> bool { true }
 
     fn auto_detect(&self, _file_index: &FileIndex) -> bool {
         let base = Path::new(&self.config.source_dir);
@@ -232,8 +217,6 @@ impl Processor for IpdfuniteProcessor {
         Ok(())
     }
 
-    fn supports_batch(&self) -> bool { false }
-
     fn execute(&self, _ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let output = product.primary_output();
         crate::processors::ensure_output_dir(output)?;
@@ -270,5 +253,7 @@ inventory::submit! {
         description: "Merge PDFs from subdirectories into course bundles (in-process)",
         is_native: true,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: Some(1),
     }
 }

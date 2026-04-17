@@ -5,17 +5,15 @@ use std::process::Command;
 use crate::config::{MdlConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProcessorBase, Processor, check_command_output, config_file_inputs, run_command};
+use crate::processors::{Processor, check_command_output, config_file_inputs, run_command};
 
 pub struct MdlProcessor {
-    base: ProcessorBase,
     config: MdlConfig,
 }
 
 impl MdlProcessor {
     pub fn new(config: MdlConfig) -> Self {
         Self {
-            base: ProcessorBase::checker(crate::processors::names::MDL, "Lint Markdown files using mdl (markdownlint)"),
             config,
         }
     }
@@ -28,14 +26,6 @@ impl Processor for MdlProcessor {
 
     fn standard_config(&self) -> Option<&crate::config::StandardConfig> {
         Some(&self.config.standard)
-    }
-
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -73,8 +63,6 @@ impl Processor for MdlProcessor {
         Ok(())
     }
 
-    fn supports_batch(&self) -> bool { false }
-
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let file = product.primary_input();
         let mut cmd = Command::new(&self.config.standard.command);
@@ -109,5 +97,7 @@ inventory::submit! {
         description: "Lint Markdown files using mdl (markdownlint)",
         is_native: false,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: None,
     }
 }

@@ -7,17 +7,12 @@ use crate::graph::{BuildGraph, Product};
 use crate::processors::{ProcessorBase, Processor, config_file_inputs, run_checker, execute_checker_batch};
 
 pub struct ScriptProcessor {
-    base: ProcessorBase,
     config: ScriptConfig,
 }
 
 impl ScriptProcessor {
     pub fn new(config: ScriptConfig) -> Self {
         Self {
-            base: ProcessorBase::checker(
-                crate::processors::names::SCRIPT,
-                "Run a user-configured script as a checker",
-            ),
             config,
         }
     }
@@ -42,21 +37,8 @@ impl Processor for ScriptProcessor {
     }
 
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
-    }
-
-
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.standard.max_jobs
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -96,16 +78,8 @@ impl Processor for ScriptProcessor {
         self.check_files(ctx, &[product.primary_input()])
     }
 
-    fn supports_batch(&self) -> bool {
-        self.config.standard.batch
-    }
-
     fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
         execute_checker_batch(ctx, products, |ctx, files| self.check_files(ctx, files))
-    }
-
-    fn can_fix(&self) -> bool {
-        self.has_fix()
     }
 
     fn fix(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
@@ -139,5 +113,7 @@ inventory::submit! {
         description: "Run a user-configured script as a checker",
         is_native: false,
         can_fix: false,
+        supports_batch: true,
+        max_jobs_cap: None,
     }
 }

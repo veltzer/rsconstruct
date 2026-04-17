@@ -6,22 +6,17 @@ use std::process::Command;
 use crate::config::{PdfuniteConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProcessorBase, Processor, run_command, check_command_output};
+use crate::processors::{Processor, run_command, check_command_output};
 
 use super::find_dirs_with_ext;
 
 pub struct PdfuniteProcessor {
-    base: ProcessorBase,
     config: PdfuniteConfig,
 }
 
 impl PdfuniteProcessor {
     pub fn new(config: PdfuniteConfig) -> Self {
         Self {
-            base: ProcessorBase::generator(
-                crate::processors::names::PDFUNITE,
-                "Merge PDFs from subdirectories into course bundles",
-            ),
             config,
         }
     }
@@ -34,14 +29,6 @@ impl Processor for PdfuniteProcessor {
 
     fn standard_config(&self) -> Option<&crate::config::StandardConfig> {
         Some(&self.config.standard)
-    }
-
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
@@ -113,8 +100,6 @@ impl Processor for PdfuniteProcessor {
         Ok(())
     }
 
-    fn supports_batch(&self) -> bool { false }
-
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let output = product.primary_output();
 
@@ -154,5 +139,7 @@ inventory::submit! {
         description: "Merge PDFs from subdirectories into course bundles",
         is_native: false,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: Some(1),
     }
 }

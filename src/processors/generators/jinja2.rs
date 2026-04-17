@@ -37,17 +37,12 @@ with open('{}', 'w') as f:
 }
 
 pub struct Jinja2Processor {
-    base: ProcessorBase,
     config: Jinja2Config,
 }
 
 impl Jinja2Processor {
     pub fn new(config: Jinja2Config) -> Self {
         Self {
-            base: ProcessorBase::generator(
-                crate::processors::names::JINJA2,
-                "Render Jinja2 templates into output files",
-            ),
             config,
         }
     }
@@ -59,20 +54,8 @@ impl Processor for Jinja2Processor {
     }
 
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
-    }
-
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.standard.max_jobs
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
@@ -106,8 +89,6 @@ impl Processor for Jinja2Processor {
         Ok(())
     }
 
-    fn supports_batch(&self) -> bool { false }
-
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let item = TemplateItem::new(
             product.primary_input().to_path_buf(),
@@ -135,5 +116,7 @@ inventory::submit! {
         description: "Render Jinja2 templates into output files",
         is_native: false,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: None,
     }
 }

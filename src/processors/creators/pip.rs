@@ -5,20 +5,15 @@ use std::process::Command;
 use crate::config::{PipConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProcessorBase, Processor, scan_root_valid, run_in_anchor_dir, anchor_display_dir, check_command_output};
+use crate::processors::{Processor, scan_root_valid, run_in_anchor_dir, anchor_display_dir, check_command_output};
 
 pub struct PipProcessor {
-    base: ProcessorBase,
     config: PipConfig,
 }
 
 impl PipProcessor {
     pub fn new(config: PipConfig) -> Self {
         Self {
-            base: ProcessorBase::creator(
-                crate::processors::names::PIP,
-                "Install Python dependencies using pip",
-            ),
             config,
         }
     }
@@ -44,24 +39,12 @@ impl Processor for PipProcessor {
     }
 
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
-    }
-
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         scan_root_valid(&self.config.standard) && !file_index.scan(&self.config.standard, false).is_empty()
     }
 
     fn config_json(&self) -> Option<String> {
         serde_json::to_string(&self.config).ok()
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.standard.max_jobs
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -92,8 +75,6 @@ impl Processor for PipProcessor {
         Ok(())
     }
 
-    fn supports_batch(&self) -> bool { false }
-
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         self.execute_pip(ctx, product.primary_input())
     }
@@ -117,5 +98,7 @@ inventory::submit! {
         description: "Install Python dependencies using pip",
         is_native: false,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: Some(1),
     }
 }

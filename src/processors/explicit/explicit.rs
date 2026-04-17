@@ -12,17 +12,12 @@ use crate::processors::{
 use crate::config::output_config_hash;
 
 pub struct ExplicitProcessor {
-    base: ProcessorBase,
     config: ExplicitConfig,
 }
 
 impl ExplicitProcessor {
     pub fn new(config: ExplicitConfig) -> Self {
         Self {
-            base: ProcessorBase::explicit(
-                crate::processors::names::EXPLICIT,
-                "Run a command with explicitly declared inputs and outputs",
-            ),
             config,
         }
     }
@@ -73,14 +68,6 @@ impl Processor for ExplicitProcessor {
     }
 
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
-    }
-
     fn auto_detect(&self, _file_index: &FileIndex) -> bool {
         // Only active if a command is configured and outputs are declared.
         !self.config.standard.command.is_empty()
@@ -119,8 +106,6 @@ impl Processor for ExplicitProcessor {
 
         Ok(())
     }
-
-    fn supports_batch(&self) -> bool { false }
 
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         // Ensure output file directories exist
@@ -189,5 +174,7 @@ inventory::submit! {
         description: "Run a command with explicitly declared inputs and outputs",
         is_native: false,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: Some(1),
     }
 }

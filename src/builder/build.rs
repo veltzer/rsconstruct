@@ -23,28 +23,28 @@ fn expand_aliases(filter: &[String], processors: &ProcessorMap) -> Vec<String> {
                 "checkers" => {
                     expanded.extend(
                         processors.iter()
-                            .filter(|(_, p)| p.processor_type() == ProcessorType::Checker)
+                            .filter(|(name, _)| crate::registries::processor::processor_type_of(name.as_str()) == ProcessorType::Checker)
                             .map(|(n, _)| n.clone())
                     );
                 }
                 "generators" => {
                     expanded.extend(
                         processors.iter()
-                            .filter(|(_, p)| p.processor_type() == ProcessorType::Generator)
+                            .filter(|(name, _)| crate::registries::processor::processor_type_of(name.as_str()) == ProcessorType::Generator)
                             .map(|(n, _)| n.clone())
                     );
                 }
                 "creators" => {
                     expanded.extend(
                         processors.iter()
-                            .filter(|(_, p)| p.processor_type() == ProcessorType::Creator)
+                            .filter(|(name, _)| crate::registries::processor::processor_type_of(name.as_str()) == ProcessorType::Creator)
                             .map(|(n, _)| n.clone())
                     );
                 }
                 "lua" => {
                     expanded.extend(
                         processors.iter()
-                            .filter(|(_, p)| p.processor_type() == ProcessorType::Lua)
+                            .filter(|(name, _)| crate::registries::processor::processor_type_of(name.as_str()) == ProcessorType::Lua)
                             .map(|(n, _)| n.clone())
                     );
                 }
@@ -362,7 +362,7 @@ impl Builder {
             .map(|s| s.as_str())
             .collect();
         let native_set: std::collections::HashSet<&str> = processors.iter()
-            .filter(|(_, proc)| proc.is_native())
+            .filter(|(name, _)| crate::registries::processor::is_native(name.as_str()))
             .map(|(name, _)| name.as_str())
             .collect();
         self.print_product_status(ctx, &products, &StatusPrintOptions {

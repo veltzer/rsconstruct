@@ -5,7 +5,7 @@ use anyhow::Result;
 use crate::config::{CreatorConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProcessorBase, Processor, ProcessorType,
+use crate::processors::{ProcessorBase, Processor,
     run_in_anchor_dir, anchor_display_dir, check_command_output};
 
 /// A data-driven processor that runs a command and caches declared outputs.
@@ -23,14 +23,12 @@ use crate::processors::{ProcessorBase, Processor, ProcessorType,
 /// src_extensions = ["requirements.txt"]
 /// ```
 pub struct CreatorProcessor {
-    base: ProcessorBase,
     config: CreatorConfig,
 }
 
 impl CreatorProcessor {
     pub fn new(config: CreatorConfig) -> Self {
         Self {
-            base: ProcessorBase::creator("creator", "Run a command and cache declared outputs"),
             config,
         }
     }
@@ -41,20 +39,8 @@ impl Processor for CreatorProcessor {
         &self.config.standard
     }
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> ProcessorType {
-        self.base.processor_type()
-    }
-
     fn config_json(&self) -> Option<String> {
         ProcessorBase::config_json(&self.config)
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.standard.max_jobs
     }
 
     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
@@ -112,8 +98,6 @@ impl Processor for CreatorProcessor {
         Ok(())
     }
 
-    fn supports_batch(&self) -> bool { false }
-
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let anchor = product.primary_input();
         let command = self.config.standard.require_command("creator")?;
@@ -144,5 +128,7 @@ inventory::submit! {
         description: "Run a command and cache declared outputs",
         is_native: false,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: Some(1),
     }
 }

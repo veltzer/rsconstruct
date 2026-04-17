@@ -8,17 +8,12 @@ use crate::graph::{BuildGraph, Product};
 use crate::processors::{ProcessorBase, Processor, SiblingFilter, run_command, anchor_display_dir, check_command_output};
 
 pub struct SphinxProcessor {
-    base: ProcessorBase,
     config: SphinxConfig,
 }
 
 impl SphinxProcessor {
     pub fn new(config: SphinxConfig) -> Self {
         Self {
-            base: ProcessorBase::creator(
-                crate::processors::names::SPHINX,
-                "Build Sphinx documentation",
-            ),
             config,
         }
     }
@@ -54,21 +49,8 @@ impl Processor for SphinxProcessor {
     }
 
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
-    }
-
-
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.standard.max_jobs
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
@@ -106,8 +88,6 @@ impl Processor for SphinxProcessor {
         Ok(())
     }
 
-    fn supports_batch(&self) -> bool { false }
-
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         self.execute_sphinx(ctx, product.primary_input())
     }
@@ -131,5 +111,7 @@ inventory::submit! {
         description: "Build Sphinx documentation",
         is_native: false,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: Some(1),
     }
 }

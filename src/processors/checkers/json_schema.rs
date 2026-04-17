@@ -104,24 +104,14 @@ impl crate::processors::Processor for JsonSchemaProcessor {
         Some(&self.config.standard)
     }
 
-    fn description(&self) -> &str {
-        "Validate propertyOrdering in JSON schema files"
-    }
-
-
     fn required_tools(&self) -> Vec<String> {
         Vec::new()
     }
 
 
-    fn supports_batch(&self) -> bool { false }
-
     fn execute(&self, _ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         self.execute_product(product)
     }
-
-
-    fn is_native(&self) -> bool { true }
 
 }
 
@@ -143,5 +133,7 @@ inventory::submit! {
         description: "Validate propertyOrdering in JSON schema files",
         is_native: true,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: None,
     }
 }

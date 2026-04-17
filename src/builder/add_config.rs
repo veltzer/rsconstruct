@@ -68,13 +68,9 @@ pub fn add_analyzer(name: &str, dry_run: bool) -> Result<()> {
     apply_snippet("analyzer", name, &snippet, dry_run)
 }
 
-/// Look up a processor's description by instantiating the full default-processor
-/// set once. We avoid exposing description on the plugin metadata (it sits inside
-/// SimpleChecker/SimpleGenerator params), but instantiating the whole set here is
-/// acceptable: `add` is a rare, user-invoked command.
+/// Look up a processor's description from static plugin metadata.
 fn processor_description(name: &str) -> Option<String> {
-    let map = super::create_all_default_processors();
-    map.get(name).map(|p| p.description().to_string())
+    crate::registries::processor::find_plugin(name).map(|p| p.description.to_string())
 }
 
 /// Render a single `[section.name]` block as a TOML snippet string with comments.

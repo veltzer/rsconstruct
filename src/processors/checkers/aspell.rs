@@ -7,11 +7,10 @@ use std::io::Write;
 use crate::config::AspellConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProcessorBase, Processor, scan_root_valid, log_command, format_command};
+use crate::processors::{Processor, scan_root_valid, log_command, format_command};
 use crate::word_manager::WordManager;
 
 pub struct AspellProcessor {
-    base: ProcessorBase,
     config: AspellConfig,
     words: WordManager,
 }
@@ -25,7 +24,6 @@ impl AspellProcessor {
             Some("personal_ws-1.1 en 0"),
         );
         Self {
-            base: ProcessorBase::checker(crate::processors::names::ASPELL, "Check spelling using aspell"),
             config,
             words,
         }
@@ -100,14 +98,6 @@ impl Processor for AspellProcessor {
         Some(&self.config.standard)
     }
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
-    }
-
     fn required_tools(&self) -> Vec<String> {
         vec![self.config.standard.command.clone()]
     }
@@ -143,10 +133,6 @@ impl Processor for AspellProcessor {
         )
     }
 
-    fn supports_batch(&self) -> bool {
-        self.config.auto_add_words
-    }
-
     fn execute_batch(&self, _ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
         self.words.execute_batch_with_flush(
             products,
@@ -175,5 +161,7 @@ inventory::submit! {
         description: "Check spelling using aspell",
         is_native: false,
         can_fix: false,
+        supports_batch: true,
+        max_jobs_cap: None,
     }
 }

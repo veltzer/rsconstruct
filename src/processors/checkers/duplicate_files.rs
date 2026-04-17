@@ -59,11 +59,6 @@ impl crate::processors::Processor for DuplicateFilesProcessor {
         Some(&self.config.standard)
     }
 
-    fn description(&self) -> &str {
-        "Detect duplicate files by content (SHA-256)"
-    }
-
-
     fn required_tools(&self) -> Vec<String> {
         Vec::new()
     }
@@ -73,13 +68,6 @@ impl crate::processors::Processor for DuplicateFilesProcessor {
         self.execute_product(product)
     }
 
-
-    fn is_native(&self) -> bool { true }
-
-
-
-
-    fn supports_batch(&self) -> bool { self.config.standard.batch }
 
     fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
         crate::processors::execute_checker_batch(ctx, products, |_ctx, files| self.check_files(files))
@@ -104,5 +92,7 @@ inventory::submit! {
         description: "Detect duplicate files by content (SHA-256)",
         is_native: true,
         can_fix: false,
+        supports_batch: true,
+        max_jobs_cap: None,
     }
 }

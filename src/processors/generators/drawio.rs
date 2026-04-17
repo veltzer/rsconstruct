@@ -43,4 +43,6 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     description: "Export draw.io diagrams to images",
     is_native: false,
     can_fix: false,
+    supports_batch: false,
+    max_jobs_cap: None,
 } }

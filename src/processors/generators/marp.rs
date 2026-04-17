@@ -56,4 +56,6 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     description: "Convert Marp Markdown presentations to PDF/HTML",
     is_native: false,
     can_fix: false,
+    supports_batch: false,
+    max_jobs_cap: None,
 } }

@@ -64,11 +64,6 @@ impl crate::processors::Processor for EncodingProcessor {
         Some(&self.config.standard)
     }
 
-    fn description(&self) -> &str {
-        "Validate that text files are valid UTF-8 without BOM"
-    }
-
-
     fn required_tools(&self) -> Vec<String> {
         Vec::new()
     }
@@ -78,13 +73,6 @@ impl crate::processors::Processor for EncodingProcessor {
         self.execute_product(product)
     }
 
-
-    fn is_native(&self) -> bool { true }
-
-
-
-
-    fn supports_batch(&self) -> bool { self.config.standard.batch }
 
     fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
         crate::processors::execute_checker_batch(ctx, products, |_ctx, files| self.check_files(files))
@@ -109,5 +97,7 @@ inventory::submit! {
         description: "Validate that text files are valid UTF-8 without BOM",
         is_native: true,
         can_fix: false,
+        supports_batch: true,
+        max_jobs_cap: None,
     }
 }

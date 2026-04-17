@@ -39,4 +39,6 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     description: "Convert Markdown to HTML (in-process)",
     is_native: true,
     can_fix: false,
+    supports_batch: false,
+    max_jobs_cap: None,
 } }

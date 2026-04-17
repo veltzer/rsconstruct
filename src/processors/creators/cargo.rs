@@ -8,17 +8,12 @@ use crate::graph::{BuildGraph, Product};
 use crate::processors::{ProcessorBase, Processor, SiblingFilter, run_in_anchor_dir, anchor_display_dir, check_command_output};
 
 pub struct CargoProcessor {
-    base: ProcessorBase,
     config: CargoConfig,
 }
 
 impl CargoProcessor {
     pub fn new(config: CargoConfig) -> Self {
         Self {
-            base: ProcessorBase::creator(
-                crate::processors::names::CARGO,
-                "Build Rust projects using Cargo",
-            ),
             config,
         }
     }
@@ -43,21 +38,8 @@ impl Processor for CargoProcessor {
     }
 
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
-    }
-
-
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.standard.max_jobs
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
@@ -125,8 +107,6 @@ impl Processor for CargoProcessor {
         Ok(())
     }
 
-    fn supports_batch(&self) -> bool { false }
-
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let profile = product.variant.as_deref().unwrap_or("dev");
         self.execute_cargo(ctx, product.primary_input(), profile)
@@ -151,5 +131,7 @@ inventory::submit! {
         description: "Build Rust projects using Cargo",
         is_native: false,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: Some(1),
     }
 }

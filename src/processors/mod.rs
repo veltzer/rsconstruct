@@ -773,40 +773,11 @@ impl ProcessorType {
 
 }
 
-/// Common base for all processors. Holds fields needed by boilerplate
-/// Processor methods so each processor doesn't repeat them.
-pub struct ProcessorBase {
-    /// Human-readable description
-    pub description: &'static str,
-    /// Generator or Checker
-    pub processor_type: ProcessorType,
-}
+/// Helper namespace for processor boilerplate (config_json, clean, clean_output_dir).
+/// No state — description and processor_type now live on the plugin metadata.
+pub struct ProcessorBase;
 
 impl ProcessorBase {
-    pub fn generator(_name: &'static str, description: &'static str) -> Self {
-        Self { description, processor_type: ProcessorType::Generator }
-    }
-
-    pub fn creator(_name: &'static str, description: &'static str) -> Self {
-        Self { description, processor_type: ProcessorType::Creator }
-    }
-
-    pub fn checker(_name: &'static str, description: &'static str) -> Self {
-        Self { description, processor_type: ProcessorType::Checker }
-    }
-
-    pub fn explicit(_name: &'static str, description: &'static str) -> Self {
-        Self { description, processor_type: ProcessorType::Explicit }
-    }
-
-    pub fn description(&self) -> &str {
-        self.description
-    }
-
-    pub fn processor_type(&self) -> ProcessorType {
-        self.processor_type
-    }
-
     pub fn config_json<C: Serialize>(config: &C) -> Option<String> {
         serde_json::to_string(config).ok()
     }
@@ -865,14 +836,6 @@ impl ProcessorBase {
 ///
 /// Must be Sync + Send for parallel execution support.
 pub trait Processor: Sync + Send {
-    /// Human-readable description of what this processor does
-    fn description(&self) -> &str;
-
-    /// The type of this processor (generator or checker).
-    /// Default is Checker since most processors are checkers.
-    fn processor_type(&self) -> ProcessorType {
-        ProcessorType::Checker
-    }
 
     /// Access the scan configuration. Required for auto_detect and discover defaults.
     fn scan_config(&self) -> &crate::config::StandardConfig;
@@ -922,26 +885,11 @@ pub trait Processor: Sync + Send {
             .collect()
     }
 
-    /// Whether this processor is native (pure Rust, no external tools).
-    fn is_native(&self) -> bool {
-        false
-    }
-
-    /// Whether this processor supports real batch execution (passing multiple
-    /// files to the tool in one invocation). Every processor must declare this
-    /// explicitly — there is no default.
-    fn supports_batch(&self) -> bool;
-
     /// Execute multiple products in one invocation.
-    /// Only called when supports_batch() returns true.
+    /// Only called when the plugin's `supports_batch` flag is true AND the
+    /// user config has `batch = true`.
     fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
         products.iter().map(|p| self.execute(ctx, p)).collect()
-    }
-
-    /// Whether this processor can fix issues (not just check).
-    /// Processors with fix capability can be invoked via `rsconstruct fix`.
-    fn can_fix(&self) -> bool {
-        false
     }
 
     /// Fix a single product (modify source files in place).
@@ -966,11 +914,6 @@ pub trait Processor: Sync + Send {
     /// Default: serialize standard_config if available.
     fn config_json(&self) -> Option<String> {
         self.standard_config().and_then(|c| serde_json::to_string(c).ok())
-    }
-
-    /// Maximum concurrent jobs. Default: reads from standard_config().max_jobs.
-    fn max_jobs(&self) -> Option<usize> {
-        self.standard_config().and_then(|c| c.max_jobs)
     }
 }
 
@@ -1370,10 +1313,6 @@ impl Processor for SimpleChecker {
         Some(&self.config.standard)
     }
 
-    fn description(&self) -> &str {
-        self.params.description
-    }
-
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         !file_index.scan(&self.config.standard, true).is_empty()
     }
@@ -1405,16 +1344,8 @@ impl Processor for SimpleChecker {
         self.check_files(ctx, &[product.primary_input()])
     }
 
-    fn supports_batch(&self) -> bool {
-        self.config.standard.batch
-    }
-
     fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
         execute_checker_batch(ctx, products, |ctx, files| self.check_files(ctx, files))
-    }
-
-    fn can_fix(&self) -> bool {
-        self.has_fix()
     }
 
     fn fix(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
@@ -1454,7 +1385,6 @@ pub(crate) struct SimpleGeneratorParams {
 /// Data-driven generator processor. Replaces identical boilerplate across
 /// generators that use `StandardConfig` with standard discover logic.
 pub struct SimpleGenerator {
-    base: ProcessorBase,
     config: StandardConfig,
     params: SimpleGeneratorParams,
 }
@@ -1462,7 +1392,6 @@ pub struct SimpleGenerator {
 impl SimpleGenerator {
     pub fn new(config: StandardConfig, params: SimpleGeneratorParams) -> Self {
         Self {
-            base: ProcessorBase::generator("", params.description),
             config,
             params,
         }
@@ -1478,24 +1407,12 @@ impl Processor for SimpleGenerator {
         Some(&self.config)
     }
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> ProcessorType {
-        self.base.processor_type()
-    }
-
     fn config_json(&self) -> Option<String> {
         ProcessorBase::config_json(&self.config)
     }
 
     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
         ProcessorBase::clean(product, &product.processor, verbose)
-    }
-
-    fn is_native(&self) -> bool {
-        self.params.is_native
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -1508,10 +1425,6 @@ impl Processor for SimpleGenerator {
             }
             tools
         }
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.max_jobs
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
@@ -1532,8 +1445,6 @@ impl Processor for SimpleGenerator {
             }
         }
     }
-
-    fn supports_batch(&self) -> bool { false }
 
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         (self.params.execute_fn)(ctx, &self.config, product)

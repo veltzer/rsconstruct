@@ -64,4 +64,6 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     description: "Convert documents using LibreOffice",
     is_native: false,
     can_fix: false,
+    supports_batch: false,
+    max_jobs_cap: None,
 } }

@@ -15,8 +15,7 @@ impl Builder {
 
         let fixable: Vec<&str> = processors.keys()
             .filter(|name| {
-                let proc = &processors[name.as_str()];
-                if !proc.can_fix() {
+                if !crate::registries::processor::can_fix(name.as_str()) {
                     return false;
                 }
                 if let Some(ref filter) = filter_set {
@@ -116,7 +115,7 @@ impl Builder {
         let proc_names = sorted_keys(&processors);
 
         let fixers: Vec<&String> = proc_names.iter()
-            .filter(|name| processors[name.as_str()].can_fix())
+            .filter(|name| crate::registries::processor::can_fix(name.as_str()))
             .copied()
             .collect();
 
@@ -127,11 +126,10 @@ impl Builder {
 
         if crate::json_output::is_json_mode() {
             let entries: Vec<serde_json::Value> = fixers.iter().map(|name| {
-                let proc = &processors[name.as_str()];
                 serde_json::json!({
                     "name": name,
-                    "type": proc.processor_type().as_str(),
-                    "description": proc.description(),
+                    "type": crate::registries::processor::processor_type_of(name.as_str()).as_str(),
+                    "description": crate::registries::processor::description_of(name.as_str()),
                 })
             }).collect();
             println!("{}", serde_json::to_string_pretty(&entries)?);
@@ -139,8 +137,11 @@ impl Builder {
         }
 
         let rows: Vec<Vec<String>> = fixers.iter().map(|name| {
-            let proc = &processors[name.as_str()];
-            vec![name.to_string(), proc.processor_type().as_str().to_string(), proc.description().to_string()]
+            vec![
+                name.to_string(),
+                crate::registries::processor::processor_type_of(name.as_str()).as_str().to_string(),
+                crate::registries::processor::description_of(name.as_str()).to_string(),
+            ]
         }).collect();
         color::print_table(&["Name", "Type", "Description"], &rows);
 

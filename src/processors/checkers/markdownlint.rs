@@ -4,17 +4,15 @@ use std::process::Command;
 use crate::config::MarkdownlintConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProcessorBase, Processor, check_command_output, run_command};
+use crate::processors::{Processor, check_command_output, run_command};
 
 pub struct MarkdownlintProcessor {
-    base: ProcessorBase,
     config: MarkdownlintConfig,
 }
 
 impl MarkdownlintProcessor {
     pub fn new(config: MarkdownlintConfig) -> Self {
         Self {
-            base: ProcessorBase::checker(crate::processors::names::MARKDOWNLINT, "Lint Markdown files using markdownlint"),
             config,
         }
     }
@@ -27,14 +25,6 @@ impl Processor for MarkdownlintProcessor {
 
     fn standard_config(&self) -> Option<&crate::config::StandardConfig> {
         Some(&self.config.standard)
-    }
-
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -50,8 +40,6 @@ impl Processor for MarkdownlintProcessor {
             instance_name,
         )
     }
-
-    fn supports_batch(&self) -> bool { false }
 
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let file = product.primary_input();
@@ -83,5 +71,7 @@ inventory::submit! {
         description: "Lint Markdown files using markdownlint",
         is_native: false,
         can_fix: true,
+        supports_batch: false,
+        max_jobs_cap: None,
     }
 }

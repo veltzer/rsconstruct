@@ -13,17 +13,12 @@ use crate::processors::{
 use crate::config::{output_config_hash, resolve_extra_inputs};
 
 pub struct GeneratorProcessor {
-    base: ProcessorBase,
     config: GeneratorConfig,
 }
 
 impl GeneratorProcessor {
     pub fn new(config: GeneratorConfig) -> Self {
         Self {
-            base: ProcessorBase::generator(
-                crate::processors::names::GENERATOR,
-                "Run a user-configured script as a generator",
-            ),
             config,
         }
     }
@@ -62,20 +57,8 @@ impl Processor for GeneratorProcessor {
     }
 
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
-    }
-
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.standard.max_jobs
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
@@ -130,10 +113,6 @@ impl Processor for GeneratorProcessor {
         self.execute_product(ctx, product)
     }
 
-    fn supports_batch(&self) -> bool {
-        self.config.standard.batch
-    }
-
     fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
         execute_generator_batch(ctx, products, |ctx, pairs| self.run_pairs(ctx, pairs))
     }
@@ -157,5 +136,7 @@ inventory::submit! {
         description: "Run a user-configured script as a generator",
         is_native: false,
         can_fix: false,
+        supports_batch: true,
+        max_jobs_cap: None,
     }
 }

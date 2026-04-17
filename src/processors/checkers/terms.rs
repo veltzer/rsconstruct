@@ -63,12 +63,6 @@ impl crate::processors::Processor for TermsProcessor {
         Some(&self.config.standard)
     }
 
-    fn description(&self) -> &str {
-        "Check that technical terms are backtick-quoted in markdown files"
-    }
-
-    fn is_native(&self) -> bool { true }
-
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         Path::new(&self.config.terms_dir).is_dir()
             && !file_index.scan(&self.config.standard, true).is_empty()
@@ -102,10 +96,6 @@ impl crate::processors::Processor for TermsProcessor {
 
     fn execute(&self, _ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         self.execute_product(product)
-    }
-
-    fn supports_batch(&self) -> bool {
-        self.config.standard.batch
     }
 
     fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
@@ -679,5 +669,7 @@ inventory::submit! {
         description: "Check that technical terms are backtick-quoted in markdown files",
         is_native: true,
         can_fix: false,
+        supports_batch: true,
+        max_jobs_cap: None,
     }
 }

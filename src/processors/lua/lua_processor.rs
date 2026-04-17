@@ -45,7 +45,6 @@ fn get_ctx_from_lua(lua: &Lua) -> &crate::build_context::BuildContext {
 
 pub struct LuaProcessor {
     name: String,
-    description: String,
     lua: Mutex<Lua>,
     stub_dir: PathBuf,
     config_value: toml::Value,
@@ -72,16 +71,6 @@ impl LuaProcessor {
             format!("Failed to load Lua plugin '{}'", name),
         )?;
 
-        // Cache the description (required function)
-        let desc_fn: LuaFunction = lua_context(
-            lua.globals().get("description"),
-            format!("Lua plugin '{}' must define a description() function", name),
-        )?;
-        let description: String = lua_context(
-            desc_fn.call(()),
-            format!("Lua plugin '{}': description() failed", name),
-        )?;
-
         // Extract scan config from the TOML config value
         let scan_config = standard_config_from_toml(&config_value, &[], &[], &[]);
 
@@ -89,7 +78,6 @@ impl LuaProcessor {
 
         Ok(Self {
             name,
-            description,
             lua: Mutex::new(lua),
             stub_dir,
             config_value,
@@ -366,30 +354,6 @@ impl Processor for LuaProcessor {
     }
 
 
-    fn description(&self) -> &str {
-        &self.description
-    }
-
-    fn processor_type(&self) -> ProcessorType {
-        if self.has_function("processor_type") {
-            let type_str = self.lua.lock().globals()
-                .get::<LuaFunction>("processor_type")
-                .and_then(|f| f.call::<String>(()))
-                .unwrap_or_else(|_| "lua".to_string());
-            match type_str.to_lowercase().as_str() {
-                "generator" => ProcessorType::Generator,
-                "checker" => ProcessorType::Checker,
-                "creator" => ProcessorType::Creator,
-                "explicit" => ProcessorType::Explicit,
-                _ => ProcessorType::Lua,
-            }
-        } else {
-            // No processor_type declared: categorize as Lua. Lua scripts that
-            // want to match @checkers/@generators/@creators must declare it.
-            ProcessorType::Lua
-        }
-    }
-
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
         let files = file_index.scan(&self.scan_config, true);
         if files.is_empty() {
@@ -462,8 +426,6 @@ impl Processor for LuaProcessor {
 
         Ok(())
     }
-
-    fn supports_batch(&self) -> bool { false }
 
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         ensure_stub_dir(&self.stub_dir, &self.name)?;

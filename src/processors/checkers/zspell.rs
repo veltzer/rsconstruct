@@ -9,13 +9,12 @@ use crate::config::ZspellConfig;
 use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProcessorBase, Processor, discover_checker_products};
+use crate::processors::{Processor, discover_checker_products};
 use crate::word_manager::WordManager;
 
 const DICT_DIR: &str = "/usr/share/hunspell";
 
 pub struct ZspellProcessor {
-    base: ProcessorBase,
     config: ZspellConfig,
     /// Cached dictionary, built once on first use and reused across all execute() calls
     cached_dict: OnceLock<Result<zspell::Dictionary, String>>,
@@ -36,7 +35,6 @@ impl ZspellProcessor {
             None,
         );
         Self {
-            base: ProcessorBase::checker(crate::processors::names::ZSPELL, "Check documentation files for spelling errors"),
             config,
             cached_dict: OnceLock::new(),
             words,
@@ -176,24 +174,9 @@ impl Processor for ZspellProcessor {
     }
 
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
-    }
-
-
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
     }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.standard.max_jobs
-    }
-
-    fn is_native(&self) -> bool { true }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
         discover_checker_products(
@@ -215,10 +198,6 @@ impl Processor for ZspellProcessor {
             |file| self.check_file(file),
             "zspell",
         )
-    }
-
-    fn supports_batch(&self) -> bool {
-        self.config.auto_add_words
     }
 
     fn execute_batch(&self, _ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
@@ -249,5 +228,7 @@ inventory::submit! {
         description: "Check documentation files for spelling errors",
         is_native: true,
         can_fix: false,
+        supports_batch: true,
+        max_jobs_cap: None,
     }
 }

@@ -14,9 +14,7 @@ pub fn search_processors(query: &str) -> Result<()> {
     for plugin in crate::registries::processor::all_plugins() {
         let name_match = plugin.name.to_lowercase().contains(&query_lower);
         let keyword_match = plugin.keywords.iter().any(|k| k.to_lowercase().contains(&query_lower));
-        let desc_match = processors.get(plugin.name)
-            .map(|p| p.description().to_lowercase().contains(&query_lower))
-            .unwrap_or(false);
+        let desc_match = plugin.description.to_lowercase().contains(&query_lower);
 
         if (name_match || keyword_match || desc_match)
             && let Some(proc) = processors.get(plugin.name) {
@@ -32,11 +30,11 @@ pub fn search_processors(query: &str) -> Result<()> {
     }
 
     if crate::json_output::is_json_mode() {
-        let entries: Vec<serde_json::Value> = matches.iter().map(|(name, proc, keywords)| {
+        let entries: Vec<serde_json::Value> = matches.iter().map(|(name, _proc, keywords)| {
             serde_json::json!({
                 "name": name,
-                "type": proc.processor_type().as_str(),
-                "description": proc.description(),
+                "type": crate::registries::processor::processor_type_of(name).as_str(),
+                "description": crate::registries::processor::description_of(name),
                 "keywords": keywords,
             })
         }).collect();
@@ -44,11 +42,11 @@ pub fn search_processors(query: &str) -> Result<()> {
         return Ok(());
     }
 
-    let rows: Vec<Vec<String>> = matches.iter().map(|(name, proc, keywords)| {
+    let rows: Vec<Vec<String>> = matches.iter().map(|(name, _proc, keywords)| {
         vec![
             name.to_string(),
-            proc.processor_type().as_str().to_string(),
-            proc.description().to_string(),
+            crate::registries::processor::processor_type_of(name).as_str().to_string(),
+            crate::registries::processor::description_of(name).to_string(),
             keywords.join(", "),
         ]
     }).collect();
@@ -252,6 +250,7 @@ fn print_processor_metadata(name: &str, verbose: bool) {
         .chain(SCAN_FIELD_DESCRIPTIONS.iter().map(|(f, d)| (*f, *d)))
         .collect();
 
+    let plugin = crate::registries::processor::find_plugin(name);
     let rows: Vec<Vec<String>> = all_descs.iter().map(|(field, desc)| {
         let val = defaults.get(*field);
         let type_str = match val {
@@ -263,7 +262,20 @@ fn print_processor_metadata(name: &str, verbose: bool) {
             _                                   => "?",
         };
         let default_str = if *field == "max_jobs" {
-            "(global)".to_string()
+            match plugin.and_then(|p| p.max_jobs_cap) {
+                Some(cap) => format!("(global, capped at {})", cap),
+                None => "(global)".to_string(),
+            }
+        } else if *field == "batch" {
+            // Cap the displayed default by the plugin's static capability.
+            // If the processor can't batch, the config field has no effect.
+            match plugin {
+                Some(p) if !p.supports_batch => "false (not supported)".to_string(),
+                _ => match val {
+                    Some(v) => serde_json::to_string(v).unwrap_or_default(),
+                    None    => "(none)".to_string(),
+                }
+            }
         } else {
             match val {
                 Some(v) => serde_json::to_string(v).unwrap_or_default(),
@@ -317,14 +329,23 @@ impl Builder {
                     let rows: Vec<Vec<String>> = proc_names.iter().map(|name| {
                         let proc = &processors[name.as_str()];
                         let detected_str = color::yes_no(proc.auto_detect(&self.file_index));
-                        vec![name.to_string(), proc.processor_type().as_str().to_string(), detected_str.to_string(), proc.description().to_string()]
+                        vec![
+                            name.to_string(),
+                            crate::registries::processor::processor_type_of(name.as_str()).as_str().to_string(),
+                            detected_str.to_string(),
+                            crate::registries::processor::description_of(name.as_str()).to_string(),
+                        ]
                     }).collect();
                     color::print_table(&["Name", "Type", "Detected", "Description"], &rows);
                 } else {
                     let rows: Vec<Vec<String>> = proc_names.iter().map(|name| {
                         let proc = &processors[name.as_str()];
                         let detected_str = color::yes_no(proc.auto_detect(&self.file_index));
-                        vec![name.to_string(), proc.processor_type().as_str().to_string(), detected_str.to_string()]
+                        vec![
+                            name.to_string(),
+                            crate::registries::processor::processor_type_of(name.as_str()).as_str().to_string(),
+                            detected_str.to_string(),
+                        ]
                     }).collect();
                     color::print_table(&["Name", "Type", "Detected"], &rows);
                 }
@@ -467,9 +488,7 @@ impl Builder {
                 if crate::json_output::is_json_mode() {
                     let entries: Vec<crate::json_output::ProcessorFileEntry> = products.iter()
                         .map(|p| {
-                            let proc_type = processors.get(p.processor.as_str())
-                                .map(|proc| proc.processor_type().as_str())
-                                .unwrap_or("unknown");
+                            let proc_type = crate::registries::processor::processor_type_of(p.processor.as_str()).as_str();
                             crate::json_output::ProcessorFileEntry {
                                 processor: p.processor.clone(),
                                 processor_type: proc_type.to_string(),
@@ -511,8 +530,11 @@ impl Builder {
                     let inputs: Vec<String> = product.inputs.iter()
                         .map(|p| p.display().to_string())
                         .collect();
-                    let proc_type = processors.get(product.processor.as_str())
-                        .map(|proc| proc.processor_type());
+                    let proc_type = if processors.contains_key(product.processor.as_str()) {
+                        Some(crate::registries::processor::processor_type_of(product.processor.as_str()))
+                    } else {
+                        None
+                    };
                     if product.outputs.is_empty() {
                         let label = match proc_type {
                             Some(crate::processors::ProcessorType::Creator) => "(creator)",

@@ -8,17 +8,12 @@ use crate::graph::{BuildGraph, Product};
 use crate::processors::{ProcessorBase, Processor, run_command, check_command_output};
 
 pub struct RustSingleFileProcessor {
-    base: ProcessorBase,
     config: RustSingleFileConfig,
 }
 
 impl RustSingleFileProcessor {
     pub fn new(config: RustSingleFileConfig) -> Self {
         Self {
-            base: ProcessorBase::generator(
-                crate::processors::names::RUST_SINGLE_FILE,
-                "Compile single-file Rust programs into executables",
-            ),
             config,
         }
     }
@@ -43,14 +38,6 @@ impl Processor for RustSingleFileProcessor {
 
     fn standard_config(&self) -> Option<&crate::config::StandardConfig> {
         Some(&self.config.standard)
-    }
-
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
@@ -88,8 +75,6 @@ impl Processor for RustSingleFileProcessor {
         Ok(())
     }
 
-    fn supports_batch(&self) -> bool { false }
-
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let source = product.primary_input();
         let output = product.primary_output();
@@ -126,5 +111,7 @@ inventory::submit! {
         description: "Compile single-file Rust programs into executables",
         is_native: false,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: None,
     }
 }

@@ -93,17 +93,12 @@ fn render_template(ctx: &crate::build_context::BuildContext, item: &TemplateItem
 }
 
 pub struct TeraProcessor {
-    base: ProcessorBase,
     config: TeraConfig,
 }
 
 impl TeraProcessor {
     pub fn new(config: TeraConfig) -> Self {
         Self {
-            base: ProcessorBase::generator(
-                crate::processors::names::TERA,
-                "Render Tera templates into output files",
-            ),
             config,
         }
     }
@@ -115,27 +110,13 @@ impl Processor for TeraProcessor {
     }
 
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
-    }
-
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.standard.max_jobs
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
         crate::processors::ProcessorBase::clean(product, &product.processor, verbose)
     }
-
-    fn is_native(&self) -> bool { true }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         super::find_templates(&self.config.standard, file_index).is_ok_and(|t| !t.is_empty())
@@ -163,8 +144,6 @@ impl Processor for TeraProcessor {
 
         Ok(())
     }
-
-    fn supports_batch(&self) -> bool { false }
 
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let item = TemplateItem::new(
@@ -539,5 +518,7 @@ inventory::submit! {
         description: "Render Tera templates into output files",
         is_native: true,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: None,
     }
 }

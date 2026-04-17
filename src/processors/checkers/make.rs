@@ -8,14 +8,12 @@ use crate::graph::{BuildGraph, Product};
 use crate::processors::{ProcessorBase, Processor, SiblingFilter, DirectoryProductOpts, discover_directory_products, run_in_anchor_dir, anchor_display_dir, check_command_output};
 
 pub struct MakeProcessor {
-    base: ProcessorBase,
     config: MakeConfig,
 }
 
 impl MakeProcessor {
     pub fn new(config: MakeConfig) -> Self {
         Self {
-            base: ProcessorBase::checker(crate::processors::names::MAKE, "Run make in directories containing Makefiles"),
             config,
         }
     }
@@ -40,21 +38,8 @@ impl Processor for MakeProcessor {
     }
 
 
-    fn description(&self) -> &str {
-        self.base.description()
-    }
-
-    fn processor_type(&self) -> crate::processors::ProcessorType {
-        self.base.processor_type()
-    }
-
-
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
-    }
-
-    fn max_jobs(&self) -> Option<usize> {
-        self.config.standard.max_jobs
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -81,8 +66,6 @@ impl Processor for MakeProcessor {
         })
     }
 
-    fn supports_batch(&self) -> bool { false }
-
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         self.execute_make(ctx, product.primary_input())
     }
@@ -106,5 +89,7 @@ inventory::submit! {
         description: "Run make in directories containing Makefiles",
         is_native: false,
         can_fix: false,
+        supports_batch: false,
+        max_jobs_cap: None,
     }
 }

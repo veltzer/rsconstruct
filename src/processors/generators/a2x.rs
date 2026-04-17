@@ -47,4 +47,6 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     description: "Convert AsciiDoc files to PDF",
     is_native: false,
     can_fix: false,
+    supports_batch: false,
+    max_jobs_cap: None,
 } }

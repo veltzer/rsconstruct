@@ -184,10 +184,6 @@ impl crate::processors::Processor for IyamlschemaProcessor {
         Some(&self.config.standard)
     }
 
-    fn description(&self) -> &str {
-        "Validate YAML files against JSON schemas (in-process)"
-    }
-
     fn auto_detect(&self, file_index: &crate::file_index::FileIndex) -> bool {
         crate::processors::checker_auto_detect(&self.config.standard, file_index)
     }
@@ -215,10 +211,6 @@ impl crate::processors::Processor for IyamlschemaProcessor {
         self.execute_product(product)
     }
 
-    fn is_native(&self) -> bool { true }
-
-    fn supports_batch(&self) -> bool { self.config.standard.batch }
-
     fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
         crate::processors::execute_checker_batch(ctx, products, |_ctx, files| self.check_files(files))
     }
@@ -242,5 +234,7 @@ inventory::submit! {
         description: "Validate YAML files against JSON schemas (in-process)",
         is_native: true,
         can_fix: false,
+        supports_batch: true,
+        max_jobs_cap: None,
     }
 }
