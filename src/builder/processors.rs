@@ -263,14 +263,12 @@ fn print_processor_metadata(name: &str, verbose: bool) {
         };
         let default_str = if *field == "max_jobs" {
             match plugin.and_then(|p| p.max_jobs_cap) {
-                Some(cap) => format!("(global, capped at {})", cap),
+                Some(cap) => cap.to_string(),
                 None => "(global)".to_string(),
             }
         } else if *field == "batch" {
-            // Cap the displayed default by the plugin's static capability.
-            // If the processor can't batch, the config field has no effect.
             match plugin {
-                Some(p) if !p.supports_batch => "false (not supported)".to_string(),
+                Some(p) if !p.supports_batch => "false".to_string(),
                 _ => match val {
                     Some(v) => serde_json::to_string(v).unwrap_or_default(),
                     None    => "(none)".to_string(),
