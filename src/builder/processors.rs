@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use anyhow::{Result, bail};
-use tabled::builder::Builder as TableBuilder;
 use crate::cli::ProcessorAction;
 use crate::color;
 use crate::config::ProcessorConfig;
@@ -45,17 +44,15 @@ pub fn search_processors(query: &str) -> Result<()> {
         return Ok(());
     }
 
-    let mut builder = TableBuilder::new();
-    builder.push_record(["Name", "Type", "Description", "Keywords"]);
-    for (name, proc, keywords) in &matches {
-        builder.push_record([
-            *name,
-            proc.processor_type().as_str(),
-            proc.description(),
-            &keywords.join(", "),
-        ]);
-    }
-    color::print_table(builder.build());
+    let rows: Vec<Vec<String>> = matches.iter().map(|(name, proc, keywords)| {
+        vec![
+            name.to_string(),
+            proc.processor_type().as_str().to_string(),
+            proc.description().to_string(),
+            keywords.join(", "),
+        ]
+    }).collect();
+    color::print_table(&["Name", "Type", "Description", "Keywords"], &rows);
 
     Ok(())
 }
@@ -78,19 +75,17 @@ pub fn list_processor_types(verbose: bool) -> Result<()> {
         return Ok(());
     }
 
-    let mut builder = TableBuilder::new();
     if verbose {
-        builder.push_record(["Type", "Description"]);
-        for pt in ProcessorType::iter() {
-            builder.push_record([pt.as_str(), pt.description()]);
-        }
+        let rows: Vec<Vec<String>> = ProcessorType::iter()
+            .map(|pt| vec![pt.as_str().to_string(), pt.description().to_string()])
+            .collect();
+        color::print_table(&["Type", "Description"], &rows);
     } else {
-        builder.push_record(["Type"]);
-        for pt in ProcessorType::iter() {
-            builder.push_record([pt.as_str()]);
-        }
+        let rows: Vec<Vec<String>> = ProcessorType::iter()
+            .map(|pt| vec![pt.as_str().to_string()])
+            .collect();
+        color::print_table(&["Type"], &rows);
     }
-    color::print_table(builder.build());
     Ok(())
 }
 
@@ -126,23 +121,21 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
         return Ok(());
     }
 
-    let mut builder = TableBuilder::new();
     if verbose {
-        builder.push_record(["Name", "Type", "Native", "Fix", "Description"]);
-        for p in &plugins {
+        let rows: Vec<Vec<String>> = plugins.iter().map(|p| {
             let native_tag = if p.is_native { "native" } else { "external" };
             let fix_tag = color::yes_no(p.can_fix);
-            builder.push_record([p.name, p.processor_type.as_str(), native_tag, fix_tag, p.description]);
-        }
+            vec![p.name.to_string(), p.processor_type.as_str().to_string(), native_tag.to_string(), fix_tag.to_string(), p.description.to_string()]
+        }).collect();
+        color::print_table(&["Name", "Type", "Native", "Fix", "Description"], &rows);
     } else {
-        builder.push_record(["Name", "Type", "Native", "Fix"]);
-        for p in &plugins {
+        let rows: Vec<Vec<String>> = plugins.iter().map(|p| {
             let native_tag = if p.is_native { "native" } else { "external" };
             let fix_tag = color::yes_no(p.can_fix);
-            builder.push_record([p.name, p.processor_type.as_str(), native_tag, fix_tag]);
-        }
+            vec![p.name.to_string(), p.processor_type.as_str().to_string(), native_tag.to_string(), fix_tag.to_string()]
+        }).collect();
+        color::print_table(&["Name", "Type", "Native", "Fix"], &rows);
     }
-    color::print_table(builder.build());
 
     Ok(())
 }
@@ -196,12 +189,10 @@ pub fn list_recommendations() {
         ("conf.py",      "sphinx",       "build Sphinx documentation"),
     ];
 
-    let mut builder = TableBuilder::new();
-    builder.push_record(["Extension / File", "Processor", "Reason"]);
-    for (ext, proc, reason) in recommendations {
-        builder.push_record([*ext, *proc, *reason]);
-    }
-    color::print_table(builder.build());
+    let rows: Vec<Vec<String>> = recommendations.iter()
+        .map(|(ext, proc, reason)| vec![ext.to_string(), proc.to_string(), reason.to_string()])
+        .collect();
+    color::print_table(&["Extension / File", "Processor", "Reason"], &rows);
 }
 
 /// Return a JSON value containing only fields that differ from the default config.
@@ -254,13 +245,6 @@ fn print_processor_metadata(name: &str, verbose: bool) {
         .and_then(|j| serde_json::from_str(&j).ok())
         .unwrap_or(serde_json::Value::Null);
 
-    let mut builder = TableBuilder::new();
-    if verbose {
-        builder.push_record(["Field", "Type", "Default", "Required", "Checksum", "Description"]);
-    } else {
-        builder.push_record(["Field", "Type", "Default", "Required", "Checksum"]);
-    }
-
     // Processor-specific fields first, then shared dep/exec, then scan fields
     let all_descs: Vec<(&str, &str)> = proc_descs.iter()
         .map(|(f, d)| (*f, *d))
@@ -268,7 +252,7 @@ fn print_processor_metadata(name: &str, verbose: bool) {
         .chain(SCAN_FIELD_DESCRIPTIONS.iter().map(|(f, d)| (*f, *d)))
         .collect();
 
-    for (field, desc) in &all_descs {
+    let rows: Vec<Vec<String>> = all_descs.iter().map(|(field, desc)| {
         let val = defaults.get(*field);
         let type_str = match val {
             Some(serde_json::Value::String(_))  => "string",
@@ -289,13 +273,17 @@ fn print_processor_metadata(name: &str, verbose: bool) {
         let required = color::yes_no(must_fields.contains(*field));
         let checksum = color::yes_no(checksum_fields.contains(*field));
         if verbose {
-            builder.push_record([field, type_str, &default_str, required, checksum, desc]);
+            vec![field.to_string(), type_str.to_string(), default_str, required.to_string(), checksum.to_string(), desc.to_string()]
         } else {
-            builder.push_record([field, type_str, &default_str, required, checksum]);
+            vec![field.to_string(), type_str.to_string(), default_str, required.to_string(), checksum.to_string()]
         }
-    }
+    }).collect();
 
-    color::print_table(builder.build());
+    if verbose {
+        color::print_table(&["Field", "Type", "Default", "Required", "Checksum", "Description"], &rows);
+    } else {
+        color::print_table(&["Field", "Type", "Default", "Required", "Checksum"], &rows);
+    }
 }
 
 /// Show default configuration for a processor (works without rsconstruct.toml).
@@ -325,23 +313,21 @@ impl Builder {
             | ProcessorAction::Delete { .. } | ProcessorAction::Disable { .. } | ProcessorAction::Enable { .. }
             | ProcessorAction::Search { .. } => unreachable!("handled before Builder is constructed"),
             ProcessorAction::Used => {
-                let mut builder = TableBuilder::new();
                 if verbose {
-                    builder.push_record(["Name", "Type", "Detected", "Description"]);
-                    for name in &proc_names {
+                    let rows: Vec<Vec<String>> = proc_names.iter().map(|name| {
                         let proc = &processors[name.as_str()];
                         let detected_str = color::yes_no(proc.auto_detect(&self.file_index));
-                        builder.push_record([name.as_str(), proc.processor_type().as_str(), detected_str, proc.description()]);
-                    }
+                        vec![name.to_string(), proc.processor_type().as_str().to_string(), detected_str.to_string(), proc.description().to_string()]
+                    }).collect();
+                    color::print_table(&["Name", "Type", "Detected", "Description"], &rows);
                 } else {
-                    builder.push_record(["Name", "Type", "Detected"]);
-                    for name in &proc_names {
+                    let rows: Vec<Vec<String>> = proc_names.iter().map(|name| {
                         let proc = &processors[name.as_str()];
                         let detected_str = color::yes_no(proc.auto_detect(&self.file_index));
-                        builder.push_record([name.as_str(), proc.processor_type().as_str(), detected_str]);
-                    }
+                        vec![name.to_string(), proc.processor_type().as_str().to_string(), detected_str.to_string()]
+                    }).collect();
+                    color::print_table(&["Name", "Type", "Detected"], &rows);
                 }
-                color::print_table(builder.build());
             }
             ProcessorAction::Config { ref iname, diff } => {
                 let names: Vec<&str> = if let Some(n) = iname {

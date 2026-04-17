@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::io::Write;
 use std::process::Command;
 use anyhow::{Context, Result};
-use tabled::builder::Builder as TableBuilder;
 use crate::cli::{GraphFormat, ToolsAction};
 use crate::color;
 use crate::json_output;
@@ -267,9 +266,7 @@ fn run_tools_command(
                 };
                 println!("{}", serde_json::to_string_pretty(&output)?);
             } else {
-                let mut builder = TableBuilder::new();
-                builder.push_record(["Tool", "Status", "Processors", "Install"]);
-                for stat in &tool_stats {
+                let rows: Vec<Vec<String>> = tool_stats.iter().map(|stat| {
                     let status = if stat.installed {
                         color::green("\u{2713}")
                     } else {
@@ -277,14 +274,12 @@ fn run_tools_command(
                     };
                     let procs = stat.processors.join(", ");
                     let install = stat.install_command.as_deref().unwrap_or("").to_string();
-                    builder.push_record([stat.name.clone(), status.to_string(), procs, install]);
-                }
-                color::print_table(builder.build());
+                    vec![stat.name.clone(), status.to_string(), procs, install]
+                }).collect();
+                color::print_table(&["Tool", "Status", "Processors", "Install"], &rows);
 
                 println!();
                 println!("Runtime summary:");
-                let mut rt_builder = TableBuilder::new();
-                rt_builder.push_record(["Runtime", "Installed"]);
                 let runtime_display: &[(&str, &str)] = &[
                     ("python", "Python"),
                     ("node", "Node.js"),
@@ -293,18 +288,18 @@ fn run_tools_command(
                     ("perl", "Perl"),
                     ("system", "System"),
                 ];
-                for (key, label) in runtime_display {
-                    if let Some(rs) = runtime_stats.iter().find(|r| r.runtime == *key) {
+                let rt_rows: Vec<Vec<String>> = runtime_display.iter().filter_map(|(key, label)| {
+                    runtime_stats.iter().find(|r| r.runtime == *key).map(|rs| {
                         let status_str = format!("{}/{}", rs.installed, rs.total);
                         let line = if rs.missing > 0 {
                             color::yellow(&status_str)
                         } else {
                             color::green(&status_str)
                         };
-                        rt_builder.push_record([label.to_string(), line.to_string()]);
-                    }
-                }
-                color::print_table(rt_builder.build());
+                        vec![label.to_string(), line.to_string()]
+                    })
+                }).collect();
+                color::print_table(&["Runtime", "Installed"], &rt_rows);
 
                 println!();
                 let total_line = format!("Total: {}/{} tools installed", installed_count, total_tools);

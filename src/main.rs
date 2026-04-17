@@ -575,15 +575,11 @@ fn run() -> (Result<()>, bool) {
                     if entries.is_empty() {
                         println!("Web cache is empty.");
                     } else {
-                        let mut builder = tabled::builder::Builder::new();
-                        builder.push_record(["URL", "Size"]);
-                        for entry in &entries {
-                            builder.push_record([
-                                entry.url.clone(),
-                                humansize::format_size(entry.size, humansize::BINARY),
-                            ]);
-                        }
-                        color::print_table(builder.build());
+                        let rows: Vec<Vec<String>> = entries.iter().map(|entry| vec![
+                            entry.url.clone(),
+                            humansize::format_size(entry.size, humansize::BINARY),
+                        ]).collect();
+                        color::print_table(&["URL", "Size"], &rows);
                     }
                 }
             }
@@ -615,19 +611,17 @@ fn list_exit_codes(verbose: bool) -> Result<()> {
         return Ok(());
     }
 
-    let mut builder = tabled::builder::Builder::new();
     if verbose {
-        builder.push_record(["Code", "Name", "Description"]);
-        for e in RsconstructExitCode::iter() {
-            builder.push_record([&e.code().to_string(), e.name(), e.description()]);
-        }
+        let rows: Vec<Vec<String>> = RsconstructExitCode::iter()
+            .map(|e| vec![e.code().to_string(), e.name().to_string(), e.description().to_string()])
+            .collect();
+        color::print_table(&["Code", "Name", "Description"], &rows);
     } else {
-        builder.push_record(["Code", "Name"]);
-        for e in RsconstructExitCode::iter() {
-            builder.push_record([&e.code().to_string(), e.name()]);
-        }
+        let rows: Vec<Vec<String>> = RsconstructExitCode::iter()
+            .map(|e| vec![e.code().to_string(), e.name().to_string()])
+            .collect();
+        color::print_table(&["Code", "Name"], &rows);
     }
-    color::print_table(builder.build());
     Ok(())
 }
 

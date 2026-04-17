@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use tabled::Table;
+use tabled::builder::Builder as TableBuilder;
 use tabled::settings::Style;
 use tabled::settings::style::HorizontalLine;
 
@@ -46,18 +47,34 @@ pub fn dim(text: &str) -> Cow<'_, str> {
     wrap("2", text)
 }
 
-/// Apply the standard rsconstruct table style and print to stdout.
-pub fn print_table(mut table: Table) {
+fn build_table(headers: &[&str], rows: &[Vec<String>]) -> Table {
+    let mut builder = TableBuilder::new();
+    builder.push_record(headers.iter().copied());
+    for row in rows {
+        builder.push_record(row.iter().map(|s| s.as_str()));
+    }
+    builder.build()
+}
+
+/// Print a table with an explicit header row. A horizontal separator is drawn
+/// between the header and the data rows.
+pub fn print_table(headers: &[&str], rows: &[Vec<String>]) {
+    let mut table = build_table(headers, rows);
     println!("{}", table.with(Style::rounded()));
 }
 
-/// Print a table whose last row is a summary ("Total") row. A horizontal
-/// separator is drawn between the data rows and the total row so the total
-/// visually stands apart. Caller must have pushed the total row last.
-pub fn print_table_with_total(mut table: Table) {
+/// Print a table with an explicit header row and a summary ("Total") row.
+/// Horizontal separators are drawn after the header and before the total row.
+pub fn print_table_with_total(headers: &[&str], rows: &[Vec<String>], total: &[String]) {
+    let mut all_rows: Vec<Vec<String>> = rows.to_vec();
+    all_rows.push(total.to_vec());
+    let mut table = build_table(headers, &all_rows);
     let n_rows = table.count_rows();
+    let header_line = HorizontalLine::inherit(Style::modern());
+    let total_line = HorizontalLine::inherit(Style::modern());
     let style = Style::rounded().horizontals([
-        (n_rows - 1, HorizontalLine::inherit(Style::modern()))
+        (1, header_line),
+        (n_rows - 1, total_line),
     ]);
     println!("{}", table.with(style));
 }

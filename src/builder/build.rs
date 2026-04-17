@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use anyhow::Result;
-use tabled::builder::Builder as TableBuilder;
 use crate::cli::{BuildOptions, BuildPhase, DisplayOptions};
 use crate::color;
 use crate::errors;
@@ -398,9 +397,7 @@ impl Builder {
             }
             println!();
             println!("{}:", color::bold("Source files by processor"));
-            let mut builder = TableBuilder::new();
-            builder.push_record(["Processor", "Files", "Breakdown"]);
-            for (proc_name, ext_counts) in &per_processor {
+            let rows: Vec<Vec<String>> = per_processor.iter().map(|(proc_name, ext_counts)| {
                 let total: usize = ext_counts.values().sum();
                 let breakdown_str = if total == 0 {
                     String::new()
@@ -410,9 +407,9 @@ impl Builder {
                         .collect::<Vec<_>>()
                         .join(", ")
                 };
-                builder.push_record([proc_name.to_string(), format!("{} files", total), breakdown_str]);
-            }
-            color::print_table(builder.build());
+                vec![proc_name.to_string(), format!("{} files", total), breakdown_str]
+            }).collect();
+            color::print_table(&["Processor", "Files", "Breakdown"], &rows);
         }
 
         Ok(())
@@ -447,12 +444,10 @@ impl Builder {
             println!("{}", serde_json::to_string_pretty(&json).expect(crate::errors::JSON_SERIALIZE));
         } else {
             println!("{}: {}", color::bold("Total source files"), all_inputs.len());
-            let mut builder = TableBuilder::new();
-            builder.push_record(["Extension", "Count"]);
-            for (ext, count) in &ext_counts {
-                builder.push_record([format!(".{}", ext), count.to_string()]);
-            }
-            color::print_table(builder.build());
+            let rows: Vec<Vec<String>> = ext_counts.iter()
+                .map(|(ext, count)| vec![format!(".{}", ext), count.to_string()])
+                .collect();
+            color::print_table(&["Extension", "Count"], &rows);
         }
         Ok(())
     }
@@ -563,22 +558,24 @@ impl Builder {
             opts.labels.new.1,
         ];
 
-        let mut builder = TableBuilder::new();
-        builder.push_record(["Processor", col_labels[0], col_labels[1], col_labels[2], col_labels[3], "native"]);
-        for (name, pc) in &per_processor {
+        let rows: Vec<Vec<String>> = per_processor.iter().map(|(name, pc)| {
             let native = crate::color::yes_no(opts.native_processors.contains(name));
-            builder.push_record([
+            vec![
                 name.to_string(),
                 pc[0].to_string(), pc[1].to_string(), pc[2].to_string(), pc[3].to_string(),
                 native.to_string(),
-            ]);
-        }
-        builder.push_record([
+            ]
+        }).collect();
+        let total = vec![
             "Total".to_string(),
             counts[0].to_string(), counts[1].to_string(), counts[2].to_string(), counts[3].to_string(),
             String::new(),
-        ]);
-        color::print_table_with_total(builder.build());
+        ];
+        color::print_table_with_total(
+            &["Processor", col_labels[0], col_labels[1], col_labels[2], col_labels[3], "native"],
+            &rows,
+            &total,
+        );
     }
 }
 

@@ -1290,12 +1290,10 @@ impl BuildStats {
 
             // Phase timings
             if !self.phase_timings.is_empty() {
-                let mut builder = tabled::builder::Builder::new();
-                builder.push_record(["Phase", "Duration"]);
-                for (name, dur) in &self.phase_timings {
-                    builder.push_record([name.to_string(), format!("{:.3}s", dur.as_secs_f64())]);
-                }
-                crate::color::print_table(builder.build());
+                let rows: Vec<Vec<String>> = self.phase_timings.iter()
+                    .map(|(name, dur)| vec![name.to_string(), format!("{:.3}s", dur.as_secs_f64())])
+                    .collect();
+                crate::color::print_table(&["Phase", "Duration"], &rows);
             }
 
             // Per-product timings

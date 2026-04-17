@@ -3,7 +3,6 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::Result;
-use tabled::builder::Builder as TableBuilder;
 use crate::color;
 
 use crate::file_index::FileIndex;
@@ -285,19 +284,21 @@ pub fn run_sloc(file_index: &FileIndex, cocomo: bool, salary: u64) -> Result<()>
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        let mut builder = TableBuilder::new();
-        builder.push_record(["Language", "Files", "Blank", "Comment", "Code"]);
-        for (name, s) in &sorted {
-            builder.push_record([
+        let rows: Vec<Vec<String>> = sorted.iter().map(|(name, s)| {
+            vec![
                 name.to_string(), s.files.to_string(), s.blank.to_string(),
                 s.comment.to_string(), s.code.to_string(),
-            ]);
-        }
-        builder.push_record([
+            ]
+        }).collect();
+        let total = vec![
             "Total".to_string(), total_files.to_string(), total_blank.to_string(),
             total_comment.to_string(), total_code.to_string(),
-        ]);
-        color::print_table_with_total(builder.build());
+        ];
+        color::print_table_with_total(
+            &["Language", "Files", "Blank", "Comment", "Code"],
+            &rows,
+            &total,
+        );
 
         if let Some(ref est) = cocomo_estimate {
             println!();

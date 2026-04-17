@@ -3,7 +3,6 @@ use redb::{ReadableDatabase, ReadableTable, ReadableTableMetadata, TableDefiniti
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use tabled::builder::Builder as TableBuilder;
 
 use crate::color;
 use crate::config::{TagsConfig, output_config_hash, resolve_extra_inputs};
@@ -697,12 +696,10 @@ pub fn count_tags(db_path: &str) -> Result<()> {
             .collect();
         println!("{}", serde_json::to_string(&json_entries).expect(crate::errors::JSON_SERIALIZE));
     } else {
-        let mut builder = TableBuilder::new();
-        builder.push_record(["Count", "Tag"]);
-        for (tag, count) in &entries {
-            builder.push_record([count.to_string(), tag.to_string()]);
-        }
-        color::print_table(builder.build());
+        let rows: Vec<Vec<String>> = entries.iter()
+            .map(|(tag, count)| vec![count.to_string(), tag.to_string()])
+            .collect();
+        color::print_table(&["Count", "Tag"], &rows);
     }
 
     Ok(())
@@ -1089,19 +1086,17 @@ pub fn matrix_tags(db_path: &str) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&file_categories).expect(crate::errors::JSON_SERIALIZE));
     } else {
         let cats: Vec<&String> = categories.iter().collect();
-        let mut builder = TableBuilder::new();
-        let mut header: Vec<String> = vec!["File".to_string()];
-        header.extend(cats.iter().map(|c| c.to_string()));
-        builder.push_record(header);
-        for (file, file_cats) in &file_categories {
+        let mut headers: Vec<&str> = vec!["File"];
+        headers.extend(cats.iter().map(|c| c.as_str()));
+        let rows: Vec<Vec<String>> = file_categories.iter().map(|(file, file_cats)| {
             let short = file.rsplit('/').next().unwrap_or(file);
             let mut row: Vec<String> = vec![short.to_string()];
             for cat in &cats {
                 row.push(if file_cats.contains(*cat) { "Y".to_string() } else { "-".to_string() });
             }
-            builder.push_record(row);
-        }
-        color::print_table(builder.build());
+            row
+        }).collect();
+        color::print_table(&headers, &rows);
     }
     Ok(())
 }
@@ -1148,12 +1143,10 @@ pub fn coverage_tags(db_path: &str) -> Result<()> {
             .collect();
         println!("{}", serde_json::to_string_pretty(&json).expect(crate::errors::JSON_SERIALIZE));
     } else {
-        let mut builder = TableBuilder::new();
-        builder.push_record(["Category", "Files", "Coverage"]);
-        for (cat, count, pct) in &coverage {
-            builder.push_record([cat.to_string(), count.to_string(), format!("{:.0}%", pct)]);
-        }
-        color::print_table(builder.build());
+        let rows: Vec<Vec<String>> = coverage.iter()
+            .map(|(cat, count, pct)| vec![cat.clone(), count.to_string(), format!("{:.0}%", pct)])
+            .collect();
+        color::print_table(&["Category", "Files", "Coverage"], &rows);
         println!("Total files: {}", total_files);
     }
     Ok(())
@@ -1480,12 +1473,10 @@ pub fn suggest_tags(db_path: &str, path: &str) -> Result<()> {
         println!("No suggestions — file already has all tags of similar files.");
     } else {
         println!("Suggested tags for {}:", path);
-        let mut builder = TableBuilder::new();
-        builder.push_record(["Tag", "Score"]);
-        for (tag, score) in sorted_suggestions.iter().take(15) {
-            builder.push_record([tag.to_string(), format!("{:.2}", score)]);
-        }
-        color::print_table(builder.build());
+        let rows: Vec<Vec<String>> = sorted_suggestions.iter().take(15)
+            .map(|(tag, score)| vec![tag.clone(), format!("{:.2}", score)])
+            .collect();
+        color::print_table(&["Tag", "Score"], &rows);
     }
     Ok(())
 }

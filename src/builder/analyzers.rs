@@ -1,7 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
 use anyhow::{Context, Result, bail};
-use tabled::builder::Builder as TableBuilder;
 use crate::color;
 use crate::deps_cache::DepsCache;
 use super::{Builder, sorted_keys};
@@ -23,21 +22,19 @@ pub fn list_analyzers(verbose: bool) {
         return;
     }
 
-    let mut builder = TableBuilder::new();
     if verbose {
-        builder.push_record(["Name", "Native", "Description"]);
-        for plugin in &plugins {
+        let rows: Vec<Vec<String>> = plugins.iter().map(|plugin| {
             let native_tag = if plugin.is_native { "native" } else { "external" };
-            builder.push_record([plugin.name, native_tag, plugin.description]);
-        }
+            vec![plugin.name.to_string(), native_tag.to_string(), plugin.description.to_string()]
+        }).collect();
+        color::print_table(&["Name", "Native", "Description"], &rows);
     } else {
-        builder.push_record(["Name", "Native"]);
-        for plugin in &plugins {
+        let rows: Vec<Vec<String>> = plugins.iter().map(|plugin| {
             let native_tag = if plugin.is_native { "native" } else { "external" };
-            builder.push_record([plugin.name, native_tag]);
-        }
+            vec![plugin.name.to_string(), native_tag.to_string()]
+        }).collect();
+        color::print_table(&["Name", "Native"], &rows);
     }
-    color::print_table(builder.build());
 }
 
 /// Show default analyzer configuration (works without rsconstruct.toml).
@@ -85,9 +82,7 @@ fn print_config_table(toml_str: &str) -> Result<()> {
     let value: toml::Value = toml::from_str(toml_str).context("Failed to parse analyzer defconfig TOML")?;
     let table = value.as_table().context("Analyzer defconfig is not a TOML table")?;
 
-    let mut builder = TableBuilder::new();
-    builder.push_record(["Field", "Type", "Default"]);
-    for (key, val) in table {
+    let rows: Vec<Vec<String>> = table.iter().map(|(key, val)| {
         let type_str = match val {
             toml::Value::String(_)  => "string",
             toml::Value::Integer(_) => "int",
@@ -102,9 +97,9 @@ fn print_config_table(toml_str: &str) -> Result<()> {
             toml::Value::Array(a) if a.is_empty() => "[]".to_string(),
             _ => val.to_string(),
         };
-        builder.push_record([key.as_str(), type_str, &default_str]);
-    }
-    color::print_table(builder.build());
+        vec![key.clone(), type_str.to_string(), default_str]
+    }).collect();
+    color::print_table(&["Field", "Type", "Default"], &rows);
     Ok(())
 }
 
@@ -126,15 +121,14 @@ fn print_deps_stats(
 
     let mut total_files = 0;
     let mut total_deps = 0;
-    let mut builder = TableBuilder::new();
-    builder.push_record(["Analyzer", "Files", "Dependencies"]);
+    let mut rows: Vec<Vec<String>> = Vec::new();
     for (name, (files, deps)) in &all {
         total_files += files;
         total_deps += deps;
-        builder.push_record([name.clone(), files.to_string(), deps.to_string()]);
+        rows.push(vec![name.clone(), files.to_string(), deps.to_string()]);
     }
-    builder.push_record(["Total".to_string(), total_files.to_string(), total_deps.to_string()]);
-    color::print_table_with_total(builder.build());
+    let total = vec!["Total".to_string(), total_files.to_string(), total_deps.to_string()];
+    color::print_table_with_total(&["Analyzer", "Files", "Dependencies"], &rows, &total);
 }
 
 impl Builder {
@@ -147,23 +141,21 @@ impl Builder {
             | AnalyzersAction::Delete { .. } | AnalyzersAction::Disable { .. } | AnalyzersAction::Enable { .. } => unreachable!("handled in main.rs"),
             AnalyzersAction::Used => {
                 let analyzers = self.create_analyzers(false)?;
-                let mut builder = TableBuilder::new();
                 if verbose {
-                    builder.push_record(["Name", "Detected", "Description"]);
-                    for name in sorted_keys(&analyzers) {
+                    let rows: Vec<Vec<String>> = sorted_keys(&analyzers).into_iter().map(|name| {
                         let analyzer = &analyzers[name];
                         let detected = color::yes_no(analyzer.auto_detect(&self.file_index));
-                        builder.push_record([name.as_str(), detected, analyzer.description()]);
-                    }
+                        vec![name.clone(), detected.to_string(), analyzer.description().to_string()]
+                    }).collect();
+                    color::print_table(&["Name", "Detected", "Description"], &rows);
                 } else {
-                    builder.push_record(["Name", "Detected"]);
-                    for name in sorted_keys(&analyzers) {
+                    let rows: Vec<Vec<String>> = sorted_keys(&analyzers).into_iter().map(|name| {
                         let analyzer = &analyzers[name];
                         let detected = color::yes_no(analyzer.auto_detect(&self.file_index));
-                        builder.push_record([name.as_str(), detected]);
-                    }
+                        vec![name.clone(), detected.to_string()]
+                    }).collect();
+                    color::print_table(&["Name", "Detected"], &rows);
                 }
-                color::print_table(builder.build());
             }
             AnalyzersAction::Build => {
                 let processors = self.create_processors()?;

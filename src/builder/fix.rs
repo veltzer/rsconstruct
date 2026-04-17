@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 use anyhow::Result;
-use tabled::builder::Builder as TableBuilder;
 use crate::color;
 use super::{Builder, sorted_keys};
 
@@ -139,13 +138,11 @@ impl Builder {
             return Ok(());
         }
 
-        let mut builder = TableBuilder::new();
-        builder.push_record(["Name", "Type", "Description"]);
-        for name in &fixers {
+        let rows: Vec<Vec<String>> = fixers.iter().map(|name| {
             let proc = &processors[name.as_str()];
-            builder.push_record([name.as_str(), proc.processor_type().as_str(), proc.description()]);
-        }
-        color::print_table(builder.build());
+            vec![name.to_string(), proc.processor_type().as_str().to_string(), proc.description().to_string()]
+        }).collect();
+        color::print_table(&["Name", "Type", "Description"], &rows);
 
         Ok(())
     }
