@@ -34,6 +34,7 @@ pub mod names {
     pub const CLIPPY: &str = "clippy";
     pub const TAGS: &str = "tags";
     pub const PIP: &str = "pip";
+    pub const REQUIREMENTS: &str = "requirements";
     pub const SPHINX: &str = "sphinx";
     pub const MDBOOK: &str = "mdbook";
     pub const NPM: &str = "npm";

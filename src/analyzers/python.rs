@@ -19,6 +19,43 @@ use crate::graph::{BuildGraph, Product};
 
 use super::DepAnalyzer;
 
+/// Scan a Python source file for `import` / `from X import ...` statements and
+/// return the top-level module names referenced. Comments are skipped. The
+/// caller decides how to classify each name (local, stdlib, third-party).
+pub(crate) fn scan_python_imports(source: &Path) -> Result<Vec<String>> {
+    let content = crate::errors::ctx(
+        fs::read_to_string(source),
+        &format!("Failed to read Python source: {}", source.display()),
+    )?;
+    let mut modules = Vec::new();
+
+    static IMPORT_RE: OnceLock<Regex> = OnceLock::new();
+    let import_re = IMPORT_RE.get_or_init(|| {
+        Regex::new(r"^\s*(?:from\s+(\S+)\s+import|import\s+(\S+))").expect(errors::INVALID_REGEX)
+    });
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('#') {
+            continue;
+        }
+
+        let Some(caps) = import_re.captures(line) else { continue };
+        let module_path = caps.get(1).or_else(|| caps.get(2)).map(|m| m.as_str());
+        let Some(module) = module_path else { continue };
+
+        // Handle multiple imports: `import foo, bar, baz`
+        for part in module.split(',') {
+            let module_name = part.split_whitespace().next().unwrap_or("");
+            if !module_name.is_empty() {
+                modules.push(module_name.to_string());
+            }
+        }
+    }
+
+    Ok(modules)
+}
+
 /// Python dependency analyzer that scans source files for import statements.
 pub struct PythonDepAnalyzer {
     iname: String,
@@ -30,49 +67,20 @@ impl PythonDepAnalyzer {
         Self { iname: iname.to_string(), config }
     }
 
-    /// Scan a Python file for import statements.
-    /// Returns paths to local Python files that are imported.
+    /// Scan a Python file for import statements and return paths to local
+    /// Python files that are imported. Stdlib and third-party modules are
+    /// filtered out by `resolve_module`.
     fn scan_imports(&self, source: &Path, file_index: &FileIndex) -> Result<Vec<PathBuf>> {
-        let content = crate::errors::ctx(fs::read_to_string(source), &format!("Failed to read Python source: {}", source.display()))?;
+        let modules = scan_python_imports(source)?;
         let mut imports = Vec::new();
         let mut seen = HashSet::new();
-
-        // Match: import foo, import foo.bar, from foo import bar, from foo.bar import baz
-        // We capture the module path (before any 'import' keyword in 'from' statements)
-        static IMPORT_RE: OnceLock<Regex> = OnceLock::new();
-        let import_re = IMPORT_RE.get_or_init(|| Regex::new(r"^\s*(?:from\s+(\S+)\s+import|import\s+(\S+))").expect(errors::INVALID_REGEX));
-
-        for line in content.lines() {
-            // Skip comments
-            let trimmed = line.trim();
-            if trimmed.starts_with('#') {
-                continue;
-            }
-
-            if let Some(caps) = import_re.captures(line) {
-                // caps[1] is for "from X import" style
-                // caps[2] is for "import X" style
-                let module_path = caps.get(1).or_else(|| caps.get(2)).map(|m| m.as_str());
-
-                if let Some(module) = module_path {
-                    // Handle multiple imports: import foo, bar, baz
-                    for part in module.split(',') {
-                        let module_name = part.split_whitespace().next().unwrap_or("");
-                        if module_name.is_empty() {
-                            continue;
-                        }
-
-                        // Try to resolve the module to a local file
-                        if let Some(path) = self.resolve_module(source, module_name, file_index)
-                            && !seen.contains(&path) {
-                                seen.insert(path.clone());
-                                imports.push(path);
-                            }
-                    }
+        for module_name in modules {
+            if let Some(path) = self.resolve_module(source, &module_name, file_index)
+                && !seen.contains(&path) {
+                    seen.insert(path.clone());
+                    imports.push(path);
                 }
-            }
         }
-
         Ok(imports)
     }
 

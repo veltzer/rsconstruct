@@ -514,6 +514,7 @@ pub(crate) fn scan_defaults_for(type_name: &str) -> Option<ScanDefaultsData> {
         "json_schema" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".json"], src_exclude_dirs: &[] },
         "tags" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] },
         "pip" => ScanDefaultsData { src_dirs: &[], src_extensions: &["requirements.txt"], src_exclude_dirs: &[] },
+        "requirements" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".py"], src_exclude_dirs: &[] },
         "sphinx" => ScanDefaultsData { src_dirs: &[], src_extensions: &["conf.py"], src_exclude_dirs: &[] },
         "mdbook" => ScanDefaultsData { src_dirs: &[], src_extensions: &["book.toml"], src_exclude_dirs: &[] },
         "npm" => ScanDefaultsData { src_dirs: &[], src_extensions: &["package.json"], src_exclude_dirs: &[] },

@@ -6,7 +6,7 @@
 mod cpp;
 mod icpp;
 mod markdown;
-mod python;
+pub(crate) mod python;
 mod tera;
 
 
