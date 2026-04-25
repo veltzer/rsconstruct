@@ -101,6 +101,7 @@
 - [Lua Plugins](plugins.md)
 - [Advanced Usage](advanced.md)
 - [Environment Variables](environment-variables.md)
+- [Release Info](release-info.md)
 
 ---
 

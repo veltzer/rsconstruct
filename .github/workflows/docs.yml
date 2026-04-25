@@ -30,6 +30,25 @@ jobs:
         with:
           mdbook-version: latest
 
+      - name: Populate release info page
+        run: |
+          set -euo pipefail
+          version="$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"(.*)".*/\1/')"
+          tag="${GITHUB_REF_NAME}"
+          commit="${GITHUB_SHA}"
+          released_at="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          file="docs/src/release-info.md"
+          sed -i \
+            -e "s|__RSCONSTRUCT_VERSION__|${version}|g" \
+            -e "s|__GIT_TAG__|${tag}|g" \
+            -e "s|__GIT_COMMIT__|${commit}|g" \
+            -e "s|__RELEASE_DATE__|${released_at}|g" \
+            -e "s|__WORKFLOW_NAME__|${GITHUB_WORKFLOW}|g" \
+            -e "s|__WORKFLOW_RUN_NUMBER__|${GITHUB_RUN_NUMBER}|g" \
+            -e "s|__WORKFLOW_RUN_URL__|${run_url}|g" \
+            "${file}"
+
       - name: Build book
         run: mdbook build docs
 
