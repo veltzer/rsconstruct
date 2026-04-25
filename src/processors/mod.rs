@@ -981,7 +981,10 @@ pub static TOOLS: &[ToolInfo] = &[
     ToolInfo { name: "ruby", runtime: "ruby", install_methods: &[InstallMethod { method: "apt", package: "ruby" }] },
     // Rust tools
     ToolInfo { name: "mdbook", runtime: "rust", install_methods: &[InstallMethod { method: "cargo", package: "mdbook" }] },
-    ToolInfo { name: "rumdl", runtime: "rust", install_methods: &[InstallMethod { method: "cargo", package: "rumdl" }] },
+    ToolInfo { name: "rumdl", runtime: "rust", install_methods: &[
+        InstallMethod { method: "binary", package: "curl -fsSL https://github.com/rvben/rumdl/releases/download/v0.1.81/rumdl-v0.1.81-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /tmp && sudo mv /tmp/rumdl /usr/local/bin/rumdl" },
+        InstallMethod { method: "cargo", package: "rumdl" },
+    ]},
     ToolInfo { name: "taplo", runtime: "rust", install_methods: &[
         InstallMethod { method: "binary", package: "curl -fsSL https://github.com/tamasfe/taplo/releases/latest/download/taplo-linux-x86_64.gz | gunzip > /tmp/taplo && chmod +x /tmp/taplo && sudo mv /tmp/taplo /usr/local/bin/taplo" },
         InstallMethod { method: "cargo", package: "taplo-cli" },
