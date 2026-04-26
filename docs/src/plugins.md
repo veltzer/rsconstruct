@@ -108,7 +108,7 @@ end
 
 #### `clean(product)`
 
-Called when running `rsconstruct clean`. Receives the same product table as `execute()`. Default behavior: removes all output files.
+Called when running `rsconstruct clean outputs`. Receives the same product table as `execute()`. Default behavior: removes every file in `product.outputs` (file-only — no directory recursion).
 
 ```lua
 function clean(product)
@@ -117,6 +117,12 @@ function clean(product)
     end
 end
 ```
+
+**Scope.** A Lua processor's `clean()` should remove only the files it produced. Do not recursively delete directories from a Lua plugin — that is a Creator-only contract, and Lua plugins are treated as Generators. If your tool genuinely produces a directory of unknown contents, declare an Explicit `[processor.explicit.*]` stanza with `output_dirs` instead of writing recursive deletes in Lua.
+
+**Empty-directory sweep.** After your `clean()` returns, the orchestrator walks every parent directory of every path in `product.outputs` bottom-up and removes any directory that is now empty. You do not need to clean up empty parent directories yourself — and you should not, because your plugin doesn't know whether siblings of those paths were produced by other processors. The user can disable the sweep with `rsconstruct clean outputs --no-empty-dirs`.
+
+See [`rsconstruct clean`](commands.md#rsconstruct-clean) for the full per-processor-type clean contract.
 
 #### `auto_detect(files)`
 

@@ -80,3 +80,7 @@ Notes:
 ## Batch support
 
 Each input file is processed individually, producing its own output file.
+
+## Clean behavior
+
+Pandoc is a Generator — see [Clean behavior](../processors.md#clean-behavior) and [`rsconstruct clean`](../commands.md#rsconstruct-clean).

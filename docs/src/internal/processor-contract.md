@@ -51,6 +51,43 @@ A processor's `execute()` must only write to the declared output paths
 (or, for creators, to the expected output directory).
 It must not modify source files, other products' outputs, or global state.
 
+## Cleaning
+
+A processor's `clean(product, verbose)` is responsible only for removing
+what *that* product produced. Concretely:
+
+- **Checkers** override nothing — the default `clean()` returns 0 (no outputs).
+- **Generators** must remove every file in `product.outputs` and only those
+  files. The `clean_outputs()` helper does exactly this with `fs::remove_file`.
+  Generators must not recurse into directories.
+- **Creators** must remove every directory in `product.output_dirs`
+  recursively (the contents are unenumerated by design — the external build
+  tool produces an unknown set of files inside). The `clean_output_dir()`
+  helper handles this. Creators must not delete anything outside their
+  declared `output_dirs`.
+- **Explicit** processors run both — files for `output_files`, recursive
+  removal for any user-declared `output_dirs`.
+- **Lua plugins** may override `clean(product)`; the default falls back to
+  file-only removal.
+
+Recursive directory removal is reserved for Creators (and the user-declared
+`output_dirs` of Explicit). All other processor types remove individually
+declared files and nothing else.
+
+After every product's `clean()` has run, the executor performs an
+**empty-directory sweep**: it collects every parent directory of every
+removed output (and every parent of every removed `output_dir`), sorts
+deepest-first, and calls `fs::remove_dir` on each one. `remove_dir` is
+non-recursive, so it only succeeds on already-empty directories — anything
+still containing files is left in place. The sweep climbs upward through
+parents until it hits a non-empty directory or the project root.
+
+The sweep is part of the orchestrator, not the per-processor `clean()`.
+Processors should not pre-empt it by removing parent directories themselves
+— let the sweep handle directory cleanup so the rule "files I produced,
+nothing else" stays clean. Users can disable the sweep with
+`rsconstruct clean outputs --no-empty-dirs`.
+
 ## Output directory caching (creators)
 
 Creators that set `output_dir` on their products get automatic

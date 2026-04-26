@@ -78,6 +78,24 @@ For built-in creators, this is controlled by the `cache_output_dir` config optio
 cache_output_dir = false   # Disable for large target/ directories
 ```
 
+## Clean behavior
+
+`rsconstruct clean outputs` calls each product's processor-defined `clean()`. What gets removed depends on the processor type:
+
+| Processor type | What `clean()` removes | Recursive? |
+|---|---|---|
+| Checker | Nothing — checkers produce no outputs | — |
+| Generator | Each declared output file (`product.outputs`) | No |
+| Creator | Each declared output directory (`product.output_dirs`) | **Yes** |
+| Explicit | Declared `output_files` + declared `output_dirs` | Yes (for `output_dirs` only) |
+| Lua plugin | Custom `clean()` if defined; otherwise file-only | No (unless plugin code does it) |
+
+Recursive directory removal is reserved for Creators (whose external build tool produces an unknown set of files inside a known directory) and the user-declared `output_dirs` of Explicit. All other processor types remove individually-declared files and nothing else.
+
+After every product's `clean()` completes, the orchestrator runs an empty-directory sweep: every parent of every removed output (and every parent of every removed `output_dir`) is tried with `fs::remove_dir` (non-recursive — succeeds only on already-empty directories), walking upward until a non-empty directory or the project root. The sweep does not special-case `out/` — any ancestor of a cleaned output is eligible.
+
+See [`rsconstruct clean`](commands.md#rsconstruct-clean) for the full command reference, the `--no-empty-dirs` flag, the `-p` filter, and the other clean variants (`all`, `git`, `unknown`).
+
 ## Custom Processors
 
 You can define custom processors in Lua. See [Lua Plugins](plugins.md) for details.
