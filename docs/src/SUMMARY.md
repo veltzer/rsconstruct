@@ -123,6 +123,7 @@ The chapters below cover the internal design and implementation of rsconstruct. 
 - [Dependency Caching](internal/dependency-caching.md)
 - [Processor Versioning](internal/processor-versioning.md)
 - [Cross-Processor Dependencies](internal/cross-processor-dependencies.md)
+- [Glob-aware Tera Dependencies](internal/glob-deps.md)
 - [Shared Output Directory](internal/shared-output-directory.md)
 - [Processor Ordering](internal/processor-ordering.md)
 - [Output Prediction](internal/output-prediction.md)

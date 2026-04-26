@@ -72,6 +72,20 @@ impl Product {
         !self.output_dirs.is_empty()
     }
 
+    /// Mix an analyzer-supplied piece into the product's config_hash.
+    /// Idempotent under the same `piece`. Used by analyzers that need to
+    /// contribute non-content state (e.g. the sorted set of paths matching
+    /// a glob pattern) into the cache key. The original config_hash and
+    /// the piece are concatenated and re-hashed; on a None original, the
+    /// piece itself becomes the new hash.
+    pub fn extend_config_hash(&mut self, piece: &str) {
+        let combined = match &self.config_hash {
+            Some(existing) => format!("{}|{}", existing, piece),
+            None => piece.to_string(),
+        };
+        self.config_hash = Some(crate::checksum::bytes_checksum(combined.as_bytes()));
+    }
+
     /// Compute a content-addressed descriptor key from processor identity and input content.
     /// This key does NOT include file paths — renaming a file with identical content
     /// produces the same key. The blob in the cache is path-free; the product knows

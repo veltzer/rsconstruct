@@ -188,6 +188,20 @@ pub fn run_include_path_commands(ctx: &crate::build_context::BuildContext, tag: 
     paths
 }
 
+/// Result of scanning a single source file: a list of dependency paths and
+/// an optional opaque string mixed into each affected product's config_hash.
+///
+/// `config_hash_contribution` is for analyzer state that must invalidate the
+/// cache key but is *not* a file content (e.g. the sorted set of paths matching
+/// a glob pattern, or the literal text of a shell command embedded in a
+/// template). It is concatenated with the existing config_hash and re-hashed,
+/// so adding/removing entries from the set or rewording the command flips the
+/// key even when no individual input file's content changed.
+pub struct ScanResult {
+    pub deps: Vec<PathBuf>,
+    pub config_hash_contribution: Option<String>,
+}
+
 /// Shared helper for analyzer `analyze()` implementations.
 ///
 /// Iterates over products in the graph, filters them using `match_product`, checks the
@@ -251,6 +265,67 @@ where
         }
 
         // Tick once per product so the progress total still matches the pre-scan count
+        progress.inc(product_ids.len() as u64);
+    }
+
+    Ok(())
+}
+
+/// Like `analyze_with_scanner` but the scanner returns a [`ScanResult`] that
+/// can also contribute to each affected product's `config_hash`. Used by
+/// analyzers whose dependencies aren't only the contents of files (e.g., the
+/// Tera analyzer must also account for the *set* of paths matching a glob).
+///
+/// Cache: the path list is cached per source like in `analyze_with_scanner`,
+/// but the `config_hash_contribution` is **not** cached — it's recomputed on
+/// every analyzer run. That's intentional. Tera analysis is cheap, and the
+/// contribution often depends on filesystem state (the glob set) that the
+/// per-source content cache cannot represent.
+pub fn analyze_with_full_scanner<F, G>(
+    _ctx: &crate::build_context::BuildContext,
+    graph: &mut BuildGraph,
+    _deps_cache: &mut DepsCache,
+    analyzer_name: &str,
+    match_product: F,
+    scan: G,
+    progress: &ProgressBar,
+) -> Result<()>
+where
+    F: Fn(&crate::graph::Product) -> Option<PathBuf>,
+    G: Fn(&Path) -> Result<ScanResult>,
+{
+    let mut by_source: std::collections::BTreeMap<PathBuf, Vec<usize>> = std::collections::BTreeMap::new();
+    for p in graph.products() {
+        if let Some(source) = match_product(p) {
+            by_source.entry(source).or_default().push(p.id);
+        }
+    }
+
+    if by_source.is_empty() {
+        return Ok(());
+    }
+
+    for (source, product_ids) in &by_source {
+        progress.set_message(format!("[{}] {}", analyzer_name, source.display()));
+
+        let result = scan(source)?;
+
+        for &id in product_ids {
+            if let Some(product) = graph.get_product_mut(id) {
+                if !result.deps.is_empty() {
+                    let existing: HashSet<&PathBuf> = product.inputs.iter().collect();
+                    let new_deps: Vec<PathBuf> = result.deps.iter()
+                        .filter(|dep| !existing.contains(dep))
+                        .cloned()
+                        .collect();
+                    product.inputs.extend(new_deps);
+                }
+                if let Some(piece) = &result.config_hash_contribution {
+                    product.extend_config_hash(piece);
+                }
+            }
+        }
+
         progress.inc(product_ids.len() as u64);
     }
 

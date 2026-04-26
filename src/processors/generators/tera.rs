@@ -54,6 +54,7 @@ fn render_template(ctx: &crate::build_context::BuildContext, item: &TemplateItem
     tera.register_function("git_count_files", GitCountFilesFunction { ctx: ctx_ptr });
     tera.register_function("workflow_names", WorkflowNamesFunction);
     tera.register_function("shell_output", ShellOutputFunction { ctx: ctx_ptr });
+    tera.register_function("glob", GlobFunction);
 
     // Add the template
     tera.add_raw_template("template", &template_content)
@@ -329,7 +330,16 @@ impl Function for WorkflowNamesFunction {
     }
 }
 
-/// Run a shell command and return its trimmed stdout.
+/// Run a shell command and return its trimmed stdout. Requires `depends_on=[...]`
+/// — a list of glob patterns whose union of resolved files determines the
+/// build-graph dependency. Pass `depends_on=[]` to assert that the command
+/// has no file-level dependencies rsconstruct can track.
+///
+/// The dependency tracking happens in the Tera analyzer
+/// (`src/analyzers/tera.rs`); this function is responsible only for running
+/// the command and returning the result. The arg validation here is a safety
+/// net: rendering must not silently succeed when the user forgot `depends_on`,
+/// even if (somehow) the analyzer didn't run for this template.
 struct ShellOutputFunction { ctx: CtxPtr }
 
 impl Function for ShellOutputFunction {
@@ -338,6 +348,25 @@ impl Function for ShellOutputFunction {
             .get("command")
             .and_then(|v| v.as_str())
             .ok_or_else(|| tera::Error::msg("shell_output requires a 'command' argument"))?;
+
+        // depends_on must be present (analyzer enforces this too, but we
+        // double-check at render time so a missed analyzer pass doesn't lead
+        // to silent stale output).
+        let depends_on = args.get("depends_on").ok_or_else(|| {
+            tera::Error::msg(format!(
+                "shell_output(command=\"{}\") requires depends_on=[...] — \
+                 rsconstruct cannot otherwise tell when its output should be invalidated. \
+                 Pass depends_on=[\"glob/pattern/*.ext\", ...] or depends_on=[] to \
+                 acknowledge that no file dependencies exist.",
+                command,
+            ))
+        })?;
+        if !depends_on.is_array() {
+            return Err(tera::Error::msg(format!(
+                "shell_output(command=\"{}\"): depends_on must be a list of strings, got {:?}",
+                command, depends_on,
+            )));
+        }
 
         let mut cmd = Command::new("sh");
         cmd.args(["-c", command]);
@@ -352,6 +381,39 @@ impl Function for ShellOutputFunction {
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
         to_value(stdout)
             .map_err(|e| tera::Error::msg(format!("shell_output: {e}")))
+    }
+}
+
+/// Expand a glob pattern at template render time and return the sorted list of
+/// matched file paths (relative to the project root, as strings). The same
+/// pattern is independently captured by the Tera analyzer at graph-construction
+/// time, which adds the matched files to the product's inputs and mixes the
+/// path set into the cache key. So a template that calls `glob()` is correctly
+/// invalidated when files matching the pattern are added, removed, or renamed.
+struct GlobFunction;
+
+impl Function for GlobFunction {
+    fn call(&self, args: &HashMap<String, TeraValue>) -> tera::Result<TeraValue> {
+        let pattern = args
+            .get("pattern")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| tera::Error::msg("glob requires a 'pattern' argument"))?;
+
+        let mut paths: Vec<String> = Vec::new();
+        for entry in glob::glob(pattern)
+            .map_err(|e| tera::Error::msg(format!("glob: invalid pattern '{}': {}", pattern, e)))?
+        {
+            let path = entry
+                .map_err(|e| tera::Error::msg(format!("glob: iteration error for '{}': {}", pattern, e)))?;
+            if path.is_file() {
+                paths.push(path.to_string_lossy().into_owned());
+            }
+        }
+        paths.sort();
+        paths.dedup();
+
+        to_value(paths)
+            .map_err(|e| tera::Error::msg(format!("glob: {e}")))
     }
 }
 

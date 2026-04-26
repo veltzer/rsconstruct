@@ -1,4 +1,5 @@
 use std::fs;
+use tempfile::TempDir;
 use crate::common::{setup_test_project, run_rsconstruct, run_rsconstruct_with_env};
 
 #[test]
@@ -270,4 +271,261 @@ fn subdirectory_output() {
 
     let content = fs::read_to_string(&output_file).unwrap();
     assert_eq!(content, "Hello from subdirectory");
+}
+
+// ----- glob() and shell_output(depends_on=...) ---------------------------------------------
+//
+// These tests exercise the design from docs/src/internal/glob-deps.md:
+// - glob(pattern=...) is a first-class directory query that participates in
+//   dependency tracking (file content + path-set fingerprint).
+// - shell_output() requires depends_on=[...] explicitly; missing the argument
+//   is an error.
+//
+// Each test sets up a project with [processor.tera] + [analyzer.tera] declared,
+// because the analyzer is what wires globs into the cache key. The harness's
+// setup_test_project() only adds the processor, so we build configs explicitly.
+
+/// Build a self-contained tera project with the given template body.
+/// Returns a TempDir whose path contains rsconstruct.toml + the template +
+/// any extra files the caller writes afterwards.
+fn setup_glob_project(template_body: &str) -> TempDir {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    fs::create_dir_all(project_path.join("tera.templates")).unwrap();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.tera]\n[analyzer.tera]\n",
+    ).unwrap();
+    fs::write(
+        project_path.join("tera.templates/report.txt.tera"),
+        template_body,
+    ).unwrap();
+    temp_dir
+}
+
+#[test]
+fn glob_counts_matching_files() {
+    let project = setup_glob_project("Total: {{ glob(pattern=\"data/**/*.md\") | length }}\n");
+    let p = project.path();
+
+    fs::create_dir_all(p.join("data")).unwrap();
+    fs::write(p.join("data/a.md"), "a").unwrap();
+    fs::write(p.join("data/b.md"), "b").unwrap();
+    fs::write(p.join("data/c.md"), "c").unwrap();
+    // A non-matching file (wrong extension) — should not be counted.
+    fs::write(p.join("data/ignore.txt"), "x").unwrap();
+
+    let output = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "build failed: {}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    let report = fs::read_to_string(p.join("report.txt")).unwrap();
+    assert_eq!(report.trim(), "Total: 3", "Got: {}", report);
+}
+
+#[test]
+fn glob_invalidates_when_file_added() {
+    let project = setup_glob_project("Total: {{ glob(pattern=\"data/**/*.md\") | length }}\n");
+    let p = project.path();
+    fs::create_dir_all(p.join("data")).unwrap();
+    fs::write(p.join("data/a.md"), "a").unwrap();
+    fs::write(p.join("data/b.md"), "b").unwrap();
+
+    // First build: 2 files.
+    let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(out1.status.success(), "first build failed: {}", String::from_utf8_lossy(&out1.stderr));
+    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Total: 2");
+
+    // Add a third file.
+    fs::write(p.join("data/c.md"), "c").unwrap();
+
+    // Second build: should rebuild (not skip) and reflect 3 files.
+    let out2 = run_rsconstruct_with_env(p, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(out2.status.success(), "second build failed: {}", String::from_utf8_lossy(&out2.stderr));
+    let stdout2 = String::from_utf8_lossy(&out2.stdout);
+    assert!(
+        !stdout2.contains("[tera] Skipping (unchanged):"),
+        "Second build should NOT have skipped after adding a glob-matched file. stdout={}",
+        stdout2,
+    );
+    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Total: 3");
+}
+
+#[test]
+fn glob_invalidates_when_file_removed() {
+    let project = setup_glob_project("Total: {{ glob(pattern=\"data/**/*.md\") | length }}\n");
+    let p = project.path();
+    fs::create_dir_all(p.join("data")).unwrap();
+    fs::write(p.join("data/a.md"), "a").unwrap();
+    fs::write(p.join("data/b.md"), "b").unwrap();
+    fs::write(p.join("data/c.md"), "c").unwrap();
+
+    let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(out1.status.success());
+    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Total: 3");
+
+    fs::remove_file(p.join("data/c.md")).unwrap();
+
+    let out2 = run_rsconstruct_with_env(p, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(out2.status.success());
+    let stdout2 = String::from_utf8_lossy(&out2.stdout);
+    assert!(
+        !stdout2.contains("[tera] Skipping (unchanged):"),
+        "Second build should NOT have skipped after removing a glob-matched file. stdout={}",
+        stdout2,
+    );
+    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Total: 2");
+}
+
+#[test]
+fn glob_invalidates_when_file_renamed() {
+    // Renaming a file with identical content otherwise produces the same
+    // content-addressed cache key. The path-set fingerprint mixed into
+    // config_hash is what makes this case work.
+    let project = setup_glob_project(
+        "Sorted: {{ glob(pattern=\"data/**/*.md\") | join(sep=\",\") }}\n",
+    );
+    let p = project.path();
+    fs::create_dir_all(p.join("data")).unwrap();
+    fs::write(p.join("data/old_name.md"), "same-content").unwrap();
+
+    let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(out1.status.success());
+    let report1 = fs::read_to_string(p.join("report.txt")).unwrap();
+    assert!(report1.contains("old_name.md"), "Got: {}", report1);
+
+    // Rename the file (content unchanged).
+    fs::rename(p.join("data/old_name.md"), p.join("data/new_name.md")).unwrap();
+
+    let out2 = run_rsconstruct_with_env(p, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(out2.status.success());
+    let stdout2 = String::from_utf8_lossy(&out2.stdout);
+    assert!(
+        !stdout2.contains("[tera] Skipping (unchanged):"),
+        "Second build should NOT have skipped after rename. stdout={}",
+        stdout2,
+    );
+    let report2 = fs::read_to_string(p.join("report.txt")).unwrap();
+    assert!(report2.contains("new_name.md"), "Got: {}", report2);
+    assert!(!report2.contains("old_name.md"), "Got: {}", report2);
+}
+
+#[test]
+fn shell_output_without_depends_on_is_rejected() {
+    let project = setup_glob_project(
+        "Count: {{ shell_output(command=\"ls data | wc -l\") }}\n",
+    );
+    let p = project.path();
+    fs::create_dir_all(p.join("data")).unwrap();
+    fs::write(p.join("data/a.md"), "a").unwrap();
+
+    let output = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        !output.status.success(),
+        "Build should have failed for shell_output without depends_on. stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        combined.contains("depends_on"),
+        "Error message should mention depends_on. Got: {}",
+        combined,
+    );
+}
+
+#[test]
+fn shell_output_with_depends_on_succeeds() {
+    let project = setup_glob_project(
+        "Count: {{ shell_output(command=\"ls data | wc -l\", depends_on=[\"data/**/*.md\"]) }}\n",
+    );
+    let p = project.path();
+    fs::create_dir_all(p.join("data")).unwrap();
+    fs::write(p.join("data/a.md"), "a").unwrap();
+    fs::write(p.join("data/b.md"), "b").unwrap();
+
+    let output = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "Build with depends_on should have succeeded. stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let report = fs::read_to_string(p.join("report.txt")).unwrap();
+    assert_eq!(report.trim(), "Count: 2", "Got: {}", report);
+}
+
+#[test]
+fn shell_output_invalidates_on_matching_file_change() {
+    // shell_output's depends_on is the only way the analyzer learns which
+    // files might affect the command's output. Modifying a depends_on-matched
+    // file should bust the cache.
+    let project = setup_glob_project(
+        "Lines: {{ shell_output(command=\"cat data/*.md | wc -l\", depends_on=[\"data/**/*.md\"]) }}\n",
+    );
+    let p = project.path();
+    fs::create_dir_all(p.join("data")).unwrap();
+    fs::write(p.join("data/a.md"), "one\ntwo\n").unwrap();
+
+    let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(out1.status.success(), "first build failed: {}", String::from_utf8_lossy(&out1.stderr));
+    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Lines: 2");
+
+    // Edit the matching file: 2 lines → 3 lines.
+    fs::write(p.join("data/a.md"), "one\ntwo\nthree\n").unwrap();
+
+    let out2 = run_rsconstruct_with_env(p, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(out2.status.success(), "second build failed: {}", String::from_utf8_lossy(&out2.stderr));
+    let stdout2 = String::from_utf8_lossy(&out2.stdout);
+    assert!(
+        !stdout2.contains("[tera] Skipping (unchanged):"),
+        "Second build should NOT have skipped after editing a depends_on-matched file. stdout={}",
+        stdout2,
+    );
+    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Lines: 3");
+}
+
+#[test]
+fn shell_output_invalidates_when_command_edited() {
+    // The literal command string is part of the config_hash, so editing the
+    // command should bust the cache even when no depends_on file changed.
+    let project = setup_glob_project(
+        "Out: {{ shell_output(command=\"echo first\", depends_on=[]) }}\n",
+    );
+    let p = project.path();
+
+    let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(out1.status.success(), "first build failed: {}", String::from_utf8_lossy(&out1.stderr));
+    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Out: first");
+
+    // Edit only the command, not the dependency list.
+    fs::write(
+        p.join("tera.templates/report.txt.tera"),
+        "Out: {{ shell_output(command=\"echo second\", depends_on=[]) }}\n",
+    ).unwrap();
+
+    let out2 = run_rsconstruct_with_env(p, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(out2.status.success(), "second build failed: {}", String::from_utf8_lossy(&out2.stderr));
+    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Out: second");
+}
+
+#[test]
+fn glob_no_matches_returns_empty_list() {
+    let project = setup_glob_project(
+        "Total: {{ glob(pattern=\"nonexistent/**/*.md\") | length }}\n",
+    );
+    let p = project.path();
+
+    let output = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "build with empty glob should succeed. stderr={}",
+        String::from_utf8_lossy(&output.stderr));
+
+    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Total: 0");
 }
