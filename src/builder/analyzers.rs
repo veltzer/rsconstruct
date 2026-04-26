@@ -103,6 +103,19 @@ fn print_config_table(toml_str: &str) -> Result<()> {
     Ok(())
 }
 
+/// Emit the analyzers `show` results as JSON.
+fn print_deps_json(entries: &[(PathBuf, Vec<PathBuf>, String)]) -> Result<()> {
+    let rows: Vec<serde_json::Value> = entries.iter().map(|(source, deps, analyzer)| {
+        serde_json::json!({
+            "source": source.display().to_string(),
+            "analyzer": analyzer,
+            "dependencies": deps.iter().map(|d| d.display().to_string()).collect::<Vec<_>>(),
+        })
+    }).collect();
+    println!("{}", serde_json::to_string_pretty(&rows)?);
+    Ok(())
+}
+
 /// Print per-analyzer dependency stats with a total line.
 /// `declared` is the list of analyzer names declared in rsconstruct.toml; any
 /// declared analyzer missing from `stats` is shown as a zero row so users can
@@ -110,7 +123,7 @@ fn print_config_table(toml_str: &str) -> Result<()> {
 fn print_deps_stats(
     stats: &std::collections::HashMap<String, (usize, usize)>,
     declared: &[String],
-) {
+) -> Result<()> {
     let mut all: std::collections::BTreeMap<String, (usize, usize)> = std::collections::BTreeMap::new();
     for name in declared {
         all.insert(name.clone(), (0, 0));
@@ -121,6 +134,26 @@ fn print_deps_stats(
 
     let mut total_files = 0;
     let mut total_deps = 0;
+
+    if crate::json_output::is_json_mode() {
+        let mut analyzers: Vec<serde_json::Value> = Vec::new();
+        for (name, (files, deps)) in &all {
+            total_files += files;
+            total_deps += deps;
+            analyzers.push(serde_json::json!({
+                "analyzer": name,
+                "files": files,
+                "dependencies": deps,
+            }));
+        }
+        let out = serde_json::json!({
+            "analyzers": analyzers,
+            "total": { "files": total_files, "dependencies": total_deps },
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        return Ok(());
+    }
+
     let mut rows: Vec<Vec<String>> = Vec::new();
     for (name, (files, deps)) in &all {
         total_files += files;
@@ -129,6 +162,7 @@ fn print_deps_stats(
     }
     let total = vec!["Total".to_string(), total_files.to_string(), total_deps.to_string()];
     color::print_table_with_total(&["Analyzer", "Files", "Dependencies"], &rows, &total);
+    Ok(())
 }
 
 impl Builder {
@@ -141,7 +175,17 @@ impl Builder {
             | AnalyzersAction::Delete { .. } | AnalyzersAction::Disable { .. } | AnalyzersAction::Enable { .. } => unreachable!("handled in main.rs"),
             AnalyzersAction::Used => {
                 let analyzers = self.create_analyzers(false)?;
-                if verbose {
+                if crate::json_output::is_json_mode() {
+                    let entries: Vec<serde_json::Value> = sorted_keys(&analyzers).into_iter().map(|name| {
+                        let analyzer = &analyzers[name];
+                        serde_json::json!({
+                            "name": name,
+                            "detected": analyzer.auto_detect(&self.file_index),
+                            "description": analyzer.description(),
+                        })
+                    }).collect();
+                    println!("{}", serde_json::to_string_pretty(&entries)?);
+                } else if verbose {
                     let rows: Vec<Vec<String>> = sorted_keys(&analyzers).into_iter().map(|name| {
                         let analyzer = &analyzers[name];
                         let detected = color::yes_no(analyzer.auto_detect(&self.file_index));
@@ -183,7 +227,7 @@ impl Builder {
                 let declared: Vec<String> = self.config.analyzer.instances.iter()
                     .map(|i| i.instance_name.clone()).collect();
                 if !stats.is_empty() || !declared.is_empty() {
-                    print_deps_stats(&stats, &declared);
+                    print_deps_stats(&stats, &declared)?;
                 }
             }
             AnalyzersAction::Config { iname } => {
@@ -195,7 +239,15 @@ impl Builder {
                     self.config.analyzer.instances.iter().collect()
                 };
 
-                if instances.is_empty() {
+                if crate::json_output::is_json_mode() {
+                    let mut map = serde_json::Map::new();
+                    for inst in &instances {
+                        let value: serde_json::Value = inst.config_toml.clone().try_into()
+                            .unwrap_or(serde_json::Value::Null);
+                        map.insert(inst.instance_name.clone(), value);
+                    }
+                    println!("{}", serde_json::to_string_pretty(&serde_json::Value::Object(map))?);
+                } else if instances.is_empty() {
                     println!("No analyzers declared in rsconstruct.toml. Add `[analyzer.NAME]` sections to enable.");
                 } else {
                     for (i, inst) in instances.iter().enumerate() {
@@ -235,60 +287,79 @@ impl Builder {
                 let declared: Vec<String> = self.config.analyzer.instances.iter()
                     .map(|i| i.instance_name.clone()).collect();
                 if stats.is_empty() && declared.is_empty() {
-                    println!("Dependency cache is empty. Run a build first.");
+                    if crate::json_output::is_json_mode() {
+                        let out = serde_json::json!({
+                            "analyzers": serde_json::Value::Array(Vec::new()),
+                            "total": { "files": 0, "dependencies": 0 },
+                        });
+                        println!("{}", serde_json::to_string_pretty(&out)?);
+                    } else {
+                        println!("Dependency cache is empty. Run a build first.");
+                    }
                     return Ok(());
                 }
-                print_deps_stats(&stats, &declared);
+                print_deps_stats(&stats, &declared)?;
             }
             AnalyzersAction::Show { filter } => {
                 use crate::cli::AnalyzersShowFilter;
                 let deps_cache = DepsCache::open()?;
 
+                let json_mode = crate::json_output::is_json_mode();
                 match filter {
                     AnalyzersShowFilter::All => {
-                        // List all entries
                         let mut entries: Vec<_> = deps_cache.list_all();
-                        if entries.is_empty() {
-                            println!("Dependency cache is empty. Run a build first.");
-                            return Ok(());
-                        }
-                        // Sort by source path for consistent output
                         entries.sort_by(|a, b| a.0.cmp(&b.0));
-                        for (source, deps, analyzer) in entries {
-                            Self::print_deps(&source, &deps, &analyzer);
+                        if json_mode {
+                            print_deps_json(&entries)?;
+                        } else if entries.is_empty() {
+                            println!("Dependency cache is empty. Run a build first.");
+                        } else {
+                            for (source, deps, analyzer) in entries {
+                                Self::print_deps(&source, &deps, &analyzer);
+                            }
                         }
                     }
                     AnalyzersShowFilter::Files { files } => {
                         // Query specific files. One path can have multiple
                         // entries — one per analyzer that scanned it.
+                        let mut collected: Vec<(PathBuf, Vec<PathBuf>, String)> = Vec::new();
                         let mut found_any = false;
                         for file_arg in &files {
                             let file_path = PathBuf::from(file_arg);
                             let entries = deps_cache.get_raw_for_path(&file_path);
                             if entries.is_empty() {
-                                eprintln!("{}: '{}' not in dependency cache", color::yellow("Warning"), file_arg);
+                                if !json_mode {
+                                    eprintln!("{}: '{}' not in dependency cache", color::yellow("Warning"), file_arg);
+                                }
                             } else {
                                 found_any = true;
                                 for (deps, analyzer) in entries {
-                                    Self::print_deps(&file_path, &deps, &analyzer);
+                                    if json_mode {
+                                        collected.push((file_path.clone(), deps, analyzer));
+                                    } else {
+                                        Self::print_deps(&file_path, &deps, &analyzer);
+                                    }
                                 }
                             }
                         }
                         if !found_any {
                             bail!("No cached dependencies found for the specified files");
                         }
+                        if json_mode {
+                            print_deps_json(&collected)?;
+                        }
                     }
                     AnalyzersShowFilter::Analyzers { analyzers } => {
-                        // Filter by analyzer names
                         let mut entries: Vec<_> = deps_cache.list_by_analyzers(&analyzers);
-                        if entries.is_empty() {
-                            println!("No cached dependencies found for analyzers: {}", analyzers.join(", "));
-                            return Ok(());
-                        }
-                        // Sort by source path for consistent output
                         entries.sort_by(|a, b| a.0.cmp(&b.0));
-                        for (source, deps, analyzer) in entries {
-                            Self::print_deps(&source, &deps, &analyzer);
+                        if json_mode {
+                            print_deps_json(&entries)?;
+                        } else if entries.is_empty() {
+                            println!("No cached dependencies found for analyzers: {}", analyzers.join(", "));
+                        } else {
+                            for (source, deps, analyzer) in entries {
+                                Self::print_deps(&source, &deps, &analyzer);
+                            }
                         }
                     }
                 }

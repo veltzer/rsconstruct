@@ -1,29 +1,62 @@
 use std::process::Command;
 use anyhow::Result;
+use serde::Serialize;
 use crate::color;
 use super::{Builder, sorted_keys};
+
+#[derive(Serialize)]
+struct DoctorCheck {
+    name: String,
+    status: &'static str,
+    category: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    detail: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    install_hint: Option<String>,
+}
 
 impl Builder {
     /// Run diagnostic checks on the build environment.
     pub fn doctor(&self) -> Result<()> {
+        let json_mode = crate::json_output::is_json_mode();
         let mut ok_count = 0usize;
         let mut fail_count = 0usize;
+        let mut warn_count = 0usize;
+        let mut checks: Vec<DoctorCheck> = Vec::new();
+
+        let mut record = |name: String, status: &'static str, category: &'static str, detail: Option<String>, install_hint: Option<String>, ok: &mut usize, fail: &mut usize, warn: &mut usize| {
+            match status {
+                "ok" => *ok += 1,
+                "fail" => *fail += 1,
+                "warn" => *warn += 1,
+                _ => {}
+            }
+            if !json_mode {
+                let detail_str = detail.as_deref().map(|d| format!(" ({})", d)).unwrap_or_default();
+                let hint_str = install_hint.as_deref().map(|h| format!("  install: {}", h)).unwrap_or_default();
+                let tag: String = match status {
+                    "ok" => color::green("[ok]").to_string(),
+                    "fail" => color::red("[FAIL]").to_string(),
+                    "warn" => color::yellow("[warn]").to_string(),
+                    _ => status.to_string(),
+                };
+                println!("{} {}{}{}", tag, name, detail_str, hint_str);
+            }
+            checks.push(DoctorCheck { name, status, category, detail, install_hint });
+        };
 
         // Check rsconstruct.toml
         if std::path::Path::new("rsconstruct.toml").exists() {
-            println!("{} rsconstruct.toml found and valid", color::green("[ok]"));
-            ok_count += 1;
+            record("rsconstruct.toml found and valid".to_string(), "ok", "config", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
         } else {
-            println!("{} rsconstruct.toml not found", color::red("[FAIL]"));
-            fail_count += 1;
+            record("rsconstruct.toml not found".to_string(), "fail", "config", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
         }
 
         // Check .rsconstructignore
         if std::path::Path::new(".rsconstructignore").exists() {
-            println!("{} .rsconstructignore found", color::green("[ok]"));
-            ok_count += 1;
+            record(".rsconstructignore found".to_string(), "ok", "config", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
         } else {
-            println!("{} .rsconstructignore not found (optional)", color::yellow("[warn]"));
+            record(".rsconstructignore not found (optional)".to_string(), "warn", "config", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
         }
 
         // Check tools for enabled processors
@@ -38,17 +71,11 @@ impl Builder {
                 }
                 match tool_version(&tool) {
                     Some(version) => {
-                        println!("{} {} available ({})",
-                            color::green("[ok]"), tool, color::dim(&version));
-                        ok_count += 1;
+                        record(format!("{} available", tool), "ok", "tool", Some(version), None, &mut ok_count, &mut fail_count, &mut warn_count);
                     }
                     None => {
-                        let install_hint = crate::processors::tool_install_command(&tool)
-                            .map(|cmd| format!("  install: {}", cmd))
-                            .unwrap_or_default();
-                        println!("{} {} not found{}",
-                            color::red("[FAIL]"), tool, install_hint);
-                        fail_count += 1;
+                        let install_hint = crate::processors::tool_install_command(&tool).map(|s| s.to_string());
+                        record(format!("{} not found", tool), "fail", "tool", None, install_hint, &mut ok_count, &mut fail_count, &mut warn_count);
                     }
                 }
             }
@@ -57,16 +84,16 @@ impl Builder {
         // Check declared dependencies
         let deps = &self.config.dependencies;
         if !deps.is_empty() {
-            println!();
-            println!("{}:", color::bold("Declared dependencies"));
+            if !json_mode {
+                println!();
+                println!("{}:", color::bold("Declared dependencies"));
+            }
 
             for pkg in &deps.system {
                 if which::which(pkg).is_ok() {
-                    println!("{} {} (system)", color::green("[ok]"), pkg);
-                    ok_count += 1;
+                    record(format!("{} (system)", pkg), "ok", "dependency", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
                 } else {
-                    println!("{} {} not found (run `rsconstruct tools install-deps`)", color::red("[FAIL]"), pkg);
-                    fail_count += 1;
+                    record(format!("{} not found", pkg), "fail", "dependency", Some("system".to_string()), Some("rsconstruct tools install-deps".to_string()), &mut ok_count, &mut fail_count, &mut warn_count);
                 }
             }
 
@@ -79,11 +106,9 @@ impl Builder {
                     .status()
                     .is_ok_and(|s| s.success());
                 if found {
-                    println!("{} {} (pip)", color::green("[ok]"), pkg);
-                    ok_count += 1;
+                    record(format!("{} (pip)", pkg), "ok", "dependency", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
                 } else {
-                    println!("{} {} not installed (pip install {})", color::red("[FAIL]"), pkg, pkg);
-                    fail_count += 1;
+                    record(format!("{} not installed", pkg), "fail", "dependency", Some("pip".to_string()), Some(format!("pip install {}", pkg)), &mut ok_count, &mut fail_count, &mut warn_count);
                 }
             }
 
@@ -95,11 +120,9 @@ impl Builder {
                     .status()
                     .is_ok_and(|s| s.success());
                 if found {
-                    println!("{} {} (npm)", color::green("[ok]"), pkg);
-                    ok_count += 1;
+                    record(format!("{} (npm)", pkg), "ok", "dependency", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
                 } else {
-                    println!("{} {} not installed (npm install {})", color::red("[FAIL]"), pkg, pkg);
-                    fail_count += 1;
+                    record(format!("{} not installed", pkg), "fail", "dependency", Some("npm".to_string()), Some(format!("npm install {}", pkg)), &mut ok_count, &mut fail_count, &mut warn_count);
                 }
             }
 
@@ -111,23 +134,34 @@ impl Builder {
                     .status()
                     .is_ok_and(|s| s.success());
                 if found {
-                    println!("{} {} (gem)", color::green("[ok]"), pkg);
-                    ok_count += 1;
+                    record(format!("{} (gem)", pkg), "ok", "dependency", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
                 } else {
-                    println!("{} {} not installed (gem install {})", color::red("[FAIL]"), pkg, pkg);
-                    fail_count += 1;
+                    record(format!("{} not installed", pkg), "fail", "dependency", Some("gem".to_string()), Some(format!("gem install {}", pkg)), &mut ok_count, &mut fail_count, &mut warn_count);
                 }
             }
         }
 
-        // Summary
-        println!();
         let total = ok_count + fail_count;
-        let summary = format!("Summary: {}/{} checks passed", ok_count, total);
-        if fail_count == 0 {
-            println!("{}", color::green(&summary));
+
+        if json_mode {
+            let out = serde_json::json!({
+                "checks": checks,
+                "summary": {
+                    "ok": ok_count,
+                    "fail": fail_count,
+                    "warn": warn_count,
+                    "total": total,
+                },
+            });
+            println!("{}", serde_json::to_string_pretty(&out)?);
         } else {
-            println!("{}", color::yellow(&summary));
+            println!();
+            let summary = format!("Summary: {}/{} checks passed", ok_count, total);
+            if fail_count == 0 {
+                println!("{}", color::green(&summary));
+            } else {
+                println!("{}", color::yellow(&summary));
+            }
         }
 
         Ok(())

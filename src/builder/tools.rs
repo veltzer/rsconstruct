@@ -172,26 +172,61 @@ fn run_tools_command(
         ToolsAction::Check => {
             let tool_commands = tool_lock::collect_tool_commands(processors, is_enabled);
             tool_lock::verify_lock_file(&tool_commands)?;
-            if verbose {
-                let lock = tool_lock::read_lock_file()?;
-                if let Some(lock) = lock {
-                    for (name, info) in &lock.tools {
+            let lock = tool_lock::read_lock_file()?;
+            if crate::json_output::is_json_mode() {
+                let entries: Vec<serde_json::Value> = lock
+                    .as_ref()
+                    .map(|l| l.tools.iter().map(|(name, info)| {
                         let version = tool_lock::extract_semver(&info.version_output).unwrap_or("?");
-                        println!("{} {} {}", name, color::green("ok"), color::dim(version));
+                        serde_json::json!({
+                            "tool": name,
+                            "status": "ok",
+                            "version": version,
+                        })
+                    }).collect())
+                    .unwrap_or_default();
+                let out = serde_json::json!({
+                    "match": true,
+                    "tools": entries,
+                });
+                println!("{}", serde_json::to_string_pretty(&out)?);
+            } else {
+                if verbose {
+                    if let Some(lock) = &lock {
+                        for (name, info) in &lock.tools {
+                            let version = tool_lock::extract_semver(&info.version_output).unwrap_or("?");
+                            println!("{} {} {}", name, color::green("ok"), color::dim(version));
+                        }
                     }
                 }
+                println!("{}", color::green("Tool versions match lock file."));
             }
-            println!("{}", color::green("Tool versions match lock file."));
         }
         ToolsAction::Lock => {
             let tool_commands = tool_lock::collect_tool_commands(processors, is_enabled);
             let lock = tool_lock::create_lock(&tool_commands)?;
-            for (name, info) in &lock.tools {
-                let version = tool_lock::extract_semver(&info.version_output).unwrap_or("?");
-                println!("{} {} {}", name, color::green("locked"), color::dim(version));
-            }
             tool_lock::write_lock_file(&lock)?;
-            println!("Wrote {}", color::bold(".tools.versions"));
+            if crate::json_output::is_json_mode() {
+                let entries: Vec<serde_json::Value> = lock.tools.iter().map(|(name, info)| {
+                    let version = tool_lock::extract_semver(&info.version_output).unwrap_or("?");
+                    serde_json::json!({
+                        "tool": name,
+                        "status": "locked",
+                        "version": version,
+                    })
+                }).collect();
+                let out = serde_json::json!({
+                    "lock_file": ".tools.versions",
+                    "tools": entries,
+                });
+                println!("{}", serde_json::to_string_pretty(&out)?);
+            } else {
+                for (name, info) in &lock.tools {
+                    let version = tool_lock::extract_semver(&info.version_output).unwrap_or("?");
+                    println!("{} {} {}", name, color::green("locked"), color::dim(version));
+                }
+                println!("Wrote {}", color::bold(".tools.versions"));
+            }
         }
         ToolsAction::Graph { format, view } => {
             if view {
@@ -206,7 +241,12 @@ fn run_tools_command(
                     println!("Wrote tools graph to: {}", html_path.display());
                 }
             } else {
-                let output = match format {
+                let effective_format = if crate::json_output::is_json_mode() {
+                    GraphFormat::Json
+                } else {
+                    format
+                };
+                let output = match effective_format {
                     GraphFormat::Dot => tools_graph_dot(&tool_map),
                     GraphFormat::Mermaid => tools_graph_mermaid(&tool_map),
                     GraphFormat::Text => tools_graph_text(&tool_map),

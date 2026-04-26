@@ -1357,7 +1357,16 @@ pub fn check_tags(config: &crate::config::TagsConfig) -> Result<()> {
     }
 
     if errors.is_empty() {
-        println!("All checks passed ({} files).", all_frontmatter.len());
+        if crate::json_output::is_json_mode() {
+            let out = serde_json::json!({
+                "ok": true,
+                "files_checked": all_frontmatter.len(),
+                "issues": serde_json::Value::Array(Vec::new()),
+            });
+            println!("{}", serde_json::to_string_pretty(&out)?);
+        } else {
+            println!("All checks passed ({} files).", all_frontmatter.len());
+        }
     } else {
         errors.sort();
         let mut msg = format!("{} issue(s) found:\n", errors.len());

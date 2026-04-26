@@ -187,10 +187,21 @@ pub fn list_recommendations() {
         ("conf.py",      "sphinx",       "build Sphinx documentation"),
     ];
 
-    let rows: Vec<Vec<String>> = recommendations.iter()
-        .map(|(ext, proc, reason)| vec![ext.to_string(), proc.to_string(), reason.to_string()])
-        .collect();
-    color::print_table(&["Extension / File", "Processor", "Reason"], &rows);
+    if crate::json_output::is_json_mode() {
+        let entries: Vec<serde_json::Value> = recommendations.iter()
+            .map(|(ext, proc, reason)| serde_json::json!({
+                "extension": ext,
+                "processor": proc,
+                "reason": reason,
+            }))
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&entries).expect(crate::errors::JSON_SERIALIZE));
+    } else {
+        let rows: Vec<Vec<String>> = recommendations.iter()
+            .map(|(ext, proc, reason)| vec![ext.to_string(), proc.to_string(), reason.to_string()])
+            .collect();
+        color::print_table(&["Extension / File", "Processor", "Reason"], &rows);
+    }
 }
 
 /// Return a JSON value containing only fields that differ from the default config.
@@ -323,7 +334,18 @@ impl Builder {
             | ProcessorAction::Delete { .. } | ProcessorAction::Disable { .. } | ProcessorAction::Enable { .. }
             | ProcessorAction::Search { .. } => unreachable!("handled before Builder is constructed"),
             ProcessorAction::Used => {
-                if verbose {
+                if crate::json_output::is_json_mode() {
+                    let entries: Vec<serde_json::Value> = proc_names.iter().map(|name| {
+                        let proc = &processors[name.as_str()];
+                        serde_json::json!({
+                            "name": name,
+                            "type": crate::registries::processor::processor_type_of(name.as_str()).as_str(),
+                            "detected": proc.auto_detect(&self.file_index),
+                            "description": crate::registries::processor::description_of(name.as_str()),
+                        })
+                    }).collect();
+                    println!("{}", serde_json::to_string_pretty(&entries)?);
+                } else if verbose {
                     let rows: Vec<Vec<String>> = proc_names.iter().map(|name| {
                         let proc = &processors[name.as_str()];
                         let detected_str = color::yes_no(proc.auto_detect(&self.file_index));
@@ -421,14 +443,23 @@ impl Builder {
                 }
             }
             ProcessorAction::Names => {
-                for name in &proc_names {
-                    println!("{}", name);
+                if crate::json_output::is_json_mode() {
+                    println!("{}", serde_json::to_string_pretty(&proc_names)?);
+                } else {
+                    for name in &proc_names {
+                        println!("{}", name);
+                    }
                 }
             }
             ProcessorAction::Graph { format } => {
                 let graph = self.build_graph(ctx)?;
                 let proc_deps = graph.processor_dependencies();
-                match format {
+                let effective_format = if crate::json_output::is_json_mode() {
+                    crate::cli::GraphFormat::Json
+                } else {
+                    format
+                };
+                match effective_format {
                     crate::cli::GraphFormat::Text => {
                         for (proc, deps) in &proc_deps {
                             if deps.is_empty() {

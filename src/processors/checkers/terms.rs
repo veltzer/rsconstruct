@@ -647,7 +647,15 @@ pub fn stats(config: &TermsConfig) -> Result<()> {
             total_terms += content.lines().filter(|l| !l.trim().is_empty()).count();
         }
     }
-    println!("{} term file(s), {} total terms", file_count, total_terms);
+    if crate::json_output::is_json_mode() {
+        let out = serde_json::json!({
+            "term_files": file_count,
+            "total_terms": total_terms,
+        });
+        println!("{}", serde_json::to_string_pretty(&out).expect(crate::errors::JSON_SERIALIZE));
+    } else {
+        println!("{} term file(s), {} total terms", file_count, total_terms);
+    }
     Ok(())
 }
 

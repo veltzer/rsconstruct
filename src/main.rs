@@ -192,21 +192,40 @@ fn run() -> (Result<()>, bool) {
                 CacheAction::Size => {
                     let builder = Builder::new()?;
                     let (bytes, count) = builder.object_store().size()?;
-                    println!("Cache size: {} ({} objects)", humansize::format_size(bytes, humansize::BINARY), count);
+                    if json_output::is_json_mode() {
+                        let out = serde_json::json!({ "bytes": bytes, "objects": count });
+                        println!("{}", serde_json::to_string_pretty(&out)?);
+                    } else {
+                        println!("Cache size: {} ({} objects)", humansize::format_size(bytes, humansize::BINARY), count);
+                    }
                 }
                 CacheAction::Trim => {
                     let builder = Builder::new()?;
                     let (bytes, count) = builder.object_store().trim()?;
-                    println!("Removed {} bytes ({} unreferenced objects)", bytes, count);
+                    if json_output::is_json_mode() {
+                        let out = serde_json::json!({ "removed_bytes": bytes, "removed_objects": count });
+                        println!("{}", serde_json::to_string_pretty(&out)?);
+                    } else {
+                        println!("Removed {} bytes ({} unreferenced objects)", bytes, count);
+                    }
                 }
                 CacheAction::RemoveStale => {
                     let builder = Builder::new()?;
                     let valid_keys = builder.valid_cache_keys(&ctx)?;
                     let stale_count = builder.object_store().remove_stale(&valid_keys)?;
                     let (bytes, trim_count) = builder.object_store().trim()?;
-                    println!("Removed {} stale index entries", stale_count);
-                    if trim_count > 0 {
-                        println!("Removed {} bytes ({} orphaned objects)", bytes, trim_count);
+                    if json_output::is_json_mode() {
+                        let out = serde_json::json!({
+                            "stale_index_entries_removed": stale_count,
+                            "orphaned_bytes_removed": bytes,
+                            "orphaned_objects_removed": trim_count,
+                        });
+                        println!("{}", serde_json::to_string_pretty(&out)?);
+                    } else {
+                        println!("Removed {} stale index entries", stale_count);
+                        if trim_count > 0 {
+                            println!("Removed {} bytes ({} orphaned objects)", bytes, trim_count);
+                        }
                     }
                 }
                 CacheAction::List => {
@@ -250,18 +269,35 @@ fn run() -> (Result<()>, bool) {
                     let entries = builder.object_store().list();
                     let mut current_count = 0usize;
                     let mut stale_count = 0usize;
-                    for entry in &entries {
-                        if valid_keys.contains(&entry.cache_key) {
-                            println!("{} {}", color::green("current"), entry.cache_key);
-                            current_count += 1;
-                        } else {
-                            println!("{} {}", color::yellow("stale"), entry.cache_key);
-                            stale_count += 1;
+                    if json_output::is_json_mode() {
+                        let mut rows = Vec::with_capacity(entries.len());
+                        for entry in &entries {
+                            let is_current = valid_keys.contains(&entry.cache_key);
+                            if is_current { current_count += 1; } else { stale_count += 1; }
+                            rows.push(serde_json::json!({
+                                "cache_key": entry.cache_key,
+                                "status": if is_current { "current" } else { "stale" },
+                            }));
                         }
+                        let out = serde_json::json!({
+                            "entries": rows,
+                            "summary": { "current": current_count, "stale": stale_count },
+                        });
+                        println!("{}", serde_json::to_string_pretty(&out)?);
+                    } else {
+                        for entry in &entries {
+                            if valid_keys.contains(&entry.cache_key) {
+                                println!("{} {}", color::green("current"), entry.cache_key);
+                                current_count += 1;
+                            } else {
+                                println!("{} {}", color::yellow("stale"), entry.cache_key);
+                                stale_count += 1;
+                            }
+                        }
+                        println!();
+                        println!("{}: {} current, {} stale",
+                            color::bold("Summary"), current_count, stale_count);
                     }
-                    println!();
-                    println!("{}: {} current, {} stale",
-                        color::bold("Summary"), current_count, stale_count);
                 }
             }
         }
@@ -550,14 +586,29 @@ fn run() -> (Result<()>, bool) {
             }
         }
         Commands::Version => {
-            println!("rsconstruct {} by {}", env!("CARGO_PKG_VERSION"), env!("CARGO_PKG_AUTHORS"));
-            println!("GIT_DESCRIBE: {}", env!("GIT_DESCRIBE"));
-            println!("GIT_SHA: {}", env!("GIT_SHA"));
-            println!("GIT_BRANCH: {}", env!("GIT_BRANCH"));
-            println!("GIT_DIRTY: {}", env!("GIT_DIRTY"));
-            println!("RUSTC_SEMVER: {}", env!("RUSTC_SEMVER"));
-            println!("RUST_EDITION: {}", env!("RUST_EDITION"));
-            println!("BUILD_TIMESTAMP: {}", env!("BUILD_TIMESTAMP"));
+            if json_output::is_json_mode() {
+                let info = serde_json::json!({
+                    "version": env!("CARGO_PKG_VERSION"),
+                    "authors": env!("CARGO_PKG_AUTHORS"),
+                    "git_describe": env!("GIT_DESCRIBE"),
+                    "git_sha": env!("GIT_SHA"),
+                    "git_branch": env!("GIT_BRANCH"),
+                    "git_dirty": env!("GIT_DIRTY"),
+                    "rustc_semver": env!("RUSTC_SEMVER"),
+                    "rust_edition": env!("RUST_EDITION"),
+                    "build_timestamp": env!("BUILD_TIMESTAMP"),
+                });
+                println!("{}", serde_json::to_string_pretty(&info)?);
+            } else {
+                println!("rsconstruct {} by {}", env!("CARGO_PKG_VERSION"), env!("CARGO_PKG_AUTHORS"));
+                println!("GIT_DESCRIBE: {}", env!("GIT_DESCRIBE"));
+                println!("GIT_SHA: {}", env!("GIT_SHA"));
+                println!("GIT_BRANCH: {}", env!("GIT_BRANCH"));
+                println!("GIT_DIRTY: {}", env!("GIT_DIRTY"));
+                println!("RUSTC_SEMVER: {}", env!("RUSTC_SEMVER"));
+                println!("RUST_EDITION: {}", env!("RUST_EDITION"));
+                println!("BUILD_TIMESTAMP: {}", env!("BUILD_TIMESTAMP"));
+            }
         }
         Commands::WebCache { action } => {
             match action {
@@ -567,12 +618,22 @@ fn run() -> (Result<()>, bool) {
                 }
                 WebCacheAction::Stats => {
                     let (bytes, count) = webcache::stats()?;
-                    println!("Web cache: {} ({} entries)",
-                        humansize::format_size(bytes, humansize::BINARY), count);
+                    if json_output::is_json_mode() {
+                        let out = serde_json::json!({ "bytes": bytes, "entries": count });
+                        println!("{}", serde_json::to_string_pretty(&out)?);
+                    } else {
+                        println!("Web cache: {} ({} entries)",
+                            humansize::format_size(bytes, humansize::BINARY), count);
+                    }
                 }
                 WebCacheAction::List => {
                     let entries = webcache::list()?;
-                    if entries.is_empty() {
+                    if json_output::is_json_mode() {
+                        let rows: Vec<serde_json::Value> = entries.iter().map(|e| {
+                            serde_json::json!({ "url": e.url, "size": e.size })
+                        }).collect();
+                        println!("{}", serde_json::to_string_pretty(&rows)?);
+                    } else if entries.is_empty() {
                         println!("Web cache is empty.");
                     } else {
                         let rows: Vec<Vec<String>> = entries.iter().map(|entry| vec![
