@@ -257,6 +257,55 @@ impl KnownFields for Jinja2Config {
     fn field_descriptions() -> &'static [(&'static str, &'static str)] { StandardConfig::field_descriptions() }
 }
 
+/// Engines accepted for `pandoc.pdf_engine`. Empty string means "use pandoc's default".
+pub const PANDOC_PDF_ENGINES: &[&str] = &["pdflatex", "xelatex", "lualatex", "tectonic", "wkhtmltopdf", "weasyprint", "prince", "context"];
+
+/// Pandoc processor config. Custom field: pdf_engine (forwarded to --pdf-engine
+/// when format == pdf). Empty string keeps pandoc's default engine.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct PandocConfig {
+    #[serde(default)]
+    pub pdf_engine: String,
+    #[serde(flatten)]
+    pub standard: StandardConfig,
+}
+impl Default for PandocConfig {
+    fn default() -> Self {
+        Self {
+            pdf_engine: String::new(),
+            standard: StandardConfig {
+                command: "pandoc".into(),
+                output_dir: "out/pandoc".into(),
+                formats: vec!["pdf".into(), "html".into(), "docx".into()],
+                ..StandardConfig::default()
+            },
+        }
+    }
+}
+impl KnownFields for PandocConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "command", "args", "dep_inputs", "dep_auto", "formats", "output_dir",
+            "batch", "max_jobs", "src_dirs", "src_extensions",
+            "src_exclude_dirs", "src_exclude_files", "src_exclude_paths", "src_files",
+            "pdf_engine",
+        ]
+    }
+    fn checksum_fields() -> &'static [&'static str] {
+        &["command", "args", "formats", "output_dir", "pdf_engine"]
+    }
+    fn must_fields() -> &'static [&'static str] { StandardConfig::must_fields() }
+    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
+        &[
+            ("command",    "Path to the pandoc executable"),
+            ("args",       "Extra arguments passed to pandoc"),
+            ("formats",    "Output formats to generate (pdf, html, docx, …)"),
+            ("output_dir", "Directory where converted files are written"),
+            ("pdf_engine", "PDF engine for --pdf-engine (e.g. xelatex, lualatex). Empty = pandoc default (pdflatex)."),
+        ]
+    }
+}
+
 
 
 

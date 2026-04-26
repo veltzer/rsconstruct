@@ -100,6 +100,140 @@ fn pandoc_no_project_discovered() {
     );
 }
 
+/// Markdown containing characters outside the latin-1 range. pdflatex (the
+/// pandoc default PDF engine) cannot typeset these without manual package
+/// setup; xelatex and lualatex handle them natively. These tests pin both
+/// behaviors so a regression in argument plumbing surfaces immediately.
+const UNICODE_MD: &str = "---\ntitle: Unicode\n---\n# שלום λ café\n\nΩμέγα. Bonjour à tous.\n";
+
+/// Default engine (pdflatex) on unicode content must fail.
+#[test]
+fn pandoc_unicode_fails_with_default_engine() {
+    if !tool_available("pandoc") || !tool_available("pdflatex") {
+        eprintln!("pandoc or pdflatex not found, skipping test");
+        return;
+    }
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    // No pdf_engine set → pandoc uses pdflatex.
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.pandoc]\nformats = [\"pdf\"]\nsrc_dirs = [\"\"]\n",
+    )
+    .unwrap();
+    fs::write(project_path.join("doc.md"), UNICODE_MD).unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        !output.status.success(),
+        "Build should fail with unicode + default engine, but succeeded. stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        !project_path.join("out/pandoc/doc.pdf").exists(),
+        "PDF should not be produced when pdflatex chokes on unicode",
+    );
+}
+
+/// xelatex on unicode content must succeed.
+#[test]
+fn pandoc_unicode_succeeds_with_xelatex() {
+    if !tool_available("pandoc") || !tool_available("xelatex") {
+        eprintln!("pandoc or xelatex not found, skipping test");
+        return;
+    }
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.pandoc]\nformats = [\"pdf\"]\nsrc_dirs = [\"\"]\npdf_engine = \"xelatex\"\n",
+    )
+    .unwrap();
+    fs::write(project_path.join("doc.md"), UNICODE_MD).unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "Build should succeed with xelatex on unicode content. stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let pdf = project_path.join("out/pandoc/doc.pdf");
+    assert!(pdf.exists(), "Expected PDF at {}", pdf.display());
+    let bytes = fs::read(&pdf).unwrap();
+    assert!(bytes.len() > 1000, "PDF unexpectedly small: {} bytes", bytes.len());
+    assert!(bytes.starts_with(b"%PDF-"), "File is not a PDF (no %PDF- header)");
+}
+
+/// lualatex on unicode content must also succeed.
+#[test]
+fn pandoc_unicode_succeeds_with_lualatex() {
+    if !tool_available("pandoc") || !tool_available("lualatex") {
+        eprintln!("pandoc or lualatex not found, skipping test");
+        return;
+    }
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.pandoc]\nformats = [\"pdf\"]\nsrc_dirs = [\"\"]\npdf_engine = \"lualatex\"\n",
+    )
+    .unwrap();
+    fs::write(project_path.join("doc.md"), UNICODE_MD).unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "Build should succeed with lualatex on unicode content. stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let pdf = project_path.join("out/pandoc/doc.pdf");
+    assert!(pdf.exists(), "Expected PDF at {}", pdf.display());
+    let bytes = fs::read(&pdf).unwrap();
+    assert!(bytes.starts_with(b"%PDF-"), "File is not a PDF (no %PDF- header)");
+}
+
+/// Unknown engine values are rejected at config-load time, before any tool
+/// resolution. Doesn't require pandoc to be installed.
+#[test]
+fn pandoc_rejects_unknown_pdf_engine() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.pandoc]\nformats = [\"pdf\"]\nsrc_dirs = [\"\"]\npdf_engine = \"bogusengine\"\n",
+    )
+    .unwrap();
+    fs::write(project_path.join("doc.md"), "# hi\n").unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        !output.status.success(),
+        "Build should fail when pdf_engine is unknown. stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        combined.contains("pdf_engine") && combined.contains("bogusengine"),
+        "Error message should name the bad engine. Got: {}",
+        combined,
+    );
+}
+
 /// Build the same markdown file twice with pandoc and verify the PDF output is binary identical.
 /// This tests that our pandoc invocation is deterministic (no embedded timestamps, random IDs, etc.).
 #[test]

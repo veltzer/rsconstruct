@@ -1258,7 +1258,7 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
         ("marp", "marp_bin" | "output_dir") => Some(FieldType::String),
         ("marp", "formats") => Some(FieldType::StringArray),
         // pandoc
-        ("pandoc", "pandoc" | "output_dir") => Some(FieldType::String),
+        ("pandoc", "command" | "output_dir" | "pdf_engine") => Some(FieldType::String),
         ("pandoc", "formats") => Some(FieldType::StringArray),
         // markdown
         ("markdown2html", "markdown_bin" | "output_dir") => Some(FieldType::String),
