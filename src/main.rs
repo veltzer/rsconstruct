@@ -306,10 +306,10 @@ fn run() -> (Result<()>, bool) {
                 "Missing subcommand. Usage: rsconstruct clean <outputs|all|git|unknown>"
             ))?;
             match action {
-                CleanAction::Outputs { processors } => {
+                CleanAction::Outputs { processors, no_empty_dirs } => {
                     let builder = Builder::new()?;
                     let filter = if processors.is_empty() { None } else { Some(processors) };
-                    builder.clean(&ctx, cli.verbose, filter.as_deref())?;
+                    builder.clean(&ctx, cli.verbose, filter.as_deref(), !no_empty_dirs)?;
                 }
                 CleanAction::All => {
                     let builder = Builder::new()?;

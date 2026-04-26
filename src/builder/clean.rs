@@ -11,7 +11,9 @@ use super::Builder;
 impl Builder {
     /// Clean build artifacts using the dependency graph.
     /// If `processor_filter` is `Some`, only clean outputs from the listed processors.
-    pub fn clean(&self, ctx: &crate::build_context::BuildContext, verbose: bool, processor_filter: Option<&[String]>) -> Result<()> {
+    /// When `sweep_empty_dirs` is true (default), directories left empty after
+    /// per-product cleanup are removed bottom-up.
+    pub fn clean(&self, ctx: &crate::build_context::BuildContext, verbose: bool, processor_filter: Option<&[String]>, sweep_empty_dirs: bool) -> Result<()> {
         if let Some(names) = processor_filter {
             println!("{}", color::bold(&format!("Cleaning outputs for: {}", names.join(", "))));
         } else {
@@ -28,6 +30,27 @@ impl Builder {
             graph.retain_products(|p| filter_set.contains(p.processor.as_str()));
         }
 
+        // Collect every directory whose contents may be affected by the clean:
+        // the parent of each output file, and the output_dirs themselves
+        // (whose parents become candidates once the dir is removed).
+        let mut candidate_dirs: HashSet<PathBuf> = HashSet::new();
+        for product in graph.products() {
+            for output in &product.outputs {
+                if let Some(parent) = output.parent()
+                    && !parent.as_os_str().is_empty()
+                {
+                    candidate_dirs.insert(parent.to_path_buf());
+                }
+            }
+            for dir in &product.output_dirs {
+                if let Some(parent) = dir.parent()
+                    && !parent.as_os_str().is_empty()
+                {
+                    candidate_dirs.insert(parent.to_path_buf());
+                }
+            }
+        }
+
         // Use executor to clean (batch_size doesn't matter for clean)
         let policy = crate::executor::IncrementalPolicy;
         let executor = Executor::new(&processors, ctx, &policy, ExecutorOptions {
@@ -40,32 +63,15 @@ impl Builder {
         }, Arc::new(std::sync::atomic::AtomicBool::new(false)));
         let stats = executor.clean(&graph, verbose)?;
 
-        // Remove empty subdirectories under out/
-        // Use try-and-ignore pattern to avoid TOCTOU races (directory could be
-        // populated between emptiness check and removal by another process).
-        let mut dirs_removed = 0usize;
-        let out_dir = std::path::PathBuf::from("out");
-        if out_dir.is_dir() {
-            for entry in crate::errors::ctx(fs::read_dir(&out_dir), &format!("Failed to read directory {}", out_dir.display()))? {
-                let entry = entry?;
-                let path = entry.path();
-                if path.is_dir()
-                    && let Ok(()) = fs::remove_dir(&path)
-                {
-                    dirs_removed += 1;
-                    if verbose {
-                        println!("Removed empty directory: {}", path.display());
-                    }
-                }
-            }
-            // Remove out/ itself if now empty
-            if let Ok(()) = fs::remove_dir(&out_dir) {
-                dirs_removed += 1;
-                if verbose {
-                    println!("Removed empty directory: {}", out_dir.display());
-                }
-            }
-        }
+        // Walk every candidate directory bottom-up: try fs::remove_dir (only
+        // succeeds if empty), then climb to the parent and try again. Stops at
+        // the project root. Try-and-ignore avoids the TOCTOU race where another
+        // process populates the dir between an emptiness check and the removal.
+        let dirs_removed = if sweep_empty_dirs {
+            remove_empty_ancestors(&candidate_dirs, verbose)
+        } else {
+            0
+        };
 
         // Print summary
         let total_files: usize = stats.values().sum();
@@ -284,4 +290,37 @@ impl Builder {
 
         Ok(())
     }
+}
+
+/// Remove every empty directory rooted at any of the given candidates, walking
+/// upward toward the project root. `fs::remove_dir` only succeeds on empty
+/// directories, so non-empty ones (and their ancestors) are left intact.
+/// Returns the number of directories removed.
+fn remove_empty_ancestors(candidates: &HashSet<PathBuf>, verbose: bool) -> usize {
+    let mut all: HashSet<PathBuf> = HashSet::new();
+    for dir in candidates {
+        let mut current: Option<&std::path::Path> = Some(dir.as_path());
+        while let Some(p) = current {
+            if p.as_os_str().is_empty() || p == std::path::Path::new(".") {
+                break;
+            }
+            all.insert(p.to_path_buf());
+            current = p.parent();
+        }
+    }
+
+    // Deepest first so children are tried before their parents.
+    let mut sorted: Vec<PathBuf> = all.into_iter().collect();
+    sorted.sort_by_key(|p| std::cmp::Reverse(p.components().count()));
+
+    let mut removed = 0usize;
+    for dir in &sorted {
+        if fs::remove_dir(dir).is_ok() {
+            removed += 1;
+            if verbose {
+                println!("Removed empty directory: {}", dir.display());
+            }
+        }
+    }
+    removed
 }

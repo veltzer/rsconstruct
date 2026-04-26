@@ -415,6 +415,9 @@ pub enum CleanAction {
         /// Only clean outputs from these processors (comma-separated)
         #[arg(short, long, value_delimiter = ',')]
         processors: Vec<String>,
+        /// Skip the post-clean sweep that removes directories left empty
+        #[arg(long)]
+        no_empty_dirs: bool,
     },
     /// Remove all build outputs and cache directories (requires config)
     All,

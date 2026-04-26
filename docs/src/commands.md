@@ -114,12 +114,47 @@ Clean build artifacts. When run without a subcommand, removes build output files
 ```bash
 rsconstruct clean                # Remove build output files (preserves cache) [default]
 rsconstruct clean outputs        # Remove build output files (preserves cache)
+rsconstruct clean outputs -p tera,tags    # Only clean outputs from named processors
+rsconstruct clean outputs --no-empty-dirs # Skip the empty-directory sweep
 rsconstruct clean all            # Remove out/ and .rsconstruct/ directories
 rsconstruct clean git            # Hard clean using git clean -qffxd (requires git repository)
 rsconstruct clean unknown        # Remove files not tracked by git and not known as build outputs
 rsconstruct clean unknown --dry-run      # Show what would be removed without deleting
 rsconstruct clean unknown --no-gitignore # Include gitignored files as unknown
 ```
+
+### `rsconstruct clean outputs`
+
+Removes build output files. The cache (`.rsconstruct/`) is preserved.
+
+What gets removed depends on each product's processor type:
+
+- **Checkers** (ruff, cppcheck, shellcheck, terms, …) — produce no outputs, so nothing to delete.
+- **Generators** (tera, tags, mako, jinja2, mermaid, pdflatex, pdfunite, …) — declare concrete output files. Each declared output file is removed individually with `fs::remove_file`. **Directories are never recursed into.**
+- **Creators** (mdbook, sphinx, jekyll, cargo, npm, gem, cc, …) — invoke an external build that produces an unknown set of files inside a declared output directory (e.g. `book/`, `_site/`, `target/`). The whole declared `output_dir` is removed recursively. This is the only path that recursively deletes a directory, and it only ever affects directories the creator itself declared.
+- **Explicit** — declares both `output_files` and `output_dirs` directly in `rsconstruct.toml`. Files are removed individually; declared `output_dirs` are removed recursively (because the user asked for that).
+- **Lua plugins** — call the plugin's own `clean()` function if defined; otherwise fall back to file-only removal.
+
+#### Empty-directory sweep
+
+After every product's `clean()` has run, `clean outputs` walks every directory that previously contained an output file (and the parents of every removed `output_dir`), bottom-up, and removes any that are now empty. The sweep:
+
+- Tries `fs::remove_dir` (non-recursive) — only succeeds when the directory is empty.
+- Walks upward through parents until it hits a non-empty directory or the project root.
+- Never removes a directory that still contains files — empty dirs only.
+- Does not special-case `out/`. Any path ancestor of a cleaned output is eligible.
+
+Pass `--no-empty-dirs` to skip the sweep entirely. Files still get cleaned; empty parent directories are left in place.
+
+#### Filtering by processor
+
+`-p` / `--processors` accepts a comma-separated list of processor type names (e.g. `tera`, `cargo`). Only products whose processor type matches are cleaned. Multi-instance configs share a type name, so `-p tera` cleans every `[processor.tera.*]` instance together.
+
+#### Other clean variants
+
+- `clean all` — removes `out/` and `.rsconstruct/` outright (cache included). Use when you want a full reset.
+- `clean git` — runs `git clean -qffxd`. Requires a git repository.
+- `clean unknown` — finds files in the working tree that are neither git-tracked nor declared as a build output. Defaults to dry-run unless you pass without `--dry-run`. `--no-gitignore` includes gitignored files in the search.
 
 ## `rsconstruct status`
 
