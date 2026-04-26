@@ -124,7 +124,7 @@ impl Processor for TeraProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec!["python3".to_string()]
+        vec!["python3".to_string(), "sh".to_string(), "git".to_string()]
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {

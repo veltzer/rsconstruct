@@ -1015,6 +1015,8 @@ pub static TOOLS: &[ToolInfo] = &[
     ToolInfo { name: "drawio", runtime: "system", install_methods: &[InstallMethod { method: "snap", package: "drawio" }] },
     ToolInfo { name: "libreoffice", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "libreoffice" }] },
     ToolInfo { name: "flock", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "util-linux" }] },
+    ToolInfo { name: "sh", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "dash" }] },
+    ToolInfo { name: "git", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "git" }] },
     ToolInfo { name: "pdfunite", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "poppler-utils" }] },
     ToolInfo { name: "google-chrome", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "google-chrome-stable" }] },
     ToolInfo { name: "objdump", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "binutils" }] },
