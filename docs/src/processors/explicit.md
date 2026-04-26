@@ -128,3 +128,7 @@ build — everything is handled in a single build invocation.
 | Outputs | none (pass/fail) | one per input | explicitly listed |
 | Discovery | src_dirs + src_extensions | src_dirs + src_extensions | declared inputs/globs |
 | Use case | lint/validate files | transform files 1:1 | aggregate many → few |
+
+## Clean behavior
+
+This is the Explicit processor — `rsconstruct clean outputs` removes each declared `output_files` entry individually and each declared `output_dirs` entry recursively. After all per-product cleans complete, the orchestrator removes any parent directories that are now empty. Pass `--no-empty-dirs` to keep them. See [Clean behavior](../processors.md#clean-behavior) and [`rsconstruct clean`](../commands.md#rsconstruct-clean).

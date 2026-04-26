@@ -35,3 +35,7 @@ dep_inputs = []                            # Additional files that trigger rebui
 ## Batch support
 
 The tool accepts multiple files on the command line. When batching is enabled (default), rsconstruct passes all files in a single invocation for better performance.
+
+## Clean behavior
+
+This processor is a Checker — `rsconstruct clean outputs` is a no-op for it (checkers produce no outputs). See [Clean behavior](../processors.md#clean-behavior) and [`rsconstruct clean`](../commands.md#rsconstruct-clean).

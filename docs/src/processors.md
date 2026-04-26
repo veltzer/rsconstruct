@@ -96,6 +96,55 @@ After every product's `clean()` completes, the orchestrator runs an empty-direct
 
 See [`rsconstruct clean`](commands.md#rsconstruct-clean) for the full command reference, the `--no-empty-dirs` flag, the `-p` filter, and the other clean variants (`all`, `git`, `unknown`).
 
+### Worked example
+
+Consider this project:
+
+```toml
+# rsconstruct.toml
+
+[processor.ruff]                     # Checker — no outputs
+src_dirs = ["src"]
+
+[processor.tera]                     # Generator — declared file outputs
+src_dirs = ["templates"]
+src_extensions = [".tera"]
+
+[processor.mdbook]                   # Creator — declared output_dir
+src_dirs = ["docs"]
+```
+
+Layout:
+
+```
+project/
+├── rsconstruct.toml
+├── src/main.py                      # ruff lints this
+├── templates/index.html.tera        # tera renders to → out/tera/index.html
+├── docs/
+│   ├── book.toml
+│   └── src/SUMMARY.md
+└── book/                            # mdbook output_dir; contents unenumerated
+    ├── index.html
+    ├── css/main.css
+    └── ... (many files)
+```
+
+After `rsconstruct build`, both `out/tera/index.html` and the entire `book/` tree exist.
+
+Now run `rsconstruct clean outputs`:
+
+1. **ruff** — Checker. `clean()` is a no-op. Nothing removed.
+2. **tera** — Generator. `clean()` calls `fs::remove_file("out/tera/index.html")`. The file goes; `out/tera/` and `out/` are not yet touched.
+3. **mdbook** — Creator. `clean()` calls `fs::remove_dir_all("book/")`. The whole `book/` tree (including `book/css/main.css` and everything else) is removed. `book/`'s parent (the project root) is not touched.
+4. **Empty-directory sweep.** The orchestrator collects parents of every removed path: `out/tera`, `out` (parents of the tera output) and `.` (parent of `book/`, which is the project root and gets ignored). Sorted deepest-first: `out/tera`, `out`. `fs::remove_dir("out/tera")` → succeeds (empty). `fs::remove_dir("out")` → succeeds (now empty). Project root is skipped.
+
+Final state: `src/main.py`, `templates/index.html.tera`, `docs/...`, and `rsconstruct.toml` remain untouched. The cache (`.rsconstruct/`) is untouched. `out/` and `book/` are gone.
+
+If you instead ran `rsconstruct clean outputs --no-empty-dirs`, the only difference is step 4 is skipped — `out/tera/` and `out/` would remain as empty directories.
+
+If you ran `rsconstruct clean outputs -p tera`, only step 2 + the sweep of its parents runs. `book/` is left intact because mdbook is filtered out.
+
 ## Custom Processors
 
 You can define custom processors in Lua. See [Lua Plugins](plugins.md) for details.

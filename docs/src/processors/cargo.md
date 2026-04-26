@@ -114,3 +114,7 @@ src_exclude_paths = ["crates/"]
   invoking cargo at all when nothing changed
 - The `target/` directory is automatically excluded from input scanning
 - For monorepos with multiple Rust projects, each Cargo.toml is built separately
+
+## Clean behavior
+
+This processor is a Creator — `rsconstruct clean outputs` removes its declared `output_dirs` recursively (the build tool produces an unknown set of files inside, so directory-level deletion is the only option). After all per-product cleans complete, the orchestrator removes any parent directories that are now empty. Pass `--no-empty-dirs` to keep them. See [Clean behavior](../processors.md#clean-behavior) and [`rsconstruct clean`](../commands.md#rsconstruct-clean).

@@ -1,3 +1,11 @@
+- currently we have problem: look at ../teaching-slides/ and the tera snippet there.
+  It should be updated when files are:
+  - renamed
+  - added
+  - removed
+  because of the functions it activates.
+  How do we achieve that? How do other tools achieve that?
+
 python files dependency analysis:
   for "import local_python_module" statements
   for dependency on other files with open(filename) or other functions.

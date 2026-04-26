@@ -87,3 +87,7 @@ copied in both directions.
 ```bash
 rsconstruct terms merge ../other-project/terms
 ```
+
+## Clean behavior
+
+This processor is a Checker — `rsconstruct clean outputs` is a no-op for it (checkers produce no outputs). See [Clean behavior](../processors.md#clean-behavior) and [`rsconstruct clean`](../commands.md#rsconstruct-clean).

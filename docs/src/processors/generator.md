@@ -48,3 +48,7 @@ dep_inputs = []
 ## Batch support
 
 Configurable via `batch = true` (default). In batch mode, the script receives all input/output pairs in a single invocation. Set `batch = false` to invoke the script once per file.
+
+## Clean behavior
+
+This processor is a Generator — `rsconstruct clean outputs` removes each declared output file individually with no directory recursion. After all per-product cleans complete, the orchestrator removes any parent directories that are now empty. Pass `--no-empty-dirs` to keep them. See [Clean behavior](../processors.md#clean-behavior) and [`rsconstruct clean`](../commands.md#rsconstruct-clean).

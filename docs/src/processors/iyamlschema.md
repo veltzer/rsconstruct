@@ -60,3 +60,7 @@ Set `check_ordering = false` to disable this check.
 ## Batch Support
 
 Files are validated individually within a batch. Partial failure is handled correctly.
+
+## Clean behavior
+
+This processor is a Checker — `rsconstruct clean outputs` is a no-op for it (checkers produce no outputs). See [Clean behavior](../processors.md#clean-behavior) and [`rsconstruct clean`](../commands.md#rsconstruct-clean).

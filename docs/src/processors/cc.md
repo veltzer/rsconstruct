@@ -200,3 +200,7 @@ out/cc/exercises/math/lib/libmath.a
 out/cc/exercises/math/obj/main/main.o
 out/cc/exercises/math/bin/main
 ```
+
+## Clean behavior
+
+This processor is a Creator — `rsconstruct clean outputs` removes its declared `output_dirs` recursively (the build tool produces an unknown set of files inside, so directory-level deletion is the only option). After all per-product cleans complete, the orchestrator removes any parent directories that are now empty. Pass `--no-empty-dirs` to keep them. See [Clean behavior](../processors.md#clean-behavior) and [`rsconstruct clean`](../commands.md#rsconstruct-clean).

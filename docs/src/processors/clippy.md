@@ -82,3 +82,7 @@ args = ["--", "-D", "warnings"]
 - Clippy uses the `cargo` binary which is shared with the cargo processor
 - The `target/` directory is automatically excluded from input scanning
 - For monorepos with multiple Rust projects, each Cargo.toml is linted separately
+
+## Clean behavior
+
+This processor is a Checker — `rsconstruct clean outputs` is a no-op for it (checkers produce no outputs). See [Clean behavior](../processors.md#clean-behavior) and [`rsconstruct clean`](../commands.md#rsconstruct-clean).

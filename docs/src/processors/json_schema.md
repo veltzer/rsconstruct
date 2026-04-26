@@ -39,3 +39,7 @@ dep_inputs = []                            # Additional files that trigger rebui
 ## Batch support
 
 The tool processes one file at a time. Each file is checked in a separate invocation.
+
+## Clean behavior
+
+This processor is a Checker — `rsconstruct clean outputs` is a no-op for it (checkers produce no outputs). See [Clean behavior](../processors.md#clean-behavior) and [`rsconstruct clean`](../commands.md#rsconstruct-clean).

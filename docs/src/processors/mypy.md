@@ -45,3 +45,7 @@ The tool accepts multiple files on the command line. When batching is enabled (d
 Mypy automatically reads configuration from a `mypy.ini` file in the project
 root. This file is detected automatically and added as an extra input, so
 changes to it will trigger rebuilds without manual configuration.
+
+## Clean behavior
+
+This processor is a Checker — `rsconstruct clean outputs` is a no-op for it (checkers produce no outputs). See [Clean behavior](../processors.md#clean-behavior) and [`rsconstruct clean`](../commands.md#rsconstruct-clean).
