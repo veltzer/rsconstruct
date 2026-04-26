@@ -53,4 +53,4 @@ Python files are linted and stub outputs are written to `out/ruff/` (ruff proces
 
 ### Build artifacts
 
-All build outputs go into `out/`. The cache lives in `.rsconstruct/`. Use `rsconstruct clean` to remove `out/` (preserving cache) or `rsconstruct clean all` to remove both.
+All build outputs go into `out/`. The cache lives in `.rsconstruct/`. Use `rsconstruct clean` to remove every declared output (preserving the cache) — directories left empty afterward are also pruned, so `out/` typically disappears too. Use `rsconstruct clean all` to remove `out/` and `.rsconstruct/` outright. See [`rsconstruct clean`](commands.md#rsconstruct-clean) for the full breakdown of clean behavior.
