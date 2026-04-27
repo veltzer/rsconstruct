@@ -515,6 +515,125 @@ fn shell_output_invalidates_when_command_edited() {
     assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Out: second");
 }
 
+// ----- git_count_files() ---------------------------------------------------
+//
+// git_count_files(pattern="...") counts only git-tracked files matching the
+// pathspec. The analyzer mirrors that semantics by shelling out to
+// `git ls-files -- <pattern>` so the path-set fingerprint mixed into the
+// cache key matches what the renderer will actually count.
+
+/// Initialize a git repo in `project_path` and stage+commit any tracked files
+/// the caller has already written. Configures user.email/user.name so the
+/// commit succeeds in CI environments.
+fn git_init_and_commit(project_path: &std::path::Path) {
+    use std::process::Command;
+    let run = |args: &[&str]| {
+        let status = Command::new("git")
+            .current_dir(project_path)
+            .args(args)
+            .output()
+            .expect("git invocation failed");
+        assert!(
+            status.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&status.stderr)
+        );
+    };
+    run(&["init", "-q", "-b", "main"]);
+    run(&["config", "user.email", "test@example.com"]);
+    run(&["config", "user.name", "Test"]);
+    run(&["add", "-A"]);
+    run(&["commit", "-q", "-m", "init"]);
+}
+
+#[test]
+fn git_count_files_counts_only_tracked() {
+    let project = setup_glob_project(
+        "Total: {{ git_count_files(pattern=\"data/*.md\") }}\n",
+    );
+    let p = project.path();
+    fs::create_dir_all(p.join("data")).unwrap();
+    fs::write(p.join("data/a.md"), "a").unwrap();
+    fs::write(p.join("data/b.md"), "b").unwrap();
+    git_init_and_commit(p);
+
+    // An untracked file added after the commit must NOT be counted.
+    fs::write(p.join("data/untracked.md"), "x").unwrap();
+
+    let output = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "build failed: {}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+
+    let report = fs::read_to_string(p.join("report.txt")).unwrap();
+    assert_eq!(report.trim(), "Total: 2", "Got: {}", report);
+}
+
+#[test]
+fn git_count_files_invalidates_when_file_committed() {
+    let project = setup_glob_project(
+        "Total: {{ git_count_files(pattern=\"data/*.md\") }}\n",
+    );
+    let p = project.path();
+    fs::create_dir_all(p.join("data")).unwrap();
+    fs::write(p.join("data/a.md"), "a").unwrap();
+    fs::write(p.join("data/b.md"), "b").unwrap();
+    git_init_and_commit(p);
+
+    let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(out1.status.success(), "first build failed: {}", String::from_utf8_lossy(&out1.stderr));
+    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Total: 2");
+
+    // Add a new file and commit it — `git ls-files` will now return 3.
+    fs::write(p.join("data/c.md"), "c").unwrap();
+    use std::process::Command;
+    Command::new("git").current_dir(p).args(["add", "data/c.md"]).output().unwrap();
+    Command::new("git").current_dir(p).args(["commit", "-q", "-m", "add c"]).output().unwrap();
+
+    let out2 = run_rsconstruct_with_env(p, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(out2.status.success(), "second build failed: {}", String::from_utf8_lossy(&out2.stderr));
+    let stdout2 = String::from_utf8_lossy(&out2.stdout);
+    assert!(
+        !stdout2.contains("[tera] Skipping (unchanged):"),
+        "Second build should NOT have skipped after committing a new tracked file. stdout={}",
+        stdout2,
+    );
+    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Total: 3");
+}
+
+#[test]
+fn git_count_files_skips_when_only_untracked_added() {
+    // Adding an untracked file does not change the git ls-files output, so
+    // the build should skip on the second run. This is the inverse of
+    // glob_invalidates_when_file_added — different semantics, different cache.
+    let project = setup_glob_project(
+        "Total: {{ git_count_files(pattern=\"data/*.md\") }}\n",
+    );
+    let p = project.path();
+    fs::create_dir_all(p.join("data")).unwrap();
+    fs::write(p.join("data/a.md"), "a").unwrap();
+    fs::write(p.join("data/b.md"), "b").unwrap();
+    git_init_and_commit(p);
+
+    let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(out1.status.success());
+    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Total: 2");
+
+    // Add an untracked file — should NOT trigger a rebuild.
+    fs::write(p.join("data/untracked.md"), "x").unwrap();
+
+    let out2 = run_rsconstruct_with_env(p, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(out2.status.success());
+    let stdout2 = String::from_utf8_lossy(&out2.stdout);
+    assert!(
+        stdout2.contains("[tera] Skipping (unchanged):"),
+        "Second build SHOULD have skipped — untracked files don't affect git_count_files. stdout={}",
+        stdout2,
+    );
+}
+
 #[test]
 fn glob_no_matches_returns_empty_list() {
     let project = setup_glob_project(

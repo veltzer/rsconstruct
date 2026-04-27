@@ -66,6 +66,15 @@ impl TeraDepAnalyzer {
                 .expect(errors::INVALID_REGEX)
         });
 
+        // git_count_files(pattern="...") — counts git-tracked files matching
+        // a pathspec. Semantics differ from glob(): only tracked files count,
+        // and .gitignore'd or untracked files are excluded.
+        static GIT_COUNT_RE: OnceLock<Regex> = OnceLock::new();
+        let git_count_re = GIT_COUNT_RE.get_or_init(|| {
+            Regex::new(r#"git_count_files\s*\(\s*pattern\s*=\s*["']([^"']+)["']\s*\)"#)
+                .expect(errors::INVALID_REGEX)
+        });
+
         // shell_output(...) — full call. We pull out the command and depends_on
         // separately. The full body capture is intentionally lazy; a missing
         // depends_on must be diagnosed (analyzer-time error).
@@ -133,7 +142,23 @@ impl TeraDepAnalyzer {
             }
         }
 
-        // 3) shell_output(...): require depends_on, harvest patterns and command
+        // 3) git_count_files(pattern="..."): use `git ls-files -- <pattern>`
+        // to match runtime semantics (only tracked files, .gitignore-aware).
+        for caps in git_count_re.captures_iter(&content) {
+            let pattern = &caps[1];
+            let matched = git_ls_files(pattern)?;
+            hash_pieces.push(format!("git_count:{}", pattern));
+            hash_pieces.push(format!("git_count_resolved:{}", matched.join("\n")));
+            for p in matched {
+                let pb = PathBuf::from(p);
+                if !seen.contains(&pb) {
+                    seen.insert(pb.clone());
+                    paths.push(pb);
+                }
+            }
+        }
+
+        // 4) shell_output(...): require depends_on, harvest patterns and command
         for caps in shell_re.captures_iter(&content) {
             let body = &caps[1];
             let command = shell_cmd_re.captures(body)
@@ -200,6 +225,31 @@ impl TeraDepAnalyzer {
             config_hash_contribution,
         })
     }
+}
+
+/// Run `git ls-files -- <pattern>` and return the sorted list of tracked
+/// files matching the pathspec. This mirrors the runtime semantics of the
+/// `git_count_files` Tera function so the analyzer's invalidation set
+/// matches what the renderer actually counts. A failed git invocation
+/// (e.g. not a git repository) yields an empty list — the function is
+/// best-effort by design.
+fn git_ls_files(pattern: &str) -> Result<Vec<String>> {
+    let output = std::process::Command::new("git")
+        .args(["ls-files", "--", pattern])
+        .output();
+    let output = match output {
+        Ok(o) if o.status.success() => o,
+        _ => return Ok(Vec::new()),
+    };
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut paths: Vec<String> = stdout
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(|l| l.to_string())
+        .collect();
+    paths.sort();
+    paths.dedup();
+    Ok(paths)
 }
 
 /// Expand a glob pattern into a sorted list of file paths (as strings, relative
