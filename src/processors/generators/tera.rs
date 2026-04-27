@@ -55,6 +55,7 @@ fn render_template(ctx: &crate::build_context::BuildContext, item: &TemplateItem
     tera.register_function("workflow_names", WorkflowNamesFunction);
     tera.register_function("shell_output", ShellOutputFunction { ctx: ctx_ptr });
     tera.register_function("glob", GlobFunction);
+    tera.register_function("grep_count", GrepCountFunction);
 
     // Add the template
     tera.add_raw_template("template", &template_content)
@@ -387,9 +388,10 @@ impl Function for ShellOutputFunction {
 /// Expand a glob pattern at template render time and return the sorted list of
 /// matched file paths (relative to the project root, as strings). The same
 /// pattern is independently captured by the Tera analyzer at graph-construction
-/// time, which adds the matched files to the product's inputs and mixes the
-/// path set into the cache key. So a template that calls `glob()` is correctly
-/// invalidated when files matching the pattern are added, removed, or renamed.
+/// time, which mixes the path set into the cache key (path-only, not content).
+/// So a template that calls `glob()` is correctly invalidated when files
+/// matching the pattern are added, removed, or renamed — but NOT when an
+/// existing matching file's content changes.
 struct GlobFunction;
 
 impl Function for GlobFunction {
@@ -414,6 +416,51 @@ impl Function for GlobFunction {
 
         to_value(paths)
             .map_err(|e| tera::Error::msg(format!("glob: {e}")))
+    }
+}
+
+/// Count lines matching a regex across all files matching a glob pattern.
+/// This is an in-process replacement for `shell_output(command="grep -r ... | wc -l")`
+/// — same result, no shell or external grep involved. The analyzer captures
+/// both the literal regex and the resolved file set into the cache hash, AND
+/// adds the matched files as inputs so editing any of their contents
+/// correctly invalidates the product.
+struct GrepCountFunction;
+
+impl Function for GrepCountFunction {
+    fn call(&self, args: &HashMap<String, TeraValue>) -> tera::Result<TeraValue> {
+        let pattern = args
+            .get("pattern")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| tera::Error::msg("grep_count requires a 'pattern' argument (regex)"))?;
+        let glob_pattern = args
+            .get("glob")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| tera::Error::msg("grep_count requires a 'glob' argument (file glob)"))?;
+
+        let re = regex::Regex::new(pattern)
+            .map_err(|e| tera::Error::msg(format!("grep_count: invalid regex '{}': {}", pattern, e)))?;
+
+        let mut count: usize = 0;
+        for entry in glob::glob(glob_pattern)
+            .map_err(|e| tera::Error::msg(format!("grep_count: invalid glob '{}': {}", glob_pattern, e)))?
+        {
+            let path = entry
+                .map_err(|e| tera::Error::msg(format!("grep_count: glob error for '{}': {}", glob_pattern, e)))?;
+            if !path.is_file() {
+                continue;
+            }
+            let content = fs::read_to_string(&path)
+                .map_err(|e| tera::Error::msg(format!("grep_count: read {}: {e}", path.display())))?;
+            for line in content.lines() {
+                if re.is_match(line) {
+                    count += 1;
+                }
+            }
+        }
+
+        to_value(count)
+            .map_err(|e| tera::Error::msg(format!("grep_count: {e}")))
     }
 }
 
