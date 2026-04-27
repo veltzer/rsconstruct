@@ -635,6 +635,64 @@ fn git_count_files_skips_when_only_untracked_added() {
 }
 
 #[test]
+fn glob_skips_when_matched_file_content_changes() {
+    // glob() consumes names, not content. Editing a file that happens to
+    // match the glob must NOT invalidate the product — only adding,
+    // removing, or renaming a matched file does.
+    let project = setup_glob_project("Total: {{ glob(pattern=\"data/**/*.md\") | length }}\n");
+    let p = project.path();
+    fs::create_dir_all(p.join("data")).unwrap();
+    fs::write(p.join("data/a.md"), "original").unwrap();
+    fs::write(p.join("data/b.md"), "original").unwrap();
+
+    let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(out1.status.success());
+
+    // Edit the content of a matching file (path set unchanged).
+    fs::write(p.join("data/a.md"), "edited").unwrap();
+
+    let out2 = run_rsconstruct_with_env(p, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(out2.status.success());
+    let stdout2 = String::from_utf8_lossy(&out2.stdout);
+    assert!(
+        stdout2.contains("[tera] Skipping (unchanged):"),
+        "Second build SHOULD skip — glob tracks names, not content. stdout={}",
+        stdout2,
+    );
+}
+
+#[test]
+fn git_count_files_skips_when_tracked_file_content_changes() {
+    // git_count_files() consumes the count of tracked files, not their
+    // content. Editing a tracked matching file (without changing the
+    // tracked path set) must NOT invalidate the product.
+    let project = setup_glob_project(
+        "Total: {{ git_count_files(pattern=\"data/*.md\") }}\n",
+    );
+    let p = project.path();
+    fs::create_dir_all(p.join("data")).unwrap();
+    fs::write(p.join("data/a.md"), "original").unwrap();
+    fs::write(p.join("data/b.md"), "original").unwrap();
+    git_init_and_commit(p);
+
+    let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(out1.status.success());
+    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Total: 2");
+
+    // Edit a tracked file's content without changing the tracked set.
+    fs::write(p.join("data/a.md"), "edited").unwrap();
+
+    let out2 = run_rsconstruct_with_env(p, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(out2.status.success());
+    let stdout2 = String::from_utf8_lossy(&out2.stdout);
+    assert!(
+        stdout2.contains("[tera] Skipping (unchanged):"),
+        "Second build SHOULD skip — git_count_files tracks count, not content. stdout={}",
+        stdout2,
+    );
+}
+
+#[test]
 fn glob_in_included_snippet_is_tracked() {
     // The function call lives in an included snippet, not the top-level
     // template. The analyzer must recurse into includes so the snippet's

@@ -175,34 +175,25 @@ fn scan_template_recursive(
         }
     }
 
-    // 2) glob(pattern="...")
+    // 2) glob(pattern="...") — contribute only the resolved path set to the
+    // cache hash. The matched files are NOT added as inputs: the template
+    // consumes the list of *names*, not their content, so editing one of
+    // those files must not invalidate this product. Adding/removing/renaming
+    // a matching file changes the path-set fingerprint and rebuilds.
     for caps in glob_re.captures_iter(&content) {
         let pattern = &caps[1];
         let matched = expand_glob(pattern)?;
         hash_pieces.push(format!("glob:{}", pattern));
         hash_pieces.push(format!("glob_resolved:{}", matched.join("\n")));
-        for p in matched {
-            let pb = PathBuf::from(p);
-            if !seen.contains(&pb) {
-                seen.insert(pb.clone());
-                paths.push(pb);
-            }
-        }
     }
 
-    // 3) git_count_files(pattern="...")
+    // 3) git_count_files(pattern="...") — same path-set-only semantics as
+    // glob. Only the count/identity of tracked files matters, not content.
     for caps in git_count_re.captures_iter(&content) {
         let pattern = &caps[1];
         let matched = git_ls_files(pattern)?;
         hash_pieces.push(format!("git_count:{}", pattern));
         hash_pieces.push(format!("git_count_resolved:{}", matched.join("\n")));
-        for p in matched {
-            let pb = PathBuf::from(p);
-            if !seen.contains(&pb) {
-                seen.insert(pb.clone());
-                paths.push(pb);
-            }
-        }
     }
 
     // 4) shell_output(...): require depends_on, harvest patterns and command
