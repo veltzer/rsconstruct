@@ -575,6 +575,36 @@ fn run() -> (Result<()>, bool) {
                 }
             }
         }
+        Commands::Functions { action } => {
+            use cli::FunctionsAction;
+            use processors::generators::tera::TERA_FUNCTIONS;
+            match action {
+                FunctionsAction::List => {
+                    if json_output::is_json_mode() {
+                        let arr: Vec<serde_json::Value> = TERA_FUNCTIONS.iter().map(|f| {
+                            serde_json::json!({
+                                "name": f.name,
+                                "summary": f.summary,
+                                "args": f.args,
+                                "returns": f.returns,
+                                "dep_tracking": f.dep_tracking,
+                                "example": f.example,
+                            })
+                        }).collect();
+                        println!("{}", serde_json::to_string_pretty(&serde_json::Value::Array(arr))?);
+                    } else {
+                        for f in TERA_FUNCTIONS {
+                            println!("{}({})", f.name, f.args);
+                            println!("  {}", f.summary);
+                            println!("  returns:       {}", f.returns);
+                            println!("  dep tracking:  {}", f.dep_tracking);
+                            println!("  example:       {}", f.example);
+                            println!();
+                        }
+                    }
+                }
+            }
+        }
         Commands::Tools { action } => {
             // Fall back to default config only if no config file exists.
             // If config exists but is broken, fail — don't silently use defaults.

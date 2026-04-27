@@ -116,6 +116,26 @@ fn scan_template_recursive(
             .expect(errors::INVALID_REGEX)
     });
 
+    // grep_count(pattern="<regex>", glob="<glob>") — counts lines matching
+    // a regex across all files matching a glob. Unlike glob/git_count_files,
+    // this consumes the *content* of the matched files, so the analyzer must
+    // add them as inputs (mtime/checksum-tracked) AND mix the regex literal
+    // and resolved file set into the cache hash.
+    static GREP_COUNT_RE: OnceLock<Regex> = OnceLock::new();
+    let grep_count_re = GREP_COUNT_RE.get_or_init(|| {
+        // Capture both args; both can appear in either order. Two regexes:
+        // first locate the call body, then extract pattern= and glob= inside.
+        Regex::new(r#"grep_count\s*\(([^)]*)\)"#).expect(errors::INVALID_REGEX)
+    });
+    static GREP_COUNT_PATTERN_RE: OnceLock<Regex> = OnceLock::new();
+    let grep_count_pattern_re = GREP_COUNT_PATTERN_RE.get_or_init(|| {
+        Regex::new(r#"pattern\s*=\s*["']([^"']*)["']"#).expect(errors::INVALID_REGEX)
+    });
+    static GREP_COUNT_GLOB_RE: OnceLock<Regex> = OnceLock::new();
+    let grep_count_glob_re = GREP_COUNT_GLOB_RE.get_or_init(|| {
+        Regex::new(r#"glob\s*=\s*["']([^"']*)["']"#).expect(errors::INVALID_REGEX)
+    });
+
     // shell_output(...) — full call. We pull out the command and depends_on
     // separately. The full body capture is intentionally lazy; a missing
     // depends_on must be diagnosed (analyzer-time error).
@@ -194,6 +214,41 @@ fn scan_template_recursive(
         let matched = git_ls_files(pattern)?;
         hash_pieces.push(format!("git_count:{}", pattern));
         hash_pieces.push(format!("git_count_resolved:{}", matched.join("\n")));
+    }
+
+    // 3b) grep_count(pattern="<regex>", glob="<file_glob>") — content-tracked.
+    // Both the regex and the resolved file set go into the hash, AND the
+    // matched files are added as inputs so mtime/checksum-tracked content
+    // changes invalidate the product.
+    for caps in grep_count_re.captures_iter(&content) {
+        let body = &caps[1];
+        let regex_pat = grep_count_pattern_re.captures(body)
+            .and_then(|c| c.get(1).map(|m| m.as_str().to_string()));
+        let file_glob = grep_count_glob_re.captures(body)
+            .and_then(|c| c.get(1).map(|m| m.as_str().to_string()));
+        let Some(regex_pat) = regex_pat else {
+            bail!(
+                "[tera] {}: grep_count(...) is missing pattern=\"<regex>\". Found: grep_count({})",
+                source.display(), body.trim(),
+            );
+        };
+        let Some(file_glob) = file_glob else {
+            bail!(
+                "[tera] {}: grep_count(pattern=\"{}\") is missing glob=\"<file_glob>\".",
+                source.display(), regex_pat,
+            );
+        };
+        let matched = expand_glob(&file_glob)?;
+        hash_pieces.push(format!("grep_count_re:{}", regex_pat));
+        hash_pieces.push(format!("grep_count_glob:{}", file_glob));
+        hash_pieces.push(format!("grep_count_resolved:{}", matched.join("\n")));
+        for p in matched {
+            let pb = PathBuf::from(p);
+            if !seen.contains(&pb) {
+                seen.insert(pb.clone());
+                paths.push(pb);
+            }
+        }
     }
 
     // 4) shell_output(...): require depends_on, harvest patterns and command

@@ -606,6 +606,106 @@ fn load_lua_config(lua_file: &Path) -> Result<Map<String, Value>> {
     Ok(result)
 }
 
+/// Documentation for one built-in Tera function. Shared source of truth used
+/// by both the `register_function` calls in `render_template` (indirectly,
+/// for the names) and the `rsconstruct functions list` CLI command.
+pub struct TeraFunctionDoc {
+    /// Function name as called from a template, e.g. `glob`.
+    pub name: &'static str,
+    /// One-line summary (shown in the list view).
+    pub summary: &'static str,
+    /// Argument signature, e.g. `pattern: string`.
+    pub args: &'static str,
+    /// Return type description, e.g. `array<string>` or `int`.
+    pub returns: &'static str,
+    /// How the analyzer tracks dependencies: which inputs and what enters
+    /// the cache hash. This is the part users get wrong most often.
+    pub dep_tracking: &'static str,
+    /// Short usage example.
+    pub example: &'static str,
+}
+
+pub static TERA_FUNCTIONS: &[TeraFunctionDoc] = &[
+    TeraFunctionDoc {
+        name: "load_python",
+        summary: "Execute a Python file and expose its top-level variables to the template.",
+        args: "path: string",
+        returns: "object (variable name → JSON-serializable value)",
+        dep_tracking: "The file at `path` is added as an input (content-tracked).",
+        example: r#"{% set cfg = load_python(path="config/version.py") %}{{ cfg.version }}"#,
+    },
+    TeraFunctionDoc {
+        name: "load_lua",
+        summary: "Execute a Lua file and expose its globals to the template.",
+        args: "path: string",
+        returns: "object (global name → JSON-serializable value)",
+        dep_tracking: "The file at `path` is added as an input (content-tracked).",
+        example: r#"{% set cfg = load_lua(path="config/project.lua") %}{{ cfg.NAME }}"#,
+    },
+    TeraFunctionDoc {
+        name: "version_str",
+        summary: "Read a `tup` tuple from a Python or Lua file and return a dot-joined version string.",
+        args: r#"path: string (defaults to "config/version.py")"#,
+        returns: "string",
+        dep_tracking: "The file at `path` is added as an input (content-tracked).",
+        example: r#"{{ version_str(path="config/version.py") }}  {# e.g. "0.9.10" #}"#,
+    },
+    TeraFunctionDoc {
+        name: "copyright_years",
+        summary: "Return a comma-separated list of years from the first git commit year to the current year.",
+        args: "(none)",
+        returns: "string",
+        dep_tracking: "Not tracked. Result depends only on git history and the current year; \
+                       a forced rebuild is needed when crossing a New Year if no other input changed.",
+        example: r#"© {{ copyright_years() }}  {# e.g. "2013, 2014, ..., 2026" #}"#,
+    },
+    TeraFunctionDoc {
+        name: "git_count_files",
+        summary: "Count git-tracked files matching a pathspec (excludes .gitignore'd / untracked).",
+        args: "pattern: string (git pathspec)",
+        returns: "int",
+        dep_tracking: "Path-set only. The resolved tracked-file list goes into the cache hash; \
+                       individual file content does NOT. Invalidates on commit/uncommit of matching files.",
+        example: r#"{{ git_count_files(pattern="syllabi/*.md") }} syllabi"#,
+    },
+    TeraFunctionDoc {
+        name: "workflow_names",
+        summary: "List GitHub Actions workflow files under `.github/workflows/*.yml` with their `name` fields.",
+        args: "(none)",
+        returns: r#"array<{file: string, name: string}>"#,
+        dep_tracking: "Not currently tracked by the analyzer; rebuilds rely on the template body itself.",
+        example: r#"{% for wf in workflow_names() %}![{{ wf.name }}](.../{{ wf.file }}){% endfor %}"#,
+    },
+    TeraFunctionDoc {
+        name: "shell_output",
+        summary: "Run a shell command and return its trimmed stdout.",
+        args: r#"command: string, depends_on: array<string> (glob patterns; pass [] if none)"#,
+        returns: "string",
+        dep_tracking: "Content-tracked. Files matched by any pattern in `depends_on` are added \
+                       as inputs. The literal command string is mixed into the cache hash so \
+                       editing the command also invalidates. `depends_on` is REQUIRED.",
+        example: r#"{{ shell_output(command="date -u +%Y-%m-%d", depends_on=[]) }}"#,
+    },
+    TeraFunctionDoc {
+        name: "glob",
+        summary: "Return the sorted list of file paths matching a glob pattern.",
+        args: "pattern: string (glob, e.g. `data/**/*.md`)",
+        returns: "array<string>",
+        dep_tracking: "Path-set only. The resolved file list goes into the cache hash; \
+                       individual file content does NOT. Invalidates on add/remove/rename.",
+        example: r#"{{ glob(pattern="data/**/*.md") | length }} data files"#,
+    },
+    TeraFunctionDoc {
+        name: "grep_count",
+        summary: "Count lines matching a regex across all files matching a glob (in-process; no shell).",
+        args: r#"pattern: string (regex), glob: string (file glob)"#,
+        returns: "int",
+        dep_tracking: "Content-tracked. Files matched by `glob` are added as inputs. The regex \
+                       literal and resolved file set are mixed into the cache hash.",
+        example: r#"{{ grep_count(pattern="^TODO", glob="src/**/*.rs") }} TODOs"#,
+    },
+];
+
 use crate::registries as registry;
 
 fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {

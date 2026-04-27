@@ -26,7 +26,7 @@ mod python_distribution_map;
 mod python_stdlib;
 mod requirements;
 pub mod tags;
-mod tera;
+pub mod tera;
 
 
 use std::path::{Path, PathBuf};

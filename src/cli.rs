@@ -240,6 +240,11 @@ pub enum Commands {
         #[command(subcommand)]
         action: FixAction,
     },
+    /// Inspect built-in template functions exposed to Tera templates (no config needed)
+    Functions {
+        #[command(subcommand)]
+        action: FunctionsAction,
+    },
     /// Display the build dependency graph
     Graph {
         #[command(subcommand)]
@@ -543,6 +548,12 @@ pub enum ProcessorAction {
 pub enum TomlAction {
     /// Validate rsconstruct.toml — check for unknown fields, type errors, and missing required fields
     Check,
+}
+
+#[derive(Subcommand)]
+pub enum FunctionsAction {
+    /// List all built-in Tera template functions with documentation
+    List,
 }
 
 #[derive(Subcommand)]

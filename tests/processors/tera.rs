@@ -692,6 +692,84 @@ fn git_count_files_skips_when_tracked_file_content_changes() {
     );
 }
 
+// ----- grep_count() --------------------------------------------------------
+//
+// grep_count consumes file *content*, so the analyzer must add matched files
+// as inputs (mtime/checksum-tracked). This is the key difference from glob
+// and git_count_files.
+
+#[test]
+fn grep_count_counts_matching_lines() {
+    let project = setup_glob_project(
+        "TODOs: {{ grep_count(pattern=\"^TODO\", glob=\"src/**/*.txt\") }}\n",
+    );
+    let p = project.path();
+    fs::create_dir_all(p.join("src")).unwrap();
+    fs::write(p.join("src/a.txt"), "TODO: x\nfoo\nTODO: y\n").unwrap();
+    fs::write(p.join("src/b.txt"), "no todos here\nTODO: z\n").unwrap();
+
+    let output = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success(),
+        "build failed: {}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr));
+    let report = fs::read_to_string(p.join("report.txt")).unwrap();
+    assert_eq!(report.trim(), "TODOs: 3", "Got: {}", report);
+}
+
+#[test]
+fn grep_count_invalidates_when_matched_file_content_changes() {
+    // Editing a file inside the glob must trigger a rebuild — that's the
+    // whole point of grep_count vs glob/git_count_files.
+    let project = setup_glob_project(
+        "TODOs: {{ grep_count(pattern=\"^TODO\", glob=\"src/**/*.txt\") }}\n",
+    );
+    let p = project.path();
+    fs::create_dir_all(p.join("src")).unwrap();
+    fs::write(p.join("src/a.txt"), "TODO: x\n").unwrap();
+
+    let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(out1.status.success(), "first build failed: {}", String::from_utf8_lossy(&out1.stderr));
+    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "TODOs: 1");
+
+    // Add another TODO line to the same file. Content changed; path set unchanged.
+    fs::write(p.join("src/a.txt"), "TODO: x\nTODO: y\n").unwrap();
+
+    let out2 = run_rsconstruct_with_env(p, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(out2.status.success(), "second build failed: {}", String::from_utf8_lossy(&out2.stderr));
+    let stdout2 = String::from_utf8_lossy(&out2.stdout);
+    assert!(
+        !stdout2.contains("[tera] Skipping (unchanged):"),
+        "Second build should NOT skip — grep_count tracks content. stdout={}",
+        stdout2,
+    );
+    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "TODOs: 2");
+}
+
+#[test]
+fn grep_count_invalidates_when_regex_changes() {
+    let project = setup_glob_project(
+        "Hits: {{ grep_count(pattern=\"^TODO\", glob=\"src/**/*.txt\") }}\n",
+    );
+    let p = project.path();
+    fs::create_dir_all(p.join("src")).unwrap();
+    fs::write(p.join("src/a.txt"), "TODO: x\nFIXME: y\n").unwrap();
+
+    let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(out1.status.success());
+    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Hits: 1");
+
+    // Change only the regex — same files, same content.
+    fs::write(
+        p.join("tera.templates/report.txt.tera"),
+        "Hits: {{ grep_count(pattern=\"^FIXME\", glob=\"src/**/*.txt\") }}\n",
+    ).unwrap();
+
+    let out2 = run_rsconstruct_with_env(p, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(out2.status.success());
+    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Hits: 1");
+}
+
 #[test]
 fn glob_in_included_snippet_is_tracked() {
     // The function call lives in an included snippet, not the top-level
