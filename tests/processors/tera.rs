@@ -635,6 +635,53 @@ fn git_count_files_skips_when_only_untracked_added() {
 }
 
 #[test]
+fn glob_in_included_snippet_is_tracked() {
+    // The function call lives in an included snippet, not the top-level
+    // template. The analyzer must recurse into includes so the snippet's
+    // glob participates in the parent product's cache key.
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let p = temp_dir.path();
+    fs::create_dir_all(p.join("tera.templates")).unwrap();
+    fs::create_dir_all(p.join("tera.snippets")).unwrap();
+    fs::create_dir_all(p.join("data")).unwrap();
+    fs::write(
+        p.join("rsconstruct.toml"),
+        "[processor.tera]\n[analyzer.tera]\n",
+    ).unwrap();
+    fs::write(
+        p.join("tera.templates/report.txt.tera"),
+        "Header\n{% include \"tera.snippets/main.md.tera\" %}\nFooter\n",
+    ).unwrap();
+    fs::write(
+        p.join("tera.snippets/main.md.tera"),
+        "Total: {{ glob(pattern=\"data/**/*.md\") | length }}\n",
+    ).unwrap();
+    fs::write(p.join("data/a.md"), "a").unwrap();
+    fs::write(p.join("data/b.md"), "b").unwrap();
+
+    let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(out1.status.success(), "first build failed: {}", String::from_utf8_lossy(&out1.stderr));
+    let report = fs::read_to_string(p.join("report.txt")).unwrap();
+    assert!(report.contains("Total: 2"), "report should reflect 2 files: {}", report);
+
+    // Add a third matching file. The parent template body did not change,
+    // and the snippet body did not change, so without recursive analysis
+    // the build would skip incorrectly.
+    fs::write(p.join("data/c.md"), "c").unwrap();
+
+    let out2 = run_rsconstruct_with_env(p, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(out2.status.success(), "second build failed: {}", String::from_utf8_lossy(&out2.stderr));
+    let stdout2 = String::from_utf8_lossy(&out2.stdout);
+    assert!(
+        !stdout2.contains("[tera] Skipping (unchanged):"),
+        "Second build should NOT skip — glob in included snippet matched a new file. stdout={}",
+        stdout2,
+    );
+    let report2 = fs::read_to_string(p.join("report.txt")).unwrap();
+    assert!(report2.contains("Total: 3"), "report should reflect 3 files after add: {}", report2);
+}
+
+#[test]
 fn glob_no_matches_returns_empty_list() {
     let project = setup_glob_project(
         "Total: {{ glob(pattern=\"nonexistent/**/*.md\") | length }}\n",

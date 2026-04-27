@@ -36,183 +36,17 @@ impl TeraDepAnalyzer {
     /// contribution that captures non-content state — the sorted set of paths
     /// matching each glob, plus the literal text of each shell command.
     fn scan_template(&self, source: &Path) -> Result<ScanResult> {
-        let content = crate::errors::ctx(fs::read_to_string(source), &format!("Failed to read template: {}", source.display()))?;
         let mut paths: Vec<PathBuf> = Vec::new();
         let mut seen: HashSet<PathBuf> = HashSet::new();
         // Pieces accumulated into the config_hash: sorted paths from each glob,
         // plus literal command strings. Order matters and is determined by the
         // order in which they appear in the template, which is stable.
         let mut hash_pieces: Vec<String> = Vec::new();
+        // Templates whose contents we've already scanned, to avoid infinite
+        // recursion on cyclic includes.
+        let mut scanned: HashSet<PathBuf> = HashSet::new();
 
-        // {% include "path" %}, {% import "path" %}, {% extends "path" %}
-        // Single quotes also handled.
-        static INCLUDE_RE: OnceLock<Regex> = OnceLock::new();
-        let include_re = INCLUDE_RE.get_or_init(|| {
-            Regex::new(r#"\{%[-~]?\s*(?:include|import|extends)\s+["']([^"']+)["']"#)
-                .expect(errors::INVALID_REGEX)
-        });
-
-        // load_lua/load_data/load_json/load_toml/load_csv(path="...")
-        static LOAD_RE: OnceLock<Regex> = OnceLock::new();
-        let load_re = LOAD_RE.get_or_init(|| {
-            Regex::new(r#"load_(?:lua|data|json|toml|csv)\s*\(\s*path\s*=\s*["']([^"']+)["']"#)
-                .expect(errors::INVALID_REGEX)
-        });
-
-        // glob(pattern="...") — first-class directory query.
-        static GLOB_RE: OnceLock<Regex> = OnceLock::new();
-        let glob_re = GLOB_RE.get_or_init(|| {
-            Regex::new(r#"glob\s*\(\s*pattern\s*=\s*["']([^"']+)["']\s*\)"#)
-                .expect(errors::INVALID_REGEX)
-        });
-
-        // git_count_files(pattern="...") — counts git-tracked files matching
-        // a pathspec. Semantics differ from glob(): only tracked files count,
-        // and .gitignore'd or untracked files are excluded.
-        static GIT_COUNT_RE: OnceLock<Regex> = OnceLock::new();
-        let git_count_re = GIT_COUNT_RE.get_or_init(|| {
-            Regex::new(r#"git_count_files\s*\(\s*pattern\s*=\s*["']([^"']+)["']\s*\)"#)
-                .expect(errors::INVALID_REGEX)
-        });
-
-        // shell_output(...) — full call. We pull out the command and depends_on
-        // separately. The full body capture is intentionally lazy; a missing
-        // depends_on must be diagnosed (analyzer-time error).
-        static SHELL_OUTPUT_RE: OnceLock<Regex> = OnceLock::new();
-        let shell_re = SHELL_OUTPUT_RE.get_or_init(|| {
-            // Match `shell_output(... )` — body is everything up to the matching close paren.
-            // Tera template syntax doesn't nest calls of shell_output inside itself, so a
-            // non-greedy match up to the next `)` is sufficient in practice. False positives
-            // (e.g. `)` inside a quoted command string) are rare; the inner extraction below
-            // handles malformed bodies by simply not matching.
-            Regex::new(r#"shell_output\s*\(([^)]*)\)"#)
-                .expect(errors::INVALID_REGEX)
-        });
-
-        // Inner extraction inside a shell_output(...) body: `command="..."` and `depends_on=[...]`.
-        static SHELL_CMD_RE: OnceLock<Regex> = OnceLock::new();
-        let shell_cmd_re = SHELL_CMD_RE.get_or_init(|| {
-            Regex::new(r#"command\s*=\s*["']([^"']*)["']"#).expect(errors::INVALID_REGEX)
-        });
-        static SHELL_DEPS_RE: OnceLock<Regex> = OnceLock::new();
-        let shell_deps_re = SHELL_DEPS_RE.get_or_init(|| {
-            Regex::new(r#"depends_on\s*=\s*\[([^\]]*)\]"#).expect(errors::INVALID_REGEX)
-        });
-        static QUOTED_STR_RE: OnceLock<Regex> = OnceLock::new();
-        let quoted_str_re = QUOTED_STR_RE.get_or_init(|| {
-            Regex::new(r#"["']([^"']+)["']"#).expect(errors::INVALID_REGEX)
-        });
-
-        let source_dir = source.parent().unwrap_or(Path::new("."));
-
-        // 1) include/import/extends and load_*
-        for caps in include_re.captures_iter(&content).chain(load_re.captures_iter(&content)) {
-            let path_str = &caps[1];
-            if path_str.is_empty() {
-                continue;
-            }
-            let candidates = [
-                source_dir.join(path_str),
-                PathBuf::from(path_str),
-            ];
-            for candidate in &candidates {
-                if candidate.is_file() && !seen.contains(candidate) {
-                    seen.insert(candidate.clone());
-                    paths.push(candidate.clone());
-                    break;
-                }
-            }
-        }
-
-        // 2) glob(pattern="...")
-        for caps in glob_re.captures_iter(&content) {
-            let pattern = &caps[1];
-            let matched = expand_glob(pattern)?;
-            // Mix literal pattern + sorted resolved paths into the hash.
-            // The literal pattern is included so that "marp/**/*.md" with zero
-            // matches and "marp/**/*.txt" with zero matches don't collide.
-            hash_pieces.push(format!("glob:{}", pattern));
-            hash_pieces.push(format!("glob_resolved:{}", matched.join("\n")));
-            for p in matched {
-                let pb = PathBuf::from(p);
-                if !seen.contains(&pb) {
-                    seen.insert(pb.clone());
-                    paths.push(pb);
-                }
-            }
-        }
-
-        // 3) git_count_files(pattern="..."): use `git ls-files -- <pattern>`
-        // to match runtime semantics (only tracked files, .gitignore-aware).
-        for caps in git_count_re.captures_iter(&content) {
-            let pattern = &caps[1];
-            let matched = git_ls_files(pattern)?;
-            hash_pieces.push(format!("git_count:{}", pattern));
-            hash_pieces.push(format!("git_count_resolved:{}", matched.join("\n")));
-            for p in matched {
-                let pb = PathBuf::from(p);
-                if !seen.contains(&pb) {
-                    seen.insert(pb.clone());
-                    paths.push(pb);
-                }
-            }
-        }
-
-        // 4) shell_output(...): require depends_on, harvest patterns and command
-        for caps in shell_re.captures_iter(&content) {
-            let body = &caps[1];
-            let command = shell_cmd_re.captures(body)
-                .and_then(|c| c.get(1).map(|m| m.as_str().to_string()));
-            let deps_block = shell_deps_re.captures(body)
-                .and_then(|c| c.get(1).map(|m| m.as_str().to_string()));
-
-            let Some(command) = command else {
-                bail!(
-                    "[tera] {}: shell_output(...) call has no command= argument. \
-                     Found: shell_output({})",
-                    source.display(), body.trim(),
-                );
-            };
-            let Some(deps_block) = deps_block else {
-                bail!(
-                    "[tera] {}: shell_output(command=\"{}\") is missing depends_on=[...].\n\
-                     rsconstruct cannot otherwise tell when its output should be invalidated.\n\
-                     Migrate to glob(pattern=\"...\") for directory queries, or pass an explicit \
-                     list (e.g. depends_on=[\"marp/**/*.md\"]).\n\
-                     If your command genuinely has no file dependencies, pass depends_on=[] \
-                     to acknowledge that.",
-                    source.display(), command,
-                );
-            };
-
-            // Mix the command into the hash so editing it triggers rebuild.
-            hash_pieces.push(format!("shell_cmd:{}", command));
-
-            // Parse the depends_on list (sequence of quoted strings).
-            let mut patterns: Vec<String> = Vec::new();
-            for pcap in quoted_str_re.captures_iter(&deps_block) {
-                patterns.push(pcap[1].to_string());
-            }
-            if patterns.is_empty() {
-                // Empty list — explicit user acknowledgement that the command
-                // depends on nothing rsconstruct can track. Mix nothing extra;
-                // the command string itself is already in the hash.
-                hash_pieces.push("shell_deps:[]".to_string());
-                continue;
-            }
-            for pattern in &patterns {
-                let matched = expand_glob(pattern)?;
-                hash_pieces.push(format!("shell_dep:{}", pattern));
-                hash_pieces.push(format!("shell_dep_resolved:{}", matched.join("\n")));
-                for p in matched {
-                    let pb = PathBuf::from(p);
-                    if !seen.contains(&pb) {
-                        seen.insert(pb.clone());
-                        paths.push(pb);
-                    }
-                }
-            }
-        }
+        scan_template_recursive(source, &mut paths, &mut seen, &mut hash_pieces, &mut scanned)?;
 
         let config_hash_contribution = if hash_pieces.is_empty() {
             None
@@ -225,6 +59,204 @@ impl TeraDepAnalyzer {
             config_hash_contribution,
         })
     }
+}
+
+/// Scan `source` for dependencies and recurse into any `{% include %}`,
+/// `{% import %}`, or `{% extends %}` referenced templates so that
+/// glob/git_count_files/shell_output calls in *any* transitively-included
+/// template participate in the parent product's dependency set and cache key.
+///
+/// `paths` and `seen` accumulate the input file set; `hash_pieces` accumulates
+/// the config-hash contribution; `scanned` prevents revisiting the same
+/// template (cycle guard).
+fn scan_template_recursive(
+    source: &Path,
+    paths: &mut Vec<PathBuf>,
+    seen: &mut HashSet<PathBuf>,
+    hash_pieces: &mut Vec<String>,
+    scanned: &mut HashSet<PathBuf>,
+) -> Result<()> {
+    let canonical = source.canonicalize().unwrap_or_else(|_| source.to_path_buf());
+    if !scanned.insert(canonical) {
+        return Ok(());
+    }
+
+    let content = crate::errors::ctx(
+        fs::read_to_string(source),
+        &format!("Failed to read template: {}", source.display()),
+    )?;
+
+    // {% include "path" %}, {% import "path" %}, {% extends "path" %}
+    static INCLUDE_RE: OnceLock<Regex> = OnceLock::new();
+    let include_re = INCLUDE_RE.get_or_init(|| {
+        Regex::new(r#"\{%[-~]?\s*(?:include|import|extends)\s+["']([^"']+)["']"#)
+            .expect(errors::INVALID_REGEX)
+    });
+
+    // load_lua/load_data/load_json/load_toml/load_csv(path="...")
+    static LOAD_RE: OnceLock<Regex> = OnceLock::new();
+    let load_re = LOAD_RE.get_or_init(|| {
+        Regex::new(r#"load_(?:lua|data|json|toml|csv)\s*\(\s*path\s*=\s*["']([^"']+)["']"#)
+            .expect(errors::INVALID_REGEX)
+    });
+
+    // glob(pattern="...") — first-class directory query.
+    static GLOB_RE: OnceLock<Regex> = OnceLock::new();
+    let glob_re = GLOB_RE.get_or_init(|| {
+        Regex::new(r#"glob\s*\(\s*pattern\s*=\s*["']([^"']+)["']\s*\)"#)
+            .expect(errors::INVALID_REGEX)
+    });
+
+    // git_count_files(pattern="...") — counts git-tracked files matching
+    // a pathspec. Semantics differ from glob(): only tracked files count,
+    // and .gitignore'd or untracked files are excluded.
+    static GIT_COUNT_RE: OnceLock<Regex> = OnceLock::new();
+    let git_count_re = GIT_COUNT_RE.get_or_init(|| {
+        Regex::new(r#"git_count_files\s*\(\s*pattern\s*=\s*["']([^"']+)["']\s*\)"#)
+            .expect(errors::INVALID_REGEX)
+    });
+
+    // shell_output(...) — full call. We pull out the command and depends_on
+    // separately. The full body capture is intentionally lazy; a missing
+    // depends_on must be diagnosed (analyzer-time error).
+    static SHELL_OUTPUT_RE: OnceLock<Regex> = OnceLock::new();
+    let shell_re = SHELL_OUTPUT_RE.get_or_init(|| {
+        Regex::new(r#"shell_output\s*\(([^)]*)\)"#).expect(errors::INVALID_REGEX)
+    });
+
+    // Inner extraction inside a shell_output(...) body.
+    static SHELL_CMD_RE: OnceLock<Regex> = OnceLock::new();
+    let shell_cmd_re = SHELL_CMD_RE.get_or_init(|| {
+        Regex::new(r#"command\s*=\s*["']([^"']*)["']"#).expect(errors::INVALID_REGEX)
+    });
+    static SHELL_DEPS_RE: OnceLock<Regex> = OnceLock::new();
+    let shell_deps_re = SHELL_DEPS_RE.get_or_init(|| {
+        Regex::new(r#"depends_on\s*=\s*\[([^\]]*)\]"#).expect(errors::INVALID_REGEX)
+    });
+    static QUOTED_STR_RE: OnceLock<Regex> = OnceLock::new();
+    let quoted_str_re = QUOTED_STR_RE.get_or_init(|| {
+        Regex::new(r#"["']([^"']+)["']"#).expect(errors::INVALID_REGEX)
+    });
+
+    let source_dir = source.parent().unwrap_or(Path::new("."));
+
+    // 1) include/import/extends and load_*. For include/import/extends, also
+    // recurse into the included template so its glob/shell_output/git_count
+    // calls participate in this product's dependency set.
+    for caps in include_re.captures_iter(&content) {
+        let path_str = &caps[1];
+        if path_str.is_empty() {
+            continue;
+        }
+        let candidates = [source_dir.join(path_str), PathBuf::from(path_str)];
+        for candidate in &candidates {
+            if candidate.is_file() {
+                if !seen.contains(candidate) {
+                    seen.insert(candidate.clone());
+                    paths.push(candidate.clone());
+                }
+                scan_template_recursive(candidate, paths, seen, hash_pieces, scanned)?;
+                break;
+            }
+        }
+    }
+    for caps in load_re.captures_iter(&content) {
+        let path_str = &caps[1];
+        if path_str.is_empty() {
+            continue;
+        }
+        let candidates = [source_dir.join(path_str), PathBuf::from(path_str)];
+        for candidate in &candidates {
+            if candidate.is_file() && !seen.contains(candidate) {
+                seen.insert(candidate.clone());
+                paths.push(candidate.clone());
+                break;
+            }
+        }
+    }
+
+    // 2) glob(pattern="...")
+    for caps in glob_re.captures_iter(&content) {
+        let pattern = &caps[1];
+        let matched = expand_glob(pattern)?;
+        hash_pieces.push(format!("glob:{}", pattern));
+        hash_pieces.push(format!("glob_resolved:{}", matched.join("\n")));
+        for p in matched {
+            let pb = PathBuf::from(p);
+            if !seen.contains(&pb) {
+                seen.insert(pb.clone());
+                paths.push(pb);
+            }
+        }
+    }
+
+    // 3) git_count_files(pattern="...")
+    for caps in git_count_re.captures_iter(&content) {
+        let pattern = &caps[1];
+        let matched = git_ls_files(pattern)?;
+        hash_pieces.push(format!("git_count:{}", pattern));
+        hash_pieces.push(format!("git_count_resolved:{}", matched.join("\n")));
+        for p in matched {
+            let pb = PathBuf::from(p);
+            if !seen.contains(&pb) {
+                seen.insert(pb.clone());
+                paths.push(pb);
+            }
+        }
+    }
+
+    // 4) shell_output(...): require depends_on, harvest patterns and command
+    for caps in shell_re.captures_iter(&content) {
+        let body = &caps[1];
+        let command = shell_cmd_re.captures(body)
+            .and_then(|c| c.get(1).map(|m| m.as_str().to_string()));
+        let deps_block = shell_deps_re.captures(body)
+            .and_then(|c| c.get(1).map(|m| m.as_str().to_string()));
+
+        let Some(command) = command else {
+            bail!(
+                "[tera] {}: shell_output(...) call has no command= argument. \
+                 Found: shell_output({})",
+                source.display(), body.trim(),
+            );
+        };
+        let Some(deps_block) = deps_block else {
+            bail!(
+                "[tera] {}: shell_output(command=\"{}\") is missing depends_on=[...].\n\
+                 rsconstruct cannot otherwise tell when its output should be invalidated.\n\
+                 Migrate to glob(pattern=\"...\") for directory queries, or pass an explicit \
+                 list (e.g. depends_on=[\"marp/**/*.md\"]).\n\
+                 If your command genuinely has no file dependencies, pass depends_on=[] \
+                 to acknowledge that.",
+                source.display(), command,
+            );
+        };
+
+        hash_pieces.push(format!("shell_cmd:{}", command));
+
+        let mut patterns: Vec<String> = Vec::new();
+        for pcap in quoted_str_re.captures_iter(&deps_block) {
+            patterns.push(pcap[1].to_string());
+        }
+        if patterns.is_empty() {
+            hash_pieces.push("shell_deps:[]".to_string());
+            continue;
+        }
+        for pattern in &patterns {
+            let matched = expand_glob(pattern)?;
+            hash_pieces.push(format!("shell_dep:{}", pattern));
+            hash_pieces.push(format!("shell_dep_resolved:{}", matched.join("\n")));
+            for p in matched {
+                let pb = PathBuf::from(p);
+                if !seen.contains(&pb) {
+                    seen.insert(pb.clone());
+                    paths.push(pb);
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Run `git ls-files -- <pattern>` and return the sorted list of tracked
