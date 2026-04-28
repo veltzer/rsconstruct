@@ -665,6 +665,12 @@ pub enum AnalyzersShowFilter {
         /// Source files to show dependencies for
         #[arg(required = true)]
         files: Vec<String>,
+        /// Also print the structured hash pieces each analyzer contributes
+        /// to the product's cache key (e.g. resolved glob/git_count file
+        /// sets, embedded shell commands). Recomputed live — reflects the
+        /// current filesystem state, not the last build's state.
+        #[arg(long)]
+        hash_pieces: bool,
     },
     /// Show dependencies for files handled by specific analyzers
     Analyzers {

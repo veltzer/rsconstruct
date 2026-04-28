@@ -319,11 +319,19 @@ impl Builder {
                             }
                         }
                     }
-                    AnalyzersShowFilter::Files { files } => {
+                    AnalyzersShowFilter::Files { files, hash_pieces } => {
                         // Query specific files. One path can have multiple
                         // entries — one per analyzer that scanned it.
-                        let mut collected: Vec<(PathBuf, Vec<PathBuf>, String)> = Vec::new();
+                        let mut collected: Vec<ShowFileEntry> = Vec::new();
                         let mut found_any = false;
+                        // Instantiate analyzers up front only when we need to
+                        // recompute hash pieces — otherwise stay in pure
+                        // deps-cache-read mode like before.
+                        let analyzers = if hash_pieces {
+                            Some(self.create_analyzers(false)?)
+                        } else {
+                            None
+                        };
                         for file_arg in &files {
                             let file_path = PathBuf::from(file_arg);
                             let entries = deps_cache.get_raw_for_path(&file_path);
@@ -334,10 +342,19 @@ impl Builder {
                             } else {
                                 found_any = true;
                                 for (deps, analyzer) in entries {
+                                    let pieces = if let Some(ref a) = analyzers {
+                                        a.get(&analyzer)
+                                            .and_then(|inst| inst.scan_hash_pieces(&file_path).ok().flatten())
+                                    } else {
+                                        None
+                                    };
                                     if json_mode {
-                                        collected.push((file_path.clone(), deps, analyzer));
+                                        collected.push((file_path.clone(), deps, analyzer, pieces));
                                     } else {
                                         Self::print_deps(&file_path, &deps, &analyzer);
+                                        if hash_pieces {
+                                            Self::print_hash_pieces(pieces.as_deref());
+                                        }
                                     }
                                 }
                             }
@@ -346,7 +363,7 @@ impl Builder {
                             bail!("No cached dependencies found for the specified files");
                         }
                         if json_mode {
-                            print_deps_json(&collected)?;
+                            print_deps_json_with_pieces(&collected, hash_pieces)?;
                         }
                     }
                     AnalyzersShowFilter::Analyzers { analyzers } => {
@@ -385,4 +402,72 @@ impl Builder {
             }
         }
     }
+
+    /// Print structured hash pieces for a source file. Each piece is in the
+    /// form `kind:body`, where `body` may be multi-line for resolved file
+    /// lists. None means the analyzer doesn't contribute hash pieces; an
+    /// empty Vec means it does but the source had nothing to track.
+    fn print_hash_pieces(pieces: Option<&[String]>) {
+        let label = color::dim("hash pieces:");
+        match pieces {
+            None => println!("  {} {}", label, color::dim("(analyzer does not contribute)")),
+            Some([]) => println!("  {} {}", label, color::dim("(none)")),
+            Some(p) => {
+                println!("  {}", label);
+                for piece in p {
+                    let (kind, body) = piece.split_once(':').unwrap_or((piece.as_str(), ""));
+                    if body.contains('\n') {
+                        println!("    {}", color::cyan(kind));
+                        for line in body.lines() {
+                            println!("      {}", line);
+                        }
+                    } else {
+                        println!("    {} {}", color::cyan(kind), body);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// One row for `analyzers show files`: source path, dependency list, the
+/// analyzer that produced it, and optionally the live-recomputed hash pieces
+/// (None when --hash-pieces was not passed OR the analyzer doesn't contribute).
+type ShowFileEntry = (PathBuf, Vec<PathBuf>, String, Option<Vec<String>>);
+
+/// JSON printer for `analyzers show files` that may include hash pieces.
+/// Always emits the `dependencies` field; emits `hash_pieces` only when the
+/// `--hash-pieces` flag is set, so the JSON shape isn't different by accident
+/// for callers that don't ask for it. A null `hash_pieces` value means the
+/// analyzer does not contribute pieces; an empty array means it does but the
+/// source had nothing to track.
+fn print_deps_json_with_pieces(
+    entries: &[ShowFileEntry],
+    include_hash_pieces: bool,
+) -> Result<()> {
+    let rows: Vec<serde_json::Value> = entries.iter().map(|(source, deps, analyzer, pieces)| {
+        let mut obj = serde_json::Map::new();
+        obj.insert("source".into(), serde_json::Value::String(source.display().to_string()));
+        obj.insert("analyzer".into(), serde_json::Value::String(analyzer.clone()));
+        obj.insert(
+            "dependencies".into(),
+            serde_json::Value::Array(
+                deps.iter().map(|d| serde_json::Value::String(d.display().to_string())).collect()
+            ),
+        );
+        if include_hash_pieces {
+            obj.insert(
+                "hash_pieces".into(),
+                match pieces {
+                    None => serde_json::Value::Null,
+                    Some(p) => serde_json::Value::Array(
+                        p.iter().map(|s| serde_json::Value::String(s.clone())).collect()
+                    ),
+                },
+            );
+        }
+        serde_json::Value::Object(obj)
+    }).collect();
+    println!("{}", serde_json::to_string_pretty(&rows)?);
+    Ok(())
 }

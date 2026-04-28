@@ -77,6 +77,19 @@ pub trait DepAnalyzer: Sync + Send {
         verbose: bool,
         progress: &ProgressBar,
     ) -> Result<()>;
+
+    /// Recompute the hash pieces this analyzer would contribute for `source`,
+    /// without touching the build graph or the deps cache. Used by
+    /// `analyzers show files <path> --hash-pieces` to surface the non-content
+    /// state (resolved glob sets, embedded shell commands, etc.) that an
+    /// analyzer mixes into a product's cache key.
+    ///
+    /// The default impl returns `None`, meaning "this analyzer does not
+    /// contribute hash pieces" (most don't — only Tera does today). Override
+    /// when the analyzer's `analyze` populates `ScanResult.hash_pieces`.
+    fn scan_hash_pieces(&self, _source: &Path) -> Result<Option<Vec<String>>> {
+        Ok(None)
+    }
 }
 
 /// Query pkg-config for include paths from the given packages.
@@ -189,17 +202,23 @@ pub fn run_include_path_commands(ctx: &crate::build_context::BuildContext, tag: 
 }
 
 /// Result of scanning a single source file: a list of dependency paths and
-/// an optional opaque string mixed into each affected product's config_hash.
+/// a list of structured pieces mixed into each affected product's config_hash.
 ///
-/// `config_hash_contribution` is for analyzer state that must invalidate the
-/// cache key but is *not* a file content (e.g. the sorted set of paths matching
-/// a glob pattern, or the literal text of a shell command embedded in a
-/// template). It is concatenated with the existing config_hash and re-hashed,
-/// so adding/removing entries from the set or rewording the command flips the
-/// key even when no individual input file's content changed.
+/// `hash_pieces` is for analyzer state that must invalidate the cache key but
+/// is *not* a file content (e.g. the sorted set of paths matching a glob
+/// pattern, or the literal text of a shell command embedded in a template).
+/// Each piece is a `kind:body` string; the order is determined by the analyzer
+/// and must be stable across runs. The pieces are joined with `|` and mixed
+/// into the existing config_hash, so adding/removing entries from the set or
+/// rewording the command flips the key even when no individual input file's
+/// content changed.
+///
+/// The pieces are also surfaced via `rsconstruct analyzers show files <path>
+/// --hash-pieces` so users can see exactly what non-content state the analyzer
+/// is tracking for a given source.
 pub struct ScanResult {
     pub deps: Vec<PathBuf>,
-    pub config_hash_contribution: Option<String>,
+    pub hash_pieces: Vec<String>,
 }
 
 /// Shared helper for analyzer `analyze()` implementations.
@@ -277,10 +296,10 @@ where
 /// Tera analyzer must also account for the *set* of paths matching a glob).
 ///
 /// Cache: the path list is cached per source like in `analyze_with_scanner`,
-/// but the `config_hash_contribution` is **not** cached — it's recomputed on
-/// every analyzer run. That's intentional. Tera analysis is cheap, and the
-/// contribution often depends on filesystem state (the glob set) that the
-/// per-source content cache cannot represent.
+/// but the `hash_pieces` are **not** cached — they're recomputed on every
+/// analyzer run. That's intentional. Tera analysis is cheap, and the pieces
+/// often depend on filesystem state (the glob set) that the per-source
+/// content cache cannot represent.
 pub fn analyze_with_full_scanner<F, G>(
     ctx: &crate::build_context::BuildContext,
     graph: &mut BuildGraph,
@@ -312,13 +331,18 @@ where
 
         // Persist the dep list to the cache so commands like
         // `analyzers show` can report what was discovered. The
-        // config_hash_contribution is intentionally NOT cached — it
-        // depends on filesystem state (glob results) that must be
-        // recomputed on every run.
+        // hash_pieces are intentionally NOT cached — they depend on
+        // filesystem state (glob results) that must be recomputed on
+        // every run.
         if let Err(e) = deps_cache.set(ctx, analyzer_name, source, &result.deps) {
             eprintln!("Warning: failed to cache dependencies for {}: {}", source.display(), e);
         }
 
+        let joined_pieces = if result.hash_pieces.is_empty() {
+            None
+        } else {
+            Some(result.hash_pieces.join("|"))
+        };
         for &id in product_ids {
             if let Some(product) = graph.get_product_mut(id) {
                 if !result.deps.is_empty() {
@@ -329,7 +353,7 @@ where
                         .collect();
                     product.inputs.extend(new_deps);
                 }
-                if let Some(piece) = &result.config_hash_contribution {
+                if let Some(ref piece) = joined_pieces {
                     product.extend_config_hash(piece);
                 }
             }

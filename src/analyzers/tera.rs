@@ -32,10 +32,10 @@ impl TeraDepAnalyzer {
     }
 
     /// Scan a Tera template file for all dependency-affecting constructs.
-    /// Returns the resolved file paths (added to product.inputs) and a config-hash
-    /// contribution that captures non-content state — the sorted set of paths
+    /// Returns the resolved file paths (added to product.inputs) and the
+    /// hash pieces that capture non-content state — the sorted set of paths
     /// matching each glob, plus the literal text of each shell command.
-    fn scan_template(&self, source: &Path) -> Result<ScanResult> {
+    pub(crate) fn scan_template(&self, source: &Path) -> Result<ScanResult> {
         let mut paths: Vec<PathBuf> = Vec::new();
         let mut seen: HashSet<PathBuf> = HashSet::new();
         // Pieces accumulated into the config_hash: sorted paths from each glob,
@@ -48,15 +48,9 @@ impl TeraDepAnalyzer {
 
         scan_template_recursive(source, &mut paths, &mut seen, &mut hash_pieces, &mut scanned)?;
 
-        let config_hash_contribution = if hash_pieces.is_empty() {
-            None
-        } else {
-            Some(hash_pieces.join("|"))
-        };
-
         Ok(ScanResult {
             deps: paths,
-            config_hash_contribution,
+            hash_pieces,
         })
     }
 }
@@ -389,6 +383,10 @@ impl DepAnalyzer for TeraDepAnalyzer {
             |source| self.scan_template(source),
             progress,
         )
+    }
+
+    fn scan_hash_pieces(&self, source: &Path) -> Result<Option<Vec<String>>> {
+        Ok(Some(self.scan_template(source)?.hash_pieces))
     }
 }
 

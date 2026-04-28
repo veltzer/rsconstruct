@@ -831,3 +831,113 @@ fn glob_no_matches_returns_empty_list() {
 
     assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Total: 0");
 }
+
+/// `analyzers show files <path> --hash-pieces` must surface the structured
+/// non-content state the analyzer mixes into the cache key. For a tera
+/// template that calls `glob(pattern=...)`, the output should include the
+/// pattern itself and the resolved file list so the user can see exactly
+/// what's being tracked.
+#[test]
+fn show_files_hash_pieces_surfaces_glob_state() {
+    let project = setup_glob_project(
+        "Total: {{ glob(pattern=\"data/*.md\") | length }}\n",
+    );
+    let p = project.path();
+    fs::create_dir_all(p.join("data")).unwrap();
+    fs::write(p.join("data/a.md"), "a").unwrap();
+    fs::write(p.join("data/b.md"), "b").unwrap();
+
+    // Prime the deps cache so `analyzers show files` has an entry to read.
+    let build = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(build.status.success(), "build failed: {}", String::from_utf8_lossy(&build.stderr));
+
+    let out = run_rsconstruct_with_env(
+        p,
+        &["analyzers", "show", "files", "tera.templates/report.txt.tera", "--hash-pieces"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(out.status.success(),
+        "show files --hash-pieces failed: {}",
+        String::from_utf8_lossy(&out.stderr));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    assert!(stdout.contains("hash pieces:"),
+        "expected 'hash pieces:' header in output: {}", stdout);
+    assert!(stdout.contains("glob") && stdout.contains("data/*.md"),
+        "expected glob pattern in hash pieces: {}", stdout);
+    assert!(stdout.contains("data/a.md") && stdout.contains("data/b.md"),
+        "expected resolved file list in hash pieces: {}", stdout);
+}
+
+/// Same as the text test but verifies the JSON shape: `hash_pieces` is a
+/// list of `kind:body` strings, recomputed live (so the field is present
+/// only when --hash-pieces is passed).
+#[test]
+fn show_files_hash_pieces_json_shape() {
+    let project = setup_glob_project(
+        "Total: {{ glob(pattern=\"data/*.md\") | length }}\n",
+    );
+    let p = project.path();
+    fs::create_dir_all(p.join("data")).unwrap();
+    fs::write(p.join("data/a.md"), "a").unwrap();
+
+    let build = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(build.status.success());
+
+    let out = run_rsconstruct_with_env(
+        p,
+        &["--json", "analyzers", "show", "files",
+          "tera.templates/report.txt.tera", "--hash-pieces"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(out.status.success(),
+        "json show files --hash-pieces failed: {}",
+        String::from_utf8_lossy(&out.stderr));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("invalid JSON: {}\n---\n{}", e, stdout));
+    let arr = parsed.as_array().expect("top-level JSON must be an array");
+    assert_eq!(arr.len(), 1, "expected one entry, got: {}", stdout);
+    let entry = &arr[0];
+    let pieces = entry.get("hash_pieces")
+        .and_then(|v| v.as_array())
+        .unwrap_or_else(|| panic!("hash_pieces field missing or not array: {}", stdout));
+    let joined = pieces.iter()
+        .filter_map(|v| v.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(joined.contains("glob:data/*.md"),
+        "expected 'glob:data/*.md' piece, got: {}", joined);
+    assert!(joined.contains("data/a.md"),
+        "expected resolved file list to mention data/a.md, got: {}", joined);
+}
+
+/// When `--hash-pieces` is omitted, the JSON shape must NOT include the
+/// `hash_pieces` field — keeps the existing JSON contract stable for any
+/// caller that doesn't opt in.
+#[test]
+fn show_files_without_hash_pieces_omits_field() {
+    let project = setup_glob_project(
+        "Total: {{ glob(pattern=\"data/*.md\") | length }}\n",
+    );
+    let p = project.path();
+    fs::create_dir_all(p.join("data")).unwrap();
+    fs::write(p.join("data/a.md"), "a").unwrap();
+
+    let build = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(build.status.success());
+
+    let out = run_rsconstruct_with_env(
+        p,
+        &["--json", "analyzers", "show", "files", "tera.templates/report.txt.tera"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("invalid JSON: {}\n---\n{}", e, stdout));
+    let entry = &parsed.as_array().expect("array")[0];
+    assert!(entry.get("hash_pieces").is_none(),
+        "hash_pieces field must be absent when flag is omitted: {}", stdout);
+}
