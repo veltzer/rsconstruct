@@ -282,9 +282,9 @@ where
 /// contribution often depends on filesystem state (the glob set) that the
 /// per-source content cache cannot represent.
 pub fn analyze_with_full_scanner<F, G>(
-    _ctx: &crate::build_context::BuildContext,
+    ctx: &crate::build_context::BuildContext,
     graph: &mut BuildGraph,
-    _deps_cache: &mut DepsCache,
+    deps_cache: &mut DepsCache,
     analyzer_name: &str,
     match_product: F,
     scan: G,
@@ -309,6 +309,15 @@ where
         progress.set_message(format!("[{}] {}", analyzer_name, source.display()));
 
         let result = scan(source)?;
+
+        // Persist the dep list to the cache so commands like
+        // `analyzers show` can report what was discovered. The
+        // config_hash_contribution is intentionally NOT cached — it
+        // depends on filesystem state (glob results) that must be
+        // recomputed on every run.
+        if let Err(e) = deps_cache.set(ctx, analyzer_name, source, &result.deps) {
+            eprintln!("Warning: failed to cache dependencies for {}: {}", source.display(), e);
+        }
 
         for &id in product_ids {
             if let Some(product) = graph.get_product_mut(id) {
