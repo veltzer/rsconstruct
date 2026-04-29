@@ -291,14 +291,21 @@ fn parallel_builds_all_independent_products() {
 
 #[test]
 fn parallel_timings_flag() {
-    // Verify --timings output works with parallel builds
+    // Verify --timings output works with parallel builds.
+    //
+    // Each template gets distinct content so the produced output blobs
+    // also differ. Identical content across products triggers a data race
+    // in the object store's store_object check-then-write path under
+    // parallel execution: two threads both observe the blob path missing
+    // and both try to fs::write it, with the second hitting EACCES after
+    // the first has already set the file read-only.
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
     for name in &["one", "two", "three"] {
         fs::write(
             project_path.join(format!("tera.templates/{}.txt.tera", name)),
-            "hello"
+            format!("hello from {}", name),
         ).unwrap();
     }
     fs::write(

@@ -129,6 +129,16 @@ impl Processor for RequirementsProcessor {
             }
         }
 
+        // Distributions explicitly listed in `extra` are appended after the
+        // import-derived set. They bypass exclude and stdlib filters because
+        // they were declared by the user on purpose. Order: import-derived
+        // first, then extras (only matters when sorted=false).
+        for dist in &self.config.extra {
+            if seen.insert(dist.clone()) {
+                first_seen.push(dist.clone());
+            }
+        }
+
         let entries: Vec<String> = if self.config.sorted {
             let set: BTreeSet<String> = first_seen.into_iter().collect();
             set.into_iter().collect()

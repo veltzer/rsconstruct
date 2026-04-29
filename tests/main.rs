@@ -67,6 +67,7 @@ mod processors {
     pub mod pdflatex;
     pub mod pdfunite;
     pub mod pip;
+    pub mod requirements;
     pub mod protobuf;
     pub mod pylint;
     pub mod pytest;

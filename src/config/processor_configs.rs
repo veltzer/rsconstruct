@@ -1142,6 +1142,13 @@ pub struct RequirementsConfig {
     /// User-supplied import→distribution mapping overrides. Wins over the built-in table.
     #[serde(default)]
     pub mapping: HashMap<String, String>,
+    /// Distribution names to always include in the output, even when no
+    /// `import` statement references them. Use this for transitive runtime
+    /// dependencies that an upstream package needs at import time but fails
+    /// to declare in its own metadata (e.g. `setuptools` for packages that
+    /// `import pkg_resources`).
+    #[serde(default)]
+    pub extra: Vec<String>,
     #[serde(flatten)]
     pub standard: StandardConfig,
 }
@@ -1158,6 +1165,7 @@ impl Default for RequirementsConfig {
             sorted: true,
             header: true,
             mapping: HashMap::new(),
+            extra: Vec::new(),
             standard: StandardConfig::default(),
         }
     }
@@ -1166,12 +1174,12 @@ impl Default for RequirementsConfig {
 impl KnownFields for RequirementsConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "output", "exclude", "sorted", "header", "mapping",
+            "output", "exclude", "sorted", "header", "mapping", "extra",
             "dep_inputs", "dep_auto", "batch", "max_jobs",
         ]
     }
     fn checksum_fields() -> &'static [&'static str] {
-        &["output", "exclude", "sorted", "header", "mapping"]
+        &["output", "exclude", "sorted", "header", "mapping", "extra"]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
         &[
@@ -1180,6 +1188,7 @@ impl KnownFields for RequirementsConfig {
             ("sorted",  "Sort entries alphabetically (false preserves first-seen order)"),
             ("header",  "Include a comment header line in the generated file"),
             ("mapping", "Per-project import→distribution overrides (win over built-in table)"),
+            ("extra",   "Distribution names to always include, e.g. transitive deps undeclared by upstream"),
         ]
     }
 }
