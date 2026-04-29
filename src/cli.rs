@@ -262,6 +262,11 @@ pub enum Commands {
         #[command(subcommand)]
         action: ProcessorAction,
     },
+    /// Inspect individual products in the build graph (requires config)
+    Product {
+        #[command(subcommand)]
+        action: ProductAction,
+    },
     /// Count source lines of code (SLOC) by language (no config needed)
     Sloc {
         /// Show COCOMO effort/cost estimation
@@ -465,6 +470,17 @@ pub enum WebCacheAction {
     Stats,
     /// List all cached entries (no config needed)
     List,
+}
+
+#[derive(Subcommand)]
+pub enum ProductAction {
+    /// Show every input, hash piece, and cache state for a single product
+    Show {
+        /// Output path of the product (e.g. "README.md") or its primary
+        /// input. The lookup tries output paths first; if none own the path,
+        /// falls back to products that have it as primary input.
+        path: String,
+    },
 }
 
 #[derive(Subcommand)]

@@ -447,6 +447,15 @@ fn run() -> (Result<()>, bool) {
                 }
             }
         }
+        Commands::Product { action } => {
+            let builder = Builder::new()?;
+            builder.apply_config_to_context(&ctx);
+            match action {
+                cli::ProductAction::Show { ref path } => {
+                    builder.product_show(&ctx, path)?;
+                }
+            }
+        }
         Commands::Sloc { cocomo, salary } => {
             let file_index = file_index::FileIndex::build()?;
             builder::sloc::run_sloc(&file_index, cocomo, salary)?;

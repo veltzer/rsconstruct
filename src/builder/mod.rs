@@ -5,6 +5,7 @@ mod fix;
 pub(crate) mod analyzers;
 mod doctor;
 mod graph;
+mod product;
 pub(crate) mod processors;
 pub(crate) mod sloc;
 pub(crate) mod smart;
@@ -335,7 +336,7 @@ impl Builder {
     /// Only analyzers that appear in the config and have `enabled = true` are
     /// instantiated. Setting `enabled = false` lets a user disable an analyzer
     /// without removing its `[analyzer.X]` section.
-    fn create_analyzers(&self, verbose: bool) -> Result<HashMap<String, Box<dyn DepAnalyzer>>> {
+    pub(crate) fn create_analyzers(&self, verbose: bool) -> Result<HashMap<String, Box<dyn DepAnalyzer>>> {
         let mut analyzers: HashMap<String, Box<dyn DepAnalyzer>> = HashMap::new();
         for inst in &self.config.analyzer.instances {
             let plugin = crate::registries::find_analyzer_plugin(&inst.type_name)
