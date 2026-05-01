@@ -2,13 +2,18 @@
 
 use std::fs;
 use std::process::Command;
+use std::time::Duration;
 use anyhow::{Context, Result};
 
 use crate::config::StandardConfig;
 use crate::graph::Product;
-use crate::processors::{run_command, check_command_output, ensure_output_dir};
+use crate::processors::{run_command_with_timeout, check_command_output, ensure_output_dir};
 
 use crate::processors::{SimpleGenerator, SimpleGeneratorParams, DiscoverMode};
+
+/// marp occasionally hangs (chromium-headless / sandbox issues). Kill it after this long
+/// rather than letting the build sit forever.
+const MARP_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn cleanup_marp_tmp_dirs() {
     let Ok(entries) = fs::read_dir("/tmp") else { return };
@@ -34,8 +39,8 @@ fn execute_marp(ctx: &crate::build_context::BuildContext, config: &StandardConfi
     cmd.arg("--output").arg(output);
     for arg in &config.args { cmd.arg(arg); }
     cmd.arg(input);
-    let out = run_command(ctx, &mut cmd)?;
-    let result = check_command_output(&out, format_args!("marp {}", input.display()));
+    let result = run_command_with_timeout(ctx, &mut cmd, MARP_TIMEOUT)
+        .and_then(|out| check_command_output(&out, format_args!("marp {}", input.display())));
     cleanup_marp_tmp_dirs();
     result
 }

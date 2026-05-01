@@ -132,7 +132,8 @@ pub(crate) fn log_command(cmd: &Command) {
 ///
 /// - `inherit_stdio`: if true, inherit stdout/stderr (for --show-output mode);
 ///   if false, always capture via pipes.
-fn run_command_inner(ctx: &crate::build_context::BuildContext, cmd: &mut Command, inherit_stdio: bool) -> Result<Output> {
+/// - `timeout`: if Some, kill the child and return an error if it runs longer than this.
+fn run_command_inner(ctx: &crate::build_context::BuildContext, cmd: &mut Command, inherit_stdio: bool, timeout: Option<Duration>) -> Result<Output> {
     log_command(cmd);
 
     #[cfg(debug_assertions)]
@@ -204,27 +205,55 @@ fn run_command_inner(ctx: &crate::build_context::BuildContext, cmd: &mut Command
             anyhow::bail!("Interrupted");
         }
 
-        tokio::select! {
-            biased;
+        let wait = child.wait_with_output();
 
-            _ = interrupt_rx.changed() => {
-                anyhow::bail!("Interrupted")
-            }
-            result = child.wait_with_output() => {
-                let output = crate::errors::ctx(result, "Failed to wait for child process")?;
-                Ok(output)
-            }
+        match timeout {
+            Some(dur) => tokio::select! {
+                biased;
+
+                _ = interrupt_rx.changed() => {
+                    anyhow::bail!("Interrupted")
+                }
+                _ = tokio::time::sleep(dur) => {
+                    let prog = program.to_string_lossy();
+                    let args_str = args.iter().map(|a| a.to_string_lossy()).collect::<Vec<_>>().join(" ");
+                    anyhow::bail!(
+                        "Command timed out after {}s and was killed: {} {}",
+                        dur.as_secs(), prog, args_str
+                    )
+                }
+                result = wait => {
+                    let output = crate::errors::ctx(result, "Failed to wait for child process")?;
+                    Ok(output)
+                }
+            },
+            None => tokio::select! {
+                biased;
+
+                _ = interrupt_rx.changed() => {
+                    anyhow::bail!("Interrupted")
+                }
+                result = wait => {
+                    let output = crate::errors::ctx(result, "Failed to wait for child process")?;
+                    Ok(output)
+                }
+            },
         }
     })
 }
 
 pub(crate) fn run_command(ctx: &crate::build_context::BuildContext, cmd: &mut Command) -> Result<Output> {
     let show = crate::runtime_flags::show_output();
-    run_command_inner(ctx, cmd, show)
+    run_command_inner(ctx, cmd, show, None)
+}
+
+pub(crate) fn run_command_with_timeout(ctx: &crate::build_context::BuildContext, cmd: &mut Command, timeout: Duration) -> Result<Output> {
+    let show = crate::runtime_flags::show_output();
+    run_command_inner(ctx, cmd, show, Some(timeout))
 }
 
 pub(crate) fn run_command_capture(ctx: &crate::build_context::BuildContext, cmd: &mut Command) -> Result<Output> {
-    run_command_inner(ctx, cmd, false)
+    run_command_inner(ctx, cmd, false, None)
 }
 
 
