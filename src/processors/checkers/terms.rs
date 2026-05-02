@@ -22,7 +22,7 @@ impl TermsProcessor {
     }
 
     fn check_files(&self, files: &[&Path]) -> Result<()> {
-        let terms = load_terms(&self.config.terms_dir)?;
+        let terms = load_and_validate_terms(&self.config)?;
         if terms.is_empty() {
             return Ok(());
         }
@@ -149,6 +149,39 @@ pub fn load_terms(terms_dir: &str) -> Result<HashSet<String>> {
     }
 
     Ok(seen.into_keys().collect())
+}
+
+/// Load the single-meaning terms and, if `ambiguous_terms_dir` is configured,
+/// verify that no term appears in both directories. The returned set contains
+/// only the single-meaning terms; ambiguous terms are checked but never matched.
+pub fn load_and_validate_terms(config: &TermsConfig) -> Result<HashSet<String>> {
+    let terms = load_terms(&config.terms_dir)?;
+    if let Some(amb_dir) = &config.ambiguous_terms_dir {
+        if Path::new(amb_dir).is_dir() {
+            let ambiguous = load_terms(amb_dir)?;
+            let mut overlap: Vec<&str> = terms
+                .iter()
+                .filter(|t| ambiguous.contains(*t))
+                .map(|s| s.as_str())
+                .collect();
+            if !overlap.is_empty() {
+                overlap.sort();
+                bail!(
+                    "{} term(s) appear in both `{}` and `{}` (ambiguous terms must not be in the single-meaning list):\n  {}",
+                    overlap.len(),
+                    config.terms_dir,
+                    amb_dir,
+                    overlap.join("\n  "),
+                );
+            }
+        } else {
+            bail!(
+                "ambiguous_terms_dir `{}` does not exist or is not a directory",
+                amb_dir,
+            );
+        }
+    }
+    Ok(terms)
 }
 
 /// Sort terms longest-first for greedy matching (so "Android Studio" matches before "Android").
@@ -519,7 +552,7 @@ pub fn fix_file(path: &Path, terms: &HashSet<String>, sorted_terms: &[&str], rem
 /// Fix all markdown files: called by `rsconstruct terms fix`.
 /// Uses the same scan config as the terms processor to find files.
 pub fn fix_all(config: &TermsConfig, remove_non_terms: bool) -> Result<()> {
-    let terms = load_terms(&config.terms_dir)?;
+    let terms = load_and_validate_terms(config)?;
     if terms.is_empty() {
         println!("No technical terms found in {}", config.terms_dir);
         return Ok(());
@@ -628,11 +661,16 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
     }
 
     println!("Done. Merged {} file(s), copied {} new file(s).", merged_count, copied_count);
+
+    // After merging, enforce the no-overlap-with-ambiguous invariant.
+    load_and_validate_terms(config)?;
     Ok(())
 }
 
 /// Print term statistics.
 pub fn stats(config: &TermsConfig) -> Result<()> {
+    // Validate the no-overlap invariant before reporting stats.
+    load_and_validate_terms(config)?;
     let dir = Path::new(&config.terms_dir);
     if !dir.is_dir() {
         bail!("terms_dir `{}` does not exist or is not a directory", config.terms_dir);

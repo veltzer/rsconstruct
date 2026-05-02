@@ -1462,6 +1462,8 @@ fn default_terms_dir() -> String {
 pub struct TermsConfig {
     #[serde(default = "default_terms_dir")]
     pub terms_dir: String,
+    #[serde(default)]
+    pub ambiguous_terms_dir: Option<String>,
     #[serde(flatten)]
     pub standard: StandardConfig,
 }
@@ -1470,6 +1472,7 @@ impl Default for TermsConfig {
     fn default() -> Self {
         Self {
             terms_dir: "terms".into(),
+            ambiguous_terms_dir: None,
             standard: StandardConfig::default(),
         }
     }
@@ -1477,14 +1480,15 @@ impl Default for TermsConfig {
 
 impl KnownFields for TermsConfig {
     fn known_fields() -> &'static [&'static str] {
-        &["terms_dir", "dep_inputs", "dep_auto", "batch", "max_jobs"]
+        &["terms_dir", "ambiguous_terms_dir", "dep_inputs", "dep_auto", "batch", "max_jobs"]
     }
     fn checksum_fields() -> &'static [&'static str] {
-        &["terms_dir"]
+        &["terms_dir", "ambiguous_terms_dir"]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
         &[
             ("terms_dir", "Directory containing term definition files"),
+            ("ambiguous_terms_dir", "Optional directory of ambiguous terms; build fails if any term overlaps with terms_dir"),
         ]
     }
 }
