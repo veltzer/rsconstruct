@@ -27,6 +27,11 @@ pub(crate) const SCAN_CONFIG_FIELDS: &[&str] = &[
     "src_dirs", "src_extensions", "src_exclude_dirs", "src_exclude_files", "src_exclude_paths", "src_files",
 ];
 
+/// Universal StandardConfig fields that apply to every processor.
+/// Automatically appended to every processor's known_fields list during validation
+/// and to the defconfig display table — individual processors don't need to repeat them.
+pub(crate) const STANDARD_EXTRA_FIELDS: &[&str] = &["enabled", "cache"];
+
 pub(crate) trait KnownFields {
     /// Return the known fields for this config struct, excluding scan fields.
     fn known_fields() -> &'static [&'static str];
@@ -153,6 +158,8 @@ pub(crate) const SHARED_FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
     ("dep_auto",    "Config files silently added as dep_inputs when they exist on disk"),
     ("batch",       "Pass all matched files to the tool in a single invocation"),
     ("max_jobs",    "Maximum parallel jobs for this processor (overrides global --jobs)"),
+    ("enabled",     "Set to false to disable this processor without removing the stanza"),
+    ("cache",       "Whether to cache this processor's outputs (set false to always rebuild)"),
 ];
 
 /// Compute a config hash including only the fields named in `checksum_fields`.
@@ -893,6 +900,7 @@ impl ProcessorConfig {
         let known_fields: Vec<&str> = match known {
             Some(fields) => fields.iter()
                 .chain(SCAN_CONFIG_FIELDS.iter())
+                .chain(STANDARD_EXTRA_FIELDS.iter())
                 .copied()
                 .collect(),
             None => return false,
@@ -1301,9 +1309,13 @@ fn validate_single_processor(
     };
 
     for (key, field_value) in table {
-        if !own_fields.contains(&key.as_str()) && !SCAN_CONFIG_FIELDS.contains(&key.as_str()) {
+        if !own_fields.contains(&key.as_str())
+            && !SCAN_CONFIG_FIELDS.contains(&key.as_str())
+            && !STANDARD_EXTRA_FIELDS.contains(&key.as_str())
+        {
             let all_fields: Vec<&str> = own_fields.iter()
                 .chain(SCAN_CONFIG_FIELDS.iter())
+                .chain(STANDARD_EXTRA_FIELDS.iter())
                 .copied()
                 .collect();
             errors.push(format!(

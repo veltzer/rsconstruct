@@ -7,7 +7,7 @@ files, and provides commands to auto-fix and merge term lists across projects.
 
 ## How It Works
 
-Loads terms from `terms/*.txt` files (one term per line, organized by category).
+Loads terms from `terms_dir/*.txt` files (one term per line, organized by category).
 For each `.md` file, simulates what `rsconstruct terms fix` would produce. If the
 result differs from the current content, the product fails.
 
@@ -15,7 +15,15 @@ The processor skips YAML frontmatter and fenced code blocks. Terms are matched
 case-insensitively with word-boundary detection, longest-first to avoid partial
 matches (e.g., "Android Studio" matches before "Android").
 
-Auto-detected when a `terms/` directory exists and `.md` files are present.
+When `ambiguous_terms_dir` is set, terms in that directory are loaded and
+validated to be **disjoint** from `terms_dir` — any term appearing in both
+fails the build with the offending term names listed. Ambiguous terms are
+*not* required to be backticked; the directory exists so projects can track
+words that look technical but have ordinary meanings (e.g. "server", "client")
+without forcing them to be quoted everywhere. Both directories' `.txt` files
+are tracked as build inputs, so editing either invalidates the cache.
+
+Auto-detected when `terms_dir` exists and `.md` files are present.
 
 ## Source Files
 
@@ -26,14 +34,16 @@ Auto-detected when a `terms/` directory exists and `.md` files are present.
 
 ```toml
 [processor.terms]
-terms_dir = "terms"       # Directory containing term list .txt files
-batch = true              # Enable batch execution
-dep_inputs = []         # Additional files that trigger rebuilds when changed
+terms_dir = "terms.single_meaning"      # Directory of single-meaning term lists
+ambiguous_terms_dir = "terms.ambiguous" # Optional: directory of ambiguous terms
+batch = true                            # Enable batch execution
+dep_inputs = []                         # Additional files that trigger rebuilds
 ```
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `terms_dir` | string | `"terms"` | Directory containing `.txt` term list files |
+| `terms_dir` | string | `"terms"` | Directory containing `.txt` term list files. Terms here must be backticked in markdown. |
+| `ambiguous_terms_dir` | string | none | Optional directory of ambiguous terms. Build fails if any term overlaps with `terms_dir`. Terms here are **not** required to be backticked. |
 | `batch` | bool | `true` | Enable batch execution |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
@@ -43,17 +53,25 @@ The tool accepts multiple files on the command line. When batching is enabled (d
 
 ## Term List Format
 
-Each `.txt` file in the terms directory contains one term per line. Files are
-typically organized by category:
+Each `.txt` file in a terms directory contains one term per line. Files are
+typically organized by category. Projects that distinguish single-meaning
+from ambiguous terms use two parallel directories:
 
 ```
-terms/
+terms.single_meaning/
   programming_languages.txt
   frameworks_and_libraries.txt
   databases_and_storage.txt
   devops_and_cicd.txt
   ...
+terms.ambiguous/
+  general_technical_terms.txt
+  ...
 ```
+
+The two directories must be **disjoint** — the same term cannot appear in
+both. The build fails (with the overlapping term names listed) if the
+invariant is violated.
 
 Example `programming_languages.txt`:
 ```

@@ -254,7 +254,7 @@ fn print_processor_metadata(name: &str, verbose: bool) {
         .and_then(|j| serde_json::from_str(&j).ok())
         .unwrap_or(serde_json::Value::Null);
 
-    // Processor-specific fields first, then shared dep/exec, then scan fields
+    // Processor-specific fields first, then shared dep/exec, then scan fields.
     let all_descs: Vec<(&str, &str)> = proc_descs.iter()
         .map(|(f, d)| (*f, *d))
         .chain(SHARED_FIELD_DESCRIPTIONS.iter().map(|(f, d)| (*f, *d)))

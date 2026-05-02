@@ -123,7 +123,9 @@ impl StandardConfig {
 
 impl KnownFields for StandardConfig {
     fn known_fields() -> &'static [&'static str] {
-        &["command", "formats", "args", "dep_inputs", "dep_auto", "output_dir", "batch", "max_jobs", "cache", "enabled"]
+        // Note: "enabled" and "cache" are universal — declared once in
+        // STANDARD_EXTRA_FIELDS and merged in by the validator, not repeated here.
+        &["command", "formats", "args", "dep_inputs", "dep_auto", "output_dir", "batch", "max_jobs"]
     }
     fn checksum_fields() -> &'static [&'static str] {
         // formats and output_dir are excluded: format is encoded as a per-product
@@ -132,12 +134,12 @@ impl KnownFields for StandardConfig {
         &["command", "args"]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
+        // "enabled" and "cache" descriptions live in SHARED_FIELD_DESCRIPTIONS.
         &[
             ("command",    "Path to the tool executable"),
             ("formats",    "Output formats to generate"),
             ("args",       "Extra arguments passed to the tool"),
             ("output_dir", "Directory where generated output files are written"),
-            ("enabled",    "Set to false to disable this processor without removing the stanza"),
         ]
     }
 }
@@ -190,7 +192,7 @@ impl Default for CreatorConfig {
 
 impl KnownFields for CreatorConfig {
     fn known_fields() -> &'static [&'static str] {
-        &["command", "args", "dep_inputs", "dep_auto", "output_dirs", "output_files", "batch", "max_jobs", "cache"]
+        &["command", "args", "dep_inputs", "dep_auto", "output_dirs", "output_files", "batch", "max_jobs"]
     }
     fn checksum_fields() -> &'static [&'static str] {
         // output_dirs/output_files are excluded: the output paths themselves are
@@ -982,7 +984,7 @@ impl Default for ScriptConfig {
 }
 impl KnownFields for ScriptConfig {
     fn known_fields() -> &'static [&'static str] {
-        &["command", "formats", "args", "dep_inputs", "dep_auto", "output_dir", "batch", "max_jobs", "enabled",
+        &["command", "formats", "args", "dep_inputs", "dep_auto", "output_dir", "batch", "max_jobs",
           "fix_command", "fix_args", "fix_batch"]
     }
     fn checksum_fields() -> &'static [&'static str] { StandardConfig::checksum_fields() }
@@ -991,7 +993,6 @@ impl KnownFields for ScriptConfig {
         &[
             ("command",     "Path to the checker tool executable"),
             ("args",        "Extra arguments passed to the checker tool"),
-            ("enabled",     "Set to false to disable this processor without removing the stanza"),
             ("fix_command", "Path to the fixer tool executable (empty = no fix capability)"),
             ("fix_args",    "Arguments for the fixer (prepended before file paths)"),
             ("fix_batch",   "Whether fix mode supports batch execution (default: same as batch)"),

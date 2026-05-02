@@ -77,13 +77,21 @@ impl crate::processors::Processor for TermsProcessor {
         if !Path::new(&self.config.terms_dir).is_dir() {
             return Ok(());
         }
-        // Collect all .txt files from terms_dir as extra inputs
+        // Collect all .txt files from terms_dir (and ambiguous_terms_dir, if set) as extra inputs
         let mut dep_inputs = self.config.standard.dep_inputs.clone();
-        for entry in crate::errors::ctx(fs::read_dir(&self.config.terms_dir), &format!("Failed to read terms directory {}", self.config.terms_dir))? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.extension().is_some_and(|e| e == "txt") {
-                dep_inputs.push(path.to_string_lossy().into_owned());
+        let mut watched_dirs: Vec<&str> = vec![&self.config.terms_dir];
+        if let Some(amb) = &self.config.ambiguous_terms_dir
+            && Path::new(amb).is_dir()
+        {
+            watched_dirs.push(amb);
+        }
+        for dir in watched_dirs {
+            for entry in crate::errors::ctx(fs::read_dir(dir), &format!("Failed to read terms directory {}", dir))? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.extension().is_some_and(|e| e == "txt") {
+                    dep_inputs.push(path.to_string_lossy().into_owned());
+                }
             }
         }
         discover_checker_products(
@@ -339,35 +347,14 @@ fn is_word_boundary(text: &[u8], pos: usize) -> bool {
     !ch.is_ascii_alphanumeric() && ch != b'_'
 }
 
-/// Case-insensitive substring search. Returns byte offset of the match, or None.
-fn find_case_insensitive(haystack: &str, needle: &str, start: usize) -> Option<usize> {
-    let h = haystack.as_bytes();
-    let n = needle.as_bytes();
-    if n.is_empty() || start + n.len() > h.len() {
-        return None;
-    }
-    let mut i = start;
-    let limit = h.len() - n.len();
-    while i <= limit {
-        if h[i..i + n.len()].eq_ignore_ascii_case(n) {
-            return Some(i);
-        }
-        // Advance to next UTF-8 char boundary
-        i += 1;
-        while i <= limit && !haystack.is_char_boundary(i) {
-            i += 1;
-        }
-    }
-    None
-}
-
-/// Find all occurrences of a term in text (case-insensitive, word-boundary).
+/// Find all occurrences of a term in text (case-sensitive, word-boundary).
 /// Returns (start, end) byte positions for each match.
 fn find_term_occurrences(text: &str, term: &str) -> Vec<(usize, usize)> {
     let bytes = text.as_bytes();
     let mut results = Vec::new();
     let mut pos = 0;
-    while let Some(start) = find_case_insensitive(text, term, pos) {
+    while let Some(rel) = text[pos..].find(term) {
+        let start = pos + rel;
         let end = start + term.len();
         // Check word boundaries
         let before_ok = start == 0 || is_word_boundary(bytes, start - 1);
@@ -671,9 +658,32 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
 pub fn stats(config: &TermsConfig) -> Result<()> {
     // Validate the no-overlap invariant before reporting stats.
     load_and_validate_terms(config)?;
-    let dir = Path::new(&config.terms_dir);
+    let (single_files, single_terms) = count_terms_in_dir(&config.terms_dir)?;
+    let (amb_files, amb_terms) = match &config.ambiguous_terms_dir {
+        Some(d) if Path::new(d).is_dir() => count_terms_in_dir(d)?,
+        _ => (0usize, 0usize),
+    };
+    if crate::json_output::is_json_mode() {
+        let out = serde_json::json!({
+            "term_files": single_files,
+            "total_terms": single_terms,
+            "ambiguous_term_files": amb_files,
+            "total_ambiguous_terms": amb_terms,
+        });
+        println!("{}", serde_json::to_string_pretty(&out).expect(crate::errors::JSON_SERIALIZE));
+    } else {
+        println!("{} term file(s), {} total terms (single-meaning)", single_files, single_terms);
+        if config.ambiguous_terms_dir.is_some() {
+            println!("{} term file(s), {} total terms (ambiguous)", amb_files, amb_terms);
+        }
+    }
+    Ok(())
+}
+
+fn count_terms_in_dir(dir_str: &str) -> Result<(usize, usize)> {
+    let dir = Path::new(dir_str);
     if !dir.is_dir() {
-        bail!("terms_dir `{}` does not exist or is not a directory", config.terms_dir);
+        bail!("terms_dir `{}` does not exist or is not a directory", dir_str);
     }
     let mut file_count = 0;
     let mut total_terms = 0;
@@ -685,16 +695,7 @@ pub fn stats(config: &TermsConfig) -> Result<()> {
             total_terms += content.lines().filter(|l| !l.trim().is_empty()).count();
         }
     }
-    if crate::json_output::is_json_mode() {
-        let out = serde_json::json!({
-            "term_files": file_count,
-            "total_terms": total_terms,
-        });
-        println!("{}", serde_json::to_string_pretty(&out).expect(crate::errors::JSON_SERIALIZE));
-    } else {
-        println!("{} term file(s), {} total terms", file_count, total_terms);
-    }
-    Ok(())
+    Ok((file_count, total_terms))
 }
 
 fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {

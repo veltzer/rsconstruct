@@ -157,6 +157,7 @@ pub fn default_config_json<C: Default + DeserializeOwned + Serialize + KnownFiel
             let known: std::collections::HashSet<&str> = C::known_fields().iter().copied()
                 .chain(crate::config::StandardConfig::known_fields().iter().copied())
                 .chain(crate::config::SCAN_CONFIG_FIELDS.iter().copied())
+                .chain(crate::config::STANDARD_EXTRA_FIELDS.iter().copied())
                 .collect();
             let checksum: std::collections::HashSet<&str> = C::checksum_fields().iter().copied().collect();
             for key in obj.keys() {

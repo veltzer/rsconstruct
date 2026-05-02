@@ -151,6 +151,8 @@ Common fields available to all processors:
 
 | Key | Type | Default | Description |
 |---|---|---|---|
+| `enabled` | boolean | `true` | Set to `false` to disable this processor without removing the stanza. Accepted on every processor. |
+| `cache` | boolean | `true` | Whether to cache this processor's outputs. Set to `false` to always rebuild and never store results. Accepted on every processor. |
 | `args` | array of strings | `[]` | Extra command-line arguments passed to the tool. |
 | `dep_inputs` | array of strings | `[]` | Additional input files that trigger rebuild when changed. |
 | `dep_auto` | array of strings | varies | Config files auto-detected as inputs (e.g., `.pylintrc`). |

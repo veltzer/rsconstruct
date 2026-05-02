@@ -82,6 +82,7 @@ mod processors {
     pub mod sphinx;
     pub mod taplo;
     pub mod tera;
+    pub mod terms;
     pub mod yamllint;
     pub mod tags;
     pub mod eslint;
