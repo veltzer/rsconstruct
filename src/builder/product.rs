@@ -159,7 +159,14 @@ fn print_text(
             println!("  [{}]", analyzer);
             for piece in pieces {
                 let (kind, body) = piece.split_once(':').unwrap_or((piece.as_str(), ""));
-                if body.contains('\n') {
+                if !verbose && kind.ends_with("_resolved") {
+                    let n = if body.is_empty() { 0 } else { body.lines().count() };
+                    println!(
+                        "    {} {}",
+                        color::cyan(kind),
+                        color::dim(&format!("({} files, pass --verbose to list)", n)),
+                    );
+                } else if body.contains('\n') {
                     println!("    {}", color::cyan(kind));
                     for line in body.lines() {
                         println!("      {}", line);

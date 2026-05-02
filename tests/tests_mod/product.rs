@@ -51,10 +51,25 @@ fn product_show_resolves_by_output_and_prints_all_sections() {
         "missing primary input: {}", stdout);
     assert!(stdout.contains("hash_pieces:") && stdout.contains("glob") && stdout.contains("data/*.md"),
         "missing hash_pieces section: {}", stdout);
-    assert!(stdout.contains("data/a.md") && stdout.contains("data/b.md"),
-        "expected resolved file list in hash pieces: {}", stdout);
+    // Default output collapses *_resolved hash pieces to a count summary.
+    assert!(stdout.contains("glob_resolved") && stdout.contains("2 files"),
+        "expected collapsed resolved summary: {}", stdout);
+    assert!(!stdout.contains("data/a.md") && !stdout.contains("data/b.md"),
+        "resolved file list should be hidden without --verbose: {}", stdout);
     assert!(stdout.contains("descriptor_key:") && stdout.contains("cache_state:"),
         "missing descriptor/cache footer: {}", stdout);
+
+    // With --verbose the full resolved list is included.
+    let out_v = run_rsconstruct_with_env(
+        p,
+        &["product", "show", "--verbose", "report.txt"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(out_v.status.success(),
+        "product show --verbose failed: {}", String::from_utf8_lossy(&out_v.stderr));
+    let stdout_v = String::from_utf8_lossy(&out_v.stdout);
+    assert!(stdout_v.contains("data/a.md") && stdout_v.contains("data/b.md"),
+        "expected resolved file list under --verbose: {}", stdout_v);
 }
 
 /// Lookup falls back to the primary input path when no product owns the
