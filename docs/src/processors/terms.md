@@ -12,8 +12,23 @@ For each `.md` file, simulates what `rsconstruct terms fix` would produce. If th
 result differs from the current content, the product fails.
 
 The processor skips YAML frontmatter and fenced code blocks. Terms are matched
-case-insensitively with word-boundary detection, longest-first to avoid partial
-matches (e.g., "Android Studio" matches before "Android").
+**case-sensitively** with word-boundary detection, longest-first to avoid
+partial matches (e.g., "Android Studio" matches before "Android").
+
+## Case sensitivity
+
+All comparisons in the terms processor are case-sensitive — the term lists,
+the scanner, and the disjoint check between `terms_dir` and
+`ambiguous_terms_dir`. Terms are stored verbatim in their canonical casing
+(e.g. `Docker`, `AWS`, `awk`, `/etc/fstab`) and prose must match that casing
+exactly to be flagged. `Docker` in the list will match `Docker` in prose but
+not `docker` or `DOCKER`. If you want to enforce multiple casings of the
+same word, list each one separately.
+
+The disjoint invariant between the two directories is also case-sensitive,
+so `Docker` in `terms_dir` and `docker` in `ambiguous_terms_dir` will not
+be reported as overlapping. (If both lists are maintained in canonical
+casing this is a non-issue.)
 
 When `ambiguous_terms_dir` is set, terms in that directory are loaded and
 validated to be **disjoint** from `terms_dir` — any term appearing in both

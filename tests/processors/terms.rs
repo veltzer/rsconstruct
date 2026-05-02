@@ -66,6 +66,42 @@ fn terms_two_dirs_overlap_fails() {
 }
 
 #[test]
+fn terms_matching_is_case_sensitive() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    // Single-meaning list has "Docker" with capital D.
+    write_terms_dirs(project_path, &["Docker"], &[]);
+
+    // Prose uses lowercase "docker" — must NOT be flagged because the
+    // scanner is case-sensitive and the list says "Docker".
+    fs::write(
+        project_path.join("README.md"),
+        "# Doc\n\nWe run docker on every host.\n",
+    ).unwrap();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.terms]\nterms_dir = \"terms.single_meaning\"\nsrc_dirs = [\".\"]\n",
+    ).unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "Lowercase 'docker' should not match list entry 'Docker': stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // Now write the term with the canonical casing — must be flagged.
+    fs::write(
+        project_path.join("README.md"),
+        "# Doc\n\nWe run Docker on every host.\n",
+    ).unwrap();
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(!output.status.success(), "Canonical casing 'Docker' must be flagged");
+}
+
+#[test]
 fn terms_ambiguous_terms_are_not_flagged() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();

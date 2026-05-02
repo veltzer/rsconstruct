@@ -463,9 +463,7 @@ fn find_non_tech_backticked_positions(content: &str, terms: &HashSet<String>) ->
             continue;
         }
         let parts = split_backticked(inner);
-        let all_non_tech = parts.iter().all(|p| {
-            !terms.iter().any(|t| t.eq_ignore_ascii_case(p))
-        });
+        let all_non_tech = parts.iter().all(|p| !terms.contains(p));
         if all_non_tech {
             results.push((start, end));
         }
