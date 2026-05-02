@@ -1459,12 +1459,16 @@ fn default_dir_terms_unambiguous() -> String {
     "terms.unambiguous".into()
 }
 
+fn default_dir_terms_ambiguous() -> String {
+    "terms.ambiguous".into()
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TermsConfig {
     #[serde(default = "default_dir_terms_unambiguous")]
     pub dir_terms_unambiguous: String,
-    #[serde(default)]
-    pub dir_terms_ambiguous: Option<String>,
+    #[serde(default = "default_dir_terms_ambiguous")]
+    pub dir_terms_ambiguous: String,
     /// When true (default), backticking an ambiguous term is a build error
     /// and `terms fix` strips those backticks. When false, ambiguous terms
     /// are loaded only to validate the disjoint invariant; their use in
@@ -1479,7 +1483,7 @@ impl Default for TermsConfig {
     fn default() -> Self {
         Self {
             dir_terms_unambiguous: "terms.unambiguous".into(),
-            dir_terms_ambiguous: None,
+            dir_terms_ambiguous: "terms.ambiguous".into(),
             forbid_backticked_ambiguous: true,
             standard: StandardConfig::default(),
         }

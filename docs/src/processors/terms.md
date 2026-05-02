@@ -30,9 +30,11 @@ so `Docker` in `dir_terms_unambiguous` and `docker` in `dir_terms_ambiguous`
 will not be reported as overlapping. (If both lists are maintained in
 canonical casing this is a non-issue.)
 
-When `dir_terms_ambiguous` is set, terms in that directory are loaded and
+If `dir_terms_ambiguous` exists on disk, terms in it are loaded and
 validated to be **disjoint** from `dir_terms_unambiguous` — any term
-appearing in both fails the build with the offending term names listed. Ambiguous terms are
+appearing in both fails the build with the offending term names listed.
+A missing ambiguous directory is treated as an empty list (no error), so
+projects without an ambiguous list just use the unambiguous-only behavior. Ambiguous terms are
 *not* required to be backticked; the directory exists so projects can track
 words that look technical but have ordinary meanings (e.g. "server", "client")
 without forcing them to be quoted everywhere. Both directories' `.txt` files
@@ -67,7 +69,7 @@ dep_inputs = []                               # Additional files that trigger re
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `dir_terms_unambiguous` | string | `"terms.unambiguous"` | Directory containing `.txt` files of unambiguous terms. Terms here must be backticked in markdown. |
-| `dir_terms_ambiguous` | string | none | Optional directory of ambiguous terms. Build fails if any term overlaps with `dir_terms_unambiguous`. Terms here are **not** required to be backticked. |
+| `dir_terms_ambiguous` | string | `"terms.ambiguous"` | Directory of ambiguous terms. Treated as empty if the directory does not exist on disk. Build fails if any term overlaps with `dir_terms_unambiguous`. Terms here are **not** required to be backticked. |
 | `forbid_backticked_ambiguous` | bool | `true` | If true, backticking an ambiguous term is a build error and `terms fix` strips those backticks. |
 | `batch` | bool | `true` | Enable batch execution |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

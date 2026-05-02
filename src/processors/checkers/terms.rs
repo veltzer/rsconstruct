@@ -93,10 +93,8 @@ impl crate::processors::Processor for TermsProcessor {
         // Collect all .txt files from both term directories as extra inputs
         let mut dep_inputs = self.config.standard.dep_inputs.clone();
         let mut watched_dirs: Vec<&str> = vec![&self.config.dir_terms_unambiguous];
-        if let Some(amb) = &self.config.dir_terms_ambiguous
-            && Path::new(amb).is_dir()
-        {
-            watched_dirs.push(amb);
+        if Path::new(&self.config.dir_terms_ambiguous).is_dir() {
+            watched_dirs.push(&self.config.dir_terms_ambiguous);
         }
         for dir in watched_dirs {
             for entry in crate::errors::ctx(fs::read_dir(dir), &format!("Failed to read terms directory {}", dir))? {
@@ -172,35 +170,33 @@ pub fn load_terms(dir_path: &str) -> Result<HashSet<String>> {
     Ok(seen.into_keys().collect())
 }
 
-/// Load the unambiguous and ambiguous term lists. If `dir_terms_ambiguous`
-/// is configured, verifies that no term appears in both directories.
+/// Load the unambiguous and ambiguous term lists. If the ambiguous directory
+/// exists on disk, also verifies that no term appears in both directories.
+/// A missing ambiguous directory is treated as an empty list, not an error —
+/// projects without an ambiguous list just get the unambiguous-only behavior.
 pub fn load_and_validate_terms(config: &TermsConfig) -> Result<LoadedTerms> {
     let single = load_terms(&config.dir_terms_unambiguous)?;
-    let ambiguous = match &config.dir_terms_ambiguous {
-        None => HashSet::new(),
-        Some(amb_dir) if Path::new(amb_dir).is_dir() => {
-            let ambiguous = load_terms(amb_dir)?;
-            let mut overlap: Vec<&str> = single
-                .iter()
-                .filter(|t| ambiguous.contains(*t))
-                .map(|s| s.as_str())
-                .collect();
-            if !overlap.is_empty() {
-                overlap.sort();
-                bail!(
-                    "{} term(s) appear in both `{}` and `{}` (ambiguous terms must not be in the unambiguous list):\n  {}",
-                    overlap.len(),
-                    config.dir_terms_unambiguous,
-                    amb_dir,
-                    overlap.join("\n  "),
-                );
-            }
-            ambiguous
+    let amb_dir = &config.dir_terms_ambiguous;
+    let ambiguous = if Path::new(amb_dir).is_dir() {
+        let ambiguous = load_terms(amb_dir)?;
+        let mut overlap: Vec<&str> = single
+            .iter()
+            .filter(|t| ambiguous.contains(*t))
+            .map(|s| s.as_str())
+            .collect();
+        if !overlap.is_empty() {
+            overlap.sort();
+            bail!(
+                "{} term(s) appear in both `{}` and `{}` (ambiguous terms must not be in the unambiguous list):\n  {}",
+                overlap.len(),
+                config.dir_terms_unambiguous,
+                amb_dir,
+                overlap.join("\n  "),
+            );
         }
-        Some(amb_dir) => bail!(
-            "dir_terms_ambiguous `{}` does not exist or is not a directory",
-            amb_dir,
-        ),
+        ambiguous
+    } else {
+        HashSet::new()
     };
     Ok(LoadedTerms { single, ambiguous })
 }
@@ -751,9 +747,11 @@ pub fn stats(config: &TermsConfig) -> Result<()> {
     // Validate the no-overlap invariant before reporting stats.
     load_and_validate_terms(config)?;
     let (single_files, single_terms) = count_terms_in_dir(&config.dir_terms_unambiguous)?;
-    let (amb_files, amb_terms) = match &config.dir_terms_ambiguous {
-        Some(d) if Path::new(d).is_dir() => count_terms_in_dir(d)?,
-        _ => (0usize, 0usize),
+    let amb_dir_exists = Path::new(&config.dir_terms_ambiguous).is_dir();
+    let (amb_files, amb_terms) = if amb_dir_exists {
+        count_terms_in_dir(&config.dir_terms_ambiguous)?
+    } else {
+        (0usize, 0usize)
     };
     if crate::json_output::is_json_mode() {
         let out = serde_json::json!({
@@ -765,7 +763,7 @@ pub fn stats(config: &TermsConfig) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&out).expect(crate::errors::JSON_SERIALIZE));
     } else {
         println!("{} term file(s), {} total terms (unambiguous)", single_files, single_terms);
-        if config.dir_terms_ambiguous.is_some() {
+        if amb_dir_exists {
             println!("{} term file(s), {} total terms (ambiguous)", amb_files, amb_terms);
         }
     }
