@@ -2,6 +2,9 @@ use std::fs;
 use tempfile::TempDir;
 use crate::common::run_rsconstruct_with_env;
 
+test_checker!(black, tool: "black", processor: "black",
+    files: [("hello.py", "def hello():\n    return \"world\"\n")]);
+
 fn setup_black_project() -> TempDir {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     fs::write(
@@ -13,60 +16,12 @@ fn setup_black_project() -> TempDir {
 }
 
 #[test]
-fn black_valid_file() {
-    let temp_dir = setup_black_project();
-    let project_path = temp_dir.path();
-
-    fs::write(
-        project_path.join("hello.py"),
-        "def hello():\n    return \"world\"\n",
-    )
-    .unwrap();
-
-    let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
-    assert!(
-        output.status.success(),
-        "Build should succeed with well-formatted Python file: stdout={}, stderr={}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("Processing:"),
-        "Should process black: {}",
-        stdout
-    );
-}
-
-#[test]
-fn black_incremental_skip() {
-    let temp_dir = setup_black_project();
-    let project_path = temp_dir.path();
-
-    fs::write(
-        project_path.join("hello.py"),
-        "def hello():\n    return \"world\"\n",
-    )
-    .unwrap();
-
-    // First build
-    let output1 = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output1.status.success());
-
-    // Second build should skip
-    let output2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
-    assert!(output2.status.success());
-    let stdout2 = String::from_utf8_lossy(&output2.stdout);
-    assert!(
-        stdout2.contains("[black] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
-    );
-}
-
-#[test]
 fn black_badly_formatted_fails() {
+    if !crate::common::tool_available("black") {
+        eprintln!("black not found, skipping test");
+        return;
+    }
+
     let temp_dir = setup_black_project();
     let project_path = temp_dir.path();
 
