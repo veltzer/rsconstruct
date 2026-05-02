@@ -7,7 +7,7 @@ files, and provides commands to auto-fix and merge term lists across projects.
 
 ## How It Works
 
-Loads terms from `terms_dir/*.txt` files (one term per line, organized by category).
+Loads terms from `dir_terms_unambiguous/*.txt` files (one term per line, organized by category).
 For each `.md` file, simulates what `rsconstruct terms fix` would produce. If the
 result differs from the current content, the product fails.
 
@@ -18,21 +18,21 @@ partial matches (e.g., "Android Studio" matches before "Android").
 ## Case sensitivity
 
 All comparisons in the terms processor are case-sensitive — the term lists,
-the scanner, and the disjoint check between `terms_dir` and
-`ambiguous_terms_dir`. Terms are stored verbatim in their canonical casing
+the scanner, and the disjoint check between `dir_terms_unambiguous` and
+`dir_terms_ambiguous`. Terms are stored verbatim in their canonical casing
 (e.g. `Docker`, `AWS`, `awk`, `/etc/fstab`) and prose must match that casing
 exactly to be flagged. `Docker` in the list will match `Docker` in prose but
 not `docker` or `DOCKER`. If you want to enforce multiple casings of the
 same word, list each one separately.
 
 The disjoint invariant between the two directories is also case-sensitive,
-so `Docker` in `terms_dir` and `docker` in `ambiguous_terms_dir` will not
-be reported as overlapping. (If both lists are maintained in canonical
-casing this is a non-issue.)
+so `Docker` in `dir_terms_unambiguous` and `docker` in `dir_terms_ambiguous`
+will not be reported as overlapping. (If both lists are maintained in
+canonical casing this is a non-issue.)
 
-When `ambiguous_terms_dir` is set, terms in that directory are loaded and
-validated to be **disjoint** from `terms_dir` — any term appearing in both
-fails the build with the offending term names listed. Ambiguous terms are
+When `dir_terms_ambiguous` is set, terms in that directory are loaded and
+validated to be **disjoint** from `dir_terms_unambiguous` — any term
+appearing in both fails the build with the offending term names listed. Ambiguous terms are
 *not* required to be backticked; the directory exists so projects can track
 words that look technical but have ordinary meanings (e.g. "server", "client")
 without forcing them to be quoted everywhere. Both directories' `.txt` files
@@ -46,7 +46,7 @@ disable this check (ambiguous terms are then loaded only to validate the
 disjoint invariant, and their use in backticks is neither flagged nor
 modified).
 
-Auto-detected when `terms_dir` exists and `.md` files are present.
+Auto-detected when `dir_terms_unambiguous` exists and `.md` files are present.
 
 ## Source Files
 
@@ -57,8 +57,8 @@ Auto-detected when `terms_dir` exists and `.md` files are present.
 
 ```toml
 [processor.terms]
-terms_dir = "terms.single_meaning"            # Directory of single-meaning term lists
-ambiguous_terms_dir = "terms.ambiguous"       # Optional: directory of ambiguous terms
+dir_terms_unambiguous = "terms.unambiguous"   # Directory of unambiguous term lists
+dir_terms_ambiguous = "terms.ambiguous"       # Optional: directory of ambiguous terms
 forbid_backticked_ambiguous = true            # Backticking an ambiguous term is an error
 batch = true                                  # Enable batch execution
 dep_inputs = []                               # Additional files that trigger rebuilds
@@ -66,8 +66,8 @@ dep_inputs = []                               # Additional files that trigger re
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `terms_dir` | string | `"terms"` | Directory containing `.txt` term list files. Terms here must be backticked in markdown. |
-| `ambiguous_terms_dir` | string | none | Optional directory of ambiguous terms. Build fails if any term overlaps with `terms_dir`. Terms here are **not** required to be backticked. |
+| `dir_terms_unambiguous` | string | `"terms.unambiguous"` | Directory containing `.txt` files of unambiguous terms. Terms here must be backticked in markdown. |
+| `dir_terms_ambiguous` | string | none | Optional directory of ambiguous terms. Build fails if any term overlaps with `dir_terms_unambiguous`. Terms here are **not** required to be backticked. |
 | `forbid_backticked_ambiguous` | bool | `true` | If true, backticking an ambiguous term is a build error and `terms fix` strips those backticks. |
 | `batch` | bool | `true` | Enable batch execution |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
@@ -79,11 +79,11 @@ The tool accepts multiple files on the command line. When batching is enabled (d
 ## Term List Format
 
 Each `.txt` file in a terms directory contains one term per line. Files are
-typically organized by category. Projects that distinguish single-meaning
+typically organized by category. Projects that distinguish unambiguous
 from ambiguous terms use two parallel directories:
 
 ```
-terms.single_meaning/
+terms.unambiguous/
   programming_languages.txt
   frameworks_and_libraries.txt
   databases_and_storage.txt
@@ -112,7 +112,7 @@ Go
 
 ### `rsconstruct terms fix`
 
-Add backticks around unquoted single-meaning terms in all markdown files.
+Add backticks around unquoted unambiguous terms in all markdown files.
 When `forbid_backticked_ambiguous = true` (default), also strip backticks
 around ambiguous terms.
 

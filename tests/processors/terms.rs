@@ -1,12 +1,12 @@
 use std::fs;
 use crate::common::{setup_test_project, run_rsconstruct_with_env};
 
-fn write_terms_dirs(project_path: &std::path::Path, single: &[&str], ambiguous: &[&str]) {
-    let single_dir = project_path.join("terms.single_meaning");
+fn write_terms_dirs(project_path: &std::path::Path, unambiguous: &[&str], ambiguous: &[&str]) {
+    let una_dir = project_path.join("terms.unambiguous");
     let amb_dir = project_path.join("terms.ambiguous");
-    fs::create_dir_all(&single_dir).unwrap();
+    fs::create_dir_all(&una_dir).unwrap();
     fs::create_dir_all(&amb_dir).unwrap();
-    fs::write(single_dir.join("words.txt"), single.join("\n") + "\n").unwrap();
+    fs::write(una_dir.join("words.txt"), unambiguous.join("\n") + "\n").unwrap();
     fs::write(amb_dir.join("words.txt"), ambiguous.join("\n") + "\n").unwrap();
 }
 
@@ -24,7 +24,7 @@ fn terms_two_dirs_disjoint_passes() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.terms]\nterms_dir = \"terms.single_meaning\"\nambiguous_terms_dir = \"terms.ambiguous\"\nsrc_dirs = [\".\"]\n",
+        "[processor.terms]\ndir_terms_unambiguous = \"terms.unambiguous\"\ndir_terms_ambiguous = \"terms.ambiguous\"\nsrc_dirs = [\".\"]\n",
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
@@ -47,7 +47,7 @@ fn terms_two_dirs_overlap_fails() {
     fs::write(project_path.join("README.md"), "# Doc\n").unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.terms]\nterms_dir = \"terms.single_meaning\"\nambiguous_terms_dir = \"terms.ambiguous\"\nsrc_dirs = [\".\"]\n",
+        "[processor.terms]\ndir_terms_unambiguous = \"terms.unambiguous\"\ndir_terms_ambiguous = \"terms.ambiguous\"\nsrc_dirs = [\".\"]\n",
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
@@ -80,7 +80,7 @@ fn terms_backticked_ambiguous_fails_by_default() {
     ).unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.terms]\nterms_dir = \"terms.single_meaning\"\nambiguous_terms_dir = \"terms.ambiguous\"\nsrc_dirs = [\".\"]\n",
+        "[processor.terms]\ndir_terms_unambiguous = \"terms.unambiguous\"\ndir_terms_ambiguous = \"terms.ambiguous\"\nsrc_dirs = [\".\"]\n",
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
@@ -111,7 +111,7 @@ fn terms_backticked_ambiguous_allowed_when_flag_off() {
     ).unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.terms]\nterms_dir = \"terms.single_meaning\"\nambiguous_terms_dir = \"terms.ambiguous\"\nforbid_backticked_ambiguous = false\nsrc_dirs = [\".\"]\n",
+        "[processor.terms]\ndir_terms_unambiguous = \"terms.unambiguous\"\ndir_terms_ambiguous = \"terms.ambiguous\"\nforbid_backticked_ambiguous = false\nsrc_dirs = [\".\"]\n",
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
@@ -136,7 +136,7 @@ fn terms_fix_strips_ambiguous_backticks() {
     ).unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.terms]\nterms_dir = \"terms.single_meaning\"\nambiguous_terms_dir = \"terms.ambiguous\"\nsrc_dirs = [\".\"]\n",
+        "[processor.terms]\ndir_terms_unambiguous = \"terms.unambiguous\"\ndir_terms_ambiguous = \"terms.ambiguous\"\nsrc_dirs = [\".\"]\n",
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["terms", "fix"], &[("NO_COLOR", "1")]);
@@ -170,7 +170,7 @@ fn terms_matching_is_case_sensitive() {
     ).unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.terms]\nterms_dir = \"terms.single_meaning\"\nsrc_dirs = [\".\"]\n",
+        "[processor.terms]\ndir_terms_unambiguous = \"terms.unambiguous\"\nsrc_dirs = [\".\"]\n",
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
@@ -198,14 +198,14 @@ fn terms_ambiguous_terms_are_not_flagged() {
     write_terms_dirs(project_path, &["Kubernetes"], &["server"]);
 
     // "server" is ambiguous - must NOT be required to be backticked.
-    // "Kubernetes" is single-meaning and IS backticked - should pass.
+    // "Kubernetes" is unambiguous and IS backticked - should pass.
     fs::write(
         project_path.join("README.md"),
         "# Doc\n\nThe server runs on `Kubernetes`.\n",
     ).unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.terms]\nterms_dir = \"terms.single_meaning\"\nambiguous_terms_dir = \"terms.ambiguous\"\nsrc_dirs = [\".\"]\n",
+        "[processor.terms]\ndir_terms_unambiguous = \"terms.unambiguous\"\ndir_terms_ambiguous = \"terms.ambiguous\"\nsrc_dirs = [\".\"]\n",
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);

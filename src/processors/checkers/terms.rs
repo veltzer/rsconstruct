@@ -77,7 +77,7 @@ impl crate::processors::Processor for TermsProcessor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        Path::new(&self.config.terms_dir).is_dir()
+        Path::new(&self.config.dir_terms_unambiguous).is_dir()
             && !file_index.scan(&self.config.standard, true).is_empty()
     }
 
@@ -87,13 +87,13 @@ impl crate::processors::Processor for TermsProcessor {
         file_index: &FileIndex,
         instance_name: &str,
     ) -> Result<()> {
-        if !Path::new(&self.config.terms_dir).is_dir() {
+        if !Path::new(&self.config.dir_terms_unambiguous).is_dir() {
             return Ok(());
         }
-        // Collect all .txt files from terms_dir (and ambiguous_terms_dir, if set) as extra inputs
+        // Collect all .txt files from both term directories as extra inputs
         let mut dep_inputs = self.config.standard.dep_inputs.clone();
-        let mut watched_dirs: Vec<&str> = vec![&self.config.terms_dir];
-        if let Some(amb) = &self.config.ambiguous_terms_dir
+        let mut watched_dirs: Vec<&str> = vec![&self.config.dir_terms_unambiguous];
+        if let Some(amb) = &self.config.dir_terms_ambiguous
             && Path::new(amb).is_dir()
         {
             watched_dirs.push(amb);
@@ -129,10 +129,10 @@ impl crate::processors::Processor for TermsProcessor {
 /// Load all technical terms from .txt files in the given directory.
 /// Each file has one term per line. Errors if any term appears more than once
 /// (within the same file or across files).
-pub fn load_terms(terms_dir: &str) -> Result<HashSet<String>> {
-    let dir = Path::new(terms_dir);
+pub fn load_terms(dir_path: &str) -> Result<HashSet<String>> {
+    let dir = Path::new(dir_path);
     if !dir.is_dir() {
-        bail!("terms_dir `{}` does not exist or is not a directory", terms_dir);
+        bail!("terms directory `{}` does not exist or is not a directory", dir_path);
     }
     // Map each term to (file, line_number) where it first appeared
     let mut seen: std::collections::HashMap<String, (String, usize)> = std::collections::HashMap::new();
@@ -166,17 +166,17 @@ pub fn load_terms(terms_dir: &str) -> Result<HashSet<String>> {
     }
 
     if !duplicates.is_empty() {
-        bail!("Duplicate terms in {}:\n{}", terms_dir, duplicates.join("\n"));
+        bail!("Duplicate terms in {}:\n{}", dir_path, duplicates.join("\n"));
     }
 
     Ok(seen.into_keys().collect())
 }
 
-/// Load the single-meaning and ambiguous term lists. If `ambiguous_terms_dir`
+/// Load the unambiguous and ambiguous term lists. If `dir_terms_ambiguous`
 /// is configured, verifies that no term appears in both directories.
 pub fn load_and_validate_terms(config: &TermsConfig) -> Result<LoadedTerms> {
-    let single = load_terms(&config.terms_dir)?;
-    let ambiguous = match &config.ambiguous_terms_dir {
+    let single = load_terms(&config.dir_terms_unambiguous)?;
+    let ambiguous = match &config.dir_terms_ambiguous {
         None => HashSet::new(),
         Some(amb_dir) if Path::new(amb_dir).is_dir() => {
             let ambiguous = load_terms(amb_dir)?;
@@ -188,9 +188,9 @@ pub fn load_and_validate_terms(config: &TermsConfig) -> Result<LoadedTerms> {
             if !overlap.is_empty() {
                 overlap.sort();
                 bail!(
-                    "{} term(s) appear in both `{}` and `{}` (ambiguous terms must not be in the single-meaning list):\n  {}",
+                    "{} term(s) appear in both `{}` and `{}` (ambiguous terms must not be in the unambiguous list):\n  {}",
                     overlap.len(),
-                    config.terms_dir,
+                    config.dir_terms_unambiguous,
                     amb_dir,
                     overlap.join("\n  "),
                 );
@@ -198,7 +198,7 @@ pub fn load_and_validate_terms(config: &TermsConfig) -> Result<LoadedTerms> {
             ambiguous
         }
         Some(amb_dir) => bail!(
-            "ambiguous_terms_dir `{}` does not exist or is not a directory",
+            "dir_terms_ambiguous `{}` does not exist or is not a directory",
             amb_dir,
         ),
     };
@@ -464,7 +464,7 @@ fn find_unquoted_positions(content: &str, sorted_terms: &[&str]) -> Vec<(usize, 
     results
 }
 
-/// Find backtick-quoted terms that are NOT in the single-meaning list and
+/// Find backtick-quoted terms that are NOT in the unambiguous list and
 /// NOT in the ambiguous list. Used by `--remove-non-terms`. Spans containing
 /// ambiguous terms are excluded here so they're handled by the ambiguous-strip
 /// pass instead (which always runs).
@@ -531,7 +531,7 @@ fn apply_edits(content: &str, edits: &mut Vec<(usize, usize, String)>) -> String
 /// Apply term fixes to content. When `forbid_ambiguous_backticks` is true,
 /// strips backticks from ambiguous terms (they're an error). Then optionally
 /// removes backticks from arbitrary non-terms. Then adds missing backticks
-/// around bare single-meaning terms.
+/// around bare unambiguous terms.
 fn fix_content(
     original: &str,
     terms: &LoadedTerms,
@@ -569,7 +569,7 @@ fn fix_content(
         after_amb
     };
 
-    // Step 3: add backticks to unquoted single-meaning terms (on the cleaned text,
+    // Step 3: add backticks to unquoted unambiguous terms (on the cleaned text,
     // so e.g. CI/CD is now found if its backticks were just stripped).
     let mut additions: Vec<(usize, usize, String)> = find_unquoted_positions(&cleaned, sorted_terms)
         .into_iter()
@@ -583,7 +583,7 @@ fn fix_content(
 }
 
 /// Check a file and return a formatted issue summary, or an empty string if clean.
-/// Reports both unquoted single-meaning terms and ambiguous terms found inside backticks.
+/// Reports both unquoted unambiguous terms and ambiguous terms found inside backticks.
 fn check_file_detail(path: &Path, sorted_terms: &[&str], ambiguous: &HashSet<String>) -> Result<String> {
     let content = crate::errors::ctx(fs::read_to_string(path), &format!("Failed to read {}", path.display()))?;
 
@@ -630,7 +630,7 @@ pub fn fix_file(
 pub fn fix_all(config: &TermsConfig, remove_non_terms: bool) -> Result<()> {
     let terms = load_and_validate_terms(config)?;
     if terms.is_empty() {
-        println!("No technical terms found in {}", config.terms_dir);
+        println!("No technical terms found in {}", config.dir_terms_unambiguous);
         return Ok(());
     }
     let sorted = sorted_terms(&terms.single);
@@ -644,7 +644,7 @@ pub fn fix_all(config: &TermsConfig, remove_non_terms: bool) -> Result<()> {
     }
 
     println!(
-        "Checking {} markdown files against {} single-meaning + {} ambiguous terms...",
+        "Checking {} markdown files against {} unambiguous + {} ambiguous terms...",
         md_files.len(), terms.single.len(), terms.ambiguous.len(),
     );
 
@@ -662,16 +662,16 @@ pub fn fix_all(config: &TermsConfig, remove_non_terms: bool) -> Result<()> {
 
 /// Merge terms from another project's terms directory into the current one.
 /// For each .txt file in `source_dir`:
-///   - If a file with the same name exists in `terms_dir`, merge (union) and sort the terms.
+///   - If a file with the same name exists in `dir_terms_unambiguous`, merge (union) and sort the terms.
 ///   - Otherwise, copy the file as-is.
 pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
     let src = Path::new(source_dir);
     if !src.is_dir() {
         bail!("Source directory `{}` does not exist or is not a directory", source_dir);
     }
-    let dest = Path::new(&config.terms_dir);
+    let dest = Path::new(&config.dir_terms_unambiguous);
     if !dest.is_dir() {
-        bail!("Terms directory `{}` does not exist or is not a directory", config.terms_dir);
+        bail!("Terms directory `{}` does not exist or is not a directory", config.dir_terms_unambiguous);
     }
 
     let mut merged_count = 0;
@@ -750,8 +750,8 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
 pub fn stats(config: &TermsConfig) -> Result<()> {
     // Validate the no-overlap invariant before reporting stats.
     load_and_validate_terms(config)?;
-    let (single_files, single_terms) = count_terms_in_dir(&config.terms_dir)?;
-    let (amb_files, amb_terms) = match &config.ambiguous_terms_dir {
+    let (single_files, single_terms) = count_terms_in_dir(&config.dir_terms_unambiguous)?;
+    let (amb_files, amb_terms) = match &config.dir_terms_ambiguous {
         Some(d) if Path::new(d).is_dir() => count_terms_in_dir(d)?,
         _ => (0usize, 0usize),
     };
@@ -764,8 +764,8 @@ pub fn stats(config: &TermsConfig) -> Result<()> {
         });
         println!("{}", serde_json::to_string_pretty(&out).expect(crate::errors::JSON_SERIALIZE));
     } else {
-        println!("{} term file(s), {} total terms (single-meaning)", single_files, single_terms);
-        if config.ambiguous_terms_dir.is_some() {
+        println!("{} term file(s), {} total terms (unambiguous)", single_files, single_terms);
+        if config.dir_terms_ambiguous.is_some() {
             println!("{} term file(s), {} total terms (ambiguous)", amb_files, amb_terms);
         }
     }
@@ -775,7 +775,7 @@ pub fn stats(config: &TermsConfig) -> Result<()> {
 fn count_terms_in_dir(dir_str: &str) -> Result<(usize, usize)> {
     let dir = Path::new(dir_str);
     if !dir.is_dir() {
-        bail!("terms_dir `{}` does not exist or is not a directory", dir_str);
+        bail!("terms directory `{}` does not exist or is not a directory", dir_str);
     }
     let mut file_count = 0;
     let mut total_terms = 0;

@@ -1455,16 +1455,16 @@ impl KnownFields for AspellConfig {
 
 pub type AsciiConfig = CheckerConfig;
 
-fn default_terms_dir() -> String {
-    "terms".into()
+fn default_dir_terms_unambiguous() -> String {
+    "terms.unambiguous".into()
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TermsConfig {
-    #[serde(default = "default_terms_dir")]
-    pub terms_dir: String,
+    #[serde(default = "default_dir_terms_unambiguous")]
+    pub dir_terms_unambiguous: String,
     #[serde(default)]
-    pub ambiguous_terms_dir: Option<String>,
+    pub dir_terms_ambiguous: Option<String>,
     /// When true (default), backticking an ambiguous term is a build error
     /// and `terms fix` strips those backticks. When false, ambiguous terms
     /// are loaded only to validate the disjoint invariant; their use in
@@ -1478,8 +1478,8 @@ pub struct TermsConfig {
 impl Default for TermsConfig {
     fn default() -> Self {
         Self {
-            terms_dir: "terms".into(),
-            ambiguous_terms_dir: None,
+            dir_terms_unambiguous: "terms.unambiguous".into(),
+            dir_terms_ambiguous: None,
             forbid_backticked_ambiguous: true,
             standard: StandardConfig::default(),
         }
@@ -1488,15 +1488,15 @@ impl Default for TermsConfig {
 
 impl KnownFields for TermsConfig {
     fn known_fields() -> &'static [&'static str] {
-        &["terms_dir", "ambiguous_terms_dir", "forbid_backticked_ambiguous", "dep_inputs", "dep_auto", "batch", "max_jobs"]
+        &["dir_terms_unambiguous", "dir_terms_ambiguous", "forbid_backticked_ambiguous", "dep_inputs", "dep_auto", "batch", "max_jobs"]
     }
     fn checksum_fields() -> &'static [&'static str] {
-        &["terms_dir", "ambiguous_terms_dir", "forbid_backticked_ambiguous"]
+        &["dir_terms_unambiguous", "dir_terms_ambiguous", "forbid_backticked_ambiguous"]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
         &[
-            ("terms_dir", "Directory containing term definition files"),
-            ("ambiguous_terms_dir", "Optional directory of ambiguous terms; build fails if any term overlaps with terms_dir"),
+            ("dir_terms_unambiguous", "Directory containing unambiguous term definition files (must be backticked in prose)"),
+            ("dir_terms_ambiguous", "Optional directory of ambiguous terms; build fails if any term overlaps with dir_terms_unambiguous"),
             ("forbid_backticked_ambiguous", "If true (default), backticking an ambiguous term is a build error and `terms fix` strips those backticks"),
         ]
     }
