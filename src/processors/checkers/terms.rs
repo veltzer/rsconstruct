@@ -8,6 +8,20 @@ use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use crate::processors::{discover_checker_products, execute_checker_batch};
 
+/// Single-meaning terms (must be backticked in prose) and ambiguous terms
+/// (must NOT be backticked — using backticks falsely asserts they're the
+/// technical term). The sets are guaranteed disjoint by `load_and_validate_terms`.
+pub struct LoadedTerms {
+    pub single: HashSet<String>,
+    pub ambiguous: HashSet<String>,
+}
+
+impl LoadedTerms {
+    pub fn is_empty(&self) -> bool {
+        self.single.is_empty() && self.ambiguous.is_empty()
+    }
+}
+
 pub struct TermsProcessor {
     config: TermsConfig,
 }
@@ -26,19 +40,18 @@ impl TermsProcessor {
         if terms.is_empty() {
             return Ok(());
         }
-        let sorted = sorted_terms(&terms);
+        let sorted = sorted_terms(&terms.single);
+        let amb_for_check: HashSet<String> = if self.config.forbid_backticked_ambiguous {
+            terms.ambiguous.clone()
+        } else {
+            HashSet::new()
+        };
         let mut bad_files: Vec<String> = Vec::new();
 
         for file in files {
-            let unquoted = check_file_detail(file, &terms, &sorted)?;
-            if !unquoted.is_empty() {
-                let mut entry = file.display().to_string();
-                // Deduplicate and sort the unquoted terms for display
-                let mut unique_terms: Vec<&str> = unquoted.iter().map(|s| s.as_str()).collect();
-                unique_terms.sort();
-                unique_terms.dedup();
-                entry.push_str(&format!(": {}", unique_terms.join(", ")));
-                bad_files.push(entry);
+            let issues = check_file_detail(file, &sorted, &amb_for_check)?;
+            if !issues.is_empty() {
+                bad_files.push(format!("{}: {}", file.display(), issues));
             }
         }
 
@@ -159,15 +172,15 @@ pub fn load_terms(terms_dir: &str) -> Result<HashSet<String>> {
     Ok(seen.into_keys().collect())
 }
 
-/// Load the single-meaning terms and, if `ambiguous_terms_dir` is configured,
-/// verify that no term appears in both directories. The returned set contains
-/// only the single-meaning terms; ambiguous terms are checked but never matched.
-pub fn load_and_validate_terms(config: &TermsConfig) -> Result<HashSet<String>> {
-    let terms = load_terms(&config.terms_dir)?;
-    if let Some(amb_dir) = &config.ambiguous_terms_dir {
-        if Path::new(amb_dir).is_dir() {
+/// Load the single-meaning and ambiguous term lists. If `ambiguous_terms_dir`
+/// is configured, verifies that no term appears in both directories.
+pub fn load_and_validate_terms(config: &TermsConfig) -> Result<LoadedTerms> {
+    let single = load_terms(&config.terms_dir)?;
+    let ambiguous = match &config.ambiguous_terms_dir {
+        None => HashSet::new(),
+        Some(amb_dir) if Path::new(amb_dir).is_dir() => {
             let ambiguous = load_terms(amb_dir)?;
-            let mut overlap: Vec<&str> = terms
+            let mut overlap: Vec<&str> = single
                 .iter()
                 .filter(|t| ambiguous.contains(*t))
                 .map(|s| s.as_str())
@@ -182,14 +195,14 @@ pub fn load_and_validate_terms(config: &TermsConfig) -> Result<HashSet<String>> 
                     overlap.join("\n  "),
                 );
             }
-        } else {
-            bail!(
-                "ambiguous_terms_dir `{}` does not exist or is not a directory",
-                amb_dir,
-            );
+            ambiguous
         }
-    }
-    Ok(terms)
+        Some(amb_dir) => bail!(
+            "ambiguous_terms_dir `{}` does not exist or is not a directory",
+            amb_dir,
+        ),
+    };
+    Ok(LoadedTerms { single, ambiguous })
 }
 
 /// Sort terms longest-first for greedy matching (so "Android Studio" matches before "Android").
@@ -451,9 +464,15 @@ fn find_unquoted_positions(content: &str, sorted_terms: &[&str]) -> Vec<(usize, 
     results
 }
 
-/// Find backtick-quoted terms that are NOT in the term list.
-/// Only considers spans that look like term references, not arbitrary inline code.
-fn find_non_tech_backticked_positions(content: &str, terms: &HashSet<String>) -> Vec<(usize, usize)> {
+/// Find backtick-quoted terms that are NOT in the single-meaning list and
+/// NOT in the ambiguous list. Used by `--remove-non-terms`. Spans containing
+/// ambiguous terms are excluded here so they're handled by the ambiguous-strip
+/// pass instead (which always runs).
+fn find_non_tech_backticked_positions(
+    content: &str,
+    single: &HashSet<String>,
+    ambiguous: &HashSet<String>,
+) -> Vec<(usize, usize)> {
     let fenced = excluded_ranges(content);
     let spans = backtick_span_ranges(content, &fenced);
     let mut results = Vec::new();
@@ -463,9 +482,35 @@ fn find_non_tech_backticked_positions(content: &str, terms: &HashSet<String>) ->
             continue;
         }
         let parts = split_backticked(inner);
-        let all_non_tech = parts.iter().all(|p| !terms.contains(p));
+        let all_non_tech = parts.iter().all(|p| !single.contains(p) && !ambiguous.contains(p));
         if all_non_tech {
             results.push((start, end));
+        }
+    }
+    results
+}
+
+/// Find backtick-quoted spans whose contents include any ambiguous term.
+/// These are an error — ambiguous terms must NOT be backticked, since
+/// backticks falsely assert the technical reading.
+fn find_backticked_ambiguous_positions(
+    content: &str,
+    ambiguous: &HashSet<String>,
+) -> Vec<(usize, usize, Vec<String>)> {
+    let fenced = excluded_ranges(content);
+    let spans = backtick_span_ranges(content, &fenced);
+    let mut results = Vec::new();
+    for &(start, end) in &spans {
+        let inner = &content[start + 1..end - 1];
+        if !looks_like_term_reference(inner) {
+            continue;
+        }
+        let parts = split_backticked(inner);
+        let hits: Vec<String> = parts.into_iter()
+            .filter(|p| ambiguous.contains(p))
+            .collect();
+        if !hits.is_empty() {
+            results.push((start, end, hits));
         }
     }
     results
@@ -483,26 +528,49 @@ fn apply_edits(content: &str, edits: &mut Vec<(usize, usize, String)>) -> String
     result
 }
 
-/// Apply term fixes to content: optionally remove non-tech backticks, then add missing backticks.
-/// When `remove_non_terms` is true, backticks around non-terms are removed first.
-/// Returns the fixed content.
-fn fix_content(original: &str, terms: &HashSet<String>, sorted_terms: &[&str], remove_non_terms: bool) -> String {
-    // Step 1: optionally remove backticks from non-terms (e.g. `CI`/`CD` → CI/CD)
-    let cleaned = if remove_non_terms {
-        let mut removals: Vec<(usize, usize, String)> = find_non_tech_backticked_positions(original, terms)
+/// Apply term fixes to content. When `forbid_ambiguous_backticks` is true,
+/// strips backticks from ambiguous terms (they're an error). Then optionally
+/// removes backticks from arbitrary non-terms. Then adds missing backticks
+/// around bare single-meaning terms.
+fn fix_content(
+    original: &str,
+    terms: &LoadedTerms,
+    sorted_terms: &[&str],
+    remove_non_terms: bool,
+    forbid_ambiguous_backticks: bool,
+) -> String {
+    // Step 1: when forbidding, strip backticks around ambiguous terms (`server` → server).
+    let after_amb = if forbid_ambiguous_backticks {
+        let mut amb_removals: Vec<(usize, usize, String)> = find_backticked_ambiguous_positions(original, &terms.ambiguous)
             .into_iter()
-            .map(|(s, e)| (s, e, original[s + 1..e - 1].to_string()))
+            .map(|(s, e, _)| (s, e, original[s + 1..e - 1].to_string()))
             .collect();
-        if removals.is_empty() {
+        if amb_removals.is_empty() {
             original.to_string()
         } else {
-            apply_edits(original, &mut removals)
+            apply_edits(original, &mut amb_removals)
         }
     } else {
         original.to_string()
     };
 
-    // Step 2: add backticks to unquoted terms (on the cleaned text, so CI/CD is now found)
+    // Step 2: optionally remove backticks from non-terms (e.g. `CI`/`CD` → CI/CD).
+    let cleaned = if remove_non_terms {
+        let mut removals: Vec<(usize, usize, String)> = find_non_tech_backticked_positions(&after_amb, &terms.single, &terms.ambiguous)
+            .into_iter()
+            .map(|(s, e)| (s, e, after_amb[s + 1..e - 1].to_string()))
+            .collect();
+        if removals.is_empty() {
+            after_amb
+        } else {
+            apply_edits(&after_amb, &mut removals)
+        }
+    } else {
+        after_amb
+    };
+
+    // Step 3: add backticks to unquoted single-meaning terms (on the cleaned text,
+    // so e.g. CI/CD is now found if its backticks were just stripped).
     let mut additions: Vec<(usize, usize, String)> = find_unquoted_positions(&cleaned, sorted_terms)
         .into_iter()
         .map(|(s, e, m)| (s, e, format!("`{}`", m)))
@@ -514,18 +582,41 @@ fn fix_content(original: &str, terms: &HashSet<String>, sorted_terms: &[&str], r
     }
 }
 
-/// Check a file and return the list of unquoted terms found.
-/// Returns an empty vec if the file is clean.
-fn check_file_detail(path: &Path, _terms: &HashSet<String>, sorted_terms: &[&str]) -> Result<Vec<String>> {
+/// Check a file and return a formatted issue summary, or an empty string if clean.
+/// Reports both unquoted single-meaning terms and ambiguous terms found inside backticks.
+fn check_file_detail(path: &Path, sorted_terms: &[&str], ambiguous: &HashSet<String>) -> Result<String> {
     let content = crate::errors::ctx(fs::read_to_string(path), &format!("Failed to read {}", path.display()))?;
-    let matches = find_unquoted_positions(&content, sorted_terms);
-    Ok(matches.into_iter().map(|(_, _, term)| term).collect())
+
+    let unquoted = find_unquoted_positions(&content, sorted_terms);
+    let mut unquoted_terms: Vec<String> = unquoted.into_iter().map(|(_, _, t)| t).collect();
+    unquoted_terms.sort();
+    unquoted_terms.dedup();
+
+    let amb_hits = find_backticked_ambiguous_positions(&content, ambiguous);
+    let mut amb_terms: Vec<String> = amb_hits.into_iter().flat_map(|(_, _, hits)| hits).collect();
+    amb_terms.sort();
+    amb_terms.dedup();
+
+    let mut parts: Vec<String> = Vec::new();
+    if !unquoted_terms.is_empty() {
+        parts.push(format!("missing backticks: {}", unquoted_terms.join(", ")));
+    }
+    if !amb_terms.is_empty() {
+        parts.push(format!("ambiguous terms must not be backticked: {}", amb_terms.join(", ")));
+    }
+    Ok(parts.join("; "))
 }
 
 /// Auto-fix a single markdown file. Returns true if the file was modified.
-pub fn fix_file(path: &Path, terms: &HashSet<String>, sorted_terms: &[&str], remove_non_terms: bool) -> Result<bool> {
+pub fn fix_file(
+    path: &Path,
+    terms: &LoadedTerms,
+    sorted_terms: &[&str],
+    remove_non_terms: bool,
+    forbid_ambiguous_backticks: bool,
+) -> Result<bool> {
     let original = crate::errors::ctx(fs::read_to_string(path), &format!("Failed to read {}", path.display()))?;
-    let fixed = fix_content(&original, terms, sorted_terms, remove_non_terms);
+    let fixed = fix_content(&original, terms, sorted_terms, remove_non_terms, forbid_ambiguous_backticks);
     if fixed != original {
         crate::errors::ctx(fs::write(path, &fixed), &format!("Failed to write {}", path.display()))?;
         Ok(true)
@@ -542,7 +633,7 @@ pub fn fix_all(config: &TermsConfig, remove_non_terms: bool) -> Result<()> {
         println!("No technical terms found in {}", config.terms_dir);
         return Ok(());
     }
-    let sorted = sorted_terms(&terms);
+    let sorted = sorted_terms(&terms.single);
 
     let file_index = FileIndex::build()?;
     let md_files = file_index.scan(&config.standard, true);
@@ -552,11 +643,14 @@ pub fn fix_all(config: &TermsConfig, remove_non_terms: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("Checking {} markdown files against {} terms...", md_files.len(), terms.len());
+    println!(
+        "Checking {} markdown files against {} single-meaning + {} ambiguous terms...",
+        md_files.len(), terms.single.len(), terms.ambiguous.len(),
+    );
 
     let mut modified_count = 0;
     for file in &md_files {
-        if fix_file(file, &terms, &sorted, remove_non_terms)? {
+        if fix_file(file, &terms, &sorted, remove_non_terms, config.forbid_backticked_ambiguous)? {
             modified_count += 1;
             println!("  Fixed: {}", file.display());
         }

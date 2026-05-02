@@ -38,6 +38,14 @@ words that look technical but have ordinary meanings (e.g. "server", "client")
 without forcing them to be quoted everywhere. Both directories' `.txt` files
 are tracked as build inputs, so editing either invalidates the cache.
 
+By default (`forbid_backticked_ambiguous = true`), backticking an ambiguous
+term is itself a build error: backticks falsely assert the technical
+reading, so prose like `` the `server` was slow `` fails. `terms fix`
+strips those backticks. Set `forbid_backticked_ambiguous = false` to
+disable this check (ambiguous terms are then loaded only to validate the
+disjoint invariant, and their use in backticks is neither flagged nor
+modified).
+
 Auto-detected when `terms_dir` exists and `.md` files are present.
 
 ## Source Files
@@ -49,16 +57,18 @@ Auto-detected when `terms_dir` exists and `.md` files are present.
 
 ```toml
 [processor.terms]
-terms_dir = "terms.single_meaning"      # Directory of single-meaning term lists
-ambiguous_terms_dir = "terms.ambiguous" # Optional: directory of ambiguous terms
-batch = true                            # Enable batch execution
-dep_inputs = []                         # Additional files that trigger rebuilds
+terms_dir = "terms.single_meaning"            # Directory of single-meaning term lists
+ambiguous_terms_dir = "terms.ambiguous"       # Optional: directory of ambiguous terms
+forbid_backticked_ambiguous = true            # Backticking an ambiguous term is an error
+batch = true                                  # Enable batch execution
+dep_inputs = []                               # Additional files that trigger rebuilds
 ```
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `terms_dir` | string | `"terms"` | Directory containing `.txt` term list files. Terms here must be backticked in markdown. |
 | `ambiguous_terms_dir` | string | none | Optional directory of ambiguous terms. Build fails if any term overlaps with `terms_dir`. Terms here are **not** required to be backticked. |
+| `forbid_backticked_ambiguous` | bool | `true` | If true, backticking an ambiguous term is a build error and `terms fix` strips those backticks. |
 | `batch` | bool | `true` | Enable batch execution |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
@@ -102,11 +112,13 @@ Go
 
 ### `rsconstruct terms fix`
 
-Add backticks around unquoted terms in all markdown files.
+Add backticks around unquoted single-meaning terms in all markdown files.
+When `forbid_backticked_ambiguous = true` (default), also strip backticks
+around ambiguous terms.
 
 ```bash
 rsconstruct terms fix
-rsconstruct terms fix --remove-non-terms   # also remove backticks from non-terms
+rsconstruct terms fix --remove-non-terms   # also remove backticks from arbitrary non-terms
 ```
 
 The fix is idempotent: running it twice produces the same result.

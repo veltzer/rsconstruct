@@ -1465,6 +1465,12 @@ pub struct TermsConfig {
     pub terms_dir: String,
     #[serde(default)]
     pub ambiguous_terms_dir: Option<String>,
+    /// When true (default), backticking an ambiguous term is a build error
+    /// and `terms fix` strips those backticks. When false, ambiguous terms
+    /// are loaded only to validate the disjoint invariant; their use in
+    /// backticks is neither flagged nor changed.
+    #[serde(default = "default_true")]
+    pub forbid_backticked_ambiguous: bool,
     #[serde(flatten)]
     pub standard: StandardConfig,
 }
@@ -1474,6 +1480,7 @@ impl Default for TermsConfig {
         Self {
             terms_dir: "terms".into(),
             ambiguous_terms_dir: None,
+            forbid_backticked_ambiguous: true,
             standard: StandardConfig::default(),
         }
     }
@@ -1481,15 +1488,16 @@ impl Default for TermsConfig {
 
 impl KnownFields for TermsConfig {
     fn known_fields() -> &'static [&'static str] {
-        &["terms_dir", "ambiguous_terms_dir", "dep_inputs", "dep_auto", "batch", "max_jobs"]
+        &["terms_dir", "ambiguous_terms_dir", "forbid_backticked_ambiguous", "dep_inputs", "dep_auto", "batch", "max_jobs"]
     }
     fn checksum_fields() -> &'static [&'static str] {
-        &["terms_dir", "ambiguous_terms_dir"]
+        &["terms_dir", "ambiguous_terms_dir", "forbid_backticked_ambiguous"]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
         &[
             ("terms_dir", "Directory containing term definition files"),
             ("ambiguous_terms_dir", "Optional directory of ambiguous terms; build fails if any term overlaps with terms_dir"),
+            ("forbid_backticked_ambiguous", "If true (default), backticking an ambiguous term is a build error and `terms fix` strips those backticks"),
         ]
     }
 }

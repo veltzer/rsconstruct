@@ -66,6 +66,95 @@ fn terms_two_dirs_overlap_fails() {
 }
 
 #[test]
+fn terms_backticked_ambiguous_fails_by_default() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    write_terms_dirs(project_path, &["Kubernetes"], &["server"]);
+
+    // Backticked `server` should fail — server is ambiguous, so backticks
+    // falsely assert the technical reading.
+    fs::write(
+        project_path.join("README.md"),
+        "# Doc\n\nThe `server` runs on `Kubernetes`.\n",
+    ).unwrap();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.terms]\nterms_dir = \"terms.single_meaning\"\nambiguous_terms_dir = \"terms.ambiguous\"\nsrc_dirs = [\".\"]\n",
+    ).unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(!output.status.success(), "Backticked ambiguous term must fail by default");
+
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        combined.contains("server") && combined.contains("ambiguous"),
+        "Error must mention 'server' and 'ambiguous': {}",
+        combined
+    );
+}
+
+#[test]
+fn terms_backticked_ambiguous_allowed_when_flag_off() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    write_terms_dirs(project_path, &["Kubernetes"], &["server"]);
+
+    fs::write(
+        project_path.join("README.md"),
+        "# Doc\n\nThe `server` runs on `Kubernetes`.\n",
+    ).unwrap();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.terms]\nterms_dir = \"terms.single_meaning\"\nambiguous_terms_dir = \"terms.ambiguous\"\nforbid_backticked_ambiguous = false\nsrc_dirs = [\".\"]\n",
+    ).unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "With forbid_backticked_ambiguous=false, backticked ambiguous term must pass: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn terms_fix_strips_ambiguous_backticks() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    write_terms_dirs(project_path, &["Kubernetes"], &["server"]);
+
+    fs::write(
+        project_path.join("README.md"),
+        "# Doc\n\nThe `server` runs on `Kubernetes`.\n",
+    ).unwrap();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.terms]\nterms_dir = \"terms.single_meaning\"\nambiguous_terms_dir = \"terms.ambiguous\"\nsrc_dirs = [\".\"]\n",
+    ).unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["terms", "fix"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "terms fix must succeed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    let after = fs::read_to_string(project_path.join("README.md")).unwrap();
+    assert!(
+        !after.contains("`server`") && after.contains("`Kubernetes`"),
+        "fix must strip `server` backticks but keep `Kubernetes`: {after}",
+    );
+}
+
+#[test]
 fn terms_matching_is_case_sensitive() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
