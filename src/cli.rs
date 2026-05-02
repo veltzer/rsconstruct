@@ -187,8 +187,16 @@ impl DisplayOptions {
     }
 }
 
+// Subcommand variants are kept in alphabetical order by their display name (kebab-case
+// of the variant). Clap renders subcommands in declaration order, so this list IS the
+// help output. Always insert new variants in alphabetical position.
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Manage dependency analyzers
+    Analyzers {
+        #[command(subcommand)]
+        action: AnalyzersAction,
+    },
     /// Execute an incremental build
     Build {
         /// Force rebuild even if files haven't changed
@@ -225,11 +233,6 @@ pub enum Commands {
         /// The shells to generate completions for (if none specified, uses config file)
         #[arg(value_enum)]
         shells: Vec<Shell>,
-    },
-    /// Manage dependency analyzers
-    Analyzers {
-        #[command(subcommand)]
-        action: AnalyzersAction,
     },
     /// Check build environment (requires config)
     Doctor,
@@ -287,20 +290,17 @@ pub enum Commands {
         #[arg(long)]
         breakdown: bool,
     },
-    /// Manage term checking and fixing in markdown files
-    Terms {
-        #[command(subcommand)]
-        action: TermsAction,
-    },
+    /// Create symlinks from source folders to target folders (requires config)
+    SymlinkInstall,
     /// Search and query frontmatter tags from markdown files
     Tags {
         #[command(subcommand)]
         action: TagsAction,
     },
-    /// Manage external tool dependencies
-    Tools {
+    /// Manage term checking and fixing in markdown files
+    Terms {
         #[command(subcommand)]
-        action: ToolsAction,
+        action: TermsAction,
     },
     /// Validate rsconstruct.toml configuration (no processors created)
     #[command(name = "toml")]
@@ -308,8 +308,11 @@ pub enum Commands {
         #[command(subcommand)]
         action: TomlAction,
     },
-    /// Create symlinks from source folders to target folders (requires config)
-    SymlinkInstall,
+    /// Manage external tool dependencies
+    Tools {
+        #[command(subcommand)]
+        action: ToolsAction,
+    },
     /// Print version information (no config needed)
     Version,
     /// Watch source files and auto-rebuild on changes (requires config)
@@ -327,30 +330,28 @@ pub enum Commands {
 
 #[derive(Subcommand)]
 pub enum SmartAction {
-    /// Disable all processors in rsconstruct.toml (no config needed)
-    DisableAll,
-    /// Enable all processors in rsconstruct.toml (no config needed)
-    EnableAll,
-    /// Enable only processors whose files are detected in the project (requires config)
-    EnableDetected,
+    /// Auto-detect relevant processors and add them to rsconstruct.toml (requires config)
+    Auto,
     /// Disable a single processor in rsconstruct.toml (no config needed)
     Disable {
         /// Processor name
         name: String,
     },
+    /// Disable all processors in rsconstruct.toml (no config needed)
+    DisableAll,
     /// Enable a single processor in rsconstruct.toml (no config needed)
     Enable {
         /// Processor name
         name: String,
     },
-    /// Disable all, then enable only detected processors (requires config)
-    Minimal,
-    /// Remove all [processor.*] sections, returning to pure defaults (no config needed)
-    Reset,
-    /// Auto-detect relevant processors and add them to rsconstruct.toml (requires config)
-    Auto,
+    /// Enable all processors in rsconstruct.toml (no config needed)
+    EnableAll,
+    /// Enable only processors whose files are detected in the project (requires config)
+    EnableDetected,
     /// Enable only processors whose files are detected and tools are installed (requires config)
     EnableIfAvailable,
+    /// Disable all, then enable only detected processors (requires config)
+    Minimal,
     /// Disable all, then enable only the listed processors (no config needed)
     Only {
         /// Processor names to enable
@@ -359,6 +360,8 @@ pub enum SmartAction {
     },
     /// Remove processors from rsconstruct.toml that don't match any files (requires config)
     RemoveNoFileProcessors,
+    /// Remove all [processor.*] sections, returning to pure defaults (no config needed)
+    Reset,
 }
 
 #[derive(Subcommand)]
@@ -369,29 +372,6 @@ pub enum InfoAction {
 
 #[derive(Subcommand)]
 pub enum GraphAction {
-    /// Print the dependency graph to stdout (requires config)
-    Show {
-        /// Output format
-        #[arg(short, long, value_enum, default_value = "svg")]
-        format: GraphFormat,
-    },
-    /// Open the dependency graph in a viewer (requires config)
-    View {
-        /// Viewer to use
-        #[arg(long, value_enum, default_value = "svg")]
-        viewer: GraphViewer,
-    },
-    /// Show graph statistics (requires config)
-    Stats,
-    /// List files on disk not referenced by any product in the graph (requires config)
-    Unreferenced {
-        /// File extensions to check, comma-separated (e.g. .svg,.png)
-        #[arg(short, long, value_delimiter = ',', required = true)]
-        extensions: Vec<String>,
-        /// Delete the unreferenced files
-        #[arg(long)]
-        rm: bool,
-    },
     /// For each input file, show the products that consume it (forward lookup: source → outputs)
     LookupFwd {
         /// One or more file paths (relative to project root)
@@ -404,22 +384,49 @@ pub enum GraphAction {
         #[arg(required = true)]
         files: Vec<String>,
     },
+    /// Print the dependency graph to stdout (requires config)
+    Show {
+        /// Output format
+        #[arg(short, long, value_enum, default_value = "svg")]
+        format: GraphFormat,
+    },
+    /// Show graph statistics (requires config)
+    Stats,
+    /// List files on disk not referenced by any product in the graph (requires config)
+    Unreferenced {
+        /// File extensions to check, comma-separated (e.g. .svg,.png)
+        #[arg(short, long, value_delimiter = ',', required = true)]
+        extensions: Vec<String>,
+        /// Delete the unreferenced files
+        #[arg(long)]
+        rm: bool,
+    },
+    /// Open the dependency graph in a viewer (requires config)
+    View {
+        /// Viewer to use
+        #[arg(long, value_enum, default_value = "svg")]
+        viewer: GraphViewer,
+    },
 }
 
 #[derive(Subcommand)]
 pub enum FixAction {
+    /// List all fix-capable processors declared in this project (requires config)
+    List,
     /// Run a fixer on source files (requires config)
     Run {
         /// Processor name (comma-separated for multiple)
         #[arg(value_delimiter = ',')]
         processors: Vec<String>,
     },
-    /// List all fix-capable processors declared in this project (requires config)
-    List,
 }
 
 #[derive(Subcommand)]
 pub enum CleanAction {
+    /// Remove all build outputs and cache directories (requires config)
+    All,
+    /// Hard clean using git clean (requires config)
+    Git,
     /// Remove build output files, preserves cache (requires config) [default]
     Outputs {
         /// Only clean outputs from these processors (comma-separated)
@@ -429,10 +436,6 @@ pub enum CleanAction {
         #[arg(long)]
         no_empty_dirs: bool,
     },
-    /// Remove all build outputs and cache directories (requires config)
-    All,
-    /// Hard clean using git clean (requires config)
-    Git,
     /// Remove files not tracked by git and not known as build outputs (requires config)
     Unknown {
         /// Show what would be removed without actually deleting
@@ -448,28 +451,28 @@ pub enum CleanAction {
 pub enum CacheAction {
     /// Clear the entire cache (no config needed)
     Clear,
-    /// Show cache size (requires config)
-    Size,
-    /// Remove unreferenced objects from cache (requires config)
-    Trim,
-    /// Remove stale index entries not matching any current product (requires config)
-    RemoveStale,
     /// List all cache entries and their status (requires config)
     List,
+    /// Remove stale index entries not matching any current product (requires config)
+    RemoveStale,
+    /// Show cache size (requires config)
+    Size,
     /// Show which cache entries are stale vs current (requires config)
     Stale,
     /// Show per-processor cache statistics (requires config)
     Stats,
+    /// Remove unreferenced objects from cache (requires config)
+    Trim,
 }
 
 #[derive(Subcommand)]
 pub enum WebCacheAction {
     /// Clear the web cache (no config needed)
     Clear,
-    /// Show web cache statistics (no config needed)
-    Stats,
     /// List all cached entries (no config needed)
     List,
+    /// Show web cache statistics (no config needed)
+    Stats,
 }
 
 #[derive(Subcommand)]
