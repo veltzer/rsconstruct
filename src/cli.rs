@@ -492,22 +492,17 @@ pub enum ProductAction {
 
 #[derive(Subcommand)]
 pub enum ProcessorAction {
-    /// List all built-in processors with type and description (no config needed)
-    List {
-        /// Filter by processor type (checker, generator, creator, explicit)
-        #[arg(long = "type", value_name = "TYPE")]
-        processor_type: Option<String>,
-    },
-    /// Show which processors are enabled and detected (requires config)
-    Used,
-    /// Show source and target files for each processor (requires config)
-    Files {
-        /// Instance name (iname) as declared in rsconstruct.toml (omit to show all)
-        iname: Option<String>,
-        /// Show processor headers (e.g., "[ruff] (42 products)")
+    /// Add a processor to rsconstruct.toml with must-fill fields pre-populated and comments
+    Add {
+        /// Processor name (pname) — the type name (e.g., ruff, pip, tera)
+        #[arg(value_parser = crate::registries::processor_name_parser())]
+        pname: String,
+        /// Print the generated TOML snippet to stdout instead of writing to rsconstruct.toml
         #[arg(long)]
-        headers: bool,
+        dry_run: bool,
     },
+    /// Show the current processor allowlist (requires config)
+    Allowlist,
     /// Show resolved configuration for a processor instance by iname (requires config)
     Config {
         /// Instance name (iname) as declared in rsconstruct.toml (omit to show all)
@@ -522,34 +517,6 @@ pub enum ProcessorAction {
         #[arg(value_parser = crate::registries::processor_name_parser())]
         pname: String,
     },
-    /// Search processors by name, description, or keywords
-    Search {
-        /// Search term (case-insensitive, matches name, description, and keywords)
-        query: String,
-    },
-    /// Add a processor to rsconstruct.toml with must-fill fields pre-populated and comments
-    Add {
-        /// Processor name (pname) — the type name (e.g., ruff, pip, tera)
-        #[arg(value_parser = crate::registries::processor_name_parser())]
-        pname: String,
-        /// Print the generated TOML snippet to stdout instead of writing to rsconstruct.toml
-        #[arg(long)]
-        dry_run: bool,
-    },
-    /// Show the current processor allowlist (requires config)
-    Allowlist,
-    /// Show names of all enabled processors (one per line, requires config)
-    Names,
-    /// Show the recommended processor for each file extension (no config needed)
-    Recommend,
-    /// Show inter-processor dependencies (requires config)
-    Graph {
-        /// Output format
-        #[arg(short, long, value_enum, default_value = "text")]
-        format: GraphFormat,
-    },
-    /// List all processor types with descriptions
-    Types,
     /// Remove a processor stanza from rsconstruct.toml entirely (requires config)
     Delete {
         /// Instance name (iname) as declared in rsconstruct.toml
@@ -565,6 +532,39 @@ pub enum ProcessorAction {
         /// Instance name (iname) as declared in rsconstruct.toml
         iname: String,
     },
+    /// Show source and target files for each processor (requires config)
+    Files {
+        /// Instance name (iname) as declared in rsconstruct.toml (omit to show all)
+        iname: Option<String>,
+        /// Show processor headers (e.g., "[ruff] (42 products)")
+        #[arg(long)]
+        headers: bool,
+    },
+    /// Show inter-processor dependencies (requires config)
+    Graph {
+        /// Output format
+        #[arg(short, long, value_enum, default_value = "text")]
+        format: GraphFormat,
+    },
+    /// List all built-in processors with type and description (no config needed)
+    List {
+        /// Filter by processor type (checker, generator, creator, explicit)
+        #[arg(long = "type", value_name = "TYPE")]
+        processor_type: Option<String>,
+    },
+    /// Show names of all enabled processors (one per line, requires config)
+    Names,
+    /// Show the recommended processor for each file extension (no config needed)
+    Recommend,
+    /// Search processors by name, description, or keywords
+    Search {
+        /// Search term (case-insensitive, matches name, description, and keywords)
+        query: String,
+    },
+    /// List all processor types with descriptions
+    Types,
+    /// Show which processors are enabled and detected (requires config)
+    Used,
 }
 
 #[derive(Subcommand)]
@@ -581,19 +581,17 @@ pub enum FunctionsAction {
 
 #[derive(Subcommand)]
 pub enum ToolsAction {
-    /// List all required external tools (uses config if available)
-    List {
-        /// Include tools from disabled processors too
-        #[arg(short, long)]
-        all: bool,
-        /// Show all available installation methods for each tool
-        #[arg(short = 'M', long)]
-        methods: bool,
-    },
     /// Verify tool versions against .tools.versions lock file (uses config if available)
     Check,
-    /// Lock tool versions to .tools.versions (uses config if available)
-    Lock,
+    /// Show tool-to-processor dependency graph (uses config if available)
+    Graph {
+        /// Output format
+        #[arg(short, long, value_enum, default_value = "dot")]
+        format: GraphFormat,
+        /// Open the graph in a browser instead of printing to stdout
+        #[arg(long)]
+        view: bool,
+    },
     /// Install missing external tools (uses config if available)
     Install {
         /// Tool name to install (omit to install missing tools for enabled processors)
@@ -608,33 +606,23 @@ pub enum ToolsAction {
         #[arg(short, long)]
         yes: bool,
     },
+    /// List all required external tools (uses config if available)
+    List {
+        /// Include tools from disabled processors too
+        #[arg(short, long)]
+        all: bool,
+        /// Show all available installation methods for each tool
+        #[arg(short = 'M', long)]
+        methods: bool,
+    },
+    /// Lock tool versions to .tools.versions (uses config if available)
+    Lock,
     /// Show tool availability statistics (uses config if available)
     Stats,
-    /// Show tool-to-processor dependency graph (uses config if available)
-    Graph {
-        /// Output format
-        #[arg(short, long, value_enum, default_value = "dot")]
-        format: GraphFormat,
-        /// Open the graph in a browser instead of printing to stdout
-        #[arg(long)]
-        view: bool,
-    },
 }
 
 #[derive(Subcommand)]
 pub enum AnalyzersAction {
-    /// List all available dependency analyzers (no config needed)
-    List,
-    /// Show which dependency analyzers are enabled and detected (requires config)
-    Used,
-    /// Run dependency analysis without building (requires config)
-    Build,
-    /// Show default analyzer configuration by pname (no config needed)
-    Defconfig {
-        /// Analyzer type name (pname) (e.g., cpp, icpp, python); omit to show all
-        #[arg(value_parser = crate::registries::analyzer_name_parser())]
-        pname: Option<String>,
-    },
     /// Add an analyzer to rsconstruct.toml with must-fill fields pre-populated and comments
     Add {
         /// Analyzer type name (pname) (e.g., cpp, icpp, python, markdown, tera)
@@ -644,23 +632,24 @@ pub enum AnalyzersAction {
         #[arg(long)]
         dry_run: bool,
     },
-    /// Show resolved analyzer configuration by iname (requires config)
-    Config {
-        /// Analyzer instance name (iname) as declared in rsconstruct.toml; omit to show all
-        iname: Option<String>,
-    },
-    /// Show cached dependencies (requires config)
-    Show {
-        #[command(subcommand)]
-        filter: AnalyzersShowFilter,
-    },
-    /// Show statistics about cached dependencies by analyzer (requires config)
-    Stats,
+    /// Run dependency analysis without building (requires config)
+    Build,
     /// Clear the dependency cache (requires config)
     Clean {
         /// Only clear entries tagged with this analyzer iname (e.g., "cpp", "cpp.kernel")
         #[arg(long)]
         analyzer: Option<String>,
+    },
+    /// Show resolved analyzer configuration by iname (requires config)
+    Config {
+        /// Analyzer instance name (iname) as declared in rsconstruct.toml; omit to show all
+        iname: Option<String>,
+    },
+    /// Show default analyzer configuration by pname (no config needed)
+    Defconfig {
+        /// Analyzer type name (pname) (e.g., cpp, icpp, python); omit to show all
+        #[arg(value_parser = crate::registries::analyzer_name_parser())]
+        pname: Option<String>,
     },
     /// Remove an analyzer stanza from rsconstruct.toml entirely (requires config)
     Delete {
@@ -677,12 +666,29 @@ pub enum AnalyzersAction {
         /// Instance name (iname) as declared in rsconstruct.toml
         iname: String,
     },
+    /// List all available dependency analyzers (no config needed)
+    List,
+    /// Show cached dependencies (requires config)
+    Show {
+        #[command(subcommand)]
+        filter: AnalyzersShowFilter,
+    },
+    /// Show statistics about cached dependencies by analyzer (requires config)
+    Stats,
+    /// Show which dependency analyzers are enabled and detected (requires config)
+    Used,
 }
 
 #[derive(Subcommand)]
 pub enum AnalyzersShowFilter {
     /// Show dependencies for all source files
     All,
+    /// Show dependencies for files handled by specific analyzers
+    Analyzers {
+        /// Analyzer names (e.g., "cpp", "python")
+        #[arg(required = true)]
+        analyzers: Vec<String>,
+    },
     /// Show dependencies for specific files
     Files {
         /// Source files to show dependencies for
@@ -694,12 +700,6 @@ pub enum AnalyzersShowFilter {
         /// current filesystem state, not the last build's state.
         #[arg(long)]
         hash_pieces: bool,
-    },
-    /// Show dependencies for files handled by specific analyzers
-    Analyzers {
-        /// Analyzer names (e.g., "cpp", "python")
-        #[arg(required = true)]
-        analyzers: Vec<String>,
     },
 }
 
@@ -722,6 +722,14 @@ pub enum TermsAction {
 
 #[derive(Subcommand)]
 pub enum TagsAction {
+    /// Run all tag validations without building (requires config)
+    Check,
+    /// Scan source files and add missing tags back to the tag collection (requires config)
+    Collect,
+    /// Show each tag with its file count, sorted by frequency (requires config)
+    Count,
+    /// Show percentage of files that have each tag category (requires config)
+    Coverage,
     /// List files matching given tags, AND by default, --or for OR (requires config)
     Files {
         /// Tags: bare values (e.g. "docker") or key:value (e.g. "level:advanced")
@@ -730,6 +738,16 @@ pub enum TagsAction {
         /// Use OR semantics (match files with any of the given tags)
         #[arg(long, short)]
         or: bool,
+    },
+    /// List all tags for a specific file (requires config)
+    ForFile {
+        /// Path to the file
+        path: String,
+    },
+    /// Show the raw frontmatter for a specific file (requires config)
+    Frontmatter {
+        /// Path to the file
+        path: String,
     },
     /// Search for tags containing a substring (requires config)
     Grep {
@@ -741,22 +759,24 @@ pub enum TagsAction {
     },
     /// List all unique tags (requires config)
     List,
-    /// Show each tag with its file count, sorted by frequency (requires config)
-    Count,
-    /// Show tags grouped by prefix/category (requires config)
-    Tree,
+    /// Show a coverage matrix of tag categories per file (requires config)
+    Matrix,
+    /// Merge tags from another project's tags directory (requires config)
+    Merge {
+        /// Path to the other project's tags directory
+        path: String,
+    },
+    /// Find markdown files with no tags at all (requires config)
+    Orphans,
     /// Show statistics about the tags database (requires config)
     Stats,
-    /// List all tags for a specific file (requires config)
-    ForFile {
+    /// Suggest tags for a file based on similarity (requires config)
+    Suggest {
         /// Path to the file
         path: String,
     },
-    /// Show the raw frontmatter for a specific file (requires config)
-    Frontmatter {
-        /// Path to the file
-        path: String,
-    },
+    /// Show tags grouped by prefix/category (requires config)
+    Tree,
     /// List tags in the allowlist (tags_dir) that are not used by any file (requires config)
     Unused {
         /// Exit with error if unused tags are found (useful for CI)
@@ -765,26 +785,6 @@ pub enum TagsAction {
     },
     /// Validate tags against the allowlist without building (requires config)
     Validate,
-    /// Show a coverage matrix of tag categories per file (requires config)
-    Matrix,
-    /// Show percentage of files that have each tag category (requires config)
-    Coverage,
-    /// Find markdown files with no tags at all (requires config)
-    Orphans,
-    /// Run all tag validations without building (requires config)
-    Check,
-    /// Suggest tags for a file based on similarity (requires config)
-    Suggest {
-        /// Path to the file
-        path: String,
-    },
-    /// Merge tags from another project's tags directory (requires config)
-    Merge {
-        /// Path to the other project's tags directory
-        path: String,
-    },
-    /// Scan source files and add missing tags back to the tag collection (requires config)
-    Collect,
 }
 
 /// CLI arguments shared between Build and Watch commands.
