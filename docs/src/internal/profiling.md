@@ -270,3 +270,6 @@ half.
   That's independent of this graph-construction finding.
 - [Architecture](architecture.md) — overview of the graph and how products
   are added.
+- [Fast `stat` on Linux](fast-stat.md) — background on batching `statx`
+  via io_uring; relevant if the per-input `fs::metadata` call ever climbs
+  out of the noise (currently ~0.19% of CPU).

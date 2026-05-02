@@ -451,8 +451,8 @@ fn run() -> (Result<()>, bool) {
             let builder = Builder::new()?;
             builder.apply_config_to_context(&ctx);
             match action {
-                cli::ProductAction::Show { ref path } => {
-                    builder.product_show(&ctx, path)?;
+                cli::ProductAction::Show { ref path, verbose } => {
+                    builder.product_show(&ctx, path, verbose)?;
                 }
             }
         }

@@ -129,6 +129,7 @@ The chapters below cover the internal design and implementation of rsconstruct. 
 - [Output Prediction](internal/output-prediction.md)
 - [Per-Processor Statistics](internal/per-processor-stats.md)
 - [Profiling](internal/profiling.md)
+- [Fast `stat` on Linux](internal/fast-stat.md)
 - [Path Interning](internal/path-interning.md)
 - [Unreferenced Files](internal/unreferenced-files.md)
 - [Distributed Execution](internal/distributed-execution.md)

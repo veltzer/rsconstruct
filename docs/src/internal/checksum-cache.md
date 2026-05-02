@@ -73,3 +73,9 @@ The `combined_input_checksum(inputs)` function computes a single hash representi
 3. Hashes the combined string to produce a fixed-length result
 
 Missing files get a `MISSING:<path>` sentinel so that different sets of missing files produce different combined checksums.
+
+## See also
+
+- [Fast `stat` on Linux](fast-stat.md) — notes on batching the per-input
+  `fs::metadata` call (relevant for very large projects, cold cache, or
+  network filesystems).

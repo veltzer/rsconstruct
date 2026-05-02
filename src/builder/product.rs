@@ -21,7 +21,7 @@ use super::Builder;
 
 impl Builder {
     /// Implement `rsconstruct product show <path>`.
-    pub fn product_show(&self, ctx: &crate::build_context::BuildContext, path: &str) -> Result<()> {
+    pub fn product_show(&self, ctx: &crate::build_context::BuildContext, path: &str, verbose: bool) -> Result<()> {
         let graph = self.build_graph_for_cache(ctx)?;
         let target = PathBuf::from(path);
 
@@ -68,7 +68,7 @@ impl Builder {
         if crate::json_output::is_json_mode() {
             print_json(product, &input_checksum, &descriptor_key, &analyzer_inputs, &hash_pieces, &cache_state)?;
         } else {
-            print_text(product, &input_checksum, &descriptor_key, &analyzer_inputs, &hash_pieces, &cache_state);
+            print_text(product, &input_checksum, &descriptor_key, &analyzer_inputs, &hash_pieces, &cache_state, verbose);
         }
 
         Ok(())
@@ -102,6 +102,7 @@ fn print_text(
     analyzer_inputs: &BTreeMap<String, Vec<PathBuf>>,
     hash_pieces: &BTreeMap<String, Vec<String>>,
     cache_state: &crate::object_store::ExplainAction,
+    verbose: bool,
 ) {
     println!("{} {}", color::dim("processor:"), color::cyan(&product.processor));
     if let Some(v) = &product.variant {

@@ -251,6 +251,13 @@ Grades:
 - Also enables efficient transfer of input trees to remote execution workers.
 - **Urgency**: low | **Complexity**: medium
 
+### Batched stat via io_uring (Linux)
+- `combined_input_checksum` calls `fs::metadata` serially per input. Currently ~0.19% of CPU on a 10k-product project, so not a priority.
+- Becomes interesting at 100k+ products, on cold-cache CI runs, or against network filesystems where each `statx` is a round-trip.
+- Try `rayon::par_iter` + `fs::metadata` first; reach for `io-uring` only if that is insufficient. Linux-only — must live behind `src/platform.rs`.
+- See [Fast `stat` on Linux](fast-stat.md) for the design notes.
+- **Urgency**: low | **Complexity**: medium
+
 ## Reproducibility
 
 ### Hermetic builds

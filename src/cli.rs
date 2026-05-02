@@ -480,6 +480,10 @@ pub enum ProductAction {
         /// input. The lookup tries output paths first; if none own the path,
         /// falls back to products that have it as primary input.
         path: String,
+        /// Include the resolved file lists for glob/git_count/grep_count
+        /// hash pieces (omitted by default — they can be thousands of lines)
+        #[arg(long, short)]
+        verbose: bool,
     },
 }
 
