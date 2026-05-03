@@ -43,8 +43,11 @@ fn sass_basic_compile() {
     assert!(content.contains("red"), "CSS should contain the color value");
 }
 
+// sass's default `src_dirs = ["sass"]` must exist on disk too — a
+// processor configured with [processor.sass] but no `sass/` directory
+// is a misconfiguration and must fail loudly.
 #[test]
-fn sass_no_project_discovered() {
+fn sass_default_src_dir_must_exist() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -55,13 +58,16 @@ fn sass_no_project_discovered() {
     .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success());
+    assert!(!output.status.success(), "Build must fail when default src_dir doesn't exist");
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(
-        stdout.contains("0 products"),
-        "Should discover 0 products: {}",
-        stdout
+        combined.contains("sass") && combined.contains("does not exist"),
+        "Error must name the missing 'sass' directory: {}", combined
     );
 }
 

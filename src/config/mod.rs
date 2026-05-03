@@ -1394,6 +1394,7 @@ fn validate_single_processor(
             _ => {} // present and non-empty: OK
         }
     }
+
 }
 
 /// Validate that all fields in `[processor.X]` sections are known fields for that processor

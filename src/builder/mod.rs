@@ -577,6 +577,39 @@ impl Builder {
                 )));
             }
         }
+
+        // After the fixed-point loop has settled, every src_dirs entry must
+        // be backed by something — either a real directory on disk or virtual
+        // files injected by an upstream processor's declared outputs. A dir
+        // that is neither is a typo and must fail. Skip when src_files is set
+        // (file-list mode bypasses src_dirs).
+        let mut missing: Vec<String> = Vec::new();
+        for name in active {
+            let name = name.as_ref();
+            let scan = processors[name].scan_config();
+            if !scan.enabled {
+                continue;
+            }
+            if !scan.src_files().is_empty() {
+                continue;
+            }
+            for dir in scan.src_dirs() {
+                if dir.is_empty() || dir == "." {
+                    continue;
+                }
+                if std::path::Path::new(dir).is_dir() {
+                    continue;
+                }
+                let prefix = std::path::PathBuf::from(dir);
+                let covered_by_virtual = file_index.files().iter().any(|f| f.starts_with(&prefix));
+                if !covered_by_virtual {
+                    missing.push(format!("[{}]: src_dirs entry '{}' does not exist or is not a directory", name, dir));
+                }
+            }
+        }
+        if !missing.is_empty() {
+            anyhow::bail!("Invalid config:\n{}", missing.join("\n"));
+        }
         Ok(())
     }
 

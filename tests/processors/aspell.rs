@@ -91,7 +91,7 @@ fn aspell_incremental_skip() {
 }
 
 #[test]
-fn aspell_no_project_discovered() {
+fn aspell_nonexistent_src_dir_fails() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -102,12 +102,16 @@ fn aspell_no_project_discovered() {
     .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success());
+    assert!(!output.status.success(), "Build must fail when src_dirs entry doesn't exist");
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(
-        stdout.contains("0 products"),
-        "Should discover 0 products: {}",
-        stdout
+        combined.contains("aspell_docs") && combined.contains("does not exist"),
+        "Error must name the missing directory: {}",
+        combined
     );
 }
