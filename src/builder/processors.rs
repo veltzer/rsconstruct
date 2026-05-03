@@ -205,6 +205,18 @@ pub fn list_recommendations() {
 }
 
 /// Return a JSON value containing only fields that differ from the default config.
+/// Render a JSON value as a single-line table cell. Strings appear unquoted;
+/// arrays and objects are rendered as compact JSON.
+fn format_config_value(v: &serde_json::Value) -> String {
+    match v {
+        serde_json::Value::Null      => "—".to_string(),
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Bool(b)   => b.to_string(),
+        serde_json::Value::Number(n) => n.to_string(),
+        other                        => other.to_string(),
+    }
+}
+
 fn config_diff(name: &str, current: &serde_json::Value) -> serde_json::Value {
     let default_json = ProcessorConfig::defconfig_json(name);
     let default_value = default_json
@@ -402,7 +414,13 @@ impl Builder {
                         if names.len() > 1 {
                             println!("{}:", n);
                         }
-                        println!("{}", serde_json::to_string_pretty(&value)?);
+                        let rows: Vec<Vec<String>> = match &value {
+                            serde_json::Value::Object(map) => map.iter()
+                                .map(|(k, v)| vec![k.clone(), format_config_value(v)])
+                                .collect(),
+                            other => vec![vec!["(value)".to_string(), format_config_value(other)]],
+                        };
+                        crate::color::print_table(&["Field", "Value"], &rows);
                         // Show the processor's type name for metadata lookup.
                         // Multi-instance names are like "explicit.report" — strip the instance suffix.
                         let type_name = n.split('.').next().unwrap_or(n);

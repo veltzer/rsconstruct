@@ -510,6 +510,37 @@ fn run_tools_command(
             let mut commands: Vec<(String, String)> = Vec::new(); // (description, command)
             let mut skipped: Vec<String> = Vec::new();
 
+            // System packages must be installed first: language-level packages
+            // (pip, gem, npm) may build native extensions that link against
+            // system libraries (e.g. manimpango needs libpango1.0-dev).
+            if !config.system.is_empty() {
+                let missing: Vec<&str> = config.system.iter()
+                    .filter(|pkg| {
+                        let installed = is_system_package_installed(pkg);
+                        if installed { skipped.push(format!("[system] {}", pkg)); }
+                        !installed
+                    })
+                    .map(|s| s.as_str())
+                    .collect();
+                if !missing.is_empty() {
+                    let pkgs = missing.join(" ");
+                    let (mgr, cmd) = if which::which("apt-get").is_ok() {
+                        ("apt", format!("sudo apt-get install -y {}", pkgs))
+                    } else if which::which("dnf").is_ok() {
+                        ("dnf", format!("sudo dnf install -y {}", pkgs))
+                    } else if which::which("pacman").is_ok() {
+                        ("pacman", format!("sudo pacman -S --noconfirm {}", pkgs))
+                    } else if which::which("brew").is_ok() {
+                        ("brew", format!("brew install {}", pkgs))
+                    } else {
+                        ("system", format!("echo 'No supported package manager found; install manually: {}'", pkgs))
+                    };
+                    commands.push((
+                        format!("[{}] {}", mgr, missing.join(", ")),
+                        cmd,
+                    ));
+                }
+            }
             if !config.pip.is_empty() {
                 let missing: Vec<&str> = config.pip.iter()
                     .filter(|pkg| {
@@ -575,34 +606,6 @@ fn run_tools_command(
                     commands.push((
                         format!("[gem] {}", missing.join(", ")),
                         format!("gem install {}", pkgs),
-                    ));
-                }
-            }
-            if !config.system.is_empty() {
-                let missing: Vec<&str> = config.system.iter()
-                    .filter(|pkg| {
-                        let installed = is_system_package_installed(pkg);
-                        if installed { skipped.push(format!("[system] {}", pkg)); }
-                        !installed
-                    })
-                    .map(|s| s.as_str())
-                    .collect();
-                if !missing.is_empty() {
-                    let pkgs = missing.join(" ");
-                    let (mgr, cmd) = if which::which("apt-get").is_ok() {
-                        ("apt", format!("sudo apt-get install -y {}", pkgs))
-                    } else if which::which("dnf").is_ok() {
-                        ("dnf", format!("sudo dnf install -y {}", pkgs))
-                    } else if which::which("pacman").is_ok() {
-                        ("pacman", format!("sudo pacman -S --noconfirm {}", pkgs))
-                    } else if which::which("brew").is_ok() {
-                        ("brew", format!("brew install {}", pkgs))
-                    } else {
-                        ("system", format!("echo 'No supported package manager found; install manually: {}'", pkgs))
-                    };
-                    commands.push((
-                        format!("[{}] {}", mgr, missing.join(", ")),
-                        cmd,
                     ));
                 }
             }
