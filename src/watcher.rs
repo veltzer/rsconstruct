@@ -66,7 +66,7 @@ pub fn watch(ctx: &crate::build_context::BuildContext, opts: &BuildOptions, inte
     println!("{}", color::bold("Running initial build..."));
     let mut watch_paths;
     {
-        let mut builder = Builder::new()?;
+        let mut builder = Builder::new_with_overrides(&opts.iset, &opts.pset)?;
         watch_paths = builder.watch_paths();
         if let Err(e) = builder.build(ctx, opts, Arc::clone(&interrupted), Vec::new()) {
             println!("{}", color::red(&format!("Initial build error: {}", e)));
@@ -130,7 +130,7 @@ pub fn watch(ctx: &crate::build_context::BuildContext, opts: &BuildOptions, inte
         println!();
         println!("{}", color::bold("Change detected, rebuilding..."));
         {
-            let mut builder = Builder::new()?;
+            let mut builder = Builder::new_with_overrides(&opts.iset, &opts.pset)?;
             let new_paths = builder.watch_paths();
             if let Err(e) = builder.build(ctx, opts, Arc::clone(&interrupted), Vec::new()) {
                 println!("{}", color::red(&format!("Build error: {}", e)));

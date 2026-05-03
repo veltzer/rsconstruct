@@ -194,8 +194,15 @@ impl Builder {
     }
 
     pub fn new() -> Result<Self> {
+        Self::new_with_overrides(&[], &[])
+    }
+
+    /// Construct a Builder, applying CLI `--iset`/`--pset` config overrides
+    /// after the rsconstruct.toml is loaded.
+    pub fn new_with_overrides(iset: &[String], pset: &[String]) -> Result<Self> {
         Config::require_config()?;
-        let config = Config::load()?;
+        let mut config = Config::load()?;
+        config.apply_overrides(iset, pset)?;
 
         // Resolve auto restore method based on environment
         let restore_method = config.cache.restore_method.resolve();

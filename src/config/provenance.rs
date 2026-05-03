@@ -10,6 +10,7 @@ pub(crate) enum FieldProvenance {
     ScanDefault,
     OutputDirDefault,
     SerdeDefault,
+    CliOverride,
 }
 
 impl fmt::Display for FieldProvenance {
@@ -20,6 +21,7 @@ impl fmt::Display for FieldProvenance {
             Self::ScanDefault => write!(f, "scan default"),
             Self::OutputDirDefault => write!(f, "output dir default"),
             Self::SerdeDefault => write!(f, "serde default"),
+            Self::CliOverride => write!(f, "CLI override"),
         }
     }
 }

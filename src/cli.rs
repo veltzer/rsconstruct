@@ -848,6 +848,18 @@ pub struct SharedBuildArgs {
     /// Show all config changes between runs (not just output-affecting fields)
     #[arg(long)]
     pub show_all_config_changes: bool,
+
+    /// Override a per-instance config field (repeatable). Format: `<iname>.<field>=<value>`.
+    /// Value is parsed as TOML (e.g. `marp.max_jobs=2`, `marp.batch=true`, `marp.args=["--html"]`);
+    /// strings without quoting are accepted (e.g. `marp.command=marp`).
+    #[arg(long, value_name = "INAME.FIELD=VALUE")]
+    pub iset: Vec<String>,
+
+    /// Override a config field on every instance of a processor type (repeatable).
+    /// Format: `<pname>.<field>=<value>`. Same value parsing as `--iset`.
+    /// Errors if no instances of that pname exist.
+    #[arg(long, value_name = "PNAME.FIELD=VALUE")]
+    pub pset: Vec<String>,
 }
 
 impl SharedBuildArgs {
@@ -883,6 +895,8 @@ impl SharedBuildArgs {
             targets,
             trace: self.trace.clone(),
             show_all_config_changes: self.show_all_config_changes,
+            iset: self.iset.clone(),
+            pset: self.pset.clone(),
         }
     }
 }
@@ -908,6 +922,8 @@ pub struct BuildOptions {
     pub targets: Option<Vec<String>>,
     pub trace: Option<String>,
     pub show_all_config_changes: bool,
+    pub iset: Vec<String>,
+    pub pset: Vec<String>,
 }
 
 /// Parse a shell name string into a Shell enum

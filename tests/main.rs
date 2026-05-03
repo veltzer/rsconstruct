@@ -19,6 +19,8 @@ mod exit_codes;
 mod graph;
 #[path = "tests_mod/init.rs"]
 mod init;
+#[path = "tests_mod/iset_pset.rs"]
+mod iset_pset;
 #[path = "tests_mod/processor_cmd.rs"]
 mod processor_cmd;
 #[path = "tests_mod/product.rs"]

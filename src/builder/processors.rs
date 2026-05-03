@@ -270,6 +270,7 @@ fn print_processor_metadata(name: &str, verbose: bool) {
             Some(serde_json::Value::Bool(_))    => "bool",
             Some(serde_json::Value::Number(_))  => "int",
             Some(serde_json::Value::Object(_))  => "object",
+            _ if *field == "max_jobs"           => "int",
             _                                   => "?",
         };
         let default_str = if *field == "max_jobs" {

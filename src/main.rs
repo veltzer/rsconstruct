@@ -155,12 +155,12 @@ fn run() -> (Result<()>, bool) {
     match cli.command {
         Commands::Build { force, dry_run, verify_tool_versions, stop_after, ref shared } => {
             if dry_run {
-                let builder = Builder::new()?;
+                let builder = Builder::new_with_overrides(&shared.iset, &shared.pset)?;
                 builder.apply_config_to_context(&ctx);
                 builder.dry_run(&ctx, force, shared.explain)?;
             } else {
                 let t = Instant::now();
-                let mut builder = Builder::new()?;
+                let mut builder = Builder::new_with_overrides(&shared.iset, &shared.pset)?;
                 builder.apply_config_to_context(&ctx);
                 let builder_new_dur = t.elapsed();
                 let t = Instant::now();
