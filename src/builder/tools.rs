@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::process::Command;
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use crate::cli::{GraphFormat, ToolsAction};
 use crate::color;
 use crate::json_output;
@@ -506,8 +506,11 @@ fn run_tools_command(
                 return Ok(());
             }
 
-            // Filter out already-installed packages, then build install commands
-            let mut commands: Vec<(String, String)> = Vec::new(); // (description, command)
+            // Filter out already-installed packages, then build install commands.
+            // argv form (not a shell string) so package specifiers like
+            // "setuptools<82" reach the installer verbatim instead of being
+            // interpreted as shell redirections.
+            let mut commands: Vec<(String, Vec<String>)> = Vec::new(); // (description, argv)
             let mut skipped: Vec<String> = Vec::new();
 
             // Install order is FIXED and load-bearing: system → pip → npm → gem.
@@ -528,21 +531,24 @@ fn run_tools_command(
                     .map(|s| s.as_str())
                     .collect();
                 if !missing.is_empty() {
-                    let pkgs = missing.join(" ");
-                    let (mgr, cmd) = if which::which("apt-get").is_ok() {
-                        ("apt", format!("sudo apt-get install -y {}", pkgs))
+                    let (mgr, mut argv) = if which::which("apt-get").is_ok() {
+                        ("apt", vec!["sudo".to_string(), "apt-get".to_string(), "install".to_string(), "-y".to_string()])
                     } else if which::which("dnf").is_ok() {
-                        ("dnf", format!("sudo dnf install -y {}", pkgs))
+                        ("dnf", vec!["sudo".to_string(), "dnf".to_string(), "install".to_string(), "-y".to_string()])
                     } else if which::which("pacman").is_ok() {
-                        ("pacman", format!("sudo pacman -S --noconfirm {}", pkgs))
+                        ("pacman", vec!["sudo".to_string(), "pacman".to_string(), "-S".to_string(), "--noconfirm".to_string()])
                     } else if which::which("brew").is_ok() {
-                        ("brew", format!("brew install {}", pkgs))
+                        ("brew", vec!["brew".to_string(), "install".to_string()])
                     } else {
-                        ("system", format!("echo 'No supported package manager found; install manually: {}'", pkgs))
+                        bail!(
+                            "No supported package manager found (apt-get, dnf, pacman, brew); install these system packages manually: {}",
+                            missing.join(", ")
+                        );
                     };
+                    argv.extend(missing.iter().map(|s| s.to_string()));
                     commands.push((
                         format!("[{}] {}", mgr, missing.join(", ")),
-                        cmd,
+                        argv,
                     ));
                 }
             }
@@ -563,10 +569,11 @@ fn run_tools_command(
                     .map(|s| s.as_str())
                     .collect();
                 if !missing.is_empty() {
-                    let pkgs = missing.join(" ");
+                    let mut argv = vec!["pip".to_string(), "install".to_string()];
+                    argv.extend(missing.iter().map(|s| s.to_string()));
                     commands.push((
                         format!("[pip] {}", missing.join(", ")),
-                        format!("pip install {}", pkgs),
+                        argv,
                     ));
                 }
             }
@@ -585,10 +592,11 @@ fn run_tools_command(
                     .map(|s| s.as_str())
                     .collect();
                 if !missing.is_empty() {
-                    let pkgs = missing.join(" ");
+                    let mut argv = vec!["npm".to_string(), "install".to_string()];
+                    argv.extend(missing.iter().map(|s| s.to_string()));
                     commands.push((
                         format!("[npm] {}", missing.join(", ")),
-                        format!("npm install {}", pkgs),
+                        argv,
                     ));
                 }
             }
@@ -607,10 +615,11 @@ fn run_tools_command(
                     .map(|s| s.as_str())
                     .collect();
                 if !missing.is_empty() {
-                    let pkgs = missing.join(" ");
+                    let mut argv = vec!["gem".to_string(), "install".to_string()];
+                    argv.extend(missing.iter().map(|s| s.to_string()));
                     commands.push((
                         format!("[gem] {}", missing.join(", ")),
-                        format!("gem install {}", pkgs),
+                        argv,
                     ));
                 }
             }
@@ -629,8 +638,8 @@ fn run_tools_command(
             }
 
             println!("{}:", color::bold("Dependencies to install"));
-            for (desc, cmd) in &commands {
-                println!("  {} {}", color::bold(desc), color::dim(&format!("({})", cmd)));
+            for (desc, argv) in &commands {
+                println!("  {} {}", color::bold(desc), color::dim(&format!("({})", argv.join(" "))));
             }
             println!();
 
@@ -648,18 +657,19 @@ fn run_tools_command(
 
             // Suppress per-command output by default to keep CI logs short.
             // Capture stdout+stderr and only emit them when the install fails.
+            // Run via argv (no shell) so package specifiers like "setuptools<82"
+            // are not interpreted as shell redirections.
             let mut any_failed = false;
-            for (desc, cmd) in &commands {
-                let output = Command::new("sh")
-                    .arg("-c")
-                    .arg(cmd)
+            for (desc, argv) in &commands {
+                let output = Command::new(&argv[0])
+                    .args(&argv[1..])
                     .output()?;
                 if output.status.success() {
                     println!("{} {}", color::green("✓"), desc);
                 } else {
                     println!("{} {} (exit code {})", color::red("✗"), desc,
                         output.status.code().map_or("unknown".to_string(), |c| c.to_string()));
-                    println!("  {}: {}", color::dim("command"), cmd);
+                    println!("  {}: {}", color::dim("command"), argv.join(" "));
                     if !output.stdout.is_empty() {
                         println!("{}", color::dim("--- stdout ---"));
                         std::io::Write::write_all(&mut std::io::stdout(), &output.stdout)?;
