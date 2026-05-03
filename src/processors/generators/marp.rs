@@ -12,8 +12,10 @@ use crate::processors::{run_command_with_timeout, check_command_output, ensure_o
 use crate::processors::{SimpleGenerator, SimpleGeneratorParams, DiscoverMode};
 
 /// marp occasionally hangs (chromium-headless / sandbox issues). Kill it after this long
-/// rather than letting the build sit forever.
+/// rather than letting the build sit forever, and retry up to MARP_MAX_ATTEMPTS times
+/// since the hangs are transient.
 const MARP_TIMEOUT: Duration = Duration::from_secs(10);
+const MARP_MAX_ATTEMPTS: u32 = 3;
 
 fn cleanup_marp_tmp_dirs() {
     let Ok(entries) = fs::read_dir("/tmp") else { return };
@@ -24,6 +26,10 @@ fn cleanup_marp_tmp_dirs() {
     }
 }
 
+fn is_timeout_error(err: &anyhow::Error) -> bool {
+    err.to_string().contains("Command timed out after")
+}
+
 fn execute_marp(ctx: &crate::build_context::BuildContext, config: &StandardConfig, product: &Product) -> Result<()> {
     let input = product.primary_input();
     let output = product.primary_output();
@@ -32,17 +38,32 @@ fn execute_marp(ctx: &crate::build_context::BuildContext, config: &StandardConfi
         .to_string_lossy();
     ensure_output_dir(output)?;
     let command = config.require_command("marp")?;
-    let mut cmd = Command::new(command);
-    if format != "html" {
-        cmd.arg(format!("--{}", format));
+
+    for attempt in 1..=MARP_MAX_ATTEMPTS {
+        let mut cmd = Command::new(command);
+        if format != "html" {
+            cmd.arg(format!("--{}", format));
+        }
+        cmd.arg("--output").arg(output);
+        for arg in &config.args { cmd.arg(arg); }
+        cmd.arg(input);
+        let result = run_command_with_timeout(ctx, &mut cmd, MARP_TIMEOUT)
+            .and_then(|out| check_command_output(&out, format_args!("marp {}", input.display())));
+        cleanup_marp_tmp_dirs();
+        match result {
+            Ok(()) => return Ok(()),
+            Err(err) => {
+                if !is_timeout_error(&err) || attempt == MARP_MAX_ATTEMPTS {
+                    return Err(err);
+                }
+                eprintln!(
+                    "[marp] {} timed out (attempt {}/{}), retrying",
+                    input.display(), attempt, MARP_MAX_ATTEMPTS
+                );
+            }
+        }
     }
-    cmd.arg("--output").arg(output);
-    for arg in &config.args { cmd.arg(arg); }
-    cmd.arg(input);
-    let result = run_command_with_timeout(ctx, &mut cmd, MARP_TIMEOUT)
-        .and_then(|out| check_command_output(&out, format_args!("marp {}", input.display())));
-    cleanup_marp_tmp_dirs();
-    result
+    unreachable!("loop exits via return on every iteration")
 }
 
 
