@@ -87,6 +87,22 @@ For example, tests for the `cc_single_file` processor must be named
 All `println!` output must start at column 0. Never prefix output with spaces
 or tabs for visual indentation unless when printing some data with structure.
 
+## No shell when spawning subprocesses
+
+Subprocesses must be spawned via direct argv execution
+(`Command::new(prog).args([...])`), not via `sh -c` or any other shell.
+Routing user-controlled or config-controlled strings through a shell turns
+ordinary characters like `<`, `>`, `|`, `&`, `;`, `$`, and spaces into
+code-injection surface. A shell is also unnecessary — every package manager
+and tool we invoke accepts argv directly.
+
+A small number of features (Tera `shell_output()`, C source pragmas like
+`EXTRA_COMPILE_SHELL`, the icpp analyzer's `include_path_commands`, and the
+free-form `binary` install methods in the static tool registry) are
+contractually shell-shaped and are listed as named exceptions. See
+[No-Shell Policy](no-shell-policy.md) for the full rationale, the exception
+table, and how to add a new exception if one is genuinely needed.
+
 ## Suppress tool output on success
 
 External tool output (compilers, linters, etc.) must be captured and only

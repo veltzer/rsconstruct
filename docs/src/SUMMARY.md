@@ -114,6 +114,7 @@ The chapters below cover the internal design and implementation of rsconstruct. 
 - [Architecture Observations](internal/architecture-observations.md)
 - [Design Notes](internal/design.md)
 - [Coding Standards](internal/coding-standards.md)
+- [No-Shell Policy](internal/no-shell-policy.md)
 - [Strictness](internal/strictness.md)
 - [Testing](internal/testing.md)
 - [Parameter Naming](internal/parameter-naming.md)
