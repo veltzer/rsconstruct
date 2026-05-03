@@ -442,19 +442,21 @@ fn run_tools_command(
 
             // Method display order and labels
             let method_order = &["pip", "apt", "npm", "cargo", "gem", "snap"];
-            let mut commands: Vec<String> = Vec::new();
+            let mut plans: Vec<crate::processors::InstallPlan> = Vec::new();
             for method in method_order {
                 if let Some(packages) = by_method.get(method) {
-                    let cmd = crate::processors::InstallMethod::batch_command(method, packages);
+                    let plan = crate::processors::InstallMethod::batch_plan(method, packages);
                     println!("  {} {}", color::bold(&format!("[{}]", method)),
                         packages.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", "));
-                    println!("       {}", color::dim(&cmd));
-                    commands.push(cmd);
+                    println!("       {}", color::dim(&plan.display()));
+                    plans.push(plan);
                 }
             }
             for (tool_name, cmd) in &ungroupable {
                 println!("  {} {}", color::bold(&format!("[{}]", tool_name)), color::dim(cmd));
-                commands.push(cmd.clone());
+                // Free-form registry entries (curl|tar pipelines, etc.) require a shell.
+                // See docs/src/no-shell-policy.md.
+                plans.push(crate::processors::InstallPlan::Shell(cmd.clone()));
             }
             println!();
 
@@ -470,14 +472,20 @@ fn run_tools_command(
                 }
             }
 
-            // Execute batch commands
+            // Execute batch commands. Argv plans are run directly (no shell);
+            // Shell plans go through `sh -c` because they contain pipelines
+            // baked into the static registry. See docs/src/no-shell-policy.md.
             let mut any_failed = false;
-            for cmd in &commands {
-                println!("Running: {}", color::dim(cmd));
-                let status = Command::new("sh")
-                    .arg("-c")
-                    .arg(cmd)
-                    .status()?;
+            for plan in &plans {
+                println!("Running: {}", color::dim(&plan.display()));
+                let status = match plan {
+                    crate::processors::InstallPlan::Argv(argv) => {
+                        Command::new(&argv[0]).args(&argv[1..]).status()?
+                    }
+                    crate::processors::InstallPlan::Shell(s) => {
+                        Command::new("sh").arg("-c").arg(s).status()?
+                    }
+                };
                 if status.success() {
                     println!("{}", color::green("OK"));
                 } else {

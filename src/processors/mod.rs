@@ -939,32 +939,87 @@ pub struct InstallMethod {
     pub package: &'static str,
 }
 
+/// How an install plan must be executed.
+///
+/// `Argv` plans are run directly via `Command::new(argv[0]).args(argv[1..])`
+/// with no shell involvement — this is the default and applies to all
+/// structured package managers (apt, pip, npm, cargo, gem, snap).
+///
+/// `Shell` plans contain shell metacharacters (pipes, redirects, `&&`)
+/// that the registry author baked in deliberately — for example, the
+/// `binary` install methods that pipe `curl` into `tar`. These are
+/// internal static data (never user input) but they require `sh -c`.
+/// See `docs/src/no-shell-policy.md`.
+pub enum InstallPlan {
+    Argv(Vec<String>),
+    Shell(String),
+}
+
+impl InstallPlan {
+    /// Human-readable form of the plan, suitable for logs, JSON output,
+    /// and `--dry-run` previews. Lossy for argv (loses quoting around
+    /// args that contain spaces) but adequate for the display use cases
+    /// in this codebase, where install args are well-formed package names.
+    pub fn display(&self) -> String {
+        match self {
+            InstallPlan::Argv(argv) => argv.join(" "),
+            InstallPlan::Shell(s)   => s.clone(),
+        }
+    }
+}
+
 impl InstallMethod {
-    /// Return the full install command (e.g., "pip install ruff", "sudo apt install -y shellcheck")
+    /// Return the full install command as a display string
+    /// (e.g., "pip install ruff", "sudo apt install -y shellcheck").
+    /// Use `plan()` for execution; this is for logs and previews only.
     pub fn command(&self) -> String {
+        self.plan().display()
+    }
+
+    /// Return an executable plan for this method.
+    ///
+    /// Structured package managers return `Argv` so the installer can
+    /// invoke them without a shell (no metacharacter expansion, no
+    /// injection surface). Free-form methods (`binary`, `manual`,
+    /// legacy `system` entries) return `Shell` because the registry
+    /// stores them as shell pipelines like `curl ... | tar -xz ...`.
+    pub fn plan(&self) -> InstallPlan {
         match self.method {
-            "apt" => format!("sudo apt install -y {}", self.package),
-            "snap" => format!("sudo snap install {}", self.package),
-            "pip" => format!("pip install {}", self.package),
-            "npm" => format!("npm install -g {}", self.package),
-            "cargo" => format!("cargo install {}", self.package),
-            "gem" => format!("gem install {}", self.package),
-            _ => self.package.to_string(),
+            "apt"   => argv(&["sudo", "apt", "install", "-y", self.package]),
+            "snap"  => argv(&["sudo", "snap", "install", self.package]),
+            "pip"   => argv(&["pip", "install", self.package]),
+            "npm"   => argv(&["npm", "install", "-g", self.package]),
+            "cargo" => argv(&["cargo", "install", self.package]),
+            "gem"   => argv(&["gem", "install", self.package]),
+            _       => InstallPlan::Shell(self.package.to_string()),
         }
     }
 
-    /// Return the install command for multiple packages at once (batch install)
-    pub fn batch_command(method: &str, packages: &[&str]) -> String {
+    /// Return an executable plan for installing multiple packages at once.
+    pub fn batch_plan(method: &str, packages: &[&str]) -> InstallPlan {
         match method {
-            "apt" => format!("sudo apt install -y {}", packages.join(" ")),
-            "snap" => format!("sudo snap install {}", packages.join(" ")),
-            "pip" => format!("pip install {}", packages.join(" ")),
-            "npm" => format!("npm install -g {}", packages.join(" ")),
-            "cargo" => format!("cargo install {}", packages.join(" ")),
-            "gem" => format!("gem install {}", packages.join(" ")),
-            _ => packages.iter().map(|p| p.to_string()).collect::<Vec<_>>().join("; "),
+            "apt"   => argv_with_prefix(&["sudo", "apt", "install", "-y"], packages),
+            "snap"  => argv_with_prefix(&["sudo", "snap", "install"], packages),
+            "pip"   => argv_with_prefix(&["pip", "install"], packages),
+            "npm"   => argv_with_prefix(&["npm", "install", "-g"], packages),
+            "cargo" => argv_with_prefix(&["cargo", "install"], packages),
+            "gem"   => argv_with_prefix(&["gem", "install"], packages),
+            _       => InstallPlan::Shell(
+                packages.iter().map(|p| p.to_string()).collect::<Vec<_>>().join("; ")
+            ),
         }
     }
+
+}
+
+fn argv(parts: &[&str]) -> InstallPlan {
+    InstallPlan::Argv(parts.iter().map(|s| s.to_string()).collect())
+}
+
+fn argv_with_prefix(prefix: &[&str], packages: &[&str]) -> InstallPlan {
+    let mut v: Vec<String> = prefix.iter().map(|s| s.to_string()).collect();
+    v.extend(packages.iter().map(|s| s.to_string()));
+    InstallPlan::Argv(v)
 }
 
 /// Information about an external tool: its name, runtime category, and install methods.
