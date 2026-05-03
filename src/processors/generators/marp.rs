@@ -107,5 +107,7 @@ inventory::submit! { crate::phases::PhaseHook {
     name: "marp_ci_cap",
     phase: crate::phases::Phase::PostConfig,
     description: "When CI=true and marp.max_jobs is unset, cap it at 2",
+    function: concat!(module_path!(), "::marp_ci_cap"),
+    location: concat!(file!(), ":", line!()),
     run: marp_ci_cap,
 } }

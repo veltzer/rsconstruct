@@ -65,10 +65,18 @@ impl Phase {
 }
 
 /// A hook registered against a [`Phase`]. Submit one with `inventory::submit!`.
+///
+/// `function` and `location` carry the registered function's fully-qualified
+/// path and source location. They are populated by hand at each registration
+/// site (no macro), via `concat!(module_path!(), "::", stringify!(fn))` and
+/// `concat!(file!(), ":", line!())`. They are surfaced by
+/// `rsconstruct phases hooks --verbose`.
 pub struct PhaseHook {
     pub name: &'static str,
     pub phase: Phase,
     pub description: &'static str,
+    pub function: &'static str,
+    pub location: &'static str,
     pub run: fn(&mut Config) -> Result<()>,
 }
 
