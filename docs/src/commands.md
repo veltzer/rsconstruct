@@ -411,7 +411,7 @@ rsconstruct tools lock              # Lock tool versions to .tools.versions
 rsconstruct tools install           # Install all missing external tools
 rsconstruct tools install ruff      # Install a specific tool by name
 rsconstruct tools install -y        # Skip confirmation prompt
-rsconstruct tools install-deps      # Install declared [dependencies] (pip, npm, gem)
+rsconstruct tools install-deps      # Install declared [dependencies] in fixed order: system → pip → npm → gem
 rsconstruct tools install-deps -y   # Skip confirmation prompt
 rsconstruct tools stats             # Show tool availability and language runtime breakdown
 rsconstruct tools stats --json      # Show tool stats in JSON format

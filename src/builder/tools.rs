@@ -510,9 +510,14 @@ fn run_tools_command(
             let mut commands: Vec<(String, String)> = Vec::new(); // (description, command)
             let mut skipped: Vec<String> = Vec::new();
 
-            // System packages must be installed first: language-level packages
-            // (pip, gem, npm) may build native extensions that link against
-            // system libraries (e.g. manimpango needs libpango1.0-dev).
+            // Install order is FIXED and load-bearing: system → pip → npm → gem.
+            // Do not reorder. Language-level packages (pip, gem, npm) often
+            // build native extensions at install time that link against
+            // system libraries via pkg-config. Example: `pip install manim`
+            // pulls in manimpango, which needs libpango1.0-dev present on
+            // the system before its wheel can build, otherwise the install
+            // fails with "Package 'pangocairo' was not found".
+            // See docs/src/configuration.md "Install order" for the rationale.
             if !config.system.is_empty() {
                 let missing: Vec<&str> = config.system.iter()
                     .filter(|pkg| {

@@ -213,3 +213,16 @@ Declare project dependencies by package manager. Used by `rsconstruct doctor` to
 | `npm` | array of strings | `[]` | Node.js packages to install via `npm install`. |
 | `gem` | array of strings | `[]` | Ruby gems to install via `gem install`. |
 | `system` | array of strings | `[]` | System packages installed via the detected package manager (`apt-get`, `dnf`, `pacman`, or `brew`). |
+
+#### Install order
+
+`rsconstruct tools install-deps` always installs in this fixed order:
+
+1. **`system`** — OS packages (apt, dnf, pacman, brew)
+2. **`pip`** — Python packages
+3. **`npm`** — Node.js packages
+4. **`gem`** — Ruby gems
+
+This order is deliberate and must not be changed. Language-level packages frequently build native extensions that link against system libraries at install time. For example, installing `manim` via pip pulls in `manimpango`, which compiles a C extension and uses `pkg-config` to find `pangocairo` — so `libpango1.0-dev` must already be on the system before `pip install` runs. Running `pip` (or `gem`, or `npm`) before `system` causes wheel/extension builds to fail with messages like `Package 'pangocairo' was not found`.
+
+The keys inside `[dependencies]` may appear in any order in `rsconstruct.toml`; the install order is enforced by `install-deps` regardless.
