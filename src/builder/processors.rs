@@ -273,24 +273,13 @@ fn print_processor_metadata(name: &str, verbose: bool) {
             _ if *field == "max_jobs"           => "int",
             _                                   => "?",
         };
-        let default_str = if *field == "max_jobs" {
-            match plugin.and_then(|p| p.max_jobs_cap) {
-                Some(cap) => cap.to_string(),
-                None => "(global)".to_string(),
-            }
-        } else if *field == "batch" {
-            match plugin {
-                Some(p) if !p.supports_batch => "false".to_string(),
-                _ => match val {
-                    Some(v) => serde_json::to_string(v).unwrap_or_default(),
-                    None    => "(none)".to_string(),
-                }
-            }
+        let default_str = if *field == "batch"
+            && let Some(p) = plugin
+            && !p.supports_batch
+        {
+            "false".to_string()
         } else {
-            match val {
-                Some(v) => serde_json::to_string(v).unwrap_or_default(),
-                None    => "(none)".to_string(),
-            }
+            color::opt_json(val)
         };
         let required = color::yes_no(must_fields.contains(*field));
         let checksum = color::yes_no(checksum_fields.contains(*field));

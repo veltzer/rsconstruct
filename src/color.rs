@@ -84,3 +84,16 @@ pub fn print_table_with_total(headers: &[&str], rows: &[Vec<String>], total: &[S
 pub fn yes_no(b: bool) -> &'static str {
     if b { "Yes" } else { "No" }
 }
+
+/// Canonical rendering for "no value set" in tables and config dumps.
+/// Use everywhere we'd otherwise emit ad-hoc strings like "(none)" or "(global)".
+pub const NONE_LABEL: &str = "None";
+
+/// Render an optional JSON value for display. `None` becomes `NONE_LABEL`;
+/// `Some(v)` is JSON-serialized (strings stay quoted, arrays/objects stay compact).
+pub fn opt_json(value: Option<&serde_json::Value>) -> String {
+    match value {
+        Some(v) => serde_json::to_string(v).unwrap_or_default(),
+        None    => NONE_LABEL.to_string(),
+    }
+}
