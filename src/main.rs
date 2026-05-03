@@ -21,6 +21,7 @@ mod file_index;
 mod graph;
 mod json_output;
 mod object_store;
+mod phases;
 mod platform;
 mod processors;
 mod progress;
@@ -408,6 +409,9 @@ fn run() -> (Result<()>, bool) {
         Commands::Init => {
             init_project()?;
         }
+        Commands::Phases { action } => {
+            list_phases(action)?;
+        }
         Commands::Processors { action } => {
             let has_config = std::path::Path::new("rsconstruct.toml").exists();
             match action {
@@ -721,6 +725,48 @@ fn list_exit_codes(verbose: bool) -> Result<()> {
             .map(|e| vec![e.code().to_string(), e.name().to_string()])
             .collect();
         color::print_table(&["Code", "Name"], &rows);
+    }
+    Ok(())
+}
+
+fn list_phases(action: cli::PhasesAction) -> Result<()> {
+    use phases::{Phase, all_hooks, hooks_for};
+
+    match action {
+        cli::PhasesAction::List => {
+            if json_output::is_json_mode() {
+                #[derive(serde::Serialize)]
+                struct Entry { name: &'static str, description: &'static str }
+                let entries: Vec<Entry> = Phase::all().iter()
+                    .map(|p| Entry { name: p.name(), description: p.description() })
+                    .collect();
+                println!("{}", serde_json::to_string_pretty(&entries)?);
+            } else {
+                let rows: Vec<Vec<String>> = Phase::all().iter()
+                    .map(|p| vec![p.name().to_string(), p.description().to_string()])
+                    .collect();
+                color::print_table(&["Phase", "Description"], &rows);
+            }
+        }
+        cli::PhasesAction::Hooks { phase } => {
+            let hooks: Vec<&phases::PhaseHook> = match phase {
+                Some(p) => hooks_for(p).collect(),
+                None    => all_hooks().collect(),
+            };
+            if json_output::is_json_mode() {
+                #[derive(serde::Serialize)]
+                struct Entry { name: &'static str, phase: &'static str, description: &'static str }
+                let entries: Vec<Entry> = hooks.iter()
+                    .map(|h| Entry { name: h.name, phase: h.phase.name(), description: h.description })
+                    .collect();
+                println!("{}", serde_json::to_string_pretty(&entries)?);
+            } else {
+                let rows: Vec<Vec<String>> = hooks.iter()
+                    .map(|h| vec![h.phase.name().to_string(), h.name.to_string(), h.description.to_string()])
+                    .collect();
+                color::print_table(&["Phase", "Hook", "Description"], &rows);
+            }
+        }
     }
     Ok(())
 }

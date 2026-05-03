@@ -1574,6 +1574,7 @@ impl Config {
         config.processor.apply_output_dir_defaults(&config.build.output_dir);
         config.apply_span_map(&span_map);
         config.populate_global_provenance(&global_span_map)?;
+        crate::phases::run_phase(crate::phases::Phase::PostConfig, &mut config)?;
         Ok(config)
     }
 

@@ -85,3 +85,27 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     supports_batch: false,
     max_jobs_cap: None,
 } }
+
+/// CI cap for marp: GitHub Actions runners (and similar 2-vCPU CI hosts) OOM
+/// when running marp at full project parallelism. Equivalent to the user
+/// passing `--pset marp.max_jobs=2`; only applies when the user hasn't set
+/// `max_jobs` themselves and `CI=true` is in the environment.
+fn marp_ci_cap(config: &mut crate::config::Config) -> anyhow::Result<()> {
+    if !std::env::var("CI").is_ok_and(|v| v == "true") {
+        return Ok(());
+    }
+    for inst in config.processor.instances.iter_mut().filter(|i| i.type_name == "marp") {
+        let Some(table) = inst.config_toml.as_table_mut() else { continue };
+        if !table.contains_key("max_jobs") {
+            table.insert("max_jobs".to_string(), toml::Value::Integer(2));
+        }
+    }
+    Ok(())
+}
+
+inventory::submit! { crate::phases::PhaseHook {
+    name: "marp_ci_cap",
+    phase: crate::phases::Phase::PostConfig,
+    description: "When CI=true and marp.max_jobs is unset, cap it at 2",
+    run: marp_ci_cap,
+} }

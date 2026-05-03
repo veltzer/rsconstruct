@@ -22,13 +22,14 @@ use super::{Executor, HandlerContext, LevelWork, PreCheckResult, RestoreOutcome,
 /// field is capped by the plugin's static `max_jobs_cap`; `None` on either
 /// side means no limit on that side.
 fn effective_max_jobs(name: &str, proc: &dyn crate::processors::Processor) -> Option<usize> {
-    let config = proc.scan_config().max_jobs;
-    let cap = crate::registries::processor::find_plugin(name).and_then(|p| p.max_jobs_cap);
-    match (config, cap) {
+    let plugin = crate::registries::processor::find_plugin(name);
+    let user_set = proc.scan_config().max_jobs;
+    let static_cap = plugin.and_then(|p| p.max_jobs_cap);
+    match (user_set, static_cap) {
         (Some(c), Some(m)) => Some(c.min(m)),
-        (Some(c), None) => Some(c),
-        (None, Some(m)) => Some(m),
-        (None, None) => None,
+        (Some(c), None)    => Some(c),
+        (None, Some(m))    => Some(m),
+        (None, None)       => None,
     }
 }
 

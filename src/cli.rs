@@ -260,6 +260,11 @@ pub enum Commands {
     },
     /// Initialize a new rsconstruct project (no config needed)
     Init,
+    /// Inspect rsconstruct phases and registered hooks (no config needed)
+    Phases {
+        #[command(subcommand)]
+        action: PhasesAction,
+    },
     /// Manage processors
     Processors {
         #[command(subcommand)]
@@ -368,6 +373,18 @@ pub enum SmartAction {
 pub enum InfoAction {
     /// Show source file counts by extension (requires config)
     Source,
+}
+
+#[derive(Subcommand)]
+pub enum PhasesAction {
+    /// List registered phase hooks (no config needed)
+    Hooks {
+        /// Filter to a single phase
+        #[arg(value_enum)]
+        phase: Option<crate::phases::Phase>,
+    },
+    /// List all phases with descriptions (no config needed)
+    List,
 }
 
 #[derive(Subcommand)]
