@@ -62,7 +62,7 @@ fn product_show_resolves_by_output_and_prints_all_sections() {
     // With --verbose the full resolved list is included.
     let out_v = run_rsconstruct_with_env(
         p,
-        &["product", "show", "--verbose", "report.txt"],
+        &["--verbose", "product", "show", "report.txt"],
         &[("NO_COLOR", "1")],
     );
     assert!(out_v.status.success(),
