@@ -646,18 +646,28 @@ fn run_tools_command(
                 }
             }
 
+            // Suppress per-command output by default to keep CI logs short.
+            // Capture stdout+stderr and only emit them when the install fails.
             let mut any_failed = false;
             for (desc, cmd) in &commands {
-                println!("Running: {} ({})", desc, color::dim(cmd));
-                let status = Command::new("sh")
+                let output = Command::new("sh")
                     .arg("-c")
                     .arg(cmd)
-                    .status()?;
-                if status.success() {
-                    println!("{}", color::green("OK"));
+                    .output()?;
+                if output.status.success() {
+                    println!("{} {}", color::green("✓"), desc);
                 } else {
-                    println!("{} (exit code {})", color::red("FAILED"),
-                        status.code().map_or("unknown".to_string(), |c| c.to_string()));
+                    println!("{} {} (exit code {})", color::red("✗"), desc,
+                        output.status.code().map_or("unknown".to_string(), |c| c.to_string()));
+                    println!("  {}: {}", color::dim("command"), cmd);
+                    if !output.stdout.is_empty() {
+                        println!("{}", color::dim("--- stdout ---"));
+                        std::io::Write::write_all(&mut std::io::stdout(), &output.stdout)?;
+                    }
+                    if !output.stderr.is_empty() {
+                        println!("{}", color::dim("--- stderr ---"));
+                        std::io::Write::write_all(&mut std::io::stderr(), &output.stderr)?;
+                    }
                     any_failed = true;
                 }
             }
