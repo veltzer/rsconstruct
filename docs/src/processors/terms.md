@@ -59,8 +59,8 @@ Auto-detected when `dir_terms_unambiguous` exists and `.md` files are present.
 
 ```toml
 [processor.terms]
-dir_terms_unambiguous = "terms.unambiguous"   # Directory of unambiguous term lists
-dir_terms_ambiguous = "terms.ambiguous"       # Optional: directory of ambiguous terms
+dir_terms_unambiguous = "terms/unambiguous"   # Directory of unambiguous term lists
+dir_terms_ambiguous = "terms/ambiguous"       # Optional: directory of ambiguous terms
 forbid_backticked_ambiguous = true            # Backticking an ambiguous term is an error
 batch = true                                  # Enable batch execution
 dep_inputs = []                               # Additional files that trigger rebuilds
@@ -68,8 +68,8 @@ dep_inputs = []                               # Additional files that trigger re
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `dir_terms_unambiguous` | string | `"terms.unambiguous"` | Directory containing `.txt` files of unambiguous terms. Terms here must be backticked in markdown. |
-| `dir_terms_ambiguous` | string | `"terms.ambiguous"` | Directory of ambiguous terms. Treated as empty if the directory does not exist on disk. Build fails if any term overlaps with `dir_terms_unambiguous`. Terms here are **not** required to be backticked. |
+| `dir_terms_unambiguous` | string | `"terms/unambiguous"` | Directory containing `.txt` files of unambiguous terms. Terms here must be backticked in markdown. |
+| `dir_terms_ambiguous` | string | `"terms/ambiguous"` | Directory of ambiguous terms. Treated as empty if the directory does not exist on disk. Build fails if any term overlaps with `dir_terms_unambiguous`. Terms here are **not** required to be backticked. |
 | `forbid_backticked_ambiguous` | bool | `true` | If true, backticking an ambiguous term is a build error and `terms fix` strips those backticks. |
 | `batch` | bool | `true` | Enable batch execution |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
@@ -85,13 +85,13 @@ typically organized by category. Projects that distinguish unambiguous
 from ambiguous terms use two parallel directories:
 
 ```
-terms.unambiguous/
+terms/unambiguous/
   programming_languages.txt
   frameworks_and_libraries.txt
   databases_and_storage.txt
   devops_and_cicd.txt
   ...
-terms.ambiguous/
+terms/ambiguous/
   general_technical_terms.txt
   ...
 ```

@@ -1456,11 +1456,11 @@ impl KnownFields for AspellConfig {
 pub type AsciiConfig = CheckerConfig;
 
 fn default_dir_terms_unambiguous() -> String {
-    "terms.unambiguous".into()
+    "terms/unambiguous".into()
 }
 
 fn default_dir_terms_ambiguous() -> String {
-    "terms.ambiguous".into()
+    "terms/ambiguous".into()
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -1482,8 +1482,8 @@ pub struct TermsConfig {
 impl Default for TermsConfig {
     fn default() -> Self {
         Self {
-            dir_terms_unambiguous: "terms.unambiguous".into(),
-            dir_terms_ambiguous: "terms.ambiguous".into(),
+            dir_terms_unambiguous: "terms/unambiguous".into(),
+            dir_terms_ambiguous: "terms/ambiguous".into(),
             forbid_backticked_ambiguous: true,
             standard: StandardConfig::default(),
         }
