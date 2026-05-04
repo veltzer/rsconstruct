@@ -153,9 +153,8 @@ pub fn processor_tool_hashes(
 ) -> Result<std::collections::HashMap<String, String>> {
     use sha2::{Digest, Sha256};
 
-    let lock = match read_lock_file()? {
-        Some(lock) => lock,
-        None => return Ok(std::collections::HashMap::new()),
+    let Some(lock) = read_lock_file()? else {
+        return Ok(std::collections::HashMap::new());
     };
 
     let mut result = std::collections::HashMap::new();
@@ -198,22 +197,16 @@ pub fn processor_tool_hashes(
 pub fn verify_lock_file(
     tool_commands: &[(String, Vec<String>)],
 ) -> Result<()> {
-    let lock = match read_lock_file()? {
-        Some(lock) => lock,
-        None => anyhow::bail!(
-            "No {LOCK_FILE} found. Run `rsconstruct tools lock` to create one."
-        ),
+    let Some(lock) = read_lock_file()? else {
+        anyhow::bail!("No {LOCK_FILE} found. Run `rsconstruct tools lock` to create one.");
     };
 
     let mut mismatches = Vec::new();
 
     for (tool_name, version_args) in tool_commands {
-        let locked = match lock.tools.get(tool_name) {
-            Some(l) => l,
-            None => {
-                mismatches.push(format!("{tool_name} — not in lock file (new tool?)"));
-                continue;
-            }
+        let Some(locked) = lock.tools.get(tool_name) else {
+            mismatches.push(format!("{tool_name} — not in lock file (new tool?)"));
+            continue;
         };
 
         // Query current version

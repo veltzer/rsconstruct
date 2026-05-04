@@ -339,10 +339,7 @@ impl BuildGraph {
 
         // For generators: check output conflicts and deduplicate re-declarations.
         for output in &outputs {
-            let output_id = match self.interner.get(output) {
-                Some(id) => id,
-                None => continue,
-            };
+            let Some(output_id) = self.interner.get(output) else { continue };
             if let Some(&existing_id) = self.output_to_product.get(&output_id) {
                 let existing = self.products.get(existing_id).expect(crate::errors::INVALID_PRODUCT_ID);
                 let same_processor = existing.processor == processor;
@@ -881,13 +878,10 @@ impl BuildGraph {
         let _ = writeln!(buf, "======================");
 
         // Get topological order
-        let order = match self.topological_sort() {
-            Ok(o) => o,
-            Err(_) => {
-                let _ = writeln!(buf, "Error: Cycle detected in graph");
-                buf.truncate(buf.trim_end().len());
-                return buf;
-            }
+        let Ok(order) = self.topological_sort() else {
+            let _ = writeln!(buf, "Error: Cycle detected in graph");
+            buf.truncate(buf.trim_end().len());
+            return buf;
         };
 
         for id in order {

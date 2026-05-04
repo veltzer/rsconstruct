@@ -48,7 +48,7 @@ impl Processor for MarkdownlintProcessor {
             cmd.arg(arg);
         }
         cmd.arg(file);
-        let output = run_command(ctx, &mut cmd)?;
+        let output = run_command(ctx, &cmd)?;
         check_command_output(&output, format_args!("markdownlint {}", file.display()))
     }
 }

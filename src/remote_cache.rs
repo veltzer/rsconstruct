@@ -45,7 +45,7 @@ pub fn create_backend(url: &str) -> Result<Box<dyn RemoteCache>> {
     if url.starts_with("s3://") {
         Ok(Box::new(S3Backend::new(url)?))
     } else if url.starts_with("http://") || url.starts_with("https://") {
-        Ok(Box::new(HttpBackend::new(url)?))
+        Ok(Box::new(HttpBackend::new(url)))
     } else if url.starts_with("file://") {
         Ok(Box::new(FileBackend::new(url)?))
     } else {
@@ -98,7 +98,7 @@ impl RemoteCache for S3Backend {
     fn exists(&self, ctx: &crate::build_context::BuildContext, key: &str) -> Result<bool> {
         let mut cmd = Command::new("aws");
         cmd.args(["s3", "ls", &self.s3_uri(key)]);
-        let output = run_command_capture(ctx, &mut cmd)?;
+        let output = run_command_capture(ctx, &cmd)?;
         Ok(output.status.success())
     }
 
@@ -116,7 +116,7 @@ impl RemoteCache for S3Backend {
             &dest.display().to_string(),
             "--only-show-errors",
         ]);
-        let output = run_command_capture(ctx, &mut cmd)?;
+        let output = run_command_capture(ctx, &cmd)?;
         Ok(output.status.success())
     }
 
@@ -128,14 +128,14 @@ impl RemoteCache for S3Backend {
             &self.s3_uri(key),
             "--only-show-errors",
         ]);
-        let output = run_command_capture(ctx, &mut cmd)?;
+        let output = run_command_capture(ctx, &cmd)?;
         check_command_output(&output, "S3 upload")
     }
 
     fn download_bytes(&self, ctx: &crate::build_context::BuildContext, key: &str) -> Result<Option<Vec<u8>>> {
         let mut cmd = Command::new("aws");
         cmd.args(["s3", "cp", &self.s3_uri(key), "-"]);
-        let output = run_command_capture(ctx, &mut cmd)?;
+        let output = run_command_capture(ctx, &cmd)?;
 
         if output.status.success() {
             Ok(Some(output.stdout))
@@ -151,10 +151,10 @@ pub struct HttpBackend {
 }
 
 impl HttpBackend {
-    pub fn new(url: &str) -> Result<Self> {
-        Ok(Self {
+    pub fn new(url: &str) -> Self {
+        Self {
             base_url: url.trim_end_matches('/').to_string(),
-        })
+        }
     }
 
     fn full_url(&self, key: &str) -> String {
@@ -169,7 +169,7 @@ impl RemoteCache for HttpBackend {
             "-s", "-o", "/dev/null", "-w", "%{http_code}", "--head",
             &self.full_url(key),
         ]);
-        let output = run_command_capture(ctx, &mut cmd)?;
+        let output = run_command_capture(ctx, &cmd)?;
         let status_code = String::from_utf8_lossy(&output.stdout);
         Ok(status_code.trim() == "200")
     }
@@ -186,7 +186,7 @@ impl RemoteCache for HttpBackend {
             "-o", &dest.display().to_string(),
             &self.full_url(key),
         ]);
-        let output = run_command_capture(ctx, &mut cmd)?;
+        let output = run_command_capture(ctx, &cmd)?;
         Ok(output.status.success())
     }
 
@@ -197,14 +197,14 @@ impl RemoteCache for HttpBackend {
             "--data-binary", &format!("@{}", src.display()),
             &self.full_url(key),
         ]);
-        let output = run_command_capture(ctx, &mut cmd)?;
+        let output = run_command_capture(ctx, &cmd)?;
         check_command_output(&output, "HTTP upload")
     }
 
     fn download_bytes(&self, ctx: &crate::build_context::BuildContext, key: &str) -> Result<Option<Vec<u8>>> {
         let mut cmd = Command::new("curl");
         cmd.args(["-s", "-f", &self.full_url(key)]);
-        let output = run_command_capture(ctx, &mut cmd)?;
+        let output = run_command_capture(ctx, &cmd)?;
 
         if output.status.success() {
             Ok(Some(output.stdout))

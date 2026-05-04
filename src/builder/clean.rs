@@ -193,10 +193,7 @@ impl Builder {
             .build();
 
         for entry in walker {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
+            let Ok(entry) = entry else { continue };
             // Skip directories — we only care about files
             if !entry.file_type().is_some_and(|ft| ft.is_file()) {
                 continue;

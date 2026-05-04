@@ -425,11 +425,10 @@ pub fn resolve_instance_defaults(
     type_name: &str,
     value: &mut toml::Value,
     provenance: &mut ProvenanceMap,
-) -> anyhow::Result<()> {
+) {
     if find_registry_entry(type_name).is_some() {
         registry::apply_all_defaults(type_name, value, provenance);
     }
-    Ok(())
 }
 
 impl ProcessorConfig {
@@ -670,14 +669,8 @@ pub fn apply_processor_defaults(
     value: &mut toml::Value,
     provenance: &mut ProvenanceMap,
 ) {
-    let defaults = match processor_defaults_for(type_name) {
-        Some(d) => d,
-        None => return,
-    };
-    let table = match value.as_table_mut() {
-        Some(t) => t,
-        None => return,
-    };
+    let Some(defaults) = processor_defaults_for(type_name) else { return };
+    let Some(table) = value.as_table_mut() else { return };
     set_string_default(table, "command", defaults.command, provenance, FieldProvenance::ProcessorDefault);
     set_string_default(table, "output_dir", defaults.output_dir, provenance, FieldProvenance::ProcessorDefault);
     set_string_array_default(table, "dep_auto", defaults.dep_auto, provenance, FieldProvenance::ProcessorDefault);
@@ -752,14 +745,8 @@ pub fn apply_scan_defaults(
     value: &mut toml::Value,
     provenance: &mut ProvenanceMap,
 ) {
-    let defaults = match scan_defaults_for(type_name) {
-        Some(d) => d,
-        None => return,
-    };
-    let table = match value.as_table_mut() {
-        Some(t) => t,
-        None => return,
-    };
+    let Some(defaults) = scan_defaults_for(type_name) else { return };
+    let Some(table) = value.as_table_mut() else { return };
     set_maybe_empty_array_default(table, "src_dirs", defaults.src_dirs, provenance, FieldProvenance::ScanDefault);
     set_maybe_empty_array_default(table, "src_extensions", defaults.src_extensions, provenance, FieldProvenance::ScanDefault);
     set_maybe_empty_array_default(table, "src_exclude_dirs", defaults.src_exclude_dirs, provenance, FieldProvenance::ScanDefault);
@@ -817,26 +804,23 @@ impl Serialize for ProcessorConfig {
 impl<'de> Deserialize<'de> for ProcessorConfig {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
         let table = toml::Value::deserialize(deserializer)?;
-        ProcessorConfig::from_toml(&table).map_err(serde::de::Error::custom)
+        Ok(ProcessorConfig::from_toml(&table))
     }
 }
 
 impl ProcessorConfig {
     /// Parse the `[processor]` table from TOML into instances.
-    pub(crate) fn from_toml(value: &toml::Value) -> Result<Self> {
-        let table = match value.as_table() {
-            Some(t) => t,
-            None => return Ok(Self::default()),
+    pub(crate) fn from_toml(value: &toml::Value) -> Self {
+        let Some(table) = value.as_table() else {
+            return Self::default();
         };
 
         let mut instances = Vec::new();
         let mut extra = HashMap::new();
 
         for (key, val) in table {
-            let sub_table = match val.as_table() {
-                Some(t) => t,
-                None => continue, // skip non-table entries
-            };
+            // skip non-table entries
+            let Some(sub_table) = val.as_table() else { continue };
 
             if is_builtin_type(key) {
                 // Check if this is single-instance or multi-instance
@@ -846,7 +830,7 @@ impl ProcessorConfig {
                         let instance_name = format!("{key}.{name}");
                         let mut config = inst_val.clone();
                         let mut provenance = seed_user_provenance(&config);
-                        resolve_instance_defaults(key, &mut config, &mut provenance)?;
+                        resolve_instance_defaults(key, &mut config, &mut provenance);
                         instances.push(ProcessorInstance {
                             instance_name,
                             type_name: key.clone(),
@@ -858,7 +842,7 @@ impl ProcessorConfig {
                     // Single instance: [processor.pylint]
                     let mut config = val.clone();
                     let mut provenance = seed_user_provenance(&config);
-                    resolve_instance_defaults(key, &mut config, &mut provenance)?;
+                    resolve_instance_defaults(key, &mut config, &mut provenance);
                     instances.push(ProcessorInstance {
                         instance_name: key.clone(),
                         type_name: key.clone(),
@@ -872,7 +856,7 @@ impl ProcessorConfig {
             }
         }
 
-        Ok(Self { instances, extra })
+        Self { instances, extra }
     }
 
     /// Determine if a processor section contains named sub-instances (multi-instance)
@@ -909,7 +893,7 @@ impl ProcessorConfig {
     /// Resolve scan defaults for all instances.
     pub(crate) fn resolve_scan_defaults(&mut self) {
         for inst in &mut self.instances {
-            resolve_instance_defaults(&inst.type_name, &mut inst.config_toml, &mut inst.provenance).ok();
+            resolve_instance_defaults(&inst.type_name, &mut inst.config_toml, &mut inst.provenance);
         }
     }
 
@@ -928,10 +912,7 @@ impl ProcessorConfig {
             let instance_prefix = format!("{}/{}", global_output_dir, inst.instance_name);
 
             for field in &["output_dir", "output"] {
-                let val = match inst.config_toml.get(field).and_then(|v| v.as_str()).map(std::string::ToString::to_string) {
-                    Some(v) => v,
-                    None => continue,
-                };
+                let Some(val) = inst.config_toml.get(field).and_then(|v| v.as_str()).map(std::string::ToString::to_string) else { continue };
                 let new_val = if inst.instance_name != inst.type_name && val.starts_with(&type_default_prefix) {
                     // Named instance: remap out/{type} → {global}/{instance}
                     format!("{}{}", instance_prefix, &val[type_default_prefix.len()..])
@@ -1070,9 +1051,8 @@ impl AnalyzerConfig {
     /// - `[analyzer.cpp.kernel]` + `[analyzer.cpp.userspace]` → two instances,
     ///   instance_name="cpp.kernel" and "cpp.userspace"
     pub(crate) fn from_toml(value: &toml::Value) -> Result<Self> {
-        let table = match value.as_table() {
-            Some(t) => t,
-            None => return Ok(Self::default()),
+        let Some(table) = value.as_table() else {
+            return Ok(Self::default());
         };
 
         let mut instances = Vec::new();
@@ -1080,9 +1060,8 @@ impl AnalyzerConfig {
             if registry::find_analyzer_plugin(type_name).is_none() {
                 anyhow::bail!("Unknown analyzer '{type_name}'. Run 'rsconstruct analyzers list' to see available analyzers.");
             }
-            let sub_table = match val.as_table() {
-                Some(t) => t,
-                None => anyhow::bail!("Expected [analyzer.{type_name}] to be a table"),
+            let Some(sub_table) = val.as_table() else {
+                anyhow::bail!("Expected [analyzer.{type_name}] to be a table");
             };
             if Self::is_multi_instance(sub_table) {
                 for (name, inst_val) in sub_table {
@@ -1391,18 +1370,15 @@ fn validate_single_processor(
 /// Returns a list of error strings (empty if valid). `Config::load` combines this with the
 /// analyzer validator output under a single "Invalid config:" header.
 fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
-    let processor_table = match raw.get("processor").and_then(|v| v.as_table()) {
-        Some(t) => t,
-        None => return Vec::new(),
+    let Some(processor_table) = raw.get("processor").and_then(|v| v.as_table()) else {
+        return Vec::new();
     };
 
     let mut errors = Vec::new();
 
     for (name, value) in processor_table {
-        let table = match value.as_table() {
-            Some(t) => t,
-            None => continue, // skip non-table entries
-        };
+        // skip non-table entries
+        let Some(table) = value.as_table() else { continue };
 
         if !is_builtin_type(name) {
             // Check if there's a matching Lua plugin file
@@ -1445,32 +1421,23 @@ fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
 /// combines this with the processor validator output under a single
 /// "Invalid config:" header.
 fn validate_analyzer_fields_raw(raw: &toml::Value) -> Vec<String> {
-    let analyzer_table = match raw.get("analyzer").and_then(|v| v.as_table()) {
-        Some(t) => t,
-        None => return Vec::new(),
+    let Some(analyzer_table) = raw.get("analyzer").and_then(|v| v.as_table()) else {
+        return Vec::new();
     };
 
     let mut errors = Vec::new();
 
     for (type_name, value) in analyzer_table {
-        let table = match value.as_table() {
-            Some(t) => t,
-            None => {
-                errors.push(format!(
-                    "[analyzer.{type_name}]: expected a table",
-                ));
-                continue;
-            }
+        let Some(table) = value.as_table() else {
+            errors.push(format!("[analyzer.{type_name}]: expected a table"));
+            continue;
         };
 
-        let plugin = match registry::find_analyzer_plugin(type_name) {
-            Some(p) => p,
-            None => {
-                errors.push(format!(
-                    "[analyzer.{type_name}]: unknown analyzer type '{type_name}' (run 'rsconstruct analyzers list' to see available)",
-                ));
-                continue;
-            }
+        let Some(plugin) = registry::find_analyzer_plugin(type_name) else {
+            errors.push(format!(
+                "[analyzer.{type_name}]: unknown analyzer type '{type_name}' (run 'rsconstruct analyzers list' to see available)",
+            ));
+            continue;
         };
 
         // Multi-instance: `[analyzer.cpp.kernel]` / `[analyzer.cpp.userspace]`.
@@ -1603,20 +1570,14 @@ impl Config {
         // effective keys without reaching into every section struct.
         let serialized = toml::Value::try_from(&*self)
             .context("Failed to serialize config for global provenance walk")?;
-        let root = match serialized.as_table() {
-            Some(t) => t,
-            None => return Ok(()),
-        };
+        let Some(root) = serialized.as_table() else { return Ok(()) };
         for (section_name, section_value) in root {
             // Skip processor/analyzer — those are tracked per-instance in the
             // instances' own provenance maps.
             if section_name == "processor" || section_name == "analyzer" {
                 continue;
             }
-            let section_table = match section_value.as_table() {
-                Some(t) => t,
-                None => continue,
-            };
+            let Some(section_table) = section_value.as_table() else { continue };
             let user_fields = global_spans.get(section_name);
             let mut map = ProvenanceMap::new();
             for field in section_table.keys() {

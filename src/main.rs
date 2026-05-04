@@ -242,7 +242,7 @@ fn run() -> (Result<()>, bool) {
                 }
                 CacheAction::Size => {
                     let builder = Builder::new()?;
-                    let (bytes, count) = builder.object_store().size()?;
+                    let (bytes, count) = builder.object_store().size();
                     if json_output::is_json_mode() {
                         let out = serde_json::json!({ "bytes": bytes, "objects": count });
                         println!("{}", serde_json::to_string_pretty(&out)?);
@@ -530,12 +530,12 @@ fn run() -> (Result<()>, bool) {
                 }
                 cli::SmartAction::EnableDetected => {
                     let builder = Builder::new()?;
-                    let detected = builder.detected_processors()?;
+                    let detected = builder.detected_processors();
                     builder::smart::enable_detected(&detected)?;
                 }
                 cli::SmartAction::Minimal => {
                     let builder = Builder::new()?;
-                    let detected = builder.detected_processors()?;
+                    let detected = builder.detected_processors();
                     builder::smart::minimal(&detected)?;
                 }
                 cli::SmartAction::Reset => {
@@ -543,7 +543,7 @@ fn run() -> (Result<()>, bool) {
                 }
                 cli::SmartAction::EnableIfAvailable => {
                     let builder = Builder::new()?;
-                    let available = builder.detected_and_available_processors()?;
+                    let available = builder.detected_and_available_processors();
                     builder::smart::enable_if_available(&available)?;
                 }
                 cli::SmartAction::Only { ref names } => {
@@ -551,7 +551,7 @@ fn run() -> (Result<()>, bool) {
                 }
                 cli::SmartAction::Auto => {
                     let builder = Builder::new()?;
-                    let detected = builder.detected_and_available_processors()?;
+                    let detected = builder.detected_and_available_processors();
                     builder::smart::auto(&detected)?;
                 }
                 cli::SmartAction::RemoveNoFileProcessors => {

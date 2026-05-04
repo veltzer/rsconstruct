@@ -98,7 +98,7 @@ impl LinuxModuleProcessor {
         cmd.arg("modules");
         cmd.current_dir(&module_dir);
 
-        let output = run_command(ctx, &mut cmd)?;
+        let output = run_command(ctx, &cmd)?;
         check_command_output(&output, format_args!("make modules for {}", module.name))?;
 
         // Copy the .ko file to the output directory
@@ -122,7 +122,7 @@ impl LinuxModuleProcessor {
         clean_cmd.arg(format!("M={}", module_dir.display()));
         clean_cmd.arg("clean");
         clean_cmd.current_dir(&module_dir);
-        let _ = run_command(ctx, &mut clean_cmd);
+        let _ = run_command(ctx, &clean_cmd);
 
         // Remove the Kbuild we generated
         let _ = fs::remove_file(module_dir.join("Kbuild"));

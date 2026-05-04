@@ -135,7 +135,7 @@ impl Processor for ExplicitProcessor {
             }
         }
 
-        let out = run_command(ctx, &mut cmd)?;
+        let out = run_command(ctx, &cmd)?;
         check_command_output(
             &out,
             format_args!("{} ({} inputs)",

@@ -107,13 +107,10 @@ pub fn classify_products(
         let product = graph.get_product(id).expect(errors::INVALID_PRODUCT_ID);
         let dep_changed = graph.get_dependencies(id).iter().any(|d| will_change.contains(d));
 
-        let input_checksum = match crate::checksum::combined_input_checksum(ctx, &product.inputs) {
-            Ok(cs) => cs,
-            Err(_) => {
-                build_count += 1;
-                will_change.insert(id);
-                continue;
-            }
+        let Ok(input_checksum) = crate::checksum::combined_input_checksum(ctx, &product.inputs) else {
+            build_count += 1;
+            will_change.insert(id);
+            continue;
         };
 
         match policy.classify(product, object_store, &input_checksum, dep_changed, force) {

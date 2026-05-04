@@ -5,11 +5,9 @@ use super::ObjectStore;
 
 impl ObjectStore {
     /// Try to push an object to remote cache (ignores errors)
+    #[allow(clippy::unnecessary_wraps)] // Result kept for API symmetry with try_fetch_*; future writers may legitimately fail.
     pub(super) fn try_push_object_to_remote(&self, ctx: &crate::build_context::BuildContext, checksum: &str) -> Result<()> {
-        let remote = match &self.remote {
-            Some(r) => r,
-            None => return Ok(()),
-        };
+        let Some(remote) = &self.remote else { return Ok(()) };
 
         let object_path = self.object_path(checksum);
         if !object_path.exists() {
@@ -37,10 +35,7 @@ impl ObjectStore {
     // called from any read path. Intentional; tracked under remote-pull WIP.
     #[allow(dead_code)]
     pub(super) fn try_fetch_object_from_remote(&self, ctx: &crate::build_context::BuildContext, checksum: &str) -> Result<bool> {
-        let remote = match &self.remote {
-            Some(r) => r,
-            None => return Ok(false),
-        };
+        let Some(remote) = &self.remote else { return Ok(false) };
 
         let object_path = self.object_path(checksum);
         if object_path.exists() {
@@ -68,11 +63,9 @@ impl ObjectStore {
     // Scaffolding for remote-pull (for paired fetch-after-push semantics).
     // Not yet called from any write path; tracked under remote-pull WIP.
     #[allow(dead_code)]
+    #[allow(clippy::unnecessary_wraps)] // Result kept for API symmetry with try_fetch_*.
     pub(super) fn try_push_descriptor_to_remote(&self, ctx: &crate::build_context::BuildContext, descriptor_key: &str, data: &[u8]) -> Result<()> {
-        let remote = match &self.remote {
-            Some(r) => r,
-            None => return Ok(()),
-        };
+        let Some(remote) = &self.remote else { return Ok(()) };
 
         let remote_key = format!("descriptors/{descriptor_key}");
         if let Err(e) = remote.upload_bytes(ctx, &remote_key, data) {
@@ -86,10 +79,7 @@ impl ObjectStore {
     /// Scaffolding for remote-pull; not yet called from any read path.
     #[allow(dead_code)]
     pub(super) fn try_fetch_descriptor_from_remote(&self, ctx: &crate::build_context::BuildContext, descriptor_key: &str) -> Result<Option<Vec<u8>>> {
-        let remote = match &self.remote {
-            Some(r) => r,
-            None => return Ok(None),
-        };
+        let Some(remote) = &self.remote else { return Ok(None) };
 
         let remote_key = format!("descriptors/{descriptor_key}");
         let data = remote.download_bytes(ctx, &remote_key)?;

@@ -205,7 +205,7 @@ fn scan_template_recursive(
     // glob. Only the count/identity of tracked files matters, not content.
     for caps in git_count_re.captures_iter(&content) {
         let pattern = &caps[1];
-        let matched = git_ls_files(pattern)?;
+        let matched = git_ls_files(pattern);
         hash_pieces.push(format!("git_count:{pattern}"));
         hash_pieces.push(format!("git_count_resolved:{}", matched.join("\n")));
     }
@@ -305,13 +305,13 @@ fn scan_template_recursive(
 /// matches what the renderer actually counts. A failed git invocation
 /// (e.g. not a git repository) yields an empty list — the function is
 /// best-effort by design.
-fn git_ls_files(pattern: &str) -> Result<Vec<String>> {
+fn git_ls_files(pattern: &str) -> Vec<String> {
     let output = std::process::Command::new("git")
         .args(["ls-files", "--", pattern])
         .output();
     let output = match output {
         Ok(o) if o.status.success() => o,
-        _ => return Ok(Vec::new()),
+        _ => return Vec::new(),
     };
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut paths: Vec<String> = stdout
@@ -321,7 +321,7 @@ fn git_ls_files(pattern: &str) -> Result<Vec<String>> {
         .collect();
     paths.sort();
     paths.dedup();
-    Ok(paths)
+    paths
 }
 
 /// Expand a glob pattern into a sorted list of file paths (as strings, relative

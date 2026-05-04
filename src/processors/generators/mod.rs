@@ -56,7 +56,7 @@ impl TemplateItem {
 
 /// Find all template files matching configured extensions, stripping the
 /// extension to produce the output path. Shared by tera and mako processors.
-pub(super) fn find_templates(scan: &StandardConfig, file_index: &FileIndex) -> Result<Vec<TemplateItem>> {
+pub(super) fn find_templates(scan: &StandardConfig, file_index: &FileIndex) -> Vec<TemplateItem> {
     let paths = file_index.scan(scan, true);
     let extensions = scan.src_extensions();
     let src_dirs = scan.src_dirs();
@@ -80,7 +80,7 @@ pub(super) fn find_templates(scan: &StandardConfig, file_index: &FileIndex) -> R
         }
     }
 
-    Ok(items)
+    items
 }
 
 /// Parameters shared by multi-format and single-format discover helpers.
@@ -105,17 +105,11 @@ pub(super) fn find_dirs_with_ext(base: &Path, ext: &str) -> Vec<PathBuf> {
 }
 
 fn collect_dirs_with_ext(dir: &Path, ext: &str, result: &mut Vec<PathBuf>) {
-    let entries = match std::fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(_) => return,
-    };
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
     let mut has_matching_file = false;
     let mut subdirs = Vec::new();
     for entry in entries.flatten() {
-        let ft = match entry.file_type() {
-            Ok(ft) => ft,
-            Err(_) => continue,
-        };
+        let Ok(ft) = entry.file_type() else { continue };
         if ft.is_dir() {
             subdirs.push(entry.path());
         } else if !has_matching_file

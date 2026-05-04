@@ -9,7 +9,7 @@ use super::{
 
 impl ObjectStore {
     /// Get cache size in bytes and number of objects (blobs + descriptors)
-    pub fn size(&self) -> Result<(u64, usize)> {
+    pub fn size(&self) -> (u64, usize) {
         let mut total_bytes = 0u64;
         let mut object_count = 0usize;
 
@@ -25,7 +25,7 @@ impl ObjectStore {
             }
         }
 
-        Ok((total_bytes, object_count))
+        (total_bytes, object_count)
     }
 
     /// Trim cache by removing blob objects not referenced by any descriptor.
@@ -178,14 +178,8 @@ impl ObjectStore {
         }
 
         for path in walk_files(&self.descriptors_dir) {
-            let data = match fs::read(&path) {
-                Ok(d) => d,
-                Err(_) => continue,
-            };
-            let desc: CacheDescriptor = match serde_json::from_slice(&data) {
-                Ok(d) => d,
-                Err(_) => continue,
-            };
+            let Ok(data) = fs::read(&path) else { continue };
+            let Ok(desc) = serde_json::from_slice::<CacheDescriptor>(&data) else { continue };
 
             // We can't extract processor name from a hashed descriptor key.
             // Use "all" as a single bucket for now.

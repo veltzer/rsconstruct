@@ -115,7 +115,7 @@ impl CppDepAnalyzer {
             eprintln!("[cpp] {}", format_command(&cmd));
         }
 
-        let output = run_command_capture(ctx, &mut cmd)?;
+        let output = run_command_capture(ctx, &cmd)?;
         check_command_output(&output, format_args!("Dependency scan of {}", source.display()))?;
 
         let content = String::from_utf8_lossy(&output.stdout).to_string();

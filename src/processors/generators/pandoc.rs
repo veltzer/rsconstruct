@@ -96,7 +96,7 @@ impl Processor for PandocProcessor {
         cmd.arg(input);
         cmd.arg("-o").arg(output);
 
-        let out = run_command(ctx, &mut cmd)?;
+        let out = run_command(ctx, &cmd)?;
         check_command_output(&out, format_args!("pandoc {}", input.display()))
     }
 }

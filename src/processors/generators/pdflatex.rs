@@ -99,7 +99,7 @@ impl Processor for PdflatexProcessor {
             }
             cmd.arg(input);
 
-            let out = run_command(ctx, &mut cmd)?;
+            let out = run_command(ctx, &cmd)?;
             check_command_output(&out, format_args!("pdflatex run {} of {}", run + 1, input.display()))?;
         }
 
@@ -114,7 +114,7 @@ impl Processor for PdflatexProcessor {
             cmd.arg(&pdf_in_build);
             cmd.arg(&qpdf_tmp);
 
-            let out = run_command(ctx, &mut cmd)?;
+            let out = run_command(ctx, &cmd)?;
             check_command_output(&out, format_args!("qpdf {}", pdf_in_build.display()))?;
 
             // Replace original with linearized version

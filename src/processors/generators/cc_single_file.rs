@@ -14,14 +14,17 @@ static SHELL_COMMAND_CACHE: Mutex<Option<HashMap<String, Vec<String>>>> = Mutex:
 
 /// Get or compute flags from a shell command, caching the result.
 fn cached_shell_command(cmd_line: &str, runner: impl FnOnce(&crate::build_context::BuildContext, &str) -> Result<Vec<String>>, ctx: &crate::build_context::BuildContext) -> Result<Vec<String>> {
-    let mut guard = SHELL_COMMAND_CACHE.lock();
-    let cache = guard.get_or_insert_with(HashMap::new);
-
-    if let Some(cached) = cache.get(cmd_line) {
-        return Ok(cached.clone());
+    {
+        let mut guard = SHELL_COMMAND_CACHE.lock();
+        let cache = guard.get_or_insert_with(HashMap::new);
+        if let Some(cached) = cache.get(cmd_line) {
+            return Ok(cached.clone());
+        }
     }
 
     let result = runner(ctx, cmd_line)?;
+    let mut guard = SHELL_COMMAND_CACHE.lock();
+    let cache = guard.get_or_insert_with(HashMap::new);
     cache.insert(cmd_line.to_string(), result.clone());
     Ok(result)
 }
@@ -78,10 +81,7 @@ fn should_exclude_for_profile(source: &Path, profile_name: &str) -> bool {
         return false;
     }
 
-    let content = match fs::read_to_string(source) {
-        Ok(c) => c,
-        Err(_) => return false,
-    };
+    let Ok(content) = fs::read_to_string(source) else { return false };
 
     for line in content.lines() {
         let Some(value_part) = extract_comment_value(line) else {
@@ -250,7 +250,7 @@ fn run_command_for_flags(ctx: &crate::build_context::BuildContext, cmd_line: &st
     let mut cmd = Command::new(program);
     cmd.args(args);
     let _guard = crate::processors::suspend_tool_check();
-    let output = run_command_capture(ctx, &mut cmd)?;
+    let output = run_command_capture(ctx, &cmd)?;
     check_command_output(&output, cmd_line)?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
@@ -269,7 +269,7 @@ fn run_shell_for_flags(ctx: &crate::build_context::BuildContext, cmd_line: &str)
     let mut cmd = Command::new("sh");
     cmd.arg("-c").arg(cmd_line);
     let _guard = crate::processors::suspend_tool_check();
-    let output = run_command_capture(ctx, &mut cmd)?;
+    let output = run_command_capture(ctx, &cmd)?;
     check_command_output(&output, cmd_line)?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
@@ -284,7 +284,7 @@ fn run_backtick_command(ctx: &crate::build_context::BuildContext, cmd_str: &str)
     let mut cmd = Command::new("sh");
     cmd.arg("-c").arg(cmd_str);
     let _guard = crate::processors::suspend_tool_check();
-    let output = run_command_capture(ctx, &mut cmd)?;
+    let output = run_command_capture(ctx, &cmd)?;
     check_command_output(&output, cmd_str)?;
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     // Return as single-element vec so caching works uniformly
@@ -432,7 +432,7 @@ impl CcSingleFileProcessor {
             println!("[{}{}] {}", crate::processors::names::CC_SINGLE_FILE, profile_tag, format_command(&cmd));
         }
 
-        let output = run_command(ctx, &mut cmd)?;
+        let output = run_command(ctx, &cmd)?;
         check_command_output(&output, format_args!("Compilation of {}", source.display()))
     }
 

@@ -18,7 +18,7 @@ fn execute_a2x(ctx: &crate::build_context::BuildContext, config: &StandardConfig
     let mut cmd = Command::new(command);
     for arg in &config.args { cmd.arg(arg); }
     cmd.arg(input);
-    let out = run_command(ctx, &mut cmd)?;
+    let out = run_command(ctx, &cmd)?;
     check_command_output(&out, format_args!("a2x {}", input.display()))?;
     // a2x generates the PDF next to the input file — move it to the output path
     let stem = input.file_stem()

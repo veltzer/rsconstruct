@@ -480,18 +480,15 @@ impl Builder {
             let cache_key = product.cache_key();
             let display = product.display(opts.display_opts);
 
-            let input_checksum = match crate::checksum::combined_input_checksum(ctx, &product.inputs) {
-                Ok(cs) => cs,
-                Err(_) => {
-                    // Can't compute checksum — classify as new or stale based on cache
-                    let idx = if self.object_store.has_cache_entry(&cache_key) { 2 } else { 3 };
-                    if opts.verbose {
-                        println!("{} [{}] {}", status_labels[idx], product.processor, display);
-                    }
-                    counts[idx] += 1;
-                    per_processor.entry(&product.processor).or_default()[idx] += 1;
-                    continue;
+            let Ok(input_checksum) = crate::checksum::combined_input_checksum(ctx, &product.inputs) else {
+                // Can't compute checksum — classify as new or stale based on cache
+                let idx = if self.object_store.has_cache_entry(&cache_key) { 2 } else { 3 };
+                if opts.verbose {
+                    println!("{} [{}] {}", status_labels[idx], product.processor, display);
                 }
+                counts[idx] += 1;
+                per_processor.entry(&product.processor).or_default()[idx] += 1;
+                continue;
             };
 
             let desc_key = product.descriptor_key(&input_checksum);

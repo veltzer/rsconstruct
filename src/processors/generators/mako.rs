@@ -31,7 +31,7 @@ with open('{target}', 'w') as f:
 
     let mut cmd = Command::new("python3");
     cmd.arg("-c").arg(&python_script);
-    let output = run_command(ctx, &mut cmd)?;
+    let output = run_command(ctx, &cmd)?;
     check_command_output(&output, format!("mako render {}", item.source_path.display()))
 }
 
@@ -62,7 +62,7 @@ impl Processor for MakoProcessor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        super::find_templates(&self.config.standard, file_index).is_ok_and(|t| !t.is_empty())
+        !super::find_templates(&self.config.standard, file_index).is_empty()
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -70,7 +70,7 @@ impl Processor for MakoProcessor {
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
-        let items = super::find_templates(&self.config.standard, file_index)?;
+        let items = super::find_templates(&self.config.standard, file_index);
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
         for item in items {

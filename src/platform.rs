@@ -14,6 +14,7 @@ pub fn reset_sigpipe() {
 
 /// Get the Unix permission mode bits for a file.
 /// Returns `None` on non-Unix platforms.
+#[allow(clippy::unnecessary_wraps)] // Non-unix branch returns None; clippy only sees the unix path.
 pub fn get_mode(metadata: &std::fs::Metadata) -> Option<u32> {
     #[cfg(unix)]
     {

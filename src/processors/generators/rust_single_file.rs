@@ -87,7 +87,7 @@ impl Processor for RustSingleFileProcessor {
         }
         cmd.arg("-o").arg(output).arg(source);
 
-        let out = run_command(ctx, &mut cmd)?;
+        let out = run_command(ctx, &cmd)?;
         check_command_output(&out, format_args!("rustc {}", source.display()))
     }
 

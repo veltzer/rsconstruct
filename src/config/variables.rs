@@ -134,9 +134,8 @@ pub(super) fn substitute_variables(content: &str) -> Result<String> {
     let parsed: toml::Value = toml::from_str(content)
         .context("Failed to parse TOML for variable extraction")?;
 
-    let vars = match parsed.get("vars").and_then(|v| v.as_table()) {
-        Some(v) => v,
-        None => return Ok(content.to_string()),
+    let Some(vars) = parsed.get("vars").and_then(|v| v.as_table()) else {
+        return Ok(content.to_string());
     };
 
     let mut result = content.to_string();

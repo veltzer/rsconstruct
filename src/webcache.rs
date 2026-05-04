@@ -91,9 +91,8 @@ pub fn list() -> Result<Vec<CacheEntry>> {
     let db = open_db()?;
     let read_txn = db.begin_read()
         .context("Failed to begin read transaction on webcache")?;
-    let table = match read_txn.open_table(TABLE) {
-        Ok(t) => t,
-        Err(_) => return Ok(Vec::new()),
+    let Ok(table) = read_txn.open_table(TABLE) else {
+        return Ok(Vec::new());
     };
     let mut entries = Vec::new();
     for result in table.iter()? {

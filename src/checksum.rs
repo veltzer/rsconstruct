@@ -36,14 +36,18 @@ fn get_mtime_db(ctx: &BuildContext) -> Result<std::sync::MutexGuard<'_, Option<r
 /// in-memory cache. First call for a given path reads the file and caches the
 /// result. Subsequent calls return the cached value.
 pub fn file_checksum(ctx: &BuildContext, path: &Path) -> Result<String> {
-    let mut guard = ctx.checksum_cache.lock().unwrap();
-    let cache = guard.get_or_insert_with(HashMap::new);
-    if let Some(cached) = cache.get(path) {
-        return Ok(cached.clone());
+    {
+        let mut guard = ctx.checksum_cache.lock().unwrap();
+        let cache = guard.get_or_insert_with(HashMap::new);
+        if let Some(cached) = cache.get(path) {
+            return Ok(cached.clone());
+        }
     }
     let contents = fs::read(path)
         .with_context(|| format!("Failed to read file for checksum: {}", path.display()))?;
     let checksum = hex::encode(Sha256::digest(&contents));
+    let mut guard = ctx.checksum_cache.lock().unwrap();
+    let cache = guard.get_or_insert_with(HashMap::new);
     cache.insert(path.to_path_buf(), checksum.clone());
     Ok(checksum)
 }

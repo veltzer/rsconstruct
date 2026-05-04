@@ -348,10 +348,7 @@ impl Executor<'_> {
             return;
         }
 
-        let processor = match self.processors.get(proc_name) {
-            Some(p) => p,
-            None => return,
-        };
+        let Some(processor) = self.processors.get(proc_name) else { return };
 
         // Handle skip/restore for items that don't need rebuild
         let mut to_execute: Vec<&WorkItem> = Vec::new();

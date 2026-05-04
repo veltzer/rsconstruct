@@ -68,7 +68,7 @@ impl CcProcessor {
             cmd.arg(flag);
         }
         cmd.arg("-o").arg(obj).arg(source);
-        let output = run_command(ctx, &mut cmd)?;
+        let output = run_command(ctx, &cmd)?;
         check_command_output(&output, format_args!("{} -c {}", compiler, source.display()))
     }
 
@@ -80,7 +80,7 @@ impl CcProcessor {
         for obj in objects {
             cmd.arg(obj);
         }
-        let output = run_command(ctx, &mut cmd)?;
+        let output = run_command(ctx, &cmd)?;
         check_command_output(&output, format_args!("ar rcs {}", lib_path.display()))
     }
 
@@ -99,7 +99,7 @@ impl CcProcessor {
         for flag in ldflags {
             cmd.arg(flag);
         }
-        let output = run_command(ctx, &mut cmd)?;
+        let output = run_command(ctx, &cmd)?;
         check_command_output(&output, format_args!("{} -shared -o {}", compiler, lib_path.display()))
     }
 
@@ -124,7 +124,7 @@ impl CcProcessor {
         for flag in ldflags {
             cmd.arg(flag);
         }
-        let output = run_command(ctx, &mut cmd)?;
+        let output = run_command(ctx, &cmd)?;
         check_command_output(&output, format_args!("{} -o {}", compiler, exe_path.display()))
     }
 
@@ -154,7 +154,7 @@ impl CcProcessor {
         for flag in ldflags {
             cmd.arg(flag);
         }
-        let output = run_command(ctx, &mut cmd)?;
+        let output = run_command(ctx, &cmd)?;
         check_command_output(&output, format_args!("{} -o {}", compiler, exe_path.display()))
     }
 

@@ -112,7 +112,7 @@ pub fn query_pkg_config_include_paths(ctx: &crate::build_context::BuildContext, 
         eprintln!("[{}] Querying pkg-config: {}", tag, format_command(&cmd));
     }
 
-    let output = match run_command_capture(ctx, &mut cmd) {
+    let output = match run_command_capture(ctx, &cmd) {
         Ok(o) => o,
         Err(e) => {
             eprintln!("[{tag}] Failed to query pkg-config: {e}");
@@ -164,7 +164,7 @@ pub fn run_include_path_commands(ctx: &crate::build_context::BuildContext, tag: 
             eprintln!("[{tag}] Running include path command: sh -c '{cmd_str}'");
         }
 
-        let output = match run_command_capture(ctx, &mut cmd) {
+        let output = match run_command_capture(ctx, &cmd) {
             Ok(o) => o,
             Err(e) => {
                 eprintln!("[{tag}] Failed to run '{cmd_str}': {e}");

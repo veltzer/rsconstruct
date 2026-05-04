@@ -657,7 +657,7 @@ fn run_checker_once(
     for file in files {
         cmd.arg(file);
     }
-    let output = run_command(ctx, &mut cmd)?;
+    let output = run_command(ctx, &cmd)?;
     check_command_output(&output, tool)
 }
 

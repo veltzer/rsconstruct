@@ -17,7 +17,7 @@ fn execute_sass(ctx: &crate::build_context::BuildContext, config: &StandardConfi
     let mut cmd = Command::new(command);
     for arg in &config.args { cmd.arg(arg); }
     cmd.arg(input).arg(output);
-    let out = run_command(ctx, &mut cmd)?;
+    let out = run_command(ctx, &cmd)?;
     check_command_output(&out, format_args!("sass {}", input.display()))
 }
 

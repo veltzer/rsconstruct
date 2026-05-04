@@ -7,17 +7,11 @@ use super::{CacheDescriptor, ExplainAction, ObjectStore, RebuildReason};
 impl ObjectStore {
     /// Restore outputs from a cache descriptor. Returns Ok(true) if restored.
     pub fn restore_from_descriptor(&self, cache_key: &str, output_paths: &[PathBuf]) -> Result<bool> {
-        let descriptor = match self.get_descriptor(cache_key) {
-            Some(d) => d,
-            None => return Ok(false),
-        };
+        let Some(descriptor) = self.get_descriptor(cache_key) else { return Ok(false) };
         match descriptor {
             CacheDescriptor::Marker => Ok(true),
             CacheDescriptor::Blob { checksum, mode } => {
-                let output_path = match output_paths.first() {
-                    Some(p) => p,
-                    None => return Ok(true),
-                };
+                let Some(output_path) = output_paths.first() else { return Ok(true) };
                 if output_path.exists() {
                     return Ok(true);
                 }
@@ -68,10 +62,7 @@ impl ObjectStore {
 
     /// Check if a product needs rebuilding based on its descriptor.
     pub fn needs_rebuild_descriptor(&self, cache_key: &str, output_paths: &[PathBuf]) -> bool {
-        let descriptor = match self.get_descriptor(cache_key) {
-            Some(d) => d,
-            None => return true,
-        };
+        let Some(descriptor) = self.get_descriptor(cache_key) else { return true };
         match descriptor {
             CacheDescriptor::Marker => false,
             CacheDescriptor::Blob { .. } => {
@@ -88,10 +79,7 @@ impl ObjectStore {
 
     /// Check if outputs can be restored from a descriptor.
     pub fn can_restore_descriptor(&self, cache_key: &str) -> bool {
-        let descriptor = match self.get_descriptor(cache_key) {
-            Some(d) => d,
-            None => return false,
-        };
+        let Some(descriptor) = self.get_descriptor(cache_key) else { return false };
         match descriptor {
             CacheDescriptor::Marker => true,
             CacheDescriptor::Blob { checksum, .. } => self.has_object(&checksum),
@@ -106,9 +94,8 @@ impl ObjectStore {
         if force {
             return ExplainAction::Rebuild(RebuildReason::Force);
         }
-        let descriptor = match self.get_descriptor(descriptor_key) {
-            Some(d) => d,
-            None => return ExplainAction::Rebuild(RebuildReason::NoCacheEntry),
+        let Some(descriptor) = self.get_descriptor(descriptor_key) else {
+            return ExplainAction::Rebuild(RebuildReason::NoCacheEntry);
         };
         match descriptor {
             CacheDescriptor::Marker => ExplainAction::Skip,

@@ -26,7 +26,7 @@ impl ClangTidyProcessor {
             cmd.arg(arg);
         }
 
-        let output = run_command(ctx, &mut cmd)?;
+        let output = run_command(ctx, &cmd)?;
         check_command_output(&output, "clang-tidy")
     }
 }

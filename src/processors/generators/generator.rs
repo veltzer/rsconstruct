@@ -46,7 +46,7 @@ impl GeneratorProcessor {
             cmd.arg(output);
         }
 
-        let out = run_command(ctx, &mut cmd)?;
+        let out = run_command(ctx, &cmd)?;
         check_command_output(&out, format_args!("{} ({} file(s))", command, pairs.len()))
     }
 }

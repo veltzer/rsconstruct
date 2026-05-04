@@ -141,9 +141,8 @@ struct LineCounts {
 }
 
 fn count_lines(path: &Path, comment: &CommentStyle) -> LineCounts {
-    let content = match fs::read_to_string(path) {
-        Ok(c) => c,
-        Err(_) => return LineCounts { blank: 0, comment: 0, code: 0 },
+    let Ok(content) = fs::read_to_string(path) else {
+        return LineCounts { blank: 0, comment: 0, code: 0 };
     };
 
     let mut blank = 0usize;
@@ -221,10 +220,7 @@ pub fn run_sloc(file_index: &FileIndex, cocomo: bool, salary: u64) -> Result<()>
                     .and_then(|name| lang_map.get(name))
             });
 
-        let info = match info {
-            Some(i) => i,
-            None => continue,
-        };
+        let Some(info) = info else { continue };
 
         let counts = count_lines(path, info.comment);
 

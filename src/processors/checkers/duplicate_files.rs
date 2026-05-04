@@ -15,9 +15,8 @@ impl DuplicateFilesProcessor {
         Self { config }
     }
 
-    const fn execute_product(&self, _product: &Product) -> Result<()> {
+    const fn execute_product(&self, _product: &Product) {
         // Individual file checking is a no-op; duplicates are only detected in batch mode
-        Ok(())
     }
 
     fn check_files(&self, files: &[&Path]) -> Result<()> {
@@ -65,7 +64,8 @@ impl crate::processors::Processor for DuplicateFilesProcessor {
 
 
     fn execute(&self, _ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
-        self.execute_product(product)
+        self.execute_product(product);
+        Ok(())
     }
 
 

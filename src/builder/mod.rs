@@ -288,10 +288,7 @@ impl Builder {
             let processor = processors.get(name).expect(errors::PROCESSOR_NOT_IN_MAP);
 
             // Skip processors that don't provide config JSON
-            let config_json = match processor.config_json() {
-                Some(json) => json,
-                None => continue,
-            };
+            let Some(config_json) = processor.config_json() else { continue };
 
             // Keep only checksum-affecting fields for change detection (unless show_all).
             // Each processor declares which config fields affect its output;
@@ -479,7 +476,7 @@ impl Builder {
 
     /// Return the set of processor type names whose files are detected in the project.
     /// Uses default configs for all builtin processors to check auto_detect.
-    pub fn detected_processors(&self) -> Result<std::collections::HashSet<String>> {
+    pub fn detected_processors(&self) -> std::collections::HashSet<String> {
         let processors = create_all_default_processors();
         let mut detected = std::collections::HashSet::new();
         for (name, proc) in &processors {
@@ -487,12 +484,12 @@ impl Builder {
                 detected.insert(name.clone());
             }
         }
-        Ok(detected)
+        detected
     }
 
     /// Return the set of processor type names whose files are detected AND whose
     /// required tools are all installed.
-    pub fn detected_and_available_processors(&self) -> Result<std::collections::HashSet<String>> {
+    pub fn detected_and_available_processors(&self) -> std::collections::HashSet<String> {
         let processors = create_all_default_processors();
         let mut available = std::collections::HashSet::new();
         for (name, proc) in &processors {
@@ -504,7 +501,7 @@ impl Builder {
                 available.insert(name.clone());
             }
         }
-        Ok(available)
+        available
     }
 
     /// Return the set of configured processor instance names that have 0 products

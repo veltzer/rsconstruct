@@ -18,7 +18,7 @@ fn execute_mermaid(ctx: &crate::build_context::BuildContext, config: &StandardCo
     cmd.arg("-i").arg(input);
     cmd.arg("-o").arg(output);
     for arg in &config.args { cmd.arg(arg); }
-    let out = run_command(ctx, &mut cmd)?;
+    let out = run_command(ctx, &cmd)?;
     check_command_output(&out, format_args!("mmdc {}", input.display()))
 }
 

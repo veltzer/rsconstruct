@@ -94,10 +94,7 @@ fn walk_instance_section(
     map: &mut SpanMap,
 ) {
     for (type_name, item) in table {
-        let sub = match item.as_table() {
-            Some(t) => t,
-            None => continue,
-        };
+        let Some(sub) = item.as_table() else { continue };
         // Heuristic matches ProcessorConfig::is_multi_instance's shape: if
         // every child is itself a table, this section holds named
         // sub-instances; otherwise it's a single instance with direct fields.
@@ -156,10 +153,7 @@ pub fn build_global_span_map(source: &str) -> GlobalSpanMap {
         if section_name == "processor" || section_name == "analyzer" {
             continue;
         }
-        let table = match item.as_table() {
-            Some(t) => t,
-            None => continue,
-        };
+        let Some(table) = item.as_table() else { continue };
         let mut fields = HashMap::new();
         for (key, field_item) in table {
             let span = key_span(table, key).or_else(|| item_span(field_item));

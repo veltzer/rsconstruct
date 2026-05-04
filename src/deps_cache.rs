@@ -107,29 +107,20 @@ impl DepsCache {
             self.stats.misses += 1;
             return None;
         };
-        let data = match table.get(key.as_str()) {
-            Ok(Some(d)) => d,
-            _ => {
-                self.stats.misses += 1;
-                return None;
-            }
+        let Ok(Some(data)) = table.get(key.as_str()) else {
+            self.stats.misses += 1;
+            return None;
         };
-        let entry: DepsEntry = match serde_json::from_slice(data.value()) {
-            Ok(e) => e,
-            Err(_) => {
-                self.stats.misses += 1;
-                return None;
-            }
+        let Ok(entry) = serde_json::from_slice::<DepsEntry>(data.value()) else {
+            self.stats.misses += 1;
+            return None;
         };
 
         // Verify source file hasn't changed. `checksum_fast` consults the
         // persistent mtime cache so unchanged files skip the full read + hash.
-        let (current_checksum, checksum_path) = match checksum_fast(ctx, source) {
-            Ok(c) => c,
-            Err(_) => {
-                self.stats.misses += 1;
-                return None;
-            }
+        let Ok((current_checksum, checksum_path)) = checksum_fast(ctx, source) else {
+            self.stats.misses += 1;
+            return None;
         };
         if entry.source_checksum != current_checksum {
             self.stats.misses += 1;
@@ -222,18 +213,9 @@ impl DepsCache {
     /// Entries with malformed keys (no NUL separator) are skipped — that would
     /// be a pre-key-format-change entry from an older build, effectively invalid.
     fn collect_entries(&self) -> Vec<(String, PathBuf, DepsEntry)> {
-        let read_txn = match self.db.begin_read() {
-            Ok(t) => t,
-            Err(_) => return Vec::new(),
-        };
-        let table = match read_txn.open_table(DEPS_TABLE) {
-            Ok(t) => t,
-            Err(_) => return Vec::new(),
-        };
-        let iter = match table.iter() {
-            Ok(i) => i,
-            Err(_) => return Vec::new(),
-        };
+        let Ok(read_txn) = self.db.begin_read() else { return Vec::new() };
+        let Ok(table) = read_txn.open_table(DEPS_TABLE) else { return Vec::new() };
+        let Ok(iter) = table.iter() else { return Vec::new() };
         iter.filter_map(|item| {
             let (key, value) = item.ok()?;
             let (analyzer, source) = parse_key(key.value())?;

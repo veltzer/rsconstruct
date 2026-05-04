@@ -61,10 +61,7 @@ impl Builder {
         }
 
         for (proc_name, proc_products) in &by_processor {
-            let processor = match processors.get(*proc_name) {
-                Some(p) => p,
-                None => continue,
-            };
+            let Some(processor) = processors.get(*proc_name) else { continue };
 
             if processor.supports_fix_batch() && proc_products.len() > 1 {
                 // Batch fix

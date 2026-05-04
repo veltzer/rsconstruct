@@ -121,7 +121,7 @@ impl Processor for TeraProcessor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        super::find_templates(&self.config.standard, file_index).is_ok_and(|t| !t.is_empty())
+        !super::find_templates(&self.config.standard, file_index).is_empty()
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -129,7 +129,7 @@ impl Processor for TeraProcessor {
     }
 
     fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
-        let items = super::find_templates(&self.config.standard, file_index)?;
+        let items = super::find_templates(&self.config.standard, file_index);
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
         for item in items {
@@ -238,7 +238,7 @@ impl Function for CopyrightYearsFunction {
     fn call(&self, _args: &HashMap<String, TeraValue>) -> tera::Result<TeraValue> {
         let mut cmd = Command::new("git");
         cmd.args(["log", "--reverse", "--format=%ad", "--date=format:%Y"]);
-        let output = run_command_capture(self.ctx.get(), &mut cmd)
+        let output = run_command_capture(self.ctx.get(), &cmd)
             .map_err(|e| tera::Error::msg(format!("copyright_years: {e}")))?;
 
         if !output.status.success() {
@@ -272,7 +272,7 @@ impl Function for GitCountFilesFunction {
 
         let mut cmd = Command::new("git");
         cmd.args(["ls-files", "--", pattern]);
-        let output = run_command_capture(self.ctx.get(), &mut cmd)
+        let output = run_command_capture(self.ctx.get(), &cmd)
             .map_err(|e| tera::Error::msg(format!("git_count_files: {e}")))?;
 
         if !output.status.success() {
@@ -369,7 +369,7 @@ impl Function for ShellOutputFunction {
 
         let mut cmd = Command::new("sh");
         cmd.args(["-c", command]);
-        let output = run_command_capture(self.ctx.get(), &mut cmd)
+        let output = run_command_capture(self.ctx.get(), &cmd)
             .map_err(|e| tera::Error::msg(format!("shell_output: {e}")))?;
 
         if !output.status.success() {
@@ -518,7 +518,7 @@ print(json.dumps(result))
     // Execute Python and capture output
     let mut cmd = Command::new("python3");
     cmd.arg("-c").arg(&python_script);
-    let output = run_command_capture(ctx, &mut cmd)?;
+    let output = run_command_capture(ctx, &cmd)?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

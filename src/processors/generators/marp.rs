@@ -47,7 +47,7 @@ fn execute_marp(ctx: &crate::build_context::BuildContext, config: &StandardConfi
         cmd.arg("--output").arg(output);
         for arg in &config.args { cmd.arg(arg); }
         cmd.arg(input);
-        let result = run_command_with_timeout(ctx, &mut cmd, MARP_TIMEOUT)
+        let result = run_command_with_timeout(ctx, &cmd, MARP_TIMEOUT)
             .and_then(|out| check_command_output(&out, format_args!("marp {}", input.display())));
         cleanup_marp_tmp_dirs();
         match result {
@@ -90,6 +90,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
 /// when running marp at full project parallelism. Equivalent to the user
 /// passing `--pset marp.max_jobs=2`; only applies when the user hasn't set
 /// `max_jobs` themselves and `CI=true` is in the environment.
+#[allow(clippy::unnecessary_wraps)] // Result<()> is required by PhaseHook::run signature.
 fn marp_ci_cap(config: &mut crate::config::Config) -> anyhow::Result<()> {
     if !std::env::var("CI").is_ok_and(|v| v == "true") {
         return Ok(());
