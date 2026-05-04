@@ -23,7 +23,7 @@ pub fn ctx_opt<T>(r: Option<T>, msg: &str) -> anyhow::Result<T> {
 #[macro_export]
 macro_rules! ctx {
     ($expr:expr, $msg:expr) => {
-        crate::errors::ctx($expr, &format!("{}", $msg))
+        $crate::errors::ctx($expr, &format!("{}", $msg))
     };
 }
 

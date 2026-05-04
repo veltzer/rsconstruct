@@ -89,11 +89,9 @@ fn should_exclude_for_profile(source: &Path, profile_name: &str) -> bool {
         };
 
         if let Some(rest) = value_part.strip_prefix("EXCLUDE_PROFILE")
-            && let Some(profiles_str) = rest.strip_prefix('=') {
-                let excluded_profiles: Vec<&str> = profiles_str.split_whitespace().collect();
-                if excluded_profiles.contains(&profile_name) {
-                    return true;
-                }
+            && let Some(profiles_str) = rest.strip_prefix('=')
+            && profiles_str.split_whitespace().any(|p| p == profile_name) {
+                return true;
             }
     }
 

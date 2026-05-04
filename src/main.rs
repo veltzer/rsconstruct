@@ -50,16 +50,6 @@
 #![allow(clippy::use_self)]
 #![allow(clippy::wildcard_imports)]
 
-// To-do: tackle in follow-up cleanup passes.
-#![allow(clippy::crate_in_macro_def)]
-#![allow(clippy::derive_partial_eq_without_eq)]
-#![allow(clippy::equatable_if_let)]
-#![allow(clippy::manual_let_else)]
-#![allow(clippy::needless_collect)]
-#![allow(clippy::needless_pass_by_ref_mut)]
-#![allow(clippy::significant_drop_tightening)]
-#![allow(clippy::unnecessary_wraps)]
-#![allow(clippy::useless_let_if_seq)]
 
 #[macro_use]
 mod registries;

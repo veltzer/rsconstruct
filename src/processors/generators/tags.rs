@@ -827,33 +827,31 @@ pub fn frontmatter_for_file(db_path: &str, path: &str) -> Result<()> {
     let table = crate::errors::ctx(read_txn.open_table(FRONTMATTER), "Failed to open frontmatter table")?;
 
     // Try exact match first, then suffix match
-    let mut found_key: Option<String> = None;
-    let mut found_value: Option<String> = None;
-
-    if let Some(value) = table.get(path).context("Failed to query frontmatter")? {
-        found_key = Some(path.to_string());
-        found_value = Some(value.value().to_string());
-    } else {
-        // Suffix match with path boundary — collect all matches to detect ambiguity
-        let mut all_matches: Vec<(String, String)> = Vec::new();
-        let iter = crate::errors::ctx(table.iter(), "Failed to iterate frontmatter")?;
-        for entry in iter {
-            let (key, value) = crate::errors::ctx(entry, "Failed to read frontmatter entry")?;
-            if path_matches(key.value(), path) {
-                all_matches.push((key.value().to_string(), value.value().to_string()));
+    let (found_key, found_value): (Option<String>, Option<String>) =
+        if let Some(value) = table.get(path).context("Failed to query frontmatter")? {
+            (Some(path.to_string()), Some(value.value().to_string()))
+        } else {
+            // Suffix match with path boundary — collect all matches to detect ambiguity
+            let mut all_matches: Vec<(String, String)> = Vec::new();
+            let iter = crate::errors::ctx(table.iter(), "Failed to iterate frontmatter")?;
+            for entry in iter {
+                let (key, value) = crate::errors::ctx(entry, "Failed to read frontmatter entry")?;
+                if path_matches(key.value(), path) {
+                    all_matches.push((key.value().to_string(), value.value().to_string()));
+                }
             }
-        }
-        if all_matches.len() > 1 {
-            eprintln!("Warning: '{}' matches {} files, showing first:", path, all_matches.len());
-            for (k, _) in &all_matches {
-                eprintln!("  {k}");
+            if all_matches.len() > 1 {
+                eprintln!("Warning: '{}' matches {} files, showing first:", path, all_matches.len());
+                for (k, _) in &all_matches {
+                    eprintln!("  {k}");
+                }
             }
-        }
-        if let Some((k, v)) = all_matches.into_iter().next() {
-            found_key = Some(k);
-            found_value = Some(v);
-        }
-    }
+            if let Some((k, v)) = all_matches.into_iter().next() {
+                (Some(k), Some(v))
+            } else {
+                (None, None)
+            }
+        };
 
     match (found_key, found_value) {
         (Some(key), Some(json)) => {

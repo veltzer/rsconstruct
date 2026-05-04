@@ -329,7 +329,7 @@ impl KnownFields for ClangTidyConfig {
 }
 
 /// Method for scanning C/C++ header dependencies
-#[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum IncludeScanner {
     /// Native regex-based scanner (fast, no external process)

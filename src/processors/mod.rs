@@ -133,7 +133,7 @@ pub fn log_command(cmd: &Command) {
 /// - `inherit_stdio`: if true, inherit stdout/stderr (for --show-output mode);
 ///   if false, always capture via pipes.
 /// - `timeout`: if Some, kill the child and return an error if it runs longer than this.
-fn run_command_inner(ctx: &crate::build_context::BuildContext, cmd: &mut Command, inherit_stdio: bool, timeout: Option<Duration>) -> Result<Output> {
+fn run_command_inner(ctx: &crate::build_context::BuildContext, cmd: &Command, inherit_stdio: bool, timeout: Option<Duration>) -> Result<Output> {
     log_command(cmd);
 
     #[cfg(debug_assertions)]
@@ -241,17 +241,17 @@ fn run_command_inner(ctx: &crate::build_context::BuildContext, cmd: &mut Command
     })
 }
 
-pub fn run_command(ctx: &crate::build_context::BuildContext, cmd: &mut Command) -> Result<Output> {
+pub fn run_command(ctx: &crate::build_context::BuildContext, cmd: &Command) -> Result<Output> {
     let show = crate::runtime_flags::show_output();
     run_command_inner(ctx, cmd, show, None)
 }
 
-pub fn run_command_with_timeout(ctx: &crate::build_context::BuildContext, cmd: &mut Command, timeout: Duration) -> Result<Output> {
+pub fn run_command_with_timeout(ctx: &crate::build_context::BuildContext, cmd: &Command, timeout: Duration) -> Result<Output> {
     let show = crate::runtime_flags::show_output();
     run_command_inner(ctx, cmd, show, Some(timeout))
 }
 
-pub fn run_command_capture(ctx: &crate::build_context::BuildContext, cmd: &mut Command) -> Result<Output> {
+pub fn run_command_capture(ctx: &crate::build_context::BuildContext, cmd: &Command) -> Result<Output> {
     run_command_inner(ctx, cmd, false, None)
 }
 
@@ -1153,7 +1153,7 @@ pub fn tool_runtime(tool: &str) -> Option<&'static str> {
 }
 
 /// Timing for a single product execution
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProductTiming {
     pub display: String,
     pub processor: String,
@@ -1163,7 +1163,7 @@ pub struct ProductTiming {
 }
 
 /// Statistics from processing a category of items
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct ProcessStats {
     pub processed: usize,
     pub failed: usize,

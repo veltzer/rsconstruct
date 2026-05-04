@@ -494,7 +494,7 @@ impl Executor<'_> {
 
             let product = lctx.graph.get_product(item.product_id).expect(errors::INVALID_PRODUCT_ID);
 
-            if let PreCheckResult::Handled = self.try_skip_or_restore(item, &product.processor, lctx, true) {
+            if matches!(self.try_skip_or_restore(item, &product.processor, lctx, true), PreCheckResult::Handled) {
                 continue;
             }
 

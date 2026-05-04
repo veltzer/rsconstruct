@@ -303,7 +303,7 @@ where
 pub fn analyze_with_full_scanner<F, G>(
     ctx: &crate::build_context::BuildContext,
     graph: &mut BuildGraph,
-    deps_cache: &mut DepsCache,
+    deps_cache: &DepsCache,
     analyzer_name: &str,
     match_product: F,
     scan: G,
