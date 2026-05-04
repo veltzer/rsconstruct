@@ -30,7 +30,6 @@
 #![allow(clippy::manual_let_else)]
 #![allow(clippy::map_unwrap_or)]
 #![allow(clippy::match_same_arms)]
-#![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::module_inception)]
 #![allow(clippy::naive_bytecount)]
 #![allow(clippy::needless_collect)]
