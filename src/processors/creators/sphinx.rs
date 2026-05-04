@@ -12,7 +12,7 @@ pub struct SphinxProcessor {
 }
 
 impl SphinxProcessor {
-    pub fn new(config: SphinxConfig) -> Self {
+    pub const fn new(config: SphinxConfig) -> Self {
         Self {
             config,
         }

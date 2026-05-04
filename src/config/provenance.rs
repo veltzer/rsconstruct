@@ -93,7 +93,7 @@ fn walk_instance_section(
     source: &str,
     map: &mut SpanMap,
 ) {
-    for (type_name, item) in table.iter() {
+    for (type_name, item) in table {
         let sub = match item.as_table() {
             Some(t) => t,
             None => continue,
@@ -106,7 +106,7 @@ fn walk_instance_section(
 
         if all_children_are_tables {
             // Multi-instance: [processor.pylint.core], [processor.pylint.tests]
-            for (inst_suffix, inst_item) in sub.iter() {
+            for (inst_suffix, inst_item) in sub {
                 if let Some(inst_table) = inst_item.as_table() {
                     let instance_name = format!("{type_name}.{inst_suffix}");
                     record_field_lines(inst_table, section, &instance_name, source, map);
@@ -126,7 +126,7 @@ fn record_field_lines(
     source: &str,
     map: &mut SpanMap,
 ) {
-    for (key, item) in table.iter() {
+    for (key, item) in table {
         let span = key_span(table, key).or_else(|| item_span(item));
         if let Some(range) = span {
             let line = byte_offset_to_line(source, range.start);
@@ -152,7 +152,7 @@ pub fn build_global_span_map(source: &str) -> GlobalSpanMap {
         Ok(d) => d,
         Err(_) => return map,
     };
-    for (section_name, item) in doc.as_table().iter() {
+    for (section_name, item) in doc.as_table() {
         if section_name == "processor" || section_name == "analyzer" {
             continue;
         }
@@ -161,7 +161,7 @@ pub fn build_global_span_map(source: &str) -> GlobalSpanMap {
             None => continue,
         };
         let mut fields = HashMap::new();
-        for (key, field_item) in table.iter() {
+        for (key, field_item) in table {
             let span = key_span(table, key).or_else(|| item_span(field_item));
             if let Some(range) = span {
                 fields.insert(key.to_string(), byte_offset_to_line(source, range.start));
@@ -178,7 +178,7 @@ pub fn build_global_span_map(source: &str) -> GlobalSpanMap {
 fn byte_offset_to_line(source: &str, offset: usize) -> usize {
     let clamped = offset.min(source.len());
     let mut line = 1usize;
-    for b in source.as_bytes()[..clamped].iter() {
+    for b in &source.as_bytes()[..clamped] {
         if *b == b'\n' {
             line += 1;
         }

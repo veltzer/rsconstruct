@@ -9,7 +9,7 @@ pub struct AsciiProcessor {
 }
 
 impl AsciiProcessor {
-    pub fn new(config: AsciiConfig) -> Self {
+    pub const fn new(config: AsciiConfig) -> Self {
         Self { config }
     }
 

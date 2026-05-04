@@ -9,7 +9,7 @@ pub struct IjsonlintProcessor {
 }
 
 impl IjsonlintProcessor {
-    pub fn new(config: IjsonlintConfig) -> Self {
+    pub const fn new(config: IjsonlintConfig) -> Self {
         Self { config }
     }
 

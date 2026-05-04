@@ -110,7 +110,7 @@ pub fn processor_version(name: &str) -> Option<u32> {
 /// Build a clap value parser that accepts any registered processor type name (pname).
 pub fn processor_name_parser() -> clap::builder::PossibleValuesParser {
     let mut names: Vec<&'static str> = all_plugins().map(|p| p.name).collect();
-    names.sort();
+    names.sort_unstable();
     clap::builder::PossibleValuesParser::new(names)
 }
 

@@ -13,7 +13,7 @@ pub struct CcProcessor {
 }
 
 impl CcProcessor {
-    pub fn new(config: CcConfig) -> Self {
+    pub const fn new(config: CcConfig) -> Self {
         Self {
             config,
         }

@@ -8,6 +8,8 @@ This project holds itself to a strict compiler baseline and treats every relaxat
 
 ```rust
 #![deny(clippy::all)]
+#![warn(clippy::pedantic)]
+#![warn(clippy::nursery)]
 #![deny(warnings)]
 ```
 
@@ -15,8 +17,19 @@ Effect:
 
 - **Every warning is a compile error.** Unused imports, dead code, unused variables, deprecated APIs — all stop the build. There is no "warning fatigue" because there are no warnings.
 - **All of Clippy's default lint group (`clippy::all`) is enforced at `deny` level.** This covers ~500 lints spanning correctness, complexity, style, and perf.
+- **`clippy::pedantic` and `clippy::nursery` are enforced at `warn` level.** Combined with `#![deny(warnings)]`, this means any pedantic or nursery hit also stops the build, *unless* it is one of the named lints in the per-lint allow block at the top of `src/main.rs`. New code that triggers a pedantic/nursery lint not in that block will fail to compile.
 
 This is one step short of `forbid`. `forbid` cannot be overridden per-item; `deny` allows a per-item `#[allow(...)]` escape hatch. We chose `deny` so that *principled exceptions* remain possible, but each one is an obvious, grep-able act.
+
+## Per-lint allow block
+
+The crate root carries a block of `#![allow(clippy::*)]` attributes — these are pedantic and nursery lints that the codebase deliberately permits. Each falls into one of three groups (the source comments tag them):
+
+1. **Numeric/cast lints** (3 lints). `cast_possible_truncation`, `cast_precision_loss`, `cast_sign_loss`. These fire on progress-percentage computations and similar internal arithmetic where the values are bounded and not user-controlled. Per-site allows would add noise without adding safety.
+2. **Stylistic / debatable** (~33 lints). Lints where clippy's preferred shape is not obviously better. Examples: `option_if_let_else` (`map_or` form is often less readable), `match_same_arms` (kept distinct for readability), `doc_markdown` (over-eager about backticking ordinary words).
+3. **To-do** (~9 lints). Lints that should be fixed in a follow-up pass but were too disruptive to autofix in the most recent strictness sweep. Examples: `manual_let_else` (51 occurrences), `significant_drop_tightening` (14), `unnecessary_wraps` (12).
+
+The "to-do" group is the live target for incremental tightening. When one of those lints reaches zero hits, remove its allow.
 
 ## The rule for `#[allow(...)]`
 
@@ -109,8 +122,12 @@ The sweep was focused on `#[allow]` attributes. Broader strictness knobs were le
 
 - **`.unwrap()` and `.expect()` counts.** Many are on internal invariants where panicking is correct (contract violation, not user error). An audit could tighten some to `?`, but this is a separate pass with its own judgment calls.
 - **`missing_docs`, `missing_debug_implementations`**, etc. Enabling these would require documenting every public item — a much larger change.
-- **`clippy::pedantic`, `clippy::nursery`, `clippy::cargo`**. These add ~200 more lints beyond `clippy::all`. Many are noisy or stylistic. Enabling them is worth considering but outside the scope of "remove unnecessary allows."
+- **`clippy::cargo`**. 23 warnings, all about transitive dependency duplication driven by upstream Windows target crates. Not actionable from this repo.
 - **The `use crate::config::*;` glob import in `builder/mod.rs`**. Narrowing it would require enumerating ~15 symbols and risks churn. Left as-is.
+
+## Subsequent pedantic/nursery sweep
+
+A later pass (see `doc/strictness-pass.md`) enabled `clippy::pedantic` and `clippy::nursery` at `warn` level. That sweep autofixed about 830 occurrences across ~13 lints (notably `uninlined_format_args`, `redundant_pub_crate`, `redundant_closure_for_method_calls`, `missing_const_for_fn`) and added ~45 explicit per-lint allows for the remainder. See the per-lint allow block in `src/main.rs` and the design doc for the breakdown.
 
 ## Adding a new `#[allow]`
 

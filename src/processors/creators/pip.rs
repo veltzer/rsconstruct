@@ -12,7 +12,7 @@ pub struct PipProcessor {
 }
 
 impl PipProcessor {
-    pub fn new(config: PipConfig) -> Self {
+    pub const fn new(config: PipConfig) -> Self {
         Self {
             config,
         }

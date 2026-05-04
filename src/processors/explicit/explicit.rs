@@ -16,7 +16,7 @@ pub struct ExplicitProcessor {
 }
 
 impl ExplicitProcessor {
-    pub fn new(config: ExplicitConfig) -> Self {
+    pub const fn new(config: ExplicitConfig) -> Self {
         Self {
             config,
         }

@@ -15,7 +15,7 @@ pub struct PdfuniteProcessor {
 }
 
 impl PdfuniteProcessor {
-    pub fn new(config: PdfuniteConfig) -> Self {
+    pub const fn new(config: PdfuniteConfig) -> Self {
         Self {
             config,
         }

@@ -11,7 +11,7 @@ pub struct ScriptProcessor {
 }
 
 impl ScriptProcessor {
-    pub fn new(config: ScriptConfig) -> Self {
+    pub const fn new(config: ScriptConfig) -> Self {
         Self {
             config,
         }
@@ -22,7 +22,7 @@ impl ScriptProcessor {
         run_checker(ctx, command, None, &self.config.standard.args, files)
     }
 
-    fn has_fix(&self) -> bool {
+    const fn has_fix(&self) -> bool {
         !self.config.fix_command.is_empty()
     }
 

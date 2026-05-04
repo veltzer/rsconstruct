@@ -73,7 +73,7 @@ pub enum ColorMode {
 
 impl Cli {
     /// Get the display options from CLI arguments
-    pub fn display_options(&self) -> DisplayOptions {
+    pub const fn display_options(&self) -> DisplayOptions {
         DisplayOptions {
             output: self.output_display,
             input: self.input_display,
@@ -178,7 +178,7 @@ impl Default for DisplayOptions {
 
 impl DisplayOptions {
     /// Minimal display: just input source basename
-    pub fn minimal() -> Self {
+    pub const fn minimal() -> Self {
         Self {
             output: OutputDisplay::None,
             input: InputDisplay::Source,

@@ -9,7 +9,7 @@ pub struct IjqProcessor {
 }
 
 impl IjqProcessor {
-    pub fn new(config: IjqConfig) -> Self {
+    pub const fn new(config: IjqConfig) -> Self {
         Self { config }
     }
 

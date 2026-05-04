@@ -33,22 +33,6 @@ fn execute_libreoffice(ctx: &crate::build_context::BuildContext, config: &Standa
     check_command_output(&out, format_args!("libreoffice {}", input.display()))
 }
 
-/// Remove all marp-cli-* temp directories from /tmp.
-///
-/// marp-cli creates a unique browser profile directory (named `marp-cli-<random>`)
-/// in /tmp for each invocation. These are Chromium user-data-dirs needed to isolate
-/// the browser environment from the user's regular profile. marp-cli intentionally
-/// does not delete them because the browser may still use the directory for
-/// post-processing after the main conversion finishes (puppeteer/puppeteer#6291).
-/// The marp-cli maintainer considers this the OS's responsibility to clean up.
-///
-/// In practice they accumulate (~18 MB each) and are never cleaned up on Linux.
-/// Since rsconstruct waits for the marp process to fully exit before reaching this point,
-/// it is safe to remove them here.
-///
-/// See: https://github.com/marp-team/marp-cli/issues/678
-/// See: https://github.com/puppeteer/puppeteer/issues/6414
-
 fn create_libreoffice(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
     crate::registries::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { extra_tools: &["flock"], discover_mode: DiscoverMode::MultiFormat, execute_fn: execute_libreoffice, is_native: false })))
 }

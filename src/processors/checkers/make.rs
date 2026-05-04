@@ -12,7 +12,7 @@ pub struct MakeProcessor {
 }
 
 impl MakeProcessor {
-    pub fn new(config: MakeConfig) -> Self {
+    pub const fn new(config: MakeConfig) -> Self {
         Self {
             config,
         }

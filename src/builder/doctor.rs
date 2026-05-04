@@ -74,7 +74,7 @@ impl Builder {
                         record(format!("{tool} available"), "ok", "tool", Some(version), None, &mut ok_count, &mut fail_count, &mut warn_count);
                     }
                     None => {
-                        let install_hint = crate::processors::tool_install_command(&tool).map(|s| s.to_string());
+                        let install_hint = crate::processors::tool_install_command(&tool);
                         record(format!("{tool} not found"), "fail", "tool", None, install_hint, &mut ok_count, &mut fail_count, &mut warn_count);
                     }
                 }

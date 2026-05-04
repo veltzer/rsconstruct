@@ -12,7 +12,7 @@ pub struct CargoProcessor {
 }
 
 impl CargoProcessor {
-    pub fn new(config: CargoConfig) -> Self {
+    pub const fn new(config: CargoConfig) -> Self {
         Self {
             config,
         }

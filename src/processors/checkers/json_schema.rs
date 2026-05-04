@@ -11,7 +11,7 @@ pub struct JsonSchemaProcessor {
 }
 
 impl JsonSchemaProcessor {
-    pub fn new(config: JsonSchemaConfig) -> Self {
+    pub const fn new(config: JsonSchemaConfig) -> Self {
         Self { config }
     }
 

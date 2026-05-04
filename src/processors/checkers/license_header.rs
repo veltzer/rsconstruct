@@ -9,7 +9,7 @@ pub struct LicenseHeaderProcessor {
 }
 
 impl LicenseHeaderProcessor {
-    pub fn new(config: LicenseHeaderConfig) -> Self {
+    pub const fn new(config: LicenseHeaderConfig) -> Self {
         Self { config }
     }
 

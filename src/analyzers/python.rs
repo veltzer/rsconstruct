@@ -124,7 +124,7 @@ impl PythonDepAnalyzer {
 }
 
 impl DepAnalyzer for PythonDepAnalyzer {
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Scan Python source files for import dependencies"
     }
 

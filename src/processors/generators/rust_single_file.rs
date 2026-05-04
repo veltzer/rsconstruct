@@ -12,7 +12,7 @@ pub struct RustSingleFileProcessor {
 }
 
 impl RustSingleFileProcessor {
-    pub fn new(config: RustSingleFileConfig) -> Self {
+    pub const fn new(config: RustSingleFileConfig) -> Self {
         Self {
             config,
         }

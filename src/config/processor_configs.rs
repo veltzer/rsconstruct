@@ -147,12 +147,10 @@ impl KnownFields for StandardConfig {
 /// Simple checker config. No custom fields.
 /// Unused StandardConfig fields: formats, output_dir.
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Default)]
 pub struct CheckerConfig {
     #[serde(flatten)]
     pub standard: StandardConfig,
-}
-impl Default for CheckerConfig {
-    fn default() -> Self { Self { standard: StandardConfig::default() } }
 }
 impl KnownFields for CheckerConfig {
     fn known_fields() -> &'static [&'static str] { StandardConfig::known_fields() }
@@ -169,6 +167,7 @@ pub type CheckerConfigWithCommand = CheckerConfig;
 /// Creator processor config.
 /// Custom fields: output_dirs, output_files.
 /// Unused StandardConfig fields: formats, output_dir.
+#[derive(Default)]
 pub struct CreatorConfig {
     /// Directories to cache after the command runs.
     #[serde(default)]
@@ -180,15 +179,6 @@ pub struct CreatorConfig {
     pub standard: StandardConfig,
 }
 
-impl Default for CreatorConfig {
-    fn default() -> Self {
-        Self {
-            output_dirs: Vec::new(),
-            output_files: Vec::new(),
-            standard: StandardConfig::default(),
-        }
-    }
-}
 
 impl KnownFields for CreatorConfig {
     fn known_fields() -> &'static [&'static str] {
@@ -211,12 +201,10 @@ impl KnownFields for CreatorConfig {
 /// Tera template processor config. No custom fields.
 /// Unused StandardConfig fields: command, formats, output_dir.
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Default)]
 pub struct TeraConfig {
     #[serde(flatten)]
     pub standard: StandardConfig,
-}
-impl Default for TeraConfig {
-    fn default() -> Self { Self { standard: StandardConfig::default() } }
 }
 impl KnownFields for TeraConfig {
     fn known_fields() -> &'static [&'static str] { StandardConfig::known_fields() }
@@ -228,12 +216,10 @@ impl KnownFields for TeraConfig {
 /// Mako template processor config. No custom fields.
 /// Unused StandardConfig fields: command, formats, output_dir.
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Default)]
 pub struct MakoConfig {
     #[serde(flatten)]
     pub standard: StandardConfig,
-}
-impl Default for MakoConfig {
-    fn default() -> Self { Self { standard: StandardConfig::default() } }
 }
 impl KnownFields for MakoConfig {
     fn known_fields() -> &'static [&'static str] { StandardConfig::known_fields() }
@@ -245,12 +231,10 @@ impl KnownFields for MakoConfig {
 /// Jinja2 template processor config. No custom fields.
 /// Unused StandardConfig fields: command, formats, output_dir.
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Default)]
 pub struct Jinja2Config {
     #[serde(flatten)]
     pub standard: StandardConfig,
-}
-impl Default for Jinja2Config {
-    fn default() -> Self { Self { standard: StandardConfig::default() } }
 }
 impl KnownFields for Jinja2Config {
     fn known_fields() -> &'static [&'static str] { StandardConfig::known_fields() }
@@ -318,6 +302,7 @@ pub type MarpImagesConfig = CheckerConfig;
 /// ClangTidy config. Custom fields: compiler_args.
 /// Unused StandardConfig fields: command, formats, output_dir.
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Default)]
 pub struct ClangTidyConfig {
     #[serde(default)]
     pub compiler_args: Vec<String>,
@@ -325,14 +310,6 @@ pub struct ClangTidyConfig {
     pub standard: StandardConfig,
 }
 
-impl Default for ClangTidyConfig {
-    fn default() -> Self {
-        Self {
-            compiler_args: Vec::new(),
-            standard: StandardConfig::default(),
-        }
-    }
-}
 
 impl KnownFields for ClangTidyConfig {
     fn known_fields() -> &'static [&'static str] {
@@ -649,23 +626,21 @@ fn default_make_tool() -> String {
     "make".into()
 }
 
-fn default_linux_module_v() -> u32 {
+const fn default_linux_module_v() -> u32 {
     0
 }
 
-fn default_linux_module_w() -> u32 {
+const fn default_linux_module_w() -> u32 {
     1
 }
 
 /// Linux module config. No custom fields.
 /// Unused StandardConfig fields: command, formats, output_dir, args.
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Default)]
 pub struct LinuxModuleConfig {
     #[serde(flatten)]
     pub standard: StandardConfig,
-}
-impl Default for LinuxModuleConfig {
-    fn default() -> Self { Self { standard: StandardConfig::default() } }
 }
 impl KnownFields for LinuxModuleConfig {
     fn known_fields() -> &'static [&'static str] { StandardConfig::known_fields() }
@@ -958,6 +933,7 @@ impl KnownFields for TagsConfig {
 /// Unused StandardConfig fields: formats, output_dir.
 /// Note: empty command means "no command configured".
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Default)]
 pub struct ScriptConfig {
     #[serde(flatten)]
     pub standard: StandardConfig,
@@ -971,16 +947,6 @@ pub struct ScriptConfig {
     /// Defaults to the same value as `batch`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fix_batch: Option<bool>,
-}
-impl Default for ScriptConfig {
-    fn default() -> Self {
-        Self {
-            standard: StandardConfig::default(),
-            fix_command: String::new(),
-            fix_args: Vec::new(),
-            fix_batch: None,
-        }
-    }
 }
 impl KnownFields for ScriptConfig {
     fn known_fields() -> &'static [&'static str] {
@@ -1509,7 +1475,7 @@ impl KnownFields for TermsConfig {
 
 
 
-fn default_pdflatex_runs() -> usize {
+const fn default_pdflatex_runs() -> usize {
     2
 }
 
@@ -1857,6 +1823,7 @@ pub type DuplicateFilesConfig = CheckerConfig;
 
 // --- license_header (verify license headers in source files) ---
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Default)]
 pub struct LicenseHeaderConfig {
     #[serde(default)]
     pub header_lines: Vec<String>,
@@ -1864,14 +1831,6 @@ pub struct LicenseHeaderConfig {
     pub standard: StandardConfig,
 }
 
-impl Default for LicenseHeaderConfig {
-    fn default() -> Self {
-        Self {
-            header_lines: Vec::new(),
-            standard: StandardConfig::default(),
-        }
-    }
-}
 
 impl KnownFields for LicenseHeaderConfig {
     fn known_fields() -> &'static [&'static str] {

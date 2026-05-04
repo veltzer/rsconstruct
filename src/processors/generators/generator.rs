@@ -17,13 +17,13 @@ pub struct GeneratorProcessor {
 }
 
 impl GeneratorProcessor {
-    pub fn new(config: GeneratorConfig) -> Self {
+    pub const fn new(config: GeneratorConfig) -> Self {
         Self {
             config,
         }
     }
 
-    fn should_process(&self) -> bool {
+    const fn should_process(&self) -> bool {
         scan_root_valid(&self.config.standard) && !self.config.standard.command.is_empty()
     }
 

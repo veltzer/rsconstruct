@@ -13,11 +13,11 @@ pub enum RsconstructExitCode {
 }
 
 impl RsconstructExitCode {
-    pub fn code(self) -> u8 {
+    pub const fn code(self) -> u8 {
         self as u8
     }
 
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Success => "SUCCESS",
             Self::BuildError => "BUILD_ERROR",
@@ -29,7 +29,7 @@ impl RsconstructExitCode {
         }
     }
 
-    pub fn description(self) -> &'static str {
+    pub const fn description(self) -> &'static str {
         match self {
             Self::Success => "Build completed successfully",
             Self::BuildError => "One or more processors failed",

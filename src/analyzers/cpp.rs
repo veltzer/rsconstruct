@@ -181,7 +181,7 @@ impl CppDepAnalyzer {
 }
 
 impl DepAnalyzer for CppDepAnalyzer {
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Scan C/C++ source files for #include dependencies"
     }
 

@@ -11,11 +11,11 @@ pub struct DuplicateFilesProcessor {
 }
 
 impl DuplicateFilesProcessor {
-    pub fn new(config: DuplicateFilesConfig) -> Self {
+    pub const fn new(config: DuplicateFilesConfig) -> Self {
         Self { config }
     }
 
-    fn execute_product(&self, _product: &Product) -> Result<()> {
+    const fn execute_product(&self, _product: &Product) -> Result<()> {
         // Individual file checking is a no-op; duplicates are only detected in batch mode
         Ok(())
     }

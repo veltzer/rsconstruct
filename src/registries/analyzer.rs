@@ -36,7 +36,7 @@ pub fn all_analyzer_plugins() -> impl Iterator<Item = &'static AnalyzerPlugin> {
 /// Return sorted analyzer names from the registry.
 pub fn all_analyzer_names() -> Vec<&'static str> {
     let mut names: Vec<&str> = all_analyzer_plugins().map(|p| p.name).collect();
-    names.sort();
+    names.sort_unstable();
     names
 }
 

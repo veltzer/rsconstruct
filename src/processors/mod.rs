@@ -75,7 +75,7 @@ pub(crate) fn suspend_tool_check() -> ToolCheckGuard {
 
 /// No-op in release builds.
 #[cfg(not(debug_assertions))]
-pub fn suspend_tool_check() -> ToolCheckGuard {
+pub const fn suspend_tool_check() -> ToolCheckGuard {
     ToolCheckGuard { _private: () }
 }
 
@@ -279,7 +279,7 @@ pub fn check_command_output(output: &Output, context: impl std::fmt::Display) ->
 /// Check if scan directories are valid. Always returns true because scan directories
 /// may not exist on disk yet but contain virtual files from the fixed-point discovery
 /// loop (upstream generator outputs). The actual filtering is done by `file_index.scan()`.
-pub fn scan_root_valid(_scan: &crate::config::StandardConfig) -> bool {
+pub const fn scan_root_valid(_scan: &crate::config::StandardConfig) -> bool {
     true
 }
 
@@ -757,7 +757,7 @@ pub enum ProcessorType {
 
 impl ProcessorType {
     /// Returns the string representation
-    pub fn as_str(&self) -> &'static str {
+    pub const fn as_str(&self) -> &'static str {
         match self {
             ProcessorType::Generator => "generator",
             ProcessorType::Checker => "checker",
@@ -768,7 +768,7 @@ impl ProcessorType {
     }
 
     /// Returns a human-readable description of this processor type.
-    pub fn description(&self) -> &'static str {
+    pub const fn description(&self) -> &'static str {
         match self {
             ProcessorType::Generator => "Generates output files from input files (1 input -> 1 output per format)",
             ProcessorType::Checker => "Validates input files without producing outputs",
@@ -1177,7 +1177,7 @@ pub struct ProcessStats {
 }
 
 impl ProcessStats {
-    pub fn total(&self) -> usize {
+    pub const fn total(&self) -> usize {
         self.processed + self.failed + self.skipped + self.restored
     }
 }
@@ -1338,7 +1338,7 @@ pub struct SimpleChecker {
 }
 
 impl SimpleChecker {
-    pub fn new(config: CheckerConfigWithCommand, params: SimpleCheckerParams) -> Self {
+    pub const fn new(config: CheckerConfigWithCommand, params: SimpleCheckerParams) -> Self {
         Self { config, params }
     }
 
@@ -1353,7 +1353,7 @@ impl SimpleChecker {
         }
     }
 
-    fn has_fix(&self) -> bool {
+    const fn has_fix(&self) -> bool {
         self.params.fix_subcommand.is_some() || !self.params.fix_prepend_args.is_empty()
     }
 
@@ -1455,7 +1455,7 @@ pub struct SimpleGenerator {
 }
 
 impl SimpleGenerator {
-    pub fn new(config: StandardConfig, params: SimpleGeneratorParams) -> Self {
+    pub const fn new(config: StandardConfig, params: SimpleGeneratorParams) -> Self {
         Self {
             config,
             params,

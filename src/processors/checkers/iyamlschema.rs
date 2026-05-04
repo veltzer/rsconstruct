@@ -22,7 +22,7 @@ pub struct IyamlschemaProcessor {
 }
 
 impl IyamlschemaProcessor {
-    pub fn new(config: IyamlschemaConfig) -> Self {
+    pub const fn new(config: IyamlschemaConfig) -> Self {
         Self { config }
     }
 

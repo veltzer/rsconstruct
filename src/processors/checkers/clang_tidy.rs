@@ -10,7 +10,7 @@ pub struct ClangTidyProcessor {
 }
 
 impl ClangTidyProcessor {
-    pub fn new(config: ClangTidyConfig) -> Self {
+    pub const fn new(config: ClangTidyConfig) -> Self {
         Self { config }
     }
 

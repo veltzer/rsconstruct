@@ -12,7 +12,7 @@ pub struct GemProcessor {
 }
 
 impl GemProcessor {
-    pub fn new(config: GemConfig) -> Self {
+    pub const fn new(config: GemConfig) -> Self {
         Self {
             config,
         }

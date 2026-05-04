@@ -15,7 +15,7 @@ static IMAGE_RE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 impl MarpImagesProcessor {
-    pub fn new(config: MarpImagesConfig) -> Self {
+    pub const fn new(config: MarpImagesConfig) -> Self {
         Self { config }
     }
 

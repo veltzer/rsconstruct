@@ -49,7 +49,7 @@ struct Semaphore {
 }
 
 impl Semaphore {
-    fn new(max_permits: usize) -> Self {
+    const fn new(max_permits: usize) -> Self {
         Self {
             state: Mutex::new(0),
             condvar: Condvar::new(),
@@ -132,7 +132,7 @@ struct LevelContext<'b> {
     build_start: Instant,
 }
 
-impl<'a> Executor<'a> {
+impl Executor<'_> {
     /// Execute all products in the graph that need rebuilding
     pub fn execute(
         &self,

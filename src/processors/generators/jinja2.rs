@@ -40,7 +40,7 @@ pub struct Jinja2Processor {
 }
 
 impl Jinja2Processor {
-    pub fn new(config: Jinja2Config) -> Self {
+    pub const fn new(config: Jinja2Config) -> Self {
         Self {
             config,
         }

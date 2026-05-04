@@ -46,7 +46,7 @@ impl BuildContext {
         self.mtime_enabled.store(enabled, Ordering::Relaxed);
     }
 
-    pub(crate) fn runtime(&self) -> &Runtime {
+    pub(crate) const fn runtime(&self) -> &Runtime {
         &self.runtime
     }
 

@@ -20,7 +20,7 @@ pub struct PandocProcessor {
 }
 
 impl PandocProcessor {
-    pub fn new(config: PandocConfig) -> Self {
+    pub const fn new(config: PandocConfig) -> Self {
         Self { config }
     }
 }

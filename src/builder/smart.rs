@@ -207,7 +207,7 @@ pub fn auto(available: &HashSet<String>) -> Result<()> {
     } else {
         save_doc(&doc)?;
         let mut added = added;
-        added.sort();
+        added.sort_unstable();
         println!("Added {} processor(s): {}", added.len(), added.join(", "));
     }
     Ok(())
@@ -227,14 +227,13 @@ fn delete_iname(section_table: &mut toml_edit::Table, iname: &str) -> bool {
     if let Some(dot) = iname.find('.') {
         let type_name = &iname[..dot];
         let sub_name = &iname[dot + 1..];
-        if let Some(type_table) = section_table.get_mut(type_name).and_then(|t| t.as_table_mut()) {
-            if type_table.remove(sub_name).is_some() {
+        if let Some(type_table) = section_table.get_mut(type_name).and_then(|t| t.as_table_mut())
+            && type_table.remove(sub_name).is_some() {
                 if type_table.is_empty() {
                     section_table.remove(type_name);
                 }
                 return true;
             }
-        }
         false
     } else {
         section_table.remove(iname).is_some()

@@ -12,7 +12,7 @@ pub struct MdlProcessor {
 }
 
 impl MdlProcessor {
-    pub fn new(config: MdlConfig) -> Self {
+    pub const fn new(config: MdlConfig) -> Self {
         Self {
             config,
         }

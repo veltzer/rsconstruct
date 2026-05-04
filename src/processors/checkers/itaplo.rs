@@ -9,7 +9,7 @@ pub struct ItaploProcessor {
 }
 
 impl ItaploProcessor {
-    pub fn new(config: ItaploConfig) -> Self {
+    pub const fn new(config: ItaploConfig) -> Self {
         Self { config }
     }
 

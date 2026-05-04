@@ -26,7 +26,7 @@ unsafe impl Sync for CtxPtr {}
 
 impl CtxPtr {
     #[allow(dead_code)]
-    fn get(&self) -> &crate::build_context::BuildContext {
+    const fn get(&self) -> &crate::build_context::BuildContext {
         // SAFETY: caller guarantees the BuildContext outlives all uses.
         unsafe { &*self.0 }
     }

@@ -4,7 +4,7 @@ use crate::processors::{FailedProduct, ProcessStats};
 
 use super::{Executor, HandlerContext, RestoreOutcome, SharedState};
 
-impl<'a> Executor<'a> {
+impl Executor<'_> {
     /// Lock shared stats and apply an update function to the processor's stats entry.
     fn update_stats(shared: &SharedState, proc_name: &str, f: impl FnOnce(&mut ProcessStats)) {
         let mut stats = shared.stats.lock();

@@ -26,7 +26,7 @@ pub struct RequirementsProcessor {
 }
 
 impl RequirementsProcessor {
-    pub fn new(config: RequirementsConfig) -> Self {
+    pub const fn new(config: RequirementsConfig) -> Self {
         Self {
             config,
         }

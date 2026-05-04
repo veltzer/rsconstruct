@@ -151,7 +151,7 @@ impl IcppDepAnalyzer {
 }
 
 impl DepAnalyzer for IcppDepAnalyzer {
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Scan C/C++ source files for #include dependencies (in-process, regex-based)"
     }
 

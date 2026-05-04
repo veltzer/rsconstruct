@@ -12,7 +12,7 @@ pub struct MdbookProcessor {
 }
 
 impl MdbookProcessor {
-    pub fn new(config: MdbookConfig) -> Self {
+    pub const fn new(config: MdbookConfig) -> Self {
         Self {
             config,
         }

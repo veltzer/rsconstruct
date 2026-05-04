@@ -9,7 +9,7 @@ pub struct EncodingProcessor {
 }
 
 impl EncodingProcessor {
-    pub fn new(config: EncodingConfig) -> Self {
+    pub const fn new(config: EncodingConfig) -> Self {
         Self { config }
     }
 

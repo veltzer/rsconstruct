@@ -27,7 +27,7 @@ pub struct CreatorProcessor {
 }
 
 impl CreatorProcessor {
-    pub fn new(config: CreatorConfig) -> Self {
+    pub const fn new(config: CreatorConfig) -> Self {
         Self {
             config,
         }

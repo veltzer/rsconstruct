@@ -68,7 +68,7 @@ impl Product {
     }
 
     /// Whether this product has output directories to cache.
-    pub fn has_output_dirs(&self) -> bool {
+    pub const fn has_output_dirs(&self) -> bool {
         !self.output_dirs.is_empty()
     }
 
@@ -297,11 +297,10 @@ impl BuildGraph {
             .collect();
         self.products[product_id].inputs = new_inputs;
         for path in &to_remove {
-            if let Some(path_id) = self.interner.get(path) {
-                if let Some(ids) = self.input_to_products.get_mut(&path_id) {
+            if let Some(path_id) = self.interner.get(path)
+                && let Some(ids) = self.input_to_products.get_mut(&path_id) {
                     ids.retain(|&x| x != product_id);
                 }
-            }
         }
         for path in &to_add {
             let path_id = self.interner.intern(path);
@@ -329,15 +328,14 @@ impl BuildGraph {
         // primary input, and variant. If the new inputs are a superset (e.g. globs
         // resolved more files in a later fixed-point pass), update the product's
         // inputs so dependency resolution sees the full set.
-        if outputs.is_empty() && !inputs.is_empty() {
-            if let Some(primary_id) = self.interner.get(&inputs[0]) {
+        if outputs.is_empty() && !inputs.is_empty()
+            && let Some(primary_id) = self.interner.get(&inputs[0]) {
                 let key = (processor.to_string(), primary_id, variant.map(str::to_string));
                 if let Some(&existing_id) = self.checker_dedup.get(&key) {
                     self.try_update_inputs(existing_id, inputs);
                     return Ok(existing_id);
                 }
             }
-        }
 
         // For generators: check output conflicts and deduplicate re-declarations.
         for output in &outputs {
@@ -673,11 +671,10 @@ impl BuildGraph {
         }
 
         // Check 4: early cycle detection
-        if config.validate_early_cycles {
-            if let Err(e) = self.topological_sort() {
+        if config.validate_early_cycles
+            && let Err(e) = self.topological_sort() {
                 errors.push(format!("{e}"));
             }
-        }
 
         errors
     }

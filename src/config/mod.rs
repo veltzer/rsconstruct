@@ -65,6 +65,7 @@ pub struct ScanDefaultsData {
 }
 
 /// Per-processor default values applied after TOML deserialization.
+#[derive(Default)]
 pub struct ProcessorDefaults {
     /// Default command binary name. Empty if not applicable.
     pub command: &'static str,
@@ -80,18 +81,6 @@ pub struct ProcessorDefaults {
     pub batch: Option<bool>,
 }
 
-impl Default for ProcessorDefaults {
-    fn default() -> Self {
-        Self {
-            command: "",
-            dep_auto: &[],
-            output_dir: "",
-            formats: &[],
-            args: &[],
-            batch: None,
-        }
-    }
-}
 
 /// Parameters for a simple checker processor — pure data, no macros.
 #[derive(Copy, Clone)]
@@ -222,7 +211,7 @@ pub struct DependenciesConfig {
 }
 
 impl DependenciesConfig {
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.pip.is_empty() && self.npm.is_empty() && self.gem.is_empty() && self.system.is_empty()
     }
 }
@@ -294,7 +283,7 @@ pub struct BuildConfig {
     pub output_dir: String,
 }
 
-fn default_parallel() -> usize {
+const fn default_parallel() -> usize {
     0
 }
 
@@ -375,7 +364,7 @@ impl Default for CacheConfig {
     }
 }
 
-pub fn default_true() -> bool {
+pub const fn default_true() -> bool {
     true
 }
 
@@ -644,7 +633,7 @@ pub fn processor_defaults_for(type_name: &str) -> Option<ProcessorDefaults> {
         "cargo" => ProcessorDefaults { command: "build", ..d },
         "clippy" => ProcessorDefaults { command: "clippy", ..d },
         "generator" => ProcessorDefaults { output_dir: "out/generator", ..d },
-        "explicit" => ProcessorDefaults { ..d },
+        "explicit" => d,
         "sphinx" => ProcessorDefaults { command: "sphinx-build", output_dir: "docs", ..d },
         "mdbook" => ProcessorDefaults { command: "mdbook", output_dir: "book", ..d },
         "npm" => ProcessorDefaults { command: "npm", ..d },
@@ -1157,7 +1146,7 @@ enum FieldType {
 }
 
 impl FieldType {
-    fn label(self) -> &'static str {
+    const fn label(self) -> &'static str {
         match self {
             FieldType::String => "a string",
             FieldType::Bool => "a boolean",
@@ -1180,7 +1169,7 @@ impl FieldType {
         }
     }
 
-    fn describe_value(value: &toml::Value) -> &'static str {
+    const fn describe_value(value: &toml::Value) -> &'static str {
         match value {
             toml::Value::String(_) => "a string",
             toml::Value::Integer(_) => "an integer",
@@ -1754,7 +1743,7 @@ fn validate_override_field(
             .chain(STANDARD_EXTRA_FIELDS.iter())
             .copied()
             .collect();
-        all_fields.sort();
+        all_fields.sort_unstable();
         all_fields.dedup();
         anyhow::bail!(
             "instance '{instance_label}' (type {type_name}): unknown field '{field}' (valid fields: {})",

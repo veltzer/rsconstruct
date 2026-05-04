@@ -191,14 +191,13 @@ fn run_tools_command(
                 });
                 println!("{}", serde_json::to_string_pretty(&out)?);
             } else {
-                if verbose {
-                    if let Some(lock) = &lock {
+                if verbose
+                    && let Some(lock) = &lock {
                         for (name, info) in &lock.tools {
                             let version = tool_lock::extract_semver(&info.version_output).unwrap_or("?");
                             println!("{} {} {}", name, color::green("ok"), color::dim(version));
                         }
                     }
-                }
                 println!("{}", color::green("Tool versions match lock file."));
             }
         }
@@ -261,8 +260,7 @@ fn run_tools_command(
             for (tool, procs) in &tool_map {
                 let installed = which::which(tool).is_ok();
                 let runtime = tool_runtime(tool).to_string();
-                let install_command = crate::processors::tool_install_command(tool)
-                    .map(|s| s.to_string());
+                let install_command = crate::processors::tool_install_command(tool);
                 tool_stats.push(json_output::ToolStat {
                     name: tool.clone(),
                     installed,
@@ -500,9 +498,8 @@ fn run_tools_command(
                     crate::exit_code::RsconstructExitCode::ToolError,
                     "Some install commands failed",
                 ).into());
-            } else {
-                println!("{}", color::green("All tools installed successfully."));
             }
+            println!("{}", color::green("All tools installed successfully."));
         }
         ToolsAction::InstallDeps { yes } => {
             let config = builder
@@ -695,9 +692,8 @@ fn run_tools_command(
                     crate::exit_code::RsconstructExitCode::ToolError,
                     "Some dependency installs failed",
                 ).into());
-            } else {
-                println!("{}", color::green("All dependencies installed successfully."));
             }
+            println!("{}", color::green("All dependencies installed successfully."));
         }
     }
 

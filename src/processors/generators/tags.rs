@@ -18,7 +18,7 @@ pub struct TagsProcessor {
 }
 
 impl TagsProcessor {
-    pub fn new(config: TagsConfig) -> Self {
+    pub const fn new(config: TagsConfig) -> Self {
         Self {
             config,
         }

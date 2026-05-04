@@ -118,9 +118,8 @@ impl ObjectStore {
                         let display = p.display().to_string();
                         if self.has_object(&checksum) {
                             return ExplainAction::Restore(RebuildReason::OutputMissing(display));
-                        } else {
-                            return ExplainAction::Rebuild(RebuildReason::OutputMissing(display));
                         }
+                        return ExplainAction::Rebuild(RebuildReason::OutputMissing(display));
                     }
                 }
                 ExplainAction::Skip
@@ -133,9 +132,8 @@ impl ObjectStore {
                     if needs_restore {
                         if self.has_object(&entry.checksum) {
                             return ExplainAction::Restore(RebuildReason::OutputMissing(entry.path.clone()));
-                        } else {
-                            return ExplainAction::Rebuild(RebuildReason::OutputMissing(entry.path.clone()));
                         }
+                        return ExplainAction::Rebuild(RebuildReason::OutputMissing(entry.path.clone()));
                     }
                 }
                 ExplainAction::Skip

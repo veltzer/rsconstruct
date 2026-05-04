@@ -344,7 +344,7 @@ fn expand_glob(pattern: &str) -> Result<Vec<String>> {
 }
 
 impl DepAnalyzer for TeraDepAnalyzer {
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Scan Tera templates for include/import/extends dependencies"
     }
 

@@ -46,7 +46,7 @@ pub(super) struct TemplateItem {
 }
 
 impl TemplateItem {
-    pub fn new(source_path: PathBuf, output_path: PathBuf) -> Self {
+    pub const fn new(source_path: PathBuf, output_path: PathBuf) -> Self {
         Self {
             source_path,
             output_path,

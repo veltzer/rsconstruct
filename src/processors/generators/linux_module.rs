@@ -13,7 +13,7 @@ pub struct LinuxModuleProcessor {
 }
 
 impl LinuxModuleProcessor {
-    pub fn new(config: LinuxModuleConfig) -> Self {
+    pub const fn new(config: LinuxModuleConfig) -> Self {
         Self {
             config,
         }

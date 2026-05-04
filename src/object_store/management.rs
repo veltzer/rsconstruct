@@ -41,8 +41,8 @@ impl ObjectStore {
         let mut referenced: std::collections::HashSet<String> = std::collections::HashSet::new();
         if self.descriptors_dir.exists() {
             for path in walk_files(&self.descriptors_dir) {
-                if let Ok(data) = fs::read(&path) {
-                    if let Ok(desc) = serde_json::from_slice::<CacheDescriptor>(&data) {
+                if let Ok(data) = fs::read(&path)
+                    && let Ok(desc) = serde_json::from_slice::<CacheDescriptor>(&data) {
                         match desc {
                             CacheDescriptor::Marker => {}
                             CacheDescriptor::Blob { checksum, .. } => {
@@ -55,7 +55,6 @@ impl ObjectStore {
                             }
                         }
                     }
-                }
             }
         }
 

@@ -30,7 +30,7 @@ pub enum Phase {
 }
 
 impl Phase {
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Phase::PostConfig      => "post-config",
             Phase::Discover        => "discover",
@@ -41,7 +41,7 @@ impl Phase {
         }
     }
 
-    pub fn description(self) -> &'static str {
+    pub const fn description(self) -> &'static str {
         match self {
             Phase::PostConfig      => "Fires after Config::load, before any command uses the config",
             Phase::Discover        => "Build pipeline: products discovered",
@@ -52,7 +52,7 @@ impl Phase {
         }
     }
 
-    pub fn all() -> &'static [Phase] {
+    pub const fn all() -> &'static [Phase] {
         &[
             Phase::PostConfig,
             Phase::Discover,

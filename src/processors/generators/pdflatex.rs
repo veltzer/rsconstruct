@@ -18,7 +18,7 @@ pub struct PdflatexProcessor {
 }
 
 impl PdflatexProcessor {
-    pub fn new(config: PdflatexConfig) -> Self {
+    pub const fn new(config: PdflatexConfig) -> Self {
         Self {
             config,
         }

@@ -213,7 +213,7 @@ impl DepsCache {
     }
 
     /// Get cache statistics (hits and misses)
-    pub fn stats(&self) -> &DepsCacheStats {
+    pub const fn stats(&self) -> &DepsCacheStats {
         &self.stats
     }
 

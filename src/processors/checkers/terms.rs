@@ -27,7 +27,7 @@ pub struct TermsProcessor {
 }
 
 impl TermsProcessor {
-    pub fn new(config: TermsConfig) -> Self {
+    pub const fn new(config: TermsConfig) -> Self {
         Self { config }
     }
 
@@ -185,7 +185,7 @@ pub fn load_and_validate_terms(config: &TermsConfig) -> Result<LoadedTerms> {
             .map(std::string::String::as_str)
             .collect();
         if !overlap.is_empty() {
-            overlap.sort();
+            overlap.sort_unstable();
             bail!(
                 "{} term(s) appear in both `{}` and `{}` (ambiguous terms must not be in the unambiguous list):\n  {}",
                 overlap.len(),

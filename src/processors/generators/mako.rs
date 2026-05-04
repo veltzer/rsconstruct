@@ -40,7 +40,7 @@ pub struct MakoProcessor {
 }
 
 impl MakoProcessor {
-    pub fn new(config: MakoConfig) -> Self {
+    pub const fn new(config: MakoConfig) -> Self {
         Self {
             config,
         }

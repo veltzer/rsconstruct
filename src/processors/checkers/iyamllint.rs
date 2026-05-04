@@ -9,7 +9,7 @@ pub struct IyamllintProcessor {
 }
 
 impl IyamllintProcessor {
-    pub fn new(config: IyamllintConfig) -> Self {
+    pub const fn new(config: IyamllintConfig) -> Self {
         Self { config }
     }
 

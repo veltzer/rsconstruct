@@ -98,11 +98,10 @@ impl Builder {
                 "Fix completed: {fixed_count} fixed, {error_count} errors",
             )));
             anyhow::bail!("Fix failed with {error_count} error(s)");
-        } else {
-            println!("{}", color::green(&format!(
-                "Fix completed: {fixed_count} file(s) processed",
-            )));
         }
+        println!("{}", color::green(&format!(
+            "Fix completed: {fixed_count} file(s) processed",
+        )));
 
         Ok(())
     }

@@ -11,7 +11,7 @@ pub struct MarkdownlintProcessor {
 }
 
 impl MarkdownlintProcessor {
-    pub fn new(config: MarkdownlintConfig) -> Self {
+    pub const fn new(config: MarkdownlintConfig) -> Self {
         Self {
             config,
         }

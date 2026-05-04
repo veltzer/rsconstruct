@@ -88,7 +88,7 @@ impl MarkdownDepAnalyzer {
 }
 
 impl DepAnalyzer for MarkdownDepAnalyzer {
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Scan Markdown files for local file dependencies"
     }
 

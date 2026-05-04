@@ -85,7 +85,7 @@ pub enum GraphSnapshot {
 impl GraphSnapshot {
     /// Symbolic name shown in graph-stats output. Matches the enum variant
     /// in SCREAMING_SNAKE_CASE.
-    fn name(self) -> &'static str {
+    const fn name(self) -> &'static str {
         match self {
             GraphSnapshot::Start => "START",
             GraphSnapshot::AfterDiscover => "AFTER_DISCOVER",
@@ -759,7 +759,7 @@ impl Builder {
     }
 
     /// Get a reference to the object store.
-    pub fn object_store(&self) -> &ObjectStore {
+    pub const fn object_store(&self) -> &ObjectStore {
         &self.object_store
     }
 

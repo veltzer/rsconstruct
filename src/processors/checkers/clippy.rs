@@ -12,7 +12,7 @@ pub struct ClippyProcessor {
 }
 
 impl ClippyProcessor {
-    pub fn new(config: ClippyConfig) -> Self {
+    pub const fn new(config: ClippyConfig) -> Self {
         Self {
             config,
         }

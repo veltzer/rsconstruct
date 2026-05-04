@@ -12,7 +12,7 @@ pub struct NpmProcessor {
 }
 
 impl NpmProcessor {
-    pub fn new(config: NpmConfig) -> Self {
+    pub const fn new(config: NpmConfig) -> Self {
         Self {
             config,
         }

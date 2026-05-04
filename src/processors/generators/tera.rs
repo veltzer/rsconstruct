@@ -28,7 +28,7 @@ unsafe impl Send for CtxPtr {}
 unsafe impl Sync for CtxPtr {}
 
 impl CtxPtr {
-    fn get(&self) -> &crate::build_context::BuildContext {
+    const fn get(&self) -> &crate::build_context::BuildContext {
         // SAFETY: caller guarantees the BuildContext outlives all uses of CtxPtr.
         unsafe { &*self.0 }
     }
@@ -99,7 +99,7 @@ pub struct TeraProcessor {
 }
 
 impl TeraProcessor {
-    pub fn new(config: TeraConfig) -> Self {
+    pub const fn new(config: TeraConfig) -> Self {
         Self {
             config,
         }

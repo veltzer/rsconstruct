@@ -135,7 +135,7 @@ fn default_value_for_optional(val: Option<&serde_json::Value>) -> String {
     }
 }
 
-fn is_empty_default(v: &serde_json::Value) -> bool {
+const fn is_empty_default(v: &serde_json::Value) -> bool {
     match v {
         serde_json::Value::String(s) => s.is_empty(),
         serde_json::Value::Array(a) => a.is_empty(),
