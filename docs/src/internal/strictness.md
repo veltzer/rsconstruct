@@ -26,10 +26,10 @@ This is one step short of `forbid`. `forbid` cannot be overridden per-item; `den
 The crate root carries a block of `#![allow(clippy::*)]` attributes — these are pedantic and nursery lints that the codebase deliberately permits. Each falls into one of three groups (the source comments tag them):
 
 1. **Numeric/cast lints** (3 lints). `cast_possible_truncation`, `cast_precision_loss`, `cast_sign_loss`. These fire on progress-percentage computations and similar internal arithmetic where the values are bounded and not user-controlled. Per-site allows would add noise without adding safety.
-2. **Stylistic / debatable** (~33 lints). Lints where clippy's preferred shape is not obviously better. Examples: `option_if_let_else` (`map_or` form is often less readable), `match_same_arms` (kept distinct for readability), `doc_markdown` (over-eager about backticking ordinary words).
-3. **To-do** (~9 lints). Lints that should be fixed in a follow-up pass but were too disruptive to autofix in the most recent strictness sweep. Examples: `manual_let_else` (51 occurrences), `significant_drop_tightening` (14), `unnecessary_wraps` (12).
+2. **Stylistic / debatable** (~32 lints). Lints where clippy's preferred shape is not obviously better. Examples: `option_if_let_else` (`map_or` form is often less readable), `match_same_arms` (kept distinct for readability), `doc_markdown` (over-eager about backticking ordinary words), `naive_bytecount` (would require adding the `bytecount` crate for one call site).
+3. **Mutex guard tightening** (1 lint). `significant_drop_tightening`. Flags every guard whose scope extends past the last use, even by one statement. In practice our guards are held for short cache lookups and tightening produces busier code without measurable contention reduction. Deliberate policy allow.
 
-The "to-do" group is the live target for incremental tightening. When one of those lints reaches zero hits, remove its allow.
+There is no "to-do" group remaining: the previous strictness pass either fixed each pedantic/nursery lint in code or moved it to one of the three buckets above with rationale.
 
 ## The rule for `#[allow(...)]`
 
