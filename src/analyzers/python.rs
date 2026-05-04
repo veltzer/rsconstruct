@@ -22,7 +22,7 @@ use super::DepAnalyzer;
 /// Scan a Python source file for `import` / `from X import ...` statements and
 /// return the top-level module names referenced. Comments are skipped. The
 /// caller decides how to classify each name (local, stdlib, third-party).
-pub(crate) fn scan_python_imports(source: &Path) -> Result<Vec<String>> {
+pub fn scan_python_imports(source: &Path) -> Result<Vec<String>> {
     let content = crate::errors::ctx(
         fs::read_to_string(source),
         &format!("Failed to read Python source: {}", source.display()),
@@ -101,10 +101,10 @@ impl PythonDepAnalyzer {
 
         let candidates = [
             // Relative paths
-            source_dir.join(format!("{}.py", module_path)),
+            source_dir.join(format!("{module_path}.py")),
             source_dir.join(&module_path).join("__init__.py"),
             // Project root paths
-            PathBuf::from(format!("{}.py", module_path)),
+            PathBuf::from(format!("{module_path}.py")),
             PathBuf::from(&module_path).join("__init__.py"),
         ];
 

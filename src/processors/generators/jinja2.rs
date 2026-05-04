@@ -22,12 +22,11 @@ fn render_jinja2(ctx: &crate::build_context::BuildContext, item: &TemplateItem) 
 import jinja2, os
 loader = jinja2.FileSystemLoader('.')
 env = jinja2.Environment(loader=loader)
-template = env.get_template('{}')
+template = env.get_template('{source}')
 output = template.render(**os.environ)
-with open('{}', 'w') as f:
+with open('{target}', 'w') as f:
     f.write(output)
-"#,
-        source, target
+"#
     );
 
     let mut cmd = Command::new("python3");

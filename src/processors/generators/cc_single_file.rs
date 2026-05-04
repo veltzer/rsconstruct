@@ -308,7 +308,7 @@ fn expand_backticks(ctx: &crate::build_context::BuildContext, value: &str) -> Re
         result.push_str(&rest[..start]);
         let after_start = &rest[start + 1..];
         let end = after_start.find('`').ok_or_else(|| {
-            anyhow::anyhow!("Unmatched backtick in value: {}", value)
+            anyhow::anyhow!("Unmatched backtick in value: {value}")
         })?;
         let cmd_str = &after_start[..end];
         // Use cache for backtick commands too
@@ -395,7 +395,7 @@ impl CcSingleFileProcessor {
     fn add_compile_flags(&self, cmd: &mut Command, profile: &CompilerProfile, is_cpp: bool, source_flags: &SourceFlags) {
         let flags = if is_cpp { &profile.cxxflags } else { &profile.cflags };
         for inc in &self.config.include_paths {
-            cmd.arg(format!("-I{}", inc));
+            cmd.arg(format!("-I{inc}"));
         }
         for arg in &source_flags.compile_args_before {
             cmd.arg(arg);

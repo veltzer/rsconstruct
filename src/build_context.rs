@@ -13,7 +13,7 @@ use crate::errors;
 /// channel, and the checksum/mtime caches. Creating a fresh `BuildContext`
 /// gives an isolated build environment — the prerequisite for daemon mode,
 /// LSP integration, and parallel test harnesses.
-pub(crate) struct BuildContext {
+pub struct BuildContext {
     runtime: Runtime,
     interrupted: AtomicBool,
     interrupt_tx: watch::Sender<bool>,

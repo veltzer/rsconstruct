@@ -1,5 +1,68 @@
 #![deny(clippy::all)]
+#![warn(clippy::pedantic)]
+#![warn(clippy::nursery)]
 #![deny(warnings)]
+
+// Pedantic / nursery lints triggered by the existing codebase.
+// Each one is a tracked cleanup target — see doc/strictness-pass.md.
+// Remove the allow once the lint produces zero hits.
+#![allow(clippy::bool_to_int_with_if)]
+#![allow(clippy::case_sensitive_file_extension_comparisons)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::crate_in_macro_def)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::derivable_impls)]
+#![allow(clippy::derive_partial_eq_without_eq)]
+#![allow(clippy::doc_link_with_quotes)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::elidable_lifetime_names)]
+#![allow(clippy::empty_line_after_doc_comments)]
+#![allow(clippy::equatable_if_let)]
+#![allow(clippy::explicit_iter_loop)]
+#![allow(clippy::format_push_string)]
+#![allow(clippy::if_not_else)]
+#![allow(clippy::ignored_unit_patterns)]
+#![allow(clippy::implicit_clone)]
+#![allow(clippy::items_after_statements)]
+#![allow(clippy::manual_let_else)]
+#![allow(clippy::map_unwrap_or)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::missing_const_for_fn)]
+#![allow(clippy::module_inception)]
+#![allow(clippy::naive_bytecount)]
+#![allow(clippy::needless_collect)]
+#![allow(clippy::needless_continue)]
+#![allow(clippy::needless_pass_by_ref_mut)]
+#![allow(clippy::needless_pass_by_value)]
+#![allow(clippy::needless_raw_string_hashes)]
+#![allow(clippy::option_if_let_else)]
+#![allow(clippy::option_option)]
+#![allow(clippy::or_fun_call)]
+#![allow(clippy::permissions_set_readonly_false)]
+#![allow(clippy::redundant_clone)]
+#![allow(clippy::redundant_closure_for_method_calls)]
+#![allow(clippy::redundant_else)]
+#![allow(clippy::ref_as_ptr)]
+#![allow(clippy::significant_drop_tightening)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::single_match_else)]
+#![allow(clippy::stable_sort_primitive)]
+#![allow(clippy::struct_excessive_bools)]
+#![allow(clippy::struct_field_names)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::trivially_copy_pass_by_ref)]
+#![allow(clippy::unnecessary_literal_bound)]
+#![allow(clippy::unnecessary_struct_initialization)]
+#![allow(clippy::unnecessary_wraps)]
+#![allow(clippy::unnested_or_patterns)]
+#![allow(clippy::unused_self)]
+#![allow(clippy::use_self)]
+#![allow(clippy::useless_let_if_seq)]
+#![allow(clippy::wildcard_imports)]
 
 #[macro_use]
 mod registries;
@@ -58,7 +121,7 @@ fn main() -> std::process::ExitCode {
                     "exit_code_name": exit_code.name(),
                     "message": format!("{:#}", err),
                 });
-                eprintln!("{}", error_event);
+                eprintln!("{error_event}");
             } else {
                 eprintln!("Error [{}]: {:#}", exit_code.name(), err);
             }
@@ -207,7 +270,7 @@ fn run() -> (Result<()>, bool) {
                         let out = serde_json::json!({ "removed_bytes": bytes, "removed_objects": count });
                         println!("{}", serde_json::to_string_pretty(&out)?);
                     } else {
-                        println!("Removed {} bytes ({} unreferenced objects)", bytes, count);
+                        println!("Removed {bytes} bytes ({count} unreferenced objects)");
                     }
                 }
                 CacheAction::RemoveStale => {
@@ -223,9 +286,9 @@ fn run() -> (Result<()>, bool) {
                         });
                         println!("{}", serde_json::to_string_pretty(&out)?);
                     } else {
-                        println!("Removed {} stale index entries", stale_count);
+                        println!("Removed {stale_count} stale index entries");
                         if trim_count > 0 {
-                            println!("Removed {} bytes ({} orphaned objects)", bytes, trim_count);
+                            println!("Removed {bytes} bytes ({trim_count} orphaned objects)");
                         }
                     }
                 }
@@ -334,7 +397,7 @@ fn run() -> (Result<()>, bool) {
                 for shell_name in &config.completions.shells {
                     match parse_shell(shell_name) {
                         Some(shell) => parsed_shells.push(shell),
-                        None => bail!("Unknown shell in config: {}", shell_name),
+                        None => bail!("Unknown shell in config: {shell_name}"),
                     }
                 }
                 parsed_shells
@@ -657,7 +720,7 @@ fn run() -> (Result<()>, bool) {
             match action {
                 WebCacheAction::Clear => {
                     let count = webcache::clear()?;
-                    println!("Removed {} cached entries.", count);
+                    println!("Removed {count} cached entries.");
                 }
                 WebCacheAction::Stats => {
                     let (bytes, count) = webcache::stats()?;

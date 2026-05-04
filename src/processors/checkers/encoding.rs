@@ -50,7 +50,7 @@ fn validate_utf8(bytes: &[u8]) -> std::result::Result<(), String> {
         let byte_pos = e.valid_up_to();
         // Find line number
         let line_num = bytes[..byte_pos].iter().filter(|&&b| b == b'\n').count() + 1;
-        return Err(format!("invalid UTF-8 at byte {} (line {})", byte_pos, line_num));
+        return Err(format!("invalid UTF-8 at byte {byte_pos} (line {line_num})"));
     }
     Ok(())
 }

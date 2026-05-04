@@ -17,7 +17,7 @@ impl ObjectStore {
         }
 
         let (prefix, rest) = checksum.split_at(super::CHECKSUM_PREFIX_LEN.min(checksum.len()));
-        let remote_key = format!("objects/{}/{}", prefix, rest);
+        let remote_key = format!("objects/{prefix}/{rest}");
 
         // Check if already exists remotely (avoid redundant uploads)
         if remote.exists(ctx, &remote_key).unwrap_or(false) {
@@ -26,7 +26,7 @@ impl ObjectStore {
 
         // Upload (ignore errors - remote cache is best-effort)
         if let Err(e) = remote.upload(ctx, &remote_key, &object_path) {
-            eprintln!("Warning: failed to push to remote cache: {}", e);
+            eprintln!("Warning: failed to push to remote cache: {e}");
         }
 
         Ok(())
@@ -48,7 +48,7 @@ impl ObjectStore {
         }
 
         let (prefix, rest) = checksum.split_at(super::CHECKSUM_PREFIX_LEN.min(checksum.len()));
-        let remote_key = format!("objects/{}/{}", prefix, rest);
+        let remote_key = format!("objects/{prefix}/{rest}");
         let fetched = remote.download(ctx, &remote_key, &object_path)?;
 
         // Make fetched object read-only to prevent corruption via hardlinks
@@ -74,9 +74,9 @@ impl ObjectStore {
             None => return Ok(()),
         };
 
-        let remote_key = format!("descriptors/{}", descriptor_key);
+        let remote_key = format!("descriptors/{descriptor_key}");
         if let Err(e) = remote.upload_bytes(ctx, &remote_key, data) {
-            eprintln!("Warning: failed to push descriptor to remote cache: {}", e);
+            eprintln!("Warning: failed to push descriptor to remote cache: {e}");
         }
 
         Ok(())
@@ -91,7 +91,7 @@ impl ObjectStore {
             None => return Ok(None),
         };
 
-        let remote_key = format!("descriptors/{}", descriptor_key);
+        let remote_key = format!("descriptors/{descriptor_key}");
         let data = remote.download_bytes(ctx, &remote_key)?;
         if let Some(ref data) = data {
             // Store locally

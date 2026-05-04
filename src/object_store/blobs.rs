@@ -70,7 +70,7 @@ impl ObjectStore {
 
         if self.compression {
             let content = self.read_object(checksum)
-                .with_context(|| format!("Failed to read cached object: {}", checksum))?;
+                .with_context(|| format!("Failed to read cached object: {checksum}"))?;
             fs::write(output_path, &content)
                 .with_context(|| format!("Failed to write decompressed output: {}", output_path.display()))?;
             crate::platform::set_permissions_mode(output_path, 0o644)
@@ -81,11 +81,11 @@ impl ObjectStore {
         match self.restore_method {
             RestoreMethod::Hardlink => {
                 fs::hard_link(&object_path, output_path)
-                    .with_context(|| format!("Failed to hard link from cache: {}. If on a cross-filesystem setup, set restore_method = \"copy\" in rsconstruct.toml.", checksum))?;
+                    .with_context(|| format!("Failed to hard link from cache: {checksum}. If on a cross-filesystem setup, set restore_method = \"copy\" in rsconstruct.toml."))?;
             }
             RestoreMethod::Copy => {
                 fs::copy(&object_path, output_path)
-                    .with_context(|| format!("Failed to copy from cache: {}", checksum))?;
+                    .with_context(|| format!("Failed to copy from cache: {checksum}"))?;
                 crate::platform::set_permissions_mode(output_path, 0o644)
                     .context("Failed to make restored file writable")?;
             }
@@ -99,10 +99,10 @@ impl ObjectStore {
     pub(crate) fn read_object(&self, checksum: &str) -> Result<Vec<u8>> {
         let object_path = self.object_path(checksum);
         let raw = fs::read(&object_path)
-            .with_context(|| format!("Failed to read object: {}", checksum))?;
+            .with_context(|| format!("Failed to read object: {checksum}"))?;
         if self.compression {
             zstd::decode_all(raw.as_slice())
-                .with_context(|| format!("Failed to decompress object: {}", checksum))
+                .with_context(|| format!("Failed to decompress object: {checksum}"))
         } else {
             Ok(raw)
         }

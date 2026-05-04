@@ -89,7 +89,7 @@ impl Processor for PandocProcessor {
                 cmd.arg("-V").arg(r"header-includes=\pdftrailerid{}");
             }
             if !engine.is_empty() {
-                cmd.arg(format!("--pdf-engine={}", engine));
+                cmd.arg(format!("--pdf-engine={engine}"));
             }
         }
         for arg in &self.config.standard.args { cmd.arg(arg); }

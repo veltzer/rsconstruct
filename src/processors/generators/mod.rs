@@ -84,7 +84,7 @@ pub(super) fn find_templates(scan: &StandardConfig, file_index: &FileIndex) -> R
 }
 
 /// Parameters shared by multi-format and single-format discover helpers.
-pub(crate) struct DiscoverParams<'a, C: Serialize> {
+pub struct DiscoverParams<'a, C: Serialize> {
     pub scan: &'a StandardConfig,
     pub dep_inputs: &'a [String],
     pub config: &'a C,
@@ -151,7 +151,7 @@ pub(super) fn output_path(source: &Path, src_dirs: &[String], output_dir: &str, 
 
 /// Discover one product per source x format pair. Returns Ok(()) immediately
 /// if the scan root is invalid (directory doesn't exist).
-pub(crate) fn discover_multi_format(
+pub fn discover_multi_format(
     graph: &mut BuildGraph,
     file_index: &FileIndex,
     params: &DiscoverParams<'_, impl Serialize>,
@@ -182,7 +182,7 @@ pub(crate) fn discover_multi_format(
 
 /// Discover one product per source file. Returns Ok(()) immediately
 /// if the scan root is invalid (directory doesn't exist).
-pub(crate) fn discover_single_format(
+pub fn discover_single_format(
     graph: &mut BuildGraph,
     file_index: &FileIndex,
     params: &DiscoverParams<'_, impl Serialize>,

@@ -31,8 +31,7 @@ pub fn run(config: &SymlinkInstallConfig) -> Result<()> {
     }
 
     println!("{}", color::green(&format!(
-        "Symlink install: {} created, {} updated, {} unchanged",
-        total_created, total_updated, total_unchanged
+        "Symlink install: {total_created} created, {total_updated} updated, {total_unchanged} unchanged"
     )));
     Ok(())
 }
@@ -42,7 +41,7 @@ fn expand_tilde(path: &str) -> String {
     if let Some(rest) = path.strip_prefix("~/")
         && let Ok(home) = std::env::var("HOME")
     {
-        return format!("{}/{}", home, rest);
+        return format!("{home}/{rest}");
     }
     path.to_string()
 }

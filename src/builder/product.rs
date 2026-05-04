@@ -27,9 +27,8 @@ impl Builder {
 
         let product = resolve_product(&graph, &target).ok_or_else(|| {
             anyhow::anyhow!(
-                "No product owns or consumes '{}'. Try the output path \
+                "No product owns or consumes '{path}'. Try the output path \
                  (e.g. README.md) or the primary input path.",
-                path,
             )
         })?;
 
@@ -56,7 +55,7 @@ impl Builder {
         let input_checksum = match crate::checksum::combined_input_checksum(ctx, &product.inputs) {
             Ok(c) => c,
             Err(e) => {
-                bail!("Failed to compute input checksum: {}", e);
+                bail!("Failed to compute input checksum: {e}");
             }
         };
         let descriptor_key = product.descriptor_key(&input_checksum);
@@ -156,7 +155,7 @@ fn print_text(
     } else {
         println!("{}", color::dim("hash_pieces:"));
         for (analyzer, pieces) in hash_pieces {
-            println!("  [{}]", analyzer);
+            println!("  [{analyzer}]");
             for piece in pieces {
                 let (kind, body) = piece.split_once(':').unwrap_or((piece.as_str(), ""));
                 if !verbose && kind.ends_with("_resolved") {
@@ -164,12 +163,12 @@ fn print_text(
                     println!(
                         "    {} {}",
                         color::cyan(kind),
-                        color::dim(&format!("({} files, pass --verbose to list)", n)),
+                        color::dim(&format!("({n} files, pass --verbose to list)")),
                     );
                 } else if body.contains('\n') {
                     println!("    {}", color::cyan(kind));
                     for line in body.lines() {
-                        println!("      {}", line);
+                        println!("      {line}");
                     }
                 } else {
                     println!("    {} {}", color::cyan(kind), body);

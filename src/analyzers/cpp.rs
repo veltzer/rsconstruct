@@ -90,7 +90,7 @@ impl CppDepAnalyzer {
 
         // Add include paths
         for inc in &self.config.include_paths {
-            cmd.arg(format!("-I{}", inc));
+            cmd.arg(format!("-I{inc}"));
         }
 
         // Add pkg-config include paths

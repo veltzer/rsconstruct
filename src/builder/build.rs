@@ -123,7 +123,7 @@ impl Builder {
             available.sort();
             return Err(crate::exit_code::RsconstructError::new(
                 crate::exit_code::RsconstructExitCode::ConfigError,
-                format!("Unknown processor(s): {:?}. Available: {:?}", unknown, available),
+                format!("Unknown processor(s): {unknown:?}. Available: {available:?}"),
             ).into());
         }
 
@@ -134,7 +134,7 @@ impl Builder {
             if !conflicts.is_empty() {
                 return Err(crate::exit_code::RsconstructError::new(
                     crate::exit_code::RsconstructExitCode::ConfigError,
-                    format!("Processor(s) {:?} appear in both -p and -x", conflicts),
+                    format!("Processor(s) {conflicts:?} appear in both -p and -x"),
                 ).into());
             }
         }
@@ -180,7 +180,7 @@ impl Builder {
                 let mut msg = String::from("Missing required tools:\n");
                 for (tool, procs) in &missing {
                     let install_hint = crate::processors::tool_install_command(tool)
-                        .map(|cmd| format!("  install: {}", cmd))
+                        .map(|cmd| format!("  install: {cmd}"))
                         .unwrap_or_default();
                     msg.push_str(&format!("  {} (needed by: {}){}\n", tool, procs.join(", "), install_hint));
                 }
@@ -235,8 +235,7 @@ impl Builder {
             crate::executor::classify_products(ctx, &policy, &graph, &order, &self.object_store, opts.force);
         phase_timings.push(("classify".to_string(), t.elapsed()));
         if !crate::runtime_flags::quiet() {
-            println!("[build] {} to build, {} to restore ({} up-to-date)",
-                build_count, restore_count, skip_count);
+            println!("[build] {build_count} to build, {restore_count} to restore ({skip_count} up-to-date)");
         }
         print_graph_stats(GraphSnapshot::AfterClassify, &graph);
 
@@ -254,7 +253,7 @@ impl Builder {
             parallel
         };
         if !crate::runtime_flags::quiet() {
-            println!("[rsconstruct] using {} threads", effective_parallel);
+            println!("[rsconstruct] using {effective_parallel} threads");
         }
         // CLI overrides config for batch_size
         let batch_size = opts.batch_size.unwrap_or(self.config.build.batch_size);
@@ -403,7 +402,7 @@ impl Builder {
                     String::new()
                 } else {
                     ext_counts.iter()
-                        .map(|(ext, count)| format!("{} .{}", count, ext))
+                        .map(|(ext, count)| format!("{count} .{ext}"))
                         .collect::<Vec<_>>()
                         .join(", ")
                 };
@@ -498,7 +497,7 @@ impl Builder {
             let desc_key = product.descriptor_key(&input_checksum);
             let (status_idx, reason) = if opts.explain {
                 let action = self.object_store.explain_descriptor(&desc_key, &product.outputs, opts.force);
-                let reason = format!(" ({})", action);
+                let reason = format!(" ({action})");
                 let idx = match action {
                     ExplainAction::Skip => 0,
                     ExplainAction::Restore(_) => 1,
@@ -624,7 +623,7 @@ fn write_trace_file(path: &str, stats: &BuildStats) -> Result<()> {
     }
 
     let trace = serde_json::json!({ "traceEvents": events });
-    crate::errors::ctx(std::fs::write(path, serde_json::to_string_pretty(&trace)?), &format!("Failed to write trace file: {}", path))?;
+    crate::errors::ctx(std::fs::write(path, serde_json::to_string_pretty(&trace)?), &format!("Failed to write trace file: {path}"))?;
     if !crate::runtime_flags::quiet() {
         println!("Wrote trace to {}", color::bold(path));
     }

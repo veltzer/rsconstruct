@@ -66,7 +66,7 @@ impl ObjectStore {
                 path.parent().and_then(|p| p.file_name()).and_then(|n| n.to_str()),
                 path.file_name().and_then(|n| n.to_str())
             ) {
-                let checksum = format!("{}{}", prefix, rest);
+                let checksum = format!("{prefix}{rest}");
                 if !referenced.contains(&checksum) {
                     if let Ok(metadata) = fs::metadata(&path) {
                         removed_bytes += metadata.len();
@@ -110,7 +110,7 @@ impl ObjectStore {
                 path.parent().and_then(|p| p.file_name()).and_then(|n| n.to_str()),
                 path.file_name().and_then(|n| n.to_str())
             ) {
-                let key = format!("{}{}", prefix, rest);
+                let key = format!("{prefix}{rest}");
                 if !valid_descriptor_keys.contains(&key) {
                     if let Ok(mut perms) = fs::metadata(&path).map(|m| m.permissions()) {
                         perms.set_readonly(false);
@@ -146,7 +146,7 @@ impl ObjectStore {
                 // Reconstruct descriptor key from path
                 let prefix = path.parent()?.file_name()?.to_str()?;
                 let rest = path.file_name()?.to_str()?;
-                let cache_key = format!("{}{}", prefix, rest);
+                let cache_key = format!("{prefix}{rest}");
 
                 let outputs = match desc {
                     CacheDescriptor::Marker => Vec::new(),

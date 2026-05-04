@@ -36,7 +36,7 @@ pub fn extract_semver(version_output: &str) -> Option<&str> {
 /// Query a single tool for its version information.
 pub fn query_tool_version(tool_name: &str, version_args: &[String]) -> Result<LockedTool> {
     let path = which::which(tool_name)
-        .with_context(|| format!("Tool not found on PATH: {}", tool_name))?;
+        .with_context(|| format!("Tool not found on PATH: {tool_name}"))?;
 
     let mut cmd = Command::new(&path);
     for arg in version_args {
@@ -54,7 +54,7 @@ pub fn query_tool_version(tool_name: &str, version_args: &[String]) -> Result<Lo
     } else if stderr.is_empty() {
         stdout
     } else {
-        format!("{}\n{}", stdout, stderr)
+        format!("{stdout}\n{stderr}")
     };
 
     if version_output.is_empty() {
@@ -126,7 +126,7 @@ pub fn write_lock_file(lock: &ToolLockFile) -> Result<()> {
     let path = Path::new(LOCK_FILE);
     let json = serde_json::to_string_pretty(lock)
         .context("Failed to serialize lock file")?;
-    fs::write(path, format!("{}\n", json))
+    fs::write(path, format!("{json}\n"))
         .with_context(|| format!("Failed to write {}", path.display()))?;
     Ok(())
 }
@@ -201,8 +201,7 @@ pub fn verify_lock_file(
     let lock = match read_lock_file()? {
         Some(lock) => lock,
         None => anyhow::bail!(
-            "No {} found. Run `rsconstruct tools lock` to create one.",
-            LOCK_FILE
+            "No {LOCK_FILE} found. Run `rsconstruct tools lock` to create one."
         ),
     };
 
@@ -212,7 +211,7 @@ pub fn verify_lock_file(
         let locked = match lock.tools.get(tool_name) {
             Some(l) => l,
             None => {
-                mismatches.push(format!("{} — not in lock file (new tool?)", tool_name));
+                mismatches.push(format!("{tool_name} — not in lock file (new tool?)"));
                 continue;
             }
         };
@@ -221,7 +220,7 @@ pub fn verify_lock_file(
         let current = match query_tool_version(tool_name, version_args) {
             Ok(c) => c,
             Err(e) => {
-                mismatches.push(format!("{} — {}", tool_name, e));
+                mismatches.push(format!("{tool_name} — {e}"));
                 continue;
             }
         };
@@ -244,7 +243,7 @@ pub fn verify_lock_file(
     // Check for tools in lock file that are no longer required
     for tool_name in lock.tools.keys() {
         if !tool_commands.iter().any(|(name, _)| name == tool_name) {
-            mismatches.push(format!("{} — in lock file but no longer required", tool_name));
+            mismatches.push(format!("{tool_name} — in lock file but no longer required"));
         }
     }
 

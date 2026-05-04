@@ -43,7 +43,7 @@ pub fn analyzer_defconfig(name: Option<&str>) -> Result<()> {
 
     let names: Vec<String> = if let Some(name) = name {
         if registry::find_analyzer_plugin(name).is_none() {
-            anyhow::bail!("Unknown analyzer '{}'. Run 'rsconstruct analyzers list' to see available analyzers.", name);
+            anyhow::bail!("Unknown analyzer '{name}'. Run 'rsconstruct analyzers list' to see available analyzers.");
         }
         vec![name.to_string()]
     } else {
@@ -68,7 +68,7 @@ pub fn analyzer_defconfig(name: Option<&str>) -> Result<()> {
     for (i, n) in names.iter().enumerate() {
         if i > 0 { println!(); }
         let plugin = registry::find_analyzer_plugin(n).expect("checked above");
-        println!("[analyzer.{}]", n);
+        println!("[analyzer.{n}]");
         match (plugin.defconfig_toml)() {
             Some(toml_str) => print_config_table(&toml_str)?,
             None => println!("(no configuration options)"),
@@ -93,7 +93,7 @@ fn print_config_table(toml_str: &str) -> Result<()> {
             toml::Value::Datetime(_) => "datetime",
         };
         let default_str = match val {
-            toml::Value::String(s) => format!("\"{}\"", s),
+            toml::Value::String(s) => format!("\"{s}\""),
             toml::Value::Array(a) if a.is_empty() => "[]".to_string(),
             _ => val.to_string(),
         };
@@ -233,7 +233,7 @@ impl Builder {
             AnalyzersAction::Config { iname } => {
                 let instances: Vec<&crate::config::AnalyzerInstance> = if let Some(ref n) = iname {
                     let inst = self.config.analyzer.instances.iter().find(|i| &i.instance_name == n)
-                        .ok_or_else(|| anyhow::anyhow!("Analyzer instance '{}' is not declared in rsconstruct.toml", n))?;
+                        .ok_or_else(|| anyhow::anyhow!("Analyzer instance '{n}' is not declared in rsconstruct.toml"))?;
                     vec![inst]
                 } else {
                     self.config.analyzer.instances.iter().collect()
@@ -254,7 +254,7 @@ impl Builder {
                         if i > 0 { println!(); }
                         let toml_str = crate::errors::ctx(toml::to_string_pretty(&inst.config_toml), &format!("Failed to serialize {} analyzer config", inst.instance_name))?;
                         println!("[analyzer.{}]", inst.instance_name);
-                        print!("{}", toml_str);
+                        print!("{toml_str}");
                     }
                 }
             }
@@ -262,11 +262,11 @@ impl Builder {
                 if let Some(analyzer_name) = analyzer {
                     // Clear only entries from specific analyzer
                     let deps_cache = DepsCache::open()?;
-                    let removed = crate::errors::ctx(deps_cache.remove_by_analyzer(&analyzer_name), &format!("Failed to remove deps for analyzer '{}'", analyzer_name))?;
+                    let removed = crate::errors::ctx(deps_cache.remove_by_analyzer(&analyzer_name), &format!("Failed to remove deps for analyzer '{analyzer_name}'"))?;
                     if removed > 0 {
-                        println!("Removed {} entries from '{}' analyzer.", removed, analyzer_name);
+                        println!("Removed {removed} entries from '{analyzer_name}' analyzer.");
                     } else {
-                        println!("No entries found for '{}' analyzer.", analyzer_name);
+                        println!("No entries found for '{analyzer_name}' analyzer.");
                     }
                 } else {
                     // Clear the entire dependency cache
@@ -391,7 +391,7 @@ impl Builder {
         let analyzer_tag = if analyzer.is_empty() {
             String::new()
         } else {
-            format!(" {}", color::dim(&format!("[{}]", analyzer)))
+            format!(" {}", color::dim(&format!("[{analyzer}]")))
         };
         if deps.is_empty() {
             println!("{}:{} {}", source.display(), analyzer_tag, color::dim("(no dependencies)"));
@@ -413,13 +413,13 @@ impl Builder {
             None => println!("  {} {}", label, color::dim("(analyzer does not contribute)")),
             Some([]) => println!("  {} {}", label, color::dim("(none)")),
             Some(p) => {
-                println!("  {}", label);
+                println!("  {label}");
                 for piece in p {
                     let (kind, body) = piece.split_once(':').unwrap_or((piece.as_str(), ""));
                     if body.contains('\n') {
                         println!("    {}", color::cyan(kind));
                         for line in body.lines() {
-                            println!("      {}", line);
+                            println!("      {line}");
                         }
                     } else {
                         println!("    {} {}", color::cyan(kind), body);

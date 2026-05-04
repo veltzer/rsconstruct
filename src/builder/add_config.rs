@@ -10,7 +10,7 @@ const CONFIG_FILE: &str = "rsconstruct.toml";
 /// must-fill fields and one-line `#` comments for every known field.
 pub fn add_processor(pname: &str, dry_run: bool) -> Result<()> {
     let plugin = all_plugins().find(|p| p.name == pname)
-        .ok_or_else(|| anyhow::anyhow!("Unknown processor '{}'", pname))?;
+        .ok_or_else(|| anyhow::anyhow!("Unknown processor '{pname}'"))?;
 
     let known: Vec<&str> = (plugin.known_fields)().to_vec();
     let must: Vec<&str> = (plugin.must_fields)().to_vec();
@@ -43,7 +43,7 @@ pub fn add_processor(pname: &str, dry_run: bool) -> Result<()> {
 /// Add a `[analyzer.NAME]` section to rsconstruct.toml.
 pub fn add_analyzer(name: &str, dry_run: bool) -> Result<()> {
     let plugin = all_analyzer_plugins().find(|p| p.name == name)
-        .ok_or_else(|| anyhow::anyhow!("Unknown analyzer '{}'", name))?;
+        .ok_or_else(|| anyhow::anyhow!("Unknown analyzer '{name}'"))?;
 
     let defaults: serde_json::Value = match (plugin.defconfig_toml)() {
         Some(t) => toml::from_str::<serde_json::Value>(&t).unwrap_or(serde_json::Value::Object(Default::default())),
@@ -87,9 +87,9 @@ fn render_section(
 ) -> String {
     let mut out = String::new();
     if let Some(d) = description {
-        out.push_str(&format!("# {}\n", d));
+        out.push_str(&format!("# {d}\n"));
     }
-    out.push_str(&format!("[{}.{}]\n", section, name));
+    out.push_str(&format!("[{section}.{name}]\n"));
 
     let def_obj = defaults.as_object();
     let must_set: std::collections::HashSet<&str> = must.iter().copied().collect();
@@ -99,10 +99,10 @@ fn render_section(
     for field in must {
         let desc = descs.get(field).copied().unwrap_or("");
         if !desc.is_empty() {
-            out.push_str(&format!("# {}\n", desc));
+            out.push_str(&format!("# {desc}\n"));
         }
         let value_str = default_value_for_must(field, def_obj.and_then(|m| m.get(*field)));
-        out.push_str(&format!("{} = {}\n", field, value_str));
+        out.push_str(&format!("{field} = {value_str}\n"));
     }
     if !must.is_empty() { out.push('\n'); }
 
@@ -113,9 +113,9 @@ fn render_section(
         let value_str = default_value_for_optional(def_obj.and_then(|m| m.get(*field)));
         let tag = if checksum_set.contains(field) { " (affects checksum)" } else { "" };
         if !desc.is_empty() {
-            out.push_str(&format!("# {}{}\n", desc, tag));
+            out.push_str(&format!("# {desc}{tag}\n"));
         }
-        out.push_str(&format!("# {} = {}\n", field, value_str));
+        out.push_str(&format!("# {field} = {value_str}\n"));
     }
 
     out
@@ -124,7 +124,7 @@ fn render_section(
 fn default_value_for_must(field: &str, val: Option<&serde_json::Value>) -> String {
     match val {
         Some(v) if !is_empty_default(v) => toml_value_string(v),
-        _ => format!("\"TODO: set {}\"", field),
+        _ => format!("\"TODO: set {field}\""),
     }
 }
 
@@ -165,21 +165,21 @@ fn toml_value_string(v: &serde_json::Value) -> String {
 
 fn apply_snippet(section: &str, name: &str, snippet: &str, dry_run: bool) -> Result<()> {
     if dry_run {
-        print!("{}", snippet);
+        print!("{snippet}");
         return Ok(());
     }
 
     let path = std::path::Path::new(CONFIG_FILE);
     if !path.exists() {
-        bail!("{} not found. Run 'rsconstruct init' first, or use --dry-run to preview.", CONFIG_FILE);
+        bail!("{CONFIG_FILE} not found. Run 'rsconstruct init' first, or use --dry-run to preview.");
     }
 
     let content = fs::read_to_string(path)
-        .with_context(|| format!("Failed to read {}", CONFIG_FILE))?;
+        .with_context(|| format!("Failed to read {CONFIG_FILE}"))?;
 
-    let header = format!("[{}.{}]", section, name);
+    let header = format!("[{section}.{name}]");
     if content.lines().any(|l| l.trim_start() == header) {
-        bail!("Section [{}.{}] already exists in {}. Edit it manually or remove it first.", section, name, CONFIG_FILE);
+        bail!("Section [{section}.{name}] already exists in {CONFIG_FILE}. Edit it manually or remove it first.");
     }
 
     let mut new_content = content;
@@ -188,8 +188,8 @@ fn apply_snippet(section: &str, name: &str, snippet: &str, dry_run: bool) -> Res
     new_content.push_str(snippet);
 
     fs::write(path, &new_content)
-        .with_context(|| format!("Failed to write {}", CONFIG_FILE))?;
+        .with_context(|| format!("Failed to write {CONFIG_FILE}"))?;
 
-    println!("Added [{}.{}] to {}.", section, name, CONFIG_FILE);
+    println!("Added [{section}.{name}] to {CONFIG_FILE}.");
     Ok(())
 }

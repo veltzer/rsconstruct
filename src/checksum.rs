@@ -35,7 +35,7 @@ fn get_mtime_db(ctx: &BuildContext) -> Result<std::sync::MutexGuard<'_, Option<r
 /// Calculate SHA-256 checksum of a file's contents, using the BuildContext's
 /// in-memory cache. First call for a given path reads the file and caches the
 /// result. Subsequent calls return the cached value.
-pub(crate) fn file_checksum(ctx: &BuildContext, path: &Path) -> Result<String> {
+pub fn file_checksum(ctx: &BuildContext, path: &Path) -> Result<String> {
     let mut guard = ctx.checksum_cache.lock().unwrap();
     let cache = guard.get_or_insert_with(HashMap::new);
     if let Some(cached) = cache.get(path) {
@@ -129,13 +129,13 @@ fn hash_checksums(checksums: &[String]) -> String {
 /// Outcome of a `checksum_fast` call, surfacing whether the mtime cache
 /// succeeded in avoiding a file read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ChecksumPath {
+pub enum ChecksumPath {
     MtimeShortcut,
     FullRead,
 }
 
 /// Compute a file's checksum, consulting the persistent mtime cache first.
-pub(crate) fn checksum_fast(ctx: &BuildContext, path: &Path) -> Result<(String, ChecksumPath)> {
+pub fn checksum_fast(ctx: &BuildContext, path: &Path) -> Result<(String, ChecksumPath)> {
     if !ctx.mtime_enabled.load(std::sync::atomic::Ordering::Relaxed) {
         return Ok((file_checksum(ctx, path)?, ChecksumPath::FullRead));
     }
@@ -153,7 +153,7 @@ pub(crate) fn checksum_fast(ctx: &BuildContext, path: &Path) -> Result<(String, 
 
 /// Get the combined input checksum for a list of input files, using mtime
 /// pre-check to avoid re-reading unchanged files across builds.
-pub(crate) fn combined_input_checksum(ctx: &BuildContext, inputs: &[PathBuf]) -> Result<String> {
+pub fn combined_input_checksum(ctx: &BuildContext, inputs: &[PathBuf]) -> Result<String> {
     let mtime_enabled = ctx.mtime_enabled.load(std::sync::atomic::Ordering::Relaxed);
 
     let mut checksums = Vec::with_capacity(inputs.len());
@@ -183,6 +183,6 @@ pub(crate) fn combined_input_checksum(ctx: &BuildContext, inputs: &[PathBuf]) ->
 }
 
 /// Calculate SHA-256 checksum of a byte slice. Not cached — pure function.
-pub(crate) fn bytes_checksum(data: &[u8]) -> String {
+pub fn bytes_checksum(data: &[u8]) -> String {
     hex::encode(Sha256::digest(data))
 }

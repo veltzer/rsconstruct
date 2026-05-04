@@ -6,7 +6,7 @@
 mod cpp;
 mod icpp;
 mod markdown;
-pub(crate) mod python;
+pub mod python;
 mod tera;
 
 
@@ -115,7 +115,7 @@ pub fn query_pkg_config_include_paths(ctx: &crate::build_context::BuildContext, 
     let output = match run_command_capture(ctx, &mut cmd) {
         Ok(o) => o,
         Err(e) => {
-            eprintln!("[{}] Failed to query pkg-config: {}", tag, e);
+            eprintln!("[{tag}] Failed to query pkg-config: {e}");
             return Vec::new();
         }
     };
@@ -161,13 +161,13 @@ pub fn run_include_path_commands(ctx: &crate::build_context::BuildContext, tag: 
         cmd.arg(cmd_str);
 
         if verbose {
-            eprintln!("[{}] Running include path command: sh -c '{}'", tag, cmd_str);
+            eprintln!("[{tag}] Running include path command: sh -c '{cmd_str}'");
         }
 
         let output = match run_command_capture(ctx, &mut cmd) {
             Ok(o) => o,
             Err(e) => {
-                eprintln!("[{}] Failed to run '{}': {}", tag, cmd_str, e);
+                eprintln!("[{tag}] Failed to run '{cmd_str}': {e}");
                 continue;
             }
         };
@@ -190,7 +190,7 @@ pub fn run_include_path_commands(ctx: &crate::build_context::BuildContext, tag: 
             }
             paths.push(path);
         } else if verbose {
-            eprintln!("[{}] Command output is not a directory: {}", tag, path_str);
+            eprintln!("[{tag}] Command output is not a directory: {path_str}");
         }
     }
 

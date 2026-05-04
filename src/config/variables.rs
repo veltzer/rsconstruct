@@ -120,7 +120,7 @@ pub(super) fn substitute_variables(content: &str) -> Result<String> {
         if !defined_vars.iter().any(|v| v == var_name) {
             return Err(crate::exit_code::RsconstructError::new(
                 crate::exit_code::RsconstructExitCode::ConfigError,
-                format!("Undefined variable: ${{{}}}", var_name),
+                format!("Undefined variable: ${{{var_name}}}"),
             ).into());
         }
     }
@@ -143,7 +143,7 @@ pub(super) fn substitute_variables(content: &str) -> Result<String> {
 
     // Replace "${var_name}" (including quotes) with TOML-serialized value
     for (name, value) in vars {
-        let pattern = format!("\"${{{}}}\"", name);
+        let pattern = format!("\"${{{name}}}\"");
         let replacement = value_to_toml_inline(value);
         result = result.replace(&pattern, &replacement);
     }

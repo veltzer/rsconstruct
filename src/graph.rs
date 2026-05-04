@@ -80,7 +80,7 @@ impl Product {
     /// piece itself becomes the new hash.
     pub fn extend_config_hash(&mut self, piece: &str) {
         let combined = match &self.config_hash {
-            Some(existing) => format!("{}|{}", existing, piece),
+            Some(existing) => format!("{existing}|{piece}"),
             None => piece.to_string(),
         };
         self.config_hash = Some(crate::checksum::bytes_checksum(combined.as_bytes()));
@@ -178,7 +178,7 @@ impl Product {
             (true, None) => "?".to_string(),
             (true, Some(inp)) => inp,
             (false, None) => output_part,
-            (false, Some(inp)) => format!("{} <- {}", output_part, inp),
+            (false, Some(inp)) => format!("{output_part} <- {inp}"),
         }
     }
 
@@ -426,7 +426,7 @@ impl BuildGraph {
         for product in &mut self.products {
             if let Some(tool_hash) = processor_tool_hashes.get(&product.processor) {
                 product.config_hash = Some(match &product.config_hash {
-                    Some(existing) => format!("{}:{}", existing, tool_hash),
+                    Some(existing) => format!("{existing}:{tool_hash}"),
                     None => tool_hash.clone(),
                 });
             }
@@ -562,7 +562,7 @@ impl BuildGraph {
     pub fn filter_by_targets(&mut self, patterns: &[String]) -> anyhow::Result<()> {
         let compiled: Vec<glob::Pattern> = patterns.iter()
             .map(|p| glob::Pattern::new(p)
-                .with_context(|| format!("Invalid glob pattern: {}", p)))
+                .with_context(|| format!("Invalid glob pattern: {p}")))
             .collect::<anyhow::Result<_>>()?;
         if compiled.is_empty() {
             return Ok(());
@@ -675,7 +675,7 @@ impl BuildGraph {
         // Check 4: early cycle detection
         if config.validate_early_cycles {
             if let Err(e) = self.topological_sort() {
-                errors.push(format!("{}", e));
+                errors.push(format!("{e}"));
             }
         }
 
@@ -729,7 +729,7 @@ impl BuildGraph {
             if !output_files.contains(file) {
                 let node_id = Self::path_node_id(file);
                 let label = Self::file_label(file);
-                let _ = writeln!(buf, "    {} [label=\"{}\" shape=note style=filled fillcolor=white];", node_id, label);
+                let _ = writeln!(buf, "    {node_id} [label=\"{label}\" shape=note style=filled fillcolor=white];");
             }
         }
 
@@ -738,7 +738,7 @@ impl BuildGraph {
             let node_id = Self::path_node_id(file);
             let label = Self::file_label(file);
             let color = if input_files.contains(file) { "lightgreen" } else { "lightyellow" };
-            let _ = writeln!(buf, "    {} [label=\"{}\" shape=note style=filled fillcolor={}];", node_id, label, color);
+            let _ = writeln!(buf, "    {node_id} [label=\"{label}\" shape=note style=filled fillcolor={color}];");
         }
 
         let _ = writeln!(buf, "\n    // Processors");
@@ -760,13 +760,13 @@ impl BuildGraph {
             // Input files -> processor
             for input in &product.inputs {
                 let input_id = Self::path_node_id(input);
-                let _ = writeln!(buf, "    {} -> {};", input_id, proc_id);
+                let _ = writeln!(buf, "    {input_id} -> {proc_id};");
             }
 
             // Processor -> output files
             for output in &product.outputs {
                 let output_id = Self::path_node_id(output);
-                let _ = writeln!(buf, "    {} -> {};", proc_id, output_id);
+                let _ = writeln!(buf, "    {proc_id} -> {output_id};");
             }
         }
 
@@ -799,7 +799,7 @@ impl BuildGraph {
             if !output_files.contains(file) {
                 let node_id = Self::path_node_id(file);
                 let label = Self::file_label(file);
-                let _ = writeln!(buf, "    {}[/\"{}\"/]", node_id, label);
+                let _ = writeln!(buf, "    {node_id}[/\"{label}\"/]");
             }
         }
 
@@ -807,7 +807,7 @@ impl BuildGraph {
         for file in &output_files {
             let node_id = Self::path_node_id(file);
             let label = Self::file_label(file);
-            let _ = writeln!(buf, "    {}[/\"{}\"/]", node_id, label);
+            let _ = writeln!(buf, "    {node_id}[/\"{label}\"/]");
         }
 
         let _ = writeln!(buf, "\n    %% Processors");
@@ -823,12 +823,12 @@ impl BuildGraph {
             // Only connect primary source file (first input), skip headers
             if let Some(first_input) = product.inputs.first() {
                 let input_id = Self::path_node_id(first_input);
-                let _ = writeln!(buf, "    {} --> {}", input_id, proc_id);
+                let _ = writeln!(buf, "    {input_id} --> {proc_id}");
             }
 
             for output in &product.outputs {
                 let output_id = Self::path_node_id(output);
-                let _ = writeln!(buf, "    {} --> {}", proc_id, output_id);
+                let _ = writeln!(buf, "    {proc_id} --> {output_id}");
             }
         }
 
@@ -843,10 +843,10 @@ impl BuildGraph {
             .collect();
 
         for proc_id in &tera_procs {
-            let _ = writeln!(buf, "\n    style {} fill:#add8e6", proc_id);
+            let _ = writeln!(buf, "\n    style {proc_id} fill:#add8e6");
         }
         for proc_id in &cc_procs {
-            let _ = writeln!(buf, "\n    style {} fill:#ffa07a", proc_id);
+            let _ = writeln!(buf, "\n    style {proc_id} fill:#ffa07a");
         }
 
         buf.truncate(buf.trim_end().len());

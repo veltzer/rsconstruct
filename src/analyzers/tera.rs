@@ -197,7 +197,7 @@ fn scan_template_recursive(
     for caps in glob_re.captures_iter(&content) {
         let pattern = &caps[1];
         let matched = expand_glob(pattern)?;
-        hash_pieces.push(format!("glob:{}", pattern));
+        hash_pieces.push(format!("glob:{pattern}"));
         hash_pieces.push(format!("glob_resolved:{}", matched.join("\n")));
     }
 
@@ -206,7 +206,7 @@ fn scan_template_recursive(
     for caps in git_count_re.captures_iter(&content) {
         let pattern = &caps[1];
         let matched = git_ls_files(pattern)?;
-        hash_pieces.push(format!("git_count:{}", pattern));
+        hash_pieces.push(format!("git_count:{pattern}"));
         hash_pieces.push(format!("git_count_resolved:{}", matched.join("\n")));
     }
 
@@ -233,8 +233,8 @@ fn scan_template_recursive(
             );
         };
         let matched = expand_glob(&file_glob)?;
-        hash_pieces.push(format!("grep_count_re:{}", regex_pat));
-        hash_pieces.push(format!("grep_count_glob:{}", file_glob));
+        hash_pieces.push(format!("grep_count_re:{regex_pat}"));
+        hash_pieces.push(format!("grep_count_glob:{file_glob}"));
         hash_pieces.push(format!("grep_count_resolved:{}", matched.join("\n")));
         for p in matched {
             let pb = PathBuf::from(p);
@@ -272,7 +272,7 @@ fn scan_template_recursive(
             );
         };
 
-        hash_pieces.push(format!("shell_cmd:{}", command));
+        hash_pieces.push(format!("shell_cmd:{command}"));
 
         let mut patterns: Vec<String> = Vec::new();
         for pcap in quoted_str_re.captures_iter(&deps_block) {
@@ -284,7 +284,7 @@ fn scan_template_recursive(
         }
         for pattern in &patterns {
             let matched = expand_glob(pattern)?;
-            hash_pieces.push(format!("shell_dep:{}", pattern));
+            hash_pieces.push(format!("shell_dep:{pattern}"));
             hash_pieces.push(format!("shell_dep_resolved:{}", matched.join("\n")));
             for p in matched {
                 let pb = PathBuf::from(p);
@@ -330,10 +330,10 @@ fn git_ls_files(pattern: &str) -> Result<Vec<String>> {
 fn expand_glob(pattern: &str) -> Result<Vec<String>> {
     let mut paths: Vec<String> = Vec::new();
     for entry in glob::glob(pattern)
-        .map_err(|e| anyhow::anyhow!("Invalid glob pattern '{}': {}", pattern, e))?
+        .map_err(|e| anyhow::anyhow!("Invalid glob pattern '{pattern}': {e}"))?
     {
         let path = entry
-            .map_err(|e| anyhow::anyhow!("Glob iteration error for '{}': {}", pattern, e))?;
+            .map_err(|e| anyhow::anyhow!("Glob iteration error for '{pattern}': {e}"))?;
         if path.is_file() {
             paths.push(path.to_string_lossy().into_owned());
         }

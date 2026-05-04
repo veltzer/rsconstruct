@@ -25,7 +25,7 @@ pub fn search_processors(query: &str) -> Result<()> {
     matches.sort_by_key(|(name, _, _)| *name);
 
     if matches.is_empty() {
-        println!("No processors matching '{}'.", query);
+        println!("No processors matching '{query}'.");
         return Ok(());
     }
 
@@ -98,7 +98,7 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
     if let Some(filter) = type_filter {
         plugins.retain(|p| p.processor_type.as_str() == filter);
         if plugins.is_empty() {
-            anyhow::bail!("No processors of type '{}'. Valid types: checker, generator, creator, explicit.", filter);
+            anyhow::bail!("No processors of type '{filter}'. Valid types: checker, generator, creator, explicit.");
         }
     }
 
@@ -314,10 +314,10 @@ fn print_processor_metadata(name: &str, verbose: bool) {
 /// In JSON mode (`--json`), prints only the defaults as JSON.
 pub fn processor_defconfig(name: &str, verbose: bool) -> Result<()> {
     let json = ProcessorConfig::defconfig_json(name)
-        .ok_or_else(|| anyhow::anyhow!("Unknown processor: '{}'. Run 'rsconstruct processors list' to see available processors.", name))?;
+        .ok_or_else(|| anyhow::anyhow!("Unknown processor: '{name}'. Run 'rsconstruct processors list' to see available processors."))?;
 
     if crate::json_output::is_json_mode() {
-        println!("{}", json);
+        println!("{json}");
     } else {
         print_processor_metadata(name, verbose);
     }
@@ -375,7 +375,7 @@ impl Builder {
             ProcessorAction::Config { ref iname, diff } => {
                 let names: Vec<&str> = if let Some(n) = iname {
                     if !processors.contains_key(n.as_str()) {
-                        bail!("Unknown processor: '{}'. Run 'rsconstruct processors list' to see available processors.", n);
+                        bail!("Unknown processor: '{n}'. Run 'rsconstruct processors list' to see available processors.");
                     }
                     vec![n.as_str()]
                 } else {
@@ -412,7 +412,7 @@ impl Builder {
                             value
                         };
                         if names.len() > 1 {
-                            println!("{}:", n);
+                            println!("{n}:");
                         }
                         let rows: Vec<Vec<String>> = match &value {
                             serde_json::Value::Object(map) => map.iter()
@@ -430,7 +430,7 @@ impl Builder {
                             println!();
                         }
                     } else if iname.is_some() {
-                        println!("Processor '{}' does not expose configuration.", n);
+                        println!("Processor '{n}' does not expose configuration.");
                     }
                 }
             }
@@ -445,7 +445,7 @@ impl Builder {
                     println!("{}", serde_json::to_string_pretty(&enabled)?);
                 } else {
                     println!("enabled = [{}]", enabled.iter()
-                        .map(|n| format!("\"{}\"", n))
+                        .map(|n| format!("\"{n}\""))
                         .collect::<Vec<_>>()
                         .join(", "));
                 }
@@ -455,7 +455,7 @@ impl Builder {
                     println!("{}", serde_json::to_string_pretty(&proc_names)?);
                 } else {
                     for name in &proc_names {
-                        println!("{}", name);
+                        println!("{name}");
                     }
                 }
             }
@@ -471,7 +471,7 @@ impl Builder {
                     crate::cli::GraphFormat::Text => {
                         for (proc, deps) in &proc_deps {
                             if deps.is_empty() {
-                                println!("{}", proc);
+                                println!("{proc}");
                             } else {
                                 println!("{} \u{2192} {}", proc, deps.iter().cloned().collect::<Vec<_>>().join(", "));
                             }
@@ -483,7 +483,7 @@ impl Builder {
                         println!("    node [fontname=\"sans-serif\" shape=box style=filled fillcolor=lightyellow];");
                         for (proc, deps) in &proc_deps {
                             for dep in deps {
-                                println!("    \"{}\" -> \"{}\";", proc, dep);
+                                println!("    \"{proc}\" -> \"{dep}\";");
                             }
                         }
                         println!("}}");
@@ -492,7 +492,7 @@ impl Builder {
                         println!("graph LR");
                         for (proc, deps) in &proc_deps {
                             for dep in deps {
-                                println!("    {} --> {}", proc, dep);
+                                println!("    {proc} --> {dep}");
                             }
                         }
                     }
@@ -503,19 +503,19 @@ impl Builder {
                         let mut dot = String::from("digraph processors {\n    rankdir=LR;\n    node [fontname=\"sans-serif\" shape=box style=filled fillcolor=lightyellow];\n");
                         for (proc, deps) in &proc_deps {
                             for dep in deps {
-                                dot.push_str(&format!("    \"{}\" -> \"{}\";\n", proc, dep));
+                                dot.push_str(&format!("    \"{proc}\" -> \"{dep}\";\n"));
                             }
                         }
                         dot.push_str("}\n");
                         let svg = crate::processors::dot_to_svg(&dot)?;
-                        println!("{}", svg);
+                        println!("{svg}");
                     }
                 }
             }
             ProcessorAction::Files { iname: name, headers } => {
                 if let Some(ref n) = name
                     && !processors.contains_key(n.as_str()) {
-                        bail!("Unknown processor: '{}'. Run 'rsconstruct processors list' to see available processors.", n);
+                        bail!("Unknown processor: '{n}'. Run 'rsconstruct processors list' to see available processors.");
                     }
 
                 let graph = self.build_graph_filtered(ctx, name.as_deref(), false)?;
@@ -540,7 +540,7 @@ impl Builder {
 
                 if products.is_empty() {
                     if let Some(ref n) = name {
-                        println!("[{}] (no files)", n);
+                        println!("[{n}] (no files)");
                     } else {
                         println!("No files discovered by any processor.");
                     }

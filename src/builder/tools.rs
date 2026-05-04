@@ -233,7 +233,7 @@ fn run_tools_command(
                 let html_content = tools_graph_html(&tool_map);
                 let html_path = std::env::temp_dir().join("rsconstruct_tools_graph.html");
                 std::fs::write(&html_path, &html_content)
-                    .map_err(|e| anyhow::anyhow!("Failed to write HTML file: {}", e))?;
+                    .map_err(|e| anyhow::anyhow!("Failed to write HTML file: {e}"))?;
                 if let Some(b) = builder {
                     b.open_file(&html_path)?;
                     println!("Opened tools graph in browser: {}", html_path.display());
@@ -253,7 +253,7 @@ fn run_tools_command(
                     GraphFormat::Json => tools_graph_json(&tool_map)?,
                     GraphFormat::Svg => tools_graph_svg(&tool_map)?,
                 };
-                println!("{}", output);
+                println!("{output}");
             }
         }
         ToolsAction::Stats => {
@@ -342,7 +342,7 @@ fn run_tools_command(
                 color::print_table(&["Runtime", "Installed"], &rt_rows);
 
                 println!();
-                let total_line = format!("Total: {}/{} tools installed", installed_count, total_tools);
+                let total_line = format!("Total: {installed_count}/{total_tools} tools installed");
                 if missing_count > 0 {
                     println!("{}", color::yellow(&total_line));
                 } else {
@@ -362,7 +362,7 @@ fn run_tools_command(
                             eprintln!("{}: No install method for '{}'", color::red("Error"), name);
                             return Err(crate::exit_code::RsconstructError::new(
                                 crate::exit_code::RsconstructExitCode::ToolError,
-                                format!("No install method known for tool '{}'", name),
+                                format!("No install method known for tool '{name}'"),
                             ).into());
                         }
                     }
@@ -370,7 +370,7 @@ fn run_tools_command(
                         eprintln!("{}: Unknown tool '{}'", color::red("Error"), name);
                         return Err(crate::exit_code::RsconstructError::new(
                             crate::exit_code::RsconstructExitCode::ToolError,
-                            format!("Unknown tool '{}'", name),
+                            format!("Unknown tool '{name}'"),
                         ).into());
                     }
                 }
@@ -446,14 +446,14 @@ fn run_tools_command(
             for method in method_order {
                 if let Some(packages) = by_method.get(method) {
                     let plan = crate::processors::InstallMethod::batch_plan(method, packages);
-                    println!("  {} {}", color::bold(&format!("[{}]", method)),
+                    println!("  {} {}", color::bold(&format!("[{method}]")),
                         packages.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", "));
                     println!("       {}", color::dim(&plan.display()));
                     plans.push(plan);
                 }
             }
             for (tool_name, cmd) in &ungroupable {
-                println!("  {} {}", color::bold(&format!("[{}]", tool_name)), color::dim(cmd));
+                println!("  {} {}", color::bold(&format!("[{tool_name}]")), color::dim(cmd));
                 // Free-form registry entries (curl|tar pipelines, etc.) require a shell.
                 // See docs/src/no-shell-policy.md.
                 plans.push(crate::processors::InstallPlan::Shell(cmd.clone()));
@@ -533,7 +533,7 @@ fn run_tools_command(
                 let missing: Vec<&str> = config.system.iter()
                     .filter(|pkg| {
                         let installed = is_system_package_installed(pkg);
-                        if installed { skipped.push(format!("[system] {}", pkg)); }
+                        if installed { skipped.push(format!("[system] {pkg}")); }
                         !installed
                     })
                     .map(|s| s.as_str())
@@ -571,7 +571,7 @@ fn run_tools_command(
                             .stderr(std::process::Stdio::null())
                             .status()
                             .is_ok_and(|s| s.success());
-                        if installed { skipped.push(format!("[pip] {}", pkg)); }
+                        if installed { skipped.push(format!("[pip] {pkg}")); }
                         !installed
                     })
                     .map(|s| s.as_str())
@@ -594,7 +594,7 @@ fn run_tools_command(
                             .stderr(std::process::Stdio::null())
                             .status()
                             .is_ok_and(|s| s.success());
-                        if installed { skipped.push(format!("[npm] {}", pkg)); }
+                        if installed { skipped.push(format!("[npm] {pkg}")); }
                         !installed
                     })
                     .map(|s| s.as_str())
@@ -617,7 +617,7 @@ fn run_tools_command(
                             .stderr(std::process::Stdio::null())
                             .status()
                             .is_ok_and(|s| s.success());
-                        if installed { skipped.push(format!("[gem] {}", pkg)); }
+                        if installed { skipped.push(format!("[gem] {pkg}")); }
                         !installed
                     })
                     .map(|s| s.as_str())
@@ -725,8 +725,7 @@ fn tools_graph_dot(tool_map: &BTreeMap<String, Vec<String>>) -> String {
     for tool in tool_map.keys() {
         let id = sanitize_node_id("tool", tool);
         out.push_str(&format!(
-            "    {} [label=\"{}\" shape=box style=filled fillcolor=lightblue];\n",
-            id, tool
+            "    {id} [label=\"{tool}\" shape=box style=filled fillcolor=lightblue];\n"
         ));
     }
 
@@ -735,8 +734,7 @@ fn tools_graph_dot(tool_map: &BTreeMap<String, Vec<String>>) -> String {
     for proc in &processors {
         let id = sanitize_node_id("proc", proc);
         out.push_str(&format!(
-            "    {} [label=\"{}\" shape=box style=filled fillcolor=lightyellow];\n",
-            id, proc
+            "    {id} [label=\"{proc}\" shape=box style=filled fillcolor=lightyellow];\n"
         ));
     }
 
@@ -746,7 +744,7 @@ fn tools_graph_dot(tool_map: &BTreeMap<String, Vec<String>>) -> String {
         let tool_id = sanitize_node_id("tool", tool);
         for proc in procs {
             let proc_id = sanitize_node_id("proc", proc);
-            out.push_str(&format!("    {} -> {};\n", tool_id, proc_id));
+            out.push_str(&format!("    {tool_id} -> {proc_id};\n"));
         }
     }
 
@@ -762,8 +760,7 @@ fn tools_graph_mermaid(tool_map: &BTreeMap<String, Vec<String>>) -> String {
         for proc in procs {
             let proc_id = sanitize_node_id("proc", proc);
             out.push_str(&format!(
-                "    {}[\"{}\"]:::tool --> {}[\"{}\"]:::processor\n",
-                tool_id, tool, proc_id, proc
+                "    {tool_id}[\"{tool}\"]:::tool --> {proc_id}[\"{proc}\"]:::processor\n"
             ));
         }
     }
@@ -777,7 +774,7 @@ fn tools_graph_text(tool_map: &BTreeMap<String, Vec<String>>) -> String {
     let mut lines = Vec::new();
     for (tool, procs) in tool_map {
         for proc in procs {
-            lines.push(format!("{} \u{2192} {}", tool, proc));
+            lines.push(format!("{tool} \u{2192} {proc}"));
         }
     }
     lines.join("\n")

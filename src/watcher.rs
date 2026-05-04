@@ -69,7 +69,7 @@ pub fn watch(ctx: &crate::build_context::BuildContext, opts: &BuildOptions, inte
         let mut builder = Builder::new_with_overrides(&opts.iset, &opts.pset)?;
         watch_paths = builder.watch_paths();
         if let Err(e) = builder.build(ctx, opts, Arc::clone(&interrupted), Vec::new()) {
-            println!("{}", color::red(&format!("Initial build error: {}", e)));
+            println!("{}", color::red(&format!("Initial build error: {e}")));
         }
     }
 
@@ -101,7 +101,7 @@ pub fn watch(ctx: &crate::build_context::BuildContext, opts: &BuildOptions, inte
                     break true;
                 }
                 Ok(Err(e)) => {
-                    println!("{}", color::red(&format!("Watch error: {}", e)));
+                    println!("{}", color::red(&format!("Watch error: {e}")));
                     continue;
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => continue,
@@ -133,7 +133,7 @@ pub fn watch(ctx: &crate::build_context::BuildContext, opts: &BuildOptions, inte
             let mut builder = Builder::new_with_overrides(&opts.iset, &opts.pset)?;
             let new_paths = builder.watch_paths();
             if let Err(e) = builder.build(ctx, opts, Arc::clone(&interrupted), Vec::new()) {
-                println!("{}", color::red(&format!("Build error: {}", e)));
+                println!("{}", color::red(&format!("Build error: {e}")));
             }
 
             // Update watches if paths changed (e.g., new scan dirs in config)

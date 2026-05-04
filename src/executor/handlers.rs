@@ -33,7 +33,7 @@ impl<'a> Executor<'a> {
         ctx.shared.failed_details.lock().push(FailedProduct {
             file: primary_file,
             processor: ctx.proc_name.to_string(),
-            error: format!("{:#}", error),
+            error: format!("{error:#}"),
         });
 
         // Wrap the error with the processor name so users can always identify the source.
@@ -42,7 +42,7 @@ impl<'a> Executor<'a> {
 
         if ctx.keep_going {
             let msg = format!("{}: {}", self.product_display(ctx.product), prefixed_error);
-            println!("{}", color::red(&format!("Error: {}", msg)));
+            println!("{}", color::red(&format!("Error: {msg}")));
             ctx.shared.failed_messages.lock().push(msg);
         } else {
             if mark_processor_failed {
@@ -144,7 +144,7 @@ impl<'a> Executor<'a> {
             &ctx.product.processor,
             ProductStatus::Failed,
             duration,
-            Some(&format!("{:#}", error)),
+            Some(&format!("{error:#}")),
         );
         Self::update_stats(ctx.shared, ctx.proc_name, |s| s.failed += 1);
         self.record_failure(ctx, error, true);

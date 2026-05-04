@@ -81,14 +81,13 @@ impl Builder {
             println!("{}", color::bold("Clean summary:"));
             let sorted_stats: std::collections::BTreeMap<_, _> = stats.iter().collect();
             for (proc, count) in &sorted_stats {
-                println!("  {}: {} file(s)", proc, count);
+                println!("  {proc}: {count} file(s)");
             }
             if dirs_removed > 0 {
-                println!("  {} empty dir(s) removed", dirs_removed);
+                println!("  {dirs_removed} empty dir(s) removed");
             }
             println!("{}", color::green(&format!(
-                "Total: {} file(s) removed",
-                total_files,
+                "Total: {total_files} file(s) removed",
             )));
         }
         Ok(())
@@ -133,7 +132,7 @@ impl Builder {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("git clean failed:\n{}", stderr);
+            bail!("git clean failed:\n{stderr}");
         }
 
         println!("{}", color::green("Hardclean completed!"));
@@ -173,7 +172,7 @@ impl Builder {
             .context("Failed to run git ls-files")?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("git ls-files failed:\n{}", stderr);
+            bail!("git ls-files failed:\n{stderr}");
         }
         let git_tracked: HashSet<PathBuf> = String::from_utf8_lossy(&output.stdout)
             .lines()
@@ -274,9 +273,9 @@ impl Builder {
                 }
             }
 
-            let mut summary = format!("Removed {} unknown file(s)", removed);
+            let mut summary = format!("Removed {removed} unknown file(s)");
             if dirs_removed > 0 {
-                summary.push_str(&format!(", {} empty dir(s)", dirs_removed));
+                summary.push_str(&format!(", {dirs_removed} empty dir(s)"));
             }
             println!("{}", color::green(&summary));
         } else {

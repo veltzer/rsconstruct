@@ -50,8 +50,7 @@ pub fn create_backend(url: &str) -> Result<Box<dyn RemoteCache>> {
         Ok(Box::new(FileBackend::new(url)?))
     } else {
         anyhow::bail!(
-            "Unsupported remote cache URL: {}. Supported schemes: s3://, http://, https://, file://",
-            url
+            "Unsupported remote cache URL: {url}. Supported schemes: s3://, http://, https://, file://"
         )
     }
 }
@@ -77,7 +76,7 @@ impl S3Backend {
             None => (without_scheme.to_string(), String::new()),
         };
 
-        anyhow::ensure!(!bucket.is_empty(), "Invalid S3 URL: missing bucket name in {}", url);
+        anyhow::ensure!(!bucket.is_empty(), "Invalid S3 URL: missing bucket name in {url}");
 
         Ok(Self { bucket, prefix })
     }
@@ -328,7 +327,7 @@ fn uuid_simple() -> String {
     // not synchronized with other memory operations.
     let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
 
-    format!("{:x}-{:x}-{:x}", timestamp, pid, seq)
+    format!("{timestamp:x}-{pid:x}-{seq:x}")
 }
 
 #[cfg(test)]

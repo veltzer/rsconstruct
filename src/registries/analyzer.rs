@@ -29,23 +29,23 @@ unsafe impl Sync for AnalyzerPlugin {}
 
 inventory::collect!(AnalyzerPlugin);
 
-pub(crate) fn all_analyzer_plugins() -> impl Iterator<Item = &'static AnalyzerPlugin> {
+pub fn all_analyzer_plugins() -> impl Iterator<Item = &'static AnalyzerPlugin> {
     inventory::iter::<AnalyzerPlugin>.into_iter()
 }
 
 /// Return sorted analyzer names from the registry.
-pub(crate) fn all_analyzer_names() -> Vec<&'static str> {
+pub fn all_analyzer_names() -> Vec<&'static str> {
     let mut names: Vec<&str> = all_analyzer_plugins().map(|p| p.name).collect();
     names.sort();
     names
 }
 
 /// Find an analyzer plugin by name.
-pub(crate) fn find_analyzer_plugin(name: &str) -> Option<&'static AnalyzerPlugin> {
+pub fn find_analyzer_plugin(name: &str) -> Option<&'static AnalyzerPlugin> {
     all_analyzer_plugins().find(|p| p.name == name)
 }
 
 /// Build a clap value parser that accepts any registered analyzer name.
-pub(crate) fn analyzer_name_parser() -> clap::builder::PossibleValuesParser {
+pub fn analyzer_name_parser() -> clap::builder::PossibleValuesParser {
     clap::builder::PossibleValuesParser::new(all_analyzer_names())
 }

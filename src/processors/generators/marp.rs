@@ -42,7 +42,7 @@ fn execute_marp(ctx: &crate::build_context::BuildContext, config: &StandardConfi
     for attempt in 1..=MARP_MAX_ATTEMPTS {
         let mut cmd = Command::new(command);
         if format != "html" {
-            cmd.arg(format!("--{}", format));
+            cmd.arg(format!("--{format}"));
         }
         cmd.arg("--output").arg(output);
         for arg in &config.args { cmd.arg(arg); }

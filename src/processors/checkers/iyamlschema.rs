@@ -61,15 +61,15 @@ impl IyamlschemaProcessor {
 
         // Fetch schema (cached)
         let schema_str = crate::webcache::fetch(schema_url)
-            .with_context(|| format!("Failed to fetch schema {}", schema_url))?;
+            .with_context(|| format!("Failed to fetch schema {schema_url}"))?;
         let schema: Value = serde_json::from_str(&schema_str)
-            .with_context(|| format!("Failed to parse schema from {}", schema_url))?;
+            .with_context(|| format!("Failed to parse schema from {schema_url}"))?;
 
         // Validate data against schema (with custom retriever for remote $ref resolution)
         let validator = jsonschema::options()
             .with_retriever(WebCacheRetriever)
             .build(&schema)
-            .with_context(|| format!("Failed to compile schema from {}", schema_url))?;
+            .with_context(|| format!("Failed to compile schema from {schema_url}"))?;
 
         let validation_errors: Vec<String> = validator.iter_errors(&data)
             .map(|e| format!("  {}: {}", e.instance_path(), e))
@@ -128,8 +128,7 @@ fn check_property_ordering(
                 if actual_ordered != expected_ordered {
                     let display_path = if path.is_empty() { "root" } else { path };
                     errors.push(format!(
-                        "  {}: expected key order {:?}, got {:?}",
-                        display_path, expected_ordered, actual_ordered,
+                        "  {display_path}: expected key order {expected_ordered:?}, got {actual_ordered:?}",
                     ));
                 }
             }
@@ -141,7 +140,7 @@ fn check_property_ordering(
                         let child_path = if path.is_empty() {
                             key.to_string()
                         } else {
-                            format!("{}.{}", path, key)
+                            format!("{path}.{key}")
                         };
                         check_property_ordering(value, prop_schema, &child_path, errors);
                     }
@@ -153,7 +152,7 @@ fn check_property_ordering(
                 && let Value::Array(arr) = data
             {
                 for (i, item) in arr.iter().enumerate() {
-                    let child_path = format!("{}[{}]", path, i);
+                    let child_path = format!("{path}[{i}]");
                     check_property_ordering(item, items_schema, &child_path, errors);
                 }
             }
@@ -163,9 +162,9 @@ fn check_property_ordering(
             if let Some(items_schema) = schema_val.get("items") {
                 for (i, item) in arr.iter().enumerate() {
                     let child_path = if path.is_empty() {
-                        format!("[{}]", i)
+                        format!("[{i}]")
                     } else {
-                        format!("{}[{}]", path, i)
+                        format!("{path}[{i}]")
                     };
                     check_property_ordering(item, items_schema, &child_path, errors);
                 }

@@ -97,7 +97,7 @@ impl crate::processors::Processor for TermsProcessor {
             watched_dirs.push(&self.config.dir_terms_ambiguous);
         }
         for dir in watched_dirs {
-            for entry in crate::errors::ctx(fs::read_dir(dir), &format!("Failed to read terms directory {}", dir))? {
+            for entry in crate::errors::ctx(fs::read_dir(dir), &format!("Failed to read terms directory {dir}"))? {
                 let entry = entry?;
                 let path = entry.path();
                 if path.extension().is_some_and(|e| e == "txt") {
@@ -130,7 +130,7 @@ impl crate::processors::Processor for TermsProcessor {
 pub fn load_terms(dir_path: &str) -> Result<HashSet<String>> {
     let dir = Path::new(dir_path);
     if !dir.is_dir() {
-        bail!("terms directory `{}` does not exist or is not a directory", dir_path);
+        bail!("terms directory `{dir_path}` does not exist or is not a directory");
     }
     // Map each term to (file, line_number) where it first appeared
     let mut seen: std::collections::HashMap<String, (String, usize)> = std::collections::HashMap::new();
@@ -569,7 +569,7 @@ fn fix_content(
     // so e.g. CI/CD is now found if its backticks were just stripped).
     let mut additions: Vec<(usize, usize, String)> = find_unquoted_positions(&cleaned, sorted_terms)
         .into_iter()
-        .map(|(s, e, m)| (s, e, format!("`{}`", m)))
+        .map(|(s, e, m)| (s, e, format!("`{m}`")))
         .collect();
     if additions.is_empty() {
         cleaned
@@ -663,7 +663,7 @@ pub fn fix_all(config: &TermsConfig, remove_non_terms: bool) -> Result<()> {
 pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
     let src = Path::new(source_dir);
     if !src.is_dir() {
-        bail!("Source directory `{}` does not exist or is not a directory", source_dir);
+        bail!("Source directory `{source_dir}` does not exist or is not a directory");
     }
     let dest = Path::new(&config.dir_terms_unambiguous);
     if !dest.is_dir() {
@@ -735,7 +735,7 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
         }
     }
 
-    println!("Done. Merged {} file(s), copied {} new file(s).", merged_count, copied_count);
+    println!("Done. Merged {merged_count} file(s), copied {copied_count} new file(s).");
 
     // After merging, enforce the no-overlap-with-ambiguous invariant.
     load_and_validate_terms(config)?;
@@ -762,9 +762,9 @@ pub fn stats(config: &TermsConfig) -> Result<()> {
         });
         println!("{}", serde_json::to_string_pretty(&out).expect(crate::errors::JSON_SERIALIZE));
     } else {
-        println!("{} term file(s), {} total terms (unambiguous)", single_files, single_terms);
+        println!("{single_files} term file(s), {single_terms} total terms (unambiguous)");
         if amb_dir_exists {
-            println!("{} term file(s), {} total terms (ambiguous)", amb_files, amb_terms);
+            println!("{amb_files} term file(s), {amb_terms} total terms (ambiguous)");
         }
     }
     Ok(())
@@ -773,7 +773,7 @@ pub fn stats(config: &TermsConfig) -> Result<()> {
 fn count_terms_in_dir(dir_str: &str) -> Result<(usize, usize)> {
     let dir = Path::new(dir_str);
     if !dir.is_dir() {
-        bail!("terms directory `{}` does not exist or is not a directory", dir_str);
+        bail!("terms directory `{dir_str}` does not exist or is not a directory");
     }
     let mut file_count = 0;
     let mut total_terms = 0;

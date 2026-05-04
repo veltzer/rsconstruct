@@ -169,7 +169,7 @@ impl Function for LoadPythonFunction {
 
         // Execute Python and load the config
         let result = load_python_config(self.ctx.get(), Path::new(path))
-            .map_err(|e| tera::Error::msg(format!("Failed to load Python config: {}", e)))?;
+            .map_err(|e| tera::Error::msg(format!("Failed to load Python config: {e}")))?;
 
         to_value(result).map_err(|e| tera::Error::msg(format!("Failed to convert Python config to template value: {e}")))
     }
@@ -355,17 +355,15 @@ impl Function for ShellOutputFunction {
         // to silent stale output).
         let depends_on = args.get("depends_on").ok_or_else(|| {
             tera::Error::msg(format!(
-                "shell_output(command=\"{}\") requires depends_on=[...] — \
+                "shell_output(command=\"{command}\") requires depends_on=[...] — \
                  rsconstruct cannot otherwise tell when its output should be invalidated. \
                  Pass depends_on=[\"glob/pattern/*.ext\", ...] or depends_on=[] to \
                  acknowledge that no file dependencies exist.",
-                command,
             ))
         })?;
         if !depends_on.is_array() {
             return Err(tera::Error::msg(format!(
-                "shell_output(command=\"{}\"): depends_on must be a list of strings, got {:?}",
-                command, depends_on,
+                "shell_output(command=\"{command}\"): depends_on must be a list of strings, got {depends_on:?}",
             )));
         }
 
@@ -403,10 +401,10 @@ impl Function for GlobFunction {
 
         let mut paths: Vec<String> = Vec::new();
         for entry in glob::glob(pattern)
-            .map_err(|e| tera::Error::msg(format!("glob: invalid pattern '{}': {}", pattern, e)))?
+            .map_err(|e| tera::Error::msg(format!("glob: invalid pattern '{pattern}': {e}")))?
         {
             let path = entry
-                .map_err(|e| tera::Error::msg(format!("glob: iteration error for '{}': {}", pattern, e)))?;
+                .map_err(|e| tera::Error::msg(format!("glob: iteration error for '{pattern}': {e}")))?;
             if path.is_file() {
                 paths.push(path.to_string_lossy().into_owned());
             }
@@ -439,14 +437,14 @@ impl Function for GrepCountFunction {
             .ok_or_else(|| tera::Error::msg("grep_count requires a 'glob' argument (file glob)"))?;
 
         let re = regex::Regex::new(pattern)
-            .map_err(|e| tera::Error::msg(format!("grep_count: invalid regex '{}': {}", pattern, e)))?;
+            .map_err(|e| tera::Error::msg(format!("grep_count: invalid regex '{pattern}': {e}")))?;
 
         let mut count: usize = 0;
         for entry in glob::glob(glob_pattern)
-            .map_err(|e| tera::Error::msg(format!("grep_count: invalid glob '{}': {}", glob_pattern, e)))?
+            .map_err(|e| tera::Error::msg(format!("grep_count: invalid glob '{glob_pattern}': {e}")))?
         {
             let path = entry
-                .map_err(|e| tera::Error::msg(format!("grep_count: glob error for '{}': {}", glob_pattern, e)))?;
+                .map_err(|e| tera::Error::msg(format!("grep_count: glob error for '{glob_pattern}': {e}")))?;
             if !path.is_file() {
                 continue;
             }
@@ -490,7 +488,7 @@ import json
 import os
 
 # Set the working directory to the config file's directory
-config_dir = '{}'
+config_dir = '{config_dir}'
 if config_dir:
     sys.path.insert(0, config_dir)
 
@@ -498,7 +496,7 @@ if config_dir:
 namespace = {{}}
 
 # Execute the config file
-with open('{}', 'r') as f:
+with open('{config_path}', 'r') as f:
     exec(f.read(), namespace)
 
 # Filter out built-in variables and convert to JSON-serializable format
@@ -514,9 +512,7 @@ for key, value in namespace.items():
             result[key] = str(value)
 
 print(json.dumps(result))
-"#,
-        config_dir,
-        config_path
+"#
     );
 
     // Execute Python and capture output
@@ -526,7 +522,7 @@ print(json.dumps(result))
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Python config execution failed: {}", stderr);
+        anyhow::bail!("Python config execution failed: {stderr}");
     }
 
     // Parse the JSON output

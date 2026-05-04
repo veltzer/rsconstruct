@@ -68,13 +68,13 @@ impl ObjectStore {
         for (key, old_val) in &old_map {
             match new_map.get(key) {
                 None => {
-                    let s = format!("- {}: {}", key, old_val);
+                    let s = format!("- {key}: {old_val}");
                     lines.push(color::red(&s).into_owned());
                 }
                 Some(new_val) if new_val != old_val => {
-                    let old_s = format!("- {}: {}", key, old_val);
+                    let old_s = format!("- {key}: {old_val}");
                     lines.push(color::red(&old_s).into_owned());
-                    let new_s = format!("+ {}: {}", key, new_val);
+                    let new_s = format!("+ {key}: {new_val}");
                     lines.push(color::green(&new_s).into_owned());
                 }
                 _ => {}
@@ -84,7 +84,7 @@ impl ObjectStore {
         // Find added keys
         for (key, new_val) in &new_map {
             if !old_map.contains_key(key) {
-                let s = format!("+ {}: {}", key, new_val);
+                let s = format!("+ {key}: {new_val}");
                 lines.push(color::green(&s).into_owned());
             }
         }
@@ -106,20 +106,20 @@ impl ObjectStore {
                     let key = if prefix.is_empty() {
                         k.clone()
                     } else {
-                        format!("{}.{}", prefix, k)
+                        format!("{prefix}.{k}")
                     };
                     map.extend(Self::flatten_json(v, &key));
                 }
             }
             serde_json::Value::Array(arr) => {
                 for (i, v) in arr.iter().enumerate() {
-                    let key = format!("{}[{}]", prefix, i);
+                    let key = format!("{prefix}[{i}]");
                     map.extend(Self::flatten_json(v, &key));
                 }
             }
             _ => {
                 let val_str = match value {
-                    serde_json::Value::String(s) => format!("\"{}\"", s),
+                    serde_json::Value::String(s) => format!("\"{s}\""),
                     serde_json::Value::Null => "null".to_string(),
                     v => v.to_string(),
                 };

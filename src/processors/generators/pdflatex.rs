@@ -27,7 +27,7 @@ impl PdflatexProcessor {
     /// Remove temporary files produced by pdflatex in the given directory.
     fn clean_temp_files(&self, stem: &str, dir: &Path) {
         for ext in PDFLATEX_TEMP_EXTENSIONS {
-            let path = dir.join(format!("{}{}", stem, ext));
+            let path = dir.join(format!("{stem}{ext}"));
             let _ = fs::remove_file(path);
         }
     }
@@ -105,8 +105,8 @@ impl Processor for PdflatexProcessor {
 
         // Optional qpdf post-processing
         if self.config.qpdf {
-            let pdf_in_build = build_dir.join(format!("{}.pdf", input_stem));
-            let qpdf_tmp = build_dir.join(format!("{}.qpdf.pdf", input_stem));
+            let pdf_in_build = build_dir.join(format!("{input_stem}.pdf"));
+            let qpdf_tmp = build_dir.join(format!("{input_stem}.qpdf.pdf"));
 
             let mut cmd = Command::new("qpdf");
             cmd.arg("--deterministic-id");

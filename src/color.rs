@@ -15,7 +15,7 @@ fn wrap<'a>(code: &str, text: &'a str) -> Cow<'a, str> {
     if no_color() {
         Cow::Borrowed(text)
     } else {
-        Cow::Owned(format!("\x1b[{}m{}\x1b[0m", code, text))
+        Cow::Owned(format!("\x1b[{code}m{text}\x1b[0m"))
     }
 }
 

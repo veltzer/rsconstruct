@@ -4,7 +4,7 @@ use std::fmt;
 use toml_edit::{Document, Item, Table};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum FieldProvenance {
+pub enum FieldProvenance {
     UserToml { line: usize },
     ProcessorDefault,
     ScanDefault,
@@ -16,7 +16,7 @@ pub(crate) enum FieldProvenance {
 impl fmt::Display for FieldProvenance {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::UserToml { line } => write!(f, "from rsconstruct.toml:{}", line),
+            Self::UserToml { line } => write!(f, "from rsconstruct.toml:{line}"),
             Self::ProcessorDefault => write!(f, "processor default"),
             Self::ScanDefault => write!(f, "scan default"),
             Self::OutputDirDefault => write!(f, "output dir default"),
@@ -26,9 +26,9 @@ impl fmt::Display for FieldProvenance {
     }
 }
 
-pub(crate) type ProvenanceMap = HashMap<String, FieldProvenance>;
+pub type ProvenanceMap = HashMap<String, FieldProvenance>;
 
-pub(crate) fn record_if_absent(
+pub fn record_if_absent(
     map: &mut ProvenanceMap,
     field: &str,
     source: FieldProvenance,
@@ -40,7 +40,7 @@ pub(crate) fn record_if_absent(
 
 /// Which config section a user-set field lives in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum Section {
+pub enum Section {
     Processor,
     Analyzer,
 }
@@ -51,18 +51,18 @@ pub(crate) enum Section {
 ///
 /// `instance_name` is what ProcessorInstance/AnalyzerInstance use: "ruff" for
 /// single-instance, "pylint.core" for multi-instance.
-pub(crate) type SpanMap = HashMap<(Section, String, String), usize>;
+pub type SpanMap = HashMap<(Section, String, String), usize>;
 
 /// Per-section field line numbers for top-level sections like `[build]`,
 /// `[cache]`. Outer key = section name; inner key = field name; value = 1-based
 /// line number.
-pub(crate) type GlobalSpanMap = HashMap<String, HashMap<String, usize>>;
+pub type GlobalSpanMap = HashMap<String, HashMap<String, usize>>;
 
 /// Parse the user TOML source and build a map of field-level line numbers for
 /// every key under `[processor.*]` and `[analyzer.*]`. Returns an empty map if
 /// parsing fails (the caller already ran the `toml` crate's parser and
 /// validated the config, so we treat span capture as best-effort enrichment).
-pub(crate) fn build_span_map(source: &str) -> SpanMap {
+pub fn build_span_map(source: &str) -> SpanMap {
     let mut map = SpanMap::new();
     // Document preserves byte spans on every Key and Item. DocumentMut
     // strips them on construction (`despan`), so we can't use it here.
@@ -108,7 +108,7 @@ fn walk_instance_section(
             // Multi-instance: [processor.pylint.core], [processor.pylint.tests]
             for (inst_suffix, inst_item) in sub.iter() {
                 if let Some(inst_table) = inst_item.as_table() {
-                    let instance_name = format!("{}.{}", type_name, inst_suffix);
+                    let instance_name = format!("{type_name}.{inst_suffix}");
                     record_field_lines(inst_table, section, &instance_name, source, map);
                 }
             }
@@ -146,7 +146,7 @@ fn item_span(item: &Item) -> Option<std::ops::Range<usize>> {
 /// Collect line numbers for every field in top-level `[section]` tables
 /// other than `processor` and `analyzer` (handled separately by
 /// [`build_span_map`]).
-pub(crate) fn build_global_span_map(source: &str) -> GlobalSpanMap {
+pub fn build_global_span_map(source: &str) -> GlobalSpanMap {
     let mut map = GlobalSpanMap::new();
     let doc: Document<&str> = match Document::parse(source) {
         Ok(d) => d,

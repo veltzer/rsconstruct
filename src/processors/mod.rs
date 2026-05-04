@@ -1,6 +1,6 @@
 mod checkers;
 mod explicit;
-pub(crate) mod generators;
+pub mod generators;
 mod creators;
 pub mod lua;
 
@@ -36,7 +36,7 @@ pub mod names {
 
 /// Resolve a relative path against an anchor directory.
 /// If the anchor directory is empty, the relative path is returned as-is.
-pub(crate) fn resolve_anchor_path(anchor_dir: &Path, rel: &str) -> PathBuf {
+pub fn resolve_anchor_path(anchor_dir: &Path, rel: &str) -> PathBuf {
     if anchor_dir.as_os_str().is_empty() {
         PathBuf::from(rel)
     } else {
@@ -63,7 +63,7 @@ pub(crate) fn set_declared_tools(tools: Option<Vec<String>>) {
 
 /// No-op in release builds.
 #[cfg(not(debug_assertions))]
-pub(crate) fn set_declared_tools(_tools: Option<Vec<String>>) {}
+pub fn set_declared_tools(_tools: Option<Vec<String>>) {}
 
 /// Temporarily suspend the declared-tools check for user-specified commands.
 /// Returns a guard that restores the previous value when dropped.
@@ -75,7 +75,7 @@ pub(crate) fn suspend_tool_check() -> ToolCheckGuard {
 
 /// No-op in release builds.
 #[cfg(not(debug_assertions))]
-pub(crate) fn suspend_tool_check() -> ToolCheckGuard {
+pub fn suspend_tool_check() -> ToolCheckGuard {
     ToolCheckGuard { _private: () }
 }
 
@@ -96,12 +96,12 @@ impl Drop for ToolCheckGuard {
 
 /// No-op guard for release builds.
 #[cfg(not(debug_assertions))]
-pub(crate) struct ToolCheckGuard {
+pub struct ToolCheckGuard {
     _private: (),
 }
 
 /// Format a `Command` as a shell-like string for display.
-pub(crate) fn format_command(cmd: &Command) -> String {
+pub fn format_command(cmd: &Command) -> String {
     let program = cmd.get_program().to_string_lossy();
     let args: Vec<_> = cmd.get_args()
         .map(|a| a.to_string_lossy())
@@ -114,7 +114,7 @@ pub(crate) fn format_command(cmd: &Command) -> String {
 }
 
 /// If --show-child-processes is enabled, print the command that is about to be executed.
-pub(crate) fn log_command(cmd: &Command) {
+pub fn log_command(cmd: &Command) {
     if crate::runtime_flags::show_child_processes() {
         let cwd = cmd.get_current_dir()
             .map(|p| p.display().to_string())
@@ -122,7 +122,7 @@ pub(crate) fn log_command(cmd: &Command) {
         if cwd.is_empty() {
             eprintln!("{} {}", color::dim("[exec]"), format_command(cmd));
         } else {
-            let cwd_info = format!("(in {})", cwd);
+            let cwd_info = format!("(in {cwd})");
             eprintln!("{} {} {}", color::dim("[exec]"), format_command(cmd), color::dim(&cwd_info));
         }
     }
@@ -188,10 +188,9 @@ fn run_command_inner(ctx: &crate::build_context::BuildContext, cmd: &mut Command
                 let arg_count = args.len();
                 if total_len > 100_000 {
                     format!(
-                        "Failed to spawn '{}' with {} arguments (total command length ~{} bytes). \
+                        "Failed to spawn '{prog}' with {arg_count} arguments (total command length ~{total_len} bytes). \
                          This usually means the argument list is too long for the OS (E2BIG). \
-                         Consider reducing the number of files or excluding directories.",
-                        prog, arg_count, total_len
+                         Consider reducing the number of files or excluding directories."
                     )
                 } else {
                     format!("Failed to spawn: {} {}", prog,
@@ -242,24 +241,24 @@ fn run_command_inner(ctx: &crate::build_context::BuildContext, cmd: &mut Command
     })
 }
 
-pub(crate) fn run_command(ctx: &crate::build_context::BuildContext, cmd: &mut Command) -> Result<Output> {
+pub fn run_command(ctx: &crate::build_context::BuildContext, cmd: &mut Command) -> Result<Output> {
     let show = crate::runtime_flags::show_output();
     run_command_inner(ctx, cmd, show, None)
 }
 
-pub(crate) fn run_command_with_timeout(ctx: &crate::build_context::BuildContext, cmd: &mut Command, timeout: Duration) -> Result<Output> {
+pub fn run_command_with_timeout(ctx: &crate::build_context::BuildContext, cmd: &mut Command, timeout: Duration) -> Result<Output> {
     let show = crate::runtime_flags::show_output();
     run_command_inner(ctx, cmd, show, Some(timeout))
 }
 
-pub(crate) fn run_command_capture(ctx: &crate::build_context::BuildContext, cmd: &mut Command) -> Result<Output> {
+pub fn run_command_capture(ctx: &crate::build_context::BuildContext, cmd: &mut Command) -> Result<Output> {
     run_command_inner(ctx, cmd, false, None)
 }
 
 
 /// Check that a command exited successfully.
 /// On failure, includes any captured stdout/stderr in the error message for debugging.
-pub(crate) fn check_command_output(output: &Output, context: impl std::fmt::Display) -> Result<()> {
+pub fn check_command_output(output: &Output, context: impl std::fmt::Display) -> Result<()> {
     if !output.status.success() {
         use std::fmt::Write;
         let mut msg = format!("{context} failed");
@@ -280,14 +279,14 @@ pub(crate) fn check_command_output(output: &Output, context: impl std::fmt::Disp
 /// Check if scan directories are valid. Always returns true because scan directories
 /// may not exist on disk yet but contain virtual files from the fixed-point discovery
 /// loop (upstream generator outputs). The actual filtering is done by `file_index.scan()`.
-pub(crate) fn scan_root_valid(_scan: &crate::config::StandardConfig) -> bool {
+pub fn scan_root_valid(_scan: &crate::config::StandardConfig) -> bool {
     true
 }
 
 /// Compute a stub path for a source file.
 /// Maps `a/b/file.ext` -> `stub_dir/a_b_file.ext.suffix`.
 /// Source path is already relative to project root.
-pub(crate) fn stub_path(stub_dir: &Path, source: &Path, suffix: &str) -> PathBuf {
+pub fn stub_path(stub_dir: &Path, source: &Path, suffix: &str) -> PathBuf {
     let stub_name = format!(
         "{}.{}",
         source.display().to_string().replace(['/', '\\'], "_"),
@@ -297,7 +296,7 @@ pub(crate) fn stub_path(stub_dir: &Path, source: &Path, suffix: &str) -> PathBuf
 }
 
 /// Convert a DOT graph string to SVG using the `dot` command.
-pub(crate) fn dot_to_svg(dot_content: &str) -> Result<String> {
+pub fn dot_to_svg(dot_content: &str) -> Result<String> {
     use std::process::{Command, Stdio};
     let mut cmd = Command::new("dot");
     cmd.arg("-Tsvg")
@@ -322,7 +321,7 @@ pub(crate) fn dot_to_svg(dot_content: &str) -> Result<String> {
 /// If `header_line` is Some and the file does not yet exist, it is written as the
 /// first line (e.g. aspell .pws header). New words are appended to the end of the
 /// file so that existing content is never lost.
-pub(crate) fn flush_words(
+pub fn flush_words(
     existing: &HashSet<String>,
     new_words: &HashSet<String>,
     words_path: &Path,
@@ -347,10 +346,10 @@ pub(crate) fn flush_words(
         .with_context(|| format!("Failed to open words file: {}", words_path.display()))?;
     if !file_exists
         && let Some(header) = header_line {
-            writeln!(file, "{}", header)?;
+            writeln!(file, "{header}")?;
     }
     for word in &sorted {
-        writeln!(file, "{}", word)?;
+        writeln!(file, "{word}")?;
     }
     println!("Added {} word(s) to {}", sorted.len(), words_path.display());
     Ok(())
@@ -358,7 +357,7 @@ pub(crate) fn flush_words(
 
 /// Check if a config file exists and return it as extra inputs for discover.
 /// Used by processors that auto-detect config files (e.g. mypy.ini, .pylintrc).
-pub(crate) fn config_file_inputs(path: &str) -> Vec<String> {
+pub fn config_file_inputs(path: &str) -> Vec<String> {
     if Path::new(path).exists() {
         vec![path.to_string()]
     } else {
@@ -368,7 +367,7 @@ pub(crate) fn config_file_inputs(path: &str) -> Vec<String> {
 
 /// Create the parent directory of an output path if it doesn't exist.
 /// Used by generator processors before writing output files.
-pub(crate) fn ensure_output_dir(output: &Path) -> Result<()> {
+pub fn ensure_output_dir(output: &Path) -> Result<()> {
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create output directory: {}", parent.display()))?;
@@ -378,7 +377,7 @@ pub(crate) fn ensure_output_dir(output: &Path) -> Result<()> {
 
 /// Remove the output_dirs of a product. Used by creator clean() methods.
 /// Returns the number of directories removed.
-pub(crate) fn clean_output_dir(product: &Product, processor_name: &str, verbose: bool) -> Result<usize> {
+pub fn clean_output_dir(product: &Product, processor_name: &str, verbose: bool) -> Result<usize> {
     let mut count = 0;
     for output_dir in &product.output_dirs {
         if output_dir.exists() {
@@ -394,7 +393,7 @@ pub(crate) fn clean_output_dir(product: &Product, processor_name: &str, verbose:
 
 /// Build the input list for creators: anchor first, then sibling files
 /// (excluding the anchor to avoid duplicates), then extra inputs.
-pub(crate) fn build_anchor_inputs(anchor: &Path, sibling_files: &[PathBuf], extra: &[PathBuf]) -> Vec<PathBuf> {
+pub fn build_anchor_inputs(anchor: &Path, sibling_files: &[PathBuf], extra: &[PathBuf]) -> Vec<PathBuf> {
     let mut inputs: Vec<PathBuf> = Vec::with_capacity(1 + sibling_files.len() + extra.len());
     inputs.push(anchor.to_path_buf());
     for file in sibling_files {
@@ -409,7 +408,7 @@ pub(crate) fn build_anchor_inputs(anchor: &Path, sibling_files: &[PathBuf], extr
 /// Combine the scan_root_valid check, scan, and empty check that creators
 /// repeat in their discover() methods. Returns None if the scan root is invalid
 /// or no files were found, otherwise returns the list of files.
-pub(crate) fn scan_or_skip(scan: &crate::config::StandardConfig, file_index: &FileIndex) -> Option<Vec<PathBuf>> {
+pub fn scan_or_skip(scan: &crate::config::StandardConfig, file_index: &FileIndex) -> Option<Vec<PathBuf>> {
     if !scan_root_valid(scan) {
         return None;
     }
@@ -423,7 +422,7 @@ pub(crate) fn scan_or_skip(scan: &crate::config::StandardConfig, file_index: &Fi
 /// Clean outputs for a product: remove each output file.
 /// When `verbose` is true, prints a message for each removed file.
 /// Returns the number of files removed.
-pub(crate) fn clean_outputs(product: &Product, label: &str, verbose: bool) -> Result<usize> {
+pub fn clean_outputs(product: &Product, label: &str, verbose: bool) -> Result<usize> {
     let mut count = 0;
     for output in &product.outputs {
         match fs::remove_file(output) {
@@ -442,13 +441,13 @@ pub(crate) fn clean_outputs(product: &Product, label: &str, verbose: bool) -> Re
 
 /// Options for filtering sibling files in directory-based product discovery.
 #[derive(Debug)]
-pub(crate) struct SiblingFilter<'a> {
+pub struct SiblingFilter<'a> {
     pub extensions: &'a [&'a str],
     pub excludes: &'a [&'a str],
 }
 
 /// Options for `discover_directory_products`.
-pub(crate) struct DirectoryProductOpts<'a, H: serde::Serialize> {
+pub struct DirectoryProductOpts<'a, H: serde::Serialize> {
     pub scan: &'a crate::config::StandardConfig,
     pub file_index: &'a FileIndex,
     pub dep_inputs: &'a [String],
@@ -469,7 +468,7 @@ pub(crate) struct DirectoryProductOpts<'a, H: serde::Serialize> {
 ///
 /// When `output_dir_name` is `Some("dir_name")`, the product gets an `output_dir` set to
 /// `anchor_parent/dir_name`, enabling directory-level caching for creators.
-pub(crate) fn discover_directory_products(
+pub fn discover_directory_products(
     graph: &mut BuildGraph,
     opts: DirectoryProductOpts<'_, impl serde::Serialize>,
 ) -> Result<()> {
@@ -523,7 +522,7 @@ pub(crate) fn discover_directory_products(
 /// Replaces the former `discover_checker_products` (no dep_auto merge)
 /// and `checker_discover` (with dep_auto merge) — the split was a
 /// correctness hazard since picking the wrong one silently lost dep_auto.
-pub(crate) fn discover_checker_products(
+pub fn discover_checker_products(
     graph: &mut BuildGraph,
     scan: &crate::config::StandardConfig,
     file_index: &FileIndex,
@@ -556,18 +555,18 @@ pub(crate) fn discover_checker_products(
 /// When `check_scan_root` is true, also validates that the scan root
 /// directory exists (used by processors like clang_tidy that have a
 /// meaningful scan_root guard).
-pub(crate) fn checker_auto_detect(scan: &crate::config::StandardConfig, file_index: &FileIndex) -> bool {
+pub fn checker_auto_detect(scan: &crate::config::StandardConfig, file_index: &FileIndex) -> bool {
     !file_index.scan(scan, true).is_empty()
 }
 
-pub(crate) fn checker_auto_detect_with_scan_root(scan: &crate::config::StandardConfig, file_index: &FileIndex) -> bool {
+pub fn checker_auto_detect_with_scan_root(scan: &crate::config::StandardConfig, file_index: &FileIndex) -> bool {
     scan_root_valid(scan) && checker_auto_detect(scan, file_index)
 }
 
 /// Run a command in the parent directory of an anchor file (e.g., Makefile, Cargo.toml).
 /// Sets `current_dir` to the parent directory (unless it's the project root).
 /// Returns a display-friendly directory name for error messages.
-pub(crate) fn run_in_anchor_dir(ctx: &crate::build_context::BuildContext, cmd: &mut Command, anchor: &Path) -> Result<Output> {
+pub fn run_in_anchor_dir(ctx: &crate::build_context::BuildContext, cmd: &mut Command, anchor: &Path) -> Result<Output> {
     let anchor_dir = anchor.parent()
         .context("Anchor file has no parent directory")?;
     if !anchor_dir.as_os_str().is_empty() {
@@ -578,17 +577,17 @@ pub(crate) fn run_in_anchor_dir(ctx: &crate::build_context::BuildContext, cmd: &
 
 /// Format the parent directory of an anchor file for display.
 /// Returns `"."` for root-level files.
-pub(crate) fn anchor_display_dir(anchor: &Path) -> &str {
+pub fn anchor_display_dir(anchor: &Path) -> &str {
     anchor.parent()
         .and_then(|p| if p.as_os_str().is_empty() { None } else { p.to_str() })
         .unwrap_or(".")
 }
 
 /// Ensure a stub directory exists, creating it if necessary.
-pub(crate) fn ensure_stub_dir(stub_dir: &Path, processor_name: &str) -> Result<()> {
+pub fn ensure_stub_dir(stub_dir: &Path, processor_name: &str) -> Result<()> {
     if !stub_dir.exists() {
         fs::create_dir_all(stub_dir)
-            .with_context(|| format!("Failed to create {} stub directory", processor_name))?;
+            .with_context(|| format!("Failed to create {processor_name} stub directory"))?;
     }
     Ok(())
 }
@@ -602,7 +601,7 @@ pub(crate) fn ensure_stub_dir(stub_dir: &Path, processor_name: &str) -> Result<(
 /// for environment variables and the tool path itself.
 const MAX_ARG_LEN: usize = 1_000_000;
 
-pub(crate) fn run_checker(
+pub fn run_checker(
     ctx: &crate::build_context::BuildContext,
     tool: &str,
     subcommand: Option<&str>,
@@ -662,7 +661,7 @@ fn run_checker_once(
     check_command_output(&output, tool)
 }
 
-pub(crate) fn execute_checker_batch<F>(
+pub fn execute_checker_batch<F>(
     ctx: &crate::build_context::BuildContext,
     products: &[&Product],
     batch_fn: F,
@@ -678,12 +677,12 @@ where
         Ok(()) => products.iter().map(|_| Ok(())).collect(),
         Err(e) => {
             let err_msg = e.to_string();
-            products.iter().map(|_| Err(anyhow::anyhow!("{}", err_msg))).collect()
+            products.iter().map(|_| Err(anyhow::anyhow!("{err_msg}"))).collect()
         }
     }
 }
 
-pub(crate) fn execute_generator_batch<F>(
+pub fn execute_generator_batch<F>(
     ctx: &crate::build_context::BuildContext,
     products: &[&Product],
     batch_fn: F,
@@ -699,13 +698,13 @@ where
         Ok(()) => products.iter().map(|_| Ok(())).collect(),
         Err(e) => {
             let err_msg = e.to_string();
-            products.iter().map(|_| Err(anyhow::anyhow!("{}", err_msg))).collect()
+            products.iter().map(|_| Err(anyhow::anyhow!("{err_msg}"))).collect()
         }
     }
 }
 
-pub(crate) use checkers::terms;
-pub(crate) use generators::tags as tags_cmd;
+pub use checkers::terms;
+pub use generators::tags as tags_cmd;
 pub use lua::LuaProcessor;
 
 /// Map from processor name to processor instance. Used throughout the build pipeline.
@@ -1268,25 +1267,24 @@ impl BuildStats {
             // done (built, restored, failed) leads the line; idle counts
             // (unchanged, flaky) go in parentheses.
             let built_part = if total_files_created > 0 {
-                format!("{} built ({} files created)", total_processed, total_files_created)
+                format!("{total_processed} built ({total_files_created} files created)")
             } else {
-                format!("{} built", total_processed)
+                format!("{total_processed} built")
             };
             let restored_part = if total_files_restored > 0 {
-                format!("{} restored ({} files)", total_restored, total_files_restored)
+                format!("{total_restored} restored ({total_files_restored} files)")
             } else {
-                format!("{} restored", total_restored)
+                format!("{total_restored} restored")
             };
             let lead = format!(
-                "{}, {}, {} failed",
-                built_part, restored_part, total_failed,
+                "{built_part}, {restored_part}, {total_failed} failed",
             );
-            let aside = format!("{} unchanged, {} flaky", total_skipped, total_flaky);
+            let aside = format!("{total_skipped} unchanged, {total_flaky} flaky");
 
             // Emitted without color: the final "Exited with ..." line printed
             // by main() is the one coloured green/red so there's a single
             // signal of overall success/failure.
-            println!("[build] summary: {} ({})", lead, aside);
+            println!("[build] summary: {lead} ({aside})");
         }
 
         if self.failed_count > 0 {
@@ -1317,7 +1315,7 @@ impl BuildStats {
             }
 
             let total: f64 = self.phase_timings.iter().map(|(_, d)| d.as_secs_f64()).sum();
-            println!("{}", color::bold(&format!("Total: {:.3}s", total)));
+            println!("{}", color::bold(&format!("Total: {total:.3}s")));
         }
     }
 }
@@ -1431,7 +1429,7 @@ impl Processor for SimpleChecker {
 
 /// How a simple generator discovers its products.
 #[derive(Copy, Clone)]
-pub(crate) enum DiscoverMode {
+pub enum DiscoverMode {
     /// Discover one product per source x format (uses config.formats).
     MultiFormat,
     /// Discover one product per source file with a fixed output extension.
@@ -1442,7 +1440,7 @@ pub(crate) enum DiscoverMode {
 /// (mermaid.rs, pandoc.rs, etc.) configures one and registers it via the
 /// processor registry.
 #[derive(Copy, Clone)]
-pub(crate) struct SimpleGeneratorParams {
+pub struct SimpleGeneratorParams {
     pub extra_tools: &'static [&'static str],
     pub discover_mode: DiscoverMode,
     pub execute_fn: fn(&crate::build_context::BuildContext, &StandardConfig, &Product) -> Result<()>,

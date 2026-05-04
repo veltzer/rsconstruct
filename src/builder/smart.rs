@@ -9,15 +9,15 @@ const CONFIG_FILE: &str = "rsconstruct.toml";
 /// Load rsconstruct.toml as a toml_edit document.
 fn load_doc() -> Result<toml_edit::DocumentMut> {
     let content = fs::read_to_string(CONFIG_FILE)
-        .with_context(|| format!("Failed to read {}", CONFIG_FILE))?;
+        .with_context(|| format!("Failed to read {CONFIG_FILE}"))?;
     content.parse()
-        .with_context(|| format!("Failed to parse {}", CONFIG_FILE))
+        .with_context(|| format!("Failed to parse {CONFIG_FILE}"))
 }
 
 /// Write a toml_edit document back to rsconstruct.toml.
 fn save_doc(doc: &toml_edit::DocumentMut) -> Result<()> {
     fs::write(CONFIG_FILE, doc.to_string())
-        .with_context(|| format!("Failed to write {}", CONFIG_FILE))
+        .with_context(|| format!("Failed to write {CONFIG_FILE}"))
 }
 
 /// Get or create the [processor] table in the document.
@@ -33,15 +33,14 @@ fn validate_name(name: &str) -> Result<()> {
     let all = all_type_names();
     if !all.contains(&name) {
         bail!(
-            "Unknown processor '{}'. Run 'rsconstruct processors list --all' to see available processors.",
-            name
+            "Unknown processor '{name}'. Run 'rsconstruct processors list --all' to see available processors."
         );
     }
     Ok(())
 }
 
 /// Disable all processors by removing all [processor.*] sections.
-pub(crate) fn disable_all() -> Result<()> {
+pub fn disable_all() -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
     let keys: Vec<String> = table.iter().map(|(k, _)| k.to_string()).collect();
@@ -54,12 +53,12 @@ pub(crate) fn disable_all() -> Result<()> {
     }
 
     save_doc(&doc)?;
-    println!("Removed {} processor sections from {}.", count, CONFIG_FILE);
+    println!("Removed {count} processor sections from {CONFIG_FILE}.");
     Ok(())
 }
 
 /// Enable all processors by adding [processor.NAME] sections for all builtin types.
-pub(crate) fn enable_all() -> Result<()> {
+pub fn enable_all() -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
     let all_names = all_type_names();
@@ -73,43 +72,43 @@ pub(crate) fn enable_all() -> Result<()> {
     }
 
     save_doc(&doc)?;
-    println!("Added {} processor sections to {}.", count, CONFIG_FILE);
+    println!("Added {count} processor sections to {CONFIG_FILE}.");
     Ok(())
 }
 
 /// Disable a single processor by removing its [processor.NAME] section.
-pub(crate) fn disable(name: &str) -> Result<()> {
+pub fn disable(name: &str) -> Result<()> {
     validate_name(name)?;
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
 
     if table.remove(name).is_some() {
         save_doc(&doc)?;
-        println!("Removed processor '{}'.", name);
+        println!("Removed processor '{name}'.");
     } else {
-        println!("Processor '{}' is not declared.", name);
+        println!("Processor '{name}' is not declared.");
     }
     Ok(())
 }
 
 /// Enable a single processor by adding an empty [processor.NAME] section.
-pub(crate) fn enable(name: &str) -> Result<()> {
+pub fn enable(name: &str) -> Result<()> {
     validate_name(name)?;
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
 
     if table.get(name).is_some() {
-        println!("Processor '{}' is already declared.", name);
+        println!("Processor '{name}' is already declared.");
     } else {
         table.insert(name, toml_edit::Item::Table(toml_edit::Table::new()));
         save_doc(&doc)?;
-        println!("Added processor '{}'.", name);
+        println!("Added processor '{name}'.");
     }
     Ok(())
 }
 
 /// Enable only processors whose files are detected in the project.
-pub(crate) fn enable_detected(detected: &HashSet<String>) -> Result<()> {
+pub fn enable_detected(detected: &HashSet<String>) -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
     let mut count = 0;
@@ -122,17 +121,17 @@ pub(crate) fn enable_detected(detected: &HashSet<String>) -> Result<()> {
     }
 
     save_doc(&doc)?;
-    println!("Added {} detected processor sections to {}.", count, CONFIG_FILE);
+    println!("Added {count} detected processor sections to {CONFIG_FILE}.");
     Ok(())
 }
 
 /// Remove all processor sections, returning to empty config.
-pub(crate) fn reset() -> Result<()> {
+pub fn reset() -> Result<()> {
     disable_all()
 }
 
 /// Remove all processor sections, then add only the listed ones.
-pub(crate) fn only(names: &[String]) -> Result<()> {
+pub fn only(names: &[String]) -> Result<()> {
     for name in names {
         validate_name(name)?;
     }
@@ -157,7 +156,7 @@ pub(crate) fn only(names: &[String]) -> Result<()> {
 }
 
 /// Remove all processor sections, then add only detected ones.
-pub(crate) fn minimal(detected: &HashSet<String>) -> Result<()> {
+pub fn minimal(detected: &HashSet<String>) -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
 
@@ -184,14 +183,14 @@ pub(crate) fn minimal(detected: &HashSet<String>) -> Result<()> {
 }
 
 /// Add sections for processors whose files are detected AND tools are installed.
-pub(crate) fn enable_if_available(available: &HashSet<String>) -> Result<()> {
+pub fn enable_if_available(available: &HashSet<String>) -> Result<()> {
     enable_detected(available)
 }
 
 /// Auto-detect relevant processors and add them to rsconstruct.toml.
 /// Only adds processors whose files are detected AND whose tools are installed.
 /// Does not remove existing processor sections.
-pub(crate) fn auto(available: &HashSet<String>) -> Result<()> {
+pub fn auto(available: &HashSet<String>) -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
     let mut added = Vec::new();
@@ -265,78 +264,78 @@ fn set_enabled_iname(section_table: &mut toml_edit::Table, iname: &str, value: b
             t.insert("enabled", toml_edit::value(value));
             Ok(())
         }
-        None => bail!("{} '{}' is not declared in rsconstruct.toml.", section, iname),
+        None => bail!("{section} '{iname}' is not declared in rsconstruct.toml."),
     }
 }
 
 /// Delete a processor by iname from rsconstruct.toml.
-pub(crate) fn delete_processor(iname: &str) -> Result<()> {
+pub fn delete_processor(iname: &str) -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
     if delete_iname(table, iname) {
         save_doc(&doc)?;
-        println!("Deleted processor '{}'.", iname);
+        println!("Deleted processor '{iname}'.");
     } else {
-        println!("Processor '{}' is not declared.", iname);
+        println!("Processor '{iname}' is not declared.");
     }
     Ok(())
 }
 
 /// Set enabled = false on a processor by iname.
-pub(crate) fn disable_processor(iname: &str) -> Result<()> {
+pub fn disable_processor(iname: &str) -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
     set_enabled_iname(table, iname, false, "Processor")?;
     save_doc(&doc)?;
-    println!("Disabled processor '{}'.", iname);
+    println!("Disabled processor '{iname}'.");
     Ok(())
 }
 
 /// Set enabled = true on a processor by iname.
-pub(crate) fn enable_processor(iname: &str) -> Result<()> {
+pub fn enable_processor(iname: &str) -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
     set_enabled_iname(table, iname, true, "Processor")?;
     save_doc(&doc)?;
-    println!("Enabled processor '{}'.", iname);
+    println!("Enabled processor '{iname}'.");
     Ok(())
 }
 
 /// Delete an analyzer by iname from rsconstruct.toml.
-pub(crate) fn delete_analyzer(iname: &str) -> Result<()> {
+pub fn delete_analyzer(iname: &str) -> Result<()> {
     let mut doc = load_doc()?;
     let table = analyzer_table(&mut doc)?;
     if delete_iname(table, iname) {
         save_doc(&doc)?;
-        println!("Deleted analyzer '{}'.", iname);
+        println!("Deleted analyzer '{iname}'.");
     } else {
-        println!("Analyzer '{}' is not declared.", iname);
+        println!("Analyzer '{iname}' is not declared.");
     }
     Ok(())
 }
 
 /// Set enabled = false on an analyzer by iname.
-pub(crate) fn disable_analyzer(iname: &str) -> Result<()> {
+pub fn disable_analyzer(iname: &str) -> Result<()> {
     let mut doc = load_doc()?;
     let table = analyzer_table(&mut doc)?;
     set_enabled_iname(table, iname, false, "Analyzer")?;
     save_doc(&doc)?;
-    println!("Disabled analyzer '{}'.", iname);
+    println!("Disabled analyzer '{iname}'.");
     Ok(())
 }
 
 /// Set enabled = true on an analyzer by iname.
-pub(crate) fn enable_analyzer(iname: &str) -> Result<()> {
+pub fn enable_analyzer(iname: &str) -> Result<()> {
     let mut doc = load_doc()?;
     let table = analyzer_table(&mut doc)?;
     set_enabled_iname(table, iname, true, "Analyzer")?;
     save_doc(&doc)?;
-    println!("Enabled analyzer '{}'.", iname);
+    println!("Enabled analyzer '{iname}'.");
     Ok(())
 }
 
 /// Remove processors from rsconstruct.toml that don't match any files.
-pub(crate) fn remove_no_file_processors(empty_processors: &[String]) -> Result<()> {
+pub fn remove_no_file_processors(empty_processors: &[String]) -> Result<()> {
     if empty_processors.is_empty() {
         println!("All processors match at least one file.");
         return Ok(());

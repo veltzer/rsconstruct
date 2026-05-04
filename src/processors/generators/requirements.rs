@@ -153,7 +153,7 @@ impl Processor for RequirementsProcessor {
                 .with_context(|| format!("Failed to write header to {}", output_path.display()))?;
         }
         for entry in &entries {
-            writeln!(file, "{}", entry)
+            writeln!(file, "{entry}")
                 .with_context(|| format!("Failed to write entry to {}", output_path.display()))?;
         }
 
@@ -167,9 +167,9 @@ fn is_local(source: &Path, module: &str, local_py: &HashSet<&Path>) -> bool {
     let module_path = module.replace('.', "/");
     let source_dir = source.parent().unwrap_or(Path::new("."));
     let candidates = [
-        source_dir.join(format!("{}.py", module_path)),
+        source_dir.join(format!("{module_path}.py")),
         source_dir.join(&module_path).join("__init__.py"),
-        PathBuf::from(format!("{}.py", module_path)),
+        PathBuf::from(format!("{module_path}.py")),
         PathBuf::from(&module_path).join("__init__.py"),
     ];
     for candidate in &candidates {

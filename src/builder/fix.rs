@@ -74,7 +74,7 @@ impl Builder {
                     match result {
                         Ok(()) => fixed_count += 1,
                         Err(e) => {
-                            eprintln!("{}: {}", color::red(&format!("[{}] fix error", proc_name)), e);
+                            eprintln!("{}: {}", color::red(&format!("[{proc_name}] fix error")), e);
                             error_count += 1;
                         }
                     }
@@ -85,7 +85,7 @@ impl Builder {
                     match processor.fix(ctx, product) {
                         Ok(()) => fixed_count += 1,
                         Err(e) => {
-                            eprintln!("{}: {}", color::red(&format!("[{}] fix error", proc_name)), e);
+                            eprintln!("{}: {}", color::red(&format!("[{proc_name}] fix error")), e);
                             error_count += 1;
                         }
                     }
@@ -95,14 +95,12 @@ impl Builder {
 
         if error_count > 0 {
             println!("{}", color::red(&format!(
-                "Fix completed: {} fixed, {} errors",
-                fixed_count, error_count,
+                "Fix completed: {fixed_count} fixed, {error_count} errors",
             )));
-            anyhow::bail!("Fix failed with {} error(s)", error_count);
+            anyhow::bail!("Fix failed with {error_count} error(s)");
         } else {
             println!("{}", color::green(&format!(
-                "Fix completed: {} file(s) processed",
-                fixed_count,
+                "Fix completed: {fixed_count} file(s) processed",
             )));
         }
 

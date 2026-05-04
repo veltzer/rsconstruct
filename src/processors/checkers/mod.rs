@@ -54,5 +54,5 @@ mod itaplo;
 mod iyamllint;
 mod iyamlschema;
 mod json_schema;
-pub(crate) mod terms;
+pub mod terms;
 

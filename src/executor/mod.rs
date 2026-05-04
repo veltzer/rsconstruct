@@ -2,7 +2,7 @@ mod execution;
 mod handlers;
 mod policy;
 
-pub(crate) use policy::{BuildPolicy, IncrementalPolicy, ProductAction};
+pub use policy::{BuildPolicy, IncrementalPolicy, ProductAction};
 
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};

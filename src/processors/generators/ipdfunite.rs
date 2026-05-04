@@ -46,7 +46,7 @@ fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
 
         for object_id in doc.get_pages().into_values() {
             let obj = doc.get_object(object_id)
-                .with_context(|| format!("PDF object {:?} referenced by Pages tree not found in document", object_id))?
+                .with_context(|| format!("PDF object {object_id:?} referenced by Pages tree not found in document"))?
                 .to_owned();
             documents_pages.insert(object_id, obj);
         }

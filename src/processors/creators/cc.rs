@@ -115,7 +115,7 @@ impl CcProcessor {
         if !link_libs.is_empty() {
             cmd.arg(format!("-L{}", lib_dir.display()));
             for lib in link_libs {
-                cmd.arg(format!("-l{}", lib));
+                cmd.arg(format!("-l{lib}"));
             }
         }
         for flag in &manifest.ldflags {
@@ -145,7 +145,7 @@ impl CcProcessor {
         if !link_libs.is_empty() {
             cmd.arg(format!("-L{}", lib_dir.display()));
             for lib in link_libs {
-                cmd.arg(format!("-l{}", lib));
+                cmd.arg(format!("-l{lib}"));
             }
         }
         for flag in &manifest.ldflags {
@@ -323,7 +323,7 @@ impl Processor for CcProcessor {
         let yaml_path = product.primary_input();
         let display_dir = anchor_display_dir(yaml_path);
         self.execute_build(ctx, yaml_path)
-            .with_context(|| format!("cc build failed in {}", display_dir))
+            .with_context(|| format!("cc build failed in {display_dir}"))
     }
 }
 

@@ -5,9 +5,9 @@ mod variables;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use analyzer_configs::*;
-pub(crate) use processor_configs::*;
-pub(crate) use provenance::{FieldProvenance, ProvenanceMap, Section, SpanMap};
+pub use analyzer_configs::*;
+pub use processor_configs::*;
+pub use provenance::{FieldProvenance, ProvenanceMap, Section, SpanMap};
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -23,16 +23,16 @@ const CONFIG_FILE: &str = "rsconstruct.toml";
 
 /// Scan field names in StandardConfig.
 /// These are automatically appended to every processor's known fields during validation.
-pub(crate) const SCAN_CONFIG_FIELDS: &[&str] = &[
+pub const SCAN_CONFIG_FIELDS: &[&str] = &[
     "src_dirs", "src_extensions", "src_exclude_dirs", "src_exclude_files", "src_exclude_paths", "src_files",
 ];
 
 /// Universal StandardConfig fields that apply to every processor.
 /// Automatically appended to every processor's known_fields list during validation
 /// and to the defconfig display table — individual processors don't need to repeat them.
-pub(crate) const STANDARD_EXTRA_FIELDS: &[&str] = &["enabled", "cache"];
+pub const STANDARD_EXTRA_FIELDS: &[&str] = &["enabled", "cache"];
 
-pub(crate) trait KnownFields {
+pub trait KnownFields {
     /// Return the known fields for this config struct, excluding scan fields.
     fn known_fields() -> &'static [&'static str];
 
@@ -58,14 +58,14 @@ pub(crate) trait KnownFields {
 
 /// Default scan configuration for a processor, as plain data.
 /// Used to resolve None scan fields in StandardConfig after TOML deserialization.
-pub(crate) struct ScanDefaultsData {
+pub struct ScanDefaultsData {
     pub src_dirs: &'static [&'static str],
     pub src_extensions: &'static [&'static str],
     pub src_exclude_dirs: &'static [&'static str],
 }
 
 /// Per-processor default values applied after TOML deserialization.
-pub(crate) struct ProcessorDefaults {
+pub struct ProcessorDefaults {
     /// Default command binary name. Empty if not applicable.
     pub command: &'static str,
     /// Default dep_auto entries.
@@ -95,7 +95,7 @@ impl Default for ProcessorDefaults {
 
 /// Parameters for a simple checker processor — pure data, no macros.
 #[derive(Copy, Clone)]
-pub(crate) struct SimpleCheckerParams {
+pub struct SimpleCheckerParams {
     /// Human-readable description
     pub description: &'static str,
     /// Optional subcommand (e.g., "check" for ruff)
@@ -118,15 +118,15 @@ pub(crate) struct SimpleCheckerParams {
 
 /// Validate dep_inputs paths exist and return them as PathBufs.
 /// Paths are relative to project root (which is cwd).
-pub(crate) fn resolve_extra_inputs(dep_inputs: &[String]) -> Result<Vec<PathBuf>> {
+pub fn resolve_extra_inputs(dep_inputs: &[String]) -> Result<Vec<PathBuf>> {
     let mut resolved = Vec::new();
     for p in dep_inputs {
         if p.contains('*') || p.contains('?') || p.contains('[') {
             // Glob pattern: expand to matching files
             for entry in glob::glob(p)
-                .with_context(|| format!("Invalid glob pattern in dep_inputs: {}", p))?
+                .with_context(|| format!("Invalid glob pattern in dep_inputs: {p}"))?
             {
-                let path = crate::errors::ctx(entry, &format!("Failed to read glob entry for: {}", p))?;
+                let path = crate::errors::ctx(entry, &format!("Failed to read glob entry for: {p}"))?;
                 if path.is_file() {
                     resolved.push(path);
                 }
@@ -134,7 +134,7 @@ pub(crate) fn resolve_extra_inputs(dep_inputs: &[String]) -> Result<Vec<PathBuf>
         } else {
             let path = PathBuf::from(p);
             if !path.exists() {
-                anyhow::bail!("dep_inputs file not found: {}", p);
+                anyhow::bail!("dep_inputs file not found: {p}");
             }
             resolved.push(path);
         }
@@ -143,7 +143,7 @@ pub(crate) fn resolve_extra_inputs(dep_inputs: &[String]) -> Result<Vec<PathBuf>
 }
 
 /// Descriptions for scan fields shared by every processor.
-pub(crate) const SCAN_FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
+pub const SCAN_FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
     ("src_dirs",            "Directories to scan for source files"),
     ("src_extensions",      "File extensions to match during scanning"),
     ("src_exclude_dirs",    "Directory path segments to skip during scanning"),
@@ -153,7 +153,7 @@ pub(crate) const SCAN_FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
 ];
 
 /// Descriptions for execution/dependency fields shared by most processors.
-pub(crate) const SHARED_FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
+pub const SHARED_FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
     ("dep_inputs",  "Extra files that trigger a rebuild when their content changes"),
     ("dep_auto",    "Config files silently added as dep_inputs when they exist on disk"),
     ("batch",       "Pass all matched files to the tool in a single invocation"),
@@ -166,7 +166,7 @@ pub(crate) const SHARED_FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
 /// This is allowlist-based: any key not in `checksum_fields` is removed before
 /// hashing. Each processor declares its own checksum_fields() list, which is the
 /// single source of truth for which config fields trigger cache invalidation.
-pub(crate) fn output_config_hash(value: &impl Serialize, checksum_fields: &[&str]) -> String {
+pub fn output_config_hash(value: &impl Serialize, checksum_fields: &[&str]) -> String {
     let json_value: serde_json::Value = serde_json::to_value(value).expect(errors::CONFIG_SERIALIZE);
     let filtered = if let serde_json::Value::Object(map) = json_value {
         let kept: serde_json::Map<String, serde_json::Value> = map.into_iter()
@@ -187,7 +187,7 @@ const DEFAULT_PLUGINS_DIR: &str = "plugins";
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct PluginsConfig {
+pub struct PluginsConfig {
     #[serde(default = "default_plugins_dir")]
     pub dir: String,
 }
@@ -206,7 +206,7 @@ impl Default for PluginsConfig {
 /// Used by `rsconstruct doctor` to verify and `rsconstruct tools install-deps` to install.
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct DependenciesConfig {
+pub struct DependenciesConfig {
     /// Python packages (installed via pip)
     #[serde(default)]
     pub pip: Vec<String>,
@@ -229,7 +229,7 @@ impl DependenciesConfig {
 
 #[derive(Debug, Deserialize, Serialize, Default)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct Config {
+pub struct Config {
     #[serde(default)]
     pub build: BuildConfig,
     #[serde(default)]
@@ -261,7 +261,7 @@ pub(crate) struct Config {
 /// `sources[i]` is symlinked to `targets[i]`. Both arrays must be the same length.
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct SymlinkInstallConfig {
+pub struct SymlinkInstallConfig {
     /// Source folders containing files to symlink
     #[serde(default)]
     pub sources: Vec<String>,
@@ -273,14 +273,14 @@ pub(crate) struct SymlinkInstallConfig {
 /// Configuration for custom commands.
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct CommandsConfig {
+pub struct CommandsConfig {
     #[serde(default)]
     pub symlink_install: SymlinkInstallConfig,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct BuildConfig {
+pub struct BuildConfig {
     /// Number of parallel jobs (1 = sequential, 0 = auto-detect CPU cores)
     #[serde(default = "default_parallel")]
     pub parallel: usize,
@@ -315,7 +315,7 @@ impl Default for BuildConfig {
 /// Method used to restore files from cache
 #[derive(Debug, Deserialize, Serialize, Clone, Copy, Default, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum RestoreMethod {
+pub enum RestoreMethod {
     /// Auto-detect: use copy in CI environments (CI=true), hardlink otherwise.
     #[default]
     Auto,
@@ -341,7 +341,7 @@ impl RestoreMethod {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct CacheConfig {
+pub struct CacheConfig {
     #[serde(default)]
     pub restore_method: RestoreMethod,
     /// Whether to compress cached objects with zstd (default: false).
@@ -375,7 +375,7 @@ impl Default for CacheConfig {
     }
 }
 
-pub(crate) fn default_true() -> bool {
+pub fn default_true() -> bool {
     true
 }
 
@@ -383,7 +383,7 @@ pub(crate) fn default_true() -> bool {
 /// `[processor.pylint]` produces one instance with type_name="pylint", instance_name="pylint".
 /// `[processor.pylint.core]` produces one with type_name="pylint", instance_name="pylint.core".
 #[derive(Debug, Clone)]
-pub(crate) struct ProcessorInstance {
+pub struct ProcessorInstance {
     /// Instance name: "pylint" for single, "pylint.core" for named
     pub instance_name: String,
     /// Processor type name: always "pylint"
@@ -396,22 +396,22 @@ pub(crate) struct ProcessorInstance {
 
 use crate::registries::{self as registry, ProcessorPlugin};
 
-pub(crate) fn find_registry_entry(type_name: &str) -> Option<&'static ProcessorPlugin> {
+pub fn find_registry_entry(type_name: &str) -> Option<&'static ProcessorPlugin> {
     registry::all_plugins().find(|e| e.name == type_name)
 }
 
 /// Return all registered processor plugins.
-pub(crate) fn registry_entries() -> impl Iterator<Item = &'static ProcessorPlugin> {
+pub fn registry_entries() -> impl Iterator<Item = &'static ProcessorPlugin> {
     registry::all_plugins()
 }
 
 /// Return all known builtin processor type names.
-pub(crate) fn all_type_names() -> Vec<&'static str> {
+pub fn all_type_names() -> Vec<&'static str> {
     registry::all_plugins().map(|e| e.name).collect()
 }
 
 /// Check if a name is a known builtin processor type.
-pub(crate) fn is_builtin_type(name: &str) -> bool {
+pub fn is_builtin_type(name: &str) -> bool {
     find_registry_entry(name).is_some()
 }
 
@@ -421,7 +421,7 @@ pub(crate) fn is_builtin_type(name: &str) -> bool {
 ///
 /// Line numbers are filled in later by the toml_edit span pass; until then we
 /// use line 0 as a sentinel meaning "from user TOML, line unknown".
-pub(crate) fn seed_user_provenance(value: &toml::Value) -> ProvenanceMap {
+pub fn seed_user_provenance(value: &toml::Value) -> ProvenanceMap {
     let mut map = ProvenanceMap::new();
     if let Some(table) = value.as_table() {
         for key in table.keys() {
@@ -432,7 +432,7 @@ pub(crate) fn seed_user_provenance(value: &toml::Value) -> ProvenanceMap {
 }
 
 /// Resolve scan and processor defaults for an instance config in-place.
-pub(crate) fn resolve_instance_defaults(
+pub fn resolve_instance_defaults(
     type_name: &str,
     value: &mut toml::Value,
     provenance: &mut ProvenanceMap,
@@ -493,7 +493,7 @@ impl ProcessorConfig {
 }
 
 /// Return scan defaults for a builtin processor type.
-pub(crate) fn scan_defaults_for(type_name: &str) -> Option<ScanDefaultsData> {
+pub fn scan_defaults_for(type_name: &str) -> Option<ScanDefaultsData> {
     Some(match type_name {
         "tera" => ScanDefaultsData { src_dirs: &["tera.templates"], src_extensions: &[".tera"], src_exclude_dirs: &[] },
         "ruff" => ScanDefaultsData { src_dirs: &[], src_extensions: &[".py"], src_exclude_dirs: &[] },
@@ -593,7 +593,7 @@ pub(crate) fn scan_defaults_for(type_name: &str) -> Option<ScanDefaultsData> {
 
 /// Return per-processor default values (command, dep_auto, batch override).
 /// Only needed for processors whose defaults differ from the struct's Default impl.
-pub(crate) fn processor_defaults_for(type_name: &str) -> Option<ProcessorDefaults> {
+pub fn processor_defaults_for(type_name: &str) -> Option<ProcessorDefaults> {
     let d = ProcessorDefaults::default();
     Some(match type_name {
         "ruff" => ProcessorDefaults { command: "ruff", dep_auto: &["ruff.toml", ".ruff.toml", "pyproject.toml"], ..d },
@@ -676,7 +676,7 @@ pub(crate) fn processor_defaults_for(type_name: &str) -> Option<ProcessorDefault
 /// Sets command and dep_auto if they weren't explicitly provided by the user.
 /// Every field that's actually injected is recorded in `provenance` as a processor default.
 /// Fields already present in `provenance` (i.e. user-set) are skipped.
-pub(crate) fn apply_processor_defaults(
+pub fn apply_processor_defaults(
     type_name: &str,
     value: &mut toml::Value,
     provenance: &mut ProvenanceMap,
@@ -758,7 +758,7 @@ fn set_maybe_empty_array_default(
 /// Apply scan defaults to a config TOML value.
 /// Sets src_dirs, src_extensions, and src_exclude_dirs if not explicitly provided.
 /// Every field that's actually injected is recorded in `provenance` as a scan default.
-pub(crate) fn apply_scan_defaults(
+pub fn apply_scan_defaults(
     type_name: &str,
     value: &mut toml::Value,
     provenance: &mut ProvenanceMap,
@@ -783,7 +783,7 @@ pub(crate) fn apply_scan_defaults(
 /// Each `[processor.TYPE]` or `[processor.TYPE.NAME]` section in rsconstruct.toml
 /// creates a ProcessorInstance. No instances exist by default — only what's declared.
 #[derive(Debug, Default)]
-pub(crate) struct ProcessorConfig {
+pub struct ProcessorConfig {
     /// All declared processor instances
     pub instances: Vec<ProcessorInstance>,
     /// Lua plugin configs (processor types not in the builtin registry)
@@ -854,7 +854,7 @@ impl ProcessorConfig {
                 if Self::is_multi_instance(key, sub_table) {
                     // Multi-instance: [processor.pylint.core], [processor.pylint.tests]
                     for (name, inst_val) in sub_table {
-                        let instance_name = format!("{}.{}", key, name);
+                        let instance_name = format!("{key}.{name}");
                         let mut config = inst_val.clone();
                         let mut provenance = seed_user_provenance(&config);
                         resolve_instance_defaults(key, &mut config, &mut provenance)?;
@@ -985,21 +985,21 @@ impl ProcessorConfig {
 }
 
 
-pub(crate) fn default_cc_compiler() -> String {
+pub fn default_cc_compiler() -> String {
     "gcc".into()
 }
 
-pub(crate) fn default_cxx_compiler() -> String {
+pub fn default_cxx_compiler() -> String {
     "g++".into()
 }
 
-pub(crate) fn default_output_suffix() -> String {
+pub fn default_output_suffix() -> String {
     ".elf".into()
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct CompletionsConfig {
+pub struct CompletionsConfig {
     #[serde(default = "default_shells")]
     pub shells: Vec<String>,
 }
@@ -1018,7 +1018,7 @@ impl Default for CompletionsConfig {
 /// `[analyzer.cpp]` produces one instance with type_name="cpp", instance_name="cpp".
 /// `[analyzer.cpp.kernel]` produces one with type_name="cpp", instance_name="cpp.kernel".
 #[derive(Debug, Clone)]
-pub(crate) struct AnalyzerInstance {
+pub struct AnalyzerInstance {
     /// Instance name: "cpp" for single, "cpp.kernel" for named
     pub instance_name: String,
     /// Analyzer type name (must match a registered AnalyzerPlugin name)
@@ -1033,7 +1033,7 @@ pub(crate) struct AnalyzerInstance {
 /// Each `[analyzer.NAME]` section in rsconstruct.toml creates an AnalyzerInstance.
 /// No analyzers run unless explicitly declared in the config.
 #[derive(Debug, Default)]
-pub(crate) struct AnalyzerConfig {
+pub struct AnalyzerConfig {
     /// All declared analyzer instances
     pub instances: Vec<AnalyzerInstance>,
 }
@@ -1089,17 +1089,17 @@ impl AnalyzerConfig {
         let mut instances = Vec::new();
         for (type_name, val) in table {
             if registry::find_analyzer_plugin(type_name).is_none() {
-                anyhow::bail!("Unknown analyzer '{}'. Run 'rsconstruct analyzers list' to see available analyzers.", type_name);
+                anyhow::bail!("Unknown analyzer '{type_name}'. Run 'rsconstruct analyzers list' to see available analyzers.");
             }
             let sub_table = match val.as_table() {
                 Some(t) => t,
-                None => anyhow::bail!("Expected [analyzer.{}] to be a table", type_name),
+                None => anyhow::bail!("Expected [analyzer.{type_name}] to be a table"),
             };
             if Self::is_multi_instance(sub_table) {
                 for (name, inst_val) in sub_table {
                     let provenance = seed_user_provenance(inst_val);
                     instances.push(AnalyzerInstance {
-                        instance_name: format!("{}.{}", type_name, name),
+                        instance_name: format!("{type_name}.{name}"),
                         type_name: type_name.clone(),
                         config_toml: inst_val.clone(),
                         provenance,
@@ -1128,7 +1128,7 @@ impl AnalyzerConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct GraphConfig {
+pub struct GraphConfig {
     #[serde(default)]
     pub viewer: Option<String>,
     /// Reject products with no input files. Default: true.
@@ -1348,20 +1348,17 @@ fn validate_single_processor(
             match table.get(*field) {
                 None => {
                     errors.push(format!(
-                        "[{}]: required field '{}' must be specified",
-                        section_label, field,
+                        "[{section_label}]: required field '{field}' must be specified",
                     ));
                 }
                 Some(toml::Value::Array(arr)) if arr.is_empty() => {
                     errors.push(format!(
-                        "[{}]: required field '{}' must not be empty",
-                        section_label, field,
+                        "[{section_label}]: required field '{field}' must not be empty",
                     ));
                 }
                 Some(toml::Value::String(s)) if s.is_empty() => {
                     errors.push(format!(
-                        "[{}]: required field '{}' must not be empty",
-                        section_label, field,
+                        "[{section_label}]: required field '{field}' must not be empty",
                     ));
                 }
                 _ => {} // present and non-empty: OK
@@ -1383,8 +1380,7 @@ fn validate_single_processor(
         match table.get("src_dirs") {
             None => {
                 errors.push(format!(
-                    "[{}]: 'src_dirs' must be specified (this processor defaults to scanning the project root)",
-                    section_label,
+                    "[{section_label}]: 'src_dirs' must be specified (this processor defaults to scanning the project root)",
                 ));
             }
             Some(toml::Value::Array(arr))
@@ -1392,8 +1388,7 @@ fn validate_single_processor(
                     && arr[0].as_str().is_some_and(|s| s.is_empty()) =>
             {
                 errors.push(format!(
-                    "[{}]: 'src_dirs' must not contain empty strings; specify actual directories to scan",
-                    section_label,
+                    "[{section_label}]: 'src_dirs' must not contain empty strings; specify actual directories to scan",
                 ));
             }
             _ => {} // present and non-empty: OK
@@ -1427,7 +1422,7 @@ fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
                 .and_then(|d| d.as_str())
                 .unwrap_or(DEFAULT_PLUGINS_DIR);
             let plugin_path = std::path::Path::new(plugins_dir)
-                .join(format!("{}.lua", name));
+                .join(format!("{name}.lua"));
             if !plugin_path.exists() {
                 errors.push(format!(
                     "[processor.{}]: unknown processor type '{}' (not a builtin processor or Lua plugin at {})",
@@ -1441,12 +1436,12 @@ fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
         if ProcessorConfig::is_multi_instance(name, table) {
             for (inst_name, inst_value) in table {
                 if let Some(inst_table) = inst_value.as_table() {
-                    let section = format!("processor.{}.{}", name, inst_name);
+                    let section = format!("processor.{name}.{inst_name}");
                     validate_single_processor(name, &section, inst_table, &mut errors);
                 }
             }
         } else {
-            let section = format!("processor.{}", name);
+            let section = format!("processor.{name}");
             validate_single_processor(name, &section, table, &mut errors);
         }
     }
@@ -1473,7 +1468,7 @@ fn validate_analyzer_fields_raw(raw: &toml::Value) -> Vec<String> {
             Some(t) => t,
             None => {
                 errors.push(format!(
-                    "[analyzer.{}]: expected a table", type_name,
+                    "[analyzer.{type_name}]: expected a table",
                 ));
                 continue;
             }
@@ -1483,8 +1478,7 @@ fn validate_analyzer_fields_raw(raw: &toml::Value) -> Vec<String> {
             Some(p) => p,
             None => {
                 errors.push(format!(
-                    "[analyzer.{}]: unknown analyzer type '{}' (run 'rsconstruct analyzers list' to see available)",
-                    type_name, type_name,
+                    "[analyzer.{type_name}]: unknown analyzer type '{type_name}' (run 'rsconstruct analyzers list' to see available)",
                 ));
                 continue;
             }
@@ -1497,12 +1491,12 @@ fn validate_analyzer_fields_raw(raw: &toml::Value) -> Vec<String> {
         if is_multi_instance {
             for (inst_name, inst_value) in table {
                 if let Some(inst_table) = inst_value.as_table() {
-                    let section = format!("analyzer.{}.{}", type_name, inst_name);
+                    let section = format!("analyzer.{type_name}.{inst_name}");
                     validate_analyzer_section(plugin, &section, inst_table, &mut errors);
                 }
             }
         } else {
-            let section = format!("analyzer.{}", type_name);
+            let section = format!("analyzer.{type_name}");
             validate_analyzer_section(plugin, &section, table, &mut errors);
         }
     }
@@ -1781,7 +1775,7 @@ fn validate_override_field(
 
 /// Extract a `StandardConfig` with scan fields from a dynamic TOML table (used by Lua plugins).
 /// Falls back to the given defaults for any missing scan fields.
-pub(crate) fn standard_config_from_toml(
+pub fn standard_config_from_toml(
     value: &toml::Value,
     default_src_dirs: &[&str],
     default_src_extensions: &[&str],

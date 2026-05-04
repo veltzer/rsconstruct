@@ -75,7 +75,7 @@ pub fn classify_error(err: &anyhow::Error) -> RsconstructExitCode {
     }
 
     // Fallback: message pattern matching
-    let msg = format!("{:#}", err);
+    let msg = format!("{err:#}");
     let lower = msg.to_lowercase();
 
     if lower.contains("interrupted") || lower.contains("ctrl+c") {

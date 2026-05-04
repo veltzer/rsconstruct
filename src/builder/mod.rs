@@ -2,17 +2,17 @@ mod add_config;
 mod build;
 mod clean;
 mod fix;
-pub(crate) mod analyzers;
+pub mod analyzers;
 mod doctor;
 mod graph;
 mod product;
-pub(crate) mod processors;
-pub(crate) mod sloc;
-pub(crate) mod smart;
-pub(crate) mod symlink_install;
-pub(crate) mod tools;
+pub mod processors;
+pub mod sloc;
+pub mod smart;
+pub mod symlink_install;
+pub mod tools;
 
-pub(crate) use add_config::{add_processor, add_analyzer};
+pub use add_config::{add_processor, add_analyzer};
 
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -33,7 +33,7 @@ use crate::remote_cache;
 use crate::tool_lock;
 
 /// Phase timing data collected during graph building.
-pub(crate) type PhaseTimings = Vec<(String, Duration)>;
+pub type PhaseTimings = Vec<(String, Duration)>;
 
 /// Controls which graph-building variant to use.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -65,7 +65,7 @@ fn phases_debug() -> bool {
 /// verbatim next to the counts so the user can grep for a specific point
 /// or feed the symbolic name back into future CLI flags (e.g. stop-at).
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum GraphSnapshot {
+pub enum GraphSnapshot {
     /// Before any phase runs — empty graph.
     Start,
     /// After product discovery.
@@ -109,7 +109,7 @@ impl GraphSnapshot {
 ///     by analyzers don't form `edges` (they aren't outputs of any product),
 ///     but they DO grow `inputs` — diff `inputs` between AFTER_DISCOVER and
 ///     AFTER_ADD_DEPENDENCIES to see how much the analyzer phase contributed.
-pub(crate) fn print_graph_stats(snapshot: GraphSnapshot, graph: &BuildGraph) {
+pub fn print_graph_stats(snapshot: GraphSnapshot, graph: &BuildGraph) {
     if !crate::runtime_flags::graph_stats() {
         return;
     }
@@ -150,7 +150,7 @@ struct StatusPrintOptions<'a> {
 
 /// Create a processor from a type name and TOML config value.
 /// Returns None for unknown types (Lua plugins handled separately).
-pub(crate) fn create_processor_for_instance(
+pub fn create_processor_for_instance(
     type_name: &str,
     config_toml: &toml::Value,
 ) -> anyhow::Result<Option<Box<dyn Processor>>> {
@@ -164,7 +164,7 @@ pub(crate) fn create_processor_for_instance(
 }
 
 /// Create all builtin processors with default configs.
-pub(crate) fn create_all_default_processors() -> ProcessorMap {
+pub fn create_all_default_processors() -> ProcessorMap {
     let mut processors: ProcessorMap = HashMap::new();
     for entry in registry_entries() {
         let mut empty_toml = toml::Value::Table(toml::map::Map::new());
@@ -268,7 +268,7 @@ impl Builder {
         )?;
         for (name, proc) in lua_plugins {
             if processors.contains_key(&name) {
-                anyhow::bail!("Lua plugin '{}' conflicts with processor instance", name);
+                anyhow::bail!("Lua plugin '{name}' conflicts with processor instance");
             }
             processors.insert(name, Box::new(proc));
         }
@@ -308,8 +308,8 @@ impl Builder {
                 // Config changed - show diff
                 if let Some(diff) = ObjectStore::diff_configs(&old_json, &config_json) {
                     println!("{}",
-                        color::yellow(&format!("Config changed for [{}]:", name)));
-                    println!("{}", diff);
+                        color::yellow(&format!("Config changed for [{name}]:")));
+                    println!("{diff}");
                 }
             }
         }
@@ -410,11 +410,10 @@ impl Builder {
         if unique_count > 0 && !suppress {
             if product_refs > unique_count {
                 println!(
-                    "[deps] {} files to check (consumed by {} products)",
-                    unique_count, product_refs,
+                    "[deps] {unique_count} files to check (consumed by {product_refs} products)",
                 );
             } else {
-                println!("[deps] {} files to check", unique_count);
+                println!("[deps] {unique_count} files to check");
             }
         }
 
@@ -436,8 +435,7 @@ impl Builder {
         if unique_count > 0 && !suppress {
             let cached = mtime_hits + content_hits;
             println!(
-                "[deps] {} to rescan ({} cached: {} mtime, {} checksum)",
-                misses, cached, mtime_hits, content_hits,
+                "[deps] {misses} to rescan ({cached} cached: {mtime_hits} mtime, {content_hits} checksum)",
             );
         }
 
@@ -610,7 +608,7 @@ impl Builder {
                 let prefix = std::path::PathBuf::from(dir);
                 let covered_by_virtual = file_index.files().iter().any(|f| f.starts_with(&prefix));
                 if !covered_by_virtual {
-                    missing.push(format!("[{}]: src_dirs entry '{}' does not exist or is not a directory", name, dir));
+                    missing.push(format!("[{name}]: src_dirs entry '{dir}' does not exist or is not a directory"));
                 }
             }
         }

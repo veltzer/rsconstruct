@@ -3,7 +3,7 @@ use crate::object_store::{ExplainAction, ObjectStore};
 
 /// What action should be taken for a product.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ProductAction {
+pub enum ProductAction {
     /// Outputs are up-to-date — skip execution entirely.
     Skip,
     /// Outputs can be restored from the cache without re-executing.
@@ -18,7 +18,7 @@ pub(crate) enum ProductAction {
 /// behavior: skip if outputs match, restore if cache has blobs, else build.
 /// Future implementations could add time-based expiry, always-rebuild,
 /// demand-driven filtering, or deterministic-verification modes.
-pub(crate) trait BuildPolicy: Sync + Send {
+pub trait BuildPolicy: Sync + Send {
     /// Classify a single product given the current cache state.
     ///
     /// `dep_changed` is true if any dependency of this product will be rebuilt
@@ -46,7 +46,7 @@ pub(crate) trait BuildPolicy: Sync + Send {
 
 /// The standard incremental build policy: skip unchanged, restore from cache
 /// when possible, otherwise build.
-pub(crate) struct IncrementalPolicy;
+pub struct IncrementalPolicy;
 
 impl BuildPolicy for IncrementalPolicy {
     fn classify(

@@ -115,7 +115,7 @@ impl StandardConfig {
     /// Return the command string, or error with context if it was never set.
     pub(crate) fn require_command(&self, context: &str) -> anyhow::Result<&str> {
         if self.command.is_empty() {
-            anyhow::bail!("'command' is not set for processor '{}'", context);
+            anyhow::bail!("'command' is not set for processor '{context}'");
         }
         Ok(&self.command)
     }

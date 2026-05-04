@@ -52,7 +52,7 @@ pub fn fetch(url: &str) -> Result<String> {
         let mut table = write_txn.open_table(TABLE)
             .context("Failed to open webcache table for write")?;
         table.insert(url, body.as_str())
-            .with_context(|| format!("Failed to insert webcache entry for {}", url))?;
+            .with_context(|| format!("Failed to insert webcache entry for {url}"))?;
     }
     write_txn.commit()
         .context("Failed to commit webcache write")?;

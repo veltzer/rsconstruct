@@ -34,7 +34,7 @@ impl Builder {
             GraphFormat::Svg => graph.to_svg()?,
         };
 
-        println!("{}", output);
+        println!("{output}");
         Ok(())
     }
 
@@ -86,7 +86,7 @@ impl Builder {
 
                 if !output.status.success() {
                     let stderr = String::from_utf8_lossy(&output.stderr);
-                    anyhow::bail!("dot command failed: {}", stderr);
+                    anyhow::bail!("dot command failed: {stderr}");
                 }
 
                 // Open SVG
@@ -155,7 +155,7 @@ impl Builder {
 
         // Normalise extensions: ensure they start with '.'
         let exts: Vec<String> = extensions.iter()
-            .map(|e| if e.starts_with('.') { e.clone() } else { format!(".{}", e) })
+            .map(|e| if e.starts_with('.') { e.clone() } else { format!(".{e}") })
             .collect();
 
         // Walk the project directory for matching files
@@ -193,7 +193,7 @@ impl Builder {
         log_command(&open_cmd);
         open_cmd
             .spawn()
-            .with_context(|| format!("Failed to open file with {}", cmd))?;
+            .with_context(|| format!("Failed to open file with {cmd}"))?;
 
         Ok(())
     }
@@ -334,7 +334,7 @@ fn collect_unreferenced(
             collect_unreferenced(&path, exts, referenced, out)?;
         } else if path.is_file()
             && let Some(ext) = path.extension().and_then(|e| e.to_str())
-            && exts.contains(&format!(".{}", ext))
+            && exts.contains(&format!(".{ext}"))
         {
             // Normalise to a path without leading "./"
             let clean = path.strip_prefix("./").unwrap_or(&path).to_path_buf();

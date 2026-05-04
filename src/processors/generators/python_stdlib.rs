@@ -9,7 +9,7 @@
 
 /// Returns true if the given top-level module name is part of the Python
 /// stdlib. `module` should be the top-level name (e.g. "os" from "os.path").
-pub(crate) fn is_stdlib(module: &str) -> bool {
+pub fn is_stdlib(module: &str) -> bool {
     STDLIB_MODULES.binary_search(&module).is_ok()
 }
 

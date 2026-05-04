@@ -523,7 +523,7 @@ impl<'a> Executor<'a> {
 
                 if self.verbose {
                     let variant_tag = product.variant.as_ref()
-                        .map(|v| format!(":{}", v))
+                        .map(|v| format!(":{v}"))
                         .unwrap_or_default();
                     let gc = lctx.shared.global_current.load(Ordering::SeqCst) + 1;
                     println!("[{}{}] ({}/{}) ({}/{}) {} {}", product.processor, variant_tag,
@@ -533,7 +533,7 @@ impl<'a> Executor<'a> {
                         self.product_display(product));
                 } else {
                     let variant_tag = product.variant.as_ref()
-                        .map(|v| format!(":{}", v))
+                        .map(|v| format!(":{v}"))
                         .unwrap_or_default();
                     lctx.pb.set_message(format!("[{}{}] {}", product.processor, variant_tag, self.product_display(product)));
                 }
@@ -729,7 +729,7 @@ impl<'a> Executor<'a> {
                     Err(e) => {
                         if keep_going {
                             let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
-                            println!("{}", color::red(&format!("Error: {}", msg)));
+                            println!("{}", color::red(&format!("Error: {msg}")));
                             shared.failed_products.lock().insert(id);
                             shared.failed_messages.lock().push(msg);
                         } else {

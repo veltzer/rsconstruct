@@ -107,7 +107,7 @@ impl LinuxModuleProcessor {
         if ko_src.exists() {
             crate::errors::ctx(fs::create_dir_all(output_dir), &format!("Failed to create output dir: {}", output_dir.display()))?;
             fs::copy(&ko_src, output_dir.join(&ko_name))
-                .with_context(|| format!("Failed to copy {} to output", ko_name))?;
+                .with_context(|| format!("Failed to copy {ko_name} to output"))?;
         }
 
         // Clean up build artifacts from source directory
@@ -203,7 +203,7 @@ impl Processor for LinuxModuleProcessor {
         let yaml_path = product.primary_input();
         let display_dir = anchor_display_dir(yaml_path);
         self.execute_build(ctx, yaml_path)
-            .with_context(|| format!("linux_module build failed in {}", display_dir))
+            .with_context(|| format!("linux_module build failed in {display_dir}"))
     }
 
 }

@@ -210,7 +210,7 @@ pub fn run_sloc(file_index: &FileIndex, cocomo: bool, salary: u64) -> Result<()>
         let info = path.extension()
             .and_then(|ext| ext.to_str())
             .and_then(|ext| {
-                let dot_ext = format!(".{}", ext);
+                let dot_ext = format!(".{ext}");
                 // We need to look up by the dot-prefixed extension
                 // but our map keys include the dot already
                 lang_map.get(dot_ext.as_str())

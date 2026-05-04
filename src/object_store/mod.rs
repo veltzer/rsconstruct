@@ -17,10 +17,10 @@ use crate::config::RestoreMethod;
 use crate::remote_cache::RemoteCache;
 
 /// Number of hex chars used as the subdirectory prefix for object storage (git-style sharding).
-pub(super) const CHECKSUM_PREFIX_LEN: usize = 2;
+pub const CHECKSUM_PREFIX_LEN: usize = 2;
 
 /// Iteratively collect all files under a directory.
-pub(super) fn walk_files(dir: &Path) -> Vec<PathBuf> {
+pub fn walk_files(dir: &Path) -> Vec<PathBuf> {
     let mut result = Vec::new();
     let mut stack = vec![dir.to_path_buf()];
     while let Some(current) = stack.pop() {
@@ -61,7 +61,7 @@ impl std::fmt::Display for RebuildReason {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RebuildReason::NoCacheEntry => write!(f, "no cache entry"),
-            RebuildReason::OutputMissing(path) => write!(f, "output missing: {}", path),
+            RebuildReason::OutputMissing(path) => write!(f, "output missing: {path}"),
             RebuildReason::Force => write!(f, "forced"),
         }
     }
@@ -82,8 +82,8 @@ impl std::fmt::Display for ExplainAction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExplainAction::Skip => write!(f, "SKIP (inputs unchanged)"),
-            ExplainAction::Restore(reason) => write!(f, "RESTORE ({})", reason),
-            ExplainAction::Rebuild(reason) => write!(f, "BUILD ({})", reason),
+            ExplainAction::Restore(reason) => write!(f, "RESTORE ({reason})"),
+            ExplainAction::Rebuild(reason) => write!(f, "BUILD ({reason})"),
         }
     }
 }
@@ -114,7 +114,7 @@ pub struct ObjectStore {
 /// A cache descriptor stored in the object store at the cache key path.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type")]
-pub(super) enum CacheDescriptor {
+pub enum CacheDescriptor {
     #[serde(rename = "marker")]
     Marker,
     #[serde(rename = "blob")]
@@ -131,7 +131,7 @@ pub(super) enum CacheDescriptor {
 
 /// A single file entry in a tree descriptor.
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub(super) struct TreeEntry {
+pub struct TreeEntry {
     pub(super) path: String,
     pub(super) checksum: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -66,14 +66,12 @@ fn check_property_ordering(value: &Value, path: &str, errors: &mut Vec<String>) 
 
                     if !missing.is_empty() {
                         errors.push(format!(
-                            "  {}: missing from propertyOrdering: {:?}",
-                            path, missing
+                            "  {path}: missing from propertyOrdering: {missing:?}"
                         ));
                     }
                     if !extra.is_empty() {
                         errors.push(format!(
-                            "  {}: extra in propertyOrdering: {:?}",
-                            path, extra
+                            "  {path}: extra in propertyOrdering: {extra:?}"
                         ));
                     }
                 }
@@ -81,13 +79,13 @@ fn check_property_ordering(value: &Value, path: &str, errors: &mut Vec<String>) 
 
             // Recurse into all values
             for (key, val) in map {
-                let child_path = format!("{}.{}", path, key);
+                let child_path = format!("{path}.{key}");
                 check_property_ordering(val, &child_path, errors);
             }
         }
         Value::Array(arr) => {
             for (i, val) in arr.iter().enumerate() {
-                let child_path = format!("{}[{}]", path, i);
+                let child_path = format!("{path}[{i}]");
                 check_property_ordering(val, &child_path, errors);
             }
         }

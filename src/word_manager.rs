@@ -11,7 +11,7 @@ use crate::graph::Product;
 /// Handles loading custom words, collecting misspelled words in auto-add mode,
 /// and flushing new words to disk. Also provides the shared execute/batch pattern
 /// where files are checked and words are flushed afterward.
-pub(crate) struct WordManager {
+pub struct WordManager {
     custom_words: HashSet<String>,
     words_to_add: Mutex<HashSet<String>>,
     words_file: String,
@@ -87,7 +87,7 @@ impl WordManager {
         if auto_add_words
             && let Err(e) = self.flush()
         {
-            eprintln!("Warning: failed to flush {} words file: {}", processor_name, e);
+            eprintln!("Warning: failed to flush {processor_name} words file: {e}");
         }
         result
     }
@@ -108,7 +108,7 @@ impl WordManager {
         if auto_add_words
             && let Err(e) = self.flush()
         {
-            eprintln!("Warning: failed to flush {} words file: {}", processor_name, e);
+            eprintln!("Warning: failed to flush {processor_name} words file: {e}");
         }
 
         results

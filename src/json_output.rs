@@ -202,7 +202,7 @@ pub fn emit(event: &BuildEvent) {
     let mut stdout = io::stdout().lock();
     // Intentionally discard write errors: stdout may be a broken pipe (SIGPIPE)
     // when the consumer closes early, which is not an error we can recover from.
-    let _ = writeln!(stdout, "{}", json);
+    let _ = writeln!(stdout, "{json}");
 }
 
 /// Emit a build start event.

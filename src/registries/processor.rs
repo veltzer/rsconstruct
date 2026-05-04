@@ -65,36 +65,36 @@ unsafe impl Sync for ProcessorPlugin {}
 
 inventory::collect!(ProcessorPlugin);
 
-pub(crate) fn all_plugins() -> impl Iterator<Item = &'static ProcessorPlugin> {
+pub fn all_plugins() -> impl Iterator<Item = &'static ProcessorPlugin> {
     inventory::iter::<ProcessorPlugin>.into_iter()
 }
 
 /// Look up a processor plugin by type name (e.g. "marp"). For multi-instance
 /// names (e.g. "explicit.foo"), strip the instance suffix before lookup.
-pub(crate) fn find_plugin(name: &str) -> Option<&'static ProcessorPlugin> {
+pub fn find_plugin(name: &str) -> Option<&'static ProcessorPlugin> {
     let type_name = name.split('.').next().unwrap_or(name);
     all_plugins().find(|p| p.name == type_name)
 }
 
 /// Return the static description for a processor by instance name, or `""` if unknown.
-pub(crate) fn description_of(name: &str) -> &'static str {
+pub fn description_of(name: &str) -> &'static str {
     find_plugin(name).map(|p| p.description).unwrap_or("")
 }
 
 /// Return the processor type for a processor by instance name, or `Checker` if unknown.
-pub(crate) fn processor_type_of(name: &str) -> crate::processors::ProcessorType {
+pub fn processor_type_of(name: &str) -> crate::processors::ProcessorType {
     find_plugin(name)
         .map(|p| p.processor_type)
         .unwrap_or(crate::processors::ProcessorType::Checker)
 }
 
 /// Return whether a processor is native (pure Rust) by instance name.
-pub(crate) fn is_native(name: &str) -> bool {
+pub fn is_native(name: &str) -> bool {
     find_plugin(name).is_some_and(|p| p.is_native)
 }
 
 /// Return whether a processor can fix by instance name.
-pub(crate) fn can_fix(name: &str) -> bool {
+pub fn can_fix(name: &str) -> bool {
     find_plugin(name).is_some_and(|p| p.can_fix)
 }
 
@@ -103,12 +103,12 @@ pub(crate) fn can_fix(name: &str) -> bool {
 /// Used by `Product::descriptor_key` to mix the processor's version into every
 /// cache key, so bumping a processor's `version` invalidates exactly that
 /// processor's cached outputs.
-pub(crate) fn processor_version(name: &str) -> Option<u32> {
+pub fn processor_version(name: &str) -> Option<u32> {
     all_plugins().find(|p| p.name == name).map(|p| p.version)
 }
 
 /// Build a clap value parser that accepts any registered processor type name (pname).
-pub(crate) fn processor_name_parser() -> clap::builder::PossibleValuesParser {
+pub fn processor_name_parser() -> clap::builder::PossibleValuesParser {
     let mut names: Vec<&'static str> = all_plugins().map(|p| p.name).collect();
     names.sort();
     clap::builder::PossibleValuesParser::new(names)

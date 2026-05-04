@@ -10,7 +10,7 @@
 /// table. Returns the distribution name if the import is mapped, or the
 /// original import name otherwise. Callers should consult the user's
 /// configured mapping first.
-pub(crate) fn resolve_distribution(import_name: &str) -> &str {
+pub fn resolve_distribution(import_name: &str) -> &str {
     MAPPINGS.binary_search_by_key(&import_name, |&(k, _)| k)
         .ok()
         .map(|i| MAPPINGS[i].1)

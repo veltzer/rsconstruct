@@ -979,7 +979,7 @@ pub fn print_completions(shell: Shell) {
 
     match shell {
         Shell::Bash => print!("{}", inject_bash_processor_completions(&script)),
-        _ => print!("{}", script),
+        _ => print!("{script}"),
     }
 }
 
@@ -1132,5 +1132,5 @@ _rsconstruct_fixer_inames() {
     }
 
     // Prepend the helper function before the completion function is defined.
-    format!("{}{}", helper, result)
+    format!("{helper}{result}")
 }

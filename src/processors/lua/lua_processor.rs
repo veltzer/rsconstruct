@@ -12,7 +12,7 @@ use crate::processors::{clean_outputs, ensure_stub_dir, run_command, Processor};
 
 /// Convert a LuaResult to an anyhow::Result with a contextual message.
 fn lua_context<T>(result: LuaResult<T>, msg: impl std::fmt::Display) -> Result<T> {
-    result.map_err(|e| anyhow::anyhow!("{}: {}", msg, e))
+    result.map_err(|e| anyhow::anyhow!("{msg}: {e}"))
 }
 
 /// Wrapper around a `&BuildContext` pointer stored in Lua app data.
@@ -68,7 +68,7 @@ impl LuaProcessor {
             .map_err(|e| anyhow::anyhow!("Failed to read Lua plugin '{}': {}", script_path.display(), e))?;
         lua_context(
             lua.load(&script).set_name(script_path.to_string_lossy()).exec(),
-            format!("Failed to load Lua plugin '{}'", name),
+            format!("Failed to load Lua plugin '{name}'"),
         )?;
 
         // Extract scan config from the TOML config value
@@ -157,7 +157,7 @@ impl LuaProcessor {
                     cmd.arg(&arg);
                 }
                 let output = run_command(ctx, &mut cmd).map_err(|e| {
-                    LuaError::external(format!("Failed to run '{}': {}", program, e))
+                    LuaError::external(format!("Failed to run '{program}': {e}"))
                 })?;
                 if !output.status.success() {
                     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -187,7 +187,7 @@ impl LuaProcessor {
                 }
                 cmd.current_dir(&cwd);
                 let output = run_command(ctx, &mut cmd).map_err(|e| {
-                    LuaError::external(format!("Failed to run '{}': {}", program, e))
+                    LuaError::external(format!("Failed to run '{program}': {e}"))
                 })?;
                 if !output.status.success() {
                     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -212,11 +212,11 @@ impl LuaProcessor {
                 let p = PathBuf::from(&path);
                 if let Some(parent) = p.parent() {
                     fs::create_dir_all(parent).map_err(|e| {
-                        LuaError::external(format!("Failed to create directory for stub: {}", e))
+                        LuaError::external(format!("Failed to create directory for stub: {e}"))
                     })?;
                 }
                 fs::write(&p, &content).map_err(|e| {
-                    LuaError::external(format!("Failed to write stub '{}': {}", path, e))
+                    LuaError::external(format!("Failed to write stub '{path}': {e}"))
                 })?;
                 Ok(())
             }),
@@ -230,7 +230,7 @@ impl LuaProcessor {
                 let p = PathBuf::from(&path);
                 if p.exists() {
                     fs::remove_file(&p).map_err(|e| {
-                        LuaError::external(format!("Failed to remove '{}': {}", path, e))
+                        LuaError::external(format!("Failed to remove '{path}': {e}"))
                     })?;
                 }
                 Ok(())
@@ -252,7 +252,7 @@ impl LuaProcessor {
         let read_file_fn = lua_context(
             lua.create_function(|_, path: String| {
                 let content = fs::read_to_string(&path).map_err(|e| {
-                    LuaError::external(format!("Failed to read '{}': {}", path, e))
+                    LuaError::external(format!("Failed to read '{path}': {e}"))
                 })?;
                 Ok(content)
             }),
@@ -278,7 +278,7 @@ impl LuaProcessor {
         let proc_name_owned = proc_name.to_string();
         let log_fn = lua_context(
             lua.create_function(move |_, message: String| {
-                println!("[{}] {}", proc_name_owned, message);
+                println!("[{proc_name_owned}] {message}");
                 Ok(())
             }),
             "Failed to create log function",

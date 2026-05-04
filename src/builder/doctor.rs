@@ -32,15 +32,15 @@ impl Builder {
                 _ => {}
             }
             if !json_mode {
-                let detail_str = detail.as_deref().map(|d| format!(" ({})", d)).unwrap_or_default();
-                let hint_str = install_hint.as_deref().map(|h| format!("  install: {}", h)).unwrap_or_default();
+                let detail_str = detail.as_deref().map(|d| format!(" ({d})")).unwrap_or_default();
+                let hint_str = install_hint.as_deref().map(|h| format!("  install: {h}")).unwrap_or_default();
                 let tag: String = match status {
                     "ok" => color::green("[ok]").to_string(),
                     "fail" => color::red("[FAIL]").to_string(),
                     "warn" => color::yellow("[warn]").to_string(),
                     _ => status.to_string(),
                 };
-                println!("{} {}{}{}", tag, name, detail_str, hint_str);
+                println!("{tag} {name}{detail_str}{hint_str}");
             }
             checks.push(DoctorCheck { name, status, category, detail, install_hint });
         };
@@ -71,11 +71,11 @@ impl Builder {
                 }
                 match tool_version(&tool) {
                     Some(version) => {
-                        record(format!("{} available", tool), "ok", "tool", Some(version), None, &mut ok_count, &mut fail_count, &mut warn_count);
+                        record(format!("{tool} available"), "ok", "tool", Some(version), None, &mut ok_count, &mut fail_count, &mut warn_count);
                     }
                     None => {
                         let install_hint = crate::processors::tool_install_command(&tool).map(|s| s.to_string());
-                        record(format!("{} not found", tool), "fail", "tool", None, install_hint, &mut ok_count, &mut fail_count, &mut warn_count);
+                        record(format!("{tool} not found"), "fail", "tool", None, install_hint, &mut ok_count, &mut fail_count, &mut warn_count);
                     }
                 }
             }
@@ -91,9 +91,9 @@ impl Builder {
 
             for pkg in &deps.system {
                 if which::which(pkg).is_ok() {
-                    record(format!("{} (system)", pkg), "ok", "dependency", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
+                    record(format!("{pkg} (system)"), "ok", "dependency", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
                 } else {
-                    record(format!("{} not found", pkg), "fail", "dependency", Some("system".to_string()), Some("rsconstruct tools install-deps".to_string()), &mut ok_count, &mut fail_count, &mut warn_count);
+                    record(format!("{pkg} not found"), "fail", "dependency", Some("system".to_string()), Some("rsconstruct tools install-deps".to_string()), &mut ok_count, &mut fail_count, &mut warn_count);
                 }
             }
 
@@ -106,9 +106,9 @@ impl Builder {
                     .status()
                     .is_ok_and(|s| s.success());
                 if found {
-                    record(format!("{} (pip)", pkg), "ok", "dependency", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
+                    record(format!("{pkg} (pip)"), "ok", "dependency", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
                 } else {
-                    record(format!("{} not installed", pkg), "fail", "dependency", Some("pip".to_string()), Some(format!("pip install {}", pkg)), &mut ok_count, &mut fail_count, &mut warn_count);
+                    record(format!("{pkg} not installed"), "fail", "dependency", Some("pip".to_string()), Some(format!("pip install {pkg}")), &mut ok_count, &mut fail_count, &mut warn_count);
                 }
             }
 
@@ -120,9 +120,9 @@ impl Builder {
                     .status()
                     .is_ok_and(|s| s.success());
                 if found {
-                    record(format!("{} (npm)", pkg), "ok", "dependency", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
+                    record(format!("{pkg} (npm)"), "ok", "dependency", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
                 } else {
-                    record(format!("{} not installed", pkg), "fail", "dependency", Some("npm".to_string()), Some(format!("npm install {}", pkg)), &mut ok_count, &mut fail_count, &mut warn_count);
+                    record(format!("{pkg} not installed"), "fail", "dependency", Some("npm".to_string()), Some(format!("npm install {pkg}")), &mut ok_count, &mut fail_count, &mut warn_count);
                 }
             }
 
@@ -134,9 +134,9 @@ impl Builder {
                     .status()
                     .is_ok_and(|s| s.success());
                 if found {
-                    record(format!("{} (gem)", pkg), "ok", "dependency", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
+                    record(format!("{pkg} (gem)"), "ok", "dependency", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
                 } else {
-                    record(format!("{} not installed", pkg), "fail", "dependency", Some("gem".to_string()), Some(format!("gem install {}", pkg)), &mut ok_count, &mut fail_count, &mut warn_count);
+                    record(format!("{pkg} not installed"), "fail", "dependency", Some("gem".to_string()), Some(format!("gem install {pkg}")), &mut ok_count, &mut fail_count, &mut warn_count);
                 }
             }
         }
@@ -156,7 +156,7 @@ impl Builder {
             println!("{}", serde_json::to_string_pretty(&out)?);
         } else {
             println!();
-            let summary = format!("Summary: {}/{} checks passed", ok_count, total);
+            let summary = format!("Summary: {ok_count}/{total} checks passed");
             if fail_count == 0 {
                 println!("{}", color::green(&summary));
             } else {

@@ -11,8 +11,8 @@
 //! Both submodules are re-exported here so callers can keep using
 //! `crate::registries::X` without caring which registry `X` belongs to.
 
-pub(crate) mod analyzer;
-pub(crate) mod processor;
+pub mod analyzer;
+pub mod processor;
 
 pub use analyzer::*;
 pub use processor::*;
