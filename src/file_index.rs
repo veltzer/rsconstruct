@@ -23,6 +23,18 @@ impl FileIndex {
     /// `.rsconstructignore` (via `add_custom_ignore_filename`).
     /// All paths are stored relative to project root (cwd).
     pub fn build() -> Result<Self> {
+        Self::build_with_force_dirs(&[])
+    }
+
+    /// Build a file index, but also walk the listed directories ignoring
+    /// gitignore/rsconstructignore. Use this when the user has explicitly
+    /// listed a directory in a processor's `src_dirs` — that listing is an
+    /// opt-in to scan it even if it would otherwise be ignored.
+    ///
+    /// Common case: `src_dirs = ["out/generator"]` where `out/` is in
+    /// `.gitignore` because it holds generated files. The user explicitly
+    /// wants those generated files scanned (e.g. for terms checking).
+    pub fn build_with_force_dirs(force_dirs: &[&str]) -> Result<Self> {
         let walker = ignore::WalkBuilder::new(".")
             .add_custom_ignore_filename(".rsconstructignore")
             .hidden(false) // don't skip hidden files by default (let .gitignore handle it)
@@ -40,7 +52,34 @@ impl FileIndex {
                 files.push(relative);
             }
         }
+
+        // Walk force_dirs unconditionally — these are user-declared and
+        // opt-in, so gitignore should not filter them out.
+        for dir in force_dirs {
+            if dir.is_empty() {
+                continue;
+            }
+            let path = Path::new(dir);
+            if !path.is_dir() {
+                continue;
+            }
+            let walker = ignore::WalkBuilder::new(path)
+                .standard_filters(false) // ignore .gitignore, .ignore, hidden, etc.
+                .build();
+            for entry in walker {
+                let entry = crate::errors::ctx(entry, &format!("Failed to read directory entry under forced dir '{dir}'"))?;
+                if entry.file_type().is_some_and(|ft| ft.is_file()) {
+                    let path = entry.into_path();
+                    let relative = path.strip_prefix(".")
+                        .unwrap_or(&path)
+                        .to_path_buf();
+                    files.push(relative);
+                }
+            }
+        }
+
         files.sort();
+        files.dedup();
 
         Ok(Self { files })
     }

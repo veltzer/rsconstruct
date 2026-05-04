@@ -631,9 +631,12 @@ pub fn fix_all(config: &TermsConfig, remove_non_terms: bool) -> Result<()> {
     }
     let sorted = sorted_terms(&terms.single);
 
-    let file_index = FileIndex::build()?;
-    eprintln!("DEBUG file_index has {} files", file_index.files().len());
-    eprintln!("DEBUG file_index has any out/generator? {}", file_index.files().iter().any(|p| p.starts_with("out/generator")));
+    // Force-walk every src_dir the user listed: they may include generated
+    // directories like `out/generator` that are gitignored. The build path
+    // sees those via `add_virtual_files` after the discover loop runs;
+    // `terms fix` runs standalone so it must walk them itself.
+    let force_dirs: Vec<&str> = config.standard.src_dirs().iter().map(std::string::String::as_str).collect();
+    let file_index = FileIndex::build_with_force_dirs(&force_dirs)?;
     let md_files = file_index.scan(&config.standard, true);
 
     if md_files.is_empty() {
