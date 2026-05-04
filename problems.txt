@@ -1,14 +1,6 @@
 - when doing batch processing we are not using multi core.
     What can we do about it?
 
-- error handling.
-    This is a big one.
-    I want every processor to know how to parse the output of the tools it is running (if they are exernal) and collect errors in a organized fashion: file, line number, desription of the error, stack etc.
-    then we can do something like: rsconstruct errors edit
-    and it will launch an editors of my choice on all the previous errors.
-    Internal processros will surely be able to collect all the errors into that predefined structure with no problems.
-    rsconstruct errors show  will show the latest errors
-
 - doing checksum of files.
     could we store the checksum next to the file on disk as extra data?
     are we using mmap when doing the checksum? Maybe we could speed up the checksum calculation this way.
