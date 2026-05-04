@@ -50,6 +50,14 @@
 #![allow(clippy::use_self)]
 #![allow(clippy::wildcard_imports)]
 
+// Mutex/lock guard tightening. The lint flags every guard whose scope
+// extends past the last use, even by one statement. In practice our
+// guards are held for short cache lookups and ad-hoc tightening
+// produces busier code without a measurable contention win. Keep
+// allowed as a policy choice; revisit only when a hot-path profile
+// shows real contention.
+#![allow(clippy::significant_drop_tightening)]
+
 
 #[macro_use]
 mod registries;

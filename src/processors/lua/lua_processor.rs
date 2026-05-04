@@ -453,18 +453,17 @@ impl Processor for LuaProcessor {
     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
         if self.has_function("clean") {
             let existed_before = product.outputs.iter().filter(|o| o.exists()).count();
-            {
-                let lua = self.lua.lock();
-                let product_table = Self::product_to_lua(&lua, product)?;
-                let clean_fn: LuaFunction = lua_context(
-                    lua.globals().get("clean"),
-                    format!("Lua plugin '{}': clean() not found", self.name),
-                )?;
-                lua_context(
-                    clean_fn.call::<()>(product_table),
-                    format!("Lua plugin '{}': clean() failed", self.name),
-                )?;
-            }
+            let lua = self.lua.lock();
+            let product_table = Self::product_to_lua(&lua, product)?;
+            let clean_fn: LuaFunction = lua_context(
+                lua.globals().get("clean"),
+                format!("Lua plugin '{}': clean() not found", self.name),
+            )?;
+            lua_context(
+                clean_fn.call::<()>(product_table),
+                format!("Lua plugin '{}': clean() failed", self.name),
+            )?;
+            drop(lua);
             let exist_after = product.outputs.iter().filter(|o| o.exists()).count();
             Ok(existed_before.saturating_sub(exist_after))
         } else {

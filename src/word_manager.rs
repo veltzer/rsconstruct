@@ -48,12 +48,11 @@ impl WordManager {
             return Ok(());
         }
         if auto_add_words {
-            {
-                let mut words_to_add = self.words_to_add.lock();
-                for word in misspelled {
-                    words_to_add.insert(word.as_ref().to_lowercase());
-                }
+            let mut words_to_add = self.words_to_add.lock();
+            for word in misspelled {
+                words_to_add.insert(word.as_ref().to_lowercase());
             }
+            drop(words_to_add);
             Ok(())
         } else {
             let words: Vec<&str> = misspelled.iter().map(std::convert::AsRef::as_ref).collect();

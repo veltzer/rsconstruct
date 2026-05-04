@@ -68,6 +68,7 @@ impl Semaphore {
     fn release(&self) {
         let mut active = self.state.lock();
         *active -= 1;
+        drop(active);
         self.condvar.notify_one();
     }
 }
@@ -457,17 +458,18 @@ impl Executor<'_> {
 
             // Record batch timing for this chunk
             if lctx.timings {
+                let timing = ProductTiming {
+                    display: format!("batch ({} files)", product_refs.len()),
+                    processor: proc_name.to_string(),
+                    duration: batch_duration,
+                    start_offset: Some(batch_start.duration_since(lctx.build_start)),
+                };
                 let mut stats = lctx.shared.stats.lock();
                 let proc_stats = stats
                     .entry(proc_name.to_string())
                     .or_default();
                 proc_stats.duration += batch_duration;
-                proc_stats.product_timings.push(ProductTiming {
-                    display: format!("batch ({} files)", product_refs.len()),
-                    processor: proc_name.to_string(),
-                    duration: batch_duration,
-                    start_offset: Some(batch_start.duration_since(lctx.build_start)),
-                });
+                proc_stats.product_timings.push(timing);
             }
         }
     }
