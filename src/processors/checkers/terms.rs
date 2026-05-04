@@ -632,6 +632,8 @@ pub fn fix_all(config: &TermsConfig, remove_non_terms: bool) -> Result<()> {
     let sorted = sorted_terms(&terms.single);
 
     let file_index = FileIndex::build()?;
+    eprintln!("DEBUG file_index has {} files", file_index.files().len());
+    eprintln!("DEBUG file_index has any out/generator? {}", file_index.files().iter().any(|p| p.starts_with("out/generator")));
     let md_files = file_index.scan(&config.standard, true);
 
     if md_files.is_empty() {

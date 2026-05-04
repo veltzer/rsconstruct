@@ -588,6 +588,8 @@ fn run() -> (Result<()>, bool) {
             if let Some(defaults) = config::scan_defaults_for("terms") {
                 terms_config.standard.resolve_scan(&defaults);
             }
+            eprintln!("DEBUG terms_config.standard.src_dirs = {:?}", terms_config.standard.src_dirs);
+            eprintln!("DEBUG terms_config.standard.src_extensions = {:?}", terms_config.standard.src_extensions);
             match action {
                 cli::TermsAction::Fix { remove_non_terms } => {
                     processors::terms::fix_all(&terms_config, remove_non_terms)?;
