@@ -16,7 +16,6 @@
 // Stylistic / debatable. These either prefer a specific code shape that
 // is not always clearer, or warn about patterns the codebase uses
 // deliberately.
-#![allow(clippy::bool_to_int_with_if)]
 #![allow(clippy::case_sensitive_file_extension_comparisons)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_link_with_quotes)]
