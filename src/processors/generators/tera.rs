@@ -78,7 +78,7 @@ fn render_template(ctx: &crate::build_context::BuildContext, item: &TemplateItem
     }
 
     // Configure strict mode (fail on undefined variables)
-    tera.set_escape_fn(|s| s.to_string()); // No HTML escaping by default
+    tera.set_escape_fn(std::string::ToString::to_string); // No HTML escaping by default
 
     // Create an empty context (load_python will be called from within the template)
     let context = TeraContext::new();

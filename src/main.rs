@@ -43,7 +43,6 @@
 #![allow(clippy::or_fun_call)]
 #![allow(clippy::permissions_set_readonly_false)]
 #![allow(clippy::redundant_clone)]
-#![allow(clippy::redundant_closure_for_method_calls)]
 #![allow(clippy::redundant_else)]
 #![allow(clippy::ref_as_ptr)]
 #![allow(clippy::significant_drop_tightening)]

@@ -130,11 +130,11 @@ impl FileIndex {
         scan: &StandardConfig,
         recursive: bool,
     ) -> Vec<PathBuf> {
-        let ext_refs: Vec<&str> = scan.src_extensions().iter().map(|s| s.as_str()).collect();
-        let exclude_dir_refs: Vec<&str> = scan.src_exclude_dirs().iter().map(|s| s.as_str()).collect();
-        let exclude_file_refs: Vec<&str> = scan.src_exclude_files().iter().map(|s| s.as_str()).collect();
-        let exclude_path_refs: Vec<&str> = scan.src_exclude_paths().iter().map(|s| s.as_str()).collect();
-        let include_path_refs: Vec<&str> = scan.src_files().iter().map(|s| s.as_str()).collect();
+        let ext_refs: Vec<&str> = scan.src_extensions().iter().map(std::string::String::as_str).collect();
+        let exclude_dir_refs: Vec<&str> = scan.src_exclude_dirs().iter().map(std::string::String::as_str).collect();
+        let exclude_file_refs: Vec<&str> = scan.src_exclude_files().iter().map(std::string::String::as_str).collect();
+        let exclude_path_refs: Vec<&str> = scan.src_exclude_paths().iter().map(std::string::String::as_str).collect();
+        let include_path_refs: Vec<&str> = scan.src_files().iter().map(std::string::String::as_str).collect();
 
         let mut results = Vec::new();
         let src_dirs = scan.src_dirs();
@@ -143,7 +143,7 @@ impl FileIndex {
         let effective_dirs: Vec<&str> = if src_dirs.is_empty() && !include_path_refs.is_empty() {
             vec![""]
         } else {
-            src_dirs.iter().map(|s| s.as_str()).collect()
+            src_dirs.iter().map(std::string::String::as_str).collect()
         };
         for dir in &effective_dirs {
             // Normalize "." to "" so depth calculations work correctly

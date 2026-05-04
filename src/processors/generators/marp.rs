@@ -19,7 +19,7 @@ const MARP_MAX_ATTEMPTS: u32 = 3;
 
 fn cleanup_marp_tmp_dirs() {
     let Ok(entries) = fs::read_dir("/tmp") else { return };
-    for entry in entries.filter_map(|e| e.ok()) {
+    for entry in entries.filter_map(std::result::Result::ok) {
         if entry.file_name().to_string_lossy().starts_with("marp-cli-") {
             let _ = fs::remove_dir_all(entry.path());
         }

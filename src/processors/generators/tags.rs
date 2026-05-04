@@ -48,7 +48,7 @@ impl Processor for TagsProcessor {
         // Require a tags_dir with at least one .txt file
         let dir = Path::new(&self.config.tags_dir);
         dir.is_dir() && fs::read_dir(dir).is_ok_and(|entries| {
-            entries.filter_map(|e| e.ok())
+            entries.filter_map(std::result::Result::ok)
                 .any(|e| e.path().extension().and_then(|x| x.to_str()) == Some("txt"))
         })
     }
@@ -1290,7 +1290,7 @@ pub fn check_tags(config: &crate::config::TagsConfig) -> Result<()> {
 
         for (tag, tag_files) in &tag_to_files {
             if !allowed.contains(tag) {
-                let files_str: Vec<&str> = tag_files.iter().map(|s| s.as_str()).collect();
+                let files_str: Vec<&str> = tag_files.iter().map(std::string::String::as_str).collect();
                 errors.push(format!("Unknown tag '{}' in {}", tag, files_str.join(", ")));
             }
         }
@@ -1542,7 +1542,7 @@ pub fn load_tags_dir(dir: &Path) -> Result<HashSet<String>> {
     let mut entries: Vec<_> = fs::read_dir(dir)
         .with_context(|| format!("Failed to read tags directory: {}", dir.display()))?
         .collect::<Result<Vec<_>, _>>()?;
-    entries.sort_by_key(|e| e.file_name());
+    entries.sort_by_key(std::fs::DirEntry::file_name);
 
     for entry in entries {
         let path = entry.path();

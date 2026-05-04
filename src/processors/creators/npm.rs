@@ -63,7 +63,7 @@ impl Processor for NpmProcessor {
         };
 
         for anchor in files {
-            let anchor_dir = anchor.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+            let anchor_dir = anchor.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
 
             let sibling_files = file_index.query(
                 &anchor_dir,

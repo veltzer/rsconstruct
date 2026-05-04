@@ -162,7 +162,7 @@ fn run_tools_command(
                     if methods.is_empty() { "?".to_string() } else { methods.join(" | ") }
                 } else {
                     info.and_then(|i| i.install_methods.first())
-                        .map(|m| m.command())
+                        .map(super::super::processors::InstallMethod::command)
                         .unwrap_or_else(|| "?".to_string())
                 };
                 println!("{} [{}] [{}] ({}) — {}",
@@ -447,7 +447,7 @@ fn run_tools_command(
                 if let Some(packages) = by_method.get(method) {
                     let plan = crate::processors::InstallMethod::batch_plan(method, packages);
                     println!("  {} {}", color::bold(&format!("[{method}]")),
-                        packages.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", "));
+                        packages.iter().map(std::string::ToString::to_string).collect::<Vec<_>>().join(", "));
                     println!("       {}", color::dim(&plan.display()));
                     plans.push(plan);
                 }
@@ -536,7 +536,7 @@ fn run_tools_command(
                         if installed { skipped.push(format!("[system] {pkg}")); }
                         !installed
                     })
-                    .map(|s| s.as_str())
+                    .map(std::string::String::as_str)
                     .collect();
                 if !missing.is_empty() {
                     let (mgr, mut argv) = if which::which("apt-get").is_ok() {
@@ -553,7 +553,7 @@ fn run_tools_command(
                             missing.join(", ")
                         );
                     };
-                    argv.extend(missing.iter().map(|s| s.to_string()));
+                    argv.extend(missing.iter().map(std::string::ToString::to_string));
                     commands.push((
                         format!("[{}] {}", mgr, missing.join(", ")),
                         argv,
@@ -574,11 +574,11 @@ fn run_tools_command(
                         if installed { skipped.push(format!("[pip] {pkg}")); }
                         !installed
                     })
-                    .map(|s| s.as_str())
+                    .map(std::string::String::as_str)
                     .collect();
                 if !missing.is_empty() {
                     let mut argv = vec!["pip".to_string(), "install".to_string()];
-                    argv.extend(missing.iter().map(|s| s.to_string()));
+                    argv.extend(missing.iter().map(std::string::ToString::to_string));
                     commands.push((
                         format!("[pip] {}", missing.join(", ")),
                         argv,
@@ -597,11 +597,11 @@ fn run_tools_command(
                         if installed { skipped.push(format!("[npm] {pkg}")); }
                         !installed
                     })
-                    .map(|s| s.as_str())
+                    .map(std::string::String::as_str)
                     .collect();
                 if !missing.is_empty() {
                     let mut argv = vec!["npm".to_string(), "install".to_string()];
-                    argv.extend(missing.iter().map(|s| s.to_string()));
+                    argv.extend(missing.iter().map(std::string::ToString::to_string));
                     commands.push((
                         format!("[npm] {}", missing.join(", ")),
                         argv,
@@ -620,11 +620,11 @@ fn run_tools_command(
                         if installed { skipped.push(format!("[gem] {pkg}")); }
                         !installed
                     })
-                    .map(|s| s.as_str())
+                    .map(std::string::String::as_str)
                     .collect();
                 if !missing.is_empty() {
                     let mut argv = vec!["gem".to_string(), "install".to_string()];
-                    argv.extend(missing.iter().map(|s| s.to_string()));
+                    argv.extend(missing.iter().map(std::string::ToString::to_string));
                     commands.push((
                         format!("[gem] {}", missing.join(", ")),
                         argv,

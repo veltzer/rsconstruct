@@ -47,7 +47,7 @@ pub fn analyzer_defconfig(name: Option<&str>) -> Result<()> {
         }
         vec![name.to_string()]
     } else {
-        registry::all_analyzer_names().iter().map(|s| s.to_string()).collect()
+        registry::all_analyzer_names().iter().map(std::string::ToString::to_string).collect()
     };
 
     if crate::json_output::is_json_mode() {

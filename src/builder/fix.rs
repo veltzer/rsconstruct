@@ -11,7 +11,7 @@ impl Builder {
 
         // Filter to only processors with fix capability
         let filter_set: Option<HashSet<&str>> = processor_filter
-            .map(|names| names.iter().map(|s| s.as_str()).collect());
+            .map(|names| names.iter().map(std::string::String::as_str).collect());
 
         let fixable: Vec<&str> = processors.keys()
             .filter(|name| {
@@ -23,7 +23,7 @@ impl Builder {
                 }
                 true
             })
-            .map(|s| s.as_str())
+            .map(std::string::String::as_str)
             .collect();
 
         if fixable.is_empty() {

@@ -51,7 +51,7 @@ fn build_table(headers: &[&str], rows: &[Vec<String>]) -> Table {
     let mut builder = TableBuilder::new();
     builder.push_record(headers.iter().copied());
     for row in rows {
-        builder.push_record(row.iter().map(|s| s.as_str()));
+        builder.push_record(row.iter().map(std::string::String::as_str));
     }
     builder.build()
 }

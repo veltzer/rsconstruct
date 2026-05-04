@@ -248,7 +248,7 @@ impl Builder {
             .or_else(|| std::env::var("RSCONSTRUCT_THREADS").ok().and_then(|v| v.parse().ok()))
             .unwrap_or(self.config.build.parallel);
         let effective_parallel = if parallel == 0 {
-            std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1)
+            std::thread::available_parallelism().map(std::num::NonZero::get).unwrap_or(1)
         } else {
             parallel
         };
@@ -358,7 +358,7 @@ impl Builder {
         // Collect all processor names so we also show processors with 0 files
         let all_proc_names: Vec<&str> = super::sorted_keys(&processors)
             .into_iter()
-            .map(|s| s.as_str())
+            .map(std::string::String::as_str)
             .collect();
         let native_set: std::collections::HashSet<&str> = processors.iter()
             .filter(|(name, _)| crate::registries::processor::is_native(name.as_str()))

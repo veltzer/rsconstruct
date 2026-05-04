@@ -52,7 +52,7 @@ fn extract_comment_value(line: &str) -> Option<&str> {
     }
     // Try /* ... */ comment style (single-line)
     if let Some(rest) = trimmed.strip_prefix("/*") {
-        return rest.strip_suffix("*/").map(|s| s.trim());
+        return rest.strip_suffix("*/").map(str::trim);
     }
     // Try block comment continuation line: * ...
     if let Some(rest) = trimmed.strip_prefix('*') {
@@ -60,7 +60,7 @@ fn extract_comment_value(line: &str) -> Option<&str> {
         if rest.is_empty() || rest == "/" {
             return None;
         }
-        return Some(rest.strip_suffix("*/").map(|s| s.trim()).unwrap_or(rest));
+        return Some(rest.strip_suffix("*/").map(str::trim).unwrap_or(rest));
     }
     None
 }
@@ -313,7 +313,7 @@ fn expand_backticks(ctx: &crate::build_context::BuildContext, value: &str) -> Re
         let cmd_str = &after_start[..end];
         // Use cache for backtick commands too
         let cached = cached_shell_command(cmd_str, run_backtick_command, ctx)?;
-        let stdout = cached.first().map(|s| s.as_str()).unwrap_or("");
+        let stdout = cached.first().map(std::string::String::as_str).unwrap_or("");
         result.push_str(stdout);
         rest = &after_start[end + 1..];
     }
@@ -350,7 +350,7 @@ impl CcSingleFileProcessor {
 
     /// Get the first source directory from scan config (relative path)
     fn source_dir(&self) -> PathBuf {
-        PathBuf::from(self.config.standard.src_dirs().first().map(|s| s.as_str()).unwrap_or(""))
+        PathBuf::from(self.config.standard.src_dirs().first().map(std::string::String::as_str).unwrap_or(""))
     }
 
     /// Check if cc processing should be enabled

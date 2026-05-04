@@ -451,7 +451,7 @@ impl ProcessorConfig {
                 inst.config_toml.get("src_dirs")
                     .and_then(|v| v.as_array())
                     .into_iter()
-                    .flat_map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())))
+                    .flat_map(|arr| arr.iter().filter_map(|v| v.as_str().map(std::string::ToString::to_string)))
                     .filter(|d| !d.is_empty())
             })
             .collect();
@@ -914,7 +914,7 @@ impl ProcessorConfig {
         }
 
         // If ALL values are tables, it's multi-instance
-        table.values().all(|v| v.is_table())
+        table.values().all(toml::Value::is_table)
     }
 
     /// Resolve scan defaults for all instances.
@@ -939,7 +939,7 @@ impl ProcessorConfig {
             let instance_prefix = format!("{}/{}", global_output_dir, inst.instance_name);
 
             for field in &["output_dir", "output"] {
-                let val = match inst.config_toml.get(field).and_then(|v| v.as_str()).map(|s| s.to_string()) {
+                let val = match inst.config_toml.get(field).and_then(|v| v.as_str()).map(std::string::ToString::to_string) {
                     Some(v) => v,
                     None => continue,
                 };
@@ -980,7 +980,7 @@ impl ProcessorConfig {
         self.first_instance_of_type(type_name)
             .and_then(|inst| inst.config_toml.get(field))
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
     }
 }
 
@@ -1121,7 +1121,7 @@ impl AnalyzerConfig {
     /// Multi-instance iff the table is non-empty and every value is itself a
     /// table. Single-instance if any value is a scalar/array (i.e. a config field).
     fn is_multi_instance(table: &toml::map::Map<String, toml::Value>) -> bool {
-        !table.is_empty() && table.values().all(|v| v.is_table())
+        !table.is_empty() && table.values().all(toml::Value::is_table)
     }
 
 }
@@ -1174,9 +1174,9 @@ impl FieldType {
             FieldType::Bool => value.as_bool().is_some(),
             FieldType::Integer => value.is_integer(),
             FieldType::StringArray => value.as_array()
-                .is_some_and(|arr| arr.iter().all(|v| v.is_str())),
+                .is_some_and(|arr| arr.iter().all(toml::Value::is_str)),
             FieldType::TableArray => value.as_array()
-                .is_some_and(|arr| arr.iter().all(|v| v.is_table())),
+                .is_some_and(|arr| arr.iter().all(toml::Value::is_table)),
         }
     }
 
@@ -1374,7 +1374,7 @@ fn validate_single_processor(
     let has_match_paths = table.get("src_files")
         .and_then(|v| v.as_array())
         .is_some_and(|arr| !arr.is_empty());
-    if ProcessorConfig::default_src_dirs_for(type_name).is_some_and(|dirs| dirs.is_empty())
+    if ProcessorConfig::default_src_dirs_for(type_name).is_some_and(<[&str]>::is_empty)
     && !SCAN_DIRS_EXEMPT.contains(&type_name)
     && !has_match_paths {
         match table.get("src_dirs") {
@@ -1385,7 +1385,7 @@ fn validate_single_processor(
             }
             Some(toml::Value::Array(arr))
                 if arr.len() == 1
-                    && arr[0].as_str().is_some_and(|s| s.is_empty()) =>
+                    && arr[0].as_str().is_some_and(str::is_empty) =>
             {
                 errors.push(format!(
                     "[{section_label}]: 'src_dirs' must not contain empty strings; specify actual directories to scan",
@@ -1486,7 +1486,7 @@ fn validate_analyzer_fields_raw(raw: &toml::Value) -> Vec<String> {
 
         // Multi-instance: `[analyzer.cpp.kernel]` / `[analyzer.cpp.userspace]`.
         // Detected iff every value is itself a table.
-        let is_multi_instance = !table.is_empty() && table.values().all(|v| v.is_table());
+        let is_multi_instance = !table.is_empty() && table.values().all(toml::Value::is_table);
 
         if is_multi_instance {
             for (inst_name, inst_value) in table {
@@ -1801,13 +1801,13 @@ pub fn standard_config_from_toml(
     };
     // Fill defaults for None fields
     if cfg.src_dirs.is_none() {
-        cfg.src_dirs = Some(default_src_dirs.iter().map(|s| s.to_string()).collect());
+        cfg.src_dirs = Some(default_src_dirs.iter().map(std::string::ToString::to_string).collect());
     }
     if cfg.src_extensions.is_none() {
-        cfg.src_extensions = Some(default_src_extensions.iter().map(|s| s.to_string()).collect());
+        cfg.src_extensions = Some(default_src_extensions.iter().map(std::string::ToString::to_string).collect());
     }
     if cfg.src_exclude_dirs.is_none() {
-        cfg.src_exclude_dirs = Some(default_exclude_dirs.iter().map(|s| s.to_string()).collect());
+        cfg.src_exclude_dirs = Some(default_exclude_dirs.iter().map(std::string::ToString::to_string).collect());
     }
     if cfg.src_exclude_files.is_none() {
         cfg.src_exclude_files = Some(Vec::new());

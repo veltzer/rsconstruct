@@ -755,7 +755,7 @@ impl Builder {
     /// Compute the set of valid cache keys from the current build graph.
     pub fn valid_cache_keys(&self, ctx: &crate::build_context::BuildContext) -> Result<std::collections::HashSet<String>> {
         let graph = self.build_graph_for_cache(ctx)?;
-        Ok(graph.products().iter().map(|p| p.cache_key()).collect())
+        Ok(graph.products().iter().map(super::graph::Product::cache_key).collect())
     }
 
     /// Get a reference to the object store.

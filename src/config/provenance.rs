@@ -136,7 +136,7 @@ fn record_field_lines(
 }
 
 fn key_span(table: &Table, key: &str) -> Option<std::ops::Range<usize>> {
-    table.key(key).and_then(|k| k.span())
+    table.key(key).and_then(toml_edit::Key::span)
 }
 
 fn item_span(item: &Item) -> Option<std::ops::Range<usize>> {

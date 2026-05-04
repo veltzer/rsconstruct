@@ -90,11 +90,11 @@ impl Processor for RequirementsProcessor {
         // another product input.
         let local_py: HashSet<&Path> = product.inputs.iter()
             .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("py"))
-            .map(|p| p.as_path())
+            .map(std::path::PathBuf::as_path)
             .collect();
 
         let exclude: HashSet<&str> = self.config.exclude.iter()
-            .map(|s| s.as_str())
+            .map(std::string::String::as_str)
             .collect();
 
         // Preserve first-seen order for the non-sorted case; BTreeSet gives

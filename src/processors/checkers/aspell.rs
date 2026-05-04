@@ -80,7 +80,7 @@ impl AspellProcessor {
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         let misspelled: Vec<&str> = stdout.lines()
-            .map(|l| l.trim())
+            .map(str::trim)
             .filter(|l| !l.is_empty())
             .filter(|l| !self.words.is_known(&l.to_lowercase()))
             .collect();

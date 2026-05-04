@@ -317,7 +317,7 @@ fn git_ls_files(pattern: &str) -> Result<Vec<String>> {
     let mut paths: Vec<String> = stdout
         .lines()
         .filter(|l| !l.is_empty())
-        .map(|l| l.to_string())
+        .map(std::string::ToString::to_string)
         .collect();
     paths.sort();
     paths.dedup();

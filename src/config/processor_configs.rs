@@ -74,13 +74,13 @@ impl StandardConfig {
     /// Fill in None scan fields from scan defaults data.
     pub(crate) fn resolve_scan(&mut self, defaults: &ScanDefaultsData) {
         if self.src_dirs.is_none() {
-            self.src_dirs = Some(defaults.src_dirs.iter().map(|s| s.to_string()).collect());
+            self.src_dirs = Some(defaults.src_dirs.iter().map(std::string::ToString::to_string).collect());
         }
         if self.src_extensions.is_none() {
-            self.src_extensions = Some(defaults.src_extensions.iter().map(|s| s.to_string()).collect());
+            self.src_extensions = Some(defaults.src_extensions.iter().map(std::string::ToString::to_string).collect());
         }
         if self.src_exclude_dirs.is_none() {
-            self.src_exclude_dirs = Some(defaults.src_exclude_dirs.iter().map(|s| s.to_string()).collect());
+            self.src_exclude_dirs = Some(defaults.src_exclude_dirs.iter().map(std::string::ToString::to_string).collect());
         }
         if self.src_exclude_files.is_none() {
             self.src_exclude_files = Some(Vec::new());

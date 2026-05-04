@@ -156,8 +156,8 @@ fn run_command_inner(ctx: &crate::build_context::BuildContext, cmd: &mut Command
     }
 
     let program = cmd.get_program().to_os_string();
-    let args: Vec<_> = cmd.get_args().map(|a| a.to_os_string()).collect();
-    let current_dir = cmd.get_current_dir().map(|p| p.to_path_buf());
+    let args: Vec<_> = cmd.get_args().map(std::ffi::OsStr::to_os_string).collect();
+    let current_dir = cmd.get_current_dir().map(std::path::Path::to_path_buf);
     let envs: Vec<_> = cmd.get_envs()
         .filter_map(|(k, v)| v.map(|val| (k.to_os_string(), val.to_os_string())))
         .collect();
@@ -482,7 +482,7 @@ pub fn discover_directory_products(
     let extra = resolve_extra_inputs(dep_inputs)?;
 
     for anchor in files {
-        let anchor_dir = anchor.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+        let anchor_dir = anchor.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
 
         // Collect all matching sibling files under the anchor's directory as inputs
         let sibling_files = file_index.query(
@@ -1004,7 +1004,7 @@ impl InstallMethod {
             "cargo" => argv_with_prefix(&["cargo", "install"], packages),
             "gem"   => argv_with_prefix(&["gem", "install"], packages),
             _       => InstallPlan::Shell(
-                packages.iter().map(|p| p.to_string()).collect::<Vec<_>>().join("; ")
+                packages.iter().map(std::string::ToString::to_string).collect::<Vec<_>>().join("; ")
             ),
         }
     }
@@ -1012,12 +1012,12 @@ impl InstallMethod {
 }
 
 fn argv(parts: &[&str]) -> InstallPlan {
-    InstallPlan::Argv(parts.iter().map(|s| s.to_string()).collect())
+    InstallPlan::Argv(parts.iter().map(std::string::ToString::to_string).collect())
 }
 
 fn argv_with_prefix(prefix: &[&str], packages: &[&str]) -> InstallPlan {
-    let mut v: Vec<String> = prefix.iter().map(|s| s.to_string()).collect();
-    v.extend(packages.iter().map(|s| s.to_string()));
+    let mut v: Vec<String> = prefix.iter().map(std::string::ToString::to_string).collect();
+    v.extend(packages.iter().map(std::string::ToString::to_string));
     InstallPlan::Argv(v)
 }
 
@@ -1144,7 +1144,7 @@ pub fn tool_info(tool: &str) -> Option<&'static ToolInfo> {
 
 /// Return the default install command for a tool, if known.
 pub fn tool_install_command(tool: &str) -> Option<String> {
-    tool_info(tool).and_then(|t| t.install_methods.first().map(|m| m.command()))
+    tool_info(tool).and_then(|t| t.install_methods.first().map(InstallMethod::command))
 }
 
 /// Return the runtime category for a tool, if known.
@@ -1347,7 +1347,7 @@ impl SimpleChecker {
         if self.params.prepend_args.is_empty() {
             run_checker(ctx, tool, self.params.subcommand, &self.config.standard.args, files)
         } else {
-            let mut combined_args: Vec<String> = self.params.prepend_args.iter().map(|s| s.to_string()).collect();
+            let mut combined_args: Vec<String> = self.params.prepend_args.iter().map(std::string::ToString::to_string).collect();
             combined_args.extend_from_slice(&self.config.standard.args);
             run_checker(ctx, tool, self.params.subcommand, &combined_args, files)
         }
@@ -1363,7 +1363,7 @@ impl SimpleChecker {
         if self.params.fix_prepend_args.is_empty() {
             run_checker(ctx, tool, subcommand, &self.config.standard.args, files)
         } else {
-            let mut combined_args: Vec<String> = self.params.fix_prepend_args.iter().map(|s| s.to_string()).collect();
+            let mut combined_args: Vec<String> = self.params.fix_prepend_args.iter().map(std::string::ToString::to_string).collect();
             combined_args.extend_from_slice(&self.config.standard.args);
             run_checker(ctx, tool, subcommand, &combined_args, files)
         }
@@ -1482,7 +1482,7 @@ impl Processor for SimpleGenerator {
 
     fn required_tools(&self) -> Vec<String> {
         if self.params.is_native {
-            self.params.extra_tools.iter().map(|t| t.to_string()).collect()
+            self.params.extra_tools.iter().map(std::string::ToString::to_string).collect()
         } else {
             let mut tools = vec![self.config.command.clone()];
             for t in self.params.extra_tools {

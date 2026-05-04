@@ -110,7 +110,7 @@ fn check_property_ordering(
                     .collect();
 
                 let actual_keys: Vec<&str> = data_map.keys()
-                    .map(|k| k.as_str())
+                    .map(std::string::String::as_str)
                     .collect();
 
                 // Filter actual keys to only those in the expected list

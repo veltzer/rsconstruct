@@ -458,7 +458,7 @@ impl BuildGraph {
     /// Returns error if there's a cycle
     pub fn topological_sort(&self) -> Result<Vec<usize>> {
         let mut in_degree: Vec<usize> = self.dependencies.iter()
-            .map(|deps| deps.len())
+            .map(std::vec::Vec::len)
             .collect();
 
         // Start with products that have no dependencies (BTreeSet keeps sorted order)

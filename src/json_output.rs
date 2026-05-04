@@ -231,7 +231,7 @@ pub fn emit_product_complete(
         processor: processor.to_string(),
         status,
         duration_ms: duration.map(|d| d.as_millis() as u64),
-        error: error.map(|s| s.to_string()),
+        error: error.map(std::string::ToString::to_string),
     });
 }
 

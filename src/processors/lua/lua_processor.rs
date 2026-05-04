@@ -99,9 +99,9 @@ impl LuaProcessor {
         let mut plugins = Vec::new();
         let mut entries: Vec<_> = fs::read_dir(dir)
             .map_err(|e| anyhow::anyhow!("Failed to read plugins directory '{}': {}", dir.display(), e))?
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
             .collect();
-        entries.sort_by_key(|e| e.file_name());
+        entries.sort_by_key(std::fs::DirEntry::file_name);
 
         for entry in entries {
             let path = entry.path();
@@ -396,7 +396,7 @@ impl Processor for LuaProcessor {
         let keys: Vec<String> = self.config_value.as_table()
             .map(|t| t.keys().cloned().collect())
             .unwrap_or_default();
-        let key_refs: Vec<&str> = keys.iter().map(|s| s.as_str()).collect();
+        let key_refs: Vec<&str> = keys.iter().map(std::string::String::as_str).collect();
         let hash = Some(output_config_hash(&self.config_value, &key_refs));
 
         // Parse each product from the returned table

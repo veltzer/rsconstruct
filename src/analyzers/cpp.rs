@@ -158,7 +158,7 @@ impl CppDepAnalyzer {
                         } else if let Ok(canonical) = path.canonicalize() {
                             canonical.strip_prefix(canonical_root)
                                 .ok()
-                                .map(|p| p.to_path_buf())
+                                .map(std::path::Path::to_path_buf)
                         } else {
                             None
                         }

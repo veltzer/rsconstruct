@@ -137,9 +137,9 @@ pub fn load_terms(dir_path: &str) -> Result<HashSet<String>> {
     let mut duplicates = Vec::new();
 
     let mut entries: Vec<_> = crate::errors::ctx(fs::read_dir(dir), &format!("Failed to read terms directory {}", dir.display()))?
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .collect();
-    entries.sort_by_key(|e| e.path());
+    entries.sort_by_key(std::fs::DirEntry::path);
 
     for entry in &entries {
         let path = entry.path();
@@ -182,7 +182,7 @@ pub fn load_and_validate_terms(config: &TermsConfig) -> Result<LoadedTerms> {
         let mut overlap: Vec<&str> = single
             .iter()
             .filter(|t| ambiguous.contains(*t))
-            .map(|s| s.as_str())
+            .map(std::string::String::as_str)
             .collect();
         if !overlap.is_empty() {
             overlap.sort();
@@ -203,7 +203,7 @@ pub fn load_and_validate_terms(config: &TermsConfig) -> Result<LoadedTerms> {
 
 /// Sort terms longest-first for greedy matching (so "Android Studio" matches before "Android").
 fn sorted_terms(terms: &HashSet<String>) -> Vec<&str> {
-    let mut sorted: Vec<&str> = terms.iter().map(|s| s.as_str()).collect();
+    let mut sorted: Vec<&str> = terms.iter().map(std::string::String::as_str).collect();
     sorted.sort_by_key(|b| std::cmp::Reverse(b.len()));
     sorted
 }

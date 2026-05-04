@@ -63,7 +63,7 @@ impl Processor for CargoProcessor {
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
         for anchor in files {
-            let anchor_dir = anchor.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+            let anchor_dir = anchor.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
 
             let sibling_files = file_index.query(
                 &anchor_dir,

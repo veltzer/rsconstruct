@@ -53,7 +53,7 @@ fn check_property_ordering(value: &Value, path: &str, errors: &mut Vec<String>) 
                 if has_properties && has_ordering {
                     let prop_keys: BTreeSet<&str> = map["properties"]
                         .as_object()
-                        .map(|o| o.keys().map(|k| k.as_str()).collect())
+                        .map(|o| o.keys().map(std::string::String::as_str).collect())
                         .unwrap_or_default();
 
                     let ordering_keys: BTreeSet<&str> = map["propertyOrdering"]

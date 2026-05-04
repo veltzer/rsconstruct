@@ -26,7 +26,7 @@ impl Builder {
 
         // Filter the graph to only include products from the specified processors
         if let Some(names) = processor_filter {
-            let filter_set: HashSet<&str> = names.iter().map(|s| s.as_str()).collect();
+            let filter_set: HashSet<&str> = names.iter().map(std::string::String::as_str).collect();
             graph.retain_products(|p| filter_set.contains(p.processor.as_str()));
         }
 

@@ -62,7 +62,7 @@ fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
             .ok()
             .and_then(|d| d.get(b"Type").ok())
             .and_then(|t| t.as_name().ok())
-            .map(|n| n.to_vec());
+            .map(<[u8]>::to_vec);
 
         match type_name.as_deref() {
             Some(b"Catalog") => {
@@ -190,7 +190,7 @@ impl Processor for IpdfuniteProcessor {
 
         for dir_path in dirs {
             let mut source_files: Vec<PathBuf> = crate::errors::ctx(fs::read_dir(&dir_path), &format!("Failed to read directory {}", dir_path.display()))?
-                .filter_map(|e| e.ok())
+                .filter_map(std::result::Result::ok)
                 .map(|e| e.path())
                 .filter(|p| p.extension().is_some_and(|e| e == ext))
                 .collect();

@@ -54,7 +54,7 @@ impl WordManager {
             }
             Ok(())
         } else {
-            let words: Vec<&str> = misspelled.iter().map(|w| w.as_ref()).collect();
+            let words: Vec<&str> = misspelled.iter().map(std::convert::AsRef::as_ref).collect();
             anyhow::bail!(
                 "Misspelled words in {}:\n{}",
                 file.display(),

@@ -50,7 +50,7 @@ pub fn add_analyzer(name: &str, dry_run: bool) -> Result<()> {
         None => serde_json::Value::Object(Default::default()),
     };
     let keys: Vec<&str> = match &defaults {
-        serde_json::Value::Object(map) => map.keys().map(|s| s.as_str()).collect(),
+        serde_json::Value::Object(map) => map.keys().map(std::string::String::as_str).collect(),
         _ => Vec::new(),
     };
 
