@@ -104,6 +104,18 @@ fn run_tools_command(
     let show_all = matches!(&action, ToolsAction::List { all: true, .. });
     let show_methods = matches!(&action, ToolsAction::List { methods: true, .. });
     let install_yes = matches!(&action, ToolsAction::Install { yes: true, .. });
+    let install_no_eatmydata = matches!(&action, ToolsAction::Install { no_eatmydata: true, .. });
+    // eatmydata is opt-in-by-availability: use it if installed and neither
+    // the CLI flag nor the project config disables it. It dramatically
+    // speeds up apt/dnf/pacman by no-op'ing fsync; the trade-off is
+    // loss-on-power-cut, which we accept for transient install steps.
+    //
+    // Precedence: CLI --no-eatmydata > [dependencies].eatmydata config >
+    // default (true).
+    let config_allows_eatmydata = builder.is_none_or(|b| b.config.dependencies.eatmydata);
+    let install_use_eatmydata = !install_no_eatmydata
+        && config_allows_eatmydata
+        && which::which("eatmydata").is_ok();
 
     let mut tool_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for name in sorted_keys(processors) {
@@ -443,7 +455,10 @@ fn run_tools_command(
             let mut plans: Vec<crate::processors::InstallPlan> = Vec::new();
             for method in method_order {
                 if let Some(packages) = by_method.get(method) {
-                    let plan = crate::processors::InstallMethod::batch_plan(method, packages);
+                    let mut plan = crate::processors::InstallMethod::batch_plan(method, packages);
+                    if install_use_eatmydata {
+                        plan = plan.wrap_with_eatmydata();
+                    }
                     println!("  {} {}", color::bold(&format!("[{method}]")),
                         packages.iter().map(std::string::ToString::to_string).collect::<Vec<_>>().join(", "));
                     println!("       {}", color::dim(&plan.display()));
@@ -501,10 +516,17 @@ fn run_tools_command(
             }
             println!("{}", color::green("All tools installed successfully."));
         }
-        ToolsAction::InstallDeps { yes } => {
+        ToolsAction::InstallDeps { yes, no_eatmydata } => {
             let config = builder
                 .map(|b| &b.config.dependencies)
                 .ok_or_else(|| anyhow::anyhow!("install-deps requires a project with rsconstruct.toml"))?;
+            // eatmydata speeds up apt/dnf/pacman by no-op'ing fsync.
+            // Precedence: CLI --no-eatmydata > [dependencies].eatmydata
+            // config > default (true). The wrap also requires eatmydata
+            // to actually be installed on the system.
+            let use_eatmydata = !no_eatmydata
+                && config.eatmydata
+                && which::which("eatmydata").is_ok();
 
             if config.is_empty() {
                 println!("No dependencies declared in [dependencies].");
@@ -536,20 +558,26 @@ fn run_tools_command(
                     .map(std::string::String::as_str)
                     .collect();
                 if !missing.is_empty() {
-                    let (mgr, mut argv) = if which::which("apt-get").is_ok() {
-                        ("apt", vec!["sudo".to_string(), "apt-get".to_string(), "install".to_string(), "-y".to_string()])
+                    let (mgr, mut argv, supports_eatmydata) = if which::which("apt-get").is_ok() {
+                        ("apt", vec!["sudo".to_string(), "apt-get".to_string(), "install".to_string(), "-y".to_string()], true)
                     } else if which::which("dnf").is_ok() {
-                        ("dnf", vec!["sudo".to_string(), "dnf".to_string(), "install".to_string(), "-y".to_string()])
+                        ("dnf", vec!["sudo".to_string(), "dnf".to_string(), "install".to_string(), "-y".to_string()], true)
                     } else if which::which("pacman").is_ok() {
-                        ("pacman", vec!["sudo".to_string(), "pacman".to_string(), "-S".to_string(), "--noconfirm".to_string()])
+                        ("pacman", vec!["sudo".to_string(), "pacman".to_string(), "-S".to_string(), "--noconfirm".to_string()], true)
                     } else if which::which("brew").is_ok() {
-                        ("brew", vec!["brew".to_string(), "install".to_string()])
+                        ("brew", vec!["brew".to_string(), "install".to_string()], false)
                     } else {
                         bail!(
                             "No supported package manager found (apt-get, dnf, pacman, brew); install these system packages manually: {}",
                             missing.join(", ")
                         );
                     };
+                    // Insert eatmydata after sudo (so the LD_PRELOAD applies
+                    // to the package manager, not to sudo). brew skipped:
+                    // eatmydata is Linux-only and brew runs on macOS.
+                    if use_eatmydata && supports_eatmydata {
+                        argv.insert(1, "eatmydata".to_string());
+                    }
                     argv.extend(missing.iter().map(std::string::ToString::to_string));
                     commands.push((
                         format!("[{}] {}", mgr, missing.join(", ")),

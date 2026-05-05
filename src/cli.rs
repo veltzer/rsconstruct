@@ -612,12 +612,20 @@ pub enum ToolsAction {
         /// Skip confirmation prompt
         #[arg(short, long)]
         yes: bool,
+        /// Don't wrap apt/dnf/pacman calls with `eatmydata` (faster but
+        /// safer; the wrap is on by default when eatmydata is installed)
+        #[arg(long)]
+        no_eatmydata: bool,
     },
     /// Install declared dependencies from the [dependencies] config section (uses config if available)
     InstallDeps {
         /// Skip confirmation prompt
         #[arg(short, long)]
         yes: bool,
+        /// Don't wrap apt/dnf/pacman calls with `eatmydata` (faster but
+        /// safer; the wrap is on by default when eatmydata is installed)
+        #[arg(long)]
+        no_eatmydata: bool,
     },
     /// List all required external tools (uses config if available)
     List {

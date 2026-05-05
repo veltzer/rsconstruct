@@ -193,7 +193,7 @@ impl Default for PluginsConfig {
 
 /// Declared project dependencies by package manager.
 /// Used by `rsconstruct doctor` to verify and `rsconstruct tools install-deps` to install.
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct DependenciesConfig {
     /// Python packages (installed via pip)
@@ -208,6 +208,24 @@ pub struct DependenciesConfig {
     /// System packages (checked via `which`, not auto-installed)
     #[serde(default)]
     pub system: Vec<String>,
+    /// Wrap apt/dnf/pacman invocations with `eatmydata` when it's installed,
+    /// to skip fsync calls and speed up package installs. Defaults to true.
+    /// Set to false to disable for the project regardless of CLI flags.
+    /// The CLI flag `--no-eatmydata` always wins (overrides this to false).
+    #[serde(default = "default_true")]
+    pub eatmydata: bool,
+}
+
+impl Default for DependenciesConfig {
+    fn default() -> Self {
+        Self {
+            pip: Vec::new(),
+            npm: Vec::new(),
+            gem: Vec::new(),
+            system: Vec::new(),
+            eatmydata: true,
+        }
+    }
 }
 
 impl DependenciesConfig {

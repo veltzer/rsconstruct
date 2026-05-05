@@ -213,6 +213,7 @@ Declare project dependencies by package manager. Used by `rsconstruct doctor` to
 | `npm` | array of strings | `[]` | Node.js packages to install via `npm install`. |
 | `gem` | array of strings | `[]` | Ruby gems to install via `gem install`. |
 | `system` | array of strings | `[]` | System packages installed via the detected package manager (`apt-get`, `dnf`, `pacman`, or `brew`). |
+| `eatmydata` | bool | `true` | Wrap `apt`/`dnf`/`pacman` invocations with `eatmydata` when it's installed. See [eatmydata wrapping](#eatmydata-wrapping) below. |
 
 #### Install order
 
@@ -226,3 +227,36 @@ Declare project dependencies by package manager. Used by `rsconstruct doctor` to
 This order is deliberate and must not be changed. Language-level packages frequently build native extensions that link against system libraries at install time. For example, installing `manim` via pip pulls in `manimpango`, which compiles a C extension and uses `pkg-config` to find `pangocairo` — so `libpango1.0-dev` must already be on the system before `pip install` runs. Running `pip` (or `gem`, or `npm`) before `system` causes wheel/extension builds to fail with messages like `Package 'pangocairo' was not found`.
 
 The keys inside `[dependencies]` may appear in any order in `rsconstruct.toml`; the install order is enforced by `install-deps` regardless.
+
+#### `eatmydata` wrapping
+
+When [`eatmydata`](https://www.flamingspork.com/projects/libeatmydata/) is installed on the system, both `rsconstruct tools install` and `rsconstruct tools install-deps` wrap their `apt`/`dnf`/`pacman` invocations with it by default. `eatmydata` no-op's `fsync()` for the wrapped process, which speeds up package installs by 3–10× — particularly useful in CI where the system is ephemeral and the trade-off (loss-on-power-cut) doesn't matter.
+
+The wrap inserts `eatmydata` *after* `sudo` so the `LD_PRELOAD` applies to the package manager, not to `sudo` itself: e.g. `sudo eatmydata apt-get install -y …`.
+
+If `eatmydata` is not installed, the commands run unwrapped — no error, no warning.
+
+##### Disabling the wrap
+
+There are two ways to turn it off, with the following precedence:
+
+1. **CLI flag** (highest precedence): `--no-eatmydata` on either subcommand always wins:
+
+   ```bash
+   rsconstruct tools install --no-eatmydata
+   rsconstruct tools install-deps --no-eatmydata
+   ```
+
+2. **Project config**: set `eatmydata = false` under `[dependencies]` in `rsconstruct.toml` to lock the project's policy regardless of who runs the command:
+
+   ```toml
+   [dependencies]
+   eatmydata = false
+   system = ["libpango1.0-dev"]
+   ```
+
+3. **Default**: when neither is set and `eatmydata` is on the system, the wrap is applied.
+
+##### What's never wrapped
+
+`brew` is never wrapped (eatmydata is Linux-only). `pip`, `npm`, `cargo`, and `gem` are never wrapped either — those don't fsync excessively, so the wrap adds nothing.

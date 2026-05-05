@@ -965,6 +965,39 @@ impl InstallPlan {
             InstallPlan::Shell(s)   => s.clone(),
         }
     }
+
+    /// Wrap an Argv plan that calls a system package manager (apt, dnf,
+    /// pacman) with `eatmydata` to skip fsync calls. Speeds up package
+    /// installs significantly (often 3–10×).
+    ///
+    /// The wrap inserts `eatmydata` *after* `sudo` so the LD_PRELOAD
+    /// applies to the package manager (the writer of files), not to sudo
+    /// itself. For non-sudo invocations, `eatmydata` becomes the new
+    /// argv[0].
+    ///
+    /// No-op for `Shell` plans, for non-Linux package managers (`brew`),
+    /// and for non-system plans (`pip`, `npm`, `cargo`, `gem`) — those
+    /// don't fsync excessively and `eatmydata` adds nothing.
+    pub fn wrap_with_eatmydata(self) -> Self {
+        match self {
+            InstallPlan::Argv(mut argv) if !argv.is_empty() => {
+                let head = argv[0].as_str();
+                let second = argv.get(1).map(String::as_str);
+                let is_sudo_pkg = head == "sudo"
+                    && matches!(second, Some("apt" | "apt-get" | "dnf" | "pacman"));
+                let is_direct_pkg = matches!(head, "apt" | "apt-get" | "dnf" | "pacman");
+                if is_sudo_pkg {
+                    // sudo eatmydata <pkgmgr> ...
+                    argv.insert(1, "eatmydata".to_string());
+                } else if is_direct_pkg {
+                    // eatmydata <pkgmgr> ...
+                    argv.insert(0, "eatmydata".to_string());
+                }
+                InstallPlan::Argv(argv)
+            }
+            other => other,
+        }
+    }
 }
 
 impl InstallMethod {
