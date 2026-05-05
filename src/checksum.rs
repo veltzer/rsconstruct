@@ -5,8 +5,15 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+
+/// Buffer size for streaming file reads in `file_checksum`. 64 KB is a
+/// good trade-off: large enough to amortize syscall overhead, small
+/// enough to fit in L1 cache and bound peak memory regardless of file
+/// size.
+const HASH_BUF_SIZE: usize = 64 * 1024;
 
 use crate::build_context::BuildContext;
 
@@ -33,19 +40,41 @@ fn get_mtime_db(ctx: &BuildContext) -> Result<std::sync::MutexGuard<'_, Option<r
 }
 
 /// Calculate SHA-256 checksum of a file's contents, using the BuildContext's
-/// in-memory cache. First call for a given path reads the file and caches the
-/// result. Subsequent calls return the cached value.
+/// in-memory cache. First call for a given path streams the file through
+/// the hasher and caches the result. Subsequent calls return the cached
+/// value.
+///
+/// Streaming (vs `fs::read` + hash) keeps peak memory bounded at
+/// `HASH_BUF_SIZE` regardless of file size — a 100 MB binary doesn't
+/// allocate a 100 MB Vec.
 pub fn file_checksum(ctx: &BuildContext, path: &Path) -> Result<String> {
     let mut guard = ctx.checksum_cache.lock().unwrap();
     let cache = guard.get_or_insert_with(HashMap::new);
     if let Some(cached) = cache.get(path) {
         return Ok(cached.clone());
     }
-    let contents = fs::read(path)
-        .with_context(|| format!("Failed to read file for checksum: {}", path.display()))?;
-    let checksum = hex::encode(Sha256::digest(&contents));
+    let checksum = stream_file_checksum(path)?;
     cache.insert(path.to_path_buf(), checksum.clone());
     Ok(checksum)
+}
+
+/// Stream a file through SHA-256 with a fixed-size buffer. The buffer is
+/// heap-allocated to keep stack usage trivial — a single allocation per
+/// hashed file is negligible next to the I/O.
+fn stream_file_checksum(path: &Path) -> Result<String> {
+    let mut file = fs::File::open(path)
+        .with_context(|| format!("Failed to open file for checksum: {}", path.display()))?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; HASH_BUF_SIZE];
+    loop {
+        let n = file.read(&mut buf)
+            .with_context(|| format!("Failed to read file for checksum: {}", path.display()))?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hex::encode(hasher.finalize()))
 }
 
 /// Get checksum using mtime pre-check to avoid re-reading unchanged files.

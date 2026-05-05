@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::color;
+use crate::tables;
 use crate::config::{TagsConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
@@ -678,7 +678,7 @@ pub fn count_tags(db_path: &str) -> Result<()> {
         let rows: Vec<Vec<String>> = entries.iter()
             .map(|(tag, count)| vec![count.to_string(), tag.to_string()])
             .collect();
-        color::print_table(&["Count", "Tag"], &rows);
+        tables::print_table(&["Count", "Tag"], &rows);
     }
 
     Ok(())
@@ -1073,7 +1073,7 @@ pub fn matrix_tags(db_path: &str) -> Result<()> {
             }
             row
         }).collect();
-        color::print_table(&headers, &rows);
+        tables::print_table(&headers, &rows);
     }
     Ok(())
 }
@@ -1123,7 +1123,7 @@ pub fn coverage_tags(db_path: &str) -> Result<()> {
         let rows: Vec<Vec<String>> = coverage.iter()
             .map(|(cat, count, pct)| vec![cat.clone(), count.to_string(), format!("{:.0}%", pct)])
             .collect();
-        color::print_table(&["Category", "Files", "Coverage"], &rows);
+        tables::print_table(&["Category", "Files", "Coverage"], &rows);
         println!("Total files: {total_files}");
     }
     Ok(())
@@ -1462,7 +1462,7 @@ pub fn suggest_tags(db_path: &str, path: &str) -> Result<()> {
         let rows: Vec<Vec<String>> = sorted_suggestions.iter().take(15)
             .map(|(tag, score)| vec![tag.clone(), format!("{:.2}", score)])
             .collect();
-        color::print_table(&["Tag", "Score"], &rows);
+        tables::print_table(&["Tag", "Score"], &rows);
     }
     Ok(())
 }

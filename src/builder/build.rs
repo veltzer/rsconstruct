@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use crate::cli::{BuildOptions, BuildPhase, DisplayOptions};
 use crate::color;
+use crate::tables;
 use crate::errors;
 use crate::executor::{Executor, ExecutorOptions};
 use crate::processors::{BuildStats, ProcessorMap, ProcessorType};
@@ -408,7 +409,7 @@ impl Builder {
                 };
                 vec![proc_name.to_string(), format!("{} files", total), breakdown_str]
             }).collect();
-            color::print_table(&["Processor", "Files", "Breakdown"], &rows);
+            tables::print_table(&["Processor", "Files", "Breakdown"], &rows);
         }
 
         Ok(())
@@ -446,7 +447,7 @@ impl Builder {
             let rows: Vec<Vec<String>> = ext_counts.iter()
                 .map(|(ext, count)| vec![format!(".{}", ext), count.to_string()])
                 .collect();
-            color::print_table(&["Extension", "Count"], &rows);
+            tables::print_table(&["Extension", "Count"], &rows);
         }
         Ok(())
     }
@@ -555,7 +556,7 @@ impl Builder {
         ];
 
         let rows: Vec<Vec<String>> = per_processor.iter().map(|(name, pc)| {
-            let native = crate::color::yes_no(opts.native_processors.contains(name));
+            let native = crate::tables::yes_no(opts.native_processors.contains(name));
             vec![
                 name.to_string(),
                 pc[0].to_string(), pc[1].to_string(), pc[2].to_string(), pc[3].to_string(),
@@ -567,7 +568,7 @@ impl Builder {
             counts[0].to_string(), counts[1].to_string(), counts[2].to_string(), counts[3].to_string(),
             String::new(),
         ];
-        color::print_table_with_total(
+        tables::print_table_with_total(
             &["Processor", col_labels[0], col_labels[1], col_labels[2], col_labels[3], "native"],
             &rows,
             &total,

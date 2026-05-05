@@ -85,6 +85,7 @@ mod progress;
 pub(crate) mod word_manager;
 mod runtime_flags;
 mod remote_cache;
+mod tables;
 mod tool_lock;
 mod watcher;
 mod webcache;
@@ -740,7 +741,7 @@ fn run() -> (Result<()>, bool) {
                             entry.url.clone(),
                             humansize::format_size(entry.size, humansize::BINARY),
                         ]).collect();
-                        color::print_table(&["URL", "Size"], &rows);
+                        tables::print_table(&["URL", "Size"], &rows);
                     }
                 }
             }
@@ -776,12 +777,12 @@ fn list_exit_codes(verbose: bool) -> Result<()> {
         let rows: Vec<Vec<String>> = RsconstructExitCode::iter()
             .map(|e| vec![e.code().to_string(), e.name().to_string(), e.description().to_string()])
             .collect();
-        color::print_table(&["Code", "Name", "Description"], &rows);
+        tables::print_table(&["Code", "Name", "Description"], &rows);
     } else {
         let rows: Vec<Vec<String>> = RsconstructExitCode::iter()
             .map(|e| vec![e.code().to_string(), e.name().to_string()])
             .collect();
-        color::print_table(&["Code", "Name"], &rows);
+        tables::print_table(&["Code", "Name"], &rows);
     }
     Ok(())
 }
@@ -802,7 +803,7 @@ fn list_phases(action: cli::PhasesAction, verbose: bool) -> Result<()> {
                 let rows: Vec<Vec<String>> = Phase::all().iter()
                     .map(|p| vec![p.name().to_string(), p.description().to_string()])
                     .collect();
-                color::print_table(&["Phase", "Description"], &rows);
+                tables::print_table(&["Phase", "Description"], &rows);
             }
         }
         cli::PhasesAction::Hooks { phase } => {
@@ -839,12 +840,12 @@ fn list_phases(action: cli::PhasesAction, verbose: bool) -> Result<()> {
                         h.description.to_string(),
                     ])
                     .collect();
-                color::print_table(&["Phase", "Hook", "Function", "Location", "Description"], &rows);
+                tables::print_table(&["Phase", "Hook", "Function", "Location", "Description"], &rows);
             } else {
                 let rows: Vec<Vec<String>> = hooks.iter()
                     .map(|h| vec![h.phase.name().to_string(), h.name.to_string(), h.description.to_string()])
                     .collect();
-                color::print_table(&["Phase", "Hook", "Description"], &rows);
+                tables::print_table(&["Phase", "Hook", "Description"], &rows);
             }
         }
     }

@@ -4,6 +4,7 @@ use std::process::Command;
 use anyhow::{bail, Context, Result};
 use crate::cli::{GraphFormat, ToolsAction};
 use crate::color;
+use crate::tables;
 use crate::json_output;
 use crate::tool_lock;
 use super::{Builder, sorted_keys};
@@ -324,7 +325,7 @@ fn run_tools_command(
                     let install = stat.install_command.as_deref().unwrap_or("").to_string();
                     vec![stat.name.clone(), status.to_string(), procs, install]
                 }).collect();
-                color::print_table(&["Tool", "Status", "Processors", "Install"], &rows);
+                tables::print_table(&["Tool", "Status", "Processors", "Install"], &rows);
 
                 println!();
                 println!("Runtime summary:");
@@ -347,7 +348,7 @@ fn run_tools_command(
                         vec![label.to_string(), line.to_string()]
                     })
                 }).collect();
-                color::print_table(&["Runtime", "Installed"], &rt_rows);
+                tables::print_table(&["Runtime", "Installed"], &rt_rows);
 
                 println!();
                 let total_line = format!("Total: {installed_count}/{total_tools} tools installed");

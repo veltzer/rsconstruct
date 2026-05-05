@@ -2,6 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 use anyhow::{Context, Result, bail};
 use crate::color;
+use crate::tables;
 use crate::deps_cache::DepsCache;
 use super::{Builder, sorted_keys};
 
@@ -27,13 +28,13 @@ pub fn list_analyzers(verbose: bool) {
             let native_tag = if plugin.is_native { "native" } else { "external" };
             vec![plugin.name.to_string(), native_tag.to_string(), plugin.description.to_string()]
         }).collect();
-        color::print_table(&["Name", "Native", "Description"], &rows);
+        tables::print_table(&["Name", "Native", "Description"], &rows);
     } else {
         let rows: Vec<Vec<String>> = plugins.iter().map(|plugin| {
             let native_tag = if plugin.is_native { "native" } else { "external" };
             vec![plugin.name.to_string(), native_tag.to_string()]
         }).collect();
-        color::print_table(&["Name", "Native"], &rows);
+        tables::print_table(&["Name", "Native"], &rows);
     }
 }
 
@@ -99,7 +100,7 @@ fn print_config_table(toml_str: &str) -> Result<()> {
         };
         vec![key.clone(), type_str.to_string(), default_str]
     }).collect();
-    color::print_table(&["Field", "Type", "Default"], &rows);
+    tables::print_table(&["Field", "Type", "Default"], &rows);
     Ok(())
 }
 
@@ -161,7 +162,7 @@ fn print_deps_stats(
         rows.push(vec![name.clone(), files.to_string(), deps.to_string()]);
     }
     let total = vec!["Total".to_string(), total_files.to_string(), total_deps.to_string()];
-    color::print_table_with_total(&["Analyzer", "Files", "Dependencies"], &rows, &total);
+    tables::print_table_with_total(&["Analyzer", "Files", "Dependencies"], &rows, &total);
     Ok(())
 }
 
@@ -188,17 +189,17 @@ impl Builder {
                 } else if verbose {
                     let rows: Vec<Vec<String>> = sorted_keys(&analyzers).into_iter().map(|name| {
                         let analyzer = &analyzers[name];
-                        let detected = color::yes_no(analyzer.auto_detect(&self.file_index));
+                        let detected = tables::yes_no(analyzer.auto_detect(&self.file_index));
                         vec![name.clone(), detected.to_string(), analyzer.description().to_string()]
                     }).collect();
-                    color::print_table(&["Name", "Detected", "Description"], &rows);
+                    tables::print_table(&["Name", "Detected", "Description"], &rows);
                 } else {
                     let rows: Vec<Vec<String>> = sorted_keys(&analyzers).into_iter().map(|name| {
                         let analyzer = &analyzers[name];
-                        let detected = color::yes_no(analyzer.auto_detect(&self.file_index));
+                        let detected = tables::yes_no(analyzer.auto_detect(&self.file_index));
                         vec![name.clone(), detected.to_string()]
                     }).collect();
-                    color::print_table(&["Name", "Detected"], &rows);
+                    tables::print_table(&["Name", "Detected"], &rows);
                 }
             }
             AnalyzersAction::Build => {

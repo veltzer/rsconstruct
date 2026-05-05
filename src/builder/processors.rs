@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use anyhow::{Result, bail};
 use crate::cli::ProcessorAction;
 use crate::color;
+use crate::tables;
 use crate::config::ProcessorConfig;
 use super::{Builder, create_all_default_processors, sorted_keys};
 
@@ -50,7 +51,7 @@ pub fn search_processors(query: &str) -> Result<()> {
             keywords.join(", "),
         ]
     }).collect();
-    color::print_table(&["Name", "Type", "Description", "Keywords"], &rows);
+    tables::print_table(&["Name", "Type", "Description", "Keywords"], &rows);
 
     Ok(())
 }
@@ -77,12 +78,12 @@ pub fn list_processor_types(verbose: bool) -> Result<()> {
         let rows: Vec<Vec<String>> = ProcessorType::iter()
             .map(|pt| vec![pt.as_str().to_string(), pt.description().to_string()])
             .collect();
-        color::print_table(&["Type", "Description"], &rows);
+        tables::print_table(&["Type", "Description"], &rows);
     } else {
         let rows: Vec<Vec<String>> = ProcessorType::iter()
             .map(|pt| vec![pt.as_str().to_string()])
             .collect();
-        color::print_table(&["Type"], &rows);
+        tables::print_table(&["Type"], &rows);
     }
     Ok(())
 }
@@ -122,17 +123,17 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
     if verbose {
         let rows: Vec<Vec<String>> = plugins.iter().map(|p| {
             let native_tag = if p.is_native { "native" } else { "external" };
-            let fix_tag = color::yes_no(p.can_fix);
+            let fix_tag = tables::yes_no(p.can_fix);
             vec![p.name.to_string(), p.processor_type.as_str().to_string(), native_tag.to_string(), fix_tag.to_string(), p.description.to_string()]
         }).collect();
-        color::print_table(&["Name", "Type", "Native", "Fix", "Description"], &rows);
+        tables::print_table(&["Name", "Type", "Native", "Fix", "Description"], &rows);
     } else {
         let rows: Vec<Vec<String>> = plugins.iter().map(|p| {
             let native_tag = if p.is_native { "native" } else { "external" };
-            let fix_tag = color::yes_no(p.can_fix);
+            let fix_tag = tables::yes_no(p.can_fix);
             vec![p.name.to_string(), p.processor_type.as_str().to_string(), native_tag.to_string(), fix_tag.to_string()]
         }).collect();
-        color::print_table(&["Name", "Type", "Native", "Fix"], &rows);
+        tables::print_table(&["Name", "Type", "Native", "Fix"], &rows);
     }
 
     Ok(())
@@ -200,7 +201,7 @@ pub fn list_recommendations() {
         let rows: Vec<Vec<String>> = recommendations.iter()
             .map(|(ext, proc, reason)| vec![ext.to_string(), proc.to_string(), reason.to_string()])
             .collect();
-        color::print_table(&["Extension / File", "Processor", "Reason"], &rows);
+        tables::print_table(&["Extension / File", "Processor", "Reason"], &rows);
     }
 }
 
@@ -291,10 +292,10 @@ fn print_processor_metadata(name: &str, verbose: bool) {
         {
             "false".to_string()
         } else {
-            color::opt_json(val)
+            tables::opt_json(val)
         };
-        let required = color::yes_no(must_fields.contains(*field));
-        let checksum = color::yes_no(checksum_fields.contains(*field));
+        let required = tables::yes_no(must_fields.contains(*field));
+        let checksum = tables::yes_no(checksum_fields.contains(*field));
         if verbose {
             vec![field.to_string(), type_str.to_string(), default_str, required.to_string(), checksum.to_string(), desc.to_string()]
         } else {
@@ -303,9 +304,9 @@ fn print_processor_metadata(name: &str, verbose: bool) {
     }).collect();
 
     if verbose {
-        color::print_table(&["Field", "Type", "Default", "Required", "Checksum", "Description"], &rows);
+        tables::print_table(&["Field", "Type", "Default", "Required", "Checksum", "Description"], &rows);
     } else {
-        color::print_table(&["Field", "Type", "Default", "Required", "Checksum"], &rows);
+        tables::print_table(&["Field", "Type", "Default", "Required", "Checksum"], &rows);
     }
 }
 
@@ -350,7 +351,7 @@ impl Builder {
                 } else if verbose {
                     let rows: Vec<Vec<String>> = proc_names.iter().map(|name| {
                         let proc = &processors[name.as_str()];
-                        let detected_str = color::yes_no(proc.auto_detect(&self.file_index));
+                        let detected_str = tables::yes_no(proc.auto_detect(&self.file_index));
                         vec![
                             name.to_string(),
                             crate::registries::processor::processor_type_of(name.as_str()).as_str().to_string(),
@@ -358,18 +359,18 @@ impl Builder {
                             crate::registries::processor::description_of(name.as_str()).to_string(),
                         ]
                     }).collect();
-                    color::print_table(&["Name", "Type", "Detected", "Description"], &rows);
+                    tables::print_table(&["Name", "Type", "Detected", "Description"], &rows);
                 } else {
                     let rows: Vec<Vec<String>> = proc_names.iter().map(|name| {
                         let proc = &processors[name.as_str()];
-                        let detected_str = color::yes_no(proc.auto_detect(&self.file_index));
+                        let detected_str = tables::yes_no(proc.auto_detect(&self.file_index));
                         vec![
                             name.to_string(),
                             crate::registries::processor::processor_type_of(name.as_str()).as_str().to_string(),
                             detected_str.to_string(),
                         ]
                     }).collect();
-                    color::print_table(&["Name", "Type", "Detected"], &rows);
+                    tables::print_table(&["Name", "Type", "Detected"], &rows);
                 }
             }
             ProcessorAction::Config { ref iname, diff } => {
@@ -420,7 +421,7 @@ impl Builder {
                                 .collect(),
                             other => vec![vec!["(value)".to_string(), format_config_value(other)]],
                         };
-                        crate::color::print_table(&["Field", "Value"], &rows);
+                        crate::tables::print_table(&["Field", "Value"], &rows);
                         // Show the processor's type name for metadata lookup.
                         // Multi-instance names are like "explicit.report" — strip the instance suffix.
                         let type_name = n.split('.').next().unwrap_or(n);

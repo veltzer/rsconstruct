@@ -1336,7 +1336,7 @@ impl BuildStats {
                 let rows: Vec<Vec<String>> = self.phase_timings.iter()
                     .map(|(name, dur)| vec![name.to_string(), format!("{:.3}s", dur.as_secs_f64())])
                     .collect();
-                crate::color::print_table(&["Phase", "Duration"], &rows);
+                crate::tables::print_table(&["Phase", "Duration"], &rows);
             }
 
             // Per-product timings

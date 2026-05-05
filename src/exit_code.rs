@@ -19,13 +19,13 @@ impl RsconstructExitCode {
 
     pub const fn name(self) -> &'static str {
         match self {
-            Self::Success => "SUCCESS",
-            Self::BuildError => "BUILD_ERROR",
-            Self::ConfigError => "CONFIG_ERROR",
-            Self::ToolError => "TOOL_ERROR",
-            Self::GraphError => "GRAPH_ERROR",
-            Self::IoError => "IO_ERROR",
-            Self::Interrupted => "INTERRUPTED",
+            Self::Success => "EXIT_SUCCESS",
+            Self::BuildError => "EXIT_BUILD_ERROR",
+            Self::ConfigError => "EXIT_CONFIG_ERROR",
+            Self::ToolError => "EXIT_TOOL_ERROR",
+            Self::GraphError => "EXIT_GRAPH_ERROR",
+            Self::IoError => "EXIT_IO_ERROR",
+            Self::Interrupted => "EXIT_INTERRUPTED",
         }
     }
 

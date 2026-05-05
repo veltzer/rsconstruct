@@ -1,9 +1,10 @@
-# Feature design: checksum performance
+# Feature design: checksum performance — DONE (streaming)
 
 ## Status
 
-Draft — partially answered already, partially open. The user's two
-suggestions overlap with what's already implemented in different forms.
+Streaming hash (option A below) is implemented. xattr/sidecar (sub-question
+1) and mmap (option B/C below) are answered as recommendations not to
+pursue at this time.
 
 ## Origin
 

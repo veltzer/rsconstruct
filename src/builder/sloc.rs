@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::Result;
-use crate::color;
+use crate::tables;
 
 use crate::file_index::FileIndex;
 use crate::json_output::{self, SlocCocomoEstimate, SlocLanguageEntry, SlocOutput, SlocTotals};
@@ -290,7 +290,7 @@ pub fn run_sloc(file_index: &FileIndex, cocomo: bool, salary: u64) -> Result<()>
             "Total".to_string(), total_files.to_string(), total_blank.to_string(),
             total_comment.to_string(), total_code.to_string(),
         ];
-        color::print_table_with_total(
+        tables::print_table_with_total(
             &["Language", "Files", "Blank", "Comment", "Code"],
             &rows,
             &total,

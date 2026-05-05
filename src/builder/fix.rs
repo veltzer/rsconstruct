@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use anyhow::Result;
 use crate::color;
+use crate::tables;
 use super::{Builder, sorted_keys};
 
 impl Builder {
@@ -137,7 +138,7 @@ impl Builder {
                 crate::registries::processor::description_of(name.as_str()).to_string(),
             ]
         }).collect();
-        color::print_table(&["Name", "Type", "Description"], &rows);
+        tables::print_table(&["Name", "Type", "Description"], &rows);
 
         Ok(())
     }
