@@ -105,16 +105,14 @@ fn run_tools_command(
     let show_methods = matches!(&action, ToolsAction::List { methods: true, .. });
     let install_yes = matches!(&action, ToolsAction::Install { yes: true, .. });
     let install_no_eatmydata = matches!(&action, ToolsAction::Install { no_eatmydata: true, .. });
-    // eatmydata is opt-in-by-availability: use it if installed and neither
-    // the CLI flag nor the project config disables it. It dramatically
-    // speeds up apt/dnf/pacman by no-op'ing fsync; the trade-off is
-    // loss-on-power-cut, which we accept for transient install steps.
-    //
-    // Precedence: CLI --no-eatmydata > [dependencies].eatmydata config >
-    // default (true).
-    let config_allows_eatmydata = builder.is_none_or(|b| b.config.dependencies.eatmydata);
+    // eatmydata speeds up apt/dnf/pacman by no-op'ing fsync; the trade-off
+    // is loss-on-power-cut. Off by default; the post-config phase hook
+    // `eatmydata_ci_default` flips it on when CI=true. Users who want it
+    // off in CI should unset CI; users who want it on outside CI should
+    // run with CI=true. The CLI flag --no-eatmydata always wins.
+    let config_enables_eatmydata = builder.is_some_and(|b| b.config.dependencies.eatmydata);
     let install_use_eatmydata = !install_no_eatmydata
-        && config_allows_eatmydata
+        && config_enables_eatmydata
         && which::which("eatmydata").is_ok();
 
     let mut tool_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
@@ -520,10 +518,9 @@ fn run_tools_command(
             let config = builder
                 .map(|b| &b.config.dependencies)
                 .ok_or_else(|| anyhow::anyhow!("install-deps requires a project with rsconstruct.toml"))?;
-            // eatmydata speeds up apt/dnf/pacman by no-op'ing fsync.
-            // Precedence: CLI --no-eatmydata > [dependencies].eatmydata
-            // config > default (true). The wrap also requires eatmydata
-            // to actually be installed on the system.
+            // eatmydata: off by default; turned on by the post-config
+            // phase hook when CI=true. CLI --no-eatmydata overrides.
+            // Wrap also requires eatmydata to be on PATH.
             let use_eatmydata = !no_eatmydata
                 && config.eatmydata
                 && which::which("eatmydata").is_ok();

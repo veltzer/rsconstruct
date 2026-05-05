@@ -193,7 +193,7 @@ impl Default for PluginsConfig {
 
 /// Declared project dependencies by package manager.
 /// Used by `rsconstruct doctor` to verify and `rsconstruct tools install-deps` to install.
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 #[serde(deny_unknown_fields)]
 pub struct DependenciesConfig {
     /// Python packages (installed via pip)
@@ -208,24 +208,22 @@ pub struct DependenciesConfig {
     /// System packages (checked via `which`, not auto-installed)
     #[serde(default)]
     pub system: Vec<String>,
-    /// Wrap apt/dnf/pacman invocations with `eatmydata` when it's installed,
-    /// to skip fsync calls and speed up package installs. Defaults to true.
-    /// Set to false to disable for the project regardless of CLI flags.
-    /// The CLI flag `--no-eatmydata` always wins (overrides this to false).
-    #[serde(default = "default_true")]
+    /// Wrap apt/dnf/pacman invocations with `eatmydata` to skip fsync calls
+    /// and speed up package installs.
+    ///
+    /// Default: `false`. The post-config phase hook
+    /// `eatmydata_ci_default` flips this to `true` when `CI=true` is in
+    /// the environment. To turn the wrap off in CI, unset `CI` (or set
+    /// it to a non-`true` value); to turn it on outside CI, run with
+    /// `CI=true rsconstruct tools install-deps`. The CLI flag
+    /// `--no-eatmydata` always wins.
+    ///
+    /// This is not a normal user-facing config field — it's set by the
+    /// runtime, not declared in `rsconstruct.toml`. (The deserializer
+    /// still accepts it for round-trip compatibility, but setting it in
+    /// the file is overridden by the phase hook.)
+    #[serde(default)]
     pub eatmydata: bool,
-}
-
-impl Default for DependenciesConfig {
-    fn default() -> Self {
-        Self {
-            pip: Vec::new(),
-            npm: Vec::new(),
-            gem: Vec::new(),
-            system: Vec::new(),
-            eatmydata: true,
-        }
-    }
 }
 
 impl DependenciesConfig {
@@ -1788,3 +1786,26 @@ pub fn standard_config_from_toml(
     }
     cfg
 }
+
+/// Post-config hook: when `CI=true` is in the environment, enable the
+/// `eatmydata` wrap for `tools install` / `tools install-deps`. The
+/// trade-off (loss-on-power-cut for a 3-10× speedup) is right for
+/// transient CI hosts and wrong for developer workstations, so we tie
+/// the policy to `CI=true`. Users who want a different policy adjust
+/// the env var.
+#[allow(clippy::unnecessary_wraps)] // Result<()> required by PhaseHook::run signature.
+fn eatmydata_ci_default(config: &mut Config) -> anyhow::Result<()> {
+    if std::env::var("CI").is_ok_and(|v| v == "true") {
+        config.dependencies.eatmydata = true;
+    }
+    Ok(())
+}
+
+inventory::submit! { crate::phases::PhaseHook {
+    name: "eatmydata_ci_default",
+    phase: crate::phases::Phase::PostConfig,
+    description: "When CI=true, enable eatmydata wrapping for apt/dnf/pacman installs",
+    function: concat!(module_path!(), "::eatmydata_ci_default"),
+    location: concat!(file!(), ":", line!()),
+    run: eatmydata_ci_default,
+} }

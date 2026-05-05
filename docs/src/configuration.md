@@ -213,7 +213,6 @@ Declare project dependencies by package manager. Used by `rsconstruct doctor` to
 | `npm` | array of strings | `[]` | Node.js packages to install via `npm install`. |
 | `gem` | array of strings | `[]` | Ruby gems to install via `gem install`. |
 | `system` | array of strings | `[]` | System packages installed via the detected package manager (`apt-get`, `dnf`, `pacman`, or `brew`). |
-| `eatmydata` | bool | `true` | Wrap `apt`/`dnf`/`pacman` invocations with `eatmydata` when it's installed. See [eatmydata wrapping](#eatmydata-wrapping) below. |
 
 #### Install order
 
@@ -230,32 +229,26 @@ The keys inside `[dependencies]` may appear in any order in `rsconstruct.toml`; 
 
 #### `eatmydata` wrapping
 
-When [`eatmydata`](https://www.flamingspork.com/projects/libeatmydata/) is installed on the system, both `rsconstruct tools install` and `rsconstruct tools install-deps` wrap their `apt`/`dnf`/`pacman` invocations with it by default. `eatmydata` no-op's `fsync()` for the wrapped process, which speeds up package installs by 3–10× — particularly useful in CI where the system is ephemeral and the trade-off (loss-on-power-cut) doesn't matter.
+When [`eatmydata`](https://www.flamingspork.com/projects/libeatmydata/) is installed on the system *and* `CI=true` is in the environment, both `rsconstruct tools install` and `rsconstruct tools install-deps` wrap their `apt`/`dnf`/`pacman` invocations with it. `eatmydata` no-op's `fsync()` for the wrapped process, which speeds up package installs by 3–10×.
+
+The trade-off is loss-on-power-cut: any package files written during the install are not flushed to disk, so a power loss mid-install can leave the package database inconsistent. That's fine on transient CI hosts and wrong on developer workstations — hence the `CI=true` gate.
 
 The wrap inserts `eatmydata` *after* `sudo` so the `LD_PRELOAD` applies to the package manager, not to `sudo` itself: e.g. `sudo eatmydata apt-get install -y …`.
 
 If `eatmydata` is not installed, the commands run unwrapped — no error, no warning.
 
-##### Disabling the wrap
+##### Controlling the wrap
 
-There are two ways to turn it off, with the following precedence:
+| To...                                       | Do this                                              |
+| ------------------------------------------- | ---------------------------------------------------- |
+| Use the wrap (the CI default)               | Set `CI=true` and have eatmydata installed           |
+| Skip the wrap in CI                         | Unset `CI` (or set it to anything other than `true`) |
+| Use the wrap outside CI                     | Run with `CI=true rsconstruct tools install-deps`    |
+| Skip the wrap for a single invocation       | Pass `--no-eatmydata`                                |
 
-1. **CLI flag** (highest precedence): `--no-eatmydata` on either subcommand always wins:
+The CLI flag `--no-eatmydata` always wins. Otherwise the policy is driven entirely by `CI=true`. There is no `rsconstruct.toml` field for this — the env var is the knob.
 
-   ```bash
-   rsconstruct tools install --no-eatmydata
-   rsconstruct tools install-deps --no-eatmydata
-   ```
-
-2. **Project config**: set `eatmydata = false` under `[dependencies]` in `rsconstruct.toml` to lock the project's policy regardless of who runs the command:
-
-   ```toml
-   [dependencies]
-   eatmydata = false
-   system = ["libpango1.0-dev"]
-   ```
-
-3. **Default**: when neither is set and `eatmydata` is on the system, the wrap is applied.
+The mechanism is a [post-config phase hook](processors.md): `eatmydata_ci_default` runs after config load and flips the in-memory `dependencies.eatmydata` flag when `CI=true`. List it with `rsconstruct phases hooks`.
 
 ##### What's never wrapped
 
