@@ -431,44 +431,29 @@ fn run_tools_command(
                 missing
             };
 
-            // Group by install method for batch installation
+            // Group by install method for batch installation. Methods
+            // that don't batch (binary, manual) keep one entry per package.
             let mut by_method: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
-            let mut ungroupable: Vec<(&str, String)> = Vec::new();
-            for (tool_name, method) in &missing_tools {
-                match method.method {
-                    "pip" | "apt" | "npm" | "cargo" | "gem" | "snap" => {
-                        by_method.entry(method.method).or_default().push(method.package);
-                    }
-                    _ => {
-                        ungroupable.push((tool_name, method.command()));
-                    }
-                }
+            for (_tool_name, method) in &missing_tools {
+                by_method.entry(method.method).or_default().push(method.package);
             }
 
             // Display the install plan
-            println!("Missing {} tool(s), grouped by package manager:", missing_tools.len());
+            println!("Missing {} tool(s), grouped by install method:", missing_tools.len());
             println!();
 
-            // Method display order and labels
-            let method_order = &["pip", "apt", "npm", "cargo", "gem", "snap"];
-            let mut plans: Vec<crate::processors::InstallPlan> = Vec::new();
+            let method_order = &["pip", "apt", "npm", "cargo", "gem", "snap", "binary", "manual"];
+            let ctx = crate::processors::InstallCtx {
+                verbose,
+                use_eatmydata: install_use_eatmydata,
+            };
+            let mut any_failed = false;
             for method in method_order {
-                if let Some(packages) = by_method.get(method) {
-                    let mut plan = crate::processors::InstallMethod::batch_plan(method, packages);
-                    if install_use_eatmydata {
-                        plan = plan.wrap_with_eatmydata();
-                    }
-                    println!("  {} {}", color::bold(&format!("[{method}]")),
-                        packages.iter().map(std::string::ToString::to_string).collect::<Vec<_>>().join(", "));
-                    println!("       {}", color::dim(&plan.display()));
-                    plans.push(plan);
+                let Some(packages) = by_method.get(method) else { continue };
+                println!("  {} {}", color::bold(&format!("[{method}]")), packages.join(", "));
+                for argv in crate::processors::describe(method, packages) {
+                    println!("       {}", color::dim(&argv.join(" ")));
                 }
-            }
-            for (tool_name, cmd) in &ungroupable {
-                println!("  {} {}", color::bold(&format!("[{tool_name}]")), color::dim(cmd));
-                // Free-form registry entries (curl|tar pipelines, etc.) require a shell.
-                // See docs/src/no-shell-policy.md.
-                plans.push(crate::processors::InstallPlan::Shell(cmd.clone()));
             }
             println!();
 
@@ -484,26 +469,14 @@ fn run_tools_command(
                 }
             }
 
-            // Execute batch commands. Argv plans are run directly (no shell);
-            // Shell plans go through `sh -c` because they contain pipelines
-            // baked into the static registry. See docs/src/no-shell-policy.md.
-            let mut any_failed = false;
-            for plan in &plans {
-                println!("Running: {}", color::dim(&plan.display()));
-                let status = match plan {
-                    crate::processors::InstallPlan::Argv(argv) => {
-                        Command::new(&argv[0]).args(&argv[1..]).status()?
+            for method in method_order {
+                let Some(packages) = by_method.get(method) else { continue };
+                match crate::processors::run(method, packages, &ctx) {
+                    Ok(()) => println!("{} [{}] {}", color::green("OK"), method, packages.join(", ")),
+                    Err(e) => {
+                        println!("{} [{}] {}: {}", color::red("FAILED"), method, packages.join(", "), e);
+                        any_failed = true;
                     }
-                    crate::processors::InstallPlan::Shell(s) => {
-                        Command::new("sh").arg("-c").arg(s).status()?
-                    }
-                };
-                if status.success() {
-                    println!("{}", color::green("OK"));
-                } else {
-                    println!("{} (exit code {})", color::red("FAILED"),
-                        status.code().map_or("unknown".to_string(), |c| c.to_string()));
-                    any_failed = true;
                 }
             }
 
@@ -531,138 +504,93 @@ fn run_tools_command(
                 return Ok(());
             }
 
-            // Filter out already-installed packages, then build install commands.
-            // argv form (not a shell string) so package specifiers like
-            // "setuptools<82" reach the installer verbatim instead of being
-            // interpreted as shell redirections.
-            let mut commands: Vec<(String, Vec<String>)> = Vec::new(); // (description, argv)
-            let mut skipped: Vec<String> = Vec::new();
-
             // Install order is FIXED and load-bearing: system → pip → npm → gem.
-            // Do not reorder. Language-level packages (pip, gem, npm) often
-            // build native extensions at install time that link against
-            // system libraries via pkg-config. Example: `pip install manim`
-            // pulls in manimpango, which needs libpango1.0-dev present on
-            // the system before its wheel can build, otherwise the install
-            // fails with "Package 'pangocairo' was not found".
-            // See docs/src/configuration.md "Install order" for the rationale.
-            if !config.system.is_empty() {
-                let missing: Vec<&str> = config.system.iter()
-                    .filter(|pkg| {
-                        let installed = is_system_package_installed(pkg);
-                        if installed { skipped.push(format!("[system] {pkg}")); }
-                        !installed
-                    })
-                    .map(std::string::String::as_str)
-                    .collect();
-                if !missing.is_empty() {
-                    let sudo_prefix: &[&str] = if crate::platform::needs_sudo() { &["sudo"] } else { &[] };
-                    let to_strings = |parts: &[&str]| -> Vec<String> {
-                        parts.iter().map(std::string::ToString::to_string).collect()
-                    };
-                    let with_sudo = |parts: &[&str]| -> Vec<String> {
-                        let mut v = to_strings(sudo_prefix);
-                        v.extend(to_strings(parts));
-                        v
-                    };
-                    let (mgr, mut argv, supports_eatmydata) = if which::which("apt-get").is_ok() {
-                        ("apt", with_sudo(&["apt-get", "install", "-y"]), true)
-                    } else if which::which("dnf").is_ok() {
-                        ("dnf", with_sudo(&["dnf", "install", "-y"]), true)
-                    } else if which::which("pacman").is_ok() {
-                        ("pacman", with_sudo(&["pacman", "-S", "--noconfirm"]), true)
-                    } else if which::which("brew").is_ok() {
-                        ("brew", to_strings(&["brew", "install"]), false)
-                    } else {
-                        bail!(
-                            "No supported package manager found (apt-get, dnf, pacman, brew); install these system packages manually: {}",
-                            missing.join(", ")
-                        );
-                    };
-                    // Insert eatmydata immediately before the package manager
-                    // (so the LD_PRELOAD applies to the package manager, not
-                    // to sudo). brew skipped: eatmydata is Linux-only and
-                    // brew runs on macOS.
-                    if use_eatmydata && supports_eatmydata {
-                        argv.insert(sudo_prefix.len(), "eatmydata".to_string());
-                    }
-                    argv.extend(missing.iter().map(std::string::ToString::to_string));
-                    commands.push((
-                        format!("[{}] {}", mgr, missing.join(", ")),
-                        argv,
-                    ));
-                }
+            // Language-level packages (pip, gem, npm) often build native
+            // extensions at install time that link against system libraries
+            // via pkg-config — system deps must be present first.
+            // See docs/src/configuration.md "Install order".
+            let system_method: &str = if which::which("apt-get").is_ok() {
+                "apt"
+            } else if which::which("dnf").is_ok() {
+                "dnf"
+            } else if which::which("pacman").is_ok() {
+                "pacman"
+            } else if which::which("brew").is_ok() {
+                "brew"
+            } else if !config.system.is_empty() {
+                bail!(
+                    "No supported package manager found (apt-get, dnf, pacman, brew); install these system packages manually: {}",
+                    config.system.join(", ")
+                );
+            } else {
+                "apt" // unused
+            };
+
+            let mut skipped: Vec<String> = Vec::new();
+            let mut groups: Vec<(&str, Vec<String>)> = Vec::new();
+
+            let system_missing: Vec<String> = config.system.iter()
+                .filter(|pkg| {
+                    let installed = is_system_package_installed(pkg);
+                    if installed { skipped.push(format!("[system] {pkg}")); }
+                    !installed
+                })
+                .cloned()
+                .collect();
+            if !system_missing.is_empty() {
+                groups.push((system_method, system_missing));
             }
-            if !config.pip.is_empty() {
-                let missing: Vec<&str> = config.pip.iter()
-                    .filter(|pkg| {
-                        // Strip version specifiers (e.g., "ruff>=0.4" -> "ruff")
-                        let name = pkg.split(&['>', '<', '=', '!', '~'][..]).next().unwrap_or(pkg);
-                        let installed = Command::new("pip")
-                            .args(["show", name])
-                            .stdout(std::process::Stdio::null())
-                            .stderr(std::process::Stdio::null())
-                            .status()
-                            .is_ok_and(|s| s.success());
-                        if installed { skipped.push(format!("[pip] {pkg}")); }
-                        !installed
-                    })
-                    .map(std::string::String::as_str)
-                    .collect();
-                if !missing.is_empty() {
-                    let mut argv = vec!["pip".to_string(), "install".to_string()];
-                    argv.extend(missing.iter().map(std::string::ToString::to_string));
-                    commands.push((
-                        format!("[pip] {}", missing.join(", ")),
-                        argv,
-                    ));
-                }
+
+            let pip_missing: Vec<String> = config.pip.iter()
+                .filter(|pkg| {
+                    let name = pkg.split(&['>', '<', '=', '!', '~'][..]).next().unwrap_or(pkg);
+                    let installed = Command::new("pip")
+                        .args(["show", name])
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .status()
+                        .is_ok_and(|s| s.success());
+                    if installed { skipped.push(format!("[pip] {pkg}")); }
+                    !installed
+                })
+                .cloned()
+                .collect();
+            if !pip_missing.is_empty() {
+                groups.push(("pip", pip_missing));
             }
-            if !config.npm.is_empty() {
-                let missing: Vec<&str> = config.npm.iter()
-                    .filter(|pkg| {
-                        let installed = Command::new("npm")
-                            .args(["ls", "-g", pkg])
-                            .stdout(std::process::Stdio::null())
-                            .stderr(std::process::Stdio::null())
-                            .status()
-                            .is_ok_and(|s| s.success());
-                        if installed { skipped.push(format!("[npm] {pkg}")); }
-                        !installed
-                    })
-                    .map(std::string::String::as_str)
-                    .collect();
-                if !missing.is_empty() {
-                    let mut argv = vec!["npm".to_string(), "install".to_string()];
-                    argv.extend(missing.iter().map(std::string::ToString::to_string));
-                    commands.push((
-                        format!("[npm] {}", missing.join(", ")),
-                        argv,
-                    ));
-                }
+
+            let npm_missing: Vec<String> = config.npm.iter()
+                .filter(|pkg| {
+                    let installed = Command::new("npm")
+                        .args(["ls", "-g", pkg])
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .status()
+                        .is_ok_and(|s| s.success());
+                    if installed { skipped.push(format!("[npm] {pkg}")); }
+                    !installed
+                })
+                .cloned()
+                .collect();
+            if !npm_missing.is_empty() {
+                groups.push(("npm", npm_missing));
             }
-            if !config.gem.is_empty() {
-                let missing: Vec<&str> = config.gem.iter()
-                    .filter(|pkg| {
-                        let installed = Command::new("gem")
-                            .args(["list", "-i", pkg])
-                            .stdout(std::process::Stdio::null())
-                            .stderr(std::process::Stdio::null())
-                            .status()
-                            .is_ok_and(|s| s.success());
-                        if installed { skipped.push(format!("[gem] {pkg}")); }
-                        !installed
-                    })
-                    .map(std::string::String::as_str)
-                    .collect();
-                if !missing.is_empty() {
-                    let mut argv = vec!["gem".to_string(), "install".to_string()];
-                    argv.extend(missing.iter().map(std::string::ToString::to_string));
-                    commands.push((
-                        format!("[gem] {}", missing.join(", ")),
-                        argv,
-                    ));
-                }
+
+            let gem_missing: Vec<String> = config.gem.iter()
+                .filter(|pkg| {
+                    let installed = Command::new("gem")
+                        .args(["list", "-i", pkg])
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .status()
+                        .is_ok_and(|s| s.success());
+                    if installed { skipped.push(format!("[gem] {pkg}")); }
+                    !installed
+                })
+                .cloned()
+                .collect();
+            if !gem_missing.is_empty() {
+                groups.push(("gem", gem_missing));
             }
 
             if !skipped.is_empty() {
@@ -673,14 +601,17 @@ fn run_tools_command(
                 println!();
             }
 
-            if commands.is_empty() {
+            if groups.is_empty() {
                 println!("{}", color::green("All dependencies already installed."));
                 return Ok(());
             }
 
             println!("{}:", color::bold("Dependencies to install"));
-            for (desc, argv) in &commands {
-                println!("  {} {}", color::bold(desc), color::dim(&format!("({})", argv.join(" "))));
+            for (method, packages) in &groups {
+                let pkgs_ref: Vec<&str> = packages.iter().map(String::as_str).collect();
+                let preview = crate::processors::describe(method, &pkgs_ref);
+                let line = preview.first().map(|a| a.join(" ")).unwrap_or_default();
+                println!("  {} {}", color::bold(&format!("[{method}]")), color::dim(&line));
             }
             println!();
 
@@ -696,30 +627,16 @@ fn run_tools_command(
                 }
             }
 
-            // Suppress per-command output by default to keep CI logs short.
-            // Capture stdout+stderr and only emit them when the install fails.
-            // Run via argv (no shell) so package specifiers like "setuptools<82"
-            // are not interpreted as shell redirections.
+            let ctx = crate::processors::InstallCtx { verbose, use_eatmydata };
             let mut any_failed = false;
-            for (desc, argv) in &commands {
-                let output = Command::new(&argv[0])
-                    .args(&argv[1..])
-                    .output()?;
-                if output.status.success() {
-                    println!("{} {}", color::green("✓"), desc);
-                } else {
-                    println!("{} {} (exit code {})", color::red("✗"), desc,
-                        output.status.code().map_or("unknown".to_string(), |c| c.to_string()));
-                    println!("  {}: {}", color::dim("command"), argv.join(" "));
-                    if !output.stdout.is_empty() {
-                        println!("{}", color::dim("--- stdout ---"));
-                        std::io::Write::write_all(&mut std::io::stdout(), &output.stdout)?;
+            for (method, packages) in &groups {
+                let pkgs_ref: Vec<&str> = packages.iter().map(String::as_str).collect();
+                match crate::processors::run(method, &pkgs_ref, &ctx) {
+                    Ok(()) => println!("{} [{}] {}", color::green("✓"), method, packages.join(", ")),
+                    Err(e) => {
+                        println!("{} [{}] {}: {}", color::red("✗"), method, packages.join(", "), e);
+                        any_failed = true;
                     }
-                    if !output.stderr.is_empty() {
-                        println!("{}", color::dim("--- stderr ---"));
-                        std::io::Write::write_all(&mut std::io::stderr(), &output.stderr)?;
-                    }
-                    any_failed = true;
                 }
             }
 

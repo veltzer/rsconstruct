@@ -938,141 +938,301 @@ pub struct InstallMethod {
     pub package: &'static str,
 }
 
-/// How an install plan must be executed.
+/// Context for executing an install: verbosity and eatmydata preference.
 ///
-/// `Argv` plans are run directly via `Command::new(argv[0]).args(argv[1..])`
-/// with no shell involvement — this is the default and applies to all
-/// structured package managers (apt, pip, npm, cargo, gem, snap).
-///
-/// `Shell` plans contain shell metacharacters (pipes, redirects, `&&`)
-/// that the registry author baked in deliberately — for example, the
-/// `binary` install methods that pipe `curl` into `tar`. These are
-/// internal static data (never user input) but they require `sh -c`.
-/// See `docs/src/no-shell-policy.md`.
-pub enum InstallPlan {
-    Argv(Vec<String>),
-    Shell(String),
-}
-
-impl InstallPlan {
-    /// Human-readable form of the plan, suitable for logs, JSON output,
-    /// and `--dry-run` previews. Lossy for argv (loses quoting around
-    /// args that contain spaces) but adequate for the display use cases
-    /// in this codebase, where install args are well-formed package names.
-    pub fn display(&self) -> String {
-        match self {
-            InstallPlan::Argv(argv) => argv.join(" "),
-            InstallPlan::Shell(s)   => s.clone(),
-        }
-    }
-
-    /// Wrap an Argv plan that calls a system package manager (apt, dnf,
-    /// pacman) with `eatmydata` to skip fsync calls. Speeds up package
-    /// installs significantly (often 3–10×).
-    ///
-    /// The wrap inserts `eatmydata` *after* `sudo` so the LD_PRELOAD
-    /// applies to the package manager (the writer of files), not to sudo
-    /// itself. For non-sudo invocations, `eatmydata` becomes the new
-    /// argv[0].
-    ///
-    /// No-op for `Shell` plans, for non-Linux package managers (`brew`),
-    /// and for non-system plans (`pip`, `npm`, `cargo`, `gem`) — those
-    /// don't fsync excessively and `eatmydata` adds nothing.
-    pub fn wrap_with_eatmydata(self) -> Self {
-        match self {
-            InstallPlan::Argv(mut argv) if !argv.is_empty() => {
-                let head = argv[0].as_str();
-                let second = argv.get(1).map(String::as_str);
-                let is_sudo_pkg = head == "sudo"
-                    && matches!(second, Some("apt" | "apt-get" | "dnf" | "pacman"));
-                let is_direct_pkg = matches!(head, "apt" | "apt-get" | "dnf" | "pacman");
-                if is_sudo_pkg {
-                    // sudo eatmydata <pkgmgr> ...
-                    argv.insert(1, "eatmydata".to_string());
-                } else if is_direct_pkg {
-                    // eatmydata <pkgmgr> ...
-                    argv.insert(0, "eatmydata".to_string());
-                }
-                InstallPlan::Argv(argv)
-            }
-            other => other,
-        }
-    }
+/// `sudo` is decided at execution time via `crate::platform::needs_sudo()`;
+/// callers don't need to pass it in.
+pub struct InstallCtx {
+    /// When true, print each subprocess argv before running it.
+    pub verbose: bool,
+    /// When true, prepend `eatmydata` to system-package-manager calls
+    /// (apt/dnf/pacman) for faster installs. No-op when eatmydata isn't
+    /// on PATH.
+    pub use_eatmydata: bool,
 }
 
 impl InstallMethod {
-    /// Return the full install command as a display string
-    /// (e.g., "pip install ruff", "sudo apt install -y shellcheck").
-    /// Use `plan()` for execution; this is for logs and previews only.
+    /// Human-readable preview of what installing this entry's package
+    /// would do — first line of the first describe step. Lossy for
+    /// multi-step installs (binary fetches), but adequate for `tools list`.
     pub fn command(&self) -> String {
-        self.plan().display()
+        let steps = describe(self.method, &[self.package]);
+        steps.first()
+            .map(|argv| join_argv(argv))
+            .unwrap_or_else(|| format!("({}) {}", self.method, self.package))
     }
-
-    /// Return an executable plan for this method.
-    ///
-    /// Structured package managers return `Argv` so the installer can
-    /// invoke them without a shell (no metacharacter expansion, no
-    /// injection surface). Free-form methods (`binary`, `manual`,
-    /// legacy `system` entries) return `Shell` because the registry
-    /// stores them as shell pipelines like `curl ... | tar -xz ...`.
-    pub fn plan(&self) -> InstallPlan {
-        let sudo: &[&str] = sudo_prefix();
-        match self.method {
-            "apt"   => argv_concat(sudo, &["apt", "install", "-y", self.package]),
-            "snap"  => argv_concat(sudo, &["snap", "install", self.package]),
-            "pip"   => argv(&["pip", "install", self.package]),
-            "npm"   => argv(&["npm", "install", "-g", self.package]),
-            "cargo" => argv(&["cargo", "install", self.package]),
-            "gem"   => argv(&["gem", "install", self.package]),
-            _       => InstallPlan::Shell(self.package.to_string()),
-        }
-    }
-
-    /// Return an executable plan for installing multiple packages at once.
-    pub fn batch_plan(method: &str, packages: &[&str]) -> InstallPlan {
-        let sudo: &[&str] = sudo_prefix();
-        let prefix_with = |head: &[&str]| -> Vec<String> {
-            sudo.iter().chain(head.iter())
-                .map(|s| (*s).to_string())
-                .collect()
-        };
-        match method {
-            "apt"   => argv_with_prefix_owned(prefix_with(&["apt", "install", "-y"]), packages),
-            "snap"  => argv_with_prefix_owned(prefix_with(&["snap", "install"]), packages),
-            "pip"   => argv_with_prefix(&["pip", "install"], packages),
-            "npm"   => argv_with_prefix(&["npm", "install", "-g"], packages),
-            "cargo" => argv_with_prefix(&["cargo", "install"], packages),
-            "gem"   => argv_with_prefix(&["gem", "install"], packages),
-            _       => InstallPlan::Shell(
-                packages.iter().map(std::string::ToString::to_string).collect::<Vec<_>>().join("; ")
-            ),
-        }
-    }
-
 }
 
-fn sudo_prefix() -> &'static [&'static str] {
+/// Display the steps that `run(method, packages, ctx)` would execute,
+/// without executing them. Used for logs and previews.
+pub fn describe(method: &str, packages: &[&str]) -> Vec<Vec<String>> {
+    let sudo = sudo_argv();
+    let strs = |parts: &[&str]| -> Vec<String> {
+        parts.iter().map(|s| (*s).to_string()).collect()
+    };
+    let prefix = |head: &[&str], tail: &[&str]| -> Vec<String> {
+        sudo.iter().chain(head.iter()).chain(tail.iter())
+            .map(|s| (*s).to_string()).collect()
+    };
+    match method {
+        "apt" => {
+            let mut argv = prefix(&["apt-get", "install", "-y"], &[]);
+            argv.extend(packages.iter().map(|s| (*s).to_string()));
+            vec![argv]
+        }
+        "dnf" => {
+            let mut argv = prefix(&["dnf", "install", "-y"], &[]);
+            argv.extend(packages.iter().map(|s| (*s).to_string()));
+            vec![argv]
+        }
+        "pacman" => {
+            let mut argv = prefix(&["pacman", "-S", "--noconfirm"], &[]);
+            argv.extend(packages.iter().map(|s| (*s).to_string()));
+            vec![argv]
+        }
+        "brew" => {
+            let mut argv = strs(&["brew", "install"]);
+            argv.extend(packages.iter().map(|s| (*s).to_string()));
+            vec![argv]
+        }
+        "snap" => {
+            let mut argv = prefix(&["snap", "install"], &[]);
+            argv.extend(packages.iter().map(|s| (*s).to_string()));
+            vec![argv]
+        }
+        "pip"   => vec![{ let mut a = strs(&["pip", "install"]); a.extend(packages.iter().map(|s| (*s).to_string())); a }],
+        "npm"   => vec![{ let mut a = strs(&["npm", "install", "-g"]); a.extend(packages.iter().map(|s| (*s).to_string())); a }],
+        "cargo" => vec![{ let mut a = strs(&["cargo", "install"]); a.extend(packages.iter().map(|s| (*s).to_string())); a }],
+        "gem"   => vec![{ let mut a = strs(&["gem", "install"]); a.extend(packages.iter().map(|s| (*s).to_string())); a }],
+        "binary" => packages.iter().flat_map(|p| describe_binary(p)).collect(),
+        "manual" => packages.iter()
+            .map(|p| vec!["# manual:".to_string(), (*p).to_string()])
+            .collect(),
+        _ => packages.iter()
+            .map(|p| vec![format!("# unknown method '{}':", method), (*p).to_string()])
+            .collect(),
+    }
+}
+
+/// Execute the install for `method` over `packages` (batched when the
+/// method supports it). Each subprocess runs argv-style — never via a
+/// shell. Returns Err on the first failure.
+pub fn run(method: &str, packages: &[&str], ctx: &InstallCtx) -> anyhow::Result<()> {
+    use anyhow::Context as _;
+    use std::process::Command;
+    if packages.is_empty() {
+        return Ok(());
+    }
+    let exec = |argv: &[String]| -> anyhow::Result<()> {
+        if ctx.verbose {
+            println!("Running: {}", join_argv(argv));
+        }
+        let status = Command::new(&argv[0]).args(&argv[1..]).status()
+            .with_context(|| format!("failed to spawn: {}", join_argv(argv)))?;
+        if !status.success() {
+            anyhow::bail!(
+                "{} exited with code {}",
+                join_argv(argv),
+                status.code().map_or("unknown".to_string(), |c| c.to_string())
+            );
+        }
+        Ok(())
+    };
+    let sudo = sudo_argv();
+    let eatmydata: &[&str] = if ctx.use_eatmydata && which::which("eatmydata").is_ok() {
+        &["eatmydata"]
+    } else {
+        &[]
+    };
+    let pkgmgr_argv = |head: &[&str]| -> Vec<String> {
+        sudo.iter()
+            .chain(eatmydata.iter())
+            .chain(head.iter())
+            .map(|s| (*s).to_string())
+            .collect()
+    };
+    match method {
+        "apt" => {
+            let mut argv = pkgmgr_argv(&["apt-get", "install", "-y"]);
+            argv.extend(packages.iter().map(|s| (*s).to_string()));
+            exec(&argv)
+        }
+        "dnf" => {
+            let mut argv = pkgmgr_argv(&["dnf", "install", "-y"]);
+            argv.extend(packages.iter().map(|s| (*s).to_string()));
+            exec(&argv)
+        }
+        "pacman" => {
+            let mut argv = pkgmgr_argv(&["pacman", "-S", "--noconfirm"]);
+            argv.extend(packages.iter().map(|s| (*s).to_string()));
+            exec(&argv)
+        }
+        "brew" => {
+            // brew is macOS-only; no sudo, no eatmydata.
+            let mut argv = vec!["brew".to_string(), "install".to_string()];
+            argv.extend(packages.iter().map(|s| (*s).to_string()));
+            exec(&argv)
+        }
+        "snap" => {
+            // snap doesn't need eatmydata.
+            let mut argv: Vec<String> = sudo.iter().chain(["snap", "install"].iter())
+                .map(|s| (*s).to_string()).collect();
+            argv.extend(packages.iter().map(|s| (*s).to_string()));
+            exec(&argv)
+        }
+        "pip" => {
+            let mut argv = vec!["pip".to_string(), "install".to_string()];
+            argv.extend(packages.iter().map(|s| (*s).to_string()));
+            exec(&argv)
+        }
+        "npm" => {
+            let mut argv = vec!["npm".to_string(), "install".to_string(), "-g".to_string()];
+            argv.extend(packages.iter().map(|s| (*s).to_string()));
+            exec(&argv)
+        }
+        "cargo" => {
+            let mut argv = vec!["cargo".to_string(), "install".to_string()];
+            argv.extend(packages.iter().map(|s| (*s).to_string()));
+            exec(&argv)
+        }
+        "gem" => {
+            let mut argv = vec!["gem".to_string(), "install".to_string()];
+            argv.extend(packages.iter().map(|s| (*s).to_string()));
+            exec(&argv)
+        }
+        "binary" => {
+            for pkg in packages {
+                run_binary(pkg, ctx)?;
+            }
+            Ok(())
+        }
+        "manual" => anyhow::bail!(
+            "method '{}' is manual-only — install these packages by hand: {}",
+            method, packages.join(", ")
+        ),
+        other => anyhow::bail!("unknown install method '{other}'"),
+    }
+}
+
+fn sudo_argv() -> &'static [&'static str] {
     if crate::platform::needs_sudo() { &["sudo"] } else { &[] }
 }
 
-fn argv(parts: &[&str]) -> InstallPlan {
-    InstallPlan::Argv(parts.iter().map(std::string::ToString::to_string).collect())
+fn join_argv(argv: &[String]) -> String {
+    argv.join(" ")
 }
 
-fn argv_concat(a: &[&str], b: &[&str]) -> InstallPlan {
-    InstallPlan::Argv(a.iter().chain(b.iter()).map(|s| (*s).to_string()).collect())
+/// Description of the steps that `run_binary` would execute. Used for
+/// preview/logging only.
+fn describe_binary(pkg: &str) -> Vec<Vec<String>> {
+    match binary_recipe(pkg) {
+        Some(BinaryRecipe { url, archive, dest, .. }) => {
+            let tmp = format!("/tmp/{dest}");
+            let dl = format!("/tmp/{dest}.dl");
+            let final_path = format!("/usr/local/bin/{dest}");
+            let download = vec!["curl".to_string(), "-fsSL".to_string(), "-o".to_string(),
+                                dl.clone(), url.to_string()];
+            let extract = match archive {
+                ArchiveKind::TarGz { inner } => vec![
+                    "tar".to_string(), "-xzf".to_string(),
+                    dl,
+                    "-C".to_string(), "/tmp".to_string(),
+                    inner.to_string(),
+                ],
+                ArchiveKind::Gunzip => vec![
+                    "gunzip".to_string(), "-f".to_string(),
+                    dl,
+                ],
+            };
+            let chmod = vec!["chmod".to_string(), "+x".to_string(), tmp.clone()];
+            let sudo = sudo_argv();
+            let mv = sudo.iter().chain(["mv", &tmp, &final_path].iter())
+                .map(|s| (*s).to_string()).collect();
+            vec![download, extract, chmod, mv]
+        }
+        None => vec![vec![format!("# unknown binary recipe '{pkg}'")]],
+    }
 }
 
-fn argv_with_prefix(prefix: &[&str], packages: &[&str]) -> InstallPlan {
-    let mut v: Vec<String> = prefix.iter().map(std::string::ToString::to_string).collect();
-    v.extend(packages.iter().map(std::string::ToString::to_string));
-    InstallPlan::Argv(v)
+fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
+    use anyhow::Context as _;
+    use std::process::Command;
+    let recipe = binary_recipe(pkg)
+        .ok_or_else(|| anyhow::anyhow!("no binary install recipe for '{pkg}'"))?;
+    let download = format!("/tmp/{}.dl", recipe.dest);
+    let final_tmp = format!("/tmp/{}", recipe.dest);
+    let final_path = format!("/usr/local/bin/{}", recipe.dest);
+    let exec = |argv: &[&str]| -> anyhow::Result<()> {
+        if ctx.verbose {
+            println!("Running: {}", argv.join(" "));
+        }
+        let status = Command::new(argv[0]).args(&argv[1..]).status()
+            .with_context(|| format!("failed to spawn: {}", argv.join(" ")))?;
+        if !status.success() {
+            anyhow::bail!(
+                "{} exited with code {}",
+                argv.join(" "),
+                status.code().map_or("unknown".to_string(), |c| c.to_string())
+            );
+        }
+        Ok(())
+    };
+    exec(&["curl", "-fsSL", "-o", &download, recipe.url])?;
+    match recipe.archive {
+        ArchiveKind::TarGz { inner } => {
+            exec(&["tar", "-xzf", &download, "-C", "/tmp", inner])?;
+            // After tar, the inner file is at /tmp/<inner>; rename to final_tmp.
+            let inner_path = format!("/tmp/{inner}");
+            if inner_path != final_tmp {
+                std::fs::rename(&inner_path, &final_tmp)
+                    .with_context(|| format!("rename {inner_path} -> {final_tmp}"))?;
+            }
+            std::fs::remove_file(&download).ok();
+        }
+        ArchiveKind::Gunzip => {
+            // gunzip strips the .gz extension. Our download path ends in
+            // .dl; rename to .dl.gz so gunzip leaves /tmp/<dest>.dl, then
+            // move to final_tmp.
+            let gz = format!("{download}.gz");
+            std::fs::rename(&download, &gz).with_context(|| format!("rename {download} -> {gz}"))?;
+            exec(&["gunzip", "-f", &gz])?;
+            std::fs::rename(&download, &final_tmp)
+                .with_context(|| format!("rename {download} -> {final_tmp}"))?;
+        }
+    }
+    crate::platform::set_permissions_mode(std::path::Path::new(&final_tmp), 0o755)
+        .with_context(|| format!("chmod +x {final_tmp}"))?;
+    let sudo = sudo_argv();
+    let mut mv: Vec<&str> = sudo.to_vec();
+    mv.extend(["mv", &final_tmp, &final_path]);
+    exec(&mv)
 }
 
-fn argv_with_prefix_owned(prefix: Vec<String>, packages: &[&str]) -> InstallPlan {
-    let mut v = prefix;
-    v.extend(packages.iter().map(std::string::ToString::to_string));
-    InstallPlan::Argv(v)
+struct BinaryRecipe {
+    url: &'static str,
+    archive: ArchiveKind,
+    dest: &'static str,
+}
+
+enum ArchiveKind {
+    TarGz { inner: &'static str },
+    Gunzip,
+}
+
+fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
+    match pkg {
+        "rumdl" => Some(BinaryRecipe {
+            url: "https://github.com/rvben/rumdl/releases/download/v0.1.81/rumdl-v0.1.81-x86_64-unknown-linux-gnu.tar.gz",
+            archive: ArchiveKind::TarGz { inner: "rumdl" },
+            dest: "rumdl",
+        }),
+        "taplo" => Some(BinaryRecipe {
+            url: "https://github.com/tamasfe/taplo/releases/latest/download/taplo-linux-x86_64.gz",
+            archive: ArchiveKind::Gunzip,
+            dest: "taplo",
+        }),
+        _ => None,
+    }
 }
 
 /// Information about an external tool: its name, runtime category, and install methods.
@@ -1119,15 +1279,15 @@ pub static TOOLS: &[ToolInfo] = &[
     // Rust tools
     ToolInfo { name: "mdbook", runtime: "rust", install_methods: &[InstallMethod { method: "cargo", package: "mdbook" }] },
     ToolInfo { name: "rumdl", runtime: "rust", install_methods: &[
-        InstallMethod { method: "binary", package: "curl -fsSL https://github.com/rvben/rumdl/releases/download/v0.1.81/rumdl-v0.1.81-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /tmp && sudo mv /tmp/rumdl /usr/local/bin/rumdl" },
+        InstallMethod { method: "binary", package: "rumdl" },
         InstallMethod { method: "cargo", package: "rumdl" },
     ]},
     ToolInfo { name: "taplo", runtime: "rust", install_methods: &[
-        InstallMethod { method: "binary", package: "curl -fsSL https://github.com/tamasfe/taplo/releases/latest/download/taplo-linux-x86_64.gz | gunzip > /tmp/taplo && chmod +x /tmp/taplo && sudo mv /tmp/taplo /usr/local/bin/taplo" },
+        InstallMethod { method: "binary", package: "taplo" },
         InstallMethod { method: "cargo", package: "taplo-cli" },
     ]},
-    ToolInfo { name: "cargo", runtime: "rust", install_methods: &[InstallMethod { method: "binary", package: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh" }] },
-    ToolInfo { name: "rustc", runtime: "rust", install_methods: &[InstallMethod { method: "binary", package: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh" }] },
+    ToolInfo { name: "cargo", runtime: "rust", install_methods: &[InstallMethod { method: "manual", package: "install via rustup: https://rustup.rs" }] },
+    ToolInfo { name: "rustc", runtime: "rust", install_methods: &[InstallMethod { method: "manual", package: "install via rustup: https://rustup.rs" }] },
     // Perl tools
     ToolInfo { name: "perl", runtime: "perl", install_methods: &[InstallMethod { method: "apt", package: "perl" }] },
     ToolInfo { name: "markdown", runtime: "perl", install_methods: &[InstallMethod { method: "apt", package: "markdown" }] },
@@ -1600,63 +1760,74 @@ mod tests {
         }
     }
 
-    /// `sudo_prefix` returns either `["sudo"]` or `[]` based on runtime
-    /// state. The exact value depends on the test host, but the contract
-    /// is: empty when running as root or when `sudo` isn't on PATH.
+    /// `sudo_argv()` returns either `["sudo"]` or `[]` based on runtime
+    /// state. Empty when running as root or when `sudo` isn't on PATH.
     #[test]
-    fn sudo_prefix_matches_runtime() {
-        let prefix = sudo_prefix();
-        let expected_needs_sudo = crate::platform::needs_sudo();
-        if expected_needs_sudo {
+    fn sudo_argv_matches_runtime() {
+        let prefix = sudo_argv();
+        if crate::platform::needs_sudo() {
             assert_eq!(prefix, &["sudo"]);
         } else {
             assert!(prefix.is_empty());
         }
     }
 
-    /// `apt` plans must call `apt install -y` exactly once, with the
-    /// package name appearing after the flags (never before). Whether
+    /// `apt` describe must call `apt-get install -y` exactly once, with
+    /// the package name appearing after the flags (never before). Whether
     /// `sudo` is prepended depends on runtime state.
     #[test]
-    fn apt_plan_shape_is_correct() {
-        let method = InstallMethod { method: "apt", package: "cowsay" };
-        let InstallPlan::Argv(argv) = method.plan() else {
-            panic!("apt plan should be Argv");
-        };
-        let apt_idx = argv.iter().position(|s| s == "apt").expect("apt in argv");
-        assert_eq!(argv[apt_idx + 1], "install");
-        assert_eq!(argv[apt_idx + 2], "-y");
-        assert_eq!(argv[apt_idx + 3], "cowsay");
-        // sudo, if present, must be argv[0] and apt must be argv[1].
+    fn apt_describe_shape_is_correct() {
+        let steps = describe("apt", &["cowsay"]);
+        assert_eq!(steps.len(), 1);
+        let argv = &steps[0];
+        let pkgmgr_idx = argv.iter().position(|s| s == "apt-get").expect("apt-get in argv");
+        assert_eq!(argv[pkgmgr_idx + 1], "install");
+        assert_eq!(argv[pkgmgr_idx + 2], "-y");
+        assert_eq!(argv[pkgmgr_idx + 3], "cowsay");
         if argv[0] == "sudo" {
-            assert_eq!(apt_idx, 1);
+            assert_eq!(pkgmgr_idx, 1);
         } else {
-            assert_eq!(apt_idx, 0);
+            assert_eq!(pkgmgr_idx, 0);
         }
     }
 
-    /// Same shape check for `batch_plan`.
+    /// `apt` batch describe collapses many packages into one apt-get call.
     #[test]
-    fn apt_batch_plan_shape_is_correct() {
-        let plan = InstallMethod::batch_plan("apt", &["foo", "bar"]);
-        let InstallPlan::Argv(argv) = plan else {
-            panic!("apt batch plan should be Argv");
-        };
-        let apt_idx = argv.iter().position(|s| s == "apt").expect("apt in argv");
-        assert_eq!(argv[apt_idx + 1], "install");
-        assert_eq!(argv[apt_idx + 2], "-y");
-        assert_eq!(argv[apt_idx + 3], "foo");
-        assert_eq!(argv[apt_idx + 4], "bar");
+    fn apt_batch_describe_collapses() {
+        let steps = describe("apt", &["foo", "bar", "baz"]);
+        assert_eq!(steps.len(), 1);
+        let argv = &steps[0];
+        let pkgmgr_idx = argv.iter().position(|s| s == "apt-get").expect("apt-get in argv");
+        assert_eq!(&argv[pkgmgr_idx + 3..], &["foo", "bar", "baz"]);
     }
 
-    /// `pip` plans never use sudo, regardless of runtime state.
+    /// `pip` describe never uses sudo, regardless of runtime state.
     #[test]
-    fn pip_plan_never_has_sudo() {
-        let method = InstallMethod { method: "pip", package: "ruff" };
-        let InstallPlan::Argv(argv) = method.plan() else {
-            panic!("pip plan should be Argv");
-        };
+    fn pip_describe_never_has_sudo() {
+        let steps = describe("pip", &["ruff"]);
+        assert_eq!(steps.len(), 1);
+        let argv = &steps[0];
         assert_eq!(argv[0], "pip");
         assert!(!argv.contains(&"sudo".to_string()));
+    }
+
+    /// `binary` describe yields a multi-step plan (download, extract,
+    /// chmod, mv) with no shell metacharacters anywhere.
+    #[test]
+    fn binary_describe_has_no_shell_metachars() {
+        for pkg in &["taplo", "rumdl"] {
+            let steps = describe("binary", &[pkg]);
+            assert!(steps.len() >= 3, "binary {pkg} should have >=3 steps");
+            for step in &steps {
+                for arg in step {
+                    for forbidden in &['|', '>', '<', ';', '&'] {
+                        assert!(
+                            !arg.contains(*forbidden),
+                            "binary {pkg} step contains shell metachar '{forbidden}': {arg:?}"
+                        );
+                    }
+                }
+            }
+        }
     }
 }
