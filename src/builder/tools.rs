@@ -556,25 +556,35 @@ fn run_tools_command(
                     .map(std::string::String::as_str)
                     .collect();
                 if !missing.is_empty() {
+                    let sudo_prefix: &[&str] = if crate::platform::needs_sudo() { &["sudo"] } else { &[] };
+                    let to_strings = |parts: &[&str]| -> Vec<String> {
+                        parts.iter().map(std::string::ToString::to_string).collect()
+                    };
+                    let with_sudo = |parts: &[&str]| -> Vec<String> {
+                        let mut v = to_strings(sudo_prefix);
+                        v.extend(to_strings(parts));
+                        v
+                    };
                     let (mgr, mut argv, supports_eatmydata) = if which::which("apt-get").is_ok() {
-                        ("apt", vec!["sudo".to_string(), "apt-get".to_string(), "install".to_string(), "-y".to_string()], true)
+                        ("apt", with_sudo(&["apt-get", "install", "-y"]), true)
                     } else if which::which("dnf").is_ok() {
-                        ("dnf", vec!["sudo".to_string(), "dnf".to_string(), "install".to_string(), "-y".to_string()], true)
+                        ("dnf", with_sudo(&["dnf", "install", "-y"]), true)
                     } else if which::which("pacman").is_ok() {
-                        ("pacman", vec!["sudo".to_string(), "pacman".to_string(), "-S".to_string(), "--noconfirm".to_string()], true)
+                        ("pacman", with_sudo(&["pacman", "-S", "--noconfirm"]), true)
                     } else if which::which("brew").is_ok() {
-                        ("brew", vec!["brew".to_string(), "install".to_string()], false)
+                        ("brew", to_strings(&["brew", "install"]), false)
                     } else {
                         bail!(
                             "No supported package manager found (apt-get, dnf, pacman, brew); install these system packages manually: {}",
                             missing.join(", ")
                         );
                     };
-                    // Insert eatmydata after sudo (so the LD_PRELOAD applies
-                    // to the package manager, not to sudo). brew skipped:
-                    // eatmydata is Linux-only and brew runs on macOS.
+                    // Insert eatmydata immediately before the package manager
+                    // (so the LD_PRELOAD applies to the package manager, not
+                    // to sudo). brew skipped: eatmydata is Linux-only and
+                    // brew runs on macOS.
                     if use_eatmydata && supports_eatmydata {
-                        argv.insert(1, "eatmydata".to_string());
+                        argv.insert(sudo_prefix.len(), "eatmydata".to_string());
                     }
                     argv.extend(missing.iter().map(std::string::ToString::to_string));
                     commands.push((

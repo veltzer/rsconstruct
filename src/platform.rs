@@ -28,6 +28,31 @@ pub fn get_mode(metadata: &std::fs::Metadata) -> Option<u32> {
     }
 }
 
+/// Whether package-manager invocations should be prefixed with `sudo`.
+///
+/// Returns false when:
+/// - Already running as root (uid 0). sudo is a no-op and may not exist
+///   (e.g. inside a bare ubuntu container).
+/// - sudo is not on PATH. We can't use it; let the package manager fail
+///   on its own with its native "are you root?" message.
+///
+/// Returns true otherwise (the normal local-dev case: non-root user with
+/// passwordless or interactive sudo configured).
+///
+/// On non-Unix platforms (Windows), always returns false — there's no
+/// sudo equivalent and the package managers we use there don't need it.
+pub fn needs_sudo() -> bool {
+    #[cfg(unix)]
+    {
+        let is_root = unsafe { libc::geteuid() } == 0;
+        !is_root && which::which("sudo").is_ok()
+    }
+    #[cfg(not(unix))]
+    {
+        false
+    }
+}
+
 /// Set file permissions from a Unix mode. On Unix this sets the exact mode bits.
 /// On Windows this approximates by setting read-only when the mode has no owner
 /// write bit (i.e. `mode & 0o200 == 0`).

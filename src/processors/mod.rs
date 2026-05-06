@@ -1016,9 +1016,10 @@ impl InstallMethod {
     /// legacy `system` entries) return `Shell` because the registry
     /// stores them as shell pipelines like `curl ... | tar -xz ...`.
     pub fn plan(&self) -> InstallPlan {
+        let sudo: &[&str] = sudo_prefix();
         match self.method {
-            "apt"   => argv(&["sudo", "apt", "install", "-y", self.package]),
-            "snap"  => argv(&["sudo", "snap", "install", self.package]),
+            "apt"   => argv_concat(sudo, &["apt", "install", "-y", self.package]),
+            "snap"  => argv_concat(sudo, &["snap", "install", self.package]),
             "pip"   => argv(&["pip", "install", self.package]),
             "npm"   => argv(&["npm", "install", "-g", self.package]),
             "cargo" => argv(&["cargo", "install", self.package]),
@@ -1029,9 +1030,15 @@ impl InstallMethod {
 
     /// Return an executable plan for installing multiple packages at once.
     pub fn batch_plan(method: &str, packages: &[&str]) -> InstallPlan {
+        let sudo: &[&str] = sudo_prefix();
+        let prefix_with = |head: &[&str]| -> Vec<String> {
+            sudo.iter().chain(head.iter())
+                .map(|s| (*s).to_string())
+                .collect()
+        };
         match method {
-            "apt"   => argv_with_prefix(&["sudo", "apt", "install", "-y"], packages),
-            "snap"  => argv_with_prefix(&["sudo", "snap", "install"], packages),
+            "apt"   => argv_with_prefix_owned(prefix_with(&["apt", "install", "-y"]), packages),
+            "snap"  => argv_with_prefix_owned(prefix_with(&["snap", "install"]), packages),
             "pip"   => argv_with_prefix(&["pip", "install"], packages),
             "npm"   => argv_with_prefix(&["npm", "install", "-g"], packages),
             "cargo" => argv_with_prefix(&["cargo", "install"], packages),
@@ -1044,12 +1051,26 @@ impl InstallMethod {
 
 }
 
+fn sudo_prefix() -> &'static [&'static str] {
+    if crate::platform::needs_sudo() { &["sudo"] } else { &[] }
+}
+
 fn argv(parts: &[&str]) -> InstallPlan {
     InstallPlan::Argv(parts.iter().map(std::string::ToString::to_string).collect())
 }
 
+fn argv_concat(a: &[&str], b: &[&str]) -> InstallPlan {
+    InstallPlan::Argv(a.iter().chain(b.iter()).map(|s| (*s).to_string()).collect())
+}
+
 fn argv_with_prefix(prefix: &[&str], packages: &[&str]) -> InstallPlan {
     let mut v: Vec<String> = prefix.iter().map(std::string::ToString::to_string).collect();
+    v.extend(packages.iter().map(std::string::ToString::to_string));
+    InstallPlan::Argv(v)
+}
+
+fn argv_with_prefix_owned(prefix: Vec<String>, packages: &[&str]) -> InstallPlan {
+    let mut v = prefix;
     v.extend(packages.iter().map(std::string::ToString::to_string));
     InstallPlan::Argv(v)
 }
@@ -1577,5 +1598,65 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// `sudo_prefix` returns either `["sudo"]` or `[]` based on runtime
+    /// state. The exact value depends on the test host, but the contract
+    /// is: empty when running as root or when `sudo` isn't on PATH.
+    #[test]
+    fn sudo_prefix_matches_runtime() {
+        let prefix = sudo_prefix();
+        let expected_needs_sudo = crate::platform::needs_sudo();
+        if expected_needs_sudo {
+            assert_eq!(prefix, &["sudo"]);
+        } else {
+            assert!(prefix.is_empty());
+        }
+    }
+
+    /// `apt` plans must call `apt install -y` exactly once, with the
+    /// package name appearing after the flags (never before). Whether
+    /// `sudo` is prepended depends on runtime state.
+    #[test]
+    fn apt_plan_shape_is_correct() {
+        let method = InstallMethod { method: "apt", package: "cowsay" };
+        let InstallPlan::Argv(argv) = method.plan() else {
+            panic!("apt plan should be Argv");
+        };
+        let apt_idx = argv.iter().position(|s| s == "apt").expect("apt in argv");
+        assert_eq!(argv[apt_idx + 1], "install");
+        assert_eq!(argv[apt_idx + 2], "-y");
+        assert_eq!(argv[apt_idx + 3], "cowsay");
+        // sudo, if present, must be argv[0] and apt must be argv[1].
+        if argv[0] == "sudo" {
+            assert_eq!(apt_idx, 1);
+        } else {
+            assert_eq!(apt_idx, 0);
+        }
+    }
+
+    /// Same shape check for `batch_plan`.
+    #[test]
+    fn apt_batch_plan_shape_is_correct() {
+        let plan = InstallMethod::batch_plan("apt", &["foo", "bar"]);
+        let InstallPlan::Argv(argv) = plan else {
+            panic!("apt batch plan should be Argv");
+        };
+        let apt_idx = argv.iter().position(|s| s == "apt").expect("apt in argv");
+        assert_eq!(argv[apt_idx + 1], "install");
+        assert_eq!(argv[apt_idx + 2], "-y");
+        assert_eq!(argv[apt_idx + 3], "foo");
+        assert_eq!(argv[apt_idx + 4], "bar");
+    }
+
+    /// `pip` plans never use sudo, regardless of runtime state.
+    #[test]
+    fn pip_plan_never_has_sudo() {
+        let method = InstallMethod { method: "pip", package: "ruff" };
+        let InstallPlan::Argv(argv) = method.plan() else {
+            panic!("pip plan should be Argv");
+        };
+        assert_eq!(argv[0], "pip");
+        assert!(!argv.contains(&"sudo".to_string()));
     }
 }
