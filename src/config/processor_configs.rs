@@ -1116,6 +1116,16 @@ pub struct RequirementsConfig {
     /// `import pkg_resources`).
     #[serde(default)]
     pub extra: Vec<String>,
+    /// Project-relative directories to treat as Python source roots. An import
+    /// is classified as local (and excluded from requirements.txt) if it
+    /// resolves to `<root>/<module>.py` or `<root>/<module>/__init__.py` for
+    /// any of these roots. The importer's own directory and the project root
+    /// are always checked in addition to these. Use this when modules live in
+    /// a directory that is added to sys.path at runtime (e.g. via PYTHONPATH
+    /// or sys.path.insert) so the static scanner doesn't mistake them for
+    /// PyPI distributions.
+    #[serde(default)]
+    pub python_paths: Vec<String>,
     #[serde(flatten)]
     pub standard: StandardConfig,
 }
@@ -1133,6 +1143,7 @@ impl Default for RequirementsConfig {
             header: true,
             mapping: HashMap::new(),
             extra: Vec::new(),
+            python_paths: Vec::new(),
             standard: StandardConfig::default(),
         }
     }
@@ -1141,21 +1152,22 @@ impl Default for RequirementsConfig {
 impl KnownFields for RequirementsConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "output", "exclude", "sorted", "header", "mapping", "extra",
+            "output", "exclude", "sorted", "header", "mapping", "extra", "python_paths",
             "dep_inputs", "dep_auto", "batch", "max_jobs",
         ]
     }
     fn checksum_fields() -> &'static [&'static str] {
-        &["output", "exclude", "sorted", "header", "mapping", "extra"]
+        &["output", "exclude", "sorted", "header", "mapping", "extra", "python_paths"]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
         &[
-            ("output",  "Path of the generated requirements.txt file"),
-            ("exclude", "Import names to never emit (e.g. internal vendored modules)"),
-            ("sorted",  "Sort entries alphabetically (false preserves first-seen order)"),
-            ("header",  "Include a comment header line in the generated file"),
-            ("mapping", "Per-project import→distribution overrides (win over built-in table)"),
-            ("extra",   "Distribution names to always include, e.g. transitive deps undeclared by upstream"),
+            ("output",       "Path of the generated requirements.txt file"),
+            ("exclude",      "Import names to never emit (e.g. internal vendored modules)"),
+            ("sorted",       "Sort entries alphabetically (false preserves first-seen order)"),
+            ("header",       "Include a comment header line in the generated file"),
+            ("mapping",      "Per-project import→distribution overrides (win over built-in table)"),
+            ("extra",        "Distribution names to always include, e.g. transitive deps undeclared by upstream"),
+            ("python_paths", "Project-relative source roots resolved when classifying imports as local"),
         ]
     }
 }

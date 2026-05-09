@@ -119,7 +119,7 @@ impl Processor for RequirementsProcessor {
                 if python_stdlib::is_stdlib(top) {
                     continue;
                 }
-                if is_local(input, top, &local_py) {
+                if is_local(input, top, &local_py, &self.config.python_paths) {
                     continue;
                 }
                 let dist = self.distribution_for(top);
@@ -162,22 +162,38 @@ impl Processor for RequirementsProcessor {
 }
 
 /// Check whether an import from `source` resolves to a file that's part of
-/// the project's Python input set.
-fn is_local(source: &Path, module: &str, local_py: &HashSet<&Path>) -> bool {
+/// the project's Python input set. The importer's own directory and the
+/// project root are always checked. Additional roots come from the
+/// processor's `python_paths` config — directories the user declares as
+/// being on `sys.path` at runtime (e.g. via PYTHONPATH or `sys.path.insert`).
+fn is_local(
+    source: &Path,
+    module: &str,
+    local_py: &HashSet<&Path>,
+    python_paths: &[String],
+) -> bool {
     let module_path = module.replace('.', "/");
     let source_dir = source.parent().unwrap_or(Path::new("."));
-    let candidates = [
-        source_dir.join(format!("{module_path}.py")),
-        source_dir.join(&module_path).join("__init__.py"),
-        PathBuf::from(format!("{module_path}.py")),
-        PathBuf::from(&module_path).join("__init__.py"),
-    ];
-    for candidate in &candidates {
-        if local_py.contains(candidate.as_path()) {
-            return true;
-        }
-        if candidate.is_file() {
-            return true;
+
+    let mut roots: Vec<PathBuf> = Vec::with_capacity(2 + python_paths.len());
+    roots.push(source_dir.to_path_buf());
+    roots.push(PathBuf::from("."));
+    for p in python_paths {
+        roots.push(PathBuf::from(p));
+    }
+
+    for root in &roots {
+        let candidates = [
+            root.join(format!("{module_path}.py")),
+            root.join(&module_path).join("__init__.py"),
+        ];
+        for candidate in &candidates {
+            if local_py.contains(candidate.as_path()) {
+                return true;
+            }
+            if candidate.is_file() {
+                return true;
+            }
         }
     }
     false
