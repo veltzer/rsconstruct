@@ -976,9 +976,13 @@ pub fn describe(method: &str, packages: &[&str]) -> Vec<Vec<String>> {
     };
     match method {
         "apt" => {
-            let mut argv = prefix(&["apt-get", "install", "-y"], &[]);
-            argv.extend(packages.iter().map(|s| (*s).to_string()));
-            vec![argv]
+            // Run `apt-get update` first so the package index isn't stale.
+            // CI runners ship with indexes a few days old; without this, an
+            // `install` for a security-updated package 404s on the mirror.
+            let update = prefix(&["apt-get", "update"], &[]);
+            let mut install = prefix(&["apt-get", "install", "-y"], &[]);
+            install.extend(packages.iter().map(|s| (*s).to_string()));
+            vec![update, install]
         }
         "dnf" => {
             let mut argv = prefix(&["dnf", "install", "-y"], &[]);
@@ -1053,6 +1057,10 @@ pub fn run(method: &str, packages: &[&str], ctx: &InstallCtx) -> anyhow::Result<
     };
     match method {
         "apt" => {
+            // Refresh the package index before installing — CI runners ship
+            // with stale indexes that 404 on security-updated packages.
+            let update = pkgmgr_argv(&["apt-get", "update"]);
+            exec(&update)?;
             let mut argv = pkgmgr_argv(&["apt-get", "install", "-y"]);
             argv.extend(packages.iter().map(|s| (*s).to_string()));
             exec(&argv)
@@ -1772,33 +1780,41 @@ mod tests {
         }
     }
 
-    /// `apt` describe must call `apt-get install -y` exactly once, with
-    /// the package name appearing after the flags (never before). Whether
-    /// `sudo` is prepended depends on runtime state.
+    /// `apt` describe must run `apt-get update` first, then call
+    /// `apt-get install -y <pkg>` exactly once with the package name
+    /// after the flags. Whether `sudo` is prepended depends on runtime
+    /// state.
     #[test]
     fn apt_describe_shape_is_correct() {
         let steps = describe("apt", &["cowsay"]);
-        assert_eq!(steps.len(), 1);
-        let argv = &steps[0];
-        let pkgmgr_idx = argv.iter().position(|s| s == "apt-get").expect("apt-get in argv");
-        assert_eq!(argv[pkgmgr_idx + 1], "install");
-        assert_eq!(argv[pkgmgr_idx + 2], "-y");
-        assert_eq!(argv[pkgmgr_idx + 3], "cowsay");
-        if argv[0] == "sudo" {
+        assert_eq!(steps.len(), 2);
+
+        let update = &steps[0];
+        let upd_idx = update.iter().position(|s| s == "apt-get").expect("apt-get in update argv");
+        assert_eq!(update[upd_idx + 1], "update");
+        assert_eq!(update.len(), upd_idx + 2);
+
+        let install = &steps[1];
+        let pkgmgr_idx = install.iter().position(|s| s == "apt-get").expect("apt-get in install argv");
+        assert_eq!(install[pkgmgr_idx + 1], "install");
+        assert_eq!(install[pkgmgr_idx + 2], "-y");
+        assert_eq!(install[pkgmgr_idx + 3], "cowsay");
+        if install[0] == "sudo" {
             assert_eq!(pkgmgr_idx, 1);
         } else {
             assert_eq!(pkgmgr_idx, 0);
         }
     }
 
-    /// `apt` batch describe collapses many packages into one apt-get call.
+    /// `apt` batch describe collapses many packages into one apt-get
+    /// install call (still preceded by a single `apt-get update`).
     #[test]
     fn apt_batch_describe_collapses() {
         let steps = describe("apt", &["foo", "bar", "baz"]);
-        assert_eq!(steps.len(), 1);
-        let argv = &steps[0];
-        let pkgmgr_idx = argv.iter().position(|s| s == "apt-get").expect("apt-get in argv");
-        assert_eq!(&argv[pkgmgr_idx + 3..], &["foo", "bar", "baz"]);
+        assert_eq!(steps.len(), 2);
+        let install = &steps[1];
+        let pkgmgr_idx = install.iter().position(|s| s == "apt-get").expect("apt-get in argv");
+        assert_eq!(&install[pkgmgr_idx + 3..], &["foo", "bar", "baz"]);
     }
 
     /// `pip` describe never uses sudo, regardless of runtime state.
