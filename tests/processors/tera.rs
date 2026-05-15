@@ -941,3 +941,50 @@ fn show_files_without_hash_pieces_omits_field() {
     assert!(entry.get("hash_pieces").is_none(),
         "hash_pieces field must be absent when flag is omitted: {}", stdout);
 }
+
+#[test]
+fn copyright_years_falls_back_when_no_commits() {
+    // A fresh repo (or a non-git directory) must not crash copyright_years().
+    // We expect the function to fall back to "{current_year}".
+    let project = setup_glob_project("© {{ copyright_years() }}\n");
+    let p = project.path();
+
+    let output = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "build failed: {}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    let report = fs::read_to_string(p.join("report.txt")).unwrap();
+    let current_year = chrono::Local::now().format("%Y").to_string();
+    assert_eq!(report.trim(), format!("© {}", current_year), "Got: {}", report);
+}
+
+#[test]
+fn copyright_years_uses_first_commit_year() {
+    // With a real git repo and a commit, copyright_years() should produce a
+    // range from the first commit's year to the current year.
+    let project = setup_glob_project("© {{ copyright_years() }}\n");
+    let p = project.path();
+    git_init_and_commit(p);
+
+    let output = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "build failed: {}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    let report = fs::read_to_string(p.join("report.txt")).unwrap();
+    let current_year: i32 = chrono::Local::now().format("%Y").to_string().parse().unwrap();
+    // Whatever the commit year was, the output must end with the current year
+    // and contain it.
+    assert!(
+        report.trim().ends_with(&current_year.to_string()),
+        "Got: {}",
+        report
+    );
+}

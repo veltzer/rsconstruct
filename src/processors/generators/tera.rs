@@ -231,28 +231,31 @@ impl Function for VersionStrFunction {
 }
 
 /// Return a comma-separated range of years from the first git commit year to the current year.
-/// e.g. `"2013, 2014, 2015, ..., 2026"`
+/// e.g. `"2013, 2014, 2015, ..., 2026"`.
+///
+/// If the directory isn't a git repo or has no commits yet, falls back to just the
+/// current year — a fresh project shouldn't fail to render its README on day zero.
 struct CopyrightYearsFunction { ctx: CtxPtr }
 
 impl Function for CopyrightYearsFunction {
     fn call(&self, _args: &HashMap<String, TeraValue>) -> tera::Result<TeraValue> {
+        let current_year = chrono::Local::now().year();
+
         let mut cmd = Command::new("git");
         cmd.args(["log", "--reverse", "--format=%ad", "--date=format:%Y"]);
-        let output = run_command_capture(self.ctx.get(), &cmd)
-            .map_err(|e| tera::Error::msg(format!("copyright_years: {e}")))?;
+        let first_year: i32 = match run_command_capture(self.ctx.get(), &cmd) {
+            Ok(output) if output.status.success() => {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                stdout
+                    .lines()
+                    .next()
+                    .and_then(|line| line.trim().parse().ok())
+                    .unwrap_or(current_year)
+            }
+            _ => current_year,
+        };
 
-        if !output.status.success() {
-            return Err(tera::Error::msg("copyright_years: git log failed"));
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let first_year: i32 = stdout
-            .lines()
-            .next()
-            .and_then(|line| line.trim().parse().ok())
-            .ok_or_else(|| tera::Error::msg("copyright_years: no commits found"))?;
-
-        let current_year = chrono::Local::now().year();
+        let first_year = first_year.min(current_year);
         let years: Vec<String> = (first_year..=current_year).map(|y| y.to_string()).collect();
 
         to_value(years.join(", "))

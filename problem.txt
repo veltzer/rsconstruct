@@ -1,1 +1,2 @@
-in ../teaching-slides rsconsruct DOES NOT rebuilt the pdf from an md file if an SVG that is linked in the .md file changes. Fix this.
+in ../teaching-slides rsconsruct DOES NOT rebuilt the pdf from an md file if an SVG that is linked in the .md file changes. 
+Tell me what the root problem is?
