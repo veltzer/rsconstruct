@@ -19,7 +19,7 @@ impl ScriptProcessor {
 
     fn check_files(&self, ctx: &crate::build_context::BuildContext, files: &[&Path]) -> Result<()> {
         let command = self.config.standard.require_command(crate::processors::names::SCRIPT)?;
-        run_checker(ctx, command, None, &self.config.standard.args, files)
+        run_checker(ctx, command, None, &self.config.standard.args, files, ctx.max_arg_len())
     }
 
     const fn has_fix(&self) -> bool {
@@ -27,7 +27,7 @@ impl ScriptProcessor {
     }
 
     fn fix_files(&self, ctx: &crate::build_context::BuildContext, files: &[&Path]) -> Result<()> {
-        run_checker(ctx, &self.config.fix_command, None, &self.config.fix_args, files)
+        run_checker(ctx, &self.config.fix_command, None, &self.config.fix_args, files, ctx.max_arg_len())
     }
 }
 

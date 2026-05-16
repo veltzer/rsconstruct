@@ -630,7 +630,15 @@ fn run() -> (Result<()>, bool) {
                         .unwrap_or_default();
                     processors::tags_cmd::check_tags(&tags_config)?;
                 }
-                cli::TagsAction::Suggest { path } => processors::tags_cmd::suggest_tags(&db_path, &path)?,
+                cli::TagsAction::Suggest { path } => {
+                    let tags_config: config::TagsConfig = config.processor
+                        .first_instance_of_type("tags")
+                        .map(|inst| inst.config_toml.clone().try_into())
+                        .transpose()
+                        .context("Failed to parse tags config")?
+                        .unwrap_or_default();
+                    processors::tags_cmd::suggest_tags(&db_path, &path, &tags_config)?;
+                }
                 cli::TagsAction::Merge { path } => processors::tags_cmd::merge_tags(&tags_dir, &path)?,
                 cli::TagsAction::Collect => processors::tags_cmd::collect_tags(&db_path, &tags_dir)?,
             }

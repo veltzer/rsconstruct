@@ -292,6 +292,66 @@ impl KnownFields for PandocConfig {
     }
 }
 
+const fn default_marp_timeout_secs() -> u64 { 20 }
+const fn default_marp_max_attempts() -> u32 { 3 }
+
+/// Marp config. Adds tunables for the per-invocation timeout and the retry
+/// budget, since marp-cli occasionally hangs under chromium-headless and the
+/// right values are project-dependent.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct MarpConfig {
+    /// Per-invocation wall-clock timeout in seconds.
+    #[serde(default = "default_marp_timeout_secs")]
+    pub timeout_secs: u64,
+    /// Total attempts (including the first) when marp times out. Set to 1 to
+    /// disable retrying.
+    #[serde(default = "default_marp_max_attempts")]
+    pub max_attempts: u32,
+    #[serde(flatten)]
+    pub standard: StandardConfig,
+}
+impl Default for MarpConfig {
+    fn default() -> Self {
+        Self {
+            timeout_secs: default_marp_timeout_secs(),
+            max_attempts: default_marp_max_attempts(),
+            standard: StandardConfig {
+                command: "marp".into(),
+                output_dir: "out/marp".into(),
+                formats: vec!["pdf".into()],
+                ..StandardConfig::default()
+            },
+        }
+    }
+}
+impl KnownFields for MarpConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &[
+            "command", "args", "dep_inputs", "dep_auto", "formats", "output_dir",
+            "batch", "max_jobs", "src_dirs", "src_extensions",
+            "src_exclude_dirs", "src_exclude_files", "src_exclude_paths", "src_files",
+            "timeout_secs", "max_attempts",
+        ]
+    }
+    fn checksum_fields() -> &'static [&'static str] {
+        // timeout_secs / max_attempts only affect HOW we run marp, not the
+        // bytes of the produced PDF — exclude from checksum to avoid pointless
+        // rebuilds when a user bumps the timeout.
+        &["command", "args", "formats", "output_dir"]
+    }
+    fn must_fields() -> &'static [&'static str] { StandardConfig::must_fields() }
+    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
+        &[
+            ("command",      "Path to the marp executable"),
+            ("args",         "Extra arguments passed to marp"),
+            ("formats",      "Output formats to generate (pdf, html, …)"),
+            ("output_dir",   "Directory where converted files are written"),
+            ("timeout_secs", "Per-invocation wall-clock timeout in seconds"),
+            ("max_attempts", "Total attempts (including the first) when marp times out"),
+        ]
+    }
+}
+
 
 
 
@@ -657,7 +717,11 @@ fn default_zspell_words_file() -> String {
     ".zspell-words".into()
 }
 
-/// Zspell config. Custom fields: language, words_file, auto_add_words.
+fn default_zspell_dict_dir() -> String {
+    "/usr/share/hunspell".into()
+}
+
+/// Zspell config. Custom fields: language, words_file, auto_add_words, dict_dir.
 /// Unused StandardConfig fields: command, formats, output_dir.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ZspellConfig {
@@ -668,6 +732,9 @@ pub struct ZspellConfig {
     /// When true, automatically add misspelled words to words_file instead of failing
     #[serde(default)]
     pub auto_add_words: bool,
+    /// Directory holding the hunspell .aff/.dic files for `language`.
+    #[serde(default = "default_zspell_dict_dir")]
+    pub dict_dir: String,
     #[serde(flatten)]
     pub standard: StandardConfig,
 }
@@ -678,6 +745,7 @@ impl Default for ZspellConfig {
             language: "en_US".into(),
             words_file: ".zspell-words".into(),
             auto_add_words: false,
+            dict_dir: default_zspell_dict_dir(),
             standard: StandardConfig::default(),
         }
     }
@@ -686,17 +754,18 @@ impl Default for ZspellConfig {
 impl KnownFields for ZspellConfig {
     fn known_fields() -> &'static [&'static str] {
         &[
-            "language", "words_file", "auto_add_words", "dep_inputs", "dep_auto", "batch", "max_jobs",
+            "language", "words_file", "auto_add_words", "dict_dir", "dep_inputs", "dep_auto", "batch", "max_jobs",
         ]
     }
     fn checksum_fields() -> &'static [&'static str] {
-        &["language", "auto_add_words"]
+        &["language", "auto_add_words", "dict_dir"]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
         &[
             ("language",       "Language/locale for spell checking"),
             ("words_file",     "Path to a personal dictionary file"),
             ("auto_add_words", "When true, automatically add misspelled words to words_file instead of failing"),
+            ("dict_dir",       "Directory containing hunspell .aff/.dic files"),
         ]
     }
 }
@@ -847,6 +916,10 @@ fn default_tags_dir() -> String {
     "tags".into()
 }
 
+const fn default_tags_similar_files_limit() -> usize { 10 }
+const fn default_tags_suggested_tags_limit() -> usize { 15 }
+const fn default_tags_common_tags_limit() -> usize { 20 }
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TagsConfig {
     #[serde(default = "default_tags_output")]
@@ -877,6 +950,15 @@ pub struct TagsConfig {
     /// Fail the build when tags in the allowlist are not used by any file.
     #[serde(default)]
     pub check_unused: bool,
+    /// How many most-similar files to inspect when generating tag suggestions.
+    #[serde(default = "default_tags_similar_files_limit")]
+    pub similar_files_limit: usize,
+    /// Maximum tag suggestions emitted by `tags suggest`.
+    #[serde(default = "default_tags_suggested_tags_limit")]
+    pub suggested_tags_limit: usize,
+    /// Maximum "most common tags" reported when a file has no tags of its own.
+    #[serde(default = "default_tags_common_tags_limit")]
+    pub common_tags_limit: usize,
     #[serde(flatten)]
     pub standard: StandardConfig,
 }
@@ -893,6 +975,9 @@ impl Default for TagsConfig {
             required_field_groups: Vec::new(),
             sorted_tags: false,
             check_unused: false,
+            similar_files_limit: default_tags_similar_files_limit(),
+            suggested_tags_limit: default_tags_suggested_tags_limit(),
+            common_tags_limit: default_tags_common_tags_limit(),
             standard: StandardConfig::default(),
         }
     }
@@ -903,14 +988,16 @@ impl KnownFields for TagsConfig {
         &[
             "output", "tags_dir", "required_fields", "required_values",
             "unique_fields", "field_types", "required_field_groups", "sorted_tags",
-            "check_unused", "dep_inputs", "dep_auto", "batch", "max_jobs",
+            "check_unused", "similar_files_limit", "suggested_tags_limit",
+            "common_tags_limit", "dep_inputs", "dep_auto", "batch", "max_jobs",
         ]
     }
     fn checksum_fields() -> &'static [&'static str] {
         // The validation-rule fields (required_fields, required_values, etc.)
         // are excluded: they affect whether the build passes, not the bytes of
         // the produced tags database. A change in those triggers a re-validation
-        // pass via dep_inputs, not a re-hash of the output.
+        // pass via dep_inputs, not a re-hash of the output. The *_limit fields
+        // affect only the `tags suggest` CLI output, not the cached database.
         &["output", "tags_dir", "check_unused"]
     }
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
@@ -924,6 +1011,9 @@ impl KnownFields for TagsConfig {
             ("required_field_groups", "Groups of fields where at least one group must be fully present"),
             ("sorted_tags",           "Require list-type fields to have items in sorted order"),
             ("check_unused",          "Fail the build when tags in the allowlist are not used by any file"),
+            ("similar_files_limit",   "How many most-similar files to inspect when generating tag suggestions"),
+            ("suggested_tags_limit",  "Maximum tag suggestions emitted by `tags suggest`"),
+            ("common_tags_limit",     "Maximum 'most common tags' reported when a file has no tags of its own"),
         ]
     }
 }

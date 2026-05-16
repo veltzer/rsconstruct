@@ -12,8 +12,6 @@ use crate::graph::{BuildGraph, Product};
 use crate::processors::{Processor, discover_checker_products};
 use crate::word_manager::WordManager;
 
-const DICT_DIR: &str = "/usr/share/hunspell";
-
 pub struct ZspellProcessor {
     config: ZspellConfig,
     /// Cached dictionary, built once on first use and reused across all execute() calls
@@ -57,8 +55,9 @@ impl ZspellProcessor {
     /// Build a zspell Dictionary from system hunspell files
     fn build_dictionary(&self) -> Result<zspell::Dictionary> {
         let lang = &self.config.language;
-        let aff_path = Path::new(DICT_DIR).join(format!("{lang}.aff"));
-        let dic_path = Path::new(DICT_DIR).join(format!("{lang}.dic"));
+        let dict_dir = Path::new(&self.config.dict_dir);
+        let aff_path = dict_dir.join(format!("{lang}.aff"));
+        let dic_path = dict_dir.join(format!("{lang}.dic"));
 
         let aff_content = fs::read_to_string(&aff_path)
             .with_context(|| format!("Failed to read affix file: {}. Is the hunspell dictionary for '{}' installed?", aff_path.display(), lang))?;

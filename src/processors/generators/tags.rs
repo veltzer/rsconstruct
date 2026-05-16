@@ -1378,7 +1378,7 @@ pub fn check_tags(config: &crate::config::TagsConfig) -> Result<()> {
 }
 
 /// Suggest tags for a file based on similarity to other tagged files.
-pub fn suggest_tags(db_path: &str, path: &str) -> Result<()> {
+pub fn suggest_tags(db_path: &str, path: &str, config: &crate::config::TagsConfig) -> Result<()> {
     let db = open_tags_db(db_path)?;
     let read_txn = crate::errors::ctx(db.begin_read(), "Failed to begin read transaction")?;
     let tag_table = crate::errors::ctx(read_txn.open_table(TAG_INDEX), "Failed to open tag_index table")?;
@@ -1413,7 +1413,7 @@ pub fn suggest_tags(db_path: &str, path: &str) -> Result<()> {
         let mut sorted: Vec<(&&String, &usize)> = tag_counts.iter().collect();
         sorted.sort_by(|a, b| b.1.cmp(a.1));
         println!("File has no tags. Most common tags across all files:");
-        for (tag, count) in sorted.iter().take(20) {
+        for (tag, count) in sorted.iter().take(config.common_tags_limit) {
             println!("  {tag} ({count} files)");
         }
         return Ok(());
@@ -1441,7 +1441,7 @@ pub fn suggest_tags(db_path: &str, path: &str) -> Result<()> {
 
     // Count suggested tags weighted by similarity
     let mut suggestions: HashMap<String, f64> = HashMap::new();
-    for (_, sim, new_tags) in similarities.iter().take(10) {
+    for (_, sim, new_tags) in similarities.iter().take(config.similar_files_limit) {
         for tag in new_tags {
             *suggestions.entry(tag.clone()).or_default() += sim;
         }
@@ -1451,7 +1451,7 @@ pub fn suggest_tags(db_path: &str, path: &str) -> Result<()> {
     sorted_suggestions.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
     if crate::json_output::is_json_mode() {
-        let json: Vec<serde_json::Value> = sorted_suggestions.iter().take(15)
+        let json: Vec<serde_json::Value> = sorted_suggestions.iter().take(config.suggested_tags_limit)
             .map(|(tag, score)| serde_json::json!({"tag": tag, "score": format!("{:.2}", score)}))
             .collect();
         println!("{}", serde_json::to_string_pretty(&json).expect(crate::errors::JSON_SERIALIZE));
@@ -1459,7 +1459,7 @@ pub fn suggest_tags(db_path: &str, path: &str) -> Result<()> {
         println!("No suggestions — file already has all tags of similar files.");
     } else {
         println!("Suggested tags for {path}:");
-        let rows: Vec<Vec<String>> = sorted_suggestions.iter().take(15)
+        let rows: Vec<Vec<String>> = sorted_suggestions.iter().take(config.suggested_tags_limit)
             .map(|(tag, score)| vec![tag.clone(), format!("{:.2}", score)])
             .collect();
         tables::print_table(&["Tag", "Score"], &rows);

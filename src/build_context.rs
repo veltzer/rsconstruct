@@ -25,6 +25,10 @@ pub struct BuildContext {
     pub(crate) mtime_db: Mutex<Option<Database>>,
     /// Whether mtime pre-check is enabled. Set to false by `--no-mtime-cache`.
     pub(crate) mtime_enabled: AtomicBool,
+    /// Max-arg-length threshold for `run_checker` (sourced from `build.max_arg_len`).
+    /// Stored on the context so any processor can read it without having to be
+    /// handed the full `Config`.
+    pub(crate) max_arg_len: std::sync::atomic::AtomicUsize,
 }
 
 impl BuildContext {
@@ -39,11 +43,20 @@ impl BuildContext {
             checksum_cache: Mutex::new(None),
             mtime_db: Mutex::new(None),
             mtime_enabled: AtomicBool::new(true),
+            max_arg_len: std::sync::atomic::AtomicUsize::new(1_000_000),
         }
     }
 
     pub(crate) fn set_mtime_check(&self, enabled: bool) {
         self.mtime_enabled.store(enabled, Ordering::Relaxed);
+    }
+
+    pub(crate) fn set_max_arg_len(&self, n: usize) {
+        self.max_arg_len.store(n, Ordering::Relaxed);
+    }
+
+    pub fn max_arg_len(&self) -> usize {
+        self.max_arg_len.load(Ordering::Relaxed)
     }
 
     pub(crate) const fn runtime(&self) -> &Runtime {

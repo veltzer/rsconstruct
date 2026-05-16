@@ -297,6 +297,11 @@ pub struct BuildConfig {
     /// Processor output_dir fields that start with "out/" will use this as the base instead.
     #[serde(default = "default_output_dir")]
     pub output_dir: String,
+    /// Maximum total argument length (in bytes) before splitting a checker
+    /// invocation into multiple invocations. Linux's `ARG_MAX` is typically
+    /// ~2MB; the default leaves headroom for env vars and the tool path.
+    #[serde(default = "default_max_arg_len")]
+    pub max_arg_len: usize,
 }
 
 const fn default_parallel() -> usize {
@@ -307,12 +312,17 @@ fn default_output_dir() -> String {
     "out".into()
 }
 
+const fn default_max_arg_len() -> usize {
+    1_000_000
+}
+
 impl Default for BuildConfig {
     fn default() -> Self {
         Self {
             parallel: 0,
             batch_size: Some(0), // Default: batching enabled, no size limit
             output_dir: "out".into(),
+            max_arg_len: default_max_arg_len(),
         }
     }
 }

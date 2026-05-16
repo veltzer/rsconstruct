@@ -595,18 +595,16 @@ pub fn ensure_stub_dir(stub_dir: &Path, processor_name: &str) -> Result<()> {
 /// Run a checker tool on one or more files.
 ///
 /// Builds a command from the tool name, optional subcommand, config args, and file paths,
-/// then runs it and checks the output.
-/// Maximum total argument length (in bytes) before splitting into multiple invocations.
-/// Linux limit is typically ~2MB; we use a conservative threshold to leave headroom
-/// for environment variables and the tool path itself.
-const MAX_ARG_LEN: usize = 1_000_000;
-
+/// then runs it and checks the output. `max_arg_len` is the threshold (in bytes) at
+/// which the invocation is split into multiple calls; it is sourced from
+/// `build.max_arg_len` in rsconstruct.toml.
 pub fn run_checker(
     ctx: &crate::build_context::BuildContext,
     tool: &str,
     subcommand: Option<&str>,
     args: &[String],
     files: &[&Path],
+    max_arg_len: usize,
 ) -> Result<()> {
     let mut files: Vec<&Path> = files.to_vec();
     files.sort();
@@ -618,7 +616,7 @@ pub fn run_checker(
         + args.iter().map(|a| a.len() + 1).sum::<usize>();
 
     let files_len: usize = files.iter().map(|f| f.as_os_str().len() + 1).sum();
-    if base_len + files_len <= MAX_ARG_LEN {
+    if base_len + files_len <= max_arg_len {
         return run_checker_once(ctx, tool, subcommand, args, files);
     }
 
@@ -628,7 +626,7 @@ pub fn run_checker(
         let mut chunk_end = chunk_start;
         while chunk_end < files.len() {
             let file_len = files[chunk_end].as_os_str().len() + 1;
-            if chunk_len + file_len > MAX_ARG_LEN && chunk_end > chunk_start {
+            if chunk_len + file_len > max_arg_len && chunk_end > chunk_start {
                 break;
             }
             chunk_len += file_len;
@@ -1567,11 +1565,11 @@ impl SimpleChecker {
     fn check_files(&self, ctx: &crate::build_context::BuildContext, files: &[&Path]) -> Result<()> {
         let tool = self.config.standard.require_command(self.params.description)?;
         if self.params.prepend_args.is_empty() {
-            run_checker(ctx, tool, self.params.subcommand, &self.config.standard.args, files)
+            run_checker(ctx, tool, self.params.subcommand, &self.config.standard.args, files, ctx.max_arg_len())
         } else {
             let mut combined_args: Vec<String> = self.params.prepend_args.iter().map(std::string::ToString::to_string).collect();
             combined_args.extend_from_slice(&self.config.standard.args);
-            run_checker(ctx, tool, self.params.subcommand, &combined_args, files)
+            run_checker(ctx, tool, self.params.subcommand, &combined_args, files, ctx.max_arg_len())
         }
     }
 
@@ -1583,11 +1581,11 @@ impl SimpleChecker {
         let tool = self.config.standard.require_command(self.params.description)?;
         let subcommand = self.params.fix_subcommand.or(self.params.subcommand);
         if self.params.fix_prepend_args.is_empty() {
-            run_checker(ctx, tool, subcommand, &self.config.standard.args, files)
+            run_checker(ctx, tool, subcommand, &self.config.standard.args, files, ctx.max_arg_len())
         } else {
             let mut combined_args: Vec<String> = self.params.fix_prepend_args.iter().map(std::string::ToString::to_string).collect();
             combined_args.extend_from_slice(&self.config.standard.args);
-            run_checker(ctx, tool, subcommand, &combined_args, files)
+            run_checker(ctx, tool, subcommand, &combined_args, files, ctx.max_arg_len())
         }
     }
 }
