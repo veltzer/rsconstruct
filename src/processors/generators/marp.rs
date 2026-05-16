@@ -14,7 +14,7 @@ use crate::processors::{SimpleGenerator, SimpleGeneratorParams, DiscoverMode};
 /// marp occasionally hangs (chromium-headless / sandbox issues). Kill it after this long
 /// rather than letting the build sit forever, and retry up to MARP_MAX_ATTEMPTS times
 /// since the hangs are transient.
-const MARP_TIMEOUT: Duration = Duration::from_secs(10);
+const MARP_TIMEOUT: Duration = Duration::from_secs(20);
 const MARP_MAX_ATTEMPTS: u32 = 3;
 
 fn cleanup_marp_tmp_dirs() {

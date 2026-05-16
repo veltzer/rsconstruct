@@ -16,7 +16,7 @@ use crate::object_store::ObjectStore;
 use crate::processors::{BuildStats, ProductTiming};
 use crate::progress;
 
-use super::{Executor, HandlerContext, LevelWork, PreCheckResult, RestoreOutcome, SharedState, WorkItem};
+use super::{Classification, Executor, HandlerContext, LevelWork, PreCheckResult, RestoreOutcome, SharedState, WorkItem};
 
 /// Compute the effective max_jobs for a processor instance. The config
 /// field is capped by the plugin's static `max_jobs_cap`; `None` on either
@@ -84,7 +84,7 @@ impl Semaphore {
 /// because other processors may contribute files to the same directory. Instead,
 /// we remove just the files recorded in this product's last tree descriptor
 /// (falling back to creating empty dirs if there is no prior tree).
-fn remove_stale_outputs(
+pub(super) fn remove_stale_outputs(
     product: &Product,
     object_store: &ObjectStore,
     input_checksum: &str,
@@ -134,7 +134,13 @@ struct LevelContext<'b> {
 }
 
 impl Executor<'_> {
-    /// Execute all products in the graph that need rebuilding
+    /// Execute all products in the graph that need rebuilding.
+    ///
+    /// `classification` is the result of an earlier [`classify_products`]
+    /// pass. The executor reuses the per-product `input_checksum` values
+    /// recorded there instead of recomputing them, which matters when
+    /// outputs of one product are inputs of another and were unlinked
+    /// between classify and execute (see [`unlink_pending_outputs`]).
     pub fn execute(
         &self,
         graph: &BuildGraph,
@@ -142,6 +148,7 @@ impl Executor<'_> {
         force: bool,
         timings: bool,
         keep_going: bool,
+        classification: &Classification,
     ) -> Result<BuildStats> {
         let build_start = Instant::now();
         let order = graph.topological_sort()?;
@@ -149,7 +156,7 @@ impl Executor<'_> {
         // Emit JSON build start event
         json_output::emit_build_start(order.len());
 
-        let result = self.execute_parallel(graph, &order, object_store, force, timings, keep_going);
+        let result = self.execute_parallel(graph, &order, object_store, force, timings, keep_going, classification);
 
         match result {
             Ok(mut stats) => {
@@ -196,6 +203,7 @@ impl Executor<'_> {
         force: bool,
         timings: bool,
         keep_going: bool,
+        classification: &Classification,
     ) -> Result<BuildStats> {
         let build_start = Instant::now();
         // Group products into levels that can run in parallel
@@ -213,9 +221,17 @@ impl Executor<'_> {
         };
         let global_total = order.len();
 
-        // Pre-build classification: count skip/restore/build for progress bar sizing
-        let (_skip_count, restore_count, build_count) = self.classify_products(graph, order, object_store, force);
-        let work_count = restore_count + build_count;
+        // Use the caller-provided classification for progress bar sizing.
+        let work_count = classification.restore_count + classification.build_count;
+
+        // Build a lookup of precomputed input checksums by product id. Reusing
+        // these (instead of recomputing in prepare_level_work) is important:
+        // unlink_pending_outputs may have removed files that appear as inputs
+        // of later-level products, which would otherwise hash as MISSING and
+        // mint a cache key the next classify can never match.
+        let precomputed_checksums: HashMap<usize, String> = classification.products.iter()
+            .map(|c| (c.id, c.input_checksum.clone()))
+            .collect();
 
         // Create progress bar sized to actual work (excludes instant skips)
         let pb = progress::create_bar(
@@ -249,7 +265,7 @@ impl Executor<'_> {
             }
 
             let LevelWork { batch_groups, non_batch_items } = self.prepare_level_work(
-                graph, &level, object_store, force, keep_going, &shared,
+                graph, &level, object_store, force, keep_going, &shared, &precomputed_checksums,
             );
 
             let lctx = LevelContext {
@@ -409,21 +425,9 @@ impl Executor<'_> {
                 lctx.pb.set_message(format!("[{}] batch {} files", proc_name, product_refs.len()));
             }
 
-            let mut cleanup_failed = false;
-            for (p, item) in product_refs.iter().zip(chunk.iter()) {
+            // Outputs were already unlinked at classify time; just announce starts.
+            for p in &product_refs {
                 json_output::emit_product_start(&self.product_display(p), &p.processor);
-                if let Err(e) = remove_stale_outputs(p, lctx.object_store, &item.input_checksum) {
-                    let ctx = HandlerContext {
-                        product: p, id: item.product_id, input_checksum: &item.input_checksum,
-                        proc_name, keep_going: lctx.keep_going, shared: lctx.shared, pb: lctx.pb,
-                    };
-                    self.handle_error(&ctx, e, None);
-                    Self::inc_progress(lctx.pb, lctx.shared);
-                    cleanup_failed = true;
-                }
-            }
-            if cleanup_failed {
-                break;
             }
             let batch_start = Instant::now();
             crate::processors::set_declared_tools(Some(processor.required_tools()));
@@ -538,12 +542,6 @@ impl Executor<'_> {
                 }
 
                 json_output::emit_product_start(&self.product_display(product), &product.processor);
-                match remove_stale_outputs(product, lctx.object_store, &item.input_checksum) {
-                    Err(e) => {
-                        self.handle_error(&ctx, e, None);
-                        Self::inc_progress(lctx.pb, lctx.shared);
-                    }
-                    Ok(()) => {
                 let product_start = Instant::now();
                 let mut last_error = None;
                 let max_attempts = 1 + self.retry;
@@ -618,8 +616,6 @@ impl Executor<'_> {
                 }
                 crate::processors::set_declared_tools(None);
                 Self::inc_progress(lctx.pb, lctx.shared);
-                    } // Ok(())
-                } // match remove_stale_outputs
             }
 
             // Release per-processor semaphore permit
@@ -668,8 +664,9 @@ impl Executor<'_> {
 
     /// Prepare work items for a single parallel level.
     ///
-    /// Skips products with failed dependencies, computes checksums,
-    /// and separates items into batch groups vs non-batch items.
+    /// Skips products with failed dependencies, reuses precomputed input
+    /// checksums from the caller's classification pass, and separates items
+    /// into batch groups vs non-batch items.
     pub(super) fn prepare_level_work(
         &self,
         graph: &BuildGraph,
@@ -678,6 +675,7 @@ impl Executor<'_> {
         force: bool,
         keep_going: bool,
         shared: &SharedState,
+        precomputed_checksums: &HashMap<usize, String>,
     ) -> LevelWork {
         let mut work_items: Vec<WorkItem> = Vec::new();
 
@@ -720,12 +718,18 @@ impl Executor<'_> {
                     shared.failed_products.lock().insert(id);
                     continue;
                 }
-                // reuse the cached input checksum instead of recomputing
-                let input_checksum = crate::checksum::combined_input_checksum(self.build_ctx, &product.inputs);
-
-                let input_checksum = match input_checksum {
-                    Ok(cs) => cs,
-                    Err(e) => {
+                // Reuse the precomputed input_checksum from classify. We do
+                // NOT recompute here: classify ran before unlink_pending_outputs,
+                // so its checksum reflects the on-disk state that the cache
+                // descriptor will be keyed by. Recomputing now would see any
+                // pre-deleted output as MISSING and produce a cache key that
+                // a subsequent classify could never match.
+                let input_checksum = match precomputed_checksums.get(&id) {
+                    Some(cs) if !cs.is_empty() => cs.clone(),
+                    _ => {
+                        // Classification couldn't compute a checksum (its only
+                        // failure mode is fatal IO). Surface it the same way.
+                        let e = anyhow::anyhow!("no precomputed input checksum for product {id}");
                         if keep_going {
                             let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
                             println!("{}", color::red(&format!("Error: {msg}")));

@@ -232,17 +232,24 @@ impl Builder {
             println!("[build] {} products to check for updates", order.len());
         }
         let policy = crate::executor::IncrementalPolicy;
-        let (skip_count, restore_count, build_count) =
+        let classification =
             crate::executor::classify_products(ctx, &policy, &graph, &order, &self.object_store, opts.force);
         phase_timings.push(("classify".to_string(), t.elapsed()));
         if !crate::runtime_flags::quiet() {
-            println!("[build] {build_count} to build, {restore_count} to restore ({skip_count} up-to-date)");
+            println!("[build] {} to build, {} to restore ({} up-to-date)",
+                classification.build_count, classification.restore_count, classification.skip_count);
         }
         print_graph_stats(GraphSnapshot::AfterClassify, &graph);
 
         if opts.stop_after == BuildPhase::Classify {
             return Ok(());
         }
+
+        // Unlink outputs of every product we intend to execute. Doing this up
+        // front (rather than per-product right before execute) means a stale
+        // downstream output cannot survive on disk if its upstream fails: the
+        // downstream's outputs are already gone before execution starts.
+        crate::executor::unlink_pending_outputs(&graph, &self.object_store, &classification)?;
 
         // Create executor with parallelism from command line, env var, or config
         let parallel = opts.jobs
@@ -270,7 +277,7 @@ impl Builder {
         // Execute the build (enable timings collection if trace output is requested)
         let t = Instant::now();
         let collect_timings = opts.timings || opts.trace.is_some();
-        let result = executor.execute(&graph, &self.object_store, opts.force, collect_timings, opts.keep_going);
+        let result = executor.execute(&graph, &self.object_store, opts.force, collect_timings, opts.keep_going, &classification);
         let build_dur = t.elapsed();
         print_graph_stats(GraphSnapshot::AfterExecute, &graph);
 

@@ -86,6 +86,24 @@ struct SharedState {
     global_total: usize,
 }
 
+/// Per-product classification recorded by [`classify_products`].
+/// `input_checksum` is empty when the checksum could not be computed
+/// (which forces Build).
+pub struct ClassifiedProduct {
+    pub id: usize,
+    pub action: ProductAction,
+    pub input_checksum: String,
+}
+
+/// Result of [`classify_products`]: counts plus per-product actions in
+/// topological order.
+pub struct Classification {
+    pub skip_count: usize,
+    pub restore_count: usize,
+    pub build_count: usize,
+    pub products: Vec<ClassifiedProduct>,
+}
+
 /// Pre-build classification: count how many products will be skipped, restored, or built.
 /// This is a fast read-only pass (checksums + cache lookups, no mutations).
 /// Products are processed in topological order so that dependency changes propagate:
@@ -97,11 +115,12 @@ pub fn classify_products(
     order: &[usize],
     object_store: &ObjectStore,
     force: bool,
-) -> (usize, usize, usize) {
+) -> Classification {
     let mut skip_count = 0;
     let mut restore_count = 0;
     let mut build_count = 0;
     let mut will_change: HashSet<usize> = HashSet::new();
+    let mut products: Vec<ClassifiedProduct> = Vec::with_capacity(order.len());
 
     for &id in order {
         let product = graph.get_product(id).expect(errors::INVALID_PRODUCT_ID);
@@ -110,10 +129,12 @@ pub fn classify_products(
         let Ok(input_checksum) = crate::checksum::combined_input_checksum(ctx, &product.inputs) else {
             build_count += 1;
             will_change.insert(id);
+            products.push(ClassifiedProduct { id, action: ProductAction::Build, input_checksum: String::new() });
             continue;
         };
 
-        match policy.classify(product, object_store, &input_checksum, dep_changed, force) {
+        let action = policy.classify(product, object_store, &input_checksum, dep_changed, force);
+        match action {
             ProductAction::Skip => {
                 skip_count += 1;
             }
@@ -126,9 +147,36 @@ pub fn classify_products(
                 will_change.insert(id);
             }
         }
+        products.push(ClassifiedProduct { id, action, input_checksum });
     }
 
-    (skip_count, restore_count, build_count)
+    Classification { skip_count, restore_count, build_count, products }
+}
+
+/// Unlink the on-disk outputs of every product classified as Build or Restore.
+///
+/// Called once between classify and execute so that any "to-be-rebuilt" output
+/// is guaranteed to be gone from disk by the time execution starts. If a
+/// processor then fails (or its upstream fails and it is skipped), the stale
+/// version cannot remain on disk — there is nothing to confuse the user into
+/// thinking the build succeeded.
+///
+/// Uses the same per-product unlink logic as the pre-execute cleanup
+/// ([`execution::remove_stale_outputs`]), so Creator-style products with
+/// shared `output_dirs` only remove files they previously owned.
+pub fn unlink_pending_outputs(
+    graph: &BuildGraph,
+    object_store: &ObjectStore,
+    classification: &Classification,
+) -> Result<()> {
+    for c in &classification.products {
+        if matches!(c.action, ProductAction::Skip) {
+            continue;
+        }
+        let product = graph.get_product(c.id).expect(errors::INVALID_PRODUCT_ID);
+        execution::remove_stale_outputs(product, object_store, &c.input_checksum)?;
+    }
+    Ok(())
 }
 
 /// Executor handles running products through their processors
@@ -187,17 +235,6 @@ impl<'a> Executor<'a> {
     fn inc_progress(pb: &ProgressBar, shared: &SharedState) {
         Self::inc_global(shared);
         pb.inc(1);
-    }
-
-    /// Pre-build classification (delegates to the free function).
-    fn classify_products(
-        &self,
-        graph: &BuildGraph,
-        order: &[usize],
-        object_store: &ObjectStore,
-        force: bool,
-    ) -> (usize, usize, usize) {
-        classify_products(self.build_ctx, self.policy, graph, order, object_store, force)
     }
 
     /// Print an explain line for a product showing what action will be taken and why.
