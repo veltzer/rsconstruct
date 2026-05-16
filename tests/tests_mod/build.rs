@@ -1045,3 +1045,105 @@ fn include_and_exclude_same_processor_is_error() {
         "Error should explain the conflict: {}", stderr
     );
 }
+
+/// Regression test for the chain SVG → marp → ipdfunite.
+///
+/// The markdown analyzer must surface the SVG referenced by a marp deck as a
+/// dependency of the deck's PDF product. When the SVG content changes, the
+/// marp PDF must be classified for rebuild, and that change must transitively
+/// propagate to the ipdfunite product that merges the deck PDFs — otherwise a
+/// stale merged PDF can survive even though its source content changed.
+///
+/// Gated on marp availability (requires `node` + the marp-cli npm package);
+/// ipdfunite is in-process so always runs when reached. Skipped in CI runners
+/// without marp installed.
+#[test]
+fn svg_change_rebuilds_marp_and_ipdfunite() {
+    if !crate::common::tool_available("marp") {
+        eprintln!("marp not found, skipping test");
+        return;
+    }
+
+    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    // Layout:
+    //   marp/courses/deck/a.md   → references svg/img.svg
+    //   svg/img.svg              → real SVG, picked up by [analyzer.markdown]
+    //   rsconstruct.toml         → marp + ipdfunite + markdown analyzer
+    fs::create_dir_all(project_path.join("marp/courses/deck")).unwrap();
+    fs::create_dir_all(project_path.join("svg")).unwrap();
+    fs::write(
+        project_path.join("svg/img.svg"),
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="red"/></svg>"#,
+    ).unwrap();
+    fs::write(
+        project_path.join("marp/courses/deck/a.md"),
+        "# Slide\n\n![img](svg/img.svg)\n",
+    ).unwrap();
+    // Generous marp timeout for shared CI hosts — marp/Chrome can be slow
+    // to launch under load. We do not care about render performance here.
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        concat!(
+            "[processor.marp]\n",
+            "timeout_secs = 120\n",
+            "max_attempts = 3\n",
+            "[processor.ipdfunite]\n",
+            "[analyzer.markdown]\n",
+        ),
+    ).unwrap();
+
+    // Phase 1: clean build. Both marp and ipdfunite must succeed.
+    let result1 = run_rsconstruct_json(project_path, &["build"]);
+    assert!(result1.exit_success,
+        "Phase 1 build failed (errors={:?}, products={:?})",
+        result1.errors, result1.products);
+    assert!(project_path.join("out/marp/courses/deck/a.pdf").exists(),
+        "marp output PDF should exist on disk");
+    assert!(project_path.join("out/ipdfunite/deck.pdf").exists(),
+        "ipdfunite merged PDF should exist on disk");
+
+    // Wait so mtime differs and the markdown analyzer's mtime shortcut
+    // doesn't decide nothing changed before reading content.
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // Phase 2: modify the SVG that the marp deck references. The point of
+    // the test: this change must flow through to BOTH the marp PDF and the
+    // ipdfunite merged PDF.
+    fs::write(
+        project_path.join("svg/img.svg"),
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="blue"/></svg>"#,
+    ).unwrap();
+
+    // Classify-only first: prove the marp product is flagged for rebuild
+    // BEFORE anything runs. This is the load-bearing assertion for the
+    // markdown analyzer / SVG-dep wiring — independent of caching quirks
+    // downstream.
+    let classify = run_rsconstruct_with_env(
+        project_path, &["build", "--stop-after", "classify"], &[("NO_COLOR", "1")]
+    );
+    assert!(classify.status.success(),
+        "Classify should succeed: stderr={}", String::from_utf8_lossy(&classify.stderr));
+    let classify_out = String::from_utf8_lossy(&classify.stdout);
+    assert!(!classify_out.contains("(2 up-to-date)"),
+        "After SVG change, not every product should be up-to-date: {}", classify_out);
+
+    // Phase 3: actually rebuild and confirm BOTH products ran (or restored).
+    // The user-facing contract: a stale ipdfunite output must NOT survive an
+    // SVG change.
+    let result3 = run_rsconstruct_json(project_path, &["build"]);
+    assert!(result3.exit_success,
+        "Phase 3 build failed (errors={:?})", result3.errors);
+    let marp_ran = result3.products.iter().any(|p|
+        p.processor == "marp" && p.status == "success"
+    );
+    assert!(marp_ran,
+        "marp must rebuild when its referenced SVG changes: {:?}", result3.products);
+    let ipdfunite_ran = result3.products.iter().any(|p|
+        p.processor == "ipdfunite" && p.status == "success"
+    );
+    assert!(ipdfunite_ran,
+        "ipdfunite must rebuild when its upstream marp PDF changes: {:?}",
+        result3.products);
+}
