@@ -1,8 +1,22 @@
 //! marp generator — custom Processor impl backed by [`MarpConfig`].
+//!
+//! Concurrency note: marp-cli launches headless Chrome under
+//! `$TMPDIR/marp-cli-<random>/`. Multiple marp processes running in parallel
+//! create sibling dirs under the same `$TMPDIR`. An earlier version of this
+//! file ran a "best effort" cleanup that walked `/tmp` and removed every
+//! `marp-cli-*` directory it found — which raced with concurrent invocations,
+//! pulling working files out from under a still-running Chrome and producing
+//! SIGTRAP crashes that surfaced to puppeteer as `TargetCloseError`.
+//!
+//! To eliminate the race, each invocation gets its own private `TMPDIR` so
+//! marp's `marp-cli-<random>` dir lands in a per-invocation namespace. The
+//! whole `TMPDIR` is then removed after marp exits — no shared cleanup.
 
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Duration;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result};
 
 use crate::config::MarpConfig;
@@ -10,17 +24,32 @@ use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use crate::processors::{run_command_with_timeout, check_command_output, ensure_output_dir, Processor};
 
-fn cleanup_marp_tmp_dirs() {
-    let Ok(entries) = fs::read_dir("/tmp") else { return };
-    for entry in entries.filter_map(std::result::Result::ok) {
-        if entry.file_name().to_string_lossy().starts_with("marp-cli-") {
-            let _ = fs::remove_dir_all(entry.path());
-        }
-    }
+fn is_transient_marp_error(err: &anyhow::Error) -> bool {
+    let s = err.to_string();
+    // Wall-clock timeout (puppeteer hung) or Chrome's CDP socket dropped
+    // (typically because the headless browser crashed). Both are retryable.
+    s.contains("Command timed out after") || s.contains("TargetCloseError")
 }
 
-fn is_timeout_error(err: &anyhow::Error) -> bool {
-    err.to_string().contains("Command timed out after")
+/// Allocate a unique, empty temp directory under the system tmpdir. Caller
+/// owns the path and is responsible for `fs::remove_dir_all` on completion.
+fn make_invocation_tmpdir() -> Result<PathBuf> {
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+    let base = std::env::temp_dir();
+    let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let pid = std::process::id();
+    let ns = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let dir = base.join(format!("rsc-marp-{pid}-{ns}-{seq}"));
+    fs::create_dir_all(&dir)
+        .with_context(|| format!("Failed to create marp scratch dir: {}", dir.display()))?;
+    Ok(dir)
+}
+
+/// Remove a single scratch dir. Errors are intentionally ignored: cleanup is
+/// best-effort, and a leaked tmpdir is preferable to surfacing a spurious
+/// error after a successful build.
+fn remove_scratch_dir(dir: &Path) {
+    let _ = fs::remove_dir_all(dir);
 }
 
 pub struct MarpProcessor {
@@ -74,7 +103,13 @@ impl Processor for MarpProcessor {
         let max_attempts = self.config.max_attempts.max(1);
 
         for attempt in 1..=max_attempts {
+            // Fresh scratch dir per attempt so a failed run can't leave state
+            // that confuses the retry, and so concurrent invocations can never
+            // touch each other's working files.
+            let scratch = make_invocation_tmpdir()?;
+
             let mut cmd = Command::new(command);
+            cmd.env("TMPDIR", &scratch);
             if format != "html" {
                 cmd.arg(format!("--{format}"));
             }
@@ -83,16 +118,18 @@ impl Processor for MarpProcessor {
             cmd.arg(input);
             let result = run_command_with_timeout(ctx, &cmd, timeout)
                 .and_then(|out| check_command_output(&out, format_args!("marp {}", input.display())));
-            cleanup_marp_tmp_dirs();
+            remove_scratch_dir(&scratch);
             match result {
                 Ok(()) => return Ok(()),
                 Err(err) => {
-                    if !is_timeout_error(&err) || attempt == max_attempts {
+                    if !is_transient_marp_error(&err) || attempt == max_attempts {
                         return Err(err);
                     }
                     eprintln!(
-                        "[marp] {} timed out (attempt {}/{}), retrying",
-                        input.display(), attempt, max_attempts
+                        "[marp] {} {} (attempt {}/{}), retrying",
+                        input.display(),
+                        if err.to_string().contains("TargetCloseError") { "Chrome crashed" } else { "timed out" },
+                        attempt, max_attempts
                     );
                 }
             }
