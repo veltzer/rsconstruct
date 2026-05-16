@@ -224,15 +224,6 @@ impl Executor<'_> {
         // Use the caller-provided classification for progress bar sizing.
         let work_count = classification.restore_count + classification.build_count;
 
-        // Build a lookup of precomputed input checksums by product id. Reusing
-        // these (instead of recomputing in prepare_level_work) is important:
-        // unlink_pending_outputs may have removed files that appear as inputs
-        // of later-level products, which would otherwise hash as MISSING and
-        // mint a cache key the next classify can never match.
-        let precomputed_checksums: HashMap<usize, String> = classification.products.iter()
-            .map(|c| (c.id, c.input_checksum.clone()))
-            .collect();
-
         // Create progress bar sized to actual work (excludes instant skips)
         let pb = progress::create_bar(
             work_count as u64,
@@ -265,7 +256,7 @@ impl Executor<'_> {
             }
 
             let LevelWork { batch_groups, non_batch_items } = self.prepare_level_work(
-                graph, &level, object_store, force, keep_going, &shared, &precomputed_checksums,
+                graph, &level, object_store, force, keep_going, &shared,
             );
 
             let lctx = LevelContext {
@@ -664,9 +655,9 @@ impl Executor<'_> {
 
     /// Prepare work items for a single parallel level.
     ///
-    /// Skips products with failed dependencies, reuses precomputed input
-    /// checksums from the caller's classification pass, and separates items
-    /// into batch groups vs non-batch items.
+    /// Skips products with failed dependencies, recomputes per-product input
+    /// checksums from current on-disk state, and separates items into batch
+    /// groups vs non-batch items.
     pub(super) fn prepare_level_work(
         &self,
         graph: &BuildGraph,
@@ -675,7 +666,6 @@ impl Executor<'_> {
         force: bool,
         keep_going: bool,
         shared: &SharedState,
-        precomputed_checksums: &HashMap<usize, String>,
     ) -> LevelWork {
         let mut work_items: Vec<WorkItem> = Vec::new();
 
@@ -718,18 +708,28 @@ impl Executor<'_> {
                     shared.failed_products.lock().insert(id);
                     continue;
                 }
-                // Reuse the precomputed input_checksum from classify. We do
-                // NOT recompute here: classify ran before unlink_pending_outputs,
-                // so its checksum reflects the on-disk state that the cache
-                // descriptor will be keyed by. Recomputing now would see any
-                // pre-deleted output as MISSING and produce a cache key that
-                // a subsequent classify could never match.
-                let input_checksum = match precomputed_checksums.get(&id) {
-                    Some(cs) if !cs.is_empty() => cs.clone(),
-                    _ => {
-                        // Classification couldn't compute a checksum (its only
-                        // failure mode is fatal IO). Surface it the same way.
-                        let e = anyhow::anyhow!("no precomputed input checksum for product {id}");
+                // Recompute the input checksum here (per-level, in topological
+                // order) rather than reusing the classify-time value. By the
+                // time we reach this level, every upstream level has completed,
+                // so reading inputs from disk gives the post-upstream content
+                // that the cache descriptor must be keyed by — critical for
+                // products whose primary inputs are produced by an upstream
+                // (e.g., ipdfunite consuming marp's PDF). The classify-time
+                // value can carry MISSING: for inputs that didn't exist yet,
+                // which would mint a cache key the next classify can never match.
+                //
+                // For products whose own outputs appear as inputs (e.g., a
+                // tera template with dep_inputs listing its own output): the
+                // input is currently MISSING here because unlink_pending_outputs
+                // removed it. That's fine: `needs_rebuild_descriptor` won't
+                // find a cache entry under the MISSING-keyed descriptor (no
+                // prior build cached under that key), so we build. After build,
+                // handle_success recomputes from the post-execution state and
+                // caches under the real-content key — which is what next
+                // classify will look up.
+                let input_checksum = match crate::checksum::combined_input_checksum(self.build_ctx, &product.inputs) {
+                    Ok(cs) => cs,
+                    Err(e) => {
                         if keep_going {
                             let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
                             println!("{}", color::red(&format!("Error: {msg}")));

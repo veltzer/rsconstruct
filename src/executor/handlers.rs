@@ -160,7 +160,34 @@ impl Executor<'_> {
         graph: &crate::graph::BuildGraph,
         duration: Option<std::time::Duration>,
     ) -> bool {
-        let desc_key = ctx.product.descriptor_key(ctx.input_checksum);
+        // Recompute the input checksum NOW (post-execution) rather than reusing
+        // the classify-time value. The cache key must match what the *next*
+        // classify will compute from on-disk state, which means hashing inputs
+        // that exist right now:
+        //   - upstream-chain case (e.g. ipdfunite consuming marp's PDF on a
+        //     clean build): at classify time the upstream output didn't exist
+        //     yet and the checksum had MISSING:; here it does, and the hash
+        //     reflects real content.
+        //   - self-reference / output-also-as-input case (e.g. tera template
+        //     whose dep_inputs lists its own output): the product just rewrote
+        //     the file, so the post-execution hash matches what next classify
+        //     will see.
+        // Both cases break if we use the classify-time checksum.
+        let post_input_checksum = match crate::checksum::combined_input_checksum(self.build_ctx, &ctx.product.inputs) {
+            Ok(cs) => cs,
+            Err(e) => {
+                emit_product_complete(
+                    &self.product_display(ctx.product),
+                    &ctx.product.processor,
+                    ProductStatus::Failed,
+                    duration,
+                    Some(&format!("Failed to compute post-execution input checksum: {e}")),
+                );
+                self.record_failure(ctx, e, false);
+                return false;
+            }
+        };
+        let desc_key = ctx.product.descriptor_key(&post_input_checksum);
         let cache_result = if ctx.product.outputs.is_empty() && !ctx.product.has_output_dirs() {
             // Checker: no outputs, just mark as passed
             object_store.store_marker(&desc_key).map(|()| false)

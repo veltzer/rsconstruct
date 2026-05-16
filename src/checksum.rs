@@ -116,8 +116,19 @@ fn fast_checksum(ctx: &BuildContext, path: &Path) -> Result<(String, Option<(Str
         return Ok((entry.checksum.clone(), None));
     }
 
-    // mtime changed or no cache entry — compute checksum
-    let checksum = file_checksum(ctx, path)?;
+    // mtime changed or no cache entry — recompute checksum from disk.
+    //
+    // We bypass `file_checksum` (which would consult `ctx.checksum_cache`)
+    // because the in-session cache assumes file content is stable across a
+    // single build run. That assumption is wrong when an upstream product
+    // writes a file mid-build: a stale entry from a pre-rebuild read would
+    // be returned here even though mtime told us the file changed. Hash
+    // the bytes directly, then refresh the in-session cache.
+    let checksum = stream_file_checksum(path)?;
+    let mut guard = ctx.checksum_cache.lock().unwrap();
+    let cache = guard.get_or_insert_with(HashMap::new);
+    cache.insert(path.to_path_buf(), checksum.clone());
+    drop(guard);
     let new_entry = MtimeEntry {
         mtime_secs,
         mtime_nanos,
