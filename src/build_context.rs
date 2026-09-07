@@ -33,6 +33,8 @@ pub struct BuildContext {
     /// On the context for the same reason as `max_arg_len`: the iyamlschema
     /// checker needs it and has no route to the full `Config`.
     pub(crate) webcache_ttl_secs: std::sync::atomic::AtomicU64,
+    /// `[build] command_timeout_secs`; 0 means no limit (the default).
+    pub(crate) command_timeout_secs: std::sync::atomic::AtomicU64,
 }
 
 impl BuildContext {
@@ -49,6 +51,20 @@ impl BuildContext {
             mtime_enabled: AtomicBool::new(true),
             max_arg_len: std::sync::atomic::AtomicUsize::new(1_000_000),
             webcache_ttl_secs: std::sync::atomic::AtomicU64::new(7 * 24 * 60 * 60),
+            command_timeout_secs: std::sync::atomic::AtomicU64::new(0),
+        }
+    }
+
+    pub(crate) fn set_command_timeout_secs(&self, n: u64) {
+        self.command_timeout_secs.store(n, Ordering::Relaxed);
+    }
+
+    /// The build-wide command timeout, or None when `[build]
+    /// command_timeout_secs` is 0 (the default: no limit).
+    pub fn command_timeout(&self) -> Option<std::time::Duration> {
+        match self.command_timeout_secs.load(Ordering::Relaxed) {
+            0 => None,
+            secs => Some(std::time::Duration::from_secs(secs)),
         }
     }
 

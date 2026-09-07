@@ -282,9 +282,12 @@ fn run_command_inner(
     })
 }
 
+/// Run a command under the build-wide `[build] command_timeout_secs` limit
+/// (none by default). A processor with its own timeout uses
+/// `run_command_with_timeout` instead, so its explicit value wins.
 pub fn run_command(ctx: &crate::build_context::BuildContext, cmd: &Command) -> Result<Output> {
     let show = crate::runtime_flags::show_output();
-    run_command_inner(ctx, cmd, show, None, None)
+    run_command_inner(ctx, cmd, show, ctx.command_timeout(), None)
 }
 
 pub fn run_command_with_timeout(ctx: &crate::build_context::BuildContext, cmd: &Command, timeout: Duration) -> Result<Output> {
@@ -293,7 +296,7 @@ pub fn run_command_with_timeout(ctx: &crate::build_context::BuildContext, cmd: &
 }
 
 pub fn run_command_capture(ctx: &crate::build_context::BuildContext, cmd: &Command) -> Result<Output> {
-    run_command_inner(ctx, cmd, false, None, None)
+    run_command_inner(ctx, cmd, false, ctx.command_timeout(), None)
 }
 
 /// Run a command, feeding `stdin_data` to its standard input and capturing
@@ -307,7 +310,7 @@ pub fn run_command_with_stdin(
     cmd: &Command,
     stdin_data: &[u8],
 ) -> Result<Output> {
-    run_command_inner(ctx, cmd, false, None, Some(stdin_data))
+    run_command_inner(ctx, cmd, false, ctx.command_timeout(), Some(stdin_data))
 }
 
 

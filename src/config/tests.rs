@@ -1017,3 +1017,15 @@ dependencies = ["flask"]
         .unwrap_err().to_string();
     assert!(err.contains("uv lock"), "error should point at uv lock: {err}");
 }
+
+/// `[build] command_timeout_secs` is opt-in: absent means 0 (no limit), and
+/// a value parses through. The knob exists for builds that must not sit
+/// forever, never as a stand-in for fixing a tool that hangs.
+#[test]
+fn build_command_timeout_secs_is_zero_unless_set() {
+    let absent: super::BuildConfig = toml::from_str("").unwrap();
+    assert_eq!(absent.command_timeout_secs, 0);
+    assert_eq!(super::BuildConfig::default().command_timeout_secs, 0);
+    let set: super::BuildConfig = toml::from_str("command_timeout_secs = 30\n").unwrap();
+    assert_eq!(set.command_timeout_secs, 30);
+}

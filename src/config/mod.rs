@@ -679,6 +679,21 @@ pub struct BuildConfig {
     /// checked, whatever this is set to.
     #[serde(default = "default_allow_missing_dep_auto")]
     pub allow_missing_dep_auto: bool,
+    /// Wall-clock limit, in seconds, for every external command a processor
+    /// runs; a command still running at the limit is killed and its product
+    /// fails with "Command timed out after Ns". `0` (the default) means no
+    /// limit: a build waits for its tools however long they take.
+    ///
+    /// Opt-in on purpose. A tool that hangs is a bug -- in the tool, in the
+    /// input it was given, or in the environment -- and the fix is to find
+    /// that cause, not to cut the tool off and move on. This knob is for
+    /// the case where a build must not be allowed to sit forever (an
+    /// unattended runner, say), where a loud kill is preferable to a
+    /// silent hang. Processors with their own timeout (marp's
+    /// `timeout_secs`) keep it: an explicit per-processor value wins over
+    /// this default.
+    #[serde(default)]
+    pub command_timeout_secs: u64,
 }
 
 const fn default_parallel() -> usize {
@@ -720,6 +735,7 @@ impl Default for BuildConfig {
             hash_tool_versions: default_hash_tool_versions(),
             warn_symlinks: default_warn_symlinks(),
             allow_missing_dep_auto: default_allow_missing_dep_auto(),
+            command_timeout_secs: 0,
         }
     }
 }

@@ -225,6 +225,7 @@ impl Builder {
         // Apply the configured argv-length threshold (build.max_arg_len) so
         // run_checker can read it via ctx.max_arg_len().
         ctx.set_max_arg_len(self.config.build.max_arg_len);
+        ctx.set_command_timeout_secs(self.config.build.command_timeout_secs);
     }
 
     /// Discover → filter → validate: everything between "we have a config" and

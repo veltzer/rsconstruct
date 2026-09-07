@@ -228,3 +228,71 @@ fn script_rebuilds_when_command_file_changes() {
         stdout3,
     );
 }
+
+/// `[build] command_timeout_secs` is off by default: a command that takes
+/// a few seconds runs to completion and the build passes.
+#[test]
+fn command_timeout_is_off_by_default() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        concat!(
+            "[processor.script]\n",
+            "command = \"sh\"\n",
+            "args = [\"-c\", \"sleep 2\"]\n",
+            "src_extensions = [\".txt\"]\n",
+            "src_dirs = [\".\"]\n",
+        ),
+    )
+    .unwrap();
+    fs::write(project_path.join("test.txt"), "hello\n").unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "no timeout by default, so a 2s command must pass: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// With `[build] command_timeout_secs` set, a command that overruns it is
+/// killed and the build fails naming the timeout and the command.
+#[test]
+fn command_timeout_kills_an_overrunning_command_when_set() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        concat!(
+            "[build]\n",
+            "command_timeout_secs = 1\n",
+            "[processor.script]\n",
+            "command = \"sh\"\n",
+            "args = [\"-c\", \"sleep 5\"]\n",
+            "src_extensions = [\".txt\"]\n",
+            "src_dirs = [\".\"]\n",
+        ),
+    )
+    .unwrap();
+    fs::write(project_path.join("test.txt"), "hello\n").unwrap();
+
+    let start = std::time::Instant::now();
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let elapsed = start.elapsed();
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!output.status.success(), "the overrunning command must fail the build: {combined}");
+    assert!(
+        combined.contains("Command timed out after 1s and was killed"),
+        "failure must name the timeout: {combined}"
+    );
+    assert!(
+        elapsed < std::time::Duration::from_secs(4),
+        "the command must be killed at the limit, not run to completion ({elapsed:?})"
+    );
+}
