@@ -239,61 +239,88 @@ fn gem_install_argv() -> Vec<String> {
 /// The argv prefix for installing Python packages with uv. `--python
 /// python3` targets whichever interpreter `python3` on PATH resolves to —
 /// the same environment a bare `pip install` would touch (the active venv
-/// when one is on PATH, the system interpreter on a CI runner). `--system`
-/// is required for the non-venv case — without it uv refuses with "No
-/// virtual environment found" even when `--python` names the interpreter —
-/// and is harmless for a venv target (uv installs into the venv the
-/// interpreter belongs to). When the target is a non-venv interpreter
-/// whose site-packages is unwritable (a CI runner's apt python), pip would
-/// silently fall back to a user install; uv has no user scheme, so
-/// `--prefix <user base>` reproduces that fallback's exact layout
+/// when one is on PATH, the system interpreter on a CI runner).
+///
+/// `--system` is passed only for a non-venv interpreter, where uv needs it
+/// (without it uv refuses with "No virtual environment found" even when
+/// `--python` names the interpreter). It is NOT harmless for a venv target:
+/// uv documents `--system` as "do not consider virtual environments", and
+/// with `--python` resolving to a venv's python it installs into that
+/// venv's *base* interpreter instead — on a Debian/Ubuntu image that base
+/// is PEP 668 externally-managed, and the install fails with "the
+/// interpreter at /usr is externally managed ... Virtual environments were
+/// not considered due to the --system flag". Omitting `--system` makes uv
+/// install into the venv the interpreter belongs to, which is what a bare
+/// `pip install` does there.
+///
+/// When the target is a non-venv interpreter whose site-packages is
+/// unwritable (a CI runner's apt python), pip would silently fall back to a
+/// user install; uv has no user scheme, so `--prefix <user base>`
+/// reproduces that fallback's exact layout
 /// (`~/.local/lib/pythonX.Y/site-packages` + `~/.local/bin` on Linux).
 /// PEP 668 externally-managed markers are still respected — no
 /// `--break-system-packages` — matching what a bare `pip install` refuses.
 /// Used by both `describe` and `run` so the printed plan matches what
 /// executes.
 fn uv_pip_install_argv() -> Vec<String> {
-    let mut argv: Vec<String> = ["uv", "pip", "install", "--python", "python3", "--system"]
+    let probe = python_probe();
+    uv_pip_install_argv_for(probe.in_venv, probe.user_prefix.as_deref())
+}
+
+/// The argv `uv_pip_install_argv` builds, with the machine probe factored
+/// out so both branches are unit-testable regardless of the host's python3.
+fn uv_pip_install_argv_for(in_venv: bool, user_prefix: Option<&str>) -> Vec<String> {
+    let mut argv: Vec<String> = ["uv", "pip", "install", "--python", "python3"]
         .iter().map(|s| (*s).to_string()).collect();
-    if let Some(user_base) = uv_user_prefix() {
+    if !in_venv {
+        argv.push("--system".to_string());
+    }
+    if let Some(user_base) = user_prefix {
         argv.push("--prefix".to_string());
-        argv.push(user_base);
+        argv.push(user_base.to_string());
     }
     argv
 }
 
-/// The `--prefix` for a uv install that must emulate pip's user-install
-/// fallback, or None when uv can write the target environment directly:
-/// a venv is active, site-packages is writable, or `python3` is missing or
-/// broken (the install then fails with uv's own message, like the gem
-/// probe below). Asks `python3` once per process for its venv-ness,
-/// purelib, and user base.
-fn uv_user_prefix() -> Option<String> {
-    static PREFIX: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
-    PREFIX.get_or_init(|| {
+/// What `python3` on PATH is: whether it is a venv interpreter, and the
+/// `--prefix` a uv install must use to emulate pip's user-install fallback
+/// (None when uv can write the target directly: a venv is active,
+/// site-packages is writable, or `python3` is missing or broken — the
+/// install then fails with uv's own message, like the gem probe below).
+/// Asks `python3` once per process for its venv-ness, purelib, and user base.
+#[derive(Clone, Default)]
+struct PythonProbe {
+    in_venv: bool,
+    user_prefix: Option<String>,
+}
+
+fn python_probe() -> PythonProbe {
+    static PROBE: std::sync::OnceLock<PythonProbe> = std::sync::OnceLock::new();
+    PROBE.get_or_init(|| {
         let Ok(out) = std::process::Command::new("python3")
             .args(["-c", "import sys, sysconfig, site; \
                     print(int(sys.prefix != sys.base_prefix)); \
                     print(sysconfig.get_path('purelib')); \
                     print(site.getuserbase())"])
             .output() else {
-            return None;
+            return PythonProbe::default();
         };
         if !out.status.success() {
-            return None;
+            return PythonProbe::default();
         }
         let stdout = String::from_utf8_lossy(&out.stdout);
         let mut lines = stdout.lines();
-        let in_venv = lines.next()? == "1";
-        let purelib = lines.next()?.trim();
-        let user_base = lines.next()?.trim();
-        if in_venv || purelib.is_empty() || user_base.is_empty() {
-            return None;
-        }
-        if nearest_existing_ancestor_is_writable(std::path::Path::new(purelib)) {
-            return None;
-        }
-        Some(user_base.to_string())
+        let in_venv = lines.next().is_some_and(|l| l == "1");
+        let purelib = lines.next().map_or("", str::trim);
+        let user_base = lines.next().map_or("", str::trim);
+        let user_prefix = if in_venv || purelib.is_empty() || user_base.is_empty()
+            || nearest_existing_ancestor_is_writable(std::path::Path::new(purelib))
+        {
+            None
+        } else {
+            Some(user_base.to_string())
+        };
+        PythonProbe { in_venv, user_prefix }
     }).clone()
 }
 
@@ -1095,8 +1122,8 @@ mod tests {
     }
 
     /// `uv` describe targets `python3` from PATH (the environment a bare
-    /// `pip install` would touch) with `--system` so a non-venv interpreter
-    /// is accepted, passes requirements — markers included — as single argv
+    /// `pip install` would touch), with `--system` only when that is a
+    /// non-venv interpreter, passes requirements — markers included — as single argv
     /// elements at the end, and never uses sudo. `--prefix <user base>` may
     /// appear between flags and requirements depending on the machine's
     /// python3 (venv-ness, site-packages writability), so the middle is not
@@ -1106,9 +1133,30 @@ mod tests {
         let steps = describe("uv", &["flask==3.1.0", "pywin32==312 ; sys_platform == 'win32'"]);
         assert_eq!(steps.len(), 1);
         let argv = &steps[0];
-        assert_eq!(argv[..6], ["uv", "pip", "install", "--python", "python3", "--system"].map(String::from));
+        assert_eq!(argv[..5], ["uv", "pip", "install", "--python", "python3"].map(String::from));
+        // --system exactly when python3 on this machine is not a venv interpreter
+        assert_eq!(argv.contains(&"--system".to_string()), !python_probe().in_venv);
         assert_eq!(&argv[argv.len() - 2..], &["flask==3.1.0", "pywin32==312 ; sys_platform == 'win32'"]);
         assert!(!argv.contains(&"sudo".to_string()));
+    }
+
+    /// A non-venv interpreter gets `--system` (uv refuses without it), plus
+    /// `--prefix` when pip would have fallen back to a user install.
+    #[test]
+    fn uv_argv_non_venv_uses_system_and_optional_prefix() {
+        assert_eq!(uv_pip_install_argv_for(false, None), ["uv", "pip", "install", "--python", "python3", "--system"].map(String::from));
+        assert_eq!(uv_pip_install_argv_for(false, Some("/home/u/.local")),
+            ["uv", "pip", "install", "--python", "python3", "--system", "--prefix", "/home/u/.local"].map(String::from));
+    }
+
+    /// A venv interpreter must NOT get `--system`: uv would ignore the venv
+    /// and install into its base interpreter, which on Debian/Ubuntu is
+    /// externally managed and refuses (seen in the demos-os-linux image).
+    #[test]
+    fn uv_argv_venv_omits_system() {
+        let argv = uv_pip_install_argv_for(true, None);
+        assert_eq!(argv, ["uv", "pip", "install", "--python", "python3"].map(String::from));
+        assert!(!argv.contains(&"--system".to_string()));
     }
 
     /// `binary` describe yields a multi-step plan (download, extract,
