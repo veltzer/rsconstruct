@@ -209,12 +209,6 @@ Organized by category, with priority based on breadth of usage.
 - **Invocation:** `node_modules/.bin/slidev export $< --with-clicks --output $@`
 - **Processor type:** Generator (single-file)
 
-### jekyll
-- **What it does:** Static site generator (Ruby-based, used by GitHub Pages).
-- **Projects:** site-personal-jekyll
-- **Invocation:** `jekyll build --source $(SOURCE_FOLDER) --destination $(DESTINATION_FOLDER)`
-- **Processor type:** MassGenerator
-
 ### lilypond
 - **What it does:** Music engraving program — compiles .ly files to PDF sheet music.
 - **Projects:** demos-lang-lilypond, book-openbook
