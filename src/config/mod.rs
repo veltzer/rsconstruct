@@ -737,6 +737,16 @@ pub struct BuildConfig {
     /// checked, whatever this is set to.
     #[serde(default = "default_allow_missing_dep_auto")]
     pub allow_missing_dep_auto: bool,
+    /// When true, a `src_dirs` entry naming a directory that does not exist
+    /// is skipped, as every entry used to be. Off by default: an entry in
+    /// the config is a claim about where the project keeps its sources, and
+    /// a directory that is not there is a typo, a stanza left behind when
+    /// the directory moved, or a copy of another repo's config — in every
+    /// case a processor that checks nothing while the build stays green, so
+    /// discovery fails naming the processor and the entry. A directory an
+    /// upstream processor declares as its output is never reported.
+    #[serde(default = "default_allow_missing_src_dirs")]
+    pub allow_missing_src_dirs: bool,
     /// Wall-clock limit, in seconds, for every external command a processor
     /// runs; a command still running at the limit is killed and its product
     /// fails with "Command timed out after Ns". `0` (the default) means no
@@ -782,6 +792,10 @@ const fn default_allow_missing_dep_auto() -> bool {
     false
 }
 
+const fn default_allow_missing_src_dirs() -> bool {
+    false
+}
+
 impl Default for BuildConfig {
     fn default() -> Self {
         Self {
@@ -793,6 +807,7 @@ impl Default for BuildConfig {
             hash_tool_versions: default_hash_tool_versions(),
             warn_symlinks: default_warn_symlinks(),
             allow_missing_dep_auto: default_allow_missing_dep_auto(),
+            allow_missing_src_dirs: default_allow_missing_src_dirs(),
             command_timeout_secs: 0,
         }
     }

@@ -127,8 +127,10 @@ fn marp_valid_file() {
     );
 }
 
+/// A src_dirs entry that does not exist is a config error naming the
+/// processor and the entry, not a silent skip.
 #[test]
-fn marp_nonexistent_src_dir_scans_nothing() {
+fn marp_nonexistent_src_dir_is_config_error() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -139,9 +141,14 @@ fn marp_nonexistent_src_dir_scans_nothing() {
     .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "a missing src_dirs entry must fail as a config error: {stderr}"
+    );
     assert!(
-        output.status.success(),
-        "Build must succeed: a missing src_dirs entry scans nothing. {}",
-        String::from_utf8_lossy(&output.stderr)
+        stderr.contains("processor.marp") && stderr.contains("marp"),
+        "error must name the processor and the entry: {stderr}"
     );
 }

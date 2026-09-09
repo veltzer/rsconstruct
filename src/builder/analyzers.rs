@@ -295,7 +295,12 @@ impl Builder {
                     .filter(|name| self.is_processor_active(name, processors[*name].as_ref()))
                     .cloned()
                     .collect();
-                self.discover_products(&mut graph, &processors, &active, false)?;
+                self.discover_products(
+                    &mut graph,
+                    &processors,
+                    &active,
+                    super::GraphBuildMode::Normal,
+                )?;
 
                 let product_count = graph.products().len();
                 if product_count == 0 {

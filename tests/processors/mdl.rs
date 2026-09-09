@@ -36,14 +36,13 @@ fn mdl_valid_file() {
     );
 }
 
-/// A missing entry is skipped without disturbing the entries beside it:
+/// With `[build] allow_missing_src_dirs = true` a missing entry is skipped
+/// without disturbing the entries beside it:
 ///   [processor.mdl]
 ///   src_dirs = ["config", "script"]
 /// where `script/` doesn't exist on disk — `config/` must still be scanned.
-/// This is the shared-config case: one config listing directories that only
-/// some repos materialize.
 #[test]
-fn mdl_missing_src_dir_skips_without_affecting_others() {
+fn mdl_missing_src_dir_skips_without_affecting_others_when_allowed() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -52,7 +51,7 @@ fn mdl_missing_src_dir_skips_without_affecting_others() {
     fs::write(project_path.join("config/doc.md"), "# doc\n").unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.mdl]\nsrc_dirs = [\"config\", \"script\"]\n",
+        "[build]\nallow_missing_src_dirs = true\n\n[processor.mdl]\nsrc_dirs = [\"config\", \"script\"]\n",
     )
     .unwrap();
 

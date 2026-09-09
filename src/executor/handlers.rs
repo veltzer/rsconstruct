@@ -89,8 +89,17 @@ impl Executor<'_> {
             return RestoreOutcome::NotRestorable;
         }
         let desc_key = ctx.product.descriptor_key(ctx.input_checksum);
-        let restore_result =
-            object_store.restore_from_descriptor(self.build_ctx, &desc_key, &ctx.product.outputs);
+        let restore_result = object_store
+            .restore_from_descriptor(self.build_ctx, &desc_key, &ctx.product.outputs)
+            .and_then(|restored| {
+                // A restored tree is read-only hardlinks (in hardlink mode):
+                // record which descriptor they came from so the next rebuild
+                // can unlink them before the tool writes.
+                if restored && ctx.product.has_output_dirs() {
+                    object_store.record_last_tree(&ctx.product.owner_key(), &desc_key)?;
+                }
+                Ok(restored)
+            });
         match restore_result {
             Ok(true) => {
                 // The restore rewrote the outputs on disk; evict any
@@ -221,13 +230,22 @@ impl Executor<'_> {
             let is_foreign = |path: &std::path::Path| -> bool {
                 matches!(graph.path_owner(path), Some(owner) if owner != ctx.id)
             };
-            object_store.store_tree_descriptor(
-                self.build_ctx,
-                &desc_key,
-                &ctx.product.output_dirs,
-                &ctx.product.outputs,
-                &is_foreign,
-            )
+            object_store
+                .store_tree_descriptor(
+                    self.build_ctx,
+                    &desc_key,
+                    &ctx.product.output_dirs,
+                    &ctx.product.outputs,
+                    &is_foreign,
+                )
+                .and_then(|changed| {
+                    // The tree now on disk is this one: the next rebuild
+                    // unlinks it by this pointer (see remove_stale_outputs).
+                    if ctx.product.has_output_dirs() {
+                        object_store.record_last_tree(&ctx.product.owner_key(), &desc_key)?;
+                    }
+                    Ok(changed)
+                })
         };
         match cache_result {
             Ok(_changed) => {}

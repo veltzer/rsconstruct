@@ -1,8 +1,9 @@
 use anyhow::{Context, Result};
 use indicatif::ProgressBar;
 use parking_lot::{Condvar, Mutex};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
@@ -107,6 +108,15 @@ impl Semaphore {
 /// because other processors may contribute files to the same directory. Instead,
 /// we remove just the files recorded in this product's last tree descriptor
 /// (falling back to creating empty dirs if there is no prior tree).
+///
+/// "Last" means the tree that is actually on disk, which is not the tree
+/// under the current descriptor key: that key mixes in the new input
+/// checksum, and on a real rebuild no descriptor exists for it yet. The
+/// object store keeps a pointer from the product's `owner_key` to the
+/// descriptor it last built or restored (`record_last_tree`), and that is
+/// what names the files to unlink. Without it every rebuild after a
+/// hardlink restore failed: sphinx and friends open their outputs for
+/// writing in place, and a read-only cache hardlink refuses.
 pub(super) fn remove_stale_outputs(
     product: &Product,
     object_store: &ObjectStore,
@@ -117,7 +127,18 @@ pub(super) fn remove_stale_outputs(
         // Files that belong to other processors (sharing the same directory)
         // are left alone and restored/rebuilt independently.
         let cache_key = product.descriptor_key(input_checksum);
-        for file in object_store.previous_tree_paths(&cache_key) {
+        let mut stale: BTreeSet<PathBuf> = object_store
+            .previous_tree_paths(&cache_key)
+            .into_iter()
+            .collect();
+        match object_store.last_tree_key(&product.owner_key()) {
+            Some(last_key) => stale.extend(object_store.previous_tree_paths(&last_key)),
+            // No pointer: the outputs on disk predate the pointer table
+            // (built by an older rsconstruct). Fall back to the one signature
+            // a restore leaves behind that a tool cannot write over.
+            None => stale.extend(restored_hardlinks_under(&product.output_dirs)),
+        }
+        for file in stale {
             if file.exists() {
                 fs::remove_file(&file).with_context(|| {
                     format!("Failed to remove stale output: {}", file.display())
@@ -141,6 +162,20 @@ pub(super) fn remove_stale_outputs(
         }
     }
     Ok(())
+}
+
+/// Files under `dirs` that a hardlink restore put there: read-only and
+/// sharing their inode with a cache object, so with a link count above one.
+/// Nothing else in a build tree has both properties, and these are exactly
+/// the files a rebuilding tool cannot open for writing.
+fn restored_hardlinks_under(dirs: &[Arc<PathBuf>]) -> Vec<PathBuf> {
+    use std::os::unix::fs::MetadataExt;
+    dirs.iter()
+        .flat_map(|dir| crate::object_store::walk_files(dir))
+        .filter(|file| {
+            fs::metadata(file).is_ok_and(|m| m.permissions().readonly() && m.nlink() > 1)
+        })
+        .collect()
 }
 
 /// Per-processor progress counters shared across non-batch threads.
@@ -1046,5 +1081,34 @@ mod tests {
             !should_batch(false, true, 5),
             "batch_size None disables batching entirely"
         );
+    }
+
+    /// The no-pointer fallback must pick out exactly what a hardlink restore
+    /// leaves behind — read-only *and* multiply linked — and nothing else.
+    #[test]
+    fn restored_hardlinks_are_read_only_and_multiply_linked() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("out");
+        fs::create_dir_all(&out).unwrap();
+
+        let object = tmp.path().join("object");
+        fs::write(&object, b"cached").unwrap();
+        let mut perms = fs::metadata(&object).unwrap().permissions();
+        perms.set_readonly(true);
+        fs::set_permissions(&object, perms).unwrap();
+        let restored = out.join("restored.txt");
+        fs::hard_link(&object, &restored).unwrap();
+
+        let written = out.join("written.txt");
+        fs::write(&written, b"tool output").unwrap();
+
+        let read_only_copy = out.join("readonly.txt");
+        fs::write(&read_only_copy, b"copy").unwrap();
+        let mut perms = fs::metadata(&read_only_copy).unwrap().permissions();
+        perms.set_readonly(true);
+        fs::set_permissions(&read_only_copy, perms).unwrap();
+
+        let found = restored_hardlinks_under(&[Arc::new(out)]);
+        assert_eq!(found, vec![restored]);
     }
 }

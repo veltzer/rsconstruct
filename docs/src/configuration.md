@@ -187,6 +187,7 @@ for what's genuinely repo-specific.
 | `warn_symlinks` | boolean | `false` | Warn about every symlink skipped during the file-index walk. The walker never follows symlinks, so a symlinked source (or a symlinked directory of sources) is absent from the index — never checked, never built. Set to `true` to make that gap visible. Off by default because projects that deliberately keep symlinks around (vendored trees, dotfile farms) would drown in warnings. |
 | `command_timeout_secs` | integer | `0` | Wall-clock limit in seconds for every external command a processor runs; a command still running at the limit is killed and its product fails with `Command timed out after Ns and was killed`. `0` means no limit. **Off by default, on purpose**: a tool that hangs is a bug in the tool, its input, or the environment, and the fix is to find that cause — not to cut the tool off. Set this only where a build must not be allowed to sit forever (an unattended runner) and a loud kill beats a silent hang. A processor with its own timeout (`marp`'s `timeout_secs`) keeps it; the explicit value wins. |
 | `allow_missing_dep_auto` | boolean | `false` | Skip a `dep_auto` entry you listed when the file does not exist, as every entry used to be skipped. By default such an entry is a config error naming the processor, the file and the config line: a listed file that is missing is a typo or a stale copy of a shared config, and either way a dependency that silently tracks nothing. Processor defaults (`.pylintrc`, `ruff.toml`, ...) are optional by nature and are never checked. |
+| `allow_missing_src_dirs` | boolean | `false` | Skip a `src_dirs` entry that names a directory which does not exist, as every entry used to be skipped. By default such an entry is a config error naming the processor and the entry: a directory listed in the config that is not there is a typo, a stanza left behind when the directory moved, or a copy of another repo's config, and in every case a processor that checks nothing while the build stays green. A directory an upstream processor declares as its output is never reported, whatever this is set to. |
 
 The `output_dir` prefix is purely a layout choice — `rsconstruct clean outputs` does not special-case it. Cleanup is driven by per-product `outputs` and `output_dirs` declarations, then a generic empty-directory sweep walks parents bottom-up. See [Clean behavior](processors.md#clean-behavior) and [`rsconstruct clean`](commands.md#rsconstruct-clean) for details.
 
@@ -205,7 +206,7 @@ Common fields available to all processors:
 | `required_tools` | array of strings | `[]` | Extra tools this processor needs beyond `command`. Normally `command` *is* the tool, so this is empty. Name the real tool here when `command` is a wrapper script that shells out to it — otherwise that tool is invisible to `rsconstruct tools install` and to version locking, and a missing tool surfaces only as a failure inside the wrapper. Each name must have a registry entry (`rsconstruct tools list`). |
 | `batch` | boolean | `true` | Whether to batch multiple files into a single tool invocation. Note: in fail-fast mode (default), chunk size is 1 regardless of this setting — batch mode only groups files with `--keep-going` or `--batch-size`. For external tools, a batch failure marks all products in the chunk as failed. Internal processors (`i`-prefixed) return per-file results, so partial failure is handled correctly. |
 | `max_jobs` | integer | none | Maximum concurrent jobs for this processor. When set, limits how many instances of this processor run in parallel, regardless of the global `-j` setting. Useful for heavyweight processors (e.g., `marp` spawns Chromium). Omit to use the global parallelism. |
-| `src_dirs` | array of strings | `[]` | Directories to scan for source files. **Every processor defaults to `[]`, which scans nothing** — no processor guesses a directory, so one declared without `src_dirs` matches no files and simply builds nothing. A default like `["src"]` would be a guess that silently matches the wrong directory in a project laid out differently; naming the directory is the user's call. To scan the whole project deliberately, use `src_dirs = [""]` — an empty string means the project root and walks everything beneath it, including `node_modules/`, `.venv/` and `target/` unless excluded. `src_files` is an alternative to `src_dirs` for listing exact paths. An entry that doesn't exist on disk (and isn't the declared output target of an upstream processor) is **skipped** — it scans nothing rather than failing the build, which is what lets one shared config list every directory the family of repos might have. Skipped entries are listed when running with `--phases`. Use `rsconstruct processors defconfig <name>` to see a processor's defaults. |
+| `src_dirs` | array of strings | `[]` | Directories to scan for source files. **Every processor defaults to `[]`, which scans nothing** — no processor guesses a directory, so one declared without `src_dirs` matches no files and simply builds nothing. A default like `["src"]` would be a guess that silently matches the wrong directory in a project laid out differently; naming the directory is the user's call. To scan the whole project deliberately, use `src_dirs = [""]` — an empty string means the project root and walks everything beneath it, including `node_modules/`, `.venv/` and `target/` unless excluded. `src_files` is an alternative to `src_dirs` for listing exact paths. **Every entry must name a directory that exists**; an entry that does not is a config error (exit code 2) naming the processor and the entry — see [Missing `src_dirs` entries](#missing-src_dirs-entries) below. The one exception is a directory an upstream processor declares as its output: it does not exist before that processor runs, and is accepted. Use `rsconstruct processors defconfig <name>` to see a processor's defaults. |
 | `src_extensions` | array of strings | varies | File extensions to match. |
 | `src_exclude_dirs` | array of strings | varies | Directory path segments to exclude from scanning. |
 | `src_exclude_files` | array of strings | `[]` | File names to exclude. |
@@ -252,6 +253,48 @@ Processor-specific fields are documented on each processor's page under [Process
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `shells` | array | `["bash"]` | Shells to generate completions for |
+
+### Missing `src_dirs` entries
+
+A `src_dirs` entry is a claim about where the project keeps its sources. When
+the directory it names is not there, the build fails at discovery with exit
+code 2 (`EXIT_CONFIG_ERROR`) and lists every offending entry:
+
+```
+Invalid config:
+  [processor.pylint] src_dirs entry 'scripts' does not exist or is not a directory
+  [processor.luacheck] src_dirs entry 'config' does not exist or is not a directory
+Every src_dirs entry must name a directory that exists (or one an upstream
+processor declares as its output) — fix the path, remove the entry, or set
+[build] allow_missing_src_dirs = true to skip absent entries as before
+```
+
+This used to be a silent skip, visible only under `--phases`. That let a
+stanza whose directory had moved, or one copied from another repo, keep the
+build green while checking nothing at all — the worst kind of failure,
+because the green tick says the check ran. The fix is always in the config:
+point the entry at the directory that actually holds the files, or delete
+the stanza if the files are gone.
+
+What is **not** reported:
+
+- `""` and `"."`, which mean the project root and always exist.
+- A directory an upstream processor declares as its output (for example a
+  linter whose `src_dirs` is a generator's `output_dir`). It does not exist
+  before that processor has run; discovery sees the declared outputs as
+  virtual files and accepts the entry.
+- Any entry when `src_files` is set, since file-list mode bypasses `src_dirs`.
+- Entries of a stanza with `enabled = false`.
+- Anything during `rsconstruct clean` and `rsconstruct smart
+  remove-no-file-processors`: clean must still be able to remove the outputs
+  of a build whose source directory has since gone, and the repair command
+  exists to delete the very stanzas this check rejects. Both report the
+  entries under `--phases` instead.
+
+`[build] allow_missing_src_dirs = true` restores the old skip for a project
+that needs it; the skipped entries are then listed under `--phases`. Prefer
+fixing the entry: the switch hides exactly the misconfiguration this check
+exists to catch.
 
 ### `[dependencies]`
 

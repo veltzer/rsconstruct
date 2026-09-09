@@ -4,6 +4,7 @@ mod config_diff;
 mod descriptors;
 mod management;
 mod operations;
+mod owners;
 mod restore;
 
 use anyhow::{Context, Result};
@@ -66,6 +67,9 @@ const DESCRIPTORS_DIR: &str = "descriptors";
 const DB_FILE: &str = "db.redb";
 
 const CONFIGS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("processor_configs");
+/// `Product::owner_key` → the descriptor key whose tree is on disk for that
+/// product. See `ObjectStore::record_last_tree`.
+const LAST_TREE_TABLE: TableDefinition<&str, &str> = TableDefinition::new("product_last_tree");
 
 /// Reason why a product needs to be rebuilt.
 #[derive(Debug)]

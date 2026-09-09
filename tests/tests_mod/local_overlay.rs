@@ -1,6 +1,6 @@
-//! Tests for the two shared-config features:
-//! - Missing `src_dirs` entries deactivate the scan instead of failing the
-//!   build, always — this is unconditional, not behind a flag.
+//! Tests for two config features:
+//! - Missing `src_dirs` entries are a config error; `[build]
+//!   allow_missing_src_dirs = true` restores the old skip.
 //! - `rsconstruct.local.toml` — a per-repo overlay deep-merged over the main
 //!   config at load time.
 
@@ -8,25 +8,34 @@ use crate::common::{run_rsconstruct, setup_project_with_config, write_file};
 use std::fs;
 use tempfile::TempDir;
 
-/// A src_dirs entry that doesn't exist scans nothing rather than failing.
-/// src_dirs scans only what it names, so naming an absent directory already
-/// means "scan nothing" by another route — and this is what lets one shared
-/// rsconstruct.toml list every directory the family of repos might have.
+/// A src_dirs entry that doesn't exist is a config error, not a silent skip:
+/// a listed directory that is not there is a stale stanza or a copy of
+/// another repo's config, and either way a processor that checks nothing.
 #[test]
-fn missing_src_dirs_scans_nothing() {
+fn missing_src_dirs_is_a_config_error() {
     let temp_dir =
         setup_project_with_config("[processor.tera]\nsrc_dirs = [\"missing.templates\"]\n");
     let output = run_rsconstruct(temp_dir.path(), &["build"]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "a missing src_dirs entry must fail as a config error: {stderr}"
+    );
     assert!(
-        output.status.success(),
-        "build should succeed with a missing src_dirs entry: {}",
-        String::from_utf8_lossy(&output.stderr)
+        stderr.contains("processor.tera") && stderr.contains("missing.templates"),
+        "error must name the processor and the entry: {stderr}"
     );
 }
 
+/// With the skip restored, a missing entry does not disturb its siblings:
+/// the instance with a real directory still builds.
 #[test]
-fn missing_src_dirs_does_not_disturb_sibling_instances() {
+fn allow_missing_src_dirs_does_not_disturb_sibling_instances() {
     let temp_dir = setup_project_with_config(concat!(
+        "[build]\n",
+        "allow_missing_src_dirs = true\n",
+        "\n",
         "[processor.tera.real]\n",
         "src_dirs = [\"tera.templates\"]\n",
         "\n",
@@ -48,8 +57,9 @@ fn missing_src_dirs_does_not_disturb_sibling_instances() {
 
 #[test]
 fn tool_check_is_deferred_to_processors_with_products() {
-    // In shared-config mode a declared processor whose tool is absent must
-    // not fail the build when it also has no products in this repo.
+    // A declared processor whose tool is absent must not fail the build
+    // when it has no products in this repo: its directory exists but holds
+    // no file it matches.
     let temp_dir = setup_project_with_config(concat!(
         "[processor.tera]\n",
         "src_dirs = [\"tera.templates\"]\n",
@@ -61,6 +71,7 @@ fn tool_check_is_deferred_to_processors_with_products() {
     ));
     let project = temp_dir.path();
     write_file(project, "tera.templates/out.txt.tera", "ok");
+    fs::create_dir_all(project.join("ghost_src")).unwrap();
 
     let output = run_rsconstruct(project, &["build"]);
     assert!(
@@ -161,10 +172,11 @@ fn local_overlay_adds_sections() {
             "max_discovery_passes = 7\n",
             "\n",
             "[processor.zspell]\n",
-            "src_dirs = [\"absent_docs\"]\n",
+            "src_dirs = [\"empty_docs\"]\n",
         ),
     )
     .unwrap();
+    fs::create_dir_all(project.join("empty_docs")).unwrap();
 
     let output = run_rsconstruct(project, &["build"]);
     assert!(

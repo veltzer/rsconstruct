@@ -1822,6 +1822,118 @@ fn user_listed_dep_auto_must_exist() {
     );
 }
 
+/// A `src_dirs` entry must name a directory that exists.
+///
+/// A missing directory used to be skipped silently (reported only under
+/// `--phases`), so a stanza whose directory moved or never existed kept the
+/// build green while checking nothing. Now it is a config error naming the
+/// processor and the entry; entries that exist are not reported; `[build]
+/// allow_missing_src_dirs = true` restores the old skip.
+#[test]
+fn src_dirs_entry_must_exist() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+    fs::write(project_path.join("tera.templates/t.txt.tera"), "hello\n").unwrap();
+
+    let strict = "[processor.tera]\nsrc_dirs = [\"tera.templates\", \"templates_moved\"]\n";
+    fs::write(project_path.join("rsconstruct.toml"), strict).unwrap();
+    let out = run_rsconstruct(project_path, &["build"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        !out.status.success(),
+        "a src_dirs entry that does not exist must fail the build: {stderr}"
+    );
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "a missing src_dirs entry is a config error (exit 2): {stderr}"
+    );
+    for needle in [
+        "processor.tera",
+        "templates_moved",
+        "allow_missing_src_dirs",
+    ] {
+        assert!(
+            stderr.contains(needle),
+            "error must mention {needle}: {stderr}"
+        );
+    }
+    assert!(
+        !stderr.contains("'tera.templates'"),
+        "the entry that exists must not be reported: {stderr}"
+    );
+
+    let lenient = format!("[build]\nallow_missing_src_dirs = true\n\n{strict}");
+    fs::write(project_path.join("rsconstruct.toml"), lenient).unwrap();
+    let out = run_rsconstruct(project_path, &["build"]);
+    assert!(
+        out.status.success(),
+        "allow_missing_src_dirs must restore the skip: stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        project_path.join("t.txt").exists(),
+        "the lenient build must still render the template"
+    );
+}
+
+/// A `src_dirs` entry that an upstream processor creates is not "missing".
+///
+/// The directory does not exist before the build, but the upstream
+/// generator declares its outputs under it, so discovery sees them as
+/// virtual files. That is the one legitimate absent directory and it must
+/// keep working without `allow_missing_src_dirs`.
+#[test]
+fn src_dirs_entry_backed_by_upstream_output_is_not_missing() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+    let script_path = project_path.join("to_md.sh");
+    fs::write(
+        &script_path,
+        "#!/bin/bash\nprintf '# %s\\n' \"$(cat \"$1\")\" > \"$2\"\n",
+    )
+    .unwrap();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&script_path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    fs::create_dir_all(project_path.join("src")).unwrap();
+    fs::write(project_path.join("src/a.txt"), "hello\n").unwrap();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        format!(
+            r#"[processor.generator]
+command = "{script}"
+src_extensions = [".txt"]
+src_dirs = ["src"]
+output_dir = "out/gen"
+output_extension = "md"
+batch = false
+
+[processor.markdownlint]
+src_dirs = ["out/gen"]
+"#,
+            script = script_path.display(),
+        ),
+    )
+    .unwrap();
+    assert!(!project_path.join("out/gen").exists());
+
+    // Discovery only: the check runs after the fixed-point loop, so this is
+    // exactly where a false "missing" would surface.
+    let output =
+        run_rsconstruct_with_env(project_path, &["processors", "files"], &[("NO_COLOR", "1")]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "a src_dirs entry fed by an upstream output must not be reported as missing: {stderr}"
+    );
+    assert!(
+        !stderr.contains("does not exist or is not a directory"),
+        "no missing-directory report expected: {stderr}"
+    );
+}
+
 /// A processor's default `dep_auto` list stays skip-if-absent.
 ///
 /// The defaults name the well-known config files a tool honours when

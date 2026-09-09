@@ -43,6 +43,11 @@ enum GraphBuildMode {
     Normal,
     /// Clean: only discover products to find output files (skip expensive analysis)
     ForClean,
+    /// Repair (`smart remove-no-file-processors`): discover products like a
+    /// normal build, but tolerate `src_dirs` entries that don't exist. The
+    /// command exists to delete exactly those stanzas, so it cannot refuse to
+    /// run because of them.
+    ForRepair,
 }
 
 /// Return the keys of a `HashMap` sorted alphabetically.
@@ -516,6 +521,23 @@ impl Builder {
         )?;
         Ok(graph)
     }
+    /// Like `build_graph_with_processors`, but tolerant of `src_dirs`
+    /// entries that don't exist (see `GraphBuildMode::ForRepair`).
+    fn build_graph_for_repair_with_processors(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        processors: &ProcessorMap,
+    ) -> Result<BuildGraph> {
+        let (graph, _) = self.build_graph_with_processors_impl(
+            ctx,
+            processors,
+            GraphBuildMode::ForRepair,
+            BuildPhase::Build,
+            None,
+            false,
+        )?;
+        Ok(graph)
+    }
 
     /// Build the dependency graph with optional early stopping
     fn build_graph_with_processors_and_phase(
@@ -594,7 +616,7 @@ impl Builder {
         ctx: &crate::build_context::BuildContext,
     ) -> Result<Vec<String>> {
         let processors = self.create_processors()?;
-        let graph = self.build_graph_with_processors(ctx, &processors)?;
+        let graph = self.build_graph_for_repair_with_processors(ctx, &processors)?;
 
         let mut has_products: std::collections::HashSet<&str> = std::collections::HashSet::new();
         for product in graph.products() {
@@ -626,8 +648,9 @@ impl Builder {
         graph: &mut BuildGraph,
         processors: &ProcessorMap,
         active: &[impl AsRef<str>],
-        for_clean: bool,
+        mode: GraphBuildMode,
     ) -> Result<()> {
+        let for_clean = mode == GraphBuildMode::ForClean;
         let mut file_index = self.file_index.clone();
         let debug = phases_debug();
         let max_passes = self.config.build.max_discovery_passes;
@@ -687,18 +710,25 @@ impl Builder {
             }
         }
 
-        // After the fixed-point loop has settled, report any src_dirs entry
-        // not backed by something — either a real directory on disk or virtual
-        // files injected by an upstream processor's declared outputs.
+        // After the fixed-point loop has settled, check every src_dirs entry
+        // is backed by something: a real directory on disk, or virtual files
+        // injected by an upstream processor's declared outputs (a directory
+        // that only exists once that processor has run).
         //
-        // A missing directory is skipped, not an error: src_dirs scans only
-        // what it names, so naming a directory that isn't there already means
-        // "scan nothing" by another route. This is what makes one shared
-        // rsconstruct.toml work across many repos — it can list every
-        // directory the family of repos might have, and each repo activates
-        // the subset it actually materializes. Reported under --phases only.
+        // A missing directory is a config error. src_dirs is a claim about
+        // where this project keeps its sources; an entry naming a directory
+        // that is not there is a typo, a stale stanza from a directory that
+        // moved, or a copy of another repo's config — and in every case a
+        // processor that silently checks nothing while the build stays
+        // green. `[build] allow_missing_src_dirs = true` restores the old
+        // skip, reported under --phases only.
         //
-        // Skip when src_files is set (file-list mode bypasses src_dirs).
+        // Clean and repair tolerate missing entries too: `clean` must be able
+        // to remove the outputs of a build whose source directory has since
+        // gone, and `smart remove-no-file-processors` exists to delete the
+        // very stanzas this check rejects.
+        //
+        // Skipped when src_files is set (file-list mode bypasses src_dirs).
         let mut missing: Vec<String> = Vec::new();
         for name in active {
             let name = name.as_ref();
@@ -720,17 +750,31 @@ impl Builder {
                 let covered_by_virtual = file_index.files().iter().any(|f| f.starts_with(&prefix));
                 if !covered_by_virtual {
                     missing.push(format!(
-                        "[{name}]: src_dirs entry '{dir}' does not exist or is not a directory"
+                        "  [processor.{name}] src_dirs entry '{dir}' does not exist or is not a directory"
                     ));
                 }
             }
         }
-        if debug {
-            for entry in &missing {
-                eprintln!("{}", color::dim(&format!("    {entry} (skipped)")));
-            }
+        if missing.is_empty() {
+            return Ok(());
         }
-        Ok(())
+        if self.config.build.allow_missing_src_dirs || mode != GraphBuildMode::Normal {
+            if debug {
+                for entry in &missing {
+                    eprintln!(
+                        "{}",
+                        color::dim(&format!("  {} (skipped)", entry.trim_start()))
+                    );
+                }
+            }
+            return Ok(());
+        }
+        Err(crate::exit_code::config_error(format!(
+            "Invalid config:\n{}\nEvery src_dirs entry must name a directory that exists (or one an \
+             upstream processor declares as its output) — fix the path, remove the entry, \
+             or set [build] allow_missing_src_dirs = true to skip absent entries as before",
+            missing.join("\n")
+        )))
     }
 
     /// Build the dependency graph using provided processors
@@ -769,12 +813,7 @@ impl Builder {
             crate::output::diagnostic(&color::dim("  Phase: discover"));
         }
         let t = Instant::now();
-        self.discover_products(
-            &mut graph,
-            processors,
-            &active_processors,
-            mode == GraphBuildMode::ForClean,
-        )?;
+        self.discover_products(&mut graph, processors, &active_processors, mode)?;
         phase_timings.push(("discover".to_string(), t.elapsed()));
         print_graph_stats(GraphSnapshot::AfterDiscover, &graph);
 
@@ -861,7 +900,12 @@ impl Builder {
             .collect();
 
         // Phase 1: Discover products (fixed-point loop for cross-processor deps)
-        self.discover_products(&mut graph, &processors, &active_processors, false)?;
+        self.discover_products(
+            &mut graph,
+            &processors,
+            &active_processors,
+            GraphBuildMode::Normal,
+        )?;
 
         // Phase 2: Run dependency analyzers
         self.run_analyzers(ctx, &mut graph, false)?;

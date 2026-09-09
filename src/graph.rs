@@ -103,6 +103,25 @@ impl Product {
             .descriptor_key(&self.processor, input_checksum)
     }
 
+    /// Stable identity of this product across builds: which processor
+    /// instance writes which paths. Deliberately excludes everything the
+    /// descriptor key mixes in (input content, config, tool versions), so it
+    /// still names the same product after any of those change. The object
+    /// store files the product's last tree descriptor under it
+    /// (`ObjectStore::record_last_tree`) so a rebuild can find and unlink
+    /// the previous build's outputs.
+    pub fn owner_key(&self) -> String {
+        let mut parts = vec![
+            self.processor.clone(),
+            self.variant.clone().unwrap_or_default(),
+            self.primary_input().display().to_string(),
+        ];
+        parts.extend(self.output_dirs.iter().map(|d| d.display().to_string()));
+        parts.extend(self.outputs.iter().map(|o| o.display().to_string()));
+        let refs: Vec<&str> = parts.iter().map(String::as_str).collect();
+        crate::checksum::hash_parts(&refs)
+    }
+
     /// Format a path according to the given format
     fn format_path(path: &Path, format: PathFormat) -> String {
         match format {

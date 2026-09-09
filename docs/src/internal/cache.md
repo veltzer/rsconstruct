@@ -184,6 +184,10 @@ If the cache entry exists AND all output files are present on disk, no work is n
 
 Because the cache key incorporates input content, a changed input produces a different key. There's no "stale entry" — either the key exists or it doesn't.
 
+### Stale outputs before a rebuild
+
+Cache objects are read-only and a hardlink restore shares their inode, so a restored output cannot be overwritten in place by the tool that regenerates it. Before a product is built or restored, the files of its previous tree are unlinked. That tree cannot be found through the current key (the input changed, so the key did too): the `product_last_tree` table in `db.redb` maps a product's *owner key* — processor instance, primary input and output paths, nothing that changes with content or config — to the descriptor it last built or restored. Outputs left by an rsconstruct older than that table are recognised by the restore's own signature instead: read-only files with a link count above one.
+
 ## Config-aware caching
 
 Processor configuration is hashed into cache keys. Changing a config value triggers rebuilds even if source files haven't changed.
