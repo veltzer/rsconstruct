@@ -44,6 +44,86 @@ pub fn user_config_path() -> Option<std::path::PathBuf> {
     Some(base.join(USER_CONFIG_FILE))
 }
 
+/// One file rsconstruct may read settings from, as reported by
+/// `rsconstruct toml files`.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ConfigFile {
+    /// Position in the merge order, 1 = lowest; a later file overrides an
+    /// earlier one key by key. `None` for files outside the merge chain.
+    pub precedence: Option<usize>,
+    /// Short role name: "user", "project", "local overlay", ...
+    pub role: &'static str,
+    /// Where the file is looked for. `None` when the location cannot be
+    /// determined (the user config with neither `$XDG_CONFIG_HOME` nor
+    /// `$HOME` set).
+    pub path: Option<std::path::PathBuf>,
+    /// Whether a regular file is there right now.
+    pub exists: bool,
+    /// What the file is for and any restriction on it.
+    pub note: &'static str,
+}
+
+/// Every file rsconstruct may read settings from, resolved against the
+/// current directory, lowest precedence first.
+///
+/// The first three form the merge chain (`user` < `project` < `local
+/// overlay`); the rest are project files read for other purposes and never
+/// merged. The list is the single place that knows these names, so a new
+/// config file must be added here to be reported.
+#[must_use]
+pub fn config_files() -> Vec<ConfigFile> {
+    let cwd = std::env::current_dir().ok();
+    let in_project = |name: &str| {
+        cwd.as_ref()
+            .map_or_else(|| std::path::PathBuf::from(name), |c| c.join(name))
+    };
+    let entry = |precedence: Option<usize>,
+                 role: &'static str,
+                 path: Option<std::path::PathBuf>,
+                 note: &'static str| {
+        let exists = path.as_deref().is_some_and(Path::is_file);
+        ConfigFile {
+            precedence,
+            role,
+            path,
+            exists,
+            note,
+        }
+    };
+    vec![
+        entry(
+            Some(1),
+            "user",
+            user_config_path(),
+            "[build] keys only; sets per-user defaults, never read in CI",
+        ),
+        entry(
+            Some(2),
+            "project",
+            Some(in_project(CONFIG_FILE)),
+            "the main config; required by most commands",
+        ),
+        entry(
+            Some(3),
+            "local overlay",
+            Some(in_project(LOCAL_CONFIG_FILE)),
+            "merged over rsconstruct.toml when present",
+        ),
+        entry(
+            None,
+            "ignore rules",
+            Some(in_project(".rsconstructignore")),
+            "extra ignore patterns in gitignore syntax, honoured in any directory of the tree",
+        ),
+        entry(
+            None,
+            "tool lock",
+            Some(in_project(crate::tool_lock::LOCK_FILE)),
+            "pinned tool versions, verified on request during build",
+        ),
+    ]
+}
+
 /// Read the user-level config file, if present, as a raw TOML value.
 ///
 /// Only a `[build]` table is accepted. A machine-wide file that could add

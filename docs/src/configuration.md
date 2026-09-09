@@ -213,6 +213,8 @@ Rules:
 - It applies even in a directory without `rsconstruct.toml`, for the commands
   that run without a config.
 - Watch mode does not watch this file; restart the watcher after editing it.
+- `rsconstruct toml files` prints the resolved path of this file, together
+  with the rest of the chain, and whether each one exists.
 
 ## Section details
 

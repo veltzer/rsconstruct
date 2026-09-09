@@ -526,6 +526,8 @@ pub enum PagesAction {
 pub enum TomlAction {
     /// Validate rsconstruct.toml — check for unknown fields, type errors, and missing required fields
     Check,
+    /// List every config file rsconstruct may read, lowest precedence first, and whether each exists (no config needed)
+    Files,
 }
 
 #[derive(Subcommand)]

@@ -618,6 +618,14 @@ fn run() -> (Result<()>, bool) {
                             output::info("rsconstruct.toml is valid.");
                         }
                     }
+                    cli::TomlAction::Files => {
+                        let files = config::config_files();
+                        if json_output::is_json_mode() {
+                            println!("{}", serde_json::to_string_pretty(&files)?);
+                        } else {
+                            print_config_files(&files);
+                        }
+                    }
                 }
             }
             Commands::Functions { action } => {
@@ -967,4 +975,33 @@ fn init_project() -> Result<()> {
         color::dim("Hint: edit .rsconstructignore to exclude files from processing")
     );
     Ok(())
+}
+
+/// Text rendering of `rsconstruct toml files`: the merge chain first, then
+/// the project files read for other purposes, one line each.
+fn print_config_files(files: &[config::ConfigFile]) {
+    let width = files
+        .iter()
+        .filter_map(|f| f.path.as_ref())
+        .map(|p| p.display().to_string().len())
+        .max()
+        .unwrap_or(0);
+    let render = |f: &config::ConfigFile| {
+        let path = f.path.as_ref().map_or_else(
+            || "(unknown: neither $XDG_CONFIG_HOME nor $HOME is set)".to_string(),
+            |p| p.display().to_string(),
+        );
+        let state = if f.exists { "present" } else { "absent" };
+        println!("  {:<13}  {path:<width$}  {state:<7}  {}", f.role, f.note);
+    };
+    println!(
+        "Config files, lowest precedence first (a later file overrides an earlier one key by key):"
+    );
+    for f in files.iter().filter(|f| f.precedence.is_some()) {
+        render(f);
+    }
+    println!("Other files read from the project:");
+    for f in files.iter().filter(|f| f.precedence.is_none()) {
+        render(f);
+    }
 }

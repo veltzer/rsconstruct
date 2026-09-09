@@ -35,6 +35,8 @@ mod product;
 mod rsconstructignore;
 #[path = "tests_mod/status.rs"]
 mod status;
+#[path = "tests_mod/toml_files.rs"]
+mod toml_files;
 #[path = "tests_mod/tools.rs"]
 mod tools;
 #[path = "tests_mod/watch.rs"]

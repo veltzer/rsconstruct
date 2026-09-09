@@ -584,6 +584,23 @@ rsconstruct sloc --cocomo        # Include COCOMO effort/cost estimation
 rsconstruct sloc --cocomo --salary 80000  # Custom annual salary for COCOMO
 ```
 
+## `rsconstruct toml`
+
+```bash
+rsconstruct toml check   # validate rsconstruct.toml (unknown fields, types, required fields)
+rsconstruct toml files   # list every config file rsconstruct may read and whether it exists
+```
+
+`toml files` needs no config. It prints the merge chain lowest precedence
+first — the user config (`$XDG_CONFIG_HOME/rsconstruct/config.toml`, see
+[User config](configuration.md#user-config-configrsconstructconfigtoml)),
+`rsconstruct.toml` and `rsconstruct.local.toml` — followed by the other
+project files rsconstruct reads (`.rsconstructignore`, `.tools.versions`),
+each with its resolved path and whether it is present. Use it to find out
+which file a setting is coming from, or where the user config lives on a
+given machine. With `--json` the same list is emitted as an array of
+`{precedence, role, path, exists, note}` objects.
+
 ## `rsconstruct version`
 
 **No config needed.** (no subcommands)

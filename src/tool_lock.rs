@@ -9,7 +9,7 @@ use std::process::Command;
 use crate::build_context::BuildContext;
 use crate::processors::ProcessorMap;
 
-const LOCK_FILE: &str = ".tools.versions";
+pub const LOCK_FILE: &str = ".tools.versions";
 const LOCK_VERSION: u32 = 1;
 
 #[derive(Debug, Serialize, Deserialize)]
