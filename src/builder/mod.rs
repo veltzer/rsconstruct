@@ -710,33 +710,32 @@ impl Builder {
             }
         }
 
-        // After the fixed-point loop has settled, check every src_dirs entry
-        // is backed by something: a real directory on disk, or virtual files
-        // injected by an upstream processor's declared outputs (a directory
-        // that only exists once that processor has run).
+        // After the fixed-point loop has settled, check every src_dirs and
+        // src_files entry is backed by something: a real directory or file on
+        // disk, or virtual files injected by an upstream processor's declared
+        // outputs (paths that only exist once that processor has run).
         //
-        // A missing directory is a config error. src_dirs is a claim about
-        // where this project keeps its sources; an entry naming a directory
-        // that is not there is a typo, a stale stanza from a directory that
-        // moved, or a copy of another repo's config — and in every case a
-        // processor that silently checks nothing while the build stays
-        // green. `[build] allow_missing_src_dirs = true` restores the old
-        // skip, reported under --phases only.
+        // A missing entry is a config error. src_dirs and src_files are claims
+        // about where this project keeps its sources; an entry naming a path
+        // that is not there is a typo, a stale stanza from a path that moved,
+        // or a copy of another repo's config — and in every case a processor
+        // that silently checks nothing while the build stays green.
+        //
+        // `[build] allow_missing_src_dirs = true` restores the old skip for
+        // directories only, reported under --phases. A missing src_files
+        // entry is never forgiven: a directory can at least plausibly be
+        // empty, a named file that is not there is simply wrong.
         //
         // Clean and repair tolerate missing entries too: `clean` must be able
-        // to remove the outputs of a build whose source directory has since
-        // gone, and `smart remove-no-file-processors` exists to delete the
-        // very stanzas this check rejects.
-        //
-        // Skipped when src_files is set (file-list mode bypasses src_dirs).
-        let mut missing: Vec<String> = Vec::new();
+        // to remove the outputs of a build whose sources have since gone, and
+        // `smart remove-no-file-processors` exists to delete the very stanzas
+        // this check rejects.
+        let mut missing_dirs: Vec<String> = Vec::new();
+        let mut missing_files: Vec<String> = Vec::new();
         for name in active {
             let name = name.as_ref();
             let scan = processors[name].scan_config();
             if !scan.enabled {
-                continue;
-            }
-            if !scan.src_files().is_empty() {
                 continue;
             }
             for dir in scan.src_dirs() {
@@ -749,30 +748,57 @@ impl Builder {
                 let prefix = std::path::PathBuf::from(dir);
                 let covered_by_virtual = file_index.files().iter().any(|f| f.starts_with(&prefix));
                 if !covered_by_virtual {
-                    missing.push(format!(
+                    missing_dirs.push(format!(
                         "  [processor.{name}] src_dirs entry '{dir}' does not exist or is not a directory"
                     ));
                 }
             }
+            for file in scan.src_files() {
+                if std::path::Path::new(file).is_file() {
+                    continue;
+                }
+                let path = std::path::PathBuf::from(file);
+                let covered_by_virtual = file_index.files().contains(&path);
+                if !covered_by_virtual {
+                    missing_files.push(format!(
+                        "  [processor.{name}] src_files entry '{file}' does not exist or is not a file"
+                    ));
+                }
+            }
         }
-        if missing.is_empty() {
-            return Ok(());
-        }
-        if self.config.build.allow_missing_src_dirs || mode != GraphBuildMode::Normal {
+        let tolerant = mode != GraphBuildMode::Normal;
+        if tolerant || self.config.build.allow_missing_src_dirs {
             if debug {
-                for entry in &missing {
+                for entry in &missing_dirs {
                     eprintln!(
                         "{}",
                         color::dim(&format!("  {} (skipped)", entry.trim_start()))
                     );
                 }
             }
+            missing_dirs.clear();
+        }
+        if tolerant {
+            if debug {
+                for entry in &missing_files {
+                    eprintln!(
+                        "{}",
+                        color::dim(&format!("  {} (skipped)", entry.trim_start()))
+                    );
+                }
+            }
+            missing_files.clear();
+        }
+        if missing_dirs.is_empty() && missing_files.is_empty() {
             return Ok(());
         }
+        let mut missing = missing_dirs;
+        missing.extend(missing_files);
         Err(crate::exit_code::config_error(format!(
-            "Invalid config:\n{}\nEvery src_dirs entry must name a directory that exists (or one an \
-             upstream processor declares as its output) — fix the path, remove the entry, \
-             or set [build] allow_missing_src_dirs = true to skip absent entries as before",
+            "Invalid config:\n{}\nEvery src_dirs entry must name a directory that exists and every \
+             src_files entry a file that exists (or a path an upstream processor declares as its \
+             output) — fix the path or remove the entry; [build] allow_missing_src_dirs = true \
+             skips absent directories as before, never absent files",
             missing.join("\n")
         )))
     }

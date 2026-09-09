@@ -187,7 +187,7 @@ for what's genuinely repo-specific.
 | `warn_symlinks` | boolean | `false` | Warn about every symlink skipped during the file-index walk. The walker never follows symlinks, so a symlinked source (or a symlinked directory of sources) is absent from the index — never checked, never built. Set to `true` to make that gap visible. Off by default because projects that deliberately keep symlinks around (vendored trees, dotfile farms) would drown in warnings. |
 | `command_timeout_secs` | integer | `0` | Wall-clock limit in seconds for every external command a processor runs; a command still running at the limit is killed and its product fails with `Command timed out after Ns and was killed`. `0` means no limit. **Off by default, on purpose**: a tool that hangs is a bug in the tool, its input, or the environment, and the fix is to find that cause — not to cut the tool off. Set this only where a build must not be allowed to sit forever (an unattended runner) and a loud kill beats a silent hang. A processor with its own timeout (`marp`'s `timeout_secs`) keeps it; the explicit value wins. |
 | `allow_missing_dep_auto` | boolean | `false` | Skip a `dep_auto` entry you listed when the file does not exist, as every entry used to be skipped. By default such an entry is a config error naming the processor, the file and the config line: a listed file that is missing is a typo or a stale copy of a shared config, and either way a dependency that silently tracks nothing. Processor defaults (`.pylintrc`, `ruff.toml`, ...) are optional by nature and are never checked. |
-| `allow_missing_src_dirs` | boolean | `false` | Skip a `src_dirs` entry that names a directory which does not exist, as every entry used to be skipped. By default such an entry is a config error naming the processor and the entry: a directory listed in the config that is not there is a typo, a stanza left behind when the directory moved, or a copy of another repo's config, and in every case a processor that checks nothing while the build stays green. A directory an upstream processor declares as its output is never reported, whatever this is set to. |
+| `allow_missing_src_dirs` | boolean | `false` | Skip a `src_dirs` entry that names a directory which does not exist, as every entry used to be skipped. By default such an entry is a config error naming the processor and the entry: a directory listed in the config that is not there is a typo, a stanza left behind when the directory moved, or a copy of another repo's config, and in every case a processor that checks nothing while the build stays green. A directory an upstream processor declares as its output is never reported, whatever this is set to. This switch covers directories only: a missing `src_files` entry is always an error. |
 
 The `output_dir` prefix is purely a layout choice — `rsconstruct clean outputs` does not special-case it. Cleanup is driven by per-product `outputs` and `output_dirs` declarations, then a generic empty-directory sweep walks parents bottom-up. See [Clean behavior](processors.md#clean-behavior) and [`rsconstruct clean`](commands.md#rsconstruct-clean) for details.
 
@@ -211,7 +211,7 @@ Common fields available to all processors:
 | `src_exclude_dirs` | array of strings | varies | Directory path segments to exclude from scanning. |
 | `src_exclude_files` | array of strings | `[]` | File names to exclude. |
 | `src_exclude_paths` | array of strings | `[]` | Paths (relative to project root) to exclude. |
-| `src_files` | array of strings | `[]` | When non-empty, only these exact paths are matched — `src_dirs`, `src_extensions`, and exclude filters are bypassed. Useful for processors that operate on specific files rather than scanning directories. |
+| `src_files` | array of strings | `[]` | Exact paths to match, relative to the project root. On its own it is an allowlist: **exactly the named files are matched and nothing else** (no directory scan, no extension filter). Together with `src_dirs`, the named files are added to what the directories yield. **Every entry must name a file that exists**, or a path an upstream processor declares as its output; anything else is a config error (exit code 2), and unlike a missing directory it is never forgiven — `allow_missing_src_dirs` does not apply to files. See [Missing `src_dirs` and `src_files` entries](#missing-src_dirs-and-src_files-entries). |
 
 Processor-specific fields are documented on each processor's page under [Processors](processors.md).
 
@@ -254,36 +254,40 @@ Processor-specific fields are documented on each processor's page under [Process
 |---|---|---|---|
 | `shells` | array | `["bash"]` | Shells to generate completions for |
 
-### Missing `src_dirs` entries
+### Missing `src_dirs` and `src_files` entries
 
-A `src_dirs` entry is a claim about where the project keeps its sources. When
-the directory it names is not there, the build fails at discovery with exit
-code 2 (`EXIT_CONFIG_ERROR`) and lists every offending entry:
+A `src_dirs` or `src_files` entry is a claim about where the project keeps its
+sources. When the directory or file it names is not there, the build fails at
+discovery with exit code 2 (`EXIT_CONFIG_ERROR`) and lists every offending
+entry:
 
 ```
 Invalid config:
   [processor.pylint] src_dirs entry 'scripts' does not exist or is not a directory
   [processor.luacheck] src_dirs entry 'config' does not exist or is not a directory
-Every src_dirs entry must name a directory that exists (or one an upstream
-processor declares as its output) — fix the path, remove the entry, or set
-[build] allow_missing_src_dirs = true to skip absent entries as before
+  [processor.taplo] src_files entry 'pyproject.toml' does not exist or is not a file
+Every src_dirs entry must name a directory that exists and every src_files
+entry a file that exists (or a path an upstream processor declares as its
+output) — fix the path or remove the entry; [build] allow_missing_src_dirs =
+true skips absent directories as before, never absent files
 ```
 
-This used to be a silent skip, visible only under `--phases`. That let a
-stanza whose directory had moved, or one copied from another repo, keep the
-build green while checking nothing at all — the worst kind of failure,
-because the green tick says the check ran. The fix is always in the config:
-point the entry at the directory that actually holds the files, or delete
-the stanza if the files are gone.
+Directories used to be a silent skip, visible only under `--phases`, and files
+were never checked at all. That let a stanza whose directory had moved, one
+copied from another repo, or one with a typo in a file name keep the build
+green while checking nothing at all — the worst kind of failure, because the
+green tick says the check ran. The fix is always in the config: point the
+entry at the directory or file that actually exists, or delete the stanza if
+the files are gone.
 
 What is **not** reported:
 
 - `""` and `"."`, which mean the project root and always exist.
-- A directory an upstream processor declares as its output (for example a
-  linter whose `src_dirs` is a generator's `output_dir`). It does not exist
-  before that processor has run; discovery sees the declared outputs as
-  virtual files and accepts the entry.
-- Any entry when `src_files` is set, since file-list mode bypasses `src_dirs`.
+- A directory or file an upstream processor declares as its output (for
+  example a linter whose `src_dirs` is a generator's `output_dir`, or whose
+  `src_files` names one of its outputs). It does not exist before that
+  processor has run; discovery sees the declared outputs as virtual files and
+  accepts the entry.
 - Entries of a stanza with `enabled = false`.
 - Anything during `rsconstruct clean` and `rsconstruct smart
   remove-no-file-processors`: clean must still be able to remove the outputs
@@ -291,10 +295,12 @@ What is **not** reported:
   exists to delete the very stanzas this check rejects. Both report the
   entries under `--phases` instead.
 
-`[build] allow_missing_src_dirs = true` restores the old skip for a project
-that needs it; the skipped entries are then listed under `--phases`. Prefer
-fixing the entry: the switch hides exactly the misconfiguration this check
-exists to catch.
+`[build] allow_missing_src_dirs = true` restores the old skip for directories
+in a project that needs it; the skipped entries are then listed under
+`--phases`. It never covers `src_files`: a directory can at least plausibly be
+empty, a named file that is not there is simply wrong. Prefer fixing the
+entry: the switch hides exactly the misconfiguration this check exists to
+catch.
 
 ### `[dependencies]`
 

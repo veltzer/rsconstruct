@@ -1934,6 +1934,129 @@ src_dirs = ["out/gen"]
     );
 }
 
+/// A `src_files` entry must name a file that exists, and unlike a
+/// directory it is never forgiven: `allow_missing_src_dirs` does not cover it.
+#[test]
+fn src_files_entry_must_exist() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+    fs::write(project_path.join("tera.templates/t.txt.tera"), "hello\n").unwrap();
+
+    let strict = "[processor.tera]\nsrc_files = [\"tera.templates/t.txt.tera\", \"tera.templates/gone.tera\"]\n";
+    fs::write(project_path.join("rsconstruct.toml"), strict).unwrap();
+    let out = run_rsconstruct(project_path, &["build"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "a missing src_files entry must fail as a config error: {stderr}"
+    );
+    assert!(
+        stderr.contains("processor.tera") && stderr.contains("tera.templates/gone.tera"),
+        "error must name the processor and the entry: {stderr}"
+    );
+    assert!(
+        !stderr.contains("'tera.templates/t.txt.tera'"),
+        "the entry that exists must not be reported: {stderr}"
+    );
+
+    let lenient = format!("[build]\nallow_missing_src_dirs = true\n\n{strict}");
+    fs::write(project_path.join("rsconstruct.toml"), lenient).unwrap();
+    let out = run_rsconstruct(project_path, &["build"]);
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "allow_missing_src_dirs must not forgive a missing file: stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// A `src_files` entry that an upstream processor produces is not missing.
+#[test]
+fn src_files_entry_backed_by_upstream_output_is_not_missing() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+    let script_path = project_path.join("to_md.sh");
+    fs::write(
+        &script_path,
+        "#!/bin/bash\nprintf '# %s\\n' \"$(cat \"$1\")\" > \"$2\"\n",
+    )
+    .unwrap();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&script_path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    fs::create_dir_all(project_path.join("src")).unwrap();
+    fs::write(project_path.join("src/a.txt"), "hello\n").unwrap();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        format!(
+            r#"[processor.generator]
+command = "{script}"
+src_extensions = [".txt"]
+src_dirs = ["src"]
+output_dir = "out/gen"
+output_extension = "md"
+batch = false
+
+[processor.markdownlint]
+src_files = ["out/gen/a.md"]
+"#,
+            script = script_path.display(),
+        ),
+    )
+    .unwrap();
+    assert!(!project_path.join("out/gen/a.md").exists());
+    let output =
+        run_rsconstruct_with_env(project_path, &["processors", "files"], &[("NO_COLOR", "1")]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "a src_files entry fed by an upstream output must not be reported as missing: {stderr}"
+    );
+}
+
+/// `src_files` on its own matches exactly the named files. It used to fall
+/// back to scanning the project root, so a stanza naming one file linted
+/// every file of that type in the tree.
+#[test]
+fn src_files_alone_matches_only_the_named_files() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+    fs::write(project_path.join("a.md"), "# a\n").unwrap();
+    fs::create_dir_all(project_path.join("sub")).unwrap();
+    fs::write(project_path.join("sub/b.md"), "# b\n").unwrap();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.markdownlint]\nsrc_files = [\"a.md\"]\n",
+    )
+    .unwrap();
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["--json", "processors", "files"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(
+        output.status.success(),
+        "processors files failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: Vec<serde_json::Value> = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("JSON parse failed: {e}\nOutput: {stdout}"));
+    let inputs: Vec<String> = parsed
+        .iter()
+        .filter(|p| p["processor"].as_str() == Some("markdownlint"))
+        .flat_map(|p| p["inputs"].as_array().unwrap().iter())
+        .map(|i| i.as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(
+        inputs,
+        vec!["a.md".to_string()],
+        "only the named file may be matched, got {inputs:?}"
+    );
+}
+
 /// A processor's default `dep_auto` list stays skip-if-absent.
 ///
 /// The defaults name the well-known config files a tool honours when

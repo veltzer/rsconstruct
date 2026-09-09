@@ -252,14 +252,27 @@ impl FileIndex {
         // accident: src_dirs = [""] normalizes to the project root below and
         // walks everything. That is a deliberate, visible opt-in.
         //
-        // src_files is the other way to reach the root: those are explicit
-        // path allowlists, so query() needs a root to match them against.
-        // That is scoped matching of named files, not open-ended discovery.
-        let effective_dirs: Vec<&str> = if src_dirs.is_empty() && !include_path_refs.is_empty() {
-            vec![""]
-        } else {
-            src_dirs.iter().map(std::string::String::as_str).collect()
-        };
+        // src_files on its own is an allowlist: exactly the named paths and
+        // nothing else. It used to fall back to scanning the project root,
+        // which made `src_files = ["x.toml"]` lint every TOML file in the
+        // tree — a catch-all wearing the clothes of a precise stanza. With
+        // src_dirs also set, the named files are added to the directory scan.
+        if src_dirs.is_empty() {
+            let mut named: Vec<PathBuf> = self
+                .files
+                .iter()
+                .filter(|path| {
+                    include_path_refs
+                        .iter()
+                        .any(|p| *p == path.to_string_lossy())
+                })
+                .cloned()
+                .collect();
+            named.sort();
+            named.dedup();
+            return named;
+        }
+        let effective_dirs: Vec<&str> = src_dirs.iter().map(std::string::String::as_str).collect();
         for dir in &effective_dirs {
             // Normalize "." to "" so depth calculations work correctly
             // (files in the index are stored as relative paths without "./" prefix)
