@@ -2057,6 +2057,63 @@ fn src_files_alone_matches_only_the_named_files() {
     );
 }
 
+/// `src_dirs = ["."]` is accepted by default and rejected as a config error
+/// with `[build] reject_dot_src_dirs = true`; `""` stays accepted either way.
+#[test]
+fn reject_dot_src_dirs_is_opt_in() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+    fs::write(project_path.join("tera.templates/t.txt.tera"), "hello\n").unwrap();
+
+    let dot = "[processor.tera]\nsrc_dirs = [\".\"]\n";
+    fs::write(project_path.join("rsconstruct.toml"), dot).unwrap();
+    let out = run_rsconstruct(project_path, &["build"]);
+    assert!(
+        out.status.success(),
+        "\".\" must be accepted by default: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(project_path.join("t.txt").exists());
+
+    let strict = format!("[build]\nreject_dot_src_dirs = true\n\n{dot}");
+    fs::write(project_path.join("rsconstruct.toml"), strict).unwrap();
+    let out = run_rsconstruct(project_path, &["build"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "with the switch on, \".\" must be a config error: {stderr}"
+    );
+    for needle in [
+        "processor.tera",
+        "reject_dot_src_dirs",
+        "rsconstruct.toml:5",
+    ] {
+        assert!(
+            stderr.contains(needle),
+            "error must mention {needle}: {stderr}"
+        );
+    }
+
+    let root = "[build]\nreject_dot_src_dirs = true\n\n[processor.tera]\nsrc_dirs = [\"\"]\n";
+    fs::write(project_path.join("rsconstruct.toml"), root).unwrap();
+    let out = run_rsconstruct(project_path, &["build"]);
+    assert!(
+        out.status.success(),
+        "\"\" is the documented whole-tree spelling and must stay accepted: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let disabled = "[build]\nreject_dot_src_dirs = true\n\n[processor.tera]\nsrc_dirs = [\".\"]\nenabled = false\n";
+    fs::write(project_path.join("rsconstruct.toml"), disabled).unwrap();
+    let out = run_rsconstruct(project_path, &["build"]);
+    assert!(
+        out.status.success(),
+        "a disabled stanza is not checked: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 /// A processor's default `dep_auto` list stays skip-if-absent.
 ///
 /// The defaults name the well-known config files a tool honours when

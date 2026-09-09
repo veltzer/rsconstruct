@@ -747,6 +747,14 @@ pub struct BuildConfig {
     /// upstream processor declares as its output is never reported.
     #[serde(default = "default_allow_missing_src_dirs")]
     pub allow_missing_src_dirs: bool,
+    /// When true, a `src_dirs` entry of `"."` is a config error. `"."` is
+    /// the same as `""`: the whole project, recursively. Written as `"."`
+    /// it reads like "the root directory" and hides that the stanza sweeps
+    /// every subdirectory too, so a project that wants its stanzas to name
+    /// the directories they cover can forbid the spelling outright. Off by
+    /// default: `"."` is not wrong, only easy to misread.
+    #[serde(default = "default_reject_dot_src_dirs")]
+    pub reject_dot_src_dirs: bool,
     /// Wall-clock limit, in seconds, for every external command a processor
     /// runs; a command still running at the limit is killed and its product
     /// fails with "Command timed out after Ns". `0` (the default) means no
@@ -796,6 +804,10 @@ const fn default_allow_missing_src_dirs() -> bool {
     false
 }
 
+const fn default_reject_dot_src_dirs() -> bool {
+    false
+}
+
 impl Default for BuildConfig {
     fn default() -> Self {
         Self {
@@ -808,6 +820,7 @@ impl Default for BuildConfig {
             warn_symlinks: default_warn_symlinks(),
             allow_missing_dep_auto: default_allow_missing_dep_auto(),
             allow_missing_src_dirs: default_allow_missing_src_dirs(),
+            reject_dot_src_dirs: default_reject_dot_src_dirs(),
             command_timeout_secs: 0,
         }
     }
@@ -1982,6 +1995,59 @@ fn validate_dep_auto_exist(instances: &[ProcessorInstance], build: &BuildConfig)
     )))
 }
 
+/// With `[build] reject_dot_src_dirs = true`, no enabled instance may list
+/// `"."` in `src_dirs`. `"."` and `""` both mean the whole project tree; the
+/// switch exists for projects that want that spelled out — as `""`, which
+/// the reference documents as the deliberate whole-tree form — or, better,
+/// replaced by the directories the stanza actually covers. Runs after the
+/// span maps are applied so the message can point at the config line.
+fn validate_no_dot_src_dirs(instances: &[ProcessorInstance], build: &BuildConfig) -> Result<()> {
+    if !build.reject_dot_src_dirs {
+        return Ok(());
+    }
+    let mut errors = Vec::new();
+    for inst in instances {
+        let disabled = inst
+            .config_toml
+            .get("enabled")
+            .and_then(toml::Value::as_bool)
+            == Some(false);
+        if disabled {
+            continue;
+        }
+        let Some(entries) = inst
+            .config_toml
+            .get("src_dirs")
+            .and_then(toml::Value::as_array)
+        else {
+            continue;
+        };
+        if entries
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .any(|e| e == ".")
+        {
+            let source = inst
+                .provenance
+                .get("src_dirs")
+                .map_or_else(String::new, |s| format!(" ({s})"));
+            errors.push(format!(
+                "  [processor.{}] src_dirs contains \".\"{source}",
+                inst.instance_name
+            ));
+        }
+    }
+    if errors.is_empty() {
+        return Ok(());
+    }
+    Err(crate::exit_code::config_error(format!(
+        "Invalid config:\n{}\n[build] reject_dot_src_dirs is on: \".\" means the whole project tree, \
+         the same as \"\" — name the directories the stanza covers, or write \"\" if sweeping \
+         the tree is intended",
+        errors.join("\n")
+    )))
+}
+
 fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
     let Some(processor_table) = raw.get("processor").and_then(|v| v.as_table()) else {
         return Vec::new();
@@ -2332,6 +2398,7 @@ impl Config {
             .apply_output_dir_defaults(&config.build.output_dir);
         config.apply_span_map(&span_map, &local_span_map);
         validate_dep_auto_exist(&config.processor.instances, &config.build)?;
+        validate_no_dot_src_dirs(&config.processor.instances, &config.build)?;
         config.populate_global_provenance(&global_span_map, &local_global_span_map)?;
         crate::phases::run_post_config_hooks(&mut config)?;
         Ok(config)
@@ -2394,6 +2461,7 @@ impl Config {
             )));
         }
         validate_dep_auto_exist(&self.processor.instances, &self.build)?;
+        validate_no_dot_src_dirs(&self.processor.instances, &self.build)?;
         Ok(())
     }
 
