@@ -6,6 +6,11 @@ use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;
 
+/// A directory that holds no user config, so tests see built-in defaults.
+fn no_user_config_dir() -> std::path::PathBuf {
+    std::env::temp_dir().join("rsconstruct-tests-no-user-config")
+}
+
 /// Assert that an external tool is available on PATH.
 /// Panics if the tool is missing — a missing tool must fail the test,
 /// never silently skip it. Only presence is checked (some tools, like
@@ -63,6 +68,10 @@ pub fn run_rsconstruct_with_env(
 ) -> std::process::Output {
     let rsconstruct_path = env!("CARGO_BIN_EXE_rsconstruct");
     let mut cmd = Command::new(rsconstruct_path);
+    // Hermetic: never read the developer's ~/.config/rsconstruct/config.toml.
+    // A test that wants a user config sets XDG_CONFIG_HOME itself, which
+    // overrides this because later env() calls win.
+    cmd.env("XDG_CONFIG_HOME", no_user_config_dir());
     cmd.current_dir(dir).args(args);
     for (key, val) in env_vars {
         cmd.env(key, val);

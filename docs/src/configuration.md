@@ -3,6 +3,8 @@
 RSConstruct is configured via an `rsconstruct.toml` file in the project root.
 An optional `rsconstruct.local.toml` overlay, when present, is merged over the
 main file at load time — see [Local overlay](#local-overlay-rsconstructlocaltoml).
+An optional user-level file can set `[build]` defaults underneath both — see
+[User config](#user-config-configrsconstructconfigtoml).
 
 ## Full reference
 
@@ -167,11 +169,50 @@ Rules and caveats:
 - `rsconstruct processors config <iname>` shows the merged values.
 - In watch mode, both files are watched for changes.
 
-This supports the shared-config pattern: one identical `rsconstruct.toml`
-distributed across many repos — a `src_dirs` entry that doesn't exist in a
-given repo simply scans nothing there, so each processor only activates where
-its directories exist — plus a small optional `rsconstruct.local.toml` per repo
-for what's genuinely repo-specific.
+This supports a shared-config pattern: one `rsconstruct.toml` distributed
+across many repos plus a small optional `rsconstruct.local.toml` per repo for
+what's genuinely repo-specific. Note that every `src_dirs` entry must exist in
+every repo that carries it (see [Missing `src_dirs` and `src_files`
+entries](#missing-src_dirs-and-src_files-entries)); a shared file can no longer
+list directories only some repos have, and `[build] allow_missing_src_dirs`
+exists for a project that still wants that.
+
+## User config (`~/.config/rsconstruct/config.toml`)
+
+A per-user file, read from `$XDG_CONFIG_HOME/rsconstruct/config.toml` (or
+`~/.config/rsconstruct/config.toml` when `XDG_CONFIG_HOME` is unset), sets
+`[build]` defaults for every project you build on this machine. Precedence,
+lowest first:
+
+1. built-in defaults
+2. the user config
+3. `rsconstruct.toml`
+4. `rsconstruct.local.toml`
+
+Keys merge one by one, so a repo that sets a `[build]` key overrides the user
+value for that key only. Example:
+
+```toml
+# ~/.config/rsconstruct/config.toml
+[build]
+reject_dot_src_dirs = true
+```
+
+Rules:
+
+- **Only `[build]` is allowed.** A `[processor.*]`, `[analyzer.*]` or any
+  other table in this file is a config error naming the offending section.
+  Anything that changes what a repo scans or builds belongs in the repo's own
+  files, where every machine and CI see the same thing; a machine-wide file
+  that could add processors would make the same repo build differently on
+  two machines.
+- **CI never reads it.** Continuous integration checks out the repo and
+  nothing else, so a switch that must hold in CI has to be set in
+  `rsconstruct.toml`. The user file is a local safety net and a way to try a
+  policy across all your projects before committing it to each of them.
+- It applies even in a directory without `rsconstruct.toml`, for the commands
+  that run without a config.
+- Watch mode does not watch this file; restart the watcher after editing it.
 
 ## Section details
 

@@ -4,7 +4,9 @@
 //! - `rsconstruct.local.toml` — a per-repo overlay deep-merged over the main
 //!   config at load time.
 
-use crate::common::{run_rsconstruct, setup_project_with_config, write_file};
+use crate::common::{
+    run_rsconstruct, run_rsconstruct_with_env, setup_project_with_config, write_file,
+};
 use std::fs;
 use tempfile::TempDir;
 
@@ -241,5 +243,99 @@ fn local_overlay_without_main_config_fails() {
     assert!(
         stderr.contains("rsconstruct.local.toml found without rsconstruct.toml"),
         "expected overlay-without-main error, got: {stderr}"
+    );
+}
+
+/// The user-level config (`$XDG_CONFIG_HOME/rsconstruct/config.toml`) sets
+/// `[build]` defaults under the repo config: it applies when the repo says
+/// nothing, and the repo's own `[build]` wins key by key.
+#[test]
+fn user_config_sets_build_defaults_under_the_repo() {
+    let temp_dir = setup_project_with_config("[processor.tera]\nsrc_dirs = [\".\"]\n");
+    let project = temp_dir.path();
+    write_file(project, "tera.templates/hello.txt.tera", "hello");
+    let xdg = TempDir::new().unwrap();
+    fs::create_dir_all(xdg.path().join("rsconstruct")).unwrap();
+    fs::write(
+        xdg.path().join("rsconstruct/config.toml"),
+        "[build]\nreject_dot_src_dirs = true\n",
+    )
+    .unwrap();
+    let xdg_path = xdg.path().to_str().unwrap();
+
+    // The user default applies: "." is rejected.
+    let output = run_rsconstruct_with_env(project, &["build"], &[("XDG_CONFIG_HOME", xdg_path)]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "the user config's reject_dot_src_dirs must apply: {stderr}"
+    );
+    assert!(
+        stderr.contains("reject_dot_src_dirs"),
+        "unexpected error: {stderr}"
+    );
+
+    // The repo overrides the user default key by key.
+    fs::write(
+        project.join("rsconstruct.toml"),
+        "[build]\nreject_dot_src_dirs = false\n\n[processor.tera]\nsrc_dirs = [\".\"]\n",
+    )
+    .unwrap();
+    let output = run_rsconstruct_with_env(project, &["build"], &[("XDG_CONFIG_HOME", xdg_path)]);
+    assert!(
+        output.status.success(),
+        "the repo's own [build] must win over the user config: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(project.join("hello.txt").exists());
+
+    // Without the user file the default is off.
+    let empty = TempDir::new().unwrap();
+    fs::write(
+        project.join("rsconstruct.toml"),
+        "[processor.tera]\nsrc_dirs = [\".\"]\n",
+    )
+    .unwrap();
+    let output = run_rsconstruct_with_env(
+        project,
+        &["build"],
+        &[("XDG_CONFIG_HOME", empty.path().to_str().unwrap())],
+    );
+    assert!(
+        output.status.success(),
+        "no user file means the built-in default: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// The user config may carry `[build]` only: anything that could change what
+/// a repo builds must live in the repo, where CI sees it.
+#[test]
+fn user_config_rejects_sections_other_than_build() {
+    let temp_dir = setup_project_with_config("[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n");
+    let project = temp_dir.path();
+    write_file(project, "tera.templates/hello.txt.tera", "hello");
+    let xdg = TempDir::new().unwrap();
+    fs::create_dir_all(xdg.path().join("rsconstruct")).unwrap();
+    fs::write(
+        xdg.path().join("rsconstruct/config.toml"),
+        "[build]\nreject_dot_src_dirs = true\n\n[processor.ruff]\nsrc_dirs = [\"src\"]\n",
+    )
+    .unwrap();
+    let output = run_rsconstruct_with_env(
+        project,
+        &["build"],
+        &[("XDG_CONFIG_HOME", xdg.path().to_str().unwrap())],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "a [processor] table in the user config must be refused: {stderr}"
+    );
+    assert!(
+        stderr.contains("only a [build] table") && stderr.contains("[processor]"),
+        "error must say what is allowed and what was found: {stderr}"
     );
 }

@@ -26,6 +26,67 @@ const CONFIG_FILE: &str = "rsconstruct.toml";
 /// in a separate local file.
 pub const LOCAL_CONFIG_FILE: &str = "rsconstruct.local.toml";
 
+/// The user-level config file, relative to `$XDG_CONFIG_HOME` (or
+/// `~/.config`). It may set `[build]` keys only and sits *under* the repo's
+/// files: rsconstruct.toml overrides it, rsconstruct.local.toml overrides both.
+pub const USER_CONFIG_FILE: &str = "rsconstruct/config.toml";
+
+/// Path of the user-level config file, or `None` when neither
+/// `$XDG_CONFIG_HOME` nor `$HOME` is set.
+#[must_use]
+pub fn user_config_path() -> Option<std::path::PathBuf> {
+    let base = std::env::var_os("XDG_CONFIG_HOME")
+        .filter(|v| !v.is_empty())
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config"))
+        })?;
+    Some(base.join(USER_CONFIG_FILE))
+}
+
+/// Read the user-level config file, if present, as a raw TOML value.
+///
+/// Only a `[build]` table is accepted. A machine-wide file that could add
+/// processors or change what a repo scans would make the same repo build
+/// differently on two machines — and differently from CI, which never sees
+/// this file. Build-policy switches are the one thing that is safe to
+/// default per user, and they stay overridable per repo.
+fn read_user_config() -> Result<Option<toml::Value>> {
+    let Some(path) = user_config_path() else {
+        return Ok(None);
+    };
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let content = crate::errors::ctx(
+        std::fs::read_to_string(&path),
+        &format!("Failed to read user config file {}", path.display()),
+    )?;
+    let raw: toml::Value = toml::from_str(&content).map_err(|e| {
+        crate::exit_code::config_error(format!(
+            "Failed to parse user config file {}: {e}",
+            path.display()
+        ))
+    })?;
+    if let Some(table) = raw.as_table() {
+        let foreign: Vec<&String> = table.keys().filter(|k| k.as_str() != "build").collect();
+        if !foreign.is_empty() {
+            return Err(crate::exit_code::config_error(format!(
+                "Invalid user config {}: only a [build] table is allowed here, found [{}] — \
+                 processors, analyzers and every other section belong in the repo's rsconstruct.toml, \
+                 where CI sees them too",
+                path.display(),
+                foreign
+                    .iter()
+                    .map(|k| k.as_str())
+                    .collect::<Vec<_>>()
+                    .join("], [")
+            )));
+        }
+    }
+    Ok(Some(raw))
+}
+
 /// Scan field names in `StandardConfig`.
 /// These are automatically appended to every processor's known fields during validation.
 pub const SCAN_CONFIG_FIELDS: &[&str] = &[
@@ -2325,12 +2386,17 @@ impl Config {
         let (mut config, span_map, global_span_map, local_span_map, local_global_span_map) =
             if config_path.exists() {
                 let substituted = read_and_substitute(config_path)?;
-                let mut raw: toml::Value = toml::from_str(&substituted).map_err(|e| {
+                let repo_raw: toml::Value = toml::from_str(&substituted).map_err(|e| {
                     crate::exit_code::config_error(format!(
                         "Failed to parse config file {}: {e}",
                         config_path.display()
                     ))
                 })?;
+                // The user-level file sits underneath: its [build] keys are
+                // defaults that the repo's own [build] overrides key by key.
+                let mut raw = read_user_config()?
+                    .unwrap_or_else(|| toml::Value::Table(toml::map::Map::new()));
+                merge_toml_values(&mut raw, repo_raw);
                 // Overlay: rsconstruct.local.toml, when present, is deep-merged
                 // over the main config. Tables merge recursively; arrays and
                 // scalars from the local file replace the main file's values.
@@ -2384,8 +2450,17 @@ impl Config {
                         "{LOCAL_CONFIG_FILE} found without {CONFIG_FILE} — the local overlay only extends a main config file",
                     );
                 }
+                let config = match read_user_config()? {
+                    Some(raw) => raw.try_into().map_err(|e| {
+                        crate::exit_code::config_error(format!(
+                            "Failed to parse user config file: {e}"
+                        ))
+                    })?,
+                    None => Self::default(),
+                };
+                validate_build_config(&config.build)?;
                 (
-                    Self::default(),
+                    config,
                     SpanMap::new(),
                     provenance::GlobalSpanMap::new(),
                     SpanMap::new(),
