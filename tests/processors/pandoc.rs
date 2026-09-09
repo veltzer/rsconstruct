@@ -1,6 +1,6 @@
+use crate::common::{require_tool, run_rsconstruct_with_env};
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsconstruct_with_env, require_tool};
 
 #[test]
 fn pandoc_valid_file() {
@@ -62,7 +62,8 @@ fn pandoc_incremental_skip() {
     assert!(output1.status.success());
 
     // Second build should skip
-    let output2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
@@ -134,8 +135,15 @@ fn pandoc_unicode_succeeds_with_xelatex() {
     let pdf = project_path.join("out/pandoc/doc.pdf");
     assert!(pdf.exists(), "Expected PDF at {}", pdf.display());
     let bytes = fs::read(&pdf).unwrap();
-    assert!(bytes.len() > 1000, "PDF unexpectedly small: {} bytes", bytes.len());
-    assert!(bytes.starts_with(b"%PDF-"), "File is not a PDF (no %PDF- header)");
+    assert!(
+        bytes.len() > 1000,
+        "PDF unexpectedly small: {} bytes",
+        bytes.len()
+    );
+    assert!(
+        bytes.starts_with(b"%PDF-"),
+        "File is not a PDF (no %PDF- header)"
+    );
 }
 
 /// lualatex on unicode content must also succeed.
@@ -164,7 +172,10 @@ fn pandoc_unicode_succeeds_with_lualatex() {
     let pdf = project_path.join("out/pandoc/doc.pdf");
     assert!(pdf.exists(), "Expected PDF at {}", pdf.display());
     let bytes = fs::read(&pdf).unwrap();
-    assert!(bytes.starts_with(b"%PDF-"), "File is not a PDF (no %PDF- header)");
+    assert!(
+        bytes.starts_with(b"%PDF-"),
+        "File is not a PDF (no %PDF- header)"
+    );
 }
 
 /// Unknown engine values are rejected at config-load time, before any tool
@@ -215,17 +226,31 @@ fn pandoc_pdf_deterministic() {
     fs::write(dir1.path().join("rsconstruct.toml"), config).unwrap();
     fs::write(dir1.path().join("doc.md"), md_content).unwrap();
     let out1 = run_rsconstruct_with_env(dir1.path(), &["build"], &[("NO_COLOR", "1")]);
-    assert!(out1.status.success(), "Build 1 failed: {}", String::from_utf8_lossy(&out1.stderr));
+    assert!(
+        out1.status.success(),
+        "Build 1 failed: {}",
+        String::from_utf8_lossy(&out1.stderr)
+    );
 
     // Build 2
     let dir2 = TempDir::new().expect("Failed to create temp dir");
     fs::write(dir2.path().join("rsconstruct.toml"), config).unwrap();
     fs::write(dir2.path().join("doc.md"), md_content).unwrap();
     let out2 = run_rsconstruct_with_env(dir2.path(), &["build"], &[("NO_COLOR", "1")]);
-    assert!(out2.status.success(), "Build 2 failed: {}", String::from_utf8_lossy(&out2.stderr));
+    assert!(
+        out2.status.success(),
+        "Build 2 failed: {}",
+        String::from_utf8_lossy(&out2.stderr)
+    );
 
     // Compare PDFs
     let pdf1 = fs::read(dir1.path().join("out/pandoc/doc.pdf")).expect("PDF 1 not found");
     let pdf2 = fs::read(dir2.path().join("out/pandoc/doc.pdf")).expect("PDF 2 not found");
-    assert_eq!(pdf1, pdf2, "PDFs should be binary identical but differ ({} vs {} bytes)", pdf1.len(), pdf2.len());
+    assert_eq!(
+        pdf1,
+        pdf2,
+        "PDFs should be binary identical but differ ({} vs {} bytes)",
+        pdf1.len(),
+        pdf2.len()
+    );
 }

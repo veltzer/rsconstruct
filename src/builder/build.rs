@@ -1,15 +1,18 @@
-use std::collections::BTreeMap;
-use std::fmt::Write;
-use std::time::{Duration, Instant};
-use anyhow::{Context, Result};
+use super::{
+    Builder, GraphSnapshot, ProductStatusLabels, StatusPrintOptions, phases_debug,
+    print_graph_stats,
+};
 use crate::cli::{BuildOptions, BuildPhase, DisplayOptions};
 use crate::color;
-use crate::tables;
 use crate::errors;
 use crate::executor::{Executor, ExecutorOptions};
 use crate::processors::{ProcessorMap, ProcessorType};
 use crate::stats::BuildStats;
-use super::{Builder, GraphSnapshot, ProductStatusLabels, StatusPrintOptions, phases_debug, print_graph_stats};
+use crate::tables;
+use anyhow::{Context, Result};
+use std::collections::BTreeMap;
+use std::fmt::Write;
+use std::time::{Duration, Instant};
 
 /// Expand `@`-prefixed shortcuts in the processor filter.
 ///
@@ -24,35 +27,52 @@ fn expand_aliases(filter: &[String], processors: &ProcessorMap) -> Vec<String> {
             match alias {
                 "checkers" => {
                     expanded.extend(
-                        processors.iter()
-                            .filter(|(name, _)| crate::registries::processor::processor_type_of(name.as_str()) == ProcessorType::Checker)
-                            .map(|(n, _)| n.clone())
+                        processors
+                            .iter()
+                            .filter(|(name, _)| {
+                                crate::registries::processor::processor_type_of(name.as_str())
+                                    == ProcessorType::Checker
+                            })
+                            .map(|(n, _)| n.clone()),
                     );
                 }
                 "generators" => {
                     expanded.extend(
-                        processors.iter()
-                            .filter(|(name, _)| crate::registries::processor::processor_type_of(name.as_str()) == ProcessorType::Generator)
-                            .map(|(n, _)| n.clone())
+                        processors
+                            .iter()
+                            .filter(|(name, _)| {
+                                crate::registries::processor::processor_type_of(name.as_str())
+                                    == ProcessorType::Generator
+                            })
+                            .map(|(n, _)| n.clone()),
                     );
                 }
                 "creators" => {
                     expanded.extend(
-                        processors.iter()
-                            .filter(|(name, _)| crate::registries::processor::processor_type_of(name.as_str()) == ProcessorType::Creator)
-                            .map(|(n, _)| n.clone())
+                        processors
+                            .iter()
+                            .filter(|(name, _)| {
+                                crate::registries::processor::processor_type_of(name.as_str())
+                                    == ProcessorType::Creator
+                            })
+                            .map(|(n, _)| n.clone()),
                     );
                 }
                 "lua" => {
                     expanded.extend(
-                        processors.iter()
-                            .filter(|(name, _)| crate::registries::processor::processor_type_of(name.as_str()) == ProcessorType::Lua)
-                            .map(|(n, _)| n.clone())
+                        processors
+                            .iter()
+                            .filter(|(name, _)| {
+                                crate::registries::processor::processor_type_of(name.as_str())
+                                    == ProcessorType::Lua
+                            })
+                            .map(|(n, _)| n.clone()),
                     );
                 }
                 _ => {
                     // Check if it's a tool name
-                    let by_tool: Vec<_> = processors.iter()
+                    let by_tool: Vec<_> = processors
+                        .iter()
                         .filter(|(_, p)| p.required_tools().iter().any(|t| t == alias))
                         .map(|(n, _)| n.clone())
                         .collect();
@@ -85,7 +105,8 @@ fn check_required_tools(
     processor_filter: Option<&[String]>,
     only: Option<&std::collections::HashSet<&str>>,
 ) -> Result<()> {
-    let active_names: Vec<&String> = processors.keys()
+    let active_names: Vec<&String> = processors
+        .keys()
         .filter(|k| processor_filter.is_none_or(|filter| filter.iter().any(|f| f == *k)))
         .filter(|k| only.is_none_or(|set| set.contains(k.as_str())))
         .filter(|k| processors[*k].scan_config().enabled)
@@ -98,7 +119,8 @@ fn check_required_tools(
                 continue;
             }
             if which::which(&tool).is_err() {
-                let procs: Vec<String> = active_names.iter()
+                let procs: Vec<String> = active_names
+                    .iter()
                     .filter(|n| processors[**n].required_tools().contains(&tool))
                     .map(|n| (*n).clone())
                     .collect();
@@ -113,13 +135,20 @@ fn check_required_tools(
             let install_hint = crate::tools::tool_install_command(tool)
                 .map(|cmd| format!("  install: {cmd}"))
                 .unwrap_or_default();
-            let _ = writeln!(msg, "  {} (needed by: {}){}", tool, procs.join(", "), install_hint);
+            let _ = writeln!(
+                msg,
+                "  {} (needed by: {}){}",
+                tool,
+                procs.join(", "),
+                install_hint
+            );
         }
         msg.push_str("\nRun `rsconstruct tools install` to install missing tools.");
         return Err(crate::exit_code::RsconstructError::new(
             crate::exit_code::RsconstructExitCode::ToolError,
             msg.trim_end(),
-        ).into());
+        )
+        .into());
     }
     Ok(())
 }
@@ -143,7 +172,11 @@ fn resolve_processor_filter(
 
     // Validate unknown names in either filter, pooling both error reports.
     let mut unknown: Vec<String> = Vec::new();
-    for filter in [&include_expanded, &exclude_expanded].iter().copied().flatten() {
+    for filter in [&include_expanded, &exclude_expanded]
+        .iter()
+        .copied()
+        .flatten()
+    {
         for name in filter {
             if !processors.contains_key(name) {
                 unknown.push(name.clone());
@@ -156,7 +189,8 @@ fn resolve_processor_filter(
         return Err(crate::exit_code::RsconstructError::new(
             crate::exit_code::RsconstructExitCode::ConfigError,
             format!("Unknown processor(s): {unknown:?}. Available: {available:?}"),
-        ).into());
+        )
+        .into());
     }
 
     // Reject overlap between -p and -x: contradictory intent should fail
@@ -167,7 +201,8 @@ fn resolve_processor_filter(
             return Err(crate::exit_code::RsconstructError::new(
                 crate::exit_code::RsconstructExitCode::ConfigError,
                 format!("Processor(s) {conflicts:?} appear in both -p and -x"),
-            ).into());
+            )
+            .into());
         }
     }
 
@@ -178,7 +213,11 @@ fn resolve_processor_filter(
         (Some(inc), Some(exc)) => Some(inc.into_iter().filter(|n| !exc.contains(n)).collect()),
         (Some(inc), None) => Some(inc),
         (None, Some(exc)) => Some(
-            processors.keys().filter(|n| !exc.contains(n)).cloned().collect()
+            processors
+                .keys()
+                .filter(|n| !exc.contains(n))
+                .cloned()
+                .collect(),
         ),
         (None, None) => None,
     })
@@ -205,7 +244,11 @@ impl Builder {
     /// steps: they translate flags into the config/context state the rest of
     /// the pipeline reads, and they must all happen before `create_processors`
     /// observes the config.
-    fn apply_cli_overrides(&mut self, ctx: &crate::build_context::BuildContext, opts: &BuildOptions) {
+    fn apply_cli_overrides(
+        &mut self,
+        ctx: &crate::build_context::BuildContext,
+        opts: &BuildOptions,
+    ) {
         // CLI override for zspell and aspell auto_add_words
         if opts.auto_add_words {
             for inst in &mut self.config.processor.instances {
@@ -260,7 +303,13 @@ impl Builder {
         self.detect_config_changes(&processors, opts.show_all_config_changes);
 
         // Build the dependency graph (may stop early based on stop_after)
-        let (mut graph, mut phase_timings) = self.build_graph_with_processors_and_phase(ctx, &processors, opts.stop_after, processor_filter, opts.verbose)?;
+        let (mut graph, mut phase_timings) = self.build_graph_with_processors_and_phase(
+            ctx,
+            &processors,
+            opts.stop_after,
+            processor_filter,
+            opts.verbose,
+        )?;
 
         // Verify required tools — after graph construction, so only processors
         // that actually produced products are checked. A declared processor
@@ -268,7 +317,9 @@ impl Builder {
         // lets one shared rsconstruct.toml serve repos with different layouts.
         // Disabled instances (`enabled = false`) are exempt — disabling a
         // processor exists precisely to keep its stanza while its tool is absent.
-        let with_products: std::collections::HashSet<&str> = graph.products().iter()
+        let with_products: std::collections::HashSet<&str> = graph
+            .products()
+            .iter()
             .map(|p| p.processor.as_str())
             .collect();
         check_required_tools(&processors, processor_filter, Some(&with_products))?;
@@ -279,7 +330,11 @@ impl Builder {
         }
 
         phase_timings.insert(0, ("create_processors".to_string(), create_processors_dur));
-        Ok(BuildPlan { processors, graph, phase_timings })
+        Ok(BuildPlan {
+            processors,
+            graph,
+            phase_timings,
+        })
     }
 
     /// Execute an incremental build using the dependency graph.
@@ -287,10 +342,19 @@ impl Builder {
     /// Three phases: [`apply_cli_overrides`](Self::apply_cli_overrides)
     /// translates flags into config/context state, [`plan_build`](Self::plan_build)
     /// produces a [`BuildPlan`], and the body below classifies and executes it.
-    pub fn build(&mut self, ctx: &crate::build_context::BuildContext, opts: &BuildOptions, init_timings: Vec<(String, Duration)>) -> Result<(), anyhow::Error> {
+    pub fn build(
+        &mut self,
+        ctx: &crate::build_context::BuildContext,
+        opts: &BuildOptions,
+        init_timings: Vec<(String, Duration)>,
+    ) -> Result<(), anyhow::Error> {
         self.apply_cli_overrides(ctx, opts);
 
-        let BuildPlan { processors, graph, mut phase_timings } = self.plan_build(ctx, opts)?;
+        let BuildPlan {
+            processors,
+            graph,
+            mut phase_timings,
+        } = self.plan_build(ctx, opts)?;
 
         // Prepend init timings ahead of create_processors, which plan_build
         // already inserted at the front.
@@ -320,12 +384,20 @@ impl Builder {
             println!("[build] {} products to check for updates", order.len());
         }
         let policy = crate::executor::IncrementalPolicy;
-        let classification =
-            crate::executor::classify_products(ctx, &policy, &graph, &order, &self.object_store, opts.force);
+        let classification = crate::executor::classify_products(
+            ctx,
+            &policy,
+            &graph,
+            &order,
+            &self.object_store,
+            opts.force,
+        );
         phase_timings.push(("classify".to_string(), t.elapsed()));
         if crate::json_output::human_output_enabled() {
-            println!("[build] {} to build, {} to restore ({} up-to-date)",
-                classification.build_count, classification.restore_count, classification.skip_count);
+            println!(
+                "[build] {} to build, {} to restore ({} up-to-date)",
+                classification.build_count, classification.restore_count, classification.skip_count
+            );
         }
         print_graph_stats(GraphSnapshot::AfterClassify, &graph);
 
@@ -340,8 +412,13 @@ impl Builder {
         crate::executor::unlink_pending_outputs(&graph, &self.object_store, &classification)?;
 
         // Create executor with parallelism from command line, env var, or config
-        let parallel = opts.jobs
-            .or_else(|| std::env::var("RSCONSTRUCT_THREADS").ok().and_then(|v| v.parse().ok()))
+        let parallel = opts
+            .jobs
+            .or_else(|| {
+                std::env::var("RSCONSTRUCT_THREADS")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+            })
             .unwrap_or(self.config.build.parallel);
         let effective_parallel = if parallel == 0 {
             std::thread::available_parallelism().map_or(1, std::num::NonZero::get)
@@ -352,20 +429,34 @@ impl Builder {
             println!("[rsconstruct] using {effective_parallel} threads");
         }
         // CLI overrides config for batch_size (CLI -1 maps to None = disable)
-        let batch_size = opts.batch_size.unwrap_or(Some(self.config.build.batch_size));
-        let executor = Executor::new(&processors, ctx, &policy, ExecutorOptions {
-            parallel: effective_parallel,
-            verbose: opts.verbose,
-            display_opts: opts.display_opts,
-            batch_size,
-            explain: opts.explain,
-            retry: opts.retry,
-        });
+        let batch_size = opts
+            .batch_size
+            .unwrap_or(Some(self.config.build.batch_size));
+        let executor = Executor::new(
+            &processors,
+            ctx,
+            &policy,
+            ExecutorOptions {
+                parallel: effective_parallel,
+                verbose: opts.verbose,
+                display_opts: opts.display_opts,
+                batch_size,
+                explain: opts.explain,
+                retry: opts.retry,
+            },
+        );
 
         // Execute the build (enable timings collection if trace output is requested)
         let t = Instant::now();
         let collect_timings = opts.timings || opts.trace.is_some();
-        let result = executor.execute(&graph, &self.object_store, opts.force, collect_timings, opts.keep_going, &classification);
+        let result = executor.execute(
+            &graph,
+            &self.object_store,
+            opts.force,
+            collect_timings,
+            opts.keep_going,
+            &classification,
+        );
         let build_dur = t.elapsed();
         print_graph_stats(GraphSnapshot::AfterExecute, &graph);
 
@@ -374,7 +465,8 @@ impl Builder {
             return Err(crate::exit_code::RsconstructError::new(
                 crate::exit_code::RsconstructExitCode::Interrupted,
                 "Build interrupted",
-            ).into());
+            )
+            .into());
         }
 
         let mut stats = result?;
@@ -396,14 +488,20 @@ impl Builder {
             return Err(crate::exit_code::RsconstructError::new(
                 crate::exit_code::RsconstructExitCode::BuildError,
                 format!("Build completed with {} error(s)", stats.failed_count),
-            ).into());
+            )
+            .into());
         }
 
         Ok(())
     }
 
     /// Show what would happen without executing anything
-    pub fn dry_run(&self, ctx: &crate::build_context::BuildContext, force: bool, explain: bool) -> anyhow::Result<()> {
+    pub fn dry_run(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        force: bool,
+        explain: bool,
+    ) -> anyhow::Result<()> {
         let processors = self.create_processors()?;
         let graph = self.build_graph_with_processors(ctx, &processors)?;
 
@@ -413,7 +511,8 @@ impl Builder {
             return Ok(());
         }
 
-        let products: Vec<_> = order.iter()
+        let products: Vec<_> = order
+            .iter()
             .map(|&id| graph.get_product(id).expect(errors::INVALID_PRODUCT_ID))
             .collect();
 
@@ -424,17 +523,29 @@ impl Builder {
             new: (color::yellow("BUILD"), "build-new"),
         };
 
-        self.print_product_status(ctx, &products, &StatusPrintOptions {
-            force, labels: &labels, explain,
-            display_opts: DisplayOptions::default(), verbose: true,
-            all_processor_names: &[],
-            native_processors: &std::collections::HashSet::new(),
-        });
+        self.print_product_status(
+            ctx,
+            &products,
+            &StatusPrintOptions {
+                force,
+                labels: &labels,
+                explain,
+                display_opts: DisplayOptions::default(),
+                verbose: true,
+                all_processor_names: &[],
+                native_processors: &std::collections::HashSet::new(),
+            },
+        );
         Ok(())
     }
 
     /// Show the status of each product in the build graph
-    pub fn status(&self, ctx: &crate::build_context::BuildContext, verbose: bool, breakdown: bool) -> anyhow::Result<()> {
+    pub fn status(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        verbose: bool,
+        breakdown: bool,
+    ) -> anyhow::Result<()> {
         let processors = self.create_processors()?;
         let graph = self.build_graph_with_processors(ctx, &processors)?;
 
@@ -456,20 +567,31 @@ impl Builder {
             .into_iter()
             .map(std::string::String::as_str)
             .collect();
-        let native_set: std::collections::HashSet<&str> = processors.iter()
+        let native_set: std::collections::HashSet<&str> = processors
+            .iter()
             .filter(|(name, _)| crate::registries::processor::is_native(name.as_str()))
             .map(|(name, _)| name.as_str())
             .collect();
-        self.print_product_status(ctx, &products, &StatusPrintOptions {
-            force: false, labels: &labels, explain: false,
-            display_opts: DisplayOptions::default(), verbose,
-            all_processor_names: &all_proc_names,
-            native_processors: &native_set,
-        });
+        self.print_product_status(
+            ctx,
+            &products,
+            &StatusPrintOptions {
+                force: false,
+                labels: &labels,
+                explain: false,
+                display_opts: DisplayOptions::default(),
+                verbose,
+                all_processor_names: &all_proc_names,
+                native_processors: &native_set,
+            },
+        );
 
         if breakdown {
             // Collect unique source files per processor, then count by extension
-            let mut per_processor_files: BTreeMap<&str, std::collections::HashSet<&std::path::Path>> = BTreeMap::new();
+            let mut per_processor_files: BTreeMap<
+                &str,
+                std::collections::HashSet<&std::path::Path>,
+            > = BTreeMap::new();
             // Seed with all processors so 0-file processors are shown
             for name in &all_proc_names {
                 per_processor_files.entry(name).or_default();
@@ -484,7 +606,8 @@ impl Builder {
             for (proc_name, files) in &per_processor_files {
                 let ext_counts = per_processor.entry(proc_name).or_default();
                 for path in files {
-                    let ext = path.extension()
+                    let ext = path
+                        .extension()
                         .and_then(|e| e.to_str())
                         .unwrap_or("(no ext)");
                     *ext_counts.entry(ext.to_string()).or_default() += 1;
@@ -492,18 +615,26 @@ impl Builder {
             }
             crate::output::info("");
             crate::output::info(&format!("{}:", color::bold("Source files by processor")));
-            let rows: Vec<Vec<String>> = per_processor.iter().map(|(proc_name, ext_counts)| {
-                let total: usize = ext_counts.values().sum();
-                let breakdown_str = if total == 0 {
-                    String::new()
-                } else {
-                    ext_counts.iter()
-                        .map(|(ext, count)| format!("{count} .{ext}"))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                };
-                vec![proc_name.to_string(), format!("{} files", total), breakdown_str]
-            }).collect();
+            let rows: Vec<Vec<String>> = per_processor
+                .iter()
+                .map(|(proc_name, ext_counts)| {
+                    let total: usize = ext_counts.values().sum();
+                    let breakdown_str = if total == 0 {
+                        String::new()
+                    } else {
+                        ext_counts
+                            .iter()
+                            .map(|(ext, count)| format!("{count} .{ext}"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    };
+                    vec![
+                        proc_name.to_string(),
+                        format!("{} files", total),
+                        breakdown_str,
+                    ]
+                })
+                .collect();
             tables::print_table(&["Processor", "Files", "Breakdown"], &rows);
         }
 
@@ -516,7 +647,8 @@ impl Builder {
         let graph = self.build_graph_with_processors(ctx, &processors)?;
 
         let products = graph.products();
-        let mut all_inputs: std::collections::HashSet<&std::path::Path> = std::collections::HashSet::new();
+        let mut all_inputs: std::collections::HashSet<&std::path::Path> =
+            std::collections::HashSet::new();
         for product in products {
             for input in &product.inputs {
                 all_inputs.insert(input.as_path());
@@ -525,7 +657,8 @@ impl Builder {
 
         let mut ext_counts: BTreeMap<String, usize> = BTreeMap::new();
         for path in &all_inputs {
-            let ext = path.extension()
+            let ext = path
+                .extension()
                 .and_then(|e| e.to_str())
                 .unwrap_or("(no ext)");
             *ext_counts.entry(ext.to_string()).or_default() += 1;
@@ -536,10 +669,18 @@ impl Builder {
                 "total": all_inputs.len(),
                 "by_extension": ext_counts,
             });
-            println!("{}", serde_json::to_string_pretty(&json).expect(crate::errors::JSON_SERIALIZE));
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json).expect(crate::errors::JSON_SERIALIZE)
+            );
         } else {
-            println!("{}: {}", color::bold("Total source files"), all_inputs.len());
-            let rows: Vec<Vec<String>> = ext_counts.iter()
+            println!(
+                "{}: {}",
+                color::bold("Total source files"),
+                all_inputs.len()
+            );
+            let rows: Vec<Vec<String>> = ext_counts
+                .iter()
                 .map(|(ext, count)| vec![format!(".{}", ext), count.to_string()])
                 .collect();
             tables::print_table(&["Extension", "Count"], &rows);
@@ -575,7 +716,8 @@ impl Builder {
         for product in products {
             let display = product.display(opts.display_opts);
 
-            let Ok(input_checksum) = crate::checksum::combined_input_checksum(ctx, &product.inputs) else {
+            let Ok(input_checksum) = crate::checksum::combined_input_checksum(ctx, &product.inputs)
+            else {
                 // Can't compute checksum (an input is unreadable) — without a
                 // descriptor key, stale and new are indistinguishable; report
                 // as new.
@@ -591,8 +733,14 @@ impl Builder {
             // Same classification with and without --explain — the flag only
             // adds the reason text.
             let desc_key = product.descriptor_key(&input_checksum);
-            let action = self.object_store.explain_descriptor(ctx, &desc_key, &product.outputs, opts.force);
-            let reason = if opts.explain { format!(" ({action})") } else { String::new() };
+            let action =
+                self.object_store
+                    .explain_descriptor(ctx, &desc_key, &product.outputs, opts.force);
+            let reason = if opts.explain {
+                format!(" ({action})")
+            } else {
+                String::new()
+            };
             let status_idx = match action {
                 ExplainAction::Skip => 0,
                 ExplainAction::Restore(_) => 1,
@@ -601,7 +749,10 @@ impl Builder {
             };
 
             if opts.verbose {
-                println!("{} [{}] {}{}", status_labels[status_idx], product.processor, display, reason);
+                println!(
+                    "{} [{}] {}{}",
+                    status_labels[status_idx], product.processor, display, reason
+                );
             }
 
             counts[status_idx] += 1;
@@ -609,17 +760,20 @@ impl Builder {
         }
 
         if crate::json_output::is_json_mode() {
-            let processors_json: Vec<serde_json::Value> = per_processor.iter().map(|(name, pc)| {
-                serde_json::json!({
-                    "name": name,
-                    "up_to_date": pc[0],
-                    "restorable": pc[1],
-                    "stale": pc[2],
-                    "new": pc[3],
-                    "total": pc[0] + pc[1] + pc[2] + pc[3],
-                    "native": opts.native_processors.contains(name),
+            let processors_json: Vec<serde_json::Value> = per_processor
+                .iter()
+                .map(|(name, pc)| {
+                    serde_json::json!({
+                        "name": name,
+                        "up_to_date": pc[0],
+                        "restorable": pc[1],
+                        "stale": pc[2],
+                        "new": pc[3],
+                        "total": pc[0] + pc[1] + pc[2] + pc[3],
+                        "native": opts.native_processors.contains(name),
+                    })
                 })
-            }).collect();
+                .collect();
             let json = serde_json::json!({
                 "processors": processors_json,
                 "totals": {
@@ -630,7 +784,10 @@ impl Builder {
                     "total": counts[0] + counts[1] + counts[2] + counts[3],
                 },
             });
-            println!("{}", serde_json::to_string_pretty(&json).expect(crate::errors::JSON_SERIALIZE));
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json).expect(crate::errors::JSON_SERIALIZE)
+            );
             return;
         }
 
@@ -642,27 +799,42 @@ impl Builder {
             opts.labels.new.1,
         ];
 
-        let rows: Vec<Vec<String>> = per_processor.iter().map(|(name, pc)| {
-            let native = crate::tables::yes_no(opts.native_processors.contains(name));
-            vec![
-                name.to_string(),
-                pc[0].to_string(), pc[1].to_string(), pc[2].to_string(), pc[3].to_string(),
-                native.to_string(),
-            ]
-        }).collect();
+        let rows: Vec<Vec<String>> = per_processor
+            .iter()
+            .map(|(name, pc)| {
+                let native = crate::tables::yes_no(opts.native_processors.contains(name));
+                vec![
+                    name.to_string(),
+                    pc[0].to_string(),
+                    pc[1].to_string(),
+                    pc[2].to_string(),
+                    pc[3].to_string(),
+                    native.to_string(),
+                ]
+            })
+            .collect();
         let total = vec![
             "Total".to_string(),
-            counts[0].to_string(), counts[1].to_string(), counts[2].to_string(), counts[3].to_string(),
+            counts[0].to_string(),
+            counts[1].to_string(),
+            counts[2].to_string(),
+            counts[3].to_string(),
             String::new(),
         ];
         tables::print_table_with_total(
-            &["Processor", col_labels[0], col_labels[1], col_labels[2], col_labels[3], "native"],
+            &[
+                "Processor",
+                col_labels[0],
+                col_labels[1],
+                col_labels[2],
+                col_labels[3],
+                "native",
+            ],
             &rows,
             &total,
         );
     }
 }
-
 
 /// Write a Chrome trace format JSON file from build statistics.
 /// The file can be opened in <chrome://tracing> or <https://ui.perfetto.dev>
@@ -690,8 +862,7 @@ fn write_trace_file(path: &str, stats: &BuildStats) -> Result<()> {
     for cat in &stats.categories {
         for pt in &cat.product_timings {
             let dur_us = pt.duration.as_micros() as i64;
-            let ts_us = pt.start_offset
-                .map_or(0, |off| off.as_micros() as i64);
+            let ts_us = pt.start_offset.map_or(0, |off| off.as_micros() as i64);
             let name = format!("{}:{}", pt.processor, pt.display);
             events.push(serde_json::json!({
                 "name": name,
@@ -727,7 +898,10 @@ mod tests {
     fn no_filters_means_no_restriction() {
         let procs = create_all_default_processors().expect("default processors");
         let filter = resolve_processor_filter(None, None, &procs).expect("no filters is valid");
-        assert!(filter.is_none(), "expected None (run everything), got {filter:?}");
+        assert!(
+            filter.is_none(),
+            "expected None (run everything), got {filter:?}"
+        );
     }
 
     /// `-x` alone has to be turned into an allow-list, because everything
@@ -739,9 +913,20 @@ mod tests {
         let filter = resolve_processor_filter(None, Some(&exclude), &procs)
             .expect("exclude-only is valid")
             .expect("exclude-only must synthesize a list");
-        assert!(!filter.contains(&"ruff".to_string()), "excluded processor must not survive");
-        assert!(filter.len() > 1, "expected everything-but-ruff, got {} entries", filter.len());
-        assert_eq!(filter.len(), procs.len() - 1, "exactly one processor should be removed");
+        assert!(
+            !filter.contains(&"ruff".to_string()),
+            "excluded processor must not survive"
+        );
+        assert!(
+            filter.len() > 1,
+            "expected everything-but-ruff, got {} entries",
+            filter.len()
+        );
+        assert_eq!(
+            filter.len(),
+            procs.len() - 1,
+            "exactly one processor should be removed"
+        );
     }
 
     /// `-p` wins the intersection: an include list is narrowed by excludes.

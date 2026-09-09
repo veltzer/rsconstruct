@@ -1,37 +1,37 @@
 mod add_config;
+pub mod analyzers;
 mod build;
 pub mod cache_cmd;
 mod clean;
-mod fix;
-pub mod analyzers;
 mod doctor;
+mod fix;
 mod graph;
-mod product;
 pub mod processors;
+mod product;
 pub mod sloc;
 pub mod smart;
 pub mod symlink_install;
 pub mod tools;
 
-pub use add_config::{add_processor, add_analyzer};
+pub use add_config::{add_analyzer, add_processor};
 
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::time::{Duration, Instant};
-use anyhow::{Context as _, Result};
 use crate::analyzers::DepAnalyzer;
 use crate::cli::{BuildPhase, DisplayOptions};
 use crate::color;
-use crate::config::{find_registry_entry, registry_entries, Config, ProcessorConfig};
+use crate::config::{Config, ProcessorConfig, find_registry_entry, registry_entries};
 use crate::deps_cache::DepsCache;
 use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
 use crate::object_store::{ObjectStore, ObjectStoreOptions};
-use crate::processors::{LuaProcessor, ProcessorMap, Processor};
+use crate::processors::{LuaProcessor, Processor, ProcessorMap};
 use crate::remote_cache;
 use crate::tool_lock;
+use anyhow::{Context as _, Result};
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
 /// Phase timing data collected during graph building.
 pub type PhaseTimings = Vec<(String, Duration)>;
@@ -116,17 +116,18 @@ pub fn print_graph_stats(snapshot: GraphSnapshot, graph: &BuildGraph) {
     }
     let products = graph.products().len();
     // Cheap — each product's dependency list is a Vec already held in memory.
-    let edges: usize = graph.products()
+    let edges: usize = graph
+        .products()
         .iter()
         .map(|p| graph.get_dependencies(p.id).len())
         .sum();
-    let inputs: usize = graph.products()
-        .iter()
-        .map(|p| p.inputs.len())
-        .sum();
+    let inputs: usize = graph.products().iter().map(|p| p.inputs.len()).sum();
     eprintln!(
         "[graph-stats] {:<24}  products={}  edges={}  inputs={}",
-        snapshot.name(), products, edges, inputs,
+        snapshot.name(),
+        products,
+        edges,
+        inputs,
     );
 }
 
@@ -171,8 +172,12 @@ pub fn create_all_default_processors() -> Result<ProcessorMap> {
         let mut empty_toml = toml::Value::Table(toml::map::Map::new());
         let mut provenance = crate::config::ProvenanceMap::new();
         crate::registries::apply_all_defaults(entry.name, &mut empty_toml, &mut provenance);
-        let processor = (entry.create)(&empty_toml)
-            .with_context(|| format!("Failed to create processor '{}' with default config", entry.name))?;
+        let processor = (entry.create)(&empty_toml).with_context(|| {
+            format!(
+                "Failed to create processor '{}' with default config",
+                entry.name
+            )
+        })?;
         processors.insert(entry.name.to_string(), processor);
     }
     Ok(processors)
@@ -204,7 +209,11 @@ impl Builder {
 
     /// Construct a Builder, applying CLI `--iset`/`--pset` config overrides
     /// after the rsconstruct.toml is loaded.
-    pub fn new_with_overrides(ctx: &crate::build_context::BuildContext, iset: &[String], pset: &[String]) -> Result<Self> {
+    pub fn new_with_overrides(
+        ctx: &crate::build_context::BuildContext,
+        iset: &[String],
+        pset: &[String],
+    ) -> Result<Self> {
         Config::require_config()?;
         let mut config = Config::load()?;
         config.apply_overrides(iset, pset)?;
@@ -214,8 +223,10 @@ impl Builder {
 
         // Validate: compression and hardlink restore are incompatible
         if config.cache.compression && restore_method == crate::config::RestoreMethod::Hardlink {
-            anyhow::bail!("Cannot use cache compression with hardlink restore method. \
-                Set restore_method = \"copy\" or disable compression.");
+            anyhow::bail!(
+                "Cannot use cache compression with hardlink restore method. \
+                Set restore_method = \"copy\" or disable compression."
+            );
         }
 
         // Create remote cache backend if configured
@@ -233,7 +244,11 @@ impl Builder {
         })?;
         let (exclude_roots, force_dirs) = config.file_index_walk_dirs();
         let force_refs: Vec<&str> = force_dirs.iter().map(String::as_str).collect();
-        let file_index = FileIndex::build_with_force_dirs(&force_refs, &exclude_roots, config.build.warn_symlinks)?;
+        let file_index = FileIndex::build_with_force_dirs(
+            &force_refs,
+            &exclude_roots,
+            config.build.warn_symlinks,
+        )?;
 
         let builder = Self {
             object_store,
@@ -260,17 +275,15 @@ impl Builder {
                 }
                 Err(e) => {
                     return Err(e.context(format!(
-                        "Failed to create processor instance '{}'", inst.instance_name
+                        "Failed to create processor instance '{}'",
+                        inst.instance_name
                     )));
                 }
             }
         }
 
         // Lua plugin processors
-        let lua_plugins = LuaProcessor::discover_plugins(
-            &self.config.plugins.dir,
-            &cfg.extra,
-        )?;
+        let lua_plugins = LuaProcessor::discover_plugins(&self.config.plugins.dir, &cfg.extra)?;
         for (name, proc) in lua_plugins {
             if processors.contains_key(&name) {
                 anyhow::bail!("Lua plugin '{name}' conflicts with processor instance");
@@ -293,7 +306,9 @@ impl Builder {
             let processor = processors.get(name).expect(errors::PROCESSOR_NOT_IN_MAP);
 
             // Skip processors that don't provide config JSON
-            let Some(config_json) = processor.config_json() else { continue };
+            let Some(config_json) = processor.config_json() else {
+                continue;
+            };
 
             // Keep only checksum-affecting fields for change detection (unless show_all).
             // Each processor declares which config fields affect its output;
@@ -311,8 +326,10 @@ impl Builder {
             {
                 // Config changed - show diff
                 if let Some(diff) = ObjectStore::diff_configs(&old_json, &config_json) {
-                    println!("{}",
-                        color::yellow(&format!("Config changed for [{name}]:")));
+                    println!(
+                        "{}",
+                        color::yellow(&format!("Config changed for [{name}]:"))
+                    );
                     println!("{diff}");
                 }
             }
@@ -332,7 +349,8 @@ impl Builder {
         };
         match checksum_fields {
             Some(fields) => {
-                let filtered: serde_json::Map<String, serde_json::Value> = obj.iter()
+                let filtered: serde_json::Map<String, serde_json::Value> = obj
+                    .iter()
                     .filter(|(k, _)| fields.contains(&k.as_str()))
                     .map(|(k, v)| (k.clone(), v.clone()))
                     .collect();
@@ -347,7 +365,10 @@ impl Builder {
     /// Only analyzers that appear in the config and have `enabled = true` are
     /// instantiated. Setting `enabled = false` lets a user disable an analyzer
     /// without removing its `[analyzer.X]` section.
-    pub(crate) fn create_analyzers(&self, verbose: bool) -> Result<HashMap<String, Box<dyn DepAnalyzer>>> {
+    pub(crate) fn create_analyzers(
+        &self,
+        verbose: bool,
+    ) -> Result<HashMap<String, Box<dyn DepAnalyzer>>> {
         let mut analyzers: HashMap<String, Box<dyn DepAnalyzer>> = HashMap::new();
         for inst in &self.config.analyzer.instances {
             let plugin = crate::registries::find_analyzer_plugin(&inst.type_name)
@@ -375,12 +396,18 @@ impl Builder {
     /// anyway, but reads the result instead of acting on it — and the
     /// in-memory checksum cache in `checksum.rs` dedupes work across the two
     /// passes, so nothing is read+hashed twice.
-    fn run_analyzers(&self, ctx: &crate::build_context::BuildContext, graph: &mut BuildGraph, verbose: bool) -> Result<()> {
+    fn run_analyzers(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        graph: &mut BuildGraph,
+        verbose: bool,
+    ) -> Result<()> {
         let analyzers = self.create_analyzers(verbose)?;
         let mut deps_cache = DepsCache::open()?;
 
         // Only run analyzers that auto-detect relevant files in the project.
-        let active_analyzers: Vec<&String> = sorted_keys(&analyzers).into_iter()
+        let active_analyzers: Vec<&String> = sorted_keys(&analyzers)
+            .into_iter()
             .filter(|name| analyzers[*name].auto_detect(&self.file_index))
             .collect();
 
@@ -392,14 +419,16 @@ impl Builder {
         // reference, even when many products share the same source. Used
         // to drive the progress bar (which ticks once per product) and to
         // surface fan-out in the user-facing total.
-        let product_refs: usize = active_analyzers.iter()
+        let product_refs: usize = active_analyzers
+            .iter()
             .map(|name| analyzers[*name].count_matches(graph))
             .sum();
 
         // Unique source count: dedup (analyzer, source) pairs. This matches
         // what the cache and the scanner actually see — one cache key and one
         // file read per pair, regardless of how many products reference it.
-        let mut unique_pairs: std::collections::HashSet<(&str, PathBuf)> = std::collections::HashSet::new();
+        let mut unique_pairs: std::collections::HashSet<(&str, PathBuf)> =
+            std::collections::HashSet::new();
         for name in &active_analyzers {
             for source in analyzers[*name].matching_sources(graph) {
                 unique_pairs.insert((name.as_str(), source));
@@ -449,7 +478,14 @@ impl Builder {
         let hidden = verbose || crate::json_output::is_json_mode() || crate::runtime_flags::quiet();
         let pb = crate::progress::create_bar(product_refs as u64, hidden);
         for name in &active_analyzers {
-            analyzers[*name].analyze(ctx, graph, &mut deps_cache, &self.file_index, verbose, &pb)?;
+            analyzers[*name].analyze(
+                ctx,
+                graph,
+                &mut deps_cache,
+                &self.file_index,
+                verbose,
+                &pb,
+            )?;
         }
         pb.finish_and_clear();
 
@@ -465,19 +501,55 @@ impl Builder {
     }
 
     /// Build the dependency graph using provided processors
-    fn build_graph_with_processors(&self, ctx: &crate::build_context::BuildContext, processors: &ProcessorMap) -> Result<BuildGraph> {
-        let (graph, _) = self.build_graph_with_processors_impl(ctx, processors, GraphBuildMode::Normal, BuildPhase::Build, None, false)?;
+    fn build_graph_with_processors(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        processors: &ProcessorMap,
+    ) -> Result<BuildGraph> {
+        let (graph, _) = self.build_graph_with_processors_impl(
+            ctx,
+            processors,
+            GraphBuildMode::Normal,
+            BuildPhase::Build,
+            None,
+            false,
+        )?;
         Ok(graph)
     }
 
     /// Build the dependency graph with optional early stopping
-    fn build_graph_with_processors_and_phase(&self, ctx: &crate::build_context::BuildContext, processors: &ProcessorMap, stop_after: BuildPhase, processor_filter: Option<&[String]>, verbose: bool) -> Result<(BuildGraph, PhaseTimings)> {
-        self.build_graph_with_processors_impl(ctx, processors, GraphBuildMode::Normal, stop_after, processor_filter, verbose)
+    fn build_graph_with_processors_and_phase(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        processors: &ProcessorMap,
+        stop_after: BuildPhase,
+        processor_filter: Option<&[String]>,
+        verbose: bool,
+    ) -> Result<(BuildGraph, PhaseTimings)> {
+        self.build_graph_with_processors_impl(
+            ctx,
+            processors,
+            GraphBuildMode::Normal,
+            stop_after,
+            processor_filter,
+            verbose,
+        )
     }
 
     /// Build the dependency graph for clean (skip expensive dependency scanning)
-    fn build_graph_for_clean_with_processors(&self, ctx: &crate::build_context::BuildContext, processors: &ProcessorMap) -> Result<BuildGraph> {
-        let (graph, _) = self.build_graph_with_processors_impl(ctx, processors, GraphBuildMode::ForClean, BuildPhase::Build, None, false)?;
+    fn build_graph_for_clean_with_processors(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        processors: &ProcessorMap,
+    ) -> Result<BuildGraph> {
+        let (graph, _) = self.build_graph_with_processors_impl(
+            ctx,
+            processors,
+            GraphBuildMode::ForClean,
+            BuildPhase::Build,
+            None,
+            false,
+        )?;
         Ok(graph)
     }
 
@@ -517,7 +589,10 @@ impl Builder {
     /// Processors with `enabled = false` are excluded: discovery skips them, so they
     /// produce 0 products by definition. Reporting them would flag a deliberately
     /// disabled stanza as dead config and invite its removal.
-    pub fn no_file_processors(&self, ctx: &crate::build_context::BuildContext) -> Result<Vec<String>> {
+    pub fn no_file_processors(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+    ) -> Result<Vec<String>> {
         let processors = self.create_processors()?;
         let graph = self.build_graph_with_processors(ctx, &processors)?;
 
@@ -600,10 +675,15 @@ impl Builder {
                 break;
             }
             if debug {
-                eprintln!("{}", color::dim(&format!(
-                    "    discover pass {}: {} new products, {} virtual files added",
-                    pass + 1, after - before, added
-                )));
+                eprintln!(
+                    "{}",
+                    color::dim(&format!(
+                        "    discover pass {}: {} new products, {} virtual files added",
+                        pass + 1,
+                        after - before,
+                        added
+                    ))
+                );
             }
         }
 
@@ -639,7 +719,9 @@ impl Builder {
                 let prefix = std::path::PathBuf::from(dir);
                 let covered_by_virtual = file_index.files().iter().any(|f| f.starts_with(&prefix));
                 if !covered_by_virtual {
-                    missing.push(format!("[{name}]: src_dirs entry '{dir}' does not exist or is not a directory"));
+                    missing.push(format!(
+                        "[{name}]: src_dirs entry '{dir}' does not exist or is not a directory"
+                    ));
                 }
             }
         }
@@ -653,7 +735,15 @@ impl Builder {
 
     /// Build the dependency graph using provided processors
     /// `processor_filter`: if Some, only run processors in this list (in addition to enabled check)
-    fn build_graph_with_processors_impl(&self, ctx: &crate::build_context::BuildContext, processors: &ProcessorMap, mode: GraphBuildMode, stop_after: BuildPhase, processor_filter: Option<&[String]>, verbose: bool) -> Result<(BuildGraph, PhaseTimings)> {
+    fn build_graph_with_processors_impl(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        processors: &ProcessorMap,
+        mode: GraphBuildMode,
+        stop_after: BuildPhase,
+        processor_filter: Option<&[String]>,
+        verbose: bool,
+    ) -> Result<(BuildGraph, PhaseTimings)> {
         if phases_debug() {
             eprintln!("{}", color::bold("Phase: Building dependency graph..."));
         }
@@ -662,12 +752,14 @@ impl Builder {
         print_graph_stats(GraphSnapshot::Start, &graph);
 
         // Collect which processors should run
-        let active_processors: Vec<&String> = sorted_keys(processors).into_iter()
+        let active_processors: Vec<&String> = sorted_keys(processors)
+            .into_iter()
             .filter(|name| {
                 if let Some(filter) = processor_filter
-                    && !filter.iter().any(|f| f == *name) {
-                        return false;
-                    }
+                    && !filter.iter().any(|f| f == *name)
+                {
+                    return false;
+                }
                 self.is_processor_active(name, processors[*name].as_ref())
             })
             .collect();
@@ -677,7 +769,12 @@ impl Builder {
             crate::output::diagnostic(&color::dim("  Phase: discover"));
         }
         let t = Instant::now();
-        self.discover_products(&mut graph, processors, &active_processors, mode == GraphBuildMode::ForClean)?;
+        self.discover_products(
+            &mut graph,
+            processors,
+            &active_processors,
+            mode == GraphBuildMode::ForClean,
+        )?;
         phase_timings.push(("discover".to_string(), t.elapsed()));
         print_graph_stats(GraphSnapshot::AfterDiscover, &graph);
 
@@ -751,12 +848,14 @@ impl Builder {
         let mut graph = BuildGraph::new();
 
         // Collect active processors
-        let active_processors: Vec<&String> = sorted_keys(&processors).into_iter()
+        let active_processors: Vec<&String> = sorted_keys(&processors)
+            .into_iter()
             .filter(|name| {
                 if let Some(filter) = filter_name
-                    && name.as_str() != filter {
-                        return false;
-                    }
+                    && name.as_str() != filter
+                {
+                    return false;
+                }
                 include_all || self.is_processor_active(name, processors[*name].as_ref())
             })
             .collect();
@@ -784,7 +883,10 @@ impl Builder {
     }
 
     /// Build the dependency graph for cache operations (public).
-    pub fn build_graph_for_cache(&self, ctx: &crate::build_context::BuildContext) -> Result<BuildGraph> {
+    pub fn build_graph_for_cache(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+    ) -> Result<BuildGraph> {
         self.build_graph(ctx)
     }
 
@@ -793,11 +895,17 @@ impl Builder {
     /// (`Product::descriptor_key` over the combined input checksum) — `cache
     /// stale` and `cache remove-stale` compare them against the keys
     /// reconstructed from on-disk descriptor paths.
-    pub fn valid_cache_keys(&self, ctx: &crate::build_context::BuildContext) -> Result<std::collections::HashSet<String>> {
+    pub fn valid_cache_keys(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+    ) -> Result<std::collections::HashSet<String>> {
         let graph = self.build_graph_for_cache(ctx)?;
-        graph.products().iter()
+        graph
+            .products()
+            .iter()
             .map(|product| {
-                let input_checksum = crate::checksum::combined_input_checksum(ctx, &product.inputs)?;
+                let input_checksum =
+                    crate::checksum::combined_input_checksum(ctx, &product.inputs)?;
                 Ok(product.descriptor_key(&input_checksum))
             })
             .collect()

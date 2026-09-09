@@ -12,18 +12,22 @@
 //! marp's `marp-cli-<random>` dir lands in a per-invocation namespace. The
 //! whole `TMPDIR` is then removed after marp exits — no shared cleanup.
 
+use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use anyhow::{Context, Result};
 
 use crate::config::StandardConfig;
 use serde::{Deserialize, Serialize};
 
-const fn default_marp_timeout_secs() -> u64 { 20 }
-const fn default_marp_max_attempts() -> u32 { 3 }
+const fn default_marp_timeout_secs() -> u64 {
+    20
+}
+const fn default_marp_max_attempts() -> u32 {
+    3
+}
 
 /// Marp config. Adds tunables for the per-invocation timeout and the retry
 /// budget, since marp-cli occasionally hangs under chromium-headless and the
@@ -51,7 +55,9 @@ impl Default for MarpConfig {
 }
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{run_command_with_timeout, check_command_output, ensure_output_dir, Processor};
+use crate::processors::{
+    Processor, check_command_output, ensure_output_dir, run_command_with_timeout,
+};
 
 fn is_transient_marp_error(err: &anyhow::Error) -> bool {
     let s = err.to_string();
@@ -67,7 +73,9 @@ fn make_invocation_tmpdir() -> Result<PathBuf> {
     let base = std::env::temp_dir();
     let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
     let pid = std::process::id();
-    let ns = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+    let ns = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
     let dir = base.join(format!("rsc-marp-{pid}-{ns}-{seq}"));
     fs::create_dir_all(&dir)
         .with_context(|| format!("Failed to create marp scratch dir: {}", dir.display()))?;
@@ -110,7 +118,12 @@ impl Processor for MarpProcessor {
         vec![self.config.standard.command.clone(), "node".into()]
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let params = super::DiscoverParams {
             scan: &self.config.standard,
             dep_inputs: &self.config.standard.dep_inputs,
@@ -125,7 +138,8 @@ impl Processor for MarpProcessor {
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let input = product.primary_input();
         let output = product.primary_output();
-        let format = output.extension()
+        let format = output
+            .extension()
             .context("marp output has no extension")?
             .to_string_lossy();
         ensure_output_dir(output)?;
@@ -147,10 +161,13 @@ impl Processor for MarpProcessor {
                 cmd.arg(format!("--{format}"));
             }
             cmd.arg("--output").arg(output);
-            for arg in &self.config.standard.args { cmd.arg(arg); }
+            for arg in &self.config.standard.args {
+                cmd.arg(arg);
+            }
             cmd.arg(input);
-            let result = run_command_with_timeout(ctx, &cmd, timeout)
-                .and_then(|out| check_command_output(&out, format_args!("marp {}", input.display())));
+            let result = run_command_with_timeout(ctx, &cmd, timeout).and_then(|out| {
+                check_command_output(&out, format_args!("marp {}", input.display()))
+            });
             remove_scratch_dir(&scratch);
             match result {
                 Ok(()) => return Ok(()),
@@ -161,8 +178,13 @@ impl Processor for MarpProcessor {
                     eprintln!(
                         "[marp] {} {} (attempt {}/{}), retrying",
                         input.display(),
-                        if err.to_string().contains("TargetCloseError") { "Chrome crashed" } else { "timed out" },
-                        attempt, max_attempts
+                        if err.to_string().contains("TargetCloseError") {
+                            "Chrome crashed"
+                        } else {
+                            "timed out"
+                        },
+                        attempt,
+                        max_attempts
                     );
                 }
             }
@@ -207,8 +229,15 @@ fn marp_ci_cap(config: &mut crate::config::Config) -> anyhow::Result<()> {
     if !std::env::var("CI").is_ok_and(|v| v == "true") {
         return Ok(());
     }
-    for inst in config.processor.instances.iter_mut().filter(|i| i.type_name == "marp") {
-        let Some(table) = inst.config_toml.as_table_mut() else { continue };
+    for inst in config
+        .processor
+        .instances
+        .iter_mut()
+        .filter(|i| i.type_name == "marp")
+    {
+        let Some(table) = inst.config_toml.as_table_mut() else {
+            continue;
+        };
         if !table.contains_key("max_jobs") {
             table.insert("max_jobs".to_string(), toml::Value::Integer(2));
         }

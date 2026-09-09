@@ -9,16 +9,15 @@ mod markdown;
 pub mod python;
 mod tera;
 
-
+use crate::deps_cache::DepsCache;
+use crate::file_index::FileIndex;
+use crate::graph::{BuildGraph, Product};
+use crate::processors::{format_command, run_command_capture};
 use anyhow::Result;
 use indicatif::ProgressBar;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use crate::deps_cache::DepsCache;
-use crate::file_index::FileIndex;
-use crate::graph::{BuildGraph, Product};
-use crate::processors::{format_command, run_command_capture};
 
 /// Trait for dependency analyzers that scan source files and add dependencies to the graph.
 ///
@@ -33,7 +32,9 @@ pub trait DepAnalyzer: Sync + Send {
 
     /// Whether this analyzer is active. Default true; override to respect
     /// the `enabled` field on an analyzer's config struct.
-    fn enabled(&self) -> bool { true }
+    fn enabled(&self) -> bool {
+        true
+    }
 
     /// Auto-detect if this analyzer is relevant for the project.
     /// Called with the file index to check for relevant file types.
@@ -49,7 +50,11 @@ pub trait DepAnalyzer: Sync + Send {
     /// Default impl iterates over products and calls `match_product`; override
     /// only if a cheaper count is available.
     fn count_matches(&self, graph: &BuildGraph) -> usize {
-        graph.products().iter().filter(|p| self.match_product(p).is_some()).count()
+        graph
+            .products()
+            .iter()
+            .filter(|p| self.match_product(p).is_some())
+            .count()
     }
 
     /// Return the set of source paths this analyzer would scan. Used by the
@@ -57,7 +62,11 @@ pub trait DepAnalyzer: Sync + Send {
     /// work runs. Default impl iterates over products and collects each
     /// `match_product` result.
     fn matching_sources(&self, graph: &BuildGraph) -> Vec<PathBuf> {
-        graph.products().iter().filter_map(|p| self.match_product(p)).collect()
+        graph
+            .products()
+            .iter()
+            .filter_map(|p| self.match_product(p))
+            .collect()
     }
 
     /// Analyze dependencies and add them to products in the graph.
@@ -103,7 +112,12 @@ pub trait DepAnalyzer: Sync + Send {
 /// - `tag`: prefix for log messages (e.g., "cpp" or "icpp")
 /// - `packages`: pkg-config package names to query
 /// - `verbose`: whether to emit diagnostic messages to stderr
-pub fn query_pkg_config_include_paths(ctx: &crate::build_context::BuildContext, tag: &str, packages: &[String], verbose: bool) -> Vec<PathBuf> {
+pub fn query_pkg_config_include_paths(
+    ctx: &crate::build_context::BuildContext,
+    tag: &str,
+    packages: &[String],
+    verbose: bool,
+) -> Vec<PathBuf> {
     if packages.is_empty() {
         return Vec::new();
     }
@@ -136,7 +150,11 @@ pub fn query_pkg_config_include_paths(ctx: &crate::build_context::BuildContext, 
         .collect();
 
     if verbose && !paths.is_empty() {
-        eprintln!("[{}] Found {} include paths from pkg-config", tag, paths.len());
+        eprintln!(
+            "[{}] Found {} include paths from pkg-config",
+            tag,
+            paths.len()
+        );
     }
 
     paths
@@ -148,7 +166,12 @@ pub fn query_pkg_config_include_paths(ctx: &crate::build_context::BuildContext, 
 /// - `tag`: prefix for log messages (e.g., "cpp" or "icpp")
 /// - `commands`: shell command strings to run
 /// - `verbose`: whether to emit diagnostic messages to stderr
-pub fn run_include_path_commands(ctx: &crate::build_context::BuildContext, tag: &str, commands: &[String], verbose: bool) -> Vec<PathBuf> {
+pub fn run_include_path_commands(
+    ctx: &crate::build_context::BuildContext,
+    tag: &str,
+    commands: &[String],
+    verbose: bool,
+) -> Vec<PathBuf> {
     if commands.is_empty() {
         return Vec::new();
     }
@@ -190,7 +213,11 @@ pub fn run_include_path_commands(ctx: &crate::build_context::BuildContext, tag: 
         let path = PathBuf::from(&path_str);
         if path.is_dir() {
             if verbose {
-                eprintln!("[{}] Added include path from command: {}", tag, path.display());
+                eprintln!(
+                    "[{}] Added include path from command: {}",
+                    tag,
+                    path.display()
+                );
             }
             paths.push(path);
         } else if verbose {
@@ -199,7 +226,11 @@ pub fn run_include_path_commands(ctx: &crate::build_context::BuildContext, tag: 
     }
 
     if verbose && !paths.is_empty() {
-        eprintln!("[{}] Found {} include paths from commands", tag, paths.len());
+        eprintln!(
+            "[{}] Found {} include paths from commands",
+            tag,
+            paths.len()
+        );
     }
 
     paths
@@ -248,7 +279,8 @@ where
 {
     // Group product IDs by source path so each unique source is scanned once,
     // then fan the resulting deps out to every product that referenced it.
-    let mut by_source: std::collections::BTreeMap<PathBuf, Vec<usize>> = std::collections::BTreeMap::new();
+    let mut by_source: std::collections::BTreeMap<PathBuf, Vec<usize>> =
+        std::collections::BTreeMap::new();
     for p in graph.products() {
         if let Some(source) = match_product(p) {
             by_source.entry(source).or_default().push(p.id);
@@ -283,7 +315,11 @@ where
             let source_checksum = DepsCache::source_checksum(ctx, source)?;
             let scanned = scan_deps(source)?;
             if let Err(e) = deps_cache.set(analyzer_name, source, source_checksum, &scanned) {
-                crate::output::warn(&format!("failed to cache dependencies for {}: {}", source.display(), e));
+                crate::output::warn(&format!(
+                    "failed to cache dependencies for {}: {}",
+                    source.display(),
+                    e
+                ));
             }
             scanned
         };
@@ -293,7 +329,8 @@ where
             for &id in product_ids {
                 if let Some(product) = graph.get_product_mut(id) {
                     let existing: HashSet<&PathBuf> = product.inputs.iter().collect();
-                    let new_deps: Vec<PathBuf> = deps.iter()
+                    let new_deps: Vec<PathBuf> = deps
+                        .iter()
                         .filter(|dep| !existing.contains(dep))
                         .cloned()
                         .collect();
@@ -332,7 +369,8 @@ where
     F: Fn(&crate::graph::Product) -> Option<PathBuf>,
     G: Fn(&Path) -> Result<ScanResult>,
 {
-    let mut by_source: std::collections::BTreeMap<PathBuf, Vec<usize>> = std::collections::BTreeMap::new();
+    let mut by_source: std::collections::BTreeMap<PathBuf, Vec<usize>> =
+        std::collections::BTreeMap::new();
     for p in graph.products() {
         if let Some(source) = match_product(p) {
             by_source.entry(source).or_default().push(p.id);
@@ -361,7 +399,11 @@ where
         // filesystem state (glob results) that must be recomputed on
         // every run. The checksum is taken before the scan (see set()).
         if let Err(e) = deps_cache.set(analyzer_name, source, source_checksum, &result.deps) {
-            crate::output::warn(&format!("failed to cache dependencies for {}: {}", source.display(), e));
+            crate::output::warn(&format!(
+                "failed to cache dependencies for {}: {}",
+                source.display(),
+                e
+            ));
         }
 
         let joined_pieces = if result.hash_pieces.is_empty() {
@@ -377,7 +419,9 @@ where
             if let Some(product) = graph.get_product_mut(id) {
                 if !result.deps.is_empty() {
                     let existing: HashSet<&PathBuf> = product.inputs.iter().collect();
-                    let new_deps: Vec<PathBuf> = result.deps.iter()
+                    let new_deps: Vec<PathBuf> = result
+                        .deps
+                        .iter()
                         .filter(|dep| !existing.contains(dep))
                         .cloned()
                         .collect();

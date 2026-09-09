@@ -1,6 +1,6 @@
+use crate::common::{require_tool, run_rsconstruct_with_env};
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsconstruct_with_env, require_tool};
 
 #[test]
 fn libreoffice_valid_file() {
@@ -18,11 +18,7 @@ fn libreoffice_valid_file() {
 
     // Create a minimal ODP file (LibreOffice presentation is a ZIP with XML)
     // For a real test, we'd need a proper ODP, but for discovery we just need the extension
-    fs::write(
-        project_path.join("slides.odp"),
-        "placeholder",
-    )
-    .unwrap();
+    fs::write(project_path.join("slides.odp"), "placeholder").unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     // This may fail if the ODP content is invalid, but it should at least discover and attempt processing

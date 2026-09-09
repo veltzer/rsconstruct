@@ -80,7 +80,11 @@ fn linux_module_root_level_manifest_output_survives_clean() {
             "make: {make}\nkdir: {kdir}\nmodules:\n  - name: mymod\n    sources: [top.c, helper.c]\n"
         ),
     );
-    write_file(project, "rsconstruct.toml", "[processor.linux_module]\nsrc_dirs = [\".\"]\n");
+    write_file(
+        project,
+        "rsconstruct.toml",
+        "[processor.linux_module]\nsrc_dirs = [\".\"]\n",
+    );
 
     let output = run_rsconstruct(project, &["build"]);
     assert!(
@@ -92,12 +96,22 @@ fn linux_module_root_level_manifest_output_survives_clean() {
 
     // The declared output exists and holds the built module.
     let ko = project.join("out/linux-module/mymod.ko");
-    assert!(ko.exists(), "output module not produced at {}", ko.display());
+    assert!(
+        ko.exists(),
+        "output module not produced at {}",
+        ko.display()
+    );
     assert_eq!(fs::read(&ko).unwrap(), b"FAKE-KO-BYTES");
 
     // The source tree is left clean: no leftover .ko or generated Kbuild.
-    assert!(!project.join("mymod.ko").exists(), "source .ko not cleaned up");
-    assert!(!project.join("Kbuild").exists(), "generated Kbuild not removed");
+    assert!(
+        !project.join("mymod.ko").exists(),
+        "source .ko not cleaned up"
+    );
+    assert!(
+        !project.join("Kbuild").exists(),
+        "generated Kbuild not removed"
+    );
 }
 
 /// A manifest in a subdirectory keeps working: the module dir is the subdir,
@@ -119,7 +133,11 @@ fn linux_module_subdir_manifest_builds() {
         "drivers/hello/linux-module.yaml",
         &format!("make: {make}\nkdir: {kdir}\nmodules:\n  - name: hello\n    sources: [main.c]\n"),
     );
-    write_file(project, "rsconstruct.toml", "[processor.linux_module]\nsrc_dirs = [\"drivers\"]\n");
+    write_file(
+        project,
+        "rsconstruct.toml",
+        "[processor.linux_module]\nsrc_dirs = [\"drivers\"]\n",
+    );
 
     let output = run_rsconstruct(project, &["build"]);
     assert!(
@@ -130,8 +148,18 @@ fn linux_module_subdir_manifest_builds() {
     );
 
     let ko = project.join("out/linux-module/drivers/hello/hello.ko");
-    assert!(ko.exists(), "output module not produced at {}", ko.display());
+    assert!(
+        ko.exists(),
+        "output module not produced at {}",
+        ko.display()
+    );
     assert_eq!(fs::read(&ko).unwrap(), b"FAKE-KO-BYTES");
-    assert!(!project.join("drivers/hello/hello.ko").exists(), "source .ko not cleaned up");
-    assert!(!project.join("drivers/hello/Kbuild").exists(), "generated Kbuild not removed");
+    assert!(
+        !project.join("drivers/hello/hello.ko").exists(),
+        "source .ko not cleaned up"
+    );
+    assert!(
+        !project.join("drivers/hello/Kbuild").exists(),
+        "generated Kbuild not removed"
+    );
 }

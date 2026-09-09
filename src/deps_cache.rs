@@ -19,7 +19,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::build_context::BuildContext;
-use crate::checksum::{checksum_fast, ChecksumPath};
+use crate::checksum::{ChecksumPath, checksum_fast};
 
 const RSBUILD_DIR: &str = ".rsconstruct";
 const DEPS_DB_FILE: &str = "deps.redb";
@@ -87,12 +87,14 @@ impl DepsCache {
         let db_path = rsconstruct_dir.join(DEPS_DB_FILE);
 
         // Ensure .rsconstruct directory exists
-        fs::create_dir_all(&rsconstruct_dir)
-            .context("Failed to create .rsconstruct directory")?;
+        fs::create_dir_all(&rsconstruct_dir).context("Failed to create .rsconstruct directory")?;
 
         let db = crate::db::open_or_recreate(&db_path, "Dependency cache")?;
 
-        Ok(Self { db, stats: DepsCacheStats::default() })
+        Ok(Self {
+            db,
+            stats: DepsCacheStats::default(),
+        })
     }
 
     /// Get cached dependencies for a (analyzer, source) pair if the cache is
@@ -100,7 +102,12 @@ impl DepsCache {
     /// Updates internal statistics (hits/misses). Every caller hits exactly
     /// one of the two counters — no silent path that leaves both unchanged,
     /// so `hits + misses` always equals the number of `get` calls.
-    pub fn get(&mut self, ctx: &BuildContext, analyzer: &str, source: &Path) -> Option<Vec<PathBuf>> {
+    pub fn get(
+        &mut self,
+        ctx: &BuildContext,
+        analyzer: &str,
+        source: &Path,
+    ) -> Option<Vec<PathBuf>> {
         let key = key_for(analyzer, source);
 
         // Any failure to reach the stored entry — DB not yet created, table
@@ -135,9 +142,7 @@ impl DepsCache {
         }
 
         // Verify all dependencies still exist
-        let deps: Vec<PathBuf> = entry.dependencies.iter()
-            .map(PathBuf::from)
-            .collect();
+        let deps: Vec<PathBuf> = entry.dependencies.iter().map(PathBuf::from).collect();
 
         for dep in &deps {
             if !dep.exists() {
@@ -161,11 +166,21 @@ impl DepsCache {
     /// Does not touch stats.
     pub fn classify(&self, ctx: &BuildContext, analyzer: &str, source: &Path) -> ClassifyResult {
         let key = key_for(analyzer, source);
-        let Ok(read_txn) = self.db.begin_read() else { return ClassifyResult::Miss };
-        let Ok(table) = read_txn.open_table(DEPS_TABLE) else { return ClassifyResult::Miss };
-        let Ok(Some(data)) = table.get(key.as_str()) else { return ClassifyResult::Miss };
-        let Ok(entry) = serde_json::from_slice::<DepsEntry>(data.value()) else { return ClassifyResult::Miss };
-        let Ok((current_checksum, checksum_path)) = checksum_fast(ctx, source) else { return ClassifyResult::Miss };
+        let Ok(read_txn) = self.db.begin_read() else {
+            return ClassifyResult::Miss;
+        };
+        let Ok(table) = read_txn.open_table(DEPS_TABLE) else {
+            return ClassifyResult::Miss;
+        };
+        let Ok(Some(data)) = table.get(key.as_str()) else {
+            return ClassifyResult::Miss;
+        };
+        let Ok(entry) = serde_json::from_slice::<DepsEntry>(data.value()) else {
+            return ClassifyResult::Miss;
+        };
+        let Ok((current_checksum, checksum_path)) = checksum_fast(ctx, source) else {
+            return ClassifyResult::Miss;
+        };
         if entry.source_checksum != current_checksum {
             return ClassifyResult::Miss;
         }
@@ -192,29 +207,40 @@ impl DepsCache {
     /// Store dependencies for a (analyzer, source) pair.
     /// `source_checksum` must come from [`Self::source_checksum`] taken
     /// before the scan that produced `dependencies`.
-    pub fn set(&self, analyzer: &str, source: &Path, source_checksum: String, dependencies: &[PathBuf]) -> Result<()> {
+    pub fn set(
+        &self,
+        analyzer: &str,
+        source: &Path,
+        source_checksum: String,
+        dependencies: &[PathBuf],
+    ) -> Result<()> {
         let key = key_for(analyzer, source);
 
         let entry = DepsEntry {
             source_checksum,
-            dependencies: dependencies.iter()
+            dependencies: dependencies
+                .iter()
                 .map(|p| p.display().to_string())
                 .collect(),
             analyzer: analyzer.to_string(),
         };
 
-        let data = serde_json::to_vec(&entry)
-            .context("Failed to serialize dependency entry")?;
+        let data = serde_json::to_vec(&entry).context("Failed to serialize dependency entry")?;
 
-        let write_txn = self.db.begin_write()
+        let write_txn = self
+            .db
+            .begin_write()
             .context("Failed to begin write transaction")?;
         {
-            let mut table = write_txn.open_table(DEPS_TABLE)
+            let mut table = write_txn
+                .open_table(DEPS_TABLE)
                 .context("Failed to open deps table")?;
-            table.insert(key.as_str(), data.as_slice())
+            table
+                .insert(key.as_str(), data.as_slice())
                 .context("Failed to write to dependency cache")?;
         }
-        write_txn.commit()
+        write_txn
+            .commit()
             .context("Failed to commit dependency cache write")?;
 
         Ok(())
@@ -230,9 +256,15 @@ impl DepsCache {
     /// Entries with malformed keys (no NUL separator) are skipped — that would
     /// be a pre-key-format-change entry from an older build, effectively invalid.
     fn collect_entries(&self) -> Vec<(String, PathBuf, DepsEntry)> {
-        let Ok(read_txn) = self.db.begin_read() else { return Vec::new() };
-        let Ok(table) = read_txn.open_table(DEPS_TABLE) else { return Vec::new() };
-        let Ok(iter) = table.iter() else { return Vec::new() };
+        let Ok(read_txn) = self.db.begin_read() else {
+            return Vec::new();
+        };
+        let Ok(table) = read_txn.open_table(DEPS_TABLE) else {
+            return Vec::new();
+        };
+        let Ok(iter) = table.iter() else {
+            return Vec::new();
+        };
         iter.filter_map(|item| {
             let (key, value) = item.ok()?;
             let (analyzer, source) = parse_key(key.value())?;
@@ -273,9 +305,14 @@ impl DepsCache {
     /// Get statistics about cached dependencies by analyzer.
     /// Returns a map of `analyzer_name` -> (`file_count`, `total_dep_count`).
     pub fn stats_by_analyzer(&self) -> std::collections::HashMap<String, (usize, usize)> {
-        let mut stats: std::collections::HashMap<String, (usize, usize)> = std::collections::HashMap::new();
+        let mut stats: std::collections::HashMap<String, (usize, usize)> =
+            std::collections::HashMap::new();
         for (analyzer, _source, entry) in self.collect_entries() {
-            let name = if analyzer.is_empty() { "unknown".to_string() } else { analyzer };
+            let name = if analyzer.is_empty() {
+                "unknown".to_string()
+            } else {
+                analyzer
+            };
             let (files, deps) = stats.entry(name).or_insert((0, 0));
             *files += 1;
             *deps += entry.dependencies.len();
@@ -302,19 +339,27 @@ impl DepsCache {
     /// Returns the number of entries removed.
     pub fn remove_by_analyzer(&self, analyzer: &str) -> Result<usize> {
         // Collect raw keys to remove by re-encoding (analyzer, source) → key.
-        let keys_to_remove: Vec<String> = self.collect_entries()
+        let keys_to_remove: Vec<String> = self
+            .collect_entries()
             .into_iter()
             .filter_map(|(a, source, _entry)| {
-                if a == analyzer { Some(key_for(&a, &source)) } else { None }
+                if a == analyzer {
+                    Some(key_for(&a, &source))
+                } else {
+                    None
+                }
             })
             .collect();
 
         let mut removed = 0;
         if !keys_to_remove.is_empty() {
-            let write_txn = self.db.begin_write()
+            let write_txn = self
+                .db
+                .begin_write()
                 .context("Failed to begin write transaction")?;
             {
-                let mut table = write_txn.open_table(DEPS_TABLE)
+                let mut table = write_txn
+                    .open_table(DEPS_TABLE)
                     .context("Failed to open deps table")?;
                 for key in &keys_to_remove {
                     if table.remove(key.as_str()).is_ok() {
@@ -322,7 +367,8 @@ impl DepsCache {
                     }
                 }
             }
-            write_txn.commit()
+            write_txn
+                .commit()
                 .context("Failed to commit dependency cache removal")?;
         }
 
@@ -416,9 +462,13 @@ mod tests {
 
         assert!(result.is_none(), "missing entry must return None");
         let stats = cache.stats();
-        assert_eq!(stats.hits + stats.misses, 1,
+        assert_eq!(
+            stats.hits + stats.misses,
+            1,
             "exactly one of hits/misses must advance per get call (hits={}, misses={})",
-            stats.hits, stats.misses);
+            stats.hits,
+            stats.misses
+        );
         assert_eq!(stats.misses, 1, "missing entry counts as a miss");
     }
 }

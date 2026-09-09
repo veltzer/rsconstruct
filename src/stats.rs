@@ -119,9 +119,7 @@ impl BuildStats {
             } else {
                 format!("{total_restored} restored")
             };
-            let lead = format!(
-                "{built_part}, {restored_part}, {total_failed} failed",
-            );
+            let lead = format!("{built_part}, {restored_part}, {total_failed} failed");
             let aside = format!("{total_skipped} unchanged, {total_flaky} flaky");
 
             // Emitted without color: the final "Exited with ..." line printed
@@ -131,7 +129,13 @@ impl BuildStats {
         }
 
         if self.failed_count > 0 {
-            println!("{}", color::red(&format!("Build finished with {} error(s):", self.failed_count)));
+            println!(
+                "{}",
+                color::red(&format!(
+                    "Build finished with {} error(s):",
+                    self.failed_count
+                ))
+            );
             for msg in &self.failed_messages {
                 println!("{} {}", color::red("*"), msg);
             }
@@ -143,7 +147,9 @@ impl BuildStats {
 
             // Phase timings
             if !self.phase_timings.is_empty() {
-                let rows: Vec<Vec<String>> = self.phase_timings.iter()
+                let rows: Vec<Vec<String>> = self
+                    .phase_timings
+                    .iter()
                     .map(|(name, dur)| vec![name.clone(), format!("{:.3}s", dur.as_secs_f64())])
                     .collect();
                 crate::tables::print_table(&["Phase", "Duration"], &rows);
@@ -152,12 +158,20 @@ impl BuildStats {
             // Per-product timings
             for cat in &self.categories {
                 for pt in &cat.product_timings {
-                    println!("[{}] {} {}", pt.processor, pt.display,
-                        color::dim(&format!("({:.3}s)", pt.duration.as_secs_f64())));
+                    println!(
+                        "[{}] {} {}",
+                        pt.processor,
+                        pt.display,
+                        color::dim(&format!("({:.3}s)", pt.duration.as_secs_f64()))
+                    );
                 }
             }
 
-            let total: f64 = self.phase_timings.iter().map(|(_, d)| d.as_secs_f64()).sum();
+            let total: f64 = self
+                .phase_timings
+                .iter()
+                .map(|(_, d)| d.as_secs_f64())
+                .sum();
             println!("{}", color::bold(&format!("Total: {total:.3}s")));
         }
     }

@@ -1,35 +1,34 @@
+mod a2x;
 mod cc_single_file;
+mod chromium;
+mod drawio;
 mod generator;
+mod imarkdown2html;
 mod ipdfunite;
+mod isass;
 mod jinja2;
+mod libreoffice;
 mod linux_module;
 mod mako;
+mod markdown2html;
+mod marp;
+mod mermaid;
+mod objdump;
+mod pandoc;
 mod pdflatex;
 mod pdfunite;
-mod rust_single_file;
-mod mermaid;
-mod drawio;
-mod sass;
 mod protobuf;
-mod chromium;
-mod markdown2html;
-mod libreoffice;
-mod marp;
-mod pandoc;
-mod a2x;
-mod objdump;
-mod imarkdown2html;
-mod isass;
+mod rust_single_file;
+mod sass;
 mod yaml2json;
 
 mod requirements;
 pub mod tags;
 pub mod tera;
 
-
-use std::path::{Path, PathBuf};
 use anyhow::Result;
 use serde::Serialize;
+use std::path::{Path, PathBuf};
 
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
@@ -67,9 +66,14 @@ pub(super) fn find_templates(scan: &StandardConfig, file_index: &FileIndex) -> V
                 let output_name = &filename[..filename.len() - ext.len()];
                 if !output_name.is_empty() {
                     // Strip the matching scan_dir prefix to get the output path
-                    let output_path = src_dirs.iter()
+                    let output_path = src_dirs
+                        .iter()
                         .filter(|d| !d.is_empty())
-                        .find_map(|d| path.strip_prefix(d).ok().map(|r| r.with_file_name(output_name)))
+                        .find_map(|d| {
+                            path.strip_prefix(d)
+                                .ok()
+                                .map(|r| r.with_file_name(output_name))
+                        })
                         .unwrap_or_else(|| PathBuf::from(output_name));
                     items.push(TemplateItem::new(path.clone(), output_path));
                     break;
@@ -98,9 +102,15 @@ pub struct DiscoverParams<'a, C: Serialize> {
 /// Strips the matching `src_dirs` prefix from the source path, replaces the extension,
 /// and joins the result under `output_dir`. This is the single place where
 /// source-to-output path mapping is defined.
-pub(super) fn output_path(source: &Path, src_dirs: &[String], output_dir: &str, extension: &str) -> PathBuf {
+pub(super) fn output_path(
+    source: &Path,
+    src_dirs: &[String],
+    output_dir: &str,
+    extension: &str,
+) -> PathBuf {
     let full_parent = super::parent_dir_or_empty(source);
-    let parent = src_dirs.iter()
+    let parent = src_dirs
+        .iter()
         .filter(|d| !d.is_empty())
         .find_map(|d| full_parent.strip_prefix(d).ok())
         .unwrap_or(full_parent);
@@ -133,7 +143,13 @@ pub fn discover_multi_format(
             inputs.push(source.clone());
             inputs.extend_from_slice(&extra);
 
-            graph.add_product_with_variant(inputs, vec![output], params.processor_name, hash.clone(), Some(format))?;
+            graph.add_product_with_variant(
+                inputs,
+                vec![output],
+                params.processor_name,
+                hash.clone(),
+                Some(format),
+            )?;
         }
     }
 

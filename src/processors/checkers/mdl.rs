@@ -46,9 +46,7 @@ pub struct MdlProcessor {
 
 impl MdlProcessor {
     pub const fn new(config: MdlConfig) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 }
 
@@ -67,12 +65,20 @@ impl Processor for MdlProcessor {
         vec![self.config.standard.command.clone(), "ruby".to_string()]
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let files = file_index.scan(&self.config.standard, true);
         if files.is_empty() {
             return Ok(());
         }
-        let hash = Some(output_config_hash(&self.config, &crate::config::checksum_fields_of(instance_name)));
+        let hash = Some(output_config_hash(
+            &self.config,
+            &crate::config::checksum_fields_of(instance_name),
+        ));
         let mut dep_inputs = self.config.standard.dep_inputs.clone();
         for ai in &self.config.standard.dep_auto {
             dep_inputs.extend(config_file_inputs(ai));

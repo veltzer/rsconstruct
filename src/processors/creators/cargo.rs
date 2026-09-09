@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{Processor, SiblingFilter, run_in_anchor_dir, anchor_display_dir, check_command_output};
+use crate::processors::{
+    Processor, SiblingFilter, anchor_display_dir, check_command_output, run_in_anchor_dir,
+};
 
 fn default_cargo() -> String {
     "cargo".into()
@@ -47,14 +49,20 @@ pub struct CargoProcessor {
 
 impl CargoProcessor {
     pub const fn new(config: CargoConfig) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 
     /// Run cargo build in the Cargo.toml's directory with the given profile
-    fn execute_cargo(&self, ctx: &crate::build_context::BuildContext, cargo_toml: &Path, profile: &str) -> Result<()> {
-        let subcommand = self.config.standard.require_command(crate::processors::names::CARGO)?;
+    fn execute_cargo(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        cargo_toml: &Path,
+        profile: &str,
+    ) -> Result<()> {
+        let subcommand = self
+            .config
+            .standard
+            .require_command(crate::processors::names::CARGO)?;
         let mut cmd = Command::new(&self.config.cargo);
         cmd.arg(subcommand);
         cmd.args(["--profile", profile]);
@@ -62,7 +70,15 @@ impl CargoProcessor {
             cmd.arg(arg);
         }
         let output = run_in_anchor_dir(ctx, &mut cmd, cargo_toml)?;
-        check_command_output(&output, format_args!("cargo {} --profile {} in {}", subcommand, profile, anchor_display_dir(cargo_toml)))
+        check_command_output(
+            &output,
+            format_args!(
+                "cargo {} --profile {} in {}",
+                subcommand,
+                profile,
+                anchor_display_dir(cargo_toml)
+            ),
+        )
     }
 }
 
@@ -70,7 +86,6 @@ impl Processor for CargoProcessor {
     fn scan_config(&self) -> &crate::config::StandardConfig {
         &self.config.standard
     }
-
 
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
@@ -84,7 +99,12 @@ impl Processor for CargoProcessor {
         vec![self.config.cargo.clone()]
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let Some(files) = crate::processors::scan_or_skip(&self.config.standard, file_index) else {
             return Ok(());
         };
@@ -93,11 +113,17 @@ impl Processor for CargoProcessor {
             extensions: &[".rs", ".toml"],
             excludes: &["/.git/", "/target/", "/.rsconstruct/"],
         };
-        let hash = Some(output_config_hash(&self.config, &crate::config::checksum_fields_of(instance_name)));
+        let hash = Some(output_config_hash(
+            &self.config,
+            &crate::config::checksum_fields_of(instance_name),
+        ));
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
         for anchor in files {
-            let anchor_dir = anchor.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+            let anchor_dir = anchor
+                .parent()
+                .map(std::path::Path::to_path_buf)
+                .unwrap_or_default();
 
             let sibling_files = file_index.query(
                 &anchor_dir,
@@ -108,7 +134,8 @@ impl Processor for CargoProcessor {
                 &[],
             );
 
-            let base_inputs = crate::processors::build_anchor_inputs(&anchor, &sibling_files, &extra);
+            let base_inputs =
+                crate::processors::build_anchor_inputs(&anchor, &sibling_files, &extra);
 
             for profile in &self.config.profiles {
                 let inputs = base_inputs.clone();

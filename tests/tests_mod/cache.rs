@@ -1,6 +1,6 @@
+use crate::common::{run_rsconstruct, run_rsconstruct_with_env, setup_test_project};
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{setup_test_project, run_rsconstruct, run_rsconstruct_with_env};
 
 #[test]
 fn cache_operations() {
@@ -10,13 +10,15 @@ fn cache_operations() {
     // Create a simple template
     fs::write(
         project_path.join("config/cache_test.py"),
-        "value = 'cached'"
-    ).unwrap();
+        "value = 'cached'",
+    )
+    .unwrap();
 
     fs::write(
         project_path.join("tera.templates/cached.txt.tera"),
-        "{% set c = load_python(path='config/cache_test.py') %}{{ c.value }}"
-    ).unwrap();
+        "{% set c = load_python(path='config/cache_test.py') %}{{ c.value }}",
+    )
+    .unwrap();
 
     // Build to populate cache
     let output = run_rsconstruct(project_path, &["build"]);
@@ -32,13 +34,17 @@ fn cache_operations() {
     assert!(size_stdout.contains("Cache size:"));
     assert!(size_stdout.contains("objects"));
     // Should have at least 1 object
-    assert!(!size_stdout.contains("0 objects"), "Cache should have objects after build");
+    assert!(
+        !size_stdout.contains("0 objects"),
+        "Cache should have objects after build"
+    );
 
     // Delete the output file, then rebuild — should restore from cache
     fs::remove_file(project_path.join("cached.txt")).unwrap();
     assert!(!project_path.join("cached.txt").exists());
 
-    let restore_output = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let restore_output =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(restore_output.status.success());
     let restore_stdout = String::from_utf8_lossy(&restore_output.stdout);
     assert!(restore_stdout.contains("Restored from cache:"));
@@ -75,8 +81,9 @@ fn cache_list_shows_entries() {
 
     fs::write(
         project_path.join("tera.templates/list_test.txt.tera"),
-        "hello"
-    ).unwrap();
+        "hello",
+    )
+    .unwrap();
 
     // Build to populate cache
     let build = run_rsconstruct(project_path, &["build"]);
@@ -88,11 +95,19 @@ fn cache_list_shows_entries() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let entries: serde_json::Value = serde_json::from_str(&stdout)
         .unwrap_or_else(|e| panic!("Cache list should be valid JSON: {}\nOutput: {}", e, stdout));
-    let arr = entries.as_array().expect("Cache list should be a JSON array");
-    assert!(!arr.is_empty(), "Cache list should have entries after build");
+    let arr = entries
+        .as_array()
+        .expect("Cache list should be a JSON array");
+    assert!(
+        !arr.is_empty(),
+        "Cache list should have entries after build"
+    );
     let first = &arr[0];
-    assert!(first["cache_key"].as_str().is_some(),
-        "Cache entry should have a cache_key: {}", first);
+    assert!(
+        first["cache_key"].as_str().is_some(),
+        "Cache entry should have a cache_key: {}",
+        first
+    );
 }
 
 #[test]
@@ -100,10 +115,7 @@ fn cache_list_empty() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    fs::write(
-        project_path.join("rsconstruct.toml"),
-        "\n"
-    ).unwrap();
+    fs::write(project_path.join("rsconstruct.toml"), "\n").unwrap();
 
     // Empty cache should produce an empty JSON array
     let output = run_rsconstruct_with_env(project_path, &["cache", "list"], &[("NO_COLOR", "1")]);
@@ -111,8 +123,14 @@ fn cache_list_empty() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let entries: serde_json::Value = serde_json::from_str(&stdout)
         .unwrap_or_else(|e| panic!("Cache list should be valid JSON: {}\nOutput: {}", e, stdout));
-    let arr = entries.as_array().expect("Cache list should be a JSON array");
-    assert!(arr.is_empty(), "Empty cache should produce an empty JSON array: {}", stdout);
+    let arr = entries
+        .as_array()
+        .expect("Cache list should be a JSON array");
+    assert!(
+        arr.is_empty(),
+        "Empty cache should produce an empty JSON array: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -120,15 +138,16 @@ fn cache_stats_empty() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    fs::write(
-        project_path.join("rsconstruct.toml"),
-        "\n"
-    ).unwrap();
+    fs::write(project_path.join("rsconstruct.toml"), "\n").unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["cache", "stats"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Cache is empty"), "Expected 'Cache is empty' message, got: {}", stdout);
+    assert!(
+        stdout.contains("Cache is empty"),
+        "Expected 'Cache is empty' message, got: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -138,8 +157,9 @@ fn cache_stats_after_build() {
 
     fs::write(
         project_path.join("tera.templates/stats_test.txt.tera"),
-        "hello"
-    ).unwrap();
+        "hello",
+    )
+    .unwrap();
 
     // Build to populate cache
     let build = run_rsconstruct(project_path, &["build"]);
@@ -149,7 +169,11 @@ fn cache_stats_after_build() {
     let output = run_rsconstruct_with_env(project_path, &["cache", "stats"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("entries"), "Expected 'entries' in stats, got: {}", stdout);
+    assert!(
+        stdout.contains("entries"),
+        "Expected 'entries' in stats, got: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -159,21 +183,34 @@ fn cache_stats_json() {
 
     fs::write(
         project_path.join("tera.templates/json_test.txt.tera"),
-        "hello"
-    ).unwrap();
+        "hello",
+    )
+    .unwrap();
 
     // Build to populate cache
     let build = run_rsconstruct(project_path, &["build"]);
     assert!(build.status.success());
 
     // Verify cache stats outputs valid JSON
-    let output = run_rsconstruct_with_env(project_path, &["--json", "cache", "stats"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["--json", "cache", "stats"],
+        &[("NO_COLOR", "1")],
+    );
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let parsed: serde_json::Value = serde_json::from_str(&stdout)
-        .unwrap_or_else(|e| panic!("Cache stats JSON should be valid: {}\nOutput: {}", e, stdout));
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|e| {
+        panic!(
+            "Cache stats JSON should be valid: {}\nOutput: {}",
+            e, stdout
+        )
+    });
     assert!(parsed.is_object(), "Expected JSON object, got: {}", stdout);
-    assert!(parsed.get("all").is_some(), "Expected 'all' key in stats JSON, got: {}", stdout);
+    assert!(
+        parsed.get("all").is_some(),
+        "Expected 'all' key in stats JSON, got: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -183,34 +220,58 @@ fn cache_clear_removes_everything() {
 
     fs::write(
         project_path.join("tera.templates/clear_test.txt.tera"),
-        "hello"
-    ).unwrap();
+        "hello",
+    )
+    .unwrap();
 
     // Build to populate cache
     let build = run_rsconstruct(project_path, &["build"]);
     assert!(build.status.success());
-    assert!(project_path.join(".rsconstruct").exists(), "Cache dir should exist after build");
-    assert!(project_path.join(".rsconstruct/objects").exists(), "Objects dir should exist after build");
-    assert!(project_path.join(".rsconstruct/descriptors").exists(), "Descriptors dir should exist after build");
+    assert!(
+        project_path.join(".rsconstruct").exists(),
+        "Cache dir should exist after build"
+    );
+    assert!(
+        project_path.join(".rsconstruct/objects").exists(),
+        "Objects dir should exist after build"
+    );
+    assert!(
+        project_path.join(".rsconstruct/descriptors").exists(),
+        "Descriptors dir should exist after build"
+    );
 
     // Clear cache
     let clear = run_rsconstruct(project_path, &["cache", "clear"]);
     assert!(clear.status.success());
 
     // Entire .rsconstruct directory should be gone
-    assert!(!project_path.join(".rsconstruct").exists(),
-        "Entire .rsconstruct dir should be removed after cache clear");
-    assert!(!project_path.join(".rsconstruct/objects").exists(),
-        "Objects dir should not exist after cache clear");
-    assert!(!project_path.join(".rsconstruct/descriptors").exists(),
-        "Descriptors dir should not exist after cache clear");
+    assert!(
+        !project_path.join(".rsconstruct").exists(),
+        "Entire .rsconstruct dir should be removed after cache clear"
+    );
+    assert!(
+        !project_path.join(".rsconstruct/objects").exists(),
+        "Objects dir should not exist after cache clear"
+    );
+    assert!(
+        !project_path.join(".rsconstruct/descriptors").exists(),
+        "Descriptors dir should not exist after cache clear"
+    );
 
     // Rebuild should work from scratch (full rebuild, no restore)
     let rebuild = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(rebuild.status.success());
     let stdout = String::from_utf8_lossy(&rebuild.stdout);
-    assert!(stdout.contains("Processing:"), "Should do a full rebuild after cache clear: {}", stdout);
-    assert!(!stdout.contains("Restored from cache:"), "Should not restore after cache clear: {}", stdout);
+    assert!(
+        stdout.contains("Processing:"),
+        "Should do a full rebuild after cache clear: {}",
+        stdout
+    );
+    assert!(
+        !stdout.contains("Restored from cache:"),
+        "Should not restore after cache clear: {}",
+        stdout
+    );
 }
 
 /// `cache remove-stale` must keep entries for the current project state.
@@ -227,8 +288,9 @@ fn remove_stale_keeps_current_entries() {
 
     fs::write(
         project_path.join("tera.templates/stale_test.txt.tera"),
-        "stale test content"
-    ).unwrap();
+        "stale test content",
+    )
+    .unwrap();
 
     // Build to populate cache
     let build = run_rsconstruct(project_path, &["build"]);
@@ -239,37 +301,62 @@ fn remove_stale_keeps_current_entries() {
     let stale = run_rsconstruct_with_env(project_path, &["cache", "stale"], &[("NO_COLOR", "1")]);
     assert!(stale.status.success());
     let stale_stdout = String::from_utf8_lossy(&stale.stdout);
-    assert!(!stale_stdout.lines().any(|l| l.starts_with("stale ")),
-        "Fresh build must have no stale entries: {}", stale_stdout);
-    assert!(stale_stdout.lines().any(|l| l.starts_with("current ")),
-        "Fresh build's entries must be recognized as current: {}", stale_stdout);
+    assert!(
+        !stale_stdout.lines().any(|l| l.starts_with("stale ")),
+        "Fresh build must have no stale entries: {}",
+        stale_stdout
+    );
+    assert!(
+        stale_stdout.lines().any(|l| l.starts_with("current ")),
+        "Fresh build's entries must be recognized as current: {}",
+        stale_stdout
+    );
 
     // remove-stale must not remove anything
-    let remove = run_rsconstruct_with_env(project_path, &["cache", "remove-stale"], &[("NO_COLOR", "1")]);
+    let remove = run_rsconstruct_with_env(
+        project_path,
+        &["cache", "remove-stale"],
+        &[("NO_COLOR", "1")],
+    );
     assert!(remove.status.success());
     let remove_stdout = String::from_utf8_lossy(&remove.stdout);
-    assert!(remove_stdout.contains("Removed 0 stale index entries"),
-        "remove-stale after a fresh build must remove nothing: {}", remove_stdout);
+    assert!(
+        remove_stdout.contains("Removed 0 stale index entries"),
+        "remove-stale after a fresh build must remove nothing: {}",
+        remove_stdout
+    );
 
     // The cache must still work: delete the output and restore from cache
     fs::remove_file(project_path.join("stale_test.txt")).unwrap();
-    let rebuild = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let rebuild =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(rebuild.status.success());
     let rebuild_stdout = String::from_utf8_lossy(&rebuild.stdout);
-    assert!(rebuild_stdout.contains("Restored from cache:"),
-        "Cache must survive remove-stale: {}", rebuild_stdout);
+    assert!(
+        rebuild_stdout.contains("Restored from cache:"),
+        "Cache must survive remove-stale: {}",
+        rebuild_stdout
+    );
 
     // Now actually make the entry stale: change the input content. The old
     // descriptor no longer matches any current product state.
     fs::write(
         project_path.join("tera.templates/stale_test.txt.tera"),
-        "changed content"
-    ).unwrap();
-    let remove2 = run_rsconstruct_with_env(project_path, &["cache", "remove-stale"], &[("NO_COLOR", "1")]);
+        "changed content",
+    )
+    .unwrap();
+    let remove2 = run_rsconstruct_with_env(
+        project_path,
+        &["cache", "remove-stale"],
+        &[("NO_COLOR", "1")],
+    );
     assert!(remove2.status.success());
     let remove2_stdout = String::from_utf8_lossy(&remove2.stdout);
-    assert!(!remove2_stdout.contains("Removed 0 stale index entries"),
-        "Changing input content must make the old entry stale: {}", remove2_stdout);
+    assert!(
+        !remove2_stdout.contains("Removed 0 stale index entries"),
+        "Changing input content must make the old entry stale: {}",
+        remove2_stdout
+    );
 }
 
 #[test]
@@ -280,8 +367,9 @@ fn cache_survives_input_rename() {
     // Create a template and build it
     fs::write(
         project_path.join("tera.templates/original.txt.tera"),
-        "rename test content"
-    ).unwrap();
+        "rename test content",
+    )
+    .unwrap();
 
     let build1 = run_rsconstruct(project_path, &["build"]);
     assert!(build1.status.success());
@@ -292,20 +380,29 @@ fn cache_survives_input_rename() {
     fs::rename(
         project_path.join("tera.templates/original.txt.tera"),
         project_path.join("tera.templates/renamed.txt.tera"),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Build again — the content is identical, so the cache should hit
     // and restore the output (under the new name) from cache
-    let build2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
-    assert!(build2.status.success(),
+    let build2 =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(
+        build2.status.success(),
         "Build after rename should succeed: stderr={}",
-        String::from_utf8_lossy(&build2.stderr));
+        String::from_utf8_lossy(&build2.stderr)
+    );
 
     let stdout = String::from_utf8_lossy(&build2.stdout);
-    assert!(stdout.contains("Restored from cache:"),
-        "Renamed input with same content should restore from cache: {}", stdout);
-    assert!(project_path.join("renamed.txt").exists(),
-        "Output under new name should exist after restore");
+    assert!(
+        stdout.contains("Restored from cache:"),
+        "Renamed input with same content should restore from cache: {}",
+        stdout
+    );
+    assert!(
+        project_path.join("renamed.txt").exists(),
+        "Output under new name should exist after restore"
+    );
 
     // Verify content is correct
     let content = fs::read_to_string(project_path.join("renamed.txt")).unwrap();
@@ -341,40 +438,62 @@ fn tool_upgrade_invalidates_cached_results() {
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(project_path.join("src/a.txt"), "content\n").unwrap();
 
-    let path_env = format!("{}:{}", bin_dir.display(), std::env::var("PATH").unwrap_or_default());
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
 
     // First build populates the cache.
     let build1 = run_rsconstruct_with_env(
-        project_path, &["build", "-v"],
+        project_path,
+        &["build", "-v"],
         &[("NO_COLOR", "1"), ("PATH", &path_env)],
     );
-    assert!(build1.status.success(),
-        "first build failed: {}", String::from_utf8_lossy(&build1.stderr));
+    assert!(
+        build1.status.success(),
+        "first build failed: {}",
+        String::from_utf8_lossy(&build1.stderr)
+    );
 
     // Second build with the tool unchanged: cached, nothing re-run.
     let build2 = run_rsconstruct_with_env(
-        project_path, &["build", "-v"],
+        project_path,
+        &["build", "-v"],
         &[("NO_COLOR", "1"), ("PATH", &path_env)],
     );
-    assert!(build2.status.success(),
-        "second build failed: {}", String::from_utf8_lossy(&build2.stderr));
+    assert!(
+        build2.status.success(),
+        "second build failed: {}",
+        String::from_utf8_lossy(&build2.stderr)
+    );
     let stdout2 = String::from_utf8_lossy(&build2.stdout);
-    assert!(!stdout2.contains("Processing:"),
-        "unchanged tool + unchanged inputs must not re-run anything: {}", stdout2);
+    assert!(
+        !stdout2.contains("Processing:"),
+        "unchanged tool + unchanged inputs must not re-run anything: {}",
+        stdout2
+    );
 
     // "Upgrade" the tool. Inputs and config are untouched.
     fs::write(&tool, "#!/bin/sh\n# v2\nexit 0\n").unwrap();
     crate::common::make_executable(&tool);
 
     let build3 = run_rsconstruct_with_env(
-        project_path, &["build", "-v"],
+        project_path,
+        &["build", "-v"],
         &[("NO_COLOR", "1"), ("PATH", &path_env)],
     );
-    assert!(build3.status.success(),
-        "build after tool upgrade failed: {}", String::from_utf8_lossy(&build3.stderr));
+    assert!(
+        build3.status.success(),
+        "build after tool upgrade failed: {}",
+        String::from_utf8_lossy(&build3.stderr)
+    );
     let stdout3 = String::from_utf8_lossy(&build3.stdout);
-    assert!(stdout3.contains("Processing:"),
-        "a tool upgrade must invalidate cached results: {}", stdout3);
+    assert!(
+        stdout3.contains("Processing:"),
+        "a tool upgrade must invalidate cached results: {}",
+        stdout3
+    );
 }
 
 /// `[build] hash_tool_versions = false` restores the old behavior for
@@ -398,27 +517,42 @@ fn hash_tool_versions_false_ignores_tool_upgrade() {
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(project_path.join("src/a.txt"), "content\n").unwrap();
 
-    let path_env = format!("{}:{}", bin_dir.display(), std::env::var("PATH").unwrap_or_default());
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
 
     let build1 = run_rsconstruct_with_env(
-        project_path, &["build", "-v"],
+        project_path,
+        &["build", "-v"],
         &[("NO_COLOR", "1"), ("PATH", &path_env)],
     );
-    assert!(build1.status.success(),
-        "first build failed: {}", String::from_utf8_lossy(&build1.stderr));
+    assert!(
+        build1.status.success(),
+        "first build failed: {}",
+        String::from_utf8_lossy(&build1.stderr)
+    );
 
     fs::write(&tool, "#!/bin/sh\n# v2\nexit 0\n").unwrap();
     crate::common::make_executable(&tool);
 
     let build2 = run_rsconstruct_with_env(
-        project_path, &["build", "-v"],
+        project_path,
+        &["build", "-v"],
         &[("NO_COLOR", "1"), ("PATH", &path_env)],
     );
-    assert!(build2.status.success(),
-        "second build failed: {}", String::from_utf8_lossy(&build2.stderr));
+    assert!(
+        build2.status.success(),
+        "second build failed: {}",
+        String::from_utf8_lossy(&build2.stderr)
+    );
     let stdout2 = String::from_utf8_lossy(&build2.stdout);
-    assert!(!stdout2.contains("Processing:"),
-        "with hash_tool_versions=false a tool upgrade must not invalidate: {}", stdout2);
+    assert!(
+        !stdout2.contains("Processing:"),
+        "with hash_tool_versions=false a tool upgrade must not invalidate: {}",
+        stdout2
+    );
 }
 
 /// Two processors over byte-identical input must not share a cache entry.
@@ -451,7 +585,11 @@ fn distinct_processors_do_not_share_cache_entries() {
     let bin_dir = project_path.join("toolbin");
     fs::create_dir_all(&bin_dir).unwrap();
     let tool = bin_dir.join("stamp");
-    fs::write(&tool, "#!/bin/sh\nprintf 'built:%s' \"$2\" > \"$2\"\nexit 0\n").unwrap();
+    fs::write(
+        &tool,
+        "#!/bin/sh\nprintf 'built:%s' \"$2\" > \"$2\"\nexit 0\n",
+    )
+    .unwrap();
     crate::common::make_executable(&tool);
 
     // gen_a and gen_b differ ONLY by instance name and output_dir.
@@ -475,19 +613,28 @@ fn distinct_processors_do_not_share_cache_entries() {
             "src_extensions = [\".src\"]\n",
             "src_dirs = [\"src\"]\n",
         ),
-    ).unwrap();
+    )
+    .unwrap();
 
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(project_path.join("src/input.src"), "identical content\n").unwrap();
 
-    let path_env = format!("{}:{}", bin_dir.display(), std::env::var("PATH").unwrap_or_default());
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
 
     let build = run_rsconstruct_with_env(
-        project_path, &["build", "-v"],
+        project_path,
+        &["build", "-v"],
         &[("NO_COLOR", "1"), ("PATH", &path_env)],
     );
-    assert!(build.status.success(),
-        "build failed: {}", String::from_utf8_lossy(&build.stderr));
+    assert!(
+        build.status.success(),
+        "build failed: {}",
+        String::from_utf8_lossy(&build.stderr)
+    );
 
     let out_a = project_path.join("out/a/input.txt");
     let out_b = project_path.join("out/b/input.txt");
@@ -496,10 +643,16 @@ fn distinct_processors_do_not_share_cache_entries() {
 
     // Each file records the path it was generated for. If the two products
     // shared a descriptor key, one of these carries the other's path.
-    assert_eq!(fs::read_to_string(&out_a).unwrap(), "built:out/a/input.txt",
-        "gen_a's output came from another processor's cache entry");
-    assert_eq!(fs::read_to_string(&out_b).unwrap(), "built:out/b/input.txt",
-        "gen_b's output came from another processor's cache entry");
+    assert_eq!(
+        fs::read_to_string(&out_a).unwrap(),
+        "built:out/a/input.txt",
+        "gen_a's output came from another processor's cache entry"
+    );
+    assert_eq!(
+        fs::read_to_string(&out_b).unwrap(),
+        "built:out/b/input.txt",
+        "gen_b's output came from another processor's cache entry"
+    );
 
     // Restore path: delete both outputs and rebuild from cache. This is where
     // a shared key does its damage — the blob is content-addressed and
@@ -509,18 +662,31 @@ fn distinct_processors_do_not_share_cache_entries() {
     fs::remove_file(&out_b).unwrap();
 
     let build2 = run_rsconstruct_with_env(
-        project_path, &["build", "-v"],
+        project_path,
+        &["build", "-v"],
         &[("NO_COLOR", "1"), ("PATH", &path_env)],
     );
-    assert!(build2.status.success(),
-        "rebuild failed: {}", String::from_utf8_lossy(&build2.stderr));
+    assert!(
+        build2.status.success(),
+        "rebuild failed: {}",
+        String::from_utf8_lossy(&build2.stderr)
+    );
 
     let stdout2 = String::from_utf8_lossy(&build2.stdout);
-    assert!(stdout2.contains("Restored from cache:"),
-        "second build should restore from cache, not rebuild: {}", stdout2);
+    assert!(
+        stdout2.contains("Restored from cache:"),
+        "second build should restore from cache, not rebuild: {}",
+        stdout2
+    );
 
-    assert_eq!(fs::read_to_string(&out_a).unwrap(), "built:out/a/input.txt",
-        "gen_a restored the wrong processor's cached blob");
-    assert_eq!(fs::read_to_string(&out_b).unwrap(), "built:out/b/input.txt",
-        "gen_b restored the wrong processor's cached blob");
+    assert_eq!(
+        fs::read_to_string(&out_a).unwrap(),
+        "built:out/a/input.txt",
+        "gen_a restored the wrong processor's cached blob"
+    );
+    assert_eq!(
+        fs::read_to_string(&out_b).unwrap(),
+        "built:out/b/input.txt",
+        "gen_b restored the wrong processor's cached blob"
+    );
 }

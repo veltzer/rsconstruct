@@ -1,21 +1,30 @@
+use super::Builder;
+use crate::cli::DisplayOptions;
+use crate::color;
+use crate::executor::{Executor, ExecutorOptions};
+use anyhow::{Context, Result, bail};
 use std::collections::HashSet;
 use std::fmt::Write;
 use std::fs;
 use std::path::PathBuf;
-use anyhow::{Context, Result, bail};
-use crate::cli::DisplayOptions;
-use crate::color;
-use crate::executor::{Executor, ExecutorOptions};
-use super::Builder;
 
 impl Builder {
     /// Clean build artifacts using the dependency graph.
     /// If `processor_filter` is `Some`, only clean outputs from the listed processors.
     /// When `sweep_empty_dirs` is true (default), directories left empty after
     /// per-product cleanup are removed bottom-up.
-    pub fn clean(&self, ctx: &crate::build_context::BuildContext, verbose: bool, processor_filter: Option<&[String]>, sweep_empty_dirs: bool) -> Result<()> {
+    pub fn clean(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        verbose: bool,
+        processor_filter: Option<&[String]>,
+        sweep_empty_dirs: bool,
+    ) -> Result<()> {
         if let Some(names) = processor_filter {
-            crate::output::info(&color::bold(&format!("Cleaning outputs for: {}", names.join(", "))));
+            crate::output::info(&color::bold(&format!(
+                "Cleaning outputs for: {}",
+                names.join(", ")
+            )));
         } else {
             crate::output::info(&color::bold("Cleaning build artifacts..."));
         }
@@ -53,14 +62,19 @@ impl Builder {
 
         // Use executor to clean (batch_size doesn't matter for clean)
         let policy = crate::executor::IncrementalPolicy;
-        let executor = Executor::new(&processors, ctx, &policy, ExecutorOptions {
-            parallel: 1,
-            verbose: false,
-            display_opts: DisplayOptions::minimal(),
-            batch_size: None,
-            explain: false,
-            retry: 0,
-        });
+        let executor = Executor::new(
+            &processors,
+            ctx,
+            &policy,
+            ExecutorOptions {
+                parallel: 1,
+                verbose: false,
+                display_opts: DisplayOptions::minimal(),
+                batch_size: None,
+                explain: false,
+                retry: 0,
+            },
+        );
         let stats = executor.clean(&graph, verbose)?;
 
         // Walk every candidate directory bottom-up: try fs::remove_dir (only
@@ -128,8 +142,8 @@ impl Builder {
 
         let mut cmd = Command::new("git");
         cmd.args(["clean", "-qffxd"]);
-        let output = crate::processors::run_command_capture(ctx, &cmd)
-            .context("Failed to run git clean")?;
+        let output =
+            crate::processors::run_command_capture(ctx, &cmd).context("Failed to run git clean")?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -142,7 +156,13 @@ impl Builder {
 
     /// Remove files not tracked by git and not known as `RSConstruct` build outputs.
     /// Dry-run by default (lists files); use `force` to actually delete.
-    pub fn clean_unknown(&self, ctx: &crate::build_context::BuildContext, force: bool, verbose: bool, respect_gitignore: bool) -> Result<()> {
+    pub fn clean_unknown(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        force: bool,
+        verbose: bool,
+        respect_gitignore: bool,
+    ) -> Result<()> {
         use ignore::WalkBuilder;
         use std::process::Command;
 
@@ -199,7 +219,10 @@ impl Builder {
             if !entry.file_type().is_some_and(|ft| ft.is_file()) {
                 continue;
             }
-            let path = entry.path().strip_prefix("./").unwrap_or_else(|_| entry.path());
+            let path = entry
+                .path()
+                .strip_prefix("./")
+                .unwrap_or_else(|_| entry.path());
             let path = PathBuf::from(path);
 
             // Skip .git/ and .rsconstruct/
@@ -218,7 +241,10 @@ impl Builder {
             }
 
             // Skip files inside RSConstruct output directories
-            if rsconstruct_output_dirs.iter().any(|dir| path.starts_with(dir)) {
+            if rsconstruct_output_dirs
+                .iter()
+                .any(|dir| path.starts_with(dir))
+            {
                 continue;
             }
 
@@ -277,12 +303,18 @@ impl Builder {
             }
             println!("{}", color::green(&summary));
         } else {
-            println!("{}", color::bold(&format!("Found {} unknown file(s):", unknown_files.len())));
+            println!(
+                "{}",
+                color::bold(&format!("Found {} unknown file(s):", unknown_files.len()))
+            );
             for path in &unknown_files {
                 println!("  {}", path.display());
             }
             println!();
-            println!("{}", color::dim("This is a dry run. Run without --dry-run to delete them."));
+            println!(
+                "{}",
+                color::dim("This is a dry run. Run without --dry-run to delete them.")
+            );
         }
 
         Ok(())

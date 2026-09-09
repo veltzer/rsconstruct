@@ -1,6 +1,6 @@
+use crate::common::{run_rsconstruct_with_env, setup_cc_project, setup_test_project};
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{setup_test_project, setup_cc_project, run_rsconstruct_with_env};
 
 #[test]
 fn rsconstructignore_excludes_tera_files() {
@@ -8,23 +8,42 @@ fn rsconstructignore_excludes_tera_files() {
     let project_path = temp_dir.path();
 
     // Create two template files
-    fs::write(project_path.join("tera.templates/included.txt.tera"), "hello").unwrap();
-    fs::write(project_path.join("tera.templates/excluded.txt.tera"), "world").unwrap();
+    fs::write(
+        project_path.join("tera.templates/included.txt.tera"),
+        "hello",
+    )
+    .unwrap();
+    fs::write(
+        project_path.join("tera.templates/excluded.txt.tera"),
+        "world",
+    )
+    .unwrap();
 
     // Create .rsconstructignore that excludes one file
     fs::write(
         project_path.join(".rsconstructignore"),
-        "tera.templates/excluded.txt.tera\n"
-    ).unwrap();
+        "tera.templates/excluded.txt.tera\n",
+    )
+    .unwrap();
 
     // Build
     let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "rsconstruct build failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "rsconstruct build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     // Verify via output - only included file should be processed
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("included.txt"), "Included template should be processed");
-    assert!(!stdout.contains("excluded.txt"), "Excluded template should not be processed");
+    assert!(
+        stdout.contains("included.txt"),
+        "Included template should be processed"
+    );
+    assert!(
+        !stdout.contains("excluded.txt"),
+        "Excluded template should not be processed"
+    );
 }
 
 #[test]
@@ -35,24 +54,43 @@ fn rsconstructignore_glob_pattern() {
     // Create templates directory with subdirectory
     fs::create_dir_all(project_path.join("tera.templates/subdir")).unwrap();
     fs::write(project_path.join("tera.templates/keep.txt.tera"), "hello").unwrap();
-    fs::write(project_path.join("tera.templates/subdir/skip1.txt.tera"), "world1").unwrap();
-    fs::write(project_path.join("tera.templates/subdir/skip2.txt.tera"), "world2").unwrap();
+    fs::write(
+        project_path.join("tera.templates/subdir/skip1.txt.tera"),
+        "world1",
+    )
+    .unwrap();
+    fs::write(
+        project_path.join("tera.templates/subdir/skip2.txt.tera"),
+        "world2",
+    )
+    .unwrap();
 
     // Use a glob pattern to exclude the entire subdirectory
     fs::write(
         project_path.join(".rsconstructignore"),
-        "# Exclude all files in subdir\ntera.templates/subdir/**\n"
-    ).unwrap();
+        "# Exclude all files in subdir\ntera.templates/subdir/**\n",
+    )
+    .unwrap();
 
     // Build
     let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "rsconstruct build failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "rsconstruct build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     // Verify via output - keep.txt should be processed, subdir files should not
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("keep.txt"), "keep.txt should be processed");
-    assert!(!stdout.contains("skip1.txt"), "subdir/skip1.txt should be excluded");
-    assert!(!stdout.contains("skip2.txt"), "subdir/skip2.txt should be excluded");
+    assert!(
+        !stdout.contains("skip1.txt"),
+        "subdir/skip1.txt should be excluded"
+    );
+    assert!(
+        !stdout.contains("skip2.txt"),
+        "subdir/skip2.txt should be excluded"
+    );
 }
 
 #[test]
@@ -65,13 +103,19 @@ fn rsconstructignore_no_file() {
 
     // Build should work fine without .rsconstructignore
     let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "rsconstruct build failed without .rsconstructignore: {}",
-        String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "rsconstruct build failed without .rsconstructignore: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     // Verify via output that the file was processed
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("normal.txt"),
-        "Template should be processed when no .rsconstructignore exists: {}", stdout);
+    assert!(
+        stdout.contains("normal.txt"),
+        "Template should be processed when no .rsconstructignore exists: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -85,8 +129,9 @@ fn rsconstructignore_comments_and_blank_lines() {
     // .rsconstructignore with comments, blank lines, and one real pattern
     fs::write(
         project_path.join(".rsconstructignore"),
-        "# This is a comment\n\n   \n# Another comment\ntera.templates/b.txt.tera\n\n"
-    ).unwrap();
+        "# This is a comment\n\n   \n# Another comment\ntera.templates/b.txt.tera\n\n",
+    )
+    .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
@@ -107,31 +152,40 @@ fn rsconstructignore_cc_processor() {
     // Create two C files
     fs::write(
         project_path.join("src/included.c"),
-        "int main() { return 0; }\n"
-    ).unwrap();
+        "int main() { return 0; }\n",
+    )
+    .unwrap();
 
     fs::create_dir_all(project_path.join("src/excluded")).unwrap();
     fs::write(
         project_path.join("src/excluded/skip.c"),
-        "int main() { return 0; }\n"
-    ).unwrap();
+        "int main() { return 0; }\n",
+    )
+    .unwrap();
 
     // Exclude the subdirectory
-    fs::write(
-        project_path.join(".rsconstructignore"),
-        "src/excluded/**\n"
-    ).unwrap();
+    fs::write(project_path.join(".rsconstructignore"), "src/excluded/**\n").unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(),
+    assert!(
+        output.status.success(),
         "Build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr));
+        String::from_utf8_lossy(&output.stderr)
+    );
 
-    assert!(project_path.join("out/cc_single_file/src/included.elf").exists(),
-        "included.c should be compiled");
-    assert!(!project_path.join("out/cc_single_file/src/excluded/skip.elf").exists(),
-        "excluded/skip.c should not be compiled");
+    assert!(
+        project_path
+            .join("out/cc_single_file/src/included.elf")
+            .exists(),
+        "included.c should be compiled"
+    );
+    assert!(
+        !project_path
+            .join("out/cc_single_file/src/excluded/skip.elf")
+            .exists(),
+        "excluded/skip.c should not be compiled"
+    );
 }
 
 #[test]
@@ -143,31 +197,44 @@ fn rsconstructignore_leading_slash() {
 
     fs::write(
         project_path.join("src/keep.c"),
-        "int main() { return 0; }\n"
-    ).unwrap();
+        "int main() { return 0; }\n",
+    )
+    .unwrap();
 
     fs::create_dir_all(project_path.join("src/skip_dir")).unwrap();
     fs::write(
         project_path.join("src/skip_dir/skip.c"),
-        "int main() { return 0; }\n"
-    ).unwrap();
+        "int main() { return 0; }\n",
+    )
+    .unwrap();
 
     // Leading '/' should work like .gitignore (anchored to project root)
     fs::write(
         project_path.join(".rsconstructignore"),
-        "/src/skip_dir/**\n"
-    ).unwrap();
+        "/src/skip_dir/**\n",
+    )
+    .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(),
+    assert!(
+        output.status.success(),
         "Build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr));
+        String::from_utf8_lossy(&output.stderr)
+    );
 
-    assert!(project_path.join("out/cc_single_file/src/keep.elf").exists(),
-        "keep.c should be compiled");
-    assert!(!project_path.join("out/cc_single_file/src/skip_dir/skip.elf").exists(),
-        "skip_dir/skip.c should be excluded by /src/skip_dir/** pattern");
+    assert!(
+        project_path
+            .join("out/cc_single_file/src/keep.elf")
+            .exists(),
+        "keep.c should be compiled"
+    );
+    assert!(
+        !project_path
+            .join("out/cc_single_file/src/skip_dir/skip.elf")
+            .exists(),
+        "skip_dir/skip.c should be excluded by /src/skip_dir/** pattern"
+    );
 }
 
 #[test]
@@ -179,29 +246,38 @@ fn rsconstructignore_trailing_slash() {
 
     fs::write(
         project_path.join("src/keep.c"),
-        "int main() { return 0; }\n"
-    ).unwrap();
+        "int main() { return 0; }\n",
+    )
+    .unwrap();
 
     fs::create_dir_all(project_path.join("src/skipme")).unwrap();
     fs::write(
         project_path.join("src/skipme/deep.c"),
-        "int main() { return 0; }\n"
-    ).unwrap();
+        "int main() { return 0; }\n",
+    )
+    .unwrap();
 
     // Trailing '/' should exclude the directory and all its contents
-    fs::write(
-        project_path.join(".rsconstructignore"),
-        "/src/skipme/\n"
-    ).unwrap();
+    fs::write(project_path.join(".rsconstructignore"), "/src/skipme/\n").unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(),
+    assert!(
+        output.status.success(),
         "Build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr));
+        String::from_utf8_lossy(&output.stderr)
+    );
 
-    assert!(project_path.join("out/cc_single_file/src/keep.elf").exists(),
-        "keep.c should be compiled");
-    assert!(!project_path.join("out/cc_single_file/src/skipme/deep.elf").exists(),
-        "skipme/deep.c should be excluded by /src/skipme/ pattern");
+    assert!(
+        project_path
+            .join("out/cc_single_file/src/keep.elf")
+            .exists(),
+        "keep.c should be compiled"
+    );
+    assert!(
+        !project_path
+            .join("out/cc_single_file/src/skipme/deep.elf")
+            .exists(),
+        "skipme/deep.c should be excluded by /src/skipme/ pattern"
+    );
 }

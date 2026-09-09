@@ -6,13 +6,12 @@ use serde::{Deserialize, Serialize};
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{Processor, config_file_inputs, run_checker, execute_checker_batch};
+use crate::processors::{Processor, config_file_inputs, execute_checker_batch, run_checker};
 
 /// Script processor config. No custom fields.
 /// Unused `StandardConfig` fields: formats, `output_dir`.
 /// Note: empty command means "no command configured".
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[derive(Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct ScriptConfig {
     #[serde(flatten)]
     pub standard: StandardConfig,
@@ -34,14 +33,22 @@ pub struct ScriptProcessor {
 
 impl ScriptProcessor {
     pub const fn new(config: ScriptConfig) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 
     fn check_files(&self, ctx: &crate::build_context::BuildContext, files: &[&Path]) -> Result<()> {
-        let command = self.config.standard.require_command(crate::processors::names::SCRIPT)?;
-        run_checker(ctx, command, None, &self.config.standard.args, files, ctx.max_arg_len())
+        let command = self
+            .config
+            .standard
+            .require_command(crate::processors::names::SCRIPT)?;
+        run_checker(
+            ctx,
+            command,
+            None,
+            &self.config.standard.args,
+            files,
+            ctx.max_arg_len(),
+        )
     }
 
     const fn has_fix(&self) -> bool {
@@ -49,7 +56,14 @@ impl ScriptProcessor {
     }
 
     fn fix_files(&self, ctx: &crate::build_context::BuildContext, files: &[&Path]) -> Result<()> {
-        run_checker(ctx, &self.config.fix_command, None, &self.config.fix_args, files, ctx.max_arg_len())
+        run_checker(
+            ctx,
+            &self.config.fix_command,
+            None,
+            &self.config.fix_args,
+            files,
+            ctx.max_arg_len(),
+        )
     }
 }
 
@@ -57,7 +71,6 @@ impl Processor for ScriptProcessor {
     fn scan_config(&self) -> &crate::config::StandardConfig {
         &self.config.standard
     }
-
 
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
@@ -71,7 +84,12 @@ impl Processor for ScriptProcessor {
         }
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         if self.config.standard.command.is_empty() {
             return Ok(());
         }
@@ -79,7 +97,10 @@ impl Processor for ScriptProcessor {
         if files.is_empty() {
             return Ok(());
         }
-        let hash = Some(output_config_hash(&self.config, &crate::config::checksum_fields_of(instance_name)));
+        let hash = Some(output_config_hash(
+            &self.config,
+            &crate::config::checksum_fields_of(instance_name),
+        ));
         let mut dep_inputs = self.config.standard.dep_inputs.clone();
         for ai in &self.config.standard.dep_auto {
             dep_inputs.extend(config_file_inputs(ai));
@@ -100,7 +121,11 @@ impl Processor for ScriptProcessor {
         self.check_files(ctx, &[product.primary_input()])
     }
 
-    fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
+    fn execute_batch(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        products: &[&Product],
+    ) -> Vec<Result<()>> {
         execute_checker_batch(ctx, products, |ctx, files| self.check_files(ctx, files))
     }
 
@@ -116,7 +141,11 @@ impl Processor for ScriptProcessor {
         self.has_fix() && self.config.fix_batch.unwrap_or(self.config.standard.batch)
     }
 
-    fn fix_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
+    fn fix_batch(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        products: &[&Product],
+    ) -> Vec<Result<()>> {
         execute_checker_batch(ctx, products, |ctx, files| self.fix_files(ctx, files))
     }
 }

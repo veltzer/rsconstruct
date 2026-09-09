@@ -3,8 +3,7 @@ use std::collections::BTreeMap;
 use std::fs;
 
 use super::{
-    walk_files, CacheDescriptor, CacheListEntry, CacheListOutput, ObjectStore,
-    ProcessorCacheStats,
+    CacheDescriptor, CacheListEntry, CacheListOutput, ObjectStore, ProcessorCacheStats, walk_files,
 };
 
 impl ObjectStore {
@@ -43,10 +42,15 @@ impl ObjectStore {
         let mut referenced: std::collections::HashSet<String> = std::collections::HashSet::new();
         if self.descriptors_dir.exists() {
             for path in walk_files(&self.descriptors_dir) {
-                let data = fs::read(&path)
-                    .with_context(|| format!("Failed to read descriptor during trim: {}", path.display()))?;
-                let desc = serde_json::from_slice::<CacheDescriptor>(&data)
-                    .with_context(|| format!("Failed to parse descriptor during trim: {} (remove it to proceed)", path.display()))?;
+                let data = fs::read(&path).with_context(|| {
+                    format!("Failed to read descriptor during trim: {}", path.display())
+                })?;
+                let desc = serde_json::from_slice::<CacheDescriptor>(&data).with_context(|| {
+                    format!(
+                        "Failed to parse descriptor during trim: {} (remove it to proceed)",
+                        path.display()
+                    )
+                })?;
                 match desc {
                     CacheDescriptor::Marker => {}
                     CacheDescriptor::Blob { checksum, .. } => {
@@ -65,8 +69,10 @@ impl ObjectStore {
         let mut to_remove = Vec::new();
         for path in walk_files(&self.objects_dir) {
             if let (Some(prefix), Some(rest)) = (
-                path.parent().and_then(|p| p.file_name()).and_then(|n| n.to_str()),
-                path.file_name().and_then(|n| n.to_str())
+                path.parent()
+                    .and_then(|p| p.file_name())
+                    .and_then(|n| n.to_str()),
+                path.file_name().and_then(|n| n.to_str()),
             ) {
                 // Compressed objects carry a .zst suffix; strip it to recover
                 // the checksum. Stray temp files never match a referenced
@@ -91,8 +97,9 @@ impl ObjectStore {
             #[allow(clippy::permissions_set_readonly_false)]
             if let Ok(mut perms) = fs::metadata(&path).map(|m| m.permissions()) {
                 perms.set_readonly(false);
-                fs::set_permissions(&path, perms)
-                    .with_context(|| format!("Failed to make cache object writable: {}", path.display()))?;
+                fs::set_permissions(&path, perms).with_context(|| {
+                    format!("Failed to make cache object writable: {}", path.display())
+                })?;
             }
             fs::remove_file(&path)
                 .with_context(|| format!("Failed to remove cache object: {}", path.display()))?;
@@ -107,7 +114,10 @@ impl ObjectStore {
 
     /// Remove stale descriptor entries whose cache keys are not in the valid set.
     /// Returns the number of entries removed.
-    pub fn remove_stale(&self, valid_descriptor_keys: &std::collections::HashSet<String>) -> Result<usize> {
+    pub fn remove_stale(
+        &self,
+        valid_descriptor_keys: &std::collections::HashSet<String>,
+    ) -> Result<usize> {
         let mut count = 0;
 
         if !self.descriptors_dir.exists() {
@@ -117,8 +127,10 @@ impl ObjectStore {
         for path in walk_files(&self.descriptors_dir) {
             // Reconstruct descriptor key from path
             if let (Some(prefix), Some(rest)) = (
-                path.parent().and_then(|p| p.file_name()).and_then(|n| n.to_str()),
-                path.file_name().and_then(|n| n.to_str())
+                path.parent()
+                    .and_then(|p| p.file_name())
+                    .and_then(|n| n.to_str()),
+                path.file_name().and_then(|n| n.to_str()),
             ) {
                 let key = format!("{prefix}{rest}");
                 if !valid_descriptor_keys.contains(&key) {
@@ -127,11 +139,16 @@ impl ObjectStore {
                     #[allow(clippy::permissions_set_readonly_false)]
                     if let Ok(mut perms) = fs::metadata(&path).map(|m| m.permissions()) {
                         perms.set_readonly(false);
-                        fs::set_permissions(&path, perms)
-                            .with_context(|| format!("Failed to make stale descriptor writable: {}", path.display()))?;
+                        fs::set_permissions(&path, perms).with_context(|| {
+                            format!(
+                                "Failed to make stale descriptor writable: {}",
+                                path.display()
+                            )
+                        })?;
                     }
-                    fs::remove_file(&path)
-                        .with_context(|| format!("Failed to remove stale descriptor: {}", path.display()))?;
+                    fs::remove_file(&path).with_context(|| {
+                        format!("Failed to remove stale descriptor: {}", path.display())
+                    })?;
                     count += 1;
                     if let Some(parent) = path.parent() {
                         // Best-effort: remove empty parent dir (fails silently if not empty)
@@ -164,14 +181,18 @@ impl ObjectStore {
                 let outputs = match desc {
                     CacheDescriptor::Marker => Vec::new(),
                     CacheDescriptor::Blob { ref checksum, .. } => {
-                        vec![CacheListOutput { path: "(blob)".to_string(), exists: self.has_object(checksum) }]
+                        vec![CacheListOutput {
+                            path: "(blob)".to_string(),
+                            exists: self.has_object(checksum),
+                        }]
                     }
-                    CacheDescriptor::Tree { entries } => {
-                        entries.iter().map(|e| CacheListOutput {
+                    CacheDescriptor::Tree { entries } => entries
+                        .iter()
+                        .map(|e| CacheListOutput {
                             path: e.path.clone(),
                             exists: self.has_object(&e.checksum),
-                        }).collect()
-                    }
+                        })
+                        .collect(),
                 };
 
                 Some(CacheListEntry { cache_key, outputs })
@@ -193,7 +214,9 @@ impl ObjectStore {
 
         for path in walk_files(&self.descriptors_dir) {
             let Ok(data) = fs::read(&path) else { continue };
-            let Ok(desc) = serde_json::from_slice::<CacheDescriptor>(&data) else { continue };
+            let Ok(desc) = serde_json::from_slice::<CacheDescriptor>(&data) else {
+                continue;
+            };
 
             // We can't extract processor name from a hashed descriptor key.
             // Use "all" as a single bucket for now.

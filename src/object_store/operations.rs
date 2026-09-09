@@ -7,8 +7,14 @@ impl ObjectStore {
     /// The remote always stores the original (uncompressed) content so
     /// machines with different local `compression` settings interoperate.
     #[allow(clippy::unnecessary_wraps)] // Result kept for API symmetry with try_fetch_*; future writers may legitimately fail.
-    pub(super) fn try_push_object_to_remote(&self, ctx: &crate::build_context::BuildContext, checksum: &str) -> Result<()> {
-        let Some(remote) = &self.remote else { return Ok(()) };
+    pub(super) fn try_push_object_to_remote(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        checksum: &str,
+    ) -> Result<()> {
+        let Some(remote) = &self.remote else {
+            return Ok(());
+        };
 
         if !self.has_object(checksum) {
             return Ok(());
@@ -43,7 +49,11 @@ impl ObjectStore {
     /// populated remote bucket can actually satisfy a restore — before this,
     /// push worked but every fetch path was dead code, making a configured
     /// remote a write-only feature.
-    pub(super) fn ensure_object(&self, ctx: &crate::build_context::BuildContext, checksum: &str) -> bool {
+    pub(super) fn ensure_object(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        checksum: &str,
+    ) -> bool {
         if self.has_object(checksum) {
             return true;
         }
@@ -71,21 +81,35 @@ impl ObjectStore {
     /// which must agree with what a real build would do but must not have
     /// the side effect of populating the local cache. `ensure_object` is the
     /// build-path counterpart that actually fetches.
-    pub(super) fn object_available(&self, ctx: &crate::build_context::BuildContext, checksum: &str) -> bool {
+    pub(super) fn object_available(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        checksum: &str,
+    ) -> bool {
         if self.has_object(checksum) {
             return true;
         }
         if !self.remote_pull {
             return false;
         }
-        let Some(remote) = &self.remote else { return false };
+        let Some(remote) = &self.remote else {
+            return false;
+        };
         let (prefix, rest) = checksum.split_at(super::CHECKSUM_PREFIX_LEN.min(checksum.len()));
-        remote.exists(ctx, &format!("objects/{prefix}/{rest}")).unwrap_or(false)
+        remote
+            .exists(ctx, &format!("objects/{prefix}/{rest}"))
+            .unwrap_or(false)
     }
 
     /// Try to fetch an object from remote cache
-    pub(super) fn try_fetch_object_from_remote(&self, ctx: &crate::build_context::BuildContext, checksum: &str) -> Result<bool> {
-        let Some(remote) = &self.remote else { return Ok(false) };
+    pub(super) fn try_fetch_object_from_remote(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        checksum: &str,
+    ) -> Result<bool> {
+        let Some(remote) = &self.remote else {
+            return Ok(false);
+        };
 
         if self.has_object(checksum) {
             return Ok(true);
@@ -113,8 +137,15 @@ impl ObjectStore {
 
     /// Try to push a descriptor to remote cache
     #[allow(clippy::unnecessary_wraps)] // Result kept for API symmetry with try_fetch_*.
-    pub(super) fn try_push_descriptor_to_remote(&self, ctx: &crate::build_context::BuildContext, descriptor_key: &str, data: &[u8]) -> Result<()> {
-        let Some(remote) = &self.remote else { return Ok(()) };
+    pub(super) fn try_push_descriptor_to_remote(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        descriptor_key: &str,
+        data: &[u8],
+    ) -> Result<()> {
+        let Some(remote) = &self.remote else {
+            return Ok(());
+        };
 
         let remote_key = format!("descriptors/{descriptor_key}");
         if let Err(e) = remote.upload_bytes(ctx, &remote_key, data) {
@@ -131,8 +162,14 @@ impl ObjectStore {
     /// permanently break `cache trim`, which fails closed on a parse error.
     /// Unlike objects, a descriptor is not content-addressed, so parsing is
     /// the only integrity check available.
-    pub(super) fn try_fetch_descriptor_from_remote(&self, ctx: &crate::build_context::BuildContext, descriptor_key: &str) -> Result<Option<super::CacheDescriptor>> {
-        let Some(remote) = &self.remote else { return Ok(None) };
+    pub(super) fn try_fetch_descriptor_from_remote(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        descriptor_key: &str,
+    ) -> Result<Option<super::CacheDescriptor>> {
+        let Some(remote) = &self.remote else {
+            return Ok(None);
+        };
 
         let remote_key = format!("descriptors/{descriptor_key}");
         let Some(data) = remote.download_bytes(ctx, &remote_key)? else {
@@ -153,7 +190,8 @@ impl ObjectStore {
                 if path.is_absolute() {
                     anyhow::bail!(
                         "Remote cache descriptor {remote_key} contains absolute entry path '{}'",
-                        entry.path);
+                        entry.path
+                    );
                 }
             }
         }
@@ -188,23 +226,28 @@ mod tests {
 
         // Machine A builds and pushes.
         {
-            let producer = ObjectStore::new_with_remote(
-                &tmp.path().join("a"), "a.redb", &remote_dir,
-            );
+            let producer =
+                ObjectStore::new_with_remote(&tmp.path().join("a"), "a.redb", &remote_dir);
             producer.store_blob_descriptor(&ctx, key, &out).unwrap();
         }
 
         // Machine B has an empty local store and no output on disk.
         fs::remove_file(&out).unwrap();
-        let consumer = ObjectStore::new_with_remote(
-            &tmp.path().join("b"), "b.redb", &remote_dir,
-        );
+        let consumer = ObjectStore::new_with_remote(&tmp.path().join("b"), "b.redb", &remote_dir);
 
-        assert!(consumer.get_descriptor(key).is_none(),
-            "consumer must start with a cold local cache");
-        assert!(consumer.can_restore_descriptor(&ctx, key),
-            "a populated remote must be able to satisfy the restore");
-        assert!(consumer.restore_from_descriptor(&ctx, key, std::slice::from_ref(&out)).unwrap());
+        assert!(
+            consumer.get_descriptor(key).is_none(),
+            "consumer must start with a cold local cache"
+        );
+        assert!(
+            consumer.can_restore_descriptor(&ctx, key),
+            "a populated remote must be able to satisfy the restore"
+        );
+        assert!(
+            consumer
+                .restore_from_descriptor(&ctx, key, std::slice::from_ref(&out))
+                .unwrap()
+        );
         assert_eq!(fs::read(&out).unwrap(), b"produced bytes");
     }
 
@@ -221,19 +264,21 @@ mod tests {
         let out = tmp.path().join("out.txt");
         fs::write(&out, b"produced bytes").unwrap();
         {
-            let producer = ObjectStore::new_with_remote(
-                &tmp.path().join("a"), "a.redb", &remote_dir,
-            );
+            let producer =
+                ObjectStore::new_with_remote(&tmp.path().join("a"), "a.redb", &remote_dir);
             producer.store_blob_descriptor(&ctx, key, &out).unwrap();
         }
         fs::remove_file(&out).unwrap();
 
-        let mut consumer = ObjectStore::new_with_remote(
-            &tmp.path().join("b"), "b.redb", &remote_dir,
-        );
+        let mut consumer =
+            ObjectStore::new_with_remote(&tmp.path().join("b"), "b.redb", &remote_dir);
         consumer.remote_pull = false;
         assert!(!consumer.can_restore_descriptor(&ctx, key));
-        assert!(!consumer.restore_from_descriptor(&ctx, key, std::slice::from_ref(&out)).unwrap());
+        assert!(
+            !consumer
+                .restore_from_descriptor(&ctx, key, std::slice::from_ref(&out))
+                .unwrap()
+        );
     }
 
     /// Tree descriptors must round-trip too — every entry's object has to
@@ -250,8 +295,10 @@ mod tests {
         // can't be used because it canonicalizes to an absolute path, and
         // the stores must share a filesystem with the tree dir for the
         // hardlink restore.
-        let base = std::path::PathBuf::from(
-            format!("target/test-tmp/remote-pull-{}", std::process::id()));
+        let base = std::path::PathBuf::from(format!(
+            "target/test-tmp/remote-pull-{}",
+            std::process::id()
+        ));
         let remote_dir = base.join("remote");
         let outdir = base.join("outdir");
         fs::create_dir_all(&outdir).unwrap();
@@ -259,16 +306,14 @@ mod tests {
         fs::write(outdir.join("b.txt"), b"beta").unwrap();
         let dirs = [std::sync::Arc::new(outdir.clone())];
         {
-            let producer = ObjectStore::new_with_remote(
-                &base.join("a"), "a.redb", &remote_dir,
-            );
-            producer.store_tree_descriptor(&ctx, key, &dirs, &[], &|_| false).unwrap();
+            let producer = ObjectStore::new_with_remote(&base.join("a"), "a.redb", &remote_dir);
+            producer
+                .store_tree_descriptor(&ctx, key, &dirs, &[], &|_| false)
+                .unwrap();
         }
 
         fs::remove_dir_all(&outdir).unwrap();
-        let consumer = ObjectStore::new_with_remote(
-            &base.join("b"), "b.redb", &remote_dir,
-        );
+        let consumer = ObjectStore::new_with_remote(&base.join("b"), "b.redb", &remote_dir);
         assert!(consumer.restore_from_descriptor(&ctx, key, &[]).unwrap());
         assert_eq!(fs::read(outdir.join("a.txt")).unwrap(), b"alpha");
         assert_eq!(fs::read(outdir.join("b.txt")).unwrap(), b"beta");
@@ -287,9 +332,8 @@ mod tests {
         let out = tmp.path().join("out.txt");
         fs::write(&out, b"produced bytes").unwrap();
         let checksum = {
-            let producer = ObjectStore::new_with_remote(
-                &tmp.path().join("a"), "a.redb", &remote_dir,
-            );
+            let producer =
+                ObjectStore::new_with_remote(&tmp.path().join("a"), "a.redb", &remote_dir);
             producer.store_blob_descriptor(&ctx, key, &out).unwrap();
             ObjectStore::calculate_checksum_bytes(b"produced bytes")
         };
@@ -302,12 +346,16 @@ mod tests {
         fs::write(&remote_object, b"tampered bytes").unwrap();
 
         fs::remove_file(&out).unwrap();
-        let consumer = ObjectStore::new_with_remote(
-            &tmp.path().join("b"), "b.redb", &remote_dir,
+        let consumer = ObjectStore::new_with_remote(&tmp.path().join("b"), "b.redb", &remote_dir);
+        assert!(
+            !consumer
+                .restore_from_descriptor(&ctx, key, std::slice::from_ref(&out))
+                .unwrap(),
+            "a corrupt remote object must not be admitted; caller falls back to building"
         );
-        assert!(!consumer.restore_from_descriptor(&ctx, key, std::slice::from_ref(&out)).unwrap(),
-            "a corrupt remote object must not be admitted; caller falls back to building");
-        assert!(!consumer.has_object(&checksum),
-            "the corrupt bytes must not land in the local store");
+        assert!(
+            !consumer.has_object(&checksum),
+            "the corrupt bytes must not land in the local store"
+        );
     }
 }

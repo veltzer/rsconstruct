@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
-use std::collections::{HashMap, HashSet};
-use std::fs;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
 use indicatif::ProgressBar;
 use parking_lot::{Condvar, Mutex};
+use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::Instant;
 
@@ -13,10 +13,13 @@ use crate::errors;
 use crate::graph::{BuildGraph, Product};
 use crate::json_output;
 use crate::object_store::ObjectStore;
-use crate::stats::{BuildStats, ProductTiming};
 use crate::progress;
+use crate::stats::{BuildStats, ProductTiming};
 
-use super::{Classification, Executor, HandlerContext, LevelWork, PreCheckResult, RestoreOutcome, SharedState, WorkItem};
+use super::{
+    Classification, Executor, HandlerContext, LevelWork, PreCheckResult, RestoreOutcome,
+    SharedState, WorkItem,
+};
 
 /// Compute the effective `max_jobs` for a processor instance. The config
 /// field is capped by the plugin's static `max_jobs_cap`; `None` on either
@@ -27,9 +30,9 @@ fn effective_max_jobs(name: &str, proc: &dyn crate::processors::Processor) -> Op
     let static_cap = plugin.and_then(|p| p.max_jobs_cap);
     match (user_set, static_cap) {
         (Some(c), Some(m)) => Some(c.min(m)),
-        (Some(c), None)    => Some(c),
-        (None, Some(m))    => Some(m),
-        (None, None)       => None,
+        (Some(c), None) => Some(c),
+        (None, Some(m)) => Some(m),
+        (None, None) => None,
     }
 }
 
@@ -37,7 +40,8 @@ fn effective_max_jobs(name: &str, proc: &dyn crate::processors::Processor) -> Op
 /// plugin's static capability flag must be true, AND the user config must
 /// request batching.
 fn effective_supports_batch(name: &str, proc: &dyn crate::processors::Processor) -> bool {
-    let plugin_ok = crate::registries::processor::find_plugin(name).is_some_and(|p| p.supports_batch);
+    let plugin_ok =
+        crate::registries::processor::find_plugin(name).is_some_and(|p| p.supports_batch);
     plugin_ok && proc.scan_config().batch
 }
 
@@ -46,7 +50,11 @@ fn effective_supports_batch(name: &str, proc: &dyn crate::processors::Processor)
 /// groups (see [`should_batch`]), so this only sees explicit sizes. Never
 /// returns 0 — `chunks(0)` panics.
 fn batch_chunk_size(batch_size: usize, n_items: usize) -> usize {
-    if batch_size == 0 { n_items.max(1) } else { batch_size }
+    if batch_size == 0 {
+        n_items.max(1)
+    } else {
+        batch_size
+    }
 }
 
 /// Whether a processor's items take the batch path. Batching requires an
@@ -111,14 +119,19 @@ pub(super) fn remove_stale_outputs(
         let cache_key = product.descriptor_key(input_checksum);
         for file in object_store.previous_tree_paths(&cache_key) {
             if file.exists() {
-                fs::remove_file(&file)
-                    .with_context(|| format!("Failed to remove stale output: {}", file.display()))?;
+                fs::remove_file(&file).with_context(|| {
+                    format!("Failed to remove stale output: {}", file.display())
+                })?;
             }
         }
         // Ensure output dirs still exist (the tool may assume they do)
         for output_dir in &product.output_dirs {
-            fs::create_dir_all(output_dir.as_ref())
-                .with_context(|| format!("Failed to create output directory: {}", output_dir.display()))?;
+            fs::create_dir_all(output_dir.as_ref()).with_context(|| {
+                format!(
+                    "Failed to create output directory: {}",
+                    output_dir.display()
+                )
+            })?;
         }
     }
     for output in &product.outputs {
@@ -171,7 +184,15 @@ impl Executor<'_> {
         // Emit JSON build start event
         json_output::emit_build_start(order.len());
 
-        let result = self.execute_parallel(graph, &order, object_store, force, timings, keep_going, classification);
+        let result = self.execute_parallel(
+            graph,
+            &order,
+            object_store,
+            force,
+            timings,
+            keep_going,
+            classification,
+        );
 
         match result {
             Ok(mut stats) => {
@@ -179,7 +200,10 @@ impl Executor<'_> {
 
                 // Emit JSON build summary
                 json_output::emit_build_summary(
-                    stats.total_processed() + stats.total_skipped() + stats.total_restored() + stats.failed_count,
+                    stats.total_processed()
+                        + stats.total_skipped()
+                        + stats.total_restored()
+                        + stats.failed_count,
                     stats.total_processed(),
                     stats.failed_count,
                     stats.total_skipped(),
@@ -233,8 +257,12 @@ impl Executor<'_> {
         // Count total products per processor for progress display
         let mut total_per_processor: HashMap<String, usize> = HashMap::new();
         for &product_id in order {
-            let product = graph.get_product(product_id).expect(errors::INVALID_PRODUCT_ID);
-            *total_per_processor.entry(product.processor.clone()).or_insert(0) += 1;
+            let product = graph
+                .get_product(product_id)
+                .expect(errors::INVALID_PRODUCT_ID);
+            *total_per_processor
+                .entry(product.processor.clone())
+                .or_insert(0) += 1;
         }
         let counters = ProgressCounters {
             total_per_processor: Arc::new(total_per_processor),
@@ -262,9 +290,12 @@ impl Executor<'_> {
         };
 
         // Build per-processor semaphores for max_jobs limits
-        let semaphores: HashMap<String, Arc<Semaphore>> = self.processors.iter()
+        let semaphores: HashMap<String, Arc<Semaphore>> = self
+            .processors
+            .iter()
             .filter_map(|(name, proc)| {
-                effective_max_jobs(name, proc.as_ref()).map(|max| (name.clone(), Arc::new(Semaphore::new(max))))
+                effective_max_jobs(name, proc.as_ref())
+                    .map(|max| (name.clone(), Arc::new(Semaphore::new(max))))
             })
             .collect();
 
@@ -274,13 +305,20 @@ impl Executor<'_> {
                 break;
             }
 
-            let LevelWork { batch_groups, non_batch_items } = self.prepare_level_work(
-                graph, &level, object_store, force, keep_going, &shared,
-            );
+            let LevelWork {
+                batch_groups,
+                non_batch_items,
+            } = self.prepare_level_work(graph, &level, object_store, force, keep_going, &shared);
 
             let lctx = LevelContext {
-                graph, object_store, force, keep_going, timings,
-                shared: &shared, pb: &pb, build_start,
+                graph,
+                object_store,
+                force,
+                keep_going,
+                timings,
+                shared: &shared,
+                pb: &pb,
+                build_start,
             };
 
             // Process this level in parallel using thread pool
@@ -305,7 +343,10 @@ impl Executor<'_> {
 
                         s.spawn(move || {
                             self.process_non_batch_chunk(
-                                chunk, lctx_ref, &total_ref, &current_ref,
+                                chunk,
+                                lctx_ref,
+                                &total_ref,
+                                &current_ref,
                                 semaphores_ref,
                             );
                         });
@@ -340,10 +381,19 @@ impl Executor<'_> {
         lctx: &LevelContext,
         emit_fail_event: bool,
     ) -> PreCheckResult {
-        let product = lctx.graph.get_product(item.product_id).expect(errors::INVALID_PRODUCT_ID);
+        let product = lctx
+            .graph
+            .get_product(item.product_id)
+            .expect(errors::INVALID_PRODUCT_ID);
 
         if self.explain {
-            let action = self.policy.explain(self.build_ctx, product, lctx.object_store, &item.input_checksum, lctx.force);
+            let action = self.policy.explain(
+                self.build_ctx,
+                product,
+                lctx.object_store,
+                &item.input_checksum,
+                lctx.force,
+            );
             self.print_explain(product, &action);
         }
 
@@ -353,8 +403,13 @@ impl Executor<'_> {
         }
 
         let ctx = HandlerContext {
-            product, id: item.product_id, input_checksum: &item.input_checksum,
-            proc_name, keep_going: lctx.keep_going, shared: lctx.shared, pb: lctx.pb,
+            product,
+            id: item.product_id,
+            input_checksum: &item.input_checksum,
+            proc_name,
+            keep_going: lctx.keep_going,
+            shared: lctx.shared,
+            pb: lctx.pb,
         };
         match self.handle_restore(&ctx, lctx.object_store, lctx.force, emit_fail_event) {
             RestoreOutcome::Restored | RestoreOutcome::Failed => PreCheckResult::Handled,
@@ -374,7 +429,9 @@ impl Executor<'_> {
             return;
         }
 
-        let Some(processor) = self.processors.get(proc_name) else { return };
+        let Some(processor) = self.processors.get(proc_name) else {
+            return;
+        };
 
         // Handle skip/restore for items that don't need rebuild
         let mut to_execute: Vec<&WorkItem> = Vec::new();
@@ -394,39 +451,53 @@ impl Executor<'_> {
         let mut proc_current = items.len() - to_execute.len();
 
         let chunk_size = batch_chunk_size(
-            self.batch_size.expect("batch groups only form when batching is enabled"),
+            self.batch_size
+                .expect("batch groups only form when batching is enabled"),
             to_execute.len(),
         );
 
         // Process in chunks
         for chunk in to_execute.chunks(chunk_size) {
-            if self.is_interrupted()
-                || (!lctx.keep_going && !lctx.shared.errors.lock().is_empty())
+            if self.is_interrupted() || (!lctx.keep_going && !lctx.shared.errors.lock().is_empty())
             {
                 break;
             }
 
             // Execute batch chunk
-            let product_refs: Vec<&crate::graph::Product> = chunk.iter()
-                .map(|item| lctx.graph.get_product(item.product_id).expect(errors::INVALID_PRODUCT_ID))
+            let product_refs: Vec<&crate::graph::Product> = chunk
+                .iter()
+                .map(|item| {
+                    lctx.graph
+                        .get_product(item.product_id)
+                        .expect(errors::INVALID_PRODUCT_ID)
+                })
                 .collect();
 
             proc_current += chunk.len();
             if self.verbose {
-                let display = product_refs.iter()
+                let display = product_refs
+                    .iter()
                     .map(|p| self.product_display(p))
                     .collect::<Vec<_>>()
                     .join(", ");
                 let gc = lctx.shared.global_current.load(Ordering::SeqCst);
-                crate::output::info(&format!("[{}] ({}/{}) ({}/{}) {} {} files: {}",
+                crate::output::info(&format!(
+                    "[{}] ({}/{}) ({}/{}) {} {} files: {}",
                     proc_name,
-                    gc + 1, lctx.shared.global_total,
-                    proc_current, proc_total,
+                    gc + 1,
+                    lctx.shared.global_total,
+                    proc_current,
+                    proc_total,
                     color::green("Processing batch:"),
                     product_refs.len(),
-                    display));
+                    display
+                ));
             } else {
-                lctx.pb.set_message(format!("[{}] batch {} files", proc_name, product_refs.len()));
+                lctx.pb.set_message(format!(
+                    "[{}] batch {} files",
+                    proc_name,
+                    product_refs.len()
+                ));
             }
 
             // Outputs were already unlinked at classify time; just announce starts.
@@ -457,29 +528,39 @@ impl Executor<'_> {
                 let results = processor.execute_batch(self.build_ctx, &refs);
 
                 // Validate batch returned correct number of results
-                assert_eq!(results.len(), refs.len(),
+                assert_eq!(
+                    results.len(),
+                    refs.len(),
                     "execute_batch returned {} results for {} products (processor: {})",
-                    results.len(), refs.len(), proc_name);
+                    results.len(),
+                    refs.len(),
+                    proc_name
+                );
 
                 let mut still_failing: Vec<usize> = Vec::new();
                 for (&idx, result) in pending.iter().zip(results) {
                     if result.is_err() && attempt < max_attempts {
-                        crate::output::info(&format!("[{}] {} {} (attempt {}/{}, retrying...)",
+                        crate::output::info(&format!(
+                            "[{}] {} {} (attempt {}/{}, retrying...)",
                             proc_name,
                             color::yellow("Retry:"),
                             self.product_display(product_refs[idx]),
-                            attempt, max_attempts));
+                            attempt,
+                            max_attempts
+                        ));
                         still_failing.push(idx);
                     } else {
                         if result.is_ok() && attempt > 1 {
                             // Passed on a retry: report flaky, like the non-batch path.
                             let mut stats = lctx.shared.stats.lock();
                             stats.entry(proc_name.to_string()).or_default().flaky += 1;
-                            crate::output::info(&format!("[{}] {} {} (passed on attempt {})",
+                            crate::output::info(&format!(
+                                "[{}] {} {} (passed on attempt {})",
                                 proc_name,
                                 color::yellow("FLAKY:"),
                                 self.product_display(product_refs[idx]),
-                                attempt));
+                                attempt
+                            ));
                         }
                         final_results[idx] = Some(result);
                     }
@@ -497,12 +578,21 @@ impl Executor<'_> {
 
             // Process per-product results
             for (item, result) in chunk.iter().zip(final_results) {
-                let result = result.expect("the retry loop records a final result for every product");
-                let product = lctx.graph.get_product(item.product_id).expect(errors::INVALID_PRODUCT_ID);
+                let result =
+                    result.expect("the retry loop records a final result for every product");
+                let product = lctx
+                    .graph
+                    .get_product(item.product_id)
+                    .expect(errors::INVALID_PRODUCT_ID);
 
                 let ctx = HandlerContext {
-                    product, id: item.product_id, input_checksum: &item.input_checksum,
-                    proc_name, keep_going: lctx.keep_going, shared: lctx.shared, pb: lctx.pb,
+                    product,
+                    id: item.product_id,
+                    input_checksum: &item.input_checksum,
+                    proc_name,
+                    keep_going: lctx.keep_going,
+                    shared: lctx.shared,
+                    pb: lctx.pb,
                 };
                 match result {
                     Ok(()) => {
@@ -525,9 +615,7 @@ impl Executor<'_> {
                     start_offset: Some(batch_start.duration_since(lctx.build_start)),
                 };
                 let mut stats = lctx.shared.stats.lock();
-                let proc_stats = stats
-                    .entry(proc_name.to_string())
-                    .or_default();
+                let proc_stats = stats.entry(proc_name.to_string()).or_default();
                 proc_stats.duration += batch_duration;
                 proc_stats.product_timings.push(timing);
             }
@@ -545,15 +633,20 @@ impl Executor<'_> {
     ) {
         for item in chunk {
             // Stop if interrupted or if there's an error (non-keep-going mode)
-            if self.is_interrupted()
-                || (!lctx.keep_going && !lctx.shared.errors.lock().is_empty())
+            if self.is_interrupted() || (!lctx.keep_going && !lctx.shared.errors.lock().is_empty())
             {
                 break;
             }
 
-            let product = lctx.graph.get_product(item.product_id).expect(errors::INVALID_PRODUCT_ID);
+            let product = lctx
+                .graph
+                .get_product(item.product_id)
+                .expect(errors::INVALID_PRODUCT_ID);
 
-            if matches!(self.try_skip_or_restore(item, &product.processor, lctx, true), PreCheckResult::Handled) {
+            if matches!(
+                self.try_skip_or_restore(item, &product.processor, lctx, true),
+                PreCheckResult::Handled
+            ) {
                 continue;
             }
 
@@ -565,9 +658,13 @@ impl Executor<'_> {
 
             if let Some(processor) = self.processors.get(&product.processor) {
                 let ctx = HandlerContext {
-                    product, id: item.product_id, input_checksum: &item.input_checksum,
-                    proc_name: &product.processor, keep_going: lctx.keep_going,
-                    shared: lctx.shared, pb: lctx.pb,
+                    product,
+                    id: item.product_id,
+                    input_checksum: &item.input_checksum,
+                    proc_name: &product.processor,
+                    keep_going: lctx.keep_going,
+                    shared: lctx.shared,
+                    pb: lctx.pb,
                 };
 
                 // Update progress counter
@@ -577,24 +674,41 @@ impl Executor<'_> {
                     *c += 1;
                     *c
                 };
-                let total = total_per_processor.get(&product.processor).copied()
+                let total = total_per_processor
+                    .get(&product.processor)
+                    .copied()
                     .expect(errors::PROCESSOR_NOT_IN_TOTALS);
 
                 if self.verbose {
-                    let variant_tag = product.variant.as_ref()
+                    let variant_tag = product
+                        .variant
+                        .as_ref()
                         .map(|v| format!(":{v}"))
                         .unwrap_or_default();
                     let gc = lctx.shared.global_current.load(Ordering::SeqCst) + 1;
-                    crate::output::info(&format!("[{}{}] ({}/{}) ({}/{}) {} {}", product.processor, variant_tag,
-                        gc, lctx.shared.global_total,
-                        current, total,
+                    crate::output::info(&format!(
+                        "[{}{}] ({}/{}) ({}/{}) {} {}",
+                        product.processor,
+                        variant_tag,
+                        gc,
+                        lctx.shared.global_total,
+                        current,
+                        total,
                         color::green("Processing:"),
-                        self.product_display(product)));
+                        self.product_display(product)
+                    ));
                 } else {
-                    let variant_tag = product.variant.as_ref()
+                    let variant_tag = product
+                        .variant
+                        .as_ref()
                         .map(|v| format!(":{v}"))
                         .unwrap_or_default();
-                    lctx.pb.set_message(format!("[{}{}] {}", product.processor, variant_tag, self.product_display(product)));
+                    lctx.pb.set_message(format!(
+                        "[{}{}] {}",
+                        product.processor,
+                        variant_tag,
+                        self.product_display(product)
+                    ));
                 }
 
                 json_output::emit_product_start(&self.product_display(product), &product.processor);
@@ -608,7 +722,12 @@ impl Executor<'_> {
                             let duration = product_start.elapsed();
                             last_error = None; // Clear before handle_success to avoid double-failure if caching fails
 
-                            if !self.handle_success(&ctx, lctx.object_store, lctx.graph, Some(duration)) {
+                            if !self.handle_success(
+                                &ctx,
+                                lctx.object_store,
+                                lctx.graph,
+                                Some(duration),
+                            ) {
                                 // cache_outputs failed and error was handled
                                 break;
                             }
@@ -616,30 +735,32 @@ impl Executor<'_> {
                             // Mark as flaky if it passed on a retry
                             if attempt > 1 {
                                 let mut stats = lctx.shared.stats.lock();
-                                let proc_stats = stats
-                                    .entry(product.processor.clone())
-                                    .or_default();
+                                let proc_stats =
+                                    stats.entry(product.processor.clone()).or_default();
                                 proc_stats.flaky += 1;
-                                crate::output::info(&format!("[{}] {} {} (passed on attempt {})",
+                                crate::output::info(&format!(
+                                    "[{}] {} {} (passed on attempt {})",
                                     product.processor,
                                     color::yellow("FLAKY:"),
                                     self.product_display(product),
-                                    attempt));
+                                    attempt
+                                ));
                             }
 
                             // Record per-product duration (non-batch only)
                             {
                                 let mut stats = lctx.shared.stats.lock();
-                                let proc_stats = stats
-                                    .entry(product.processor.clone())
-                                    .or_default();
+                                let proc_stats =
+                                    stats.entry(product.processor.clone()).or_default();
                                 proc_stats.duration += duration;
                                 if lctx.timings {
                                     proc_stats.product_timings.push(ProductTiming {
                                         display: self.product_display(product),
                                         processor: product.processor.clone(),
                                         duration,
-                                        start_offset: Some(product_start.duration_since(lctx.build_start)),
+                                        start_offset: Some(
+                                            product_start.duration_since(lctx.build_start),
+                                        ),
                                     });
                                 }
                             }
@@ -647,11 +768,14 @@ impl Executor<'_> {
                         }
                         Err(e) => {
                             if attempt < max_attempts {
-                                crate::output::info(&format!("[{}] {} {} (attempt {}/{}, retrying...)",
+                                crate::output::info(&format!(
+                                    "[{}] {} {} (attempt {}/{}, retrying...)",
                                     product.processor,
                                     color::yellow("Retry:"),
                                     self.product_display(product),
-                                    attempt, max_attempts));
+                                    attempt,
+                                    max_attempts
+                                ));
                                 last_error = Some(e);
                             } else {
                                 let duration = product_start.elapsed();
@@ -678,7 +802,11 @@ impl Executor<'_> {
     }
 
     /// Collect final build stats from shared state after all levels complete.
-    fn collect_build_stats(shared: SharedState, keep_going: bool, interrupted: bool) -> Result<BuildStats> {
+    fn collect_build_stats(
+        shared: SharedState,
+        keep_going: bool,
+        interrupted: bool,
+    ) -> Result<BuildStats> {
         let final_stats = Arc::try_unwrap(shared.stats)
             .map_err(|_| anyhow::anyhow!("internal error: outstanding Arc reference to stats"))?
             .into_inner();
@@ -688,10 +816,14 @@ impl Executor<'_> {
         }
 
         let final_failed = Arc::try_unwrap(shared.failed_products)
-            .map_err(|_| anyhow::anyhow!("internal error: outstanding Arc reference to failed products"))?
+            .map_err(|_| {
+                anyhow::anyhow!("internal error: outstanding Arc reference to failed products")
+            })?
             .into_inner();
         let final_msgs = Arc::try_unwrap(shared.failed_messages)
-            .map_err(|_| anyhow::anyhow!("internal error: outstanding Arc reference to failed messages"))?
+            .map_err(|_| {
+                anyhow::anyhow!("internal error: outstanding Arc reference to failed messages")
+            })?
             .into_inner();
         stats.failed_count = final_failed.len();
         stats.failed_messages = final_msgs;
@@ -700,7 +832,9 @@ impl Executor<'_> {
         // independent products a chance to execute and be cached
         if !keep_going && !interrupted {
             let errs = Arc::try_unwrap(shared.errors)
-                .map_err(|_| anyhow::anyhow!("internal error: outstanding Arc reference to errors"))?
+                .map_err(|_| {
+                    anyhow::anyhow!("internal error: outstanding Arc reference to errors")
+                })?
                 .into_inner();
             if let Some(first_err) = errs.into_iter().next() {
                 return Err(first_err);
@@ -733,9 +867,15 @@ impl Executor<'_> {
             for &id in level {
                 if super::has_failed_dependency(graph, id, &failed_guard) {
                     let product = graph.get_product(id).expect(errors::INVALID_PRODUCT_ID);
-                    crate::output::detail(self.verbose, &format!("[{}] {} {}", product.processor,
-                        color::yellow("Skipping (dependency failed):"),
-                        self.product_display(product)));
+                    crate::output::detail(
+                        self.verbose,
+                        &format!(
+                            "[{}] {} {}",
+                            product.processor,
+                            color::yellow("Skipping (dependency failed):"),
+                            self.product_display(product)
+                        ),
+                    );
                     skipped_ids.insert(id);
                 }
             }
@@ -782,27 +922,43 @@ impl Executor<'_> {
                 // handle_success recomputes from the post-execution state and
                 // caches under the real-content key — which is what next
                 // classify will look up.
-                let input_checksum = match crate::checksum::combined_input_checksum(self.build_ctx, &product.inputs) {
-                    Ok(cs) => cs,
-                    Err(e) => {
-                        if keep_going {
-                            let msg = format!("[{}] {}: {}", product.processor, self.product_display(product), e);
-                            // stderr: errors must survive --json, and must not
-                            // corrupt the JSON event stream on stdout.
-                            crate::output::error(&msg);
-                            shared.failed_products.lock().insert(id);
-                            shared.failed_messages.lock().push(msg);
-                        } else {
-                            shared.failed_products.lock().insert(id);
-                            shared.errors.lock().push(e);
+                let input_checksum =
+                    match crate::checksum::combined_input_checksum(self.build_ctx, &product.inputs)
+                    {
+                        Ok(cs) => cs,
+                        Err(e) => {
+                            if keep_going {
+                                let msg = format!(
+                                    "[{}] {}: {}",
+                                    product.processor,
+                                    self.product_display(product),
+                                    e
+                                );
+                                // stderr: errors must survive --json, and must not
+                                // corrupt the JSON event stream on stdout.
+                                crate::output::error(&msg);
+                                shared.failed_products.lock().insert(id);
+                                shared.failed_messages.lock().push(msg);
+                            } else {
+                                shared.failed_products.lock().insert(id);
+                                shared.errors.lock().push(e);
+                            }
+                            continue;
                         }
-                        continue;
-                    }
-                };
+                    };
 
                 let desc_key = product.descriptor_key(&input_checksum);
-                let needs_rebuild = force || object_store.needs_rebuild_descriptor(self.build_ctx, &desc_key, &product.outputs);
-                work_items.push(WorkItem { product_id: id, input_checksum, needs_rebuild });
+                let needs_rebuild = force
+                    || object_store.needs_rebuild_descriptor(
+                        self.build_ctx,
+                        &desc_key,
+                        &product.outputs,
+                    );
+                work_items.push(WorkItem {
+                    product_id: id,
+                    input_checksum,
+                    needs_rebuild,
+                });
             }
         }
 
@@ -814,8 +970,13 @@ impl Executor<'_> {
         // Group all items by processor name
         let mut by_processor: HashMap<String, Vec<WorkItem>> = HashMap::new();
         for item in work_items {
-            let product = graph.get_product(item.product_id).expect(errors::INVALID_PRODUCT_ID);
-            by_processor.entry(product.processor.clone()).or_default().push(item);
+            let product = graph
+                .get_product(item.product_id)
+                .expect(errors::INVALID_PRODUCT_ID);
+            by_processor
+                .entry(product.processor.clone())
+                .or_default()
+                .push(item);
         }
 
         // Separate into batch vs non-batch
@@ -823,7 +984,8 @@ impl Executor<'_> {
         let batching_enabled = self.batch_size.is_some();
         for (proc_name, items) in by_processor {
             let processor = self.processors.get(&proc_name);
-            let supports_batch = processor.is_some_and(|p| effective_supports_batch(&proc_name, p.as_ref()));
+            let supports_batch =
+                processor.is_some_and(|p| effective_supports_batch(&proc_name, p.as_ref()));
             // Count items that actually need rebuild (not just cache-skip)
             let rebuild_count = items.iter().filter(|item| item.needs_rebuild).count();
 
@@ -834,7 +996,10 @@ impl Executor<'_> {
             }
         }
 
-        LevelWork { batch_groups, non_batch_items }
+        LevelWork {
+            batch_groups,
+            non_batch_items,
+        }
     }
 }
 
@@ -847,7 +1012,11 @@ mod tests {
     fn batch_chunk_size_decision_table() {
         assert_eq!(batch_chunk_size(0, 7), 7, "0 means no limit");
         assert_eq!(batch_chunk_size(3, 7), 3, "explicit size wins");
-        assert_eq!(batch_chunk_size(3, 2), 3, "size larger than group is harmless");
+        assert_eq!(
+            batch_chunk_size(3, 2),
+            3,
+            "size larger than group is harmless"
+        );
     }
 
     /// `chunks(0)` panics; the sizing function must never return 0 even for
@@ -864,9 +1033,18 @@ mod tests {
     #[test]
     fn should_batch_requires_all_conditions() {
         assert!(should_batch(true, true, 2));
-        assert!(!should_batch(true, true, 1), "one rebuilding item is not a batch");
+        assert!(
+            !should_batch(true, true, 1),
+            "one rebuilding item is not a batch"
+        );
         assert!(!should_batch(true, true, 0));
-        assert!(!should_batch(true, false, 5), "processor must support batching");
-        assert!(!should_batch(false, true, 5), "batch_size None disables batching entirely");
+        assert!(
+            !should_batch(true, false, 5),
+            "processor must support batching"
+        );
+        assert!(
+            !should_batch(false, true, 5),
+            "batch_size None disables batching entirely"
+        );
     }
 }

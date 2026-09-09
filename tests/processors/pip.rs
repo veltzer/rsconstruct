@@ -1,6 +1,6 @@
+use crate::common::{require_tool, run_rsconstruct_with_env};
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsconstruct_with_env, require_tool};
 
 #[test]
 fn pip_valid_project() {
@@ -16,11 +16,7 @@ fn pip_valid_project() {
     .unwrap();
 
     // Empty requirements file — pip install succeeds with nothing to install
-    fs::write(
-        project_path.join("requirements.txt"),
-        "# no dependencies\n",
-    )
-    .unwrap();
+    fs::write(project_path.join("requirements.txt"), "# no dependencies\n").unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
@@ -51,18 +47,15 @@ fn pip_incremental_skip() {
     )
     .unwrap();
 
-    fs::write(
-        project_path.join("requirements.txt"),
-        "# no dependencies\n",
-    )
-    .unwrap();
+    fs::write(project_path.join("requirements.txt"), "# no dependencies\n").unwrap();
 
     // First build
     let output1 = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
 
     // Second build should skip
-    let output2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(

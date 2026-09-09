@@ -1,7 +1,7 @@
-use std::fs;
-use tempfile::TempDir;
 use crate::common::run_rsconstruct_with_env;
+use std::fs;
 use std::os::unix::fs::PermissionsExt;
+use tempfile::TempDir;
 
 #[test]
 fn script_valid_file() {
@@ -20,11 +20,7 @@ fn script_valid_file() {
     )
     .unwrap();
 
-    fs::write(
-        project_path.join("test.txt"),
-        "hello world\n",
-    )
-    .unwrap();
+    fs::write(project_path.join("test.txt"), "hello world\n").unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
@@ -58,18 +54,15 @@ fn script_incremental_skip() {
     )
     .unwrap();
 
-    fs::write(
-        project_path.join("test.txt"),
-        "hello world\n",
-    )
-    .unwrap();
+    fs::write(project_path.join("test.txt"), "hello world\n").unwrap();
 
     // First build
     let output1 = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
 
     // Second build should skip
-    let output2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
@@ -95,11 +88,7 @@ fn script_misspelled_linter_fails_immediately() {
     )
     .unwrap();
 
-    fs::write(
-        project_path.join("test.txt"),
-        "hello world\n",
-    )
-    .unwrap();
+    fs::write(project_path.join("test.txt"), "hello world\n").unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(
@@ -108,7 +97,11 @@ fn script_misspelled_linter_fails_immediately() {
     );
 
     let exit_code = output.status.code().unwrap();
-    assert_eq!(exit_code, 3, "Expected exit code 3 (TOOL_ERROR), got {}", exit_code);
+    assert_eq!(
+        exit_code, 3,
+        "Expected exit code 3 (TOOL_ERROR), got {}",
+        exit_code
+    );
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -207,7 +200,8 @@ fn script_rebuilds_when_command_file_changes() {
     assert!(out1.status.success(), "First build should succeed");
 
     // Second build: unchanged — should skip
-    let out2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let out2 =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(out2.status.success());
     assert!(
         String::from_utf8_lossy(&out2.stdout).contains("Skipping"),
@@ -219,7 +213,8 @@ fn script_rebuilds_when_command_file_changes() {
     fs::write(&script_path, "#!/bin/bash\nexit 0\n# changed\n").unwrap();
 
     // Third build: command changed — must rebuild
-    let out3 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let out3 =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(out3.status.success());
     let stdout3 = String::from_utf8_lossy(&out3.stdout);
     assert!(
@@ -286,7 +281,10 @@ fn command_timeout_kills_an_overrunning_command_when_set() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(!output.status.success(), "the overrunning command must fail the build: {combined}");
+    assert!(
+        !output.status.success(),
+        "the overrunning command must fail the build: {combined}"
+    );
     assert!(
         combined.contains("Command timed out after 1s and was killed"),
         "failure must name the timeout: {combined}"

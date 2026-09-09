@@ -42,4 +42,3 @@ pub fn bold(text: &str) -> Cow<'_, str> {
 pub fn dim(text: &str) -> Cow<'_, str> {
     wrap("2", text)
 }
-

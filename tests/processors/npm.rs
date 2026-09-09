@@ -1,6 +1,6 @@
+use crate::common::{require_tool, run_rsconstruct_with_env};
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsconstruct_with_env, require_tool};
 
 #[test]
 fn npm_valid_project() {
@@ -55,7 +55,11 @@ fn npm_incremental_skip() {
     .unwrap();
 
     // Ignore node_modules and package-lock.json (created by npm install)
-    fs::write(project_path.join(".rsconstructignore"), "node_modules/\npackage-lock.json\n").unwrap();
+    fs::write(
+        project_path.join(".rsconstructignore"),
+        "node_modules/\npackage-lock.json\n",
+    )
+    .unwrap();
 
     fs::write(
         project_path.join("package.json"),
@@ -68,7 +72,8 @@ fn npm_incremental_skip() {
     assert!(output1.status.success());
 
     // Second build should skip
-    let output2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(

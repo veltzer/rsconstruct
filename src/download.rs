@@ -36,11 +36,14 @@ const CONNECT_TIMEOUT_SECS: &str = "30";
 /// handshake (curl exit 35) is not in that set by default.
 const fn retry_args() -> [&'static str; 8] {
     [
-        "--retry", RETRY_ATTEMPTS,
-        "--retry-delay", RETRY_DELAY_SECS,
+        "--retry",
+        RETRY_ATTEMPTS,
+        "--retry-delay",
+        RETRY_DELAY_SECS,
         "--retry-connrefused",
         "--retry-all-errors",
-        "--connect-timeout", CONNECT_TIMEOUT_SECS,
+        "--connect-timeout",
+        CONNECT_TIMEOUT_SECS,
     ]
 }
 

@@ -1,6 +1,6 @@
+use crate::common::{require_tool, run_rsconstruct_with_env};
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsconstruct_with_env, require_tool};
 
 #[test]
 fn sphinx_valid_project() {

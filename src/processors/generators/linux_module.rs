@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{Processor, run_command, check_command_output, anchor_display_dir};
+use crate::processors::{Processor, anchor_display_dir, check_command_output, run_command};
 
 /// A single kernel module definition inside linux-module.yaml.
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -54,8 +54,7 @@ const fn default_linux_module_w() -> u32 {
 
 /// Linux module config. No custom fields.
 /// Unused `StandardConfig` fields: command, formats, `output_dir`, args.
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[derive(Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct LinuxModuleConfig {
     #[serde(flatten)]
     pub standard: StandardConfig,
@@ -67,16 +66,14 @@ pub struct LinuxModuleProcessor {
 
 impl LinuxModuleProcessor {
     pub const fn new(config: LinuxModuleConfig) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 
     /// Parse a linux-module.yaml file.
     fn parse_manifest(yaml_path: &Path) -> Result<LinuxModuleManifest> {
         let content = fs::read_to_string(yaml_path)
             .with_context(|| format!("Failed to read {}", yaml_path.display()))?;
-        let manifest: LinuxModuleManifest = serde_yml::from_str(&content)
+        let manifest: LinuxModuleManifest = serde_yaml_ng::from_str(&content)
             .with_context(|| format!("Failed to parse {}", yaml_path.display()))?;
         Ok(manifest)
     }
@@ -114,7 +111,9 @@ impl LinuxModuleProcessor {
     fn write_kbuild(module_dir: &Path, module: &LinuxModuleModuleDef) -> Result<()> {
         let mut content = format!("obj-m := {}.o\n", module.name);
 
-        let objs: Vec<String> = module.sources.iter()
+        let objs: Vec<String> = module
+            .sources
+            .iter()
             .map(|s| {
                 let p = Path::new(s);
                 let stem = p.file_stem().unwrap_or_default().to_string_lossy();
@@ -133,7 +132,13 @@ impl LinuxModuleProcessor {
     }
 
     /// Build a single kernel module. Runs make in the module's source directory.
-    fn build_module(ctx: &crate::build_context::BuildContext, manifest: &LinuxModuleManifest, anchor_dir: &Path, module: &LinuxModuleModuleDef, output_dir: &Path) -> Result<()> {
+    fn build_module(
+        ctx: &crate::build_context::BuildContext,
+        manifest: &LinuxModuleManifest,
+        anchor_dir: &Path,
+        module: &LinuxModuleModuleDef,
+        output_dir: &Path,
+    ) -> Result<()> {
         let cwd = std::env::current_dir()
             .context("Failed to get current directory for linux module build")?;
         let module_dir = if anchor_dir.as_os_str().is_empty() {
@@ -181,7 +186,9 @@ impl LinuxModuleProcessor {
             "make reported success but did not produce {} (check the module name in linux-module.yaml): {}",
             ko_src.display(), e
         ))?;
-        let ko_mode = fs::metadata(&ko_src).ok().map(|m| crate::platform::get_mode(&m));
+        let ko_mode = fs::metadata(&ko_src)
+            .ok()
+            .map(|m| crate::platform::get_mode(&m));
 
         // Clean up build artifacts from the source directory. Failures leave
         // the source tree polluted — report them. This may delete the source
@@ -199,15 +206,25 @@ impl LinuxModuleProcessor {
         clean_cmd.arg("clean");
         clean_cmd.current_dir(&module_dir);
         let clean_output = run_command(ctx, &clean_cmd)?;
-        check_command_output(&clean_output, format_args!("make clean for {}", module.name))?;
+        check_command_output(
+            &clean_output,
+            format_args!("make clean for {}", module.name),
+        )?;
 
         // Remove the Kbuild we generated
-        fs::remove_file(module_dir.join("Kbuild"))
-            .with_context(|| format!("Failed to remove generated Kbuild in {}", module_dir.display()))?;
+        fs::remove_file(module_dir.join("Kbuild")).with_context(|| {
+            format!(
+                "Failed to remove generated Kbuild in {}",
+                module_dir.display()
+            )
+        })?;
 
         // Write the captured .ko to the output directory, after clean, so it
         // cannot be swept away by the clean above.
-        crate::errors::ctx(fs::create_dir_all(output_dir), &format!("Failed to create output dir: {}", output_dir.display()))?;
+        crate::errors::ctx(
+            fs::create_dir_all(output_dir),
+            &format!("Failed to create output dir: {}", output_dir.display()),
+        )?;
         let ko_dst = output_dir.join(&ko_name);
         fs::write(&ko_dst, &ko_bytes)
             .with_context(|| format!("Failed to write {ko_name} to output"))?;
@@ -220,7 +237,11 @@ impl LinuxModuleProcessor {
     }
 
     /// Execute a full linux-module.yaml build.
-    fn execute_build(&self, ctx: &crate::build_context::BuildContext, yaml_path: &Path) -> Result<()> {
+    fn execute_build(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        yaml_path: &Path,
+    ) -> Result<()> {
         let manifest = Self::parse_manifest(yaml_path)?;
         let anchor_dir = crate::processors::parent_dir_or_empty(yaml_path);
         let output_dir = Self::output_dir_for(yaml_path);
@@ -238,7 +259,6 @@ impl Processor for LinuxModuleProcessor {
         &self.config.standard
     }
 
-
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
     }
@@ -255,11 +275,19 @@ impl Processor for LinuxModuleProcessor {
         vec!["make".to_string(), "uname".to_string()]
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let Some(files) = crate::processors::scan_or_skip(&self.config.standard, file_index) else {
             return Ok(());
         };
-        let hash = Some(output_config_hash(&self.config, &crate::config::checksum_fields_of(instance_name)));
+        let hash = Some(output_config_hash(
+            &self.config,
+            &crate::config::checksum_fields_of(instance_name),
+        ));
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
         for yaml_path in files {
@@ -298,7 +326,6 @@ impl Processor for LinuxModuleProcessor {
         self.execute_build(ctx, yaml_path)
             .with_context(|| format!("linux_module build failed in {display_dir}"))
     }
-
 }
 
 fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {

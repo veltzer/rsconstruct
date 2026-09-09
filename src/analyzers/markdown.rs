@@ -27,13 +27,19 @@ pub struct MarkdownDepAnalyzer {
 
 impl MarkdownDepAnalyzer {
     pub fn new(iname: &str, config: MarkdownAnalyzerConfig) -> Self {
-        Self { iname: iname.to_string(), config }
+        Self {
+            iname: iname.to_string(),
+            config,
+        }
     }
 
     /// Scan a Markdown file for local file references.
     /// Returns paths to local files referenced via `![alt](path)` or `[text](path)` syntax.
     fn scan_references(&self, source: &Path) -> Result<Vec<PathBuf>> {
-        let content = crate::errors::ctx(fs::read_to_string(source), &format!("Failed to read markdown: {}", source.display()))?;
+        let content = crate::errors::ctx(
+            fs::read_to_string(source),
+            &format!("Failed to read markdown: {}", source.display()),
+        )?;
         let mut refs = Vec::new();
         let mut seen = HashSet::new();
 
@@ -70,10 +76,7 @@ impl MarkdownDepAnalyzer {
 
             // Try resolving relative to the source file's directory first,
             // then relative to the project root (cwd)
-            let candidates = [
-                source_dir.join(path_str),
-                PathBuf::from(path_str),
-            ];
+            let candidates = [source_dir.join(path_str), PathBuf::from(path_str)];
             for candidate in &candidates {
                 if candidate.is_file() && !seen.contains(candidate) {
                     seen.insert(candidate.clone());
@@ -106,7 +109,11 @@ impl DepAnalyzer for MarkdownDepAnalyzer {
         }
         let source = &p.inputs[0];
         let ext = source.extension().and_then(|s| s.to_str()).unwrap_or("");
-        if ext == "md" { Some(source.clone()) } else { None }
+        if ext == "md" {
+            Some(source.clone())
+        } else {
+            None
+        }
     }
 
     fn analyze(

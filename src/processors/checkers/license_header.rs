@@ -6,8 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::config::StandardConfig;
 use crate::graph::Product;
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[derive(Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct LicenseHeaderConfig {
     #[serde(default)]
     pub header_lines: Vec<String>,
@@ -35,7 +34,10 @@ impl LicenseHeaderProcessor {
         let mut errors = Vec::new();
 
         for &file in files {
-            let content = crate::errors::ctx(std::fs::read_to_string(file), &format!("Failed to read {}", file.display()))?;
+            let content = crate::errors::ctx(
+                std::fs::read_to_string(file),
+                &format!("Failed to read {}", file.display()),
+            )?;
             let mut lines = content.lines();
 
             // Skip shebang line if present
@@ -101,8 +103,11 @@ impl crate::processors::Processor for LicenseHeaderProcessor {
         instance_name: &str,
     ) -> anyhow::Result<()> {
         crate::processors::discover_checker_products(
-            graph, &self.config.standard, file_index,
-            &self.config.standard.dep_inputs, &self.config.standard.dep_auto,
+            graph,
+            &self.config.standard,
+            file_index,
+            &self.config.standard.dep_inputs,
+            &self.config.standard.dep_auto,
             &self.config,
             &crate::config::checksum_fields_of(instance_name),
             instance_name,
@@ -113,13 +118,21 @@ impl crate::processors::Processor for LicenseHeaderProcessor {
         self.execute_product(product)
     }
 
-    fn execute_batch(&self, _ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
-        crate::processors::execute_checker_batch_per_file(products, |file| self.check_files(&[file]))
+    fn execute_batch(
+        &self,
+        _ctx: &crate::build_context::BuildContext,
+        products: &[&Product],
+    ) -> Vec<Result<()>> {
+        crate::processors::execute_checker_batch_per_file(products, |file| {
+            self.check_files(&[file])
+        })
     }
 }
 
 fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registries::deserialize_and_create(toml, |cfg| Box::new(LicenseHeaderProcessor::new(cfg)))
+    crate::registries::deserialize_and_create(toml, |cfg| {
+        Box::new(LicenseHeaderProcessor::new(cfg))
+    })
 }
 inventory::submit! {
     crate::registries::ProcessorPlugin {

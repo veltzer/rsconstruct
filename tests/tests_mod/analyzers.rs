@@ -1,6 +1,6 @@
+use crate::common::run_rsconstruct_with_env;
 use std::fs;
 use tempfile::TempDir;
-use crate::common::run_rsconstruct_with_env;
 
 /// `enabled = false` on an analyzer stanza must keep it out of the active set —
 /// `analyzers used` is the public surface for this and should omit disabled analyzers.
@@ -22,11 +22,8 @@ enabled = false
 
     fs::write(project_path.join("doc.md"), "# hi\n").unwrap();
 
-    let output = run_rsconstruct_with_env(
-        project_path,
-        &["analyzers", "used"],
-        &[("NO_COLOR", "1")],
-    );
+    let output =
+        run_rsconstruct_with_env(project_path, &["analyzers", "used"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
@@ -56,11 +53,8 @@ enabled = true
 
     fs::write(project_path.join("doc.md"), "# hi\n").unwrap();
 
-    let output = run_rsconstruct_with_env(
-        project_path,
-        &["analyzers", "used"],
-        &[("NO_COLOR", "1")],
-    );
+    let output =
+        run_rsconstruct_with_env(project_path, &["analyzers", "used"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
@@ -87,12 +81,11 @@ src_dirs = ["."]
     )
     .unwrap();
 
-    let output = run_rsconstruct_with_env(
-        project_path,
-        &["toml", "check"],
-        &[("NO_COLOR", "1")],
+    let output = run_rsconstruct_with_env(project_path, &["toml", "check"], &[("NO_COLOR", "1")]);
+    assert!(
+        !output.status.success(),
+        "Config with unknown analyzer must fail validation"
     );
-    assert!(!output.status.success(), "Config with unknown analyzer must fail validation");
     let combined = format!(
         "{}{}",
         String::from_utf8_lossy(&output.stdout),
@@ -100,7 +93,8 @@ src_dirs = ["."]
     );
     assert!(
         combined.contains("not_a_real_analyzer") && combined.contains("unknown analyzer"),
-        "Error should name the unknown analyzer: {}", combined
+        "Error should name the unknown analyzer: {}",
+        combined
     );
 }
 
@@ -122,12 +116,11 @@ enabeld = false
     )
     .unwrap();
 
-    let output = run_rsconstruct_with_env(
-        project_path,
-        &["toml", "check"],
-        &[("NO_COLOR", "1")],
+    let output = run_rsconstruct_with_env(project_path, &["toml", "check"], &[("NO_COLOR", "1")]);
+    assert!(
+        !output.status.success(),
+        "Config with unknown analyzer field must fail validation"
     );
-    assert!(!output.status.success(), "Config with unknown analyzer field must fail validation");
     let combined = format!(
         "{}{}",
         String::from_utf8_lossy(&output.stdout),
@@ -135,11 +128,13 @@ enabeld = false
     );
     assert!(
         combined.contains("enabeld") && combined.contains("unknown field"),
-        "Error should name the typo field: {}", combined
+        "Error should name the typo field: {}",
+        combined
     );
     assert!(
         combined.contains("enabled"),
-        "Error should list valid fields to help fix the typo: {}", combined
+        "Error should list valid fields to help fix the typo: {}",
+        combined
     );
 }
 
@@ -162,11 +157,8 @@ src_dirs = ["."]
 
     fs::write(project_path.join("doc.md"), "# hi\n").unwrap();
 
-    let output = run_rsconstruct_with_env(
-        project_path,
-        &["analyzers", "used"],
-        &[("NO_COLOR", "1")],
-    );
+    let output =
+        run_rsconstruct_with_env(project_path, &["analyzers", "used"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
@@ -198,7 +190,11 @@ src_dirs = ["."]
 
     // Three markdown files with image refs so the analyzer has real work.
     for i in 1..=3 {
-        fs::write(project_path.join(format!("doc{i}.md")), format!("# Doc {i}\n![img](pic{i}.png)\n")).unwrap();
+        fs::write(
+            project_path.join(format!("doc{i}.md")),
+            format!("# Doc {i}\n![img](pic{i}.png)\n"),
+        )
+        .unwrap();
         fs::write(project_path.join(format!("pic{i}.png")), []).unwrap();
     }
 
@@ -207,16 +203,29 @@ src_dirs = ["."]
     // quirk where the very first call against a fresh DB doesn't register
     // as a miss (returns None without incrementing the counter).
     let out1 = run_rsconstruct_with_env(project_path, &["status"], &[("NO_COLOR", "1")]);
-    assert!(out1.status.success(), "first status failed: {}", String::from_utf8_lossy(&out1.stderr));
+    assert!(
+        out1.status.success(),
+        "first status failed: {}",
+        String::from_utf8_lossy(&out1.stderr)
+    );
 
     // Second run with unchanged files: every file should hit the cache.
     let out2 = run_rsconstruct_with_env(project_path, &["status"], &[("NO_COLOR", "1")]);
-    assert!(out2.status.success(), "second status failed: {}", String::from_utf8_lossy(&out2.stderr));
-    let combined = format!("{}{}", String::from_utf8_lossy(&out2.stdout), String::from_utf8_lossy(&out2.stderr));
+    assert!(
+        out2.status.success(),
+        "second status failed: {}",
+        String::from_utf8_lossy(&out2.stderr)
+    );
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out2.stdout),
+        String::from_utf8_lossy(&out2.stderr)
+    );
     assert!(
         combined.contains("[deps] 3 files to check")
             && combined.contains("[deps] summary: 0 rescanned (3 cache hits:"),
-        "unchanged files should all hit the cache: {}", combined
+        "unchanged files should all hit the cache: {}",
+        combined
     );
 }
 
@@ -240,7 +249,11 @@ src_dirs = ["."]
     .unwrap();
 
     for i in 1..=3 {
-        fs::write(project_path.join(format!("doc{i}.md")), format!("# Doc {i}\n![img](pic{i}.png)\n")).unwrap();
+        fs::write(
+            project_path.join(format!("doc{i}.md")),
+            format!("# Doc {i}\n![img](pic{i}.png)\n"),
+        )
+        .unwrap();
         fs::write(project_path.join(format!("pic{i}.png")), []).unwrap();
     }
 
@@ -257,11 +270,16 @@ src_dirs = ["."]
 
     let out = run_rsconstruct_with_env(project_path, &["status"], &[("NO_COLOR", "1")]);
     assert!(out.status.success());
-    let combined = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(
         combined.contains("[deps] 3 files to check")
             && combined.contains("[deps] summary: 1 rescanned (2 cache hits:"),
-        "modified file should trigger exactly one rescan: {}", combined
+        "modified file should trigger exactly one rescan: {}",
+        combined
     );
 }
 
@@ -305,15 +323,25 @@ src_dirs = ["."]
     // products), and the cache sees exactly 1 hit — the source was scanned
     // once and fanned out to all 3 products.
     let out = run_rsconstruct_with_env(project_path, &["status"], &[("NO_COLOR", "1")]);
-    assert!(out.status.success(), "second status failed: {}", String::from_utf8_lossy(&out.stderr));
-    let combined = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "second status failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(
         combined.contains("[deps] 1 files to check (consumed by 3 products)"),
-        "display should show unique-source count with per-product fan-out: {}", combined
+        "display should show unique-source count with per-product fan-out: {}",
+        combined
     );
     assert!(
         combined.contains("[deps] summary: 0 rescanned (1 cache hits:"),
         "shared source must be looked up in the cache exactly once, \
-         not once per consuming product: {}", combined
+         not once per consuming product: {}",
+        combined
     );
 }

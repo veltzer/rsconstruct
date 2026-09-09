@@ -72,7 +72,9 @@ pub struct CacheKey {
 impl CacheKey {
     /// An empty key — a product whose output depends on nothing but its inputs.
     pub const fn new() -> Self {
-        Self { components: Vec::new() }
+        Self {
+            components: Vec::new(),
+        }
     }
 
     /// Build a key from a single config hash, the common case at discovery time.
@@ -114,7 +116,9 @@ impl CacheKey {
         if self.components.is_empty() {
             return None;
         }
-        let parts: Vec<&str> = self.components.iter()
+        let parts: Vec<&str> = self
+            .components
+            .iter()
             .flat_map(|(c, v)| [c.tag(), v.as_str()])
             .collect();
         Some(crate::checksum::hash_parts(&parts))
@@ -132,7 +136,9 @@ impl CacheKey {
     /// for the bump rule. For processors not in the builtin registry (e.g. Lua
     /// plugins), `v0` is used.
     pub fn descriptor_key(&self, processor: &str, input_checksum: &str) -> String {
-        let version = crate::registries::processor_version(processor).unwrap_or(0).to_string();
+        let version = crate::registries::processor_version(processor)
+            .unwrap_or(0)
+            .to_string();
         // Length-prefixed parts (not separator-joined): the processor half is
         // a user-controlled instance name, so a name containing the separator
         // could otherwise realign the version/digest boundaries and collide
@@ -207,7 +213,8 @@ mod tests {
         assert_ne!(
             CacheKey::new().descriptor_key("p:v0:q", "r"),
             CacheKey::new().descriptor_key("p", "q:v0:r"),
-            "instance names must not be able to realign key boundaries");
+            "instance names must not be able to realign key boundaries"
+        );
     }
 
     #[test]
@@ -219,8 +226,11 @@ mod tests {
         let mut two = CacheKey::new();
         two.push(Component::Analyzer, "a");
         two.push(Component::Analyzer, "b");
-        assert_ne!(spliced.digest(), two.digest(),
-            "analyzer values must not be able to fake component boundaries");
+        assert_ne!(
+            spliced.digest(),
+            two.digest(),
+            "analyzer values must not be able to fake component boundaries"
+        );
     }
 
     #[test]

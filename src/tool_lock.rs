@@ -40,16 +40,21 @@ pub fn query_tool_version(
     tool_name: &str,
     version_args: &[String],
 ) -> Result<LockedTool> {
-    let path = which::which(tool_name)
-        .with_context(|| format!("Tool not found on PATH: {tool_name}"))?;
+    let path =
+        which::which(tool_name).with_context(|| format!("Tool not found on PATH: {tool_name}"))?;
 
     let mut cmd = Command::new(&path);
     for arg in version_args {
         cmd.arg(arg);
     }
 
-    let output = crate::processors::run_command_capture(ctx, &cmd)
-        .with_context(|| format!("Failed to run: {} {}", path.display(), version_args.join(" ")))?;
+    let output = crate::processors::run_command_capture(ctx, &cmd).with_context(|| {
+        format!(
+            "Failed to run: {} {}",
+            path.display(),
+            version_args.join(" ")
+        )
+    })?;
 
     // Some tools write version to stdout, others to stderr; capture both
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
@@ -131,11 +136,9 @@ pub fn create_lock(
 /// concurrent reader never observes a truncated lock file.
 pub fn write_lock_file(lock: &ToolLockFile) -> Result<()> {
     let path = Path::new(LOCK_FILE);
-    let json = serde_json::to_string_pretty(lock)
-        .context("Failed to serialize lock file")?;
+    let json = serde_json::to_string_pretty(lock).context("Failed to serialize lock file")?;
     let tmp = format!("{LOCK_FILE}.tmp-{}", std::process::id());
-    fs::write(&tmp, format!("{json}\n"))
-        .with_context(|| format!("Failed to write {tmp}"))?;
+    fs::write(&tmp, format!("{json}\n")).with_context(|| format!("Failed to write {tmp}"))?;
     fs::rename(&tmp, path)
         .with_context(|| format!("Failed to move {tmp} into place as {}", path.display()))?;
     Ok(())
@@ -147,8 +150,8 @@ pub fn read_lock_file() -> Result<Option<ToolLockFile>> {
     if !path.exists() {
         return Ok(None);
     }
-    let content = fs::read_to_string(path)
-        .with_context(|| format!("Failed to read {}", path.display()))?;
+    let content =
+        fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
     let lock: ToolLockFile = serde_json::from_str(&content)
         .with_context(|| format!("Failed to parse {}", path.display()))?;
     Ok(Some(lock))
@@ -189,11 +192,14 @@ fn tool_identity(_ctx: &BuildContext, tool: &str, lock: Option<&ToolLockFile>) -
             // hole this mechanism exists to close. Surface it.
             crate::output::warn(&format!(
                 "Cannot stat tool '{tool}' at {}: {e} — excluding it from cache keys",
-                path.display()));
+                path.display()
+            ));
             return None;
         }
     };
-    let mtime = meta.modified().ok()
+    let mtime = meta
+        .modified()
+        .ok()
         .and_then(|m| m.duration_since(std::time::UNIX_EPOCH).ok())
         .map_or(0, |d| d.as_nanos());
     Some(format!("{tool}@{}:{}:{mtime}", path.display(), meta.len()))
@@ -256,7 +262,9 @@ pub fn processor_tool_hashes(
         .collect();
 
     for name in names {
-        let Some(tools) = wanted.get(name) else { continue };
+        let Some(tools) = wanted.get(name) else {
+            continue;
+        };
 
         let mut version_parts: Vec<String> = Vec::new();
         for tool in tools {
@@ -281,10 +289,7 @@ pub fn processor_tool_hashes(
 /// Returns Ok(()) if everything matches, or an error describing mismatches.
 /// Errors if the lock file does not exist — callers must run `rsconstruct
 /// tools lock` to create one.
-pub fn verify_lock_file(
-    ctx: &BuildContext,
-    tool_commands: &[(String, Vec<String>)],
-) -> Result<()> {
+pub fn verify_lock_file(ctx: &BuildContext, tool_commands: &[(String, Vec<String>)]) -> Result<()> {
     let Some(lock) = read_lock_file()? else {
         anyhow::bail!("No {LOCK_FILE} found. Run `rsconstruct tools lock` to create one.");
     };
@@ -331,8 +336,12 @@ pub fn verify_lock_file(
     if !mismatches.is_empty() {
         return Err(crate::exit_code::RsconstructError::new(
             crate::exit_code::RsconstructExitCode::ToolError,
-            format!("Tool version mismatch (run 'rsconstruct tools lock' to update):\n{}", mismatches.join("\n")),
-        ).into());
+            format!(
+                "Tool version mismatch (run 'rsconstruct tools lock' to update):\n{}",
+                mismatches.join("\n")
+            ),
+        )
+        .into());
     }
 
     Ok(())

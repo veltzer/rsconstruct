@@ -5,7 +5,6 @@
 //! This is the data and the mechanics of "what tools exist and how do we
 //! install them", which `builder/tools.rs` orchestrates on top of.
 
-
 /// Central registry of all known external tools — single source of truth for
 /// runtime category and install command. Both `tool_install_command()` and
 /// `tool_runtime()` (in `builder/tools.rs`) look up data from this table.
@@ -39,7 +38,10 @@ impl InstallMethod {
     /// multi-step installs (binary fetches), but adequate for `tools list`.
     pub fn command(&self) -> String {
         let steps = describe(self.method, &[self.package]);
-        steps.first().map_or_else(|| format!("({}) {}", self.method, self.package), |argv| join_argv(argv))
+        steps.first().map_or_else(
+            || format!("({}) {}", self.method, self.package),
+            |argv| join_argv(argv),
+        )
     }
 }
 
@@ -47,12 +49,13 @@ impl InstallMethod {
 /// without executing them. Used for logs and previews.
 pub fn describe(method: &str, packages: &[&str]) -> Vec<Vec<String>> {
     let sudo = sudo_argv();
-    let strs = |parts: &[&str]| -> Vec<String> {
-        parts.iter().map(|s| (*s).to_string()).collect()
-    };
+    let strs = |parts: &[&str]| -> Vec<String> { parts.iter().map(|s| (*s).to_string()).collect() };
     let prefix = |head: &[&str], tail: &[&str]| -> Vec<String> {
-        sudo.iter().chain(head.iter()).chain(tail.iter())
-            .map(|s| (*s).to_string()).collect()
+        sudo.iter()
+            .chain(head.iter())
+            .chain(tail.iter())
+            .map(|s| (*s).to_string())
+            .collect()
     };
     match method {
         "apt" => {
@@ -84,16 +87,38 @@ pub fn describe(method: &str, packages: &[&str]) -> Vec<Vec<String>> {
             argv.extend(packages.iter().map(|s| (*s).to_string()));
             vec![argv]
         }
-        "pip"   => vec![{ let mut a = strs(&["pip", "install"]); a.extend(packages.iter().map(|s| (*s).to_string())); a }],
-        "uv"    => vec![{ let mut a = uv_pip_install_argv(); a.extend(packages.iter().map(|s| (*s).to_string())); a }],
-        "npm"   => vec![{ let mut a = strs(&["npm", "install", "-g"]); a.extend(packages.iter().map(|s| (*s).to_string())); a }],
-        "cargo" => vec![{ let mut a = strs(&["cargo", "install"]); a.extend(packages.iter().map(|s| (*s).to_string())); a }],
-        "gem"   => vec![{ let mut a = gem_install_argv(); a.extend(packages.iter().map(|s| (*s).to_string())); a }],
+        "pip" => vec![{
+            let mut a = strs(&["pip", "install"]);
+            a.extend(packages.iter().map(|s| (*s).to_string()));
+            a
+        }],
+        "uv" => vec![{
+            let mut a = uv_pip_install_argv();
+            a.extend(packages.iter().map(|s| (*s).to_string()));
+            a
+        }],
+        "npm" => vec![{
+            let mut a = strs(&["npm", "install", "-g"]);
+            a.extend(packages.iter().map(|s| (*s).to_string()));
+            a
+        }],
+        "cargo" => vec![{
+            let mut a = strs(&["cargo", "install"]);
+            a.extend(packages.iter().map(|s| (*s).to_string()));
+            a
+        }],
+        "gem" => vec![{
+            let mut a = gem_install_argv();
+            a.extend(packages.iter().map(|s| (*s).to_string()));
+            a
+        }],
         "binary" => packages.iter().flat_map(|p| describe_binary(p)).collect(),
-        "manual" => packages.iter()
+        "manual" => packages
+            .iter()
             .map(|p| vec!["# manual:".to_string(), (*p).to_string()])
             .collect(),
-        _ => packages.iter()
+        _ => packages
+            .iter()
             .map(|p| vec![format!("# unknown method '{}':", method), (*p).to_string()])
             .collect(),
     }
@@ -118,13 +143,17 @@ pub fn run(method: &str, packages: &[&str], ctx: &InstallCtx) -> anyhow::Result<
         // password prompt. This is one of the two documented exceptions to
         // the "everything goes through the central runner" rule (see
         // docs/src/internal/architecture.md).
-        let status = Command::new(&argv[0]).args(&argv[1..]).status()
+        let status = Command::new(&argv[0])
+            .args(&argv[1..])
+            .status()
             .with_context(|| format!("failed to spawn: {}", join_argv(argv)))?;
         if !status.success() {
             anyhow::bail!(
                 "{} exited with code {}",
                 join_argv(argv),
-                status.code().map_or_else(|| "unknown".to_string(), |c| c.to_string())
+                status
+                    .code()
+                    .map_or_else(|| "unknown".to_string(), |c| c.to_string())
             );
         }
         Ok(())
@@ -170,8 +199,11 @@ pub fn run(method: &str, packages: &[&str], ctx: &InstallCtx) -> anyhow::Result<
         }
         "snap" => {
             // snap doesn't need eatmydata.
-            let mut argv: Vec<String> = sudo.iter().chain(["snap", "install"].iter())
-                .map(|s| (*s).to_string()).collect();
+            let mut argv: Vec<String> = sudo
+                .iter()
+                .chain(["snap", "install"].iter())
+                .map(|s| (*s).to_string())
+                .collect();
             argv.extend(packages.iter().map(|s| (*s).to_string()));
             exec(&argv)
         }
@@ -213,14 +245,19 @@ pub fn run(method: &str, packages: &[&str], ctx: &InstallCtx) -> anyhow::Result<
         }
         "manual" => anyhow::bail!(
             "method '{}' is manual-only — install these packages by hand: {}",
-            method, packages.join(", ")
+            method,
+            packages.join(", ")
         ),
         other => anyhow::bail!("unknown install method '{other}'"),
     }
 }
 
 fn sudo_argv() -> &'static [&'static str] {
-    if crate::platform::needs_sudo() { &["sudo"] } else { &[] }
+    if crate::platform::needs_sudo() {
+        &["sudo"]
+    } else {
+        &[]
+    }
 }
 
 /// The argv prefix for installing gems. Appends `--user-install` when a
@@ -271,7 +308,9 @@ fn uv_pip_install_argv() -> Vec<String> {
 /// out so both branches are unit-testable regardless of the host's python3.
 fn uv_pip_install_argv_for(in_venv: bool, user_prefix: Option<&str>) -> Vec<String> {
     let mut argv: Vec<String> = ["uv", "pip", "install", "--python", "python3"]
-        .iter().map(|s| (*s).to_string()).collect();
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect();
     if !in_venv {
         argv.push("--system".to_string());
     }
@@ -296,32 +335,43 @@ struct PythonProbe {
 
 fn python_probe() -> PythonProbe {
     static PROBE: std::sync::OnceLock<PythonProbe> = std::sync::OnceLock::new();
-    PROBE.get_or_init(|| {
-        let Ok(out) = std::process::Command::new("python3")
-            .args(["-c", "import sys, sysconfig, site; \
+    PROBE
+        .get_or_init(|| {
+            let Ok(out) = std::process::Command::new("python3")
+                .args([
+                    "-c",
+                    "import sys, sysconfig, site; \
                     print(int(sys.prefix != sys.base_prefix)); \
                     print(sysconfig.get_path('purelib')); \
-                    print(site.getuserbase())"])
-            .output() else {
-            return PythonProbe::default();
-        };
-        if !out.status.success() {
-            return PythonProbe::default();
-        }
-        let stdout = String::from_utf8_lossy(&out.stdout);
-        let mut lines = stdout.lines();
-        let in_venv = lines.next().is_some_and(|l| l == "1");
-        let purelib = lines.next().map_or("", str::trim);
-        let user_base = lines.next().map_or("", str::trim);
-        let user_prefix = if in_venv || purelib.is_empty() || user_base.is_empty()
-            || nearest_existing_ancestor_is_writable(std::path::Path::new(purelib))
-        {
-            None
-        } else {
-            Some(user_base.to_string())
-        };
-        PythonProbe { in_venv, user_prefix }
-    }).clone()
+                    print(site.getuserbase())",
+                ])
+                .output()
+            else {
+                return PythonProbe::default();
+            };
+            if !out.status.success() {
+                return PythonProbe::default();
+            }
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let mut lines = stdout.lines();
+            let in_venv = lines.next().is_some_and(|l| l == "1");
+            let purelib = lines.next().map_or("", str::trim);
+            let user_base = lines.next().map_or("", str::trim);
+            let user_prefix = if in_venv
+                || purelib.is_empty()
+                || user_base.is_empty()
+                || nearest_existing_ancestor_is_writable(std::path::Path::new(purelib))
+            {
+                None
+            } else {
+                Some(user_base.to_string())
+            };
+            PythonProbe {
+                in_venv,
+                user_prefix,
+            }
+        })
+        .clone()
 }
 
 /// Whether the default gem dir is unwritable for the current user (never
@@ -334,7 +384,10 @@ fn gem_needs_user_install() -> bool {
         if crate::platform::is_root() {
             return false;
         }
-        let Ok(out) = std::process::Command::new("gem").args(["env", "gemdir"]).output() else {
+        let Ok(out) = std::process::Command::new("gem")
+            .args(["env", "gemdir"])
+            .output()
+        else {
             return false;
         };
         if !out.status.success() {
@@ -375,7 +428,9 @@ fn nearest_existing_ancestor_is_writable(path: &std::path::Path) -> bool {
 /// Called once at the top of `main()`, before any thread exists — the
 /// safety condition of `platform::set_env`.
 pub fn augment_path_with_user_gem_bins() {
-    let Some(home) = std::env::var_os("HOME") else { return };
+    let Some(home) = std::env::var_os("HOME") else {
+        return;
+    };
     let gem_home = std::env::var_os("GEM_HOME");
     let dirs = user_gem_bin_dirs(std::path::Path::new(&home), gem_home.as_deref());
     if dirs.is_empty() {
@@ -393,7 +448,10 @@ pub fn augment_path_with_user_gem_bins() {
 /// `~/.local/share/gem/ruby/<version>/bin` (the Debian/Ubuntu XDG patch).
 /// Only dirs that exist are returned; globbing the layouts costs two
 /// readdirs and avoids spawning ruby at every startup.
-fn user_gem_bin_dirs(home: &std::path::Path, gem_home: Option<&std::ffi::OsStr>) -> Vec<std::path::PathBuf> {
+fn user_gem_bin_dirs(
+    home: &std::path::Path,
+    gem_home: Option<&std::ffi::OsStr>,
+) -> Vec<std::path::PathBuf> {
     let mut dirs = Vec::new();
     if let Some(gem_home) = gem_home {
         let bin = std::path::Path::new(gem_home).join("bin");
@@ -402,7 +460,9 @@ fn user_gem_bin_dirs(home: &std::path::Path, gem_home: Option<&std::ffi::OsStr>)
         }
     }
     for base in [home.join(".gem/ruby"), home.join(".local/share/gem/ruby")] {
-        let Ok(entries) = std::fs::read_dir(&base) else { continue };
+        let Ok(entries) = std::fs::read_dir(&base) else {
+            continue;
+        };
         let mut versions: Vec<std::path::PathBuf> = entries
             .flatten()
             .map(|e| e.path().join("bin"))
@@ -417,9 +477,13 @@ fn user_gem_bin_dirs(home: &std::path::Path, gem_home: Option<&std::ffi::OsStr>)
 /// `path` with the dirs not already on it appended, or None when every dir
 /// is already present. Append rather than prepend: a system-installed tool
 /// keeps winning over a user gem of the same name.
-fn path_with_appended_dirs(path: &std::ffi::OsStr, dirs: &[std::path::PathBuf]) -> Option<std::ffi::OsString> {
+fn path_with_appended_dirs(
+    path: &std::ffi::OsStr,
+    dirs: &[std::path::PathBuf],
+) -> Option<std::ffi::OsString> {
     let existing: Vec<std::path::PathBuf> = std::env::split_paths(path).collect();
-    let missing: Vec<std::path::PathBuf> = dirs.iter()
+    let missing: Vec<std::path::PathBuf> = dirs
+        .iter()
         .filter(|d| !existing.contains(d))
         .cloned()
         .collect();
@@ -442,12 +506,21 @@ fn describe_binary(pkg: &str) -> Vec<Vec<String>> {
         // A .deb goes through apt, not the download/chmod/mv shape below: the
         // asset URL is resolved from the latest release at install time, so
         // it can only be described generically here.
-        Some(BinaryRecipe { archive: ArchiveKind::Deb { source }, dest, .. }) => {
+        Some(BinaryRecipe {
+            archive: ArchiveKind::Deb { source },
+            dest,
+            ..
+        }) => {
             let sudo = sudo_argv();
             let deb = format!("/tmp/{dest}.deb");
             let (note, url) = match source {
-                DebSource::GithubRelease { repo, asset_pattern } => (
-                    Some(format!("# resolve latest '{asset_pattern}' .deb asset from {repo}")),
+                DebSource::GithubRelease {
+                    repo,
+                    asset_pattern,
+                } => (
+                    Some(format!(
+                        "# resolve latest '{asset_pattern}' .deb asset from {repo}"
+                    )),
                     "<resolved-asset-url>".to_string(),
                 ),
                 DebSource::Url(url) => (None, url.to_string()),
@@ -457,35 +530,41 @@ fn describe_binary(pkg: &str) -> Vec<Vec<String>> {
                 steps.push(vec![note]);
             }
             steps.push(crate::download::curl_argv(&url, &deb));
-            steps.push(sudo.iter().chain(["apt-get", "install", "-y", &deb].iter())
-                .map(|s| (*s).to_string()).collect());
+            steps.push(
+                sudo.iter()
+                    .chain(["apt-get", "install", "-y", &deb].iter())
+                    .map(|s| (*s).to_string())
+                    .collect(),
+            );
             steps
         }
-        Some(BinaryRecipe { url, archive, dest, .. }) => {
+        Some(BinaryRecipe {
+            url, archive, dest, ..
+        }) => {
             let tmp = format!("/tmp/{dest}");
             let dl = format!("/tmp/{dest}.dl");
             let final_path = format!("/usr/local/bin/{dest}");
             let download = crate::download::curl_argv(url, &dl);
             let extract = match archive {
                 ArchiveKind::TarGz { inner } => vec![
-                    "tar".to_string(), "-xzf".to_string(),
+                    "tar".to_string(),
+                    "-xzf".to_string(),
                     dl,
-                    "-C".to_string(), "/tmp".to_string(),
+                    "-C".to_string(),
+                    "/tmp".to_string(),
                     inner.to_string(),
                 ],
-                ArchiveKind::Gunzip => vec![
-                    "gunzip".to_string(), "-f".to_string(),
-                    dl,
-                ],
-                ArchiveKind::Raw => vec![
-                    "mv".to_string(), dl, tmp.clone(),
-                ],
+                ArchiveKind::Gunzip => vec!["gunzip".to_string(), "-f".to_string(), dl],
+                ArchiveKind::Raw => vec!["mv".to_string(), dl, tmp.clone()],
                 ArchiveKind::Deb { .. } => unreachable!("matched by the Deb arm above"),
             };
             let chmod = vec!["chmod".to_string(), "+x".to_string(), tmp.clone()];
             let sudo = sudo_argv();
-            let mv = sudo.iter().chain(["mv", &tmp, &final_path].iter())
-                .map(|s| (*s).to_string()).collect();
+            let mv = sudo
+                .iter()
+                .chain(["mv", &tmp, &final_path].iter())
+                .map(|s| (*s).to_string())
+                .collect();
             vec![download, extract, chmod, mv]
         }
         None => vec![vec![format!("# unknown binary recipe '{pkg}'")]],
@@ -512,7 +591,8 @@ fn github_token() -> Option<String> {
 fn github_token_from(lookup: impl Fn(&str) -> Option<String>) -> Option<String> {
     // The emptiness filter is inside find_map, not after it: an empty
     // GITHUB_TOKEN must fall through to GH_TOKEN rather than mask it.
-    ["GITHUB_TOKEN", "GH_TOKEN"].iter()
+    ["GITHUB_TOKEN", "GH_TOKEN"]
+        .iter()
         .find_map(|name| lookup(name).filter(|token| !token.trim().is_empty()))
 }
 
@@ -551,20 +631,22 @@ fn resolve_latest_deb_asset(repo: &str, asset_pattern: &str) -> anyhow::Result<S
     })?;
     let release: serde_json::Value = serde_json::from_str(&body)
         .with_context(|| format!("Failed to parse GitHub releases JSON for {repo}"))?;
-    release["assets"].as_array()
+    release["assets"]
+        .as_array()
         .with_context(|| format!("GitHub release for {repo} has no 'assets' array"))?
         .iter()
         .find_map(|a| {
             let name = a["name"].as_str()?;
-            let is_deb = std::path::Path::new(name).extension()
+            let is_deb = std::path::Path::new(name)
+                .extension()
                 .is_some_and(|ext| ext.eq_ignore_ascii_case("deb"));
             (name.contains(asset_pattern) && is_deb)
                 .then(|| a["browser_download_url"].as_str())?
                 .map(std::string::ToString::to_string)
         })
-        .with_context(|| format!(
-            "No .deb asset matching '{asset_pattern}' in the latest {repo} release"
-        ))
+        .with_context(|| {
+            format!("No .deb asset matching '{asset_pattern}' in the latest {repo} release")
+        })
 }
 
 fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
@@ -581,13 +663,17 @@ fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
         }
         // Same exception as `run()` above: the binary installer shells out to
         // `sudo install`, which needs the terminal for its password prompt.
-        let status = Command::new(argv[0]).args(&argv[1..]).status()
+        let status = Command::new(argv[0])
+            .args(&argv[1..])
+            .status()
             .with_context(|| format!("failed to spawn: {}", argv.join(" ")))?;
         if !status.success() {
             anyhow::bail!(
                 "{} exited with code {}",
                 argv.join(" "),
-                status.code().map_or_else(|| "unknown".to_string(), |c| c.to_string())
+                status
+                    .code()
+                    .map_or_else(|| "unknown".to_string(), |c| c.to_string())
             );
         }
         Ok(())
@@ -598,9 +684,10 @@ fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
     if let ArchiveKind::Deb { source } = recipe.archive {
         let deb = format!("/tmp/{}.deb", recipe.dest);
         let asset_url = match source {
-            DebSource::GithubRelease { repo, asset_pattern } => {
-                resolve_latest_deb_asset(repo, asset_pattern)?
-            }
+            DebSource::GithubRelease {
+                repo,
+                asset_pattern,
+            } => resolve_latest_deb_asset(repo, asset_pattern)?,
             DebSource::Url(url) => url.to_string(),
         };
         let dl = crate::download::curl_argv(&asset_url, &deb);
@@ -631,7 +718,8 @@ fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
             // .dl; rename to .dl.gz so gunzip leaves /tmp/<dest>.dl, then
             // move to final_tmp.
             let gz = format!("{download}.gz");
-            std::fs::rename(&download, &gz).with_context(|| format!("rename {download} -> {gz}"))?;
+            std::fs::rename(&download, &gz)
+                .with_context(|| format!("rename {download} -> {gz}"))?;
             exec(&["gunzip", "-f", &gz])?;
             std::fs::rename(&download, &final_tmp)
                 .with_context(|| format!("rename {download} -> {final_tmp}"))?;
@@ -656,7 +744,9 @@ struct BinaryRecipe {
 }
 
 enum ArchiveKind {
-    TarGz { inner: &'static str },
+    TarGz {
+        inner: &'static str,
+    },
     Gunzip,
     /// The download is the binary itself, no extraction needed.
     Raw,
@@ -668,14 +758,19 @@ enum ArchiveKind {
     /// asset is resolved at install time (so the recipe doesn't pin a version
     /// that goes stale the moment upstream cuts a release), or a vendor URL
     /// that is already stable.
-    Deb { source: DebSource },
+    Deb {
+        source: DebSource,
+    },
 }
 
 /// Where a [`ArchiveKind::Deb`] payload is fetched from.
 enum DebSource {
     /// Newest asset in `repo`'s latest release whose name contains
     /// `asset_pattern` and ends in `.deb`.
-    GithubRelease { repo: &'static str, asset_pattern: &'static str },
+    GithubRelease {
+        repo: &'static str,
+        asset_pattern: &'static str,
+    },
     /// A vendor URL that always points at the current build.
     Url(&'static str),
 }
@@ -708,7 +803,9 @@ fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
         // and hadolint do. Bump this deliberately.
         "actionlint" => Some(BinaryRecipe {
             url: "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz",
-            archive: ArchiveKind::TarGz { inner: "actionlint" },
+            archive: ArchiveKind::TarGz {
+                inner: "actionlint",
+            },
             dest: "actionlint",
         }),
         "hadolint" => Some(BinaryRecipe {
@@ -788,144 +885,765 @@ pub struct ToolInfo {
 
 pub static TOOLS: &[ToolInfo] = &[
     // Python tools
-    ToolInfo { name: "ruff", runtime: "python", install_methods: &[InstallMethod { method: "pip", package: "ruff" }] },
-    ToolInfo { name: "pylint", runtime: "python", install_methods: &[InstallMethod { method: "pip", package: "pylint" }] },
-    ToolInfo { name: "mypy", runtime: "python", install_methods: &[InstallMethod { method: "pip", package: "mypy" }] },
-    ToolInfo { name: "pyrefly", runtime: "python", install_methods: &[InstallMethod { method: "pip", package: "pyrefly" }] },
-    ToolInfo { name: "yamllint", runtime: "python", install_methods: &[InstallMethod { method: "pip", package: "yamllint" }] },
-    ToolInfo { name: "sphinx-build", runtime: "python", install_methods: &[InstallMethod { method: "pip", package: "sphinx" }] },
-    ToolInfo { name: "pip", runtime: "python", install_methods: &[InstallMethod { method: "apt", package: "python3-pip" }] },
-    ToolInfo { name: "uv", runtime: "python", install_methods: &[InstallMethod { method: "pip", package: "uv" }] },
-    ToolInfo { name: "jsonlint", runtime: "python", install_methods: &[InstallMethod { method: "pip", package: "demjson3" }] },
-    ToolInfo { name: "cpplint", runtime: "python", install_methods: &[InstallMethod { method: "pip", package: "cpplint" }] },
-    ToolInfo { name: "black", runtime: "python", install_methods: &[InstallMethod { method: "pip", package: "black" }] },
-    ToolInfo { name: "pytest", runtime: "python", install_methods: &[InstallMethod { method: "pip", package: "pytest" }] },
-    ToolInfo { name: "a2x", runtime: "python", install_methods: &[InstallMethod { method: "apt", package: "asciidoc" }] },
+    ToolInfo {
+        name: "ruff",
+        runtime: "python",
+        install_methods: &[InstallMethod {
+            method: "pip",
+            package: "ruff",
+        }],
+    },
+    ToolInfo {
+        name: "pylint",
+        runtime: "python",
+        install_methods: &[InstallMethod {
+            method: "pip",
+            package: "pylint",
+        }],
+    },
+    ToolInfo {
+        name: "mypy",
+        runtime: "python",
+        install_methods: &[InstallMethod {
+            method: "pip",
+            package: "mypy",
+        }],
+    },
+    ToolInfo {
+        name: "pyrefly",
+        runtime: "python",
+        install_methods: &[InstallMethod {
+            method: "pip",
+            package: "pyrefly",
+        }],
+    },
+    ToolInfo {
+        name: "yamllint",
+        runtime: "python",
+        install_methods: &[InstallMethod {
+            method: "pip",
+            package: "yamllint",
+        }],
+    },
+    ToolInfo {
+        name: "sphinx-build",
+        runtime: "python",
+        install_methods: &[InstallMethod {
+            method: "pip",
+            package: "sphinx",
+        }],
+    },
+    ToolInfo {
+        name: "pip",
+        runtime: "python",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "python3-pip",
+        }],
+    },
+    ToolInfo {
+        name: "uv",
+        runtime: "python",
+        install_methods: &[InstallMethod {
+            method: "pip",
+            package: "uv",
+        }],
+    },
+    ToolInfo {
+        name: "jsonlint",
+        runtime: "python",
+        install_methods: &[InstallMethod {
+            method: "pip",
+            package: "demjson3",
+        }],
+    },
+    ToolInfo {
+        name: "cpplint",
+        runtime: "python",
+        install_methods: &[InstallMethod {
+            method: "pip",
+            package: "cpplint",
+        }],
+    },
+    ToolInfo {
+        name: "black",
+        runtime: "python",
+        install_methods: &[InstallMethod {
+            method: "pip",
+            package: "black",
+        }],
+    },
+    ToolInfo {
+        name: "pytest",
+        runtime: "python",
+        install_methods: &[InstallMethod {
+            method: "pip",
+            package: "pytest",
+        }],
+    },
+    ToolInfo {
+        name: "a2x",
+        runtime: "python",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "asciidoc",
+        }],
+    },
     // The mako processor runs `python3 -c "import mako..."`, so what it really
     // needs is the Mako *library*, which the registry can't probe directly (it
     // probes executables). The `mako-render` console script ships in the same
     // distribution, so probing it is an exact proxy for "the library is
     // importable", and installing it installs the library.
-    ToolInfo { name: "mako-render", runtime: "python", install_methods: &[InstallMethod { method: "pip", package: "mako" }] },
-    ToolInfo { name: "python3", runtime: "python", install_methods: &[InstallMethod { method: "apt", package: "python3" }] },
+    ToolInfo {
+        name: "mako-render",
+        runtime: "python",
+        install_methods: &[InstallMethod {
+            method: "pip",
+            package: "mako",
+        }],
+    },
+    ToolInfo {
+        name: "python3",
+        runtime: "python",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "python3",
+        }],
+    },
     // Node tools
-    ToolInfo { name: "marp", runtime: "node", install_methods: &[InstallMethod { method: "npm", package: "@marp-team/marp-cli" }] },
-    ToolInfo { name: "mmdc", runtime: "node", install_methods: &[InstallMethod { method: "npm", package: "@mermaid-js/mermaid-cli" }] },
-    ToolInfo { name: "markdownlint", runtime: "node", install_methods: &[InstallMethod { method: "npm", package: "markdownlint-cli" }] },
-    ToolInfo { name: "prettier", runtime: "node", install_methods: &[InstallMethod { method: "npm", package: "prettier" }] },
-    ToolInfo { name: "eslint", runtime: "node", install_methods: &[InstallMethod { method: "npm", package: "eslint" }] },
-    ToolInfo { name: "htmlhint", runtime: "node", install_methods: &[InstallMethod { method: "npm", package: "htmlhint" }] },
-    ToolInfo { name: "jshint", runtime: "node", install_methods: &[InstallMethod { method: "npm", package: "jshint" }] },
-    ToolInfo { name: "npm", runtime: "node", install_methods: &[InstallMethod { method: "apt", package: "npm" }] },
-    ToolInfo { name: "node", runtime: "node", install_methods: &[InstallMethod { method: "apt", package: "nodejs" }] },
+    ToolInfo {
+        name: "marp",
+        runtime: "node",
+        install_methods: &[InstallMethod {
+            method: "npm",
+            package: "@marp-team/marp-cli",
+        }],
+    },
+    ToolInfo {
+        name: "mmdc",
+        runtime: "node",
+        install_methods: &[InstallMethod {
+            method: "npm",
+            package: "@mermaid-js/mermaid-cli",
+        }],
+    },
+    ToolInfo {
+        name: "markdownlint",
+        runtime: "node",
+        install_methods: &[InstallMethod {
+            method: "npm",
+            package: "markdownlint-cli",
+        }],
+    },
+    ToolInfo {
+        name: "prettier",
+        runtime: "node",
+        install_methods: &[InstallMethod {
+            method: "npm",
+            package: "prettier",
+        }],
+    },
+    ToolInfo {
+        name: "eslint",
+        runtime: "node",
+        install_methods: &[InstallMethod {
+            method: "npm",
+            package: "eslint",
+        }],
+    },
+    ToolInfo {
+        name: "htmlhint",
+        runtime: "node",
+        install_methods: &[InstallMethod {
+            method: "npm",
+            package: "htmlhint",
+        }],
+    },
+    ToolInfo {
+        name: "jshint",
+        runtime: "node",
+        install_methods: &[InstallMethod {
+            method: "npm",
+            package: "jshint",
+        }],
+    },
+    ToolInfo {
+        name: "npm",
+        runtime: "node",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "npm",
+        }],
+    },
+    ToolInfo {
+        name: "node",
+        runtime: "node",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "nodejs",
+        }],
+    },
     // Ruby tools
-    ToolInfo { name: "mdl", runtime: "ruby", install_methods: &[InstallMethod { method: "gem", package: "mdl" }] },
-    ToolInfo { name: "bundle", runtime: "ruby", install_methods: &[InstallMethod { method: "gem", package: "bundler" }] },
-    ToolInfo { name: "ruby", runtime: "ruby", install_methods: &[InstallMethod { method: "apt", package: "ruby" }] },
+    ToolInfo {
+        name: "mdl",
+        runtime: "ruby",
+        install_methods: &[InstallMethod {
+            method: "gem",
+            package: "mdl",
+        }],
+    },
+    ToolInfo {
+        name: "bundle",
+        runtime: "ruby",
+        install_methods: &[InstallMethod {
+            method: "gem",
+            package: "bundler",
+        }],
+    },
+    ToolInfo {
+        name: "ruby",
+        runtime: "ruby",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "ruby",
+        }],
+    },
     // Rust tools
-    ToolInfo { name: "mdbook", runtime: "rust", install_methods: &[InstallMethod { method: "cargo", package: "mdbook" }] },
-    ToolInfo { name: "rumdl", runtime: "rust", install_methods: &[
-        InstallMethod { method: "binary", package: "rumdl" },
-        InstallMethod { method: "cargo", package: "rumdl" },
-    ]},
+    ToolInfo {
+        name: "mdbook",
+        runtime: "rust",
+        install_methods: &[InstallMethod {
+            method: "cargo",
+            package: "mdbook",
+        }],
+    },
+    ToolInfo {
+        name: "rumdl",
+        runtime: "rust",
+        install_methods: &[
+            InstallMethod {
+                method: "binary",
+                package: "rumdl",
+            },
+            InstallMethod {
+                method: "cargo",
+                package: "rumdl",
+            },
+        ],
+    },
     // Binary only, no cargo fallback: upstream does not publish zola to
     // crates.io. The `zola` crate there is an unrelated squatter -- version
     // 0.0.0, yanked, described as "zola installer" -- so `cargo install zola`
     // would fail or fetch the wrong thing. The GitHub release is the only
     // automatable route.
-    ToolInfo { name: "zola", runtime: "rust", install_methods: &[
-        InstallMethod { method: "binary", package: "zola" },
-    ]},
-    ToolInfo { name: "taplo", runtime: "rust", install_methods: &[
-        InstallMethod { method: "binary", package: "taplo" },
-        InstallMethod { method: "cargo", package: "taplo-cli" },
-    ]},
+    ToolInfo {
+        name: "zola",
+        runtime: "rust",
+        install_methods: &[InstallMethod {
+            method: "binary",
+            package: "zola",
+        }],
+    },
+    ToolInfo {
+        name: "taplo",
+        runtime: "rust",
+        install_methods: &[
+            InstallMethod {
+                method: "binary",
+                package: "taplo",
+            },
+            InstallMethod {
+                method: "cargo",
+                package: "taplo-cli",
+            },
+        ],
+    },
     // rustup is the canonical route, but `apt install rustc/cargo` is a real,
     // automatable install and is what makes these reachable from
     // `tools install --all` on a bare machine. A host that already has a
     // rustup toolchain never reaches the install path: `which` finds these
     // first.
-    ToolInfo { name: "cargo", runtime: "rust", install_methods: &[InstallMethod { method: "apt", package: "cargo" }] },
-    ToolInfo { name: "rustc", runtime: "rust", install_methods: &[InstallMethod { method: "apt", package: "rustc" }] },
+    ToolInfo {
+        name: "cargo",
+        runtime: "rust",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "cargo",
+        }],
+    },
+    ToolInfo {
+        name: "rustc",
+        runtime: "rust",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "rustc",
+        }],
+    },
     // Perl tools
-    ToolInfo { name: "perl", runtime: "perl", install_methods: &[InstallMethod { method: "apt", package: "perl" }] },
-    ToolInfo { name: "markdown", runtime: "perl", install_methods: &[InstallMethod { method: "apt", package: "markdown" }] },
-    ToolInfo { name: "checkpatch.pl", runtime: "perl", install_methods: &[InstallMethod { method: "binary", package: "checkpatch.pl" }] },
-    ToolInfo { name: "perltidy", runtime: "perl", install_methods: &[InstallMethod { method: "apt", package: "perltidy" }] },
+    ToolInfo {
+        name: "perl",
+        runtime: "perl",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "perl",
+        }],
+    },
+    ToolInfo {
+        name: "markdown",
+        runtime: "perl",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "markdown",
+        }],
+    },
+    ToolInfo {
+        name: "checkpatch.pl",
+        runtime: "perl",
+        install_methods: &[InstallMethod {
+            method: "binary",
+            package: "checkpatch.pl",
+        }],
+    },
+    ToolInfo {
+        name: "perltidy",
+        runtime: "perl",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "perltidy",
+        }],
+    },
     // System tools
     // xelatex ships in texlive-xetex, not in a package of its own; pandoc's
     // `pdf_engine = "xelatex"` needs the binary, so probe the binary and
     // install the distribution that provides it.
-    ToolInfo { name: "xelatex", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "texlive-xetex" }] },
+    ToolInfo {
+        name: "xelatex",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "texlive-xetex",
+        }],
+    },
     // ARM bare-metal cross toolchain. Debian splits it the same way as the
     // native one: the compiler driver comes from gcc-arm-none-eabi, while ar
     // and objcopy come from binutils-arm-none-eabi.
-    ToolInfo { name: "arm-none-eabi-gcc", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "gcc-arm-none-eabi" }] },
-    ToolInfo { name: "arm-none-eabi-ar", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "binutils-arm-none-eabi" }] },
-    ToolInfo { name: "arm-none-eabi-objcopy", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "binutils-arm-none-eabi" }] },
-    ToolInfo { name: "shellcheck", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "shellcheck" }] },
-    ToolInfo { name: "luacheck", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "lua-check" }] },
-    ToolInfo { name: "cppcheck", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "cppcheck" }] },
-    ToolInfo { name: "clang-tidy", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "clang-tidy" }] },
-    ToolInfo { name: "gcc", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "gcc" }] },
-    ToolInfo { name: "g++", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "g++" }] },
-    ToolInfo { name: "clang", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "clang" }] },
-    ToolInfo { name: "clang++", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "clang" }] },
-    ToolInfo { name: "ar", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "binutils" }] },
-    ToolInfo { name: "make", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "make" }] },
-    ToolInfo { name: "jq", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "jq" }] },
-    ToolInfo { name: "aspell", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "aspell" }] },
-    ToolInfo { name: "pandoc", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "pandoc" }] },
-    ToolInfo { name: "pdflatex", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "texlive-latex-base" }] },
-    ToolInfo { name: "qpdf", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "qpdf" }] },
-    ToolInfo { name: "dot", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "graphviz" }] },
-    ToolInfo { name: "drawio", runtime: "system", install_methods: &[InstallMethod { method: "binary", package: "drawio" }] },
-    ToolInfo { name: "libreoffice", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "libreoffice" }] },
-    ToolInfo { name: "flock", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "util-linux" }] },
-    ToolInfo { name: "uname", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "coreutils" }] },
-    ToolInfo { name: "sh", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "dash" }] },
-    ToolInfo { name: "git", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "git" }] },
-    ToolInfo { name: "pdfunite", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "poppler-utils" }] },
-    ToolInfo { name: "google-chrome", runtime: "system", install_methods: &[InstallMethod { method: "binary", package: "google-chrome-stable" }] },
-    ToolInfo { name: "objdump", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "binutils" }] },
-    ToolInfo { name: "tidy", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "tidy" }] },
-    ToolInfo { name: "xmllint", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "libxml2-utils" }] },
-    ToolInfo { name: "clojure", runtime: "jvm", install_methods: &[
-        // Debian/Ubuntu package the Clojure CLI, which is what makes this
-        // installable without the official shell installer; brew is the macOS
-        // route. See https://clojure.org/guides/install_clojure
-        InstallMethod { method: "apt", package: "clojure" },
-        InstallMethod { method: "brew", package: "clojure/tools/clojure" },
-    ]},
-    ToolInfo { name: "svglint", runtime: "node", install_methods: &[InstallMethod { method: "npm", package: "svglint" }] },
-    ToolInfo { name: "svgo", runtime: "node", install_methods: &[InstallMethod { method: "npm", package: "svgo" }] },
-    ToolInfo { name: "cmakelint", runtime: "python", install_methods: &[InstallMethod { method: "pip", package: "cmakelint" }] },
-    ToolInfo { name: "protoc", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "protobuf-compiler" }] },
-    ToolInfo { name: "sass", runtime: "node", install_methods: &[InstallMethod { method: "npm", package: "sass" }] },
-    ToolInfo { name: "hadolint", runtime: "system", install_methods: &[
-        InstallMethod { method: "binary", package: "hadolint" },
-        InstallMethod { method: "brew", package: "hadolint" },
-        InstallMethod { method: "apt", package: "hadolint" },
-    ]},
-    ToolInfo { name: "php", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "php-cli" }] },
-    ToolInfo { name: "checkstyle", runtime: "jvm", install_methods: &[InstallMethod { method: "apt", package: "checkstyle" }] },
-    ToolInfo { name: "yq", runtime: "system", install_methods: &[
-        InstallMethod { method: "pip", package: "yq" },
-        InstallMethod { method: "snap", package: "yq" },
-        InstallMethod { method: "apt", package: "yq" },
-    ]},
+    ToolInfo {
+        name: "arm-none-eabi-gcc",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "gcc-arm-none-eabi",
+        }],
+    },
+    ToolInfo {
+        name: "arm-none-eabi-ar",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "binutils-arm-none-eabi",
+        }],
+    },
+    ToolInfo {
+        name: "arm-none-eabi-objcopy",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "binutils-arm-none-eabi",
+        }],
+    },
+    ToolInfo {
+        name: "shellcheck",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "shellcheck",
+        }],
+    },
+    ToolInfo {
+        name: "luacheck",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "lua-check",
+        }],
+    },
+    ToolInfo {
+        name: "cppcheck",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "cppcheck",
+        }],
+    },
+    ToolInfo {
+        name: "clang-tidy",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "clang-tidy",
+        }],
+    },
+    ToolInfo {
+        name: "gcc",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "gcc",
+        }],
+    },
+    ToolInfo {
+        name: "g++",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "g++",
+        }],
+    },
+    ToolInfo {
+        name: "clang",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "clang",
+        }],
+    },
+    ToolInfo {
+        name: "clang++",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "clang",
+        }],
+    },
+    ToolInfo {
+        name: "ar",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "binutils",
+        }],
+    },
+    ToolInfo {
+        name: "make",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "make",
+        }],
+    },
+    ToolInfo {
+        name: "jq",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "jq",
+        }],
+    },
+    ToolInfo {
+        name: "aspell",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "aspell",
+        }],
+    },
+    ToolInfo {
+        name: "pandoc",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "pandoc",
+        }],
+    },
+    ToolInfo {
+        name: "pdflatex",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "texlive-latex-base",
+        }],
+    },
+    ToolInfo {
+        name: "qpdf",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "qpdf",
+        }],
+    },
+    ToolInfo {
+        name: "dot",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "graphviz",
+        }],
+    },
+    ToolInfo {
+        name: "drawio",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "binary",
+            package: "drawio",
+        }],
+    },
+    ToolInfo {
+        name: "libreoffice",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "libreoffice",
+        }],
+    },
+    ToolInfo {
+        name: "flock",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "util-linux",
+        }],
+    },
+    ToolInfo {
+        name: "uname",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "coreutils",
+        }],
+    },
+    ToolInfo {
+        name: "sh",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "dash",
+        }],
+    },
+    ToolInfo {
+        name: "git",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "git",
+        }],
+    },
+    ToolInfo {
+        name: "pdfunite",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "poppler-utils",
+        }],
+    },
+    ToolInfo {
+        name: "google-chrome",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "binary",
+            package: "google-chrome-stable",
+        }],
+    },
+    ToolInfo {
+        name: "objdump",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "binutils",
+        }],
+    },
+    ToolInfo {
+        name: "tidy",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "tidy",
+        }],
+    },
+    ToolInfo {
+        name: "xmllint",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "libxml2-utils",
+        }],
+    },
+    ToolInfo {
+        name: "clojure",
+        runtime: "jvm",
+        install_methods: &[
+            // Debian/Ubuntu package the Clojure CLI, which is what makes this
+            // installable without the official shell installer; brew is the macOS
+            // route. See https://clojure.org/guides/install_clojure
+            InstallMethod {
+                method: "apt",
+                package: "clojure",
+            },
+            InstallMethod {
+                method: "brew",
+                package: "clojure/tools/clojure",
+            },
+        ],
+    },
+    ToolInfo {
+        name: "svglint",
+        runtime: "node",
+        install_methods: &[InstallMethod {
+            method: "npm",
+            package: "svglint",
+        }],
+    },
+    ToolInfo {
+        name: "svgo",
+        runtime: "node",
+        install_methods: &[InstallMethod {
+            method: "npm",
+            package: "svgo",
+        }],
+    },
+    ToolInfo {
+        name: "cmakelint",
+        runtime: "python",
+        install_methods: &[InstallMethod {
+            method: "pip",
+            package: "cmakelint",
+        }],
+    },
+    ToolInfo {
+        name: "protoc",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "protobuf-compiler",
+        }],
+    },
+    ToolInfo {
+        name: "sass",
+        runtime: "node",
+        install_methods: &[InstallMethod {
+            method: "npm",
+            package: "sass",
+        }],
+    },
+    ToolInfo {
+        name: "hadolint",
+        runtime: "system",
+        install_methods: &[
+            InstallMethod {
+                method: "binary",
+                package: "hadolint",
+            },
+            InstallMethod {
+                method: "brew",
+                package: "hadolint",
+            },
+            InstallMethod {
+                method: "apt",
+                package: "hadolint",
+            },
+        ],
+    },
+    ToolInfo {
+        name: "php",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "php-cli",
+        }],
+    },
+    ToolInfo {
+        name: "checkstyle",
+        runtime: "jvm",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "checkstyle",
+        }],
+    },
+    ToolInfo {
+        name: "yq",
+        runtime: "system",
+        install_methods: &[
+            InstallMethod {
+                method: "pip",
+                package: "yq",
+            },
+            InstallMethod {
+                method: "snap",
+                package: "yq",
+            },
+            InstallMethod {
+                method: "apt",
+                package: "yq",
+            },
+        ],
+    },
     // Node tools (additional)
-    ToolInfo { name: "stylelint", runtime: "node", install_methods: &[InstallMethod { method: "npm", package: "stylelint" }] },
-    ToolInfo { name: "jslint", runtime: "node", install_methods: &[InstallMethod { method: "npm", package: "jslint" }] },
-    ToolInfo { name: "standard", runtime: "node", install_methods: &[InstallMethod { method: "npm", package: "standard" }] },
-    ToolInfo { name: "htmllint", runtime: "node", install_methods: &[InstallMethod { method: "npm", package: "htmllint-cli" }] },
-    ToolInfo { name: "slidev", runtime: "node", install_methods: &[InstallMethod { method: "npm", package: "@slidev/cli" }] },
+    ToolInfo {
+        name: "stylelint",
+        runtime: "node",
+        install_methods: &[InstallMethod {
+            method: "npm",
+            package: "stylelint",
+        }],
+    },
+    ToolInfo {
+        name: "jslint",
+        runtime: "node",
+        install_methods: &[InstallMethod {
+            method: "npm",
+            package: "jslint",
+        }],
+    },
+    ToolInfo {
+        name: "standard",
+        runtime: "node",
+        install_methods: &[InstallMethod {
+            method: "npm",
+            package: "standard",
+        }],
+    },
+    ToolInfo {
+        name: "htmllint",
+        runtime: "node",
+        install_methods: &[InstallMethod {
+            method: "npm",
+            package: "htmllint-cli",
+        }],
+    },
+    ToolInfo {
+        name: "slidev",
+        runtime: "node",
+        install_methods: &[InstallMethod {
+            method: "npm",
+            package: "@slidev/cli",
+        }],
+    },
     // Perl tools (additional)
-    ToolInfo { name: "perlcritic", runtime: "perl", install_methods: &[InstallMethod { method: "apt", package: "libperl-critic-perl" }] },
+    ToolInfo {
+        name: "perlcritic",
+        runtime: "perl",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "libperl-critic-perl",
+        }],
+    },
     // Ruby tools (additional)
-    ToolInfo { name: "jekyll", runtime: "ruby", install_methods: &[InstallMethod { method: "gem", package: "jekyll" }] },
+    ToolInfo {
+        name: "jekyll",
+        runtime: "ruby",
+        install_methods: &[InstallMethod {
+            method: "gem",
+            package: "jekyll",
+        }],
+    },
     // Built-in / coreutils
-    ToolInfo { name: "true", runtime: "system", install_methods: &[InstallMethod { method: "apt", package: "coreutils" }] },
+    ToolInfo {
+        name: "true",
+        runtime: "system",
+        install_methods: &[InstallMethod {
+            method: "apt",
+            package: "coreutils",
+        }],
+    },
 ];
 
 // Processor files may submit additional ToolInfo entries via
@@ -977,7 +1695,6 @@ pub fn tool_runtime(tool: &str) -> Option<&'static str> {
     tool_info(tool).map(|t| t.runtime)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -988,7 +1705,9 @@ mod tests {
     #[test]
     fn github_token_prefers_github_token_and_skips_empty() {
         let lookup = |vars: &[(&str, &str)], name: &str| {
-            vars.iter().find(|(k, _)| *k == name).map(|(_, v)| (*v).to_string())
+            vars.iter()
+                .find(|(k, _)| *k == name)
+                .map(|(_, v)| (*v).to_string())
         };
 
         assert_eq!(
@@ -1055,7 +1774,10 @@ mod tests {
             PathBuf::from("/home/u/mygems/bin"),
         ];
         let new_path = path_with_appended_dirs(&path, &dirs).unwrap();
-        assert_eq!(new_path, "/usr/bin:/home/u/.gem/ruby/3.2.0/bin:/home/u/mygems/bin");
+        assert_eq!(
+            new_path,
+            "/usr/bin:/home/u/.gem/ruby/3.2.0/bin:/home/u/mygems/bin"
+        );
 
         assert!(path_with_appended_dirs(&new_path, &dirs).is_none());
         assert!(path_with_appended_dirs(&path, &[]).is_none());
@@ -1066,10 +1788,14 @@ mod tests {
     #[test]
     fn ancestor_writability_walks_to_existing_dir() {
         let dir = tempfile::TempDir::new().unwrap();
-        assert!(nearest_existing_ancestor_is_writable(&dir.path().join("a/b/c")));
+        assert!(nearest_existing_ancestor_is_writable(
+            &dir.path().join("a/b/c")
+        ));
         if !crate::platform::is_root() {
             crate::platform::set_permissions_mode(dir.path(), 0o555).unwrap();
-            assert!(!nearest_existing_ancestor_is_writable(&dir.path().join("a/b/c")));
+            assert!(!nearest_existing_ancestor_is_writable(
+                &dir.path().join("a/b/c")
+            ));
             crate::platform::set_permissions_mode(dir.path(), 0o755).unwrap();
         }
     }
@@ -1084,12 +1810,18 @@ mod tests {
         assert_eq!(steps.len(), 2);
 
         let update = &steps[0];
-        let upd_idx = update.iter().position(|s| s == "apt-get").expect("apt-get in update argv");
+        let upd_idx = update
+            .iter()
+            .position(|s| s == "apt-get")
+            .expect("apt-get in update argv");
         assert_eq!(update[upd_idx + 1], "update");
         assert_eq!(update.len(), upd_idx + 2);
 
         let install = &steps[1];
-        let pkgmgr_idx = install.iter().position(|s| s == "apt-get").expect("apt-get in install argv");
+        let pkgmgr_idx = install
+            .iter()
+            .position(|s| s == "apt-get")
+            .expect("apt-get in install argv");
         assert_eq!(install[pkgmgr_idx + 1], "install");
         assert_eq!(install[pkgmgr_idx + 2], "-y");
         assert_eq!(install[pkgmgr_idx + 3], "cowsay");
@@ -1107,7 +1839,10 @@ mod tests {
         let steps = describe("apt", &["foo", "bar", "baz"]);
         assert_eq!(steps.len(), 2);
         let install = &steps[1];
-        let pkgmgr_idx = install.iter().position(|s| s == "apt-get").expect("apt-get in argv");
+        let pkgmgr_idx = install
+            .iter()
+            .position(|s| s == "apt-get")
+            .expect("apt-get in argv");
         assert_eq!(&install[pkgmgr_idx + 3..], &["foo", "bar", "baz"]);
     }
 
@@ -1130,13 +1865,25 @@ mod tests {
     /// pinned here.
     #[test]
     fn uv_describe_targets_path_python3_without_sudo() {
-        let steps = describe("uv", &["flask==3.1.0", "pywin32==312 ; sys_platform == 'win32'"]);
+        let steps = describe(
+            "uv",
+            &["flask==3.1.0", "pywin32==312 ; sys_platform == 'win32'"],
+        );
         assert_eq!(steps.len(), 1);
         let argv = &steps[0];
-        assert_eq!(argv[..5], ["uv", "pip", "install", "--python", "python3"].map(String::from));
+        assert_eq!(
+            argv[..5],
+            ["uv", "pip", "install", "--python", "python3"].map(String::from)
+        );
         // --system exactly when python3 on this machine is not a venv interpreter
-        assert_eq!(argv.contains(&"--system".to_string()), !python_probe().in_venv);
-        assert_eq!(&argv[argv.len() - 2..], &["flask==3.1.0", "pywin32==312 ; sys_platform == 'win32'"]);
+        assert_eq!(
+            argv.contains(&"--system".to_string()),
+            !python_probe().in_venv
+        );
+        assert_eq!(
+            &argv[argv.len() - 2..],
+            &["flask==3.1.0", "pywin32==312 ; sys_platform == 'win32'"]
+        );
         assert!(!argv.contains(&"sudo".to_string()));
     }
 
@@ -1144,9 +1891,24 @@ mod tests {
     /// `--prefix` when pip would have fallen back to a user install.
     #[test]
     fn uv_argv_non_venv_uses_system_and_optional_prefix() {
-        assert_eq!(uv_pip_install_argv_for(false, None), ["uv", "pip", "install", "--python", "python3", "--system"].map(String::from));
-        assert_eq!(uv_pip_install_argv_for(false, Some("/home/u/.local")),
-            ["uv", "pip", "install", "--python", "python3", "--system", "--prefix", "/home/u/.local"].map(String::from));
+        assert_eq!(
+            uv_pip_install_argv_for(false, None),
+            ["uv", "pip", "install", "--python", "python3", "--system"].map(String::from)
+        );
+        assert_eq!(
+            uv_pip_install_argv_for(false, Some("/home/u/.local")),
+            [
+                "uv",
+                "pip",
+                "install",
+                "--python",
+                "python3",
+                "--system",
+                "--prefix",
+                "/home/u/.local"
+            ]
+            .map(String::from)
+        );
     }
 
     /// A venv interpreter must NOT get `--system`: uv would ignore the venv
@@ -1155,7 +1917,10 @@ mod tests {
     #[test]
     fn uv_argv_venv_omits_system() {
         let argv = uv_pip_install_argv_for(true, None);
-        assert_eq!(argv, ["uv", "pip", "install", "--python", "python3"].map(String::from));
+        assert_eq!(
+            argv,
+            ["uv", "pip", "install", "--python", "python3"].map(String::from)
+        );
         assert!(!argv.contains(&"--system".to_string()));
     }
 

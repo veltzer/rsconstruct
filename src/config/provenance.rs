@@ -30,11 +30,7 @@ impl fmt::Display for FieldProvenance {
 
 pub type ProvenanceMap = HashMap<String, FieldProvenance>;
 
-pub fn record_if_absent(
-    map: &mut ProvenanceMap,
-    field: &str,
-    source: FieldProvenance,
-) {
+pub fn record_if_absent(map: &mut ProvenanceMap, field: &str, source: FieldProvenance) {
     if !map.contains_key(field) {
         map.insert(field.to_string(), source);
     }
@@ -97,19 +93,13 @@ fn span_map_of(doc: &Document<&str>, source: &str) -> SpanMap {
 /// Walk `[processor]` or `[analyzer]` — each child is either a single instance
 /// (direct config fields) or a multi-instance container (each grand-child is an
 /// instance).
-fn walk_instance_section(
-    table: &Table,
-    section: Section,
-    source: &str,
-    map: &mut SpanMap,
-) {
+fn walk_instance_section(table: &Table, section: Section, source: &str, map: &mut SpanMap) {
     for (type_name, item) in table {
         let Some(sub) = item.as_table() else { continue };
         // Heuristic matches ProcessorConfig::is_multi_instance's shape: if
         // every child is itself a table, this section holds named
         // sub-instances; otherwise it's a single instance with direct fields.
-        let all_children_are_tables = !sub.is_empty()
-            && sub.iter().all(|(_, v)| v.is_table());
+        let all_children_are_tables = !sub.is_empty() && sub.iter().all(|(_, v)| v.is_table());
 
         if all_children_are_tables {
             // Multi-instance: [processor.pylint.core], [processor.pylint.tests]
@@ -158,7 +148,9 @@ fn global_span_map_of(doc: &Document<&str>, source: &str) -> GlobalSpanMap {
         if section_name == "processor" || section_name == "analyzer" {
             continue;
         }
-        let Some(table) = item.as_table() else { continue };
+        let Some(table) = item.as_table() else {
+            continue;
+        };
         let mut fields = HashMap::new();
         for (key, field_item) in table {
             let span = key_span(table, key).or_else(|| item_span(field_item));
@@ -205,7 +197,10 @@ src_dirs = ["src/core"]
         let (spans, _) = build_span_maps(src);
         let key = (Section::Processor, "ruff".to_string(), "args".to_string());
         let line = spans.get(&key).copied().unwrap_or(0);
-        assert!(line > 0, "expected a real line for ruff.args, got {line} (span map: {spans:?})");
+        assert!(
+            line > 0,
+            "expected a real line for ruff.args, got {line} (span map: {spans:?})"
+        );
     }
 
     #[test]
@@ -215,7 +210,13 @@ output_dir = "build"
 parallel = 4
 "#;
         let (_, spans) = build_span_maps(src);
-        let build = spans.get("build").expect("expected [build] section in span map");
-        assert_eq!(build.get("parallel"), Some(&3), "expected parallel on line 3");
+        let build = spans
+            .get("build")
+            .expect("expected [build] section in span map");
+        assert_eq!(
+            build.get("parallel"),
+            Some(&3),
+            "expected parallel on line 3"
+        );
     }
 }

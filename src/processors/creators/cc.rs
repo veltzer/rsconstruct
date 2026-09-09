@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{Processor, run_command, check_command_output, anchor_display_dir};
+use crate::processors::{Processor, anchor_display_dir, check_command_output, run_command};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
@@ -86,15 +86,17 @@ struct CcManifestRaw {
 
 impl CcManifest {
     /// Parse cc.yaml content, inheriting unset fields from the config.
-    pub fn parse(content: &str, defaults: &CcConfig) -> Result<Self, serde_yml::Error> {
-        let raw: CcManifestRaw = serde_yml::from_str(content)?;
+    pub fn parse(content: &str, defaults: &CcConfig) -> Result<Self, serde_yaml_ng::Error> {
+        let raw: CcManifestRaw = serde_yaml_ng::from_str(content)?;
         Ok(Self {
             cc: raw.cc.unwrap_or_else(|| defaults.cc.clone()),
             cxx: raw.cxx.unwrap_or_else(|| defaults.cxx.clone()),
             cflags: raw.cflags.unwrap_or_else(|| defaults.cflags.clone()),
             cxxflags: raw.cxxflags.unwrap_or_else(|| defaults.cxxflags.clone()),
             ldflags: raw.ldflags.unwrap_or_else(|| defaults.ldflags.clone()),
-            include_dirs: raw.include_dirs.unwrap_or_else(|| defaults.include_dirs.clone()),
+            include_dirs: raw
+                .include_dirs
+                .unwrap_or_else(|| defaults.include_dirs.clone()),
             libraries: raw.libraries,
             programs: raw.programs,
         })
@@ -196,7 +198,13 @@ impl CcProcessor {
 
     /// Compile a single source file to an object file.
     /// All paths are relative to the project root.
-    fn compile_object(ctx: &crate::build_context::BuildContext, manifest: &CcManifest, source: &Path, obj: &Path, extra_cflags: &[String]) -> Result<()> {
+    fn compile_object(
+        ctx: &crate::build_context::BuildContext,
+        manifest: &CcManifest,
+        source: &Path,
+        obj: &Path,
+        extra_cflags: &[String],
+    ) -> Result<()> {
         crate::processors::ensure_output_dir(obj)?;
         let compiler = Self::compiler_for(manifest, source);
         let mut cmd = Command::new(&compiler);
@@ -209,11 +217,18 @@ impl CcProcessor {
         }
         cmd.arg("-o").arg(obj).arg(source);
         let output = run_command(ctx, &cmd)?;
-        check_command_output(&output, format_args!("{} -c {}", compiler, source.display()))
+        check_command_output(
+            &output,
+            format_args!("{} -c {}", compiler, source.display()),
+        )
     }
 
     /// Build a static library from object files.
-    fn build_static_lib(ctx: &crate::build_context::BuildContext, lib_path: &Path, objects: &[PathBuf]) -> Result<()> {
+    fn build_static_lib(
+        ctx: &crate::build_context::BuildContext,
+        lib_path: &Path,
+        objects: &[PathBuf],
+    ) -> Result<()> {
         crate::processors::ensure_output_dir(lib_path)?;
         let mut cmd = Command::new("ar");
         cmd.arg("rcs").arg(lib_path);
@@ -242,7 +257,14 @@ impl CcProcessor {
 
     /// Build a shared library from object files.
     /// `has_cxx` selects the C++ driver, which C++ objects need at link time.
-    fn build_shared_lib(ctx: &crate::build_context::BuildContext, manifest: &CcManifest, lib_path: &Path, objects: &[PathBuf], ldflags: &[String], has_cxx: bool) -> Result<()> {
+    fn build_shared_lib(
+        ctx: &crate::build_context::BuildContext,
+        manifest: &CcManifest,
+        lib_path: &Path,
+        objects: &[PathBuf],
+        ldflags: &[String],
+        has_cxx: bool,
+    ) -> Result<()> {
         crate::processors::ensure_output_dir(lib_path)?;
         let compiler = if has_cxx { &manifest.cxx } else { &manifest.cc };
         let mut cmd = Command::new(compiler);
@@ -257,7 +279,10 @@ impl CcProcessor {
             cmd.arg(flag);
         }
         let output = run_command(ctx, &cmd)?;
-        check_command_output(&output, format_args!("{} -shared -o {}", compiler, lib_path.display()))
+        check_command_output(
+            &output,
+            format_args!("{} -shared -o {}", compiler, lib_path.display()),
+        )
     }
 
     /// Link object files into an executable.
@@ -267,7 +292,16 @@ impl CcProcessor {
     /// a linker invocation, and the natural grouping (`CcManifest`) is
     /// already one of them.
     #[allow(clippy::too_many_arguments)]
-    fn link_program(ctx: &crate::build_context::BuildContext, manifest: &CcManifest, exe_path: &Path, objects: &[PathBuf], lib_dir: &Path, link_libs: &[String], ldflags: &[String], has_cxx: bool) -> Result<()> {
+    fn link_program(
+        ctx: &crate::build_context::BuildContext,
+        manifest: &CcManifest,
+        exe_path: &Path,
+        objects: &[PathBuf],
+        lib_dir: &Path,
+        link_libs: &[String],
+        ldflags: &[String],
+        has_cxx: bool,
+    ) -> Result<()> {
         crate::processors::ensure_output_dir(exe_path)?;
         let compiler = if has_cxx { &manifest.cxx } else { &manifest.cc };
         let mut cmd = Command::new(compiler);
@@ -288,16 +322,31 @@ impl CcProcessor {
             cmd.arg(flag);
         }
         let output = run_command(ctx, &cmd)?;
-        check_command_output(&output, format_args!("{} -o {}", compiler, exe_path.display()))
+        check_command_output(
+            &output,
+            format_args!("{} -o {}", compiler, exe_path.display()),
+        )
     }
 
     /// Single-invocation build for a program (all sources in one command).
-    fn single_invocation_program(ctx: &crate::build_context::BuildContext, manifest: &CcManifest, exe_path: &Path, sources: &[PathBuf], lib_dir: &Path, link_libs: &[String], ldflags: &[String]) -> Result<()> {
+    fn single_invocation_program(
+        ctx: &crate::build_context::BuildContext,
+        manifest: &CcManifest,
+        exe_path: &Path,
+        sources: &[PathBuf],
+        lib_dir: &Path,
+        link_libs: &[String],
+        ldflags: &[String],
+    ) -> Result<()> {
         crate::processors::ensure_output_dir(exe_path)?;
         let has_cxx = sources.iter().any(|s| Self::is_cxx(s));
         let compiler = if has_cxx { &manifest.cxx } else { &manifest.cc };
         let mut cmd = Command::new(compiler);
-        let global_flags = if has_cxx { &manifest.cxxflags } else { &manifest.cflags };
+        let global_flags = if has_cxx {
+            &manifest.cxxflags
+        } else {
+            &manifest.cflags
+        };
         for flag in global_flags {
             cmd.arg(flag);
         }
@@ -318,7 +367,10 @@ impl CcProcessor {
             cmd.arg(flag);
         }
         let output = run_command(ctx, &cmd)?;
-        check_command_output(&output, format_args!("{} -o {}", compiler, exe_path.display()))
+        check_command_output(
+            &output,
+            format_args!("{} -o {}", compiler, exe_path.display()),
+        )
     }
 
     /// Compute the output directory for a cc.yaml file.
@@ -335,7 +387,11 @@ impl CcProcessor {
     /// Execute a full cc.yaml build.
     /// All commands run from the project root. Manifest paths are resolved
     /// to project-root-relative paths using the cc.yaml's parent directory.
-    fn execute_build(&self, ctx: &crate::build_context::BuildContext, yaml_path: &Path) -> Result<()> {
+    fn execute_build(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        yaml_path: &Path,
+    ) -> Result<()> {
         let manifest = self.parse_manifest(yaml_path)?;
         let anchor_dir = crate::processors::parent_dir_or_empty(yaml_path);
         let output_dir = Self::output_dir_for(yaml_path);
@@ -344,7 +400,9 @@ impl CcProcessor {
         let bin_dir = output_dir.join("bin");
 
         // include_dirs are relative to the project root (not the cc.yaml directory)
-        let resolved_include_flags: Vec<String> = manifest.include_dirs.iter()
+        let resolved_include_flags: Vec<String> = manifest
+            .include_dirs
+            .iter()
             .map(|dir| format!("-I{dir}"))
             .collect();
 
@@ -387,12 +445,22 @@ impl CcProcessor {
             let exe_path = bin_dir.join(&prog.name);
 
             // Resolve source paths
-            let sources: Vec<PathBuf> = prog.sources.iter()
+            let sources: Vec<PathBuf> = prog
+                .sources
+                .iter()
                 .map(|s| crate::processors::resolve_anchor_path(anchor_dir, s))
                 .collect();
 
             if self.config.single_invocation {
-                Self::single_invocation_program(ctx, &manifest, &exe_path, &sources, &lib_dir, &prog.link, &prog.ldflags)?;
+                Self::single_invocation_program(
+                    ctx,
+                    &manifest,
+                    &exe_path,
+                    &sources,
+                    &lib_dir,
+                    &prog.link,
+                    &prog.ldflags,
+                )?;
             } else {
                 let target_obj_dir = obj_dir.join(&prog.name);
                 let mut objects = Vec::new();
@@ -409,7 +477,16 @@ impl CcProcessor {
                     objects.push(obj);
                 }
                 let has_cxx = sources.iter().any(|s| Self::is_cxx(s));
-                Self::link_program(ctx, &manifest, &exe_path, &objects, &lib_dir, &prog.link, &prog.ldflags, has_cxx)?;
+                Self::link_program(
+                    ctx,
+                    &manifest,
+                    &exe_path,
+                    &objects,
+                    &lib_dir,
+                    &prog.link,
+                    &prog.ldflags,
+                    has_cxx,
+                )?;
             }
         }
 
@@ -421,7 +498,6 @@ impl Processor for CcProcessor {
     fn scan_config(&self) -> &crate::config::StandardConfig {
         &self.config.standard
     }
-
 
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
@@ -436,7 +512,11 @@ impl Processor for CcProcessor {
         // override the compiler per directory. Discovery records what the
         // manifests actually resolve to, so by execution time this names
         // the real compilers, not just the defaults.
-        let mut tools: Vec<String> = vec![self.config.cc.clone(), self.config.cxx.clone(), "ar".to_string()];
+        let mut tools: Vec<String> = vec![
+            self.config.cc.clone(),
+            self.config.cxx.clone(),
+            "ar".to_string(),
+        ];
         for compiler in self.manifest_compilers.lock().unwrap().iter() {
             if !tools.contains(compiler) {
                 tools.push(compiler.clone());
@@ -445,11 +525,19 @@ impl Processor for CcProcessor {
         tools
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let Some(files) = crate::processors::scan_or_skip(&self.config.standard, file_index) else {
             return Ok(());
         };
-        let hash = Some(output_config_hash(&self.config, &crate::config::checksum_fields_of(instance_name)));
+        let hash = Some(output_config_hash(
+            &self.config,
+            &crate::config::checksum_fields_of(instance_name),
+        ));
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
         for yaml_path in files {
@@ -491,7 +579,11 @@ impl Processor for CcProcessor {
             if self.config.cache_output_dir {
                 let output_dir = Self::output_dir_for(&yaml_path);
                 graph.add_product_with_output_dir(
-                    inputs, vec![], instance_name, hash.clone(), output_dir,
+                    inputs,
+                    vec![],
+                    instance_name,
+                    hash.clone(),
+                    output_dir,
                 )?;
             } else {
                 graph.add_product(inputs, vec![], instance_name, hash.clone())?;

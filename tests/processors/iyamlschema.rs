@@ -1,7 +1,7 @@
+use crate::common::run_rsconstruct_with_env;
+use redb::{Database, TableDefinition};
 use std::fs;
 use tempfile::TempDir;
-use redb::{Database, TableDefinition};
-use crate::common::run_rsconstruct_with_env;
 
 const SCHEMA_URL: &str = "https://example.com/test_schema.json";
 
@@ -33,12 +33,7 @@ fn populate_webcache(project_path: &std::path::Path, url: &str, content: &str) {
 }
 
 /// Seed the webcache with an entry that was fetched `age_secs` ago.
-fn populate_webcache_aged(
-    project_path: &std::path::Path,
-    url: &str,
-    content: &str,
-    age_secs: u64,
-) {
+fn populate_webcache_aged(project_path: &std::path::Path, url: &str, content: &str, age_secs: u64) {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -70,12 +65,14 @@ fn iyamlschema_valid_file() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[processor.iyamlschema]\nsrc_dirs = [\".\"]\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     fs::write(
         project_path.join("data.yaml"),
         format!("$schema: \"{}\"\nname: Alice\nage: 30\n", SCHEMA_URL),
-    ).unwrap();
+    )
+    .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
@@ -96,16 +93,24 @@ fn iyamlschema_invalid_data_fails() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[processor.iyamlschema]\nsrc_dirs = [\".\"]\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     // "age" should be integer, not string
     fs::write(
         project_path.join("data.yaml"),
-        format!("$schema: \"{}\"\nname: Alice\nage: not_a_number\n", SCHEMA_URL),
-    ).unwrap();
+        format!(
+            "$schema: \"{}\"\nname: Alice\nage: not_a_number\n",
+            SCHEMA_URL
+        ),
+    )
+    .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(!output.status.success(), "Build should fail for invalid data");
+    assert!(
+        !output.status.success(),
+        "Build should fail for invalid data"
+    );
 }
 
 #[test]
@@ -130,18 +135,27 @@ fn iyamlschema_wrong_ordering_fails() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[processor.iyamlschema]\nsrc_dirs = [\".\"]\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     // YAML key order is ["name", "age"] but schema expects ["age", "name"]
     fs::write(
         project_path.join("data.yaml"),
         format!("$schema: \"{}\"\nname: Alice\nage: 30\n", wrong_url),
-    ).unwrap();
+    )
+    .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(!output.status.success(), "Build should fail for wrong key order");
+    assert!(
+        !output.status.success(),
+        "Build should fail for wrong key order"
+    );
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("property ordering"), "Error should mention property ordering: {}", stderr);
+    assert!(
+        stderr.contains("property ordering"),
+        "Error should mention property ordering: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -152,15 +166,16 @@ fn iyamlschema_no_schema_field_fails() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[processor.iyamlschema]\nsrc_dirs = [\".\"]\n",
-    ).unwrap();
+    )
+    .unwrap();
 
-    fs::write(
-        project_path.join("data.yaml"),
-        "name: Alice\nage: 30\n",
-    ).unwrap();
+    fs::write(project_path.join("data.yaml"), "name: Alice\nage: 30\n").unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(!output.status.success(), "Build should fail when $schema is missing");
+    assert!(
+        !output.status.success(),
+        "Build should fail when $schema is missing"
+    );
 }
 
 #[test]
@@ -173,12 +188,14 @@ fn iyamlschema_incremental_skip() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[processor.iyamlschema]\nsrc_dirs = [\".\"]\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     fs::write(
         project_path.join("data.yaml"),
         format!("$schema: \"{}\"\nname: Alice\nage: 30\n", SCHEMA_URL),
-    ).unwrap();
+    )
+    .unwrap();
 
     // First build
     let output1 = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
@@ -190,12 +207,14 @@ fn iyamlschema_incremental_skip() {
     );
 
     // Second build should skip
-    let output2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[iyamlschema] Skipping (unchanged):"),
-        "Second build should skip: {}", stdout2,
+        "Second build should skip: {}",
+        stdout2,
     );
 }
 
@@ -217,12 +236,14 @@ fn expired_webcache_entry_is_refetched() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[cache]\nwebcache_ttl_secs = 3600\n\n[processor.iyamlschema]\nsrc_dirs = [\".\"]\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     fs::write(
         project_path.join("data.yaml"),
         format!("$schema: \"{}\"\nname: Alice\nage: 30\n", SCHEMA_URL),
-    ).unwrap();
+    )
+    .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     let combined = format!(
@@ -249,12 +270,14 @@ fn fresh_webcache_entry_is_served_from_cache() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[cache]\nwebcache_ttl_secs = 604800\n\n[processor.iyamlschema]\nsrc_dirs = [\".\"]\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     fs::write(
         project_path.join("data.yaml"),
         format!("$schema: \"{}\"\nname: Alice\nage: 30\n", SCHEMA_URL),
-    ).unwrap();
+    )
+    .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(

@@ -44,10 +44,7 @@ pub fn print_table_with_total(headers: &[&str], rows: &[Vec<String>], total: &[S
     let n_rows = table.count_rows();
     let header_line = HorizontalLine::inherit(Style::modern());
     let total_line = HorizontalLine::inherit(Style::modern());
-    let style = Style::rounded().horizontals([
-        (1, header_line),
-        (n_rows - 1, total_line),
-    ]);
+    let style = Style::rounded().horizontals([(1, header_line), (n_rows - 1, total_line)]);
     crate::output::info(&format!("{}", table.with(style)));
 }
 
@@ -66,6 +63,6 @@ pub const NONE_LABEL: &str = "None";
 pub fn opt_json(value: Option<&serde_json::Value>) -> String {
     match value {
         Some(v) => serde_json::to_string(v).unwrap_or_default(),
-        None    => NONE_LABEL.to_string(),
+        None => NONE_LABEL.to_string(),
     }
 }

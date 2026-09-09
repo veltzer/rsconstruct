@@ -1,5 +1,5 @@
+use crate::common::{require_tool, run_rsconstruct, run_rsconstruct_with_env};
 use std::fs;
-use crate::common::{run_rsconstruct, run_rsconstruct_with_env, require_tool};
 use tempfile::TempDir;
 
 fn setup_protobuf_project() -> TempDir {
@@ -7,8 +7,9 @@ fn setup_protobuf_project() -> TempDir {
     fs::create_dir_all(temp_dir.path().join("proto")).expect("Failed to create proto dir");
     fs::write(
         temp_dir.path().join("rsconstruct.toml"),
-        "[processor.protobuf]\nsrc_dirs = [\"proto\"]\n"
-    ).expect("Failed to write rsconstruct.toml");
+        "[processor.protobuf]\nsrc_dirs = [\"proto\"]\n",
+    )
+    .expect("Failed to write rsconstruct.toml");
     temp_dir
 }
 
@@ -25,14 +26,22 @@ fn protobuf_basic_compile() {
 message Hello {
   string name = 1;
 }
-"#
-    ).unwrap();
+"#,
+    )
+    .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "rsconstruct build failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "rsconstruct build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     let output_file = project_path.join("out/protobuf/hello.pb.cc");
-    assert!(output_file.exists(), "Output protobuf C++ file was not created");
+    assert!(
+        output_file.exists(),
+        "Output protobuf C++ file was not created"
+    );
 }
 
 #[test]
@@ -48,16 +57,22 @@ fn protobuf_incremental_build() {
 message Test {
   int32 id = 1;
 }
-"#
-    ).unwrap();
+"#,
+    )
+    .unwrap();
 
     let output1 = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
 
-    let output2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
-    assert!(stdout2.contains("Skipping (unchanged):"), "Expected skip message in incremental build: {}", stdout2);
+    assert!(
+        stdout2.contains("Skipping (unchanged):"),
+        "Expected skip message in incremental build: {}",
+        stdout2
+    );
 }
 
 #[test]
@@ -73,8 +88,9 @@ fn protobuf_clean() {
 message Clean {
   string value = 1;
 }
-"#
-    ).unwrap();
+"#,
+    )
+    .unwrap();
 
     let output = run_rsconstruct(project_path, &["build"]);
     assert!(output.status.success());

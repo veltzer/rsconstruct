@@ -1,9 +1,9 @@
 mod analyzer_configs;
 mod processor_configs;
 mod provenance;
-mod variables;
 #[cfg(test)]
 mod tests;
+mod variables;
 
 pub use analyzer_configs::*;
 pub use processor_configs::*;
@@ -29,7 +29,12 @@ pub const LOCAL_CONFIG_FILE: &str = "rsconstruct.local.toml";
 /// Scan field names in `StandardConfig`.
 /// These are automatically appended to every processor's known fields during validation.
 pub const SCAN_CONFIG_FIELDS: &[&str] = &[
-    "src_dirs", "src_extensions", "src_exclude_dirs", "src_exclude_files", "src_exclude_paths", "src_files",
+    "src_dirs",
+    "src_extensions",
+    "src_exclude_dirs",
+    "src_exclude_files",
+    "src_exclude_paths",
+    "src_files",
 ];
 
 /// Universal `StandardConfig` fields that apply to every processor.
@@ -122,10 +127,14 @@ impl ProcessorDefaults {
     /// All-empty defaults, for `..ProcessorDefaults::EMPTY` in static plugin
     /// entries (`Default::default()` is not const-evaluable there).
     pub const EMPTY: Self = Self {
-        command: "", dep_auto: &[], output_dir: "", formats: &[], args: &[], batch: None,
+        command: "",
+        dep_auto: &[],
+        output_dir: "",
+        formats: &[],
+        args: &[],
+        batch: None,
     };
 }
-
 
 /// Parameters for a simple checker processor — pure data, no macros.
 #[derive(Copy, Clone)]
@@ -157,10 +166,11 @@ pub fn resolve_extra_inputs(dep_inputs: &[String]) -> Result<Vec<PathBuf>> {
     for p in dep_inputs {
         if p.contains('*') || p.contains('?') || p.contains('[') {
             // Glob pattern: expand to matching files
-            for entry in glob::glob(p)
-                .with_context(|| format!("Invalid glob pattern in dep_inputs: {p}"))?
+            for entry in
+                glob::glob(p).with_context(|| format!("Invalid glob pattern in dep_inputs: {p}"))?
             {
-                let path = crate::errors::ctx(entry, &format!("Failed to read glob entry for: {p}"))?;
+                let path =
+                    crate::errors::ctx(entry, &format!("Failed to read glob entry for: {p}"))?;
                 if path.is_file() {
                     resolved.push(path);
                 }
@@ -178,21 +188,45 @@ pub fn resolve_extra_inputs(dep_inputs: &[String]) -> Result<Vec<PathBuf>> {
 
 /// Descriptions for scan fields shared by every processor.
 pub const SCAN_FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
-    ("src_dirs",            "Directories to scan for source files"),
-    ("src_extensions",      "File extensions to match during scanning"),
-    ("src_exclude_dirs",    "Directory path segments to skip during scanning"),
-    ("src_exclude_files",   "File names to exclude from scanning"),
-    ("src_exclude_paths",   "Relative paths to exclude from scanning"),
-    ("src_files",           "Additional files to include alongside normal scanning"),
+    ("src_dirs", "Directories to scan for source files"),
+    ("src_extensions", "File extensions to match during scanning"),
+    (
+        "src_exclude_dirs",
+        "Directory path segments to skip during scanning",
+    ),
+    ("src_exclude_files", "File names to exclude from scanning"),
+    (
+        "src_exclude_paths",
+        "Relative paths to exclude from scanning",
+    ),
+    (
+        "src_files",
+        "Additional files to include alongside normal scanning",
+    ),
 ];
 
 /// Descriptions for execution/dependency fields shared by most processors.
 pub const SHARED_FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
-    ("dep_inputs",  "Extra files that trigger a rebuild when their content changes"),
-    ("dep_auto",    "Config files added as dep_inputs; processor defaults are skipped when absent, entries you list must exist"),
-    ("batch",       "Pass all matched files to the tool in a single invocation"),
-    ("max_jobs",    "Maximum parallel jobs for this processor (overrides global --jobs)"),
-    ("enabled",     "Set to false to disable this processor without removing the stanza"),
+    (
+        "dep_inputs",
+        "Extra files that trigger a rebuild when their content changes",
+    ),
+    (
+        "dep_auto",
+        "Config files added as dep_inputs; processor defaults are skipped when absent, entries you list must exist",
+    ),
+    (
+        "batch",
+        "Pass all matched files to the tool in a single invocation",
+    ),
+    (
+        "max_jobs",
+        "Maximum parallel jobs for this processor (overrides global --jobs)",
+    ),
+    (
+        "enabled",
+        "Set to false to disable this processor without removing the stanza",
+    ),
 ];
 
 /// Compute a config hash including only the fields named in `checksum_fields`.
@@ -210,9 +244,11 @@ pub fn checksum_fields_of(name: &str) -> Vec<&'static str> {
 }
 
 pub fn output_config_hash(value: &impl Serialize, checksum_fields: &[&str]) -> String {
-    let json_value: serde_json::Value = serde_json::to_value(value).expect(errors::CONFIG_SERIALIZE);
+    let json_value: serde_json::Value =
+        serde_json::to_value(value).expect(errors::CONFIG_SERIALIZE);
     let filtered = if let serde_json::Value::Object(map) = json_value {
-        let kept: serde_json::Map<String, serde_json::Value> = map.into_iter()
+        let kept: serde_json::Map<String, serde_json::Value> = map
+            .into_iter()
             .filter(|(k, _)| checksum_fields.contains(&k.as_str()))
             .collect();
         serde_json::Value::Object(kept)
@@ -223,8 +259,6 @@ pub fn output_config_hash(value: &impl Serialize, checksum_fields: &[&str]) -> S
     let hash = Sha256::digest(json.as_bytes());
     hex::encode(hash)
 }
-
-
 
 const DEFAULT_PLUGINS_DIR: &str = "plugins";
 
@@ -241,7 +275,9 @@ fn default_plugins_dir() -> String {
 
 impl Default for PluginsConfig {
     fn default() -> Self {
-        Self { dir: DEFAULT_PLUGINS_DIR.into() }
+        Self {
+            dir: DEFAULT_PLUGINS_DIR.into(),
+        }
     }
 }
 
@@ -390,7 +426,8 @@ impl DependenciesConfig {
                         "{} declares Python dependencies but {} does not exist; \
                          run `uv lock` to create it, or set `pip_source = \"pyproject\"` \
                          under [dependencies] to resolve the declared names at install time",
-                        pyproject.display(), lock.display(),
+                        pyproject.display(),
+                        lock.display(),
                     );
                 }
             }
@@ -405,8 +442,11 @@ impl DependenciesConfig {
         let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
         let mut merged: Vec<String> = Vec::new();
         for req in self.pip.iter().cloned().chain(from_project) {
-            let key = format!("{}[{}]",
-                normalized_distribution_name(&req), requirement_extras(&req));
+            let key = format!(
+                "{}[{}]",
+                normalized_distribution_name(&req),
+                requirement_extras(&req)
+            );
             if seen.insert(key) {
                 merged.push(req);
             }
@@ -439,16 +479,19 @@ pub fn pyproject_python_deps(pyproject: &Path) -> Result<Vec<String>> {
     }
     let content = fs::read_to_string(pyproject)
         .with_context(|| format!("Failed to read {}", pyproject.display()))?;
-    let root: toml::Value = toml::from_str(&content)
-        .map_err(|e| crate::exit_code::config_error(
-            format!("Failed to parse {}: {e}", pyproject.display())))?;
+    let root: toml::Value = toml::from_str(&content).map_err(|e| {
+        crate::exit_code::config_error(format!("Failed to parse {}: {e}", pyproject.display()))
+    })?;
 
     let string_items = |v: &toml::Value| -> Vec<String> {
-        v.as_array().map(|items| {
-            items.iter()
-                .filter_map(|i| i.as_str().map(str::to_string))
-                .collect()
-        }).unwrap_or_default()
+        v.as_array()
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|i| i.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default()
     };
 
     let mut deps: Vec<String> = Vec::new();
@@ -456,13 +499,19 @@ pub fn pyproject_python_deps(pyproject: &Path) -> Result<Vec<String>> {
         if let Some(list) = project.get("dependencies") {
             deps.extend(string_items(list));
         }
-        if let Some(extras) = project.get("optional-dependencies").and_then(toml::Value::as_table) {
+        if let Some(extras) = project
+            .get("optional-dependencies")
+            .and_then(toml::Value::as_table)
+        {
             for list in extras.values() {
                 deps.extend(string_items(list));
             }
         }
     }
-    if let Some(groups) = root.get("dependency-groups").and_then(toml::Value::as_table) {
+    if let Some(groups) = root
+        .get("dependency-groups")
+        .and_then(toml::Value::as_table)
+    {
         for list in groups.values() {
             deps.extend(string_items(list));
         }
@@ -479,21 +528,24 @@ pub fn pyproject_python_deps(pyproject: &Path) -> Result<Vec<String>> {
 /// this function does not understand (git, path, url) is an error rather
 /// than a silently dropped dependency.
 pub fn uv_lock_pinned_deps(lock: &Path) -> Result<Vec<String>> {
-    let content = fs::read_to_string(lock)
-        .with_context(|| format!("Failed to read {}", lock.display()))?;
-    let root: toml::Value = toml::from_str(&content)
-        .map_err(|e| crate::exit_code::config_error(
-            format!("Failed to parse {}: {e}", lock.display())))?;
-    let packages = root.get("package")
+    let content =
+        fs::read_to_string(lock).with_context(|| format!("Failed to read {}", lock.display()))?;
+    let root: toml::Value = toml::from_str(&content).map_err(|e| {
+        crate::exit_code::config_error(format!("Failed to parse {}: {e}", lock.display()))
+    })?;
+    let packages = root
+        .get("package")
         .and_then(toml::Value::as_array)
         .map_or(&[] as &[toml::Value], Vec::as_slice);
     let mut pins: Vec<String> = Vec::new();
     for pkg in packages {
-        let name = pkg.get("name").and_then(toml::Value::as_str)
+        let name = pkg
+            .get("name")
+            .and_then(toml::Value::as_str)
             .with_context(|| format!("{}: package entry without a name", lock.display()))?;
         let source = pkg.get("source").and_then(toml::Value::as_table);
-        let is_project = source.is_some_and(|s|
-            s.contains_key("editable") || s.contains_key("virtual"));
+        let is_project =
+            source.is_some_and(|s| s.contains_key("editable") || s.contains_key("virtual"));
         if is_project {
             continue;
         }
@@ -505,7 +557,9 @@ pub fn uv_lock_pinned_deps(lock: &Path) -> Result<Vec<String>> {
                 lock.display(),
             );
         }
-        let version = pkg.get("version").and_then(toml::Value::as_str)
+        let version = pkg
+            .get("version")
+            .and_then(toml::Value::as_str)
             .with_context(|| format!("{}: package {name} has no version", lock.display()))?;
         pins.push(format!("{name}=={version}"));
     }
@@ -516,8 +570,12 @@ pub fn uv_lock_pinned_deps(lock: &Path) -> Result<Vec<String>> {
 /// `"manim-voiceover[gtts]"`), sorted and comma-joined so equivalent extras
 /// lists compare equal; empty when the requirement names no extras.
 pub fn requirement_extras(requirement: &str) -> String {
-    let Some(open) = requirement.find('[') else { return String::new() };
-    let Some(close) = requirement[open..].find(']') else { return String::new() };
+    let Some(open) = requirement.find('[') else {
+        return String::new();
+    };
+    let Some(close) = requirement[open..].find(']') else {
+        return String::new();
+    };
     let mut extras: Vec<String> = requirement[open + 1..open + close]
         .split(',')
         .map(|e| e.trim().to_lowercase())
@@ -890,12 +948,18 @@ pub fn resolve_instance_defaults(
 impl ProcessorConfig {
     /// Collect unique scan directories from all declared instances.
     pub(crate) fn src_dirs(&self) -> Vec<String> {
-        let mut dirs: Vec<String> = self.instances.iter()
+        let mut dirs: Vec<String> = self
+            .instances
+            .iter()
             .flat_map(|inst| {
-                inst.config_toml.get("src_dirs")
+                inst.config_toml
+                    .get("src_dirs")
                     .and_then(|v| v.as_array())
                     .into_iter()
-                    .flat_map(|arr| arr.iter().filter_map(|v| v.as_str().map(std::string::ToString::to_string)))
+                    .flat_map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
+                    })
                     .filter(|d| !d.is_empty())
             })
             .collect();
@@ -910,7 +974,8 @@ impl ProcessorConfig {
         // Standard fields (minus this processor's omissions) plus the
         // plugin's own FieldSpec names. A spec sharing a standard field's
         // name replaces it, so the dedup keeps one copy.
-        let mut fields: Vec<&'static str> = StandardConfig::known_fields().iter()
+        let mut fields: Vec<&'static str> = StandardConfig::known_fields()
+            .iter()
             .copied()
             .filter(|f| !e.omit_standard_fields.contains(f))
             .collect();
@@ -927,7 +992,8 @@ impl ProcessorConfig {
         let e = find_registry_entry(type_name)?;
         // A spec that shadows a standard field owns its checksum membership.
         let shadowed = |f: &&'static str| e.fields.iter().any(|s| s.name == *f);
-        let mut fields: Vec<&'static str> = StandardConfig::checksum_fields().iter()
+        let mut fields: Vec<&'static str> = StandardConfig::checksum_fields()
+            .iter()
             .copied()
             .filter(|f| !e.omit_standard_fields.contains(f))
             .filter(|f| !shadowed(f))
@@ -943,16 +1009,25 @@ impl ProcessorConfig {
     /// Return must fields (required non-empty fields) for a builtin processor type, or None for Lua plugins.
     pub(crate) fn must_fields_for(type_name: &str) -> Option<Vec<&'static str>> {
         let e = find_registry_entry(type_name)?;
-        Some(e.fields.iter().filter(|s| s.required).map(|s| s.name).collect())
+        Some(
+            e.fields
+                .iter()
+                .filter(|s| s.required)
+                .map(|s| s.name)
+                .collect(),
+        )
     }
 
     /// Return (field, description) pairs for a builtin processor type, or None for Lua plugins.
     /// Standard-field descriptions come from `StandardConfig` (minus omissions,
     /// minus shadowed); the plugin's spec docs follow.
-    pub(crate) fn field_descriptions_for(type_name: &str) -> Option<Vec<(&'static str, &'static str)>> {
+    pub(crate) fn field_descriptions_for(
+        type_name: &str,
+    ) -> Option<Vec<(&'static str, &'static str)>> {
         let e = find_registry_entry(type_name)?;
         let shadowed = |f: &str| e.fields.iter().any(|s| s.name == f);
-        let mut descs: Vec<(&'static str, &'static str)> = StandardConfig::field_descriptions().iter()
+        let mut descs: Vec<(&'static str, &'static str)> = StandardConfig::field_descriptions()
+            .iter()
             .copied()
             .filter(|(f, _)| !e.omit_standard_fields.contains(f) && !shadowed(f))
             .collect();
@@ -996,13 +1071,47 @@ pub fn apply_processor_defaults(
     value: &mut toml::Value,
     provenance: &mut ProvenanceMap,
 ) {
-    let Some(defaults) = processor_defaults_for(type_name) else { return };
-    let Some(table) = value.as_table_mut() else { return };
-    set_string_default(table, "command", defaults.command, provenance, FieldProvenance::ProcessorDefault);
-    set_string_default(table, "output_dir", defaults.output_dir, provenance, FieldProvenance::ProcessorDefault);
-    set_string_array_default(table, "dep_auto", defaults.dep_auto, provenance, FieldProvenance::ProcessorDefault);
-    set_string_array_default(table, "formats", defaults.formats, provenance, FieldProvenance::ProcessorDefault);
-    set_string_array_default(table, "args", defaults.args, provenance, FieldProvenance::ProcessorDefault);
+    let Some(defaults) = processor_defaults_for(type_name) else {
+        return;
+    };
+    let Some(table) = value.as_table_mut() else {
+        return;
+    };
+    set_string_default(
+        table,
+        "command",
+        defaults.command,
+        provenance,
+        FieldProvenance::ProcessorDefault,
+    );
+    set_string_default(
+        table,
+        "output_dir",
+        defaults.output_dir,
+        provenance,
+        FieldProvenance::ProcessorDefault,
+    );
+    set_string_array_default(
+        table,
+        "dep_auto",
+        defaults.dep_auto,
+        provenance,
+        FieldProvenance::ProcessorDefault,
+    );
+    set_string_array_default(
+        table,
+        "formats",
+        defaults.formats,
+        provenance,
+        FieldProvenance::ProcessorDefault,
+    );
+    set_string_array_default(
+        table,
+        "args",
+        defaults.args,
+        provenance,
+        FieldProvenance::ProcessorDefault,
+    );
     if let Some(batch) = defaults.batch
         && !table.contains_key("batch")
     {
@@ -1032,7 +1141,10 @@ fn set_string_array_default(
     source: FieldProvenance,
 ) {
     if !vals.is_empty() && !table.contains_key(key) {
-        let arr: Vec<toml::Value> = vals.iter().map(|s| toml::Value::String(s.to_string())).collect();
+        let arr: Vec<toml::Value> = vals
+            .iter()
+            .map(|s| toml::Value::String(s.to_string()))
+            .collect();
         table.insert(key.into(), toml::Value::Array(arr));
         provenance::record_if_absent(provenance, key, source);
     }
@@ -1058,7 +1170,10 @@ fn set_maybe_empty_array_default(
     source: FieldProvenance,
 ) {
     if !table.contains_key(key) {
-        let arr: Vec<toml::Value> = vals.iter().map(|s| toml::Value::String(s.to_string())).collect();
+        let arr: Vec<toml::Value> = vals
+            .iter()
+            .map(|s| toml::Value::String(s.to_string()))
+            .collect();
         table.insert(key.into(), toml::Value::Array(arr));
         provenance::record_if_absent(provenance, key, source);
     }
@@ -1072,13 +1187,45 @@ pub fn apply_scan_defaults(
     value: &mut toml::Value,
     provenance: &mut ProvenanceMap,
 ) {
-    let Some(defaults) = scan_defaults_for(type_name) else { return };
-    let Some(table) = value.as_table_mut() else { return };
-    set_maybe_empty_array_default(table, "src_dirs", defaults.src_dirs, provenance, FieldProvenance::ScanDefault);
-    set_maybe_empty_array_default(table, "src_extensions", defaults.src_extensions, provenance, FieldProvenance::ScanDefault);
-    set_maybe_empty_array_default(table, "src_exclude_dirs", defaults.src_exclude_dirs, provenance, FieldProvenance::ScanDefault);
-    set_empty_array_default(table, "src_exclude_files", provenance, FieldProvenance::ScanDefault);
-    set_empty_array_default(table, "src_exclude_paths", provenance, FieldProvenance::ScanDefault);
+    let Some(defaults) = scan_defaults_for(type_name) else {
+        return;
+    };
+    let Some(table) = value.as_table_mut() else {
+        return;
+    };
+    set_maybe_empty_array_default(
+        table,
+        "src_dirs",
+        defaults.src_dirs,
+        provenance,
+        FieldProvenance::ScanDefault,
+    );
+    set_maybe_empty_array_default(
+        table,
+        "src_extensions",
+        defaults.src_extensions,
+        provenance,
+        FieldProvenance::ScanDefault,
+    );
+    set_maybe_empty_array_default(
+        table,
+        "src_exclude_dirs",
+        defaults.src_exclude_dirs,
+        provenance,
+        FieldProvenance::ScanDefault,
+    );
+    set_empty_array_default(
+        table,
+        "src_exclude_files",
+        provenance,
+        FieldProvenance::ScanDefault,
+    );
+    set_empty_array_default(
+        table,
+        "src_exclude_paths",
+        provenance,
+        FieldProvenance::ScanDefault,
+    );
     set_empty_array_default(table, "src_files", provenance, FieldProvenance::ScanDefault);
 }
 
@@ -1094,7 +1241,10 @@ pub struct ProcessorConfig {
 }
 
 impl Serialize for ProcessorConfig {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
         use serde::ser::SerializeMap;
         let mut map = serializer.serialize_map(None)?;
         for inst in &self.instances {
@@ -1129,7 +1279,9 @@ impl Serialize for ProcessorConfig {
 }
 
 impl<'de> Deserialize<'de> for ProcessorConfig {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
         let table = toml::Value::deserialize(deserializer)?;
         Ok(Self::from_toml(&table))
     }
@@ -1162,7 +1314,9 @@ impl ProcessorConfig {
 
         for (key, val) in table {
             // skip non-table entries
-            let Some(sub_table) = val.as_table() else { continue };
+            let Some(sub_table) = val.as_table() else {
+                continue;
+            };
 
             if is_builtin_type(key) {
                 // Check if this is single-instance or multi-instance
@@ -1209,7 +1363,10 @@ impl ProcessorConfig {
     /// section is treated as single-instance here; `parse_processors` rejects
     /// it outright, so this only affects callers that have already validated.
     fn is_multi_instance(type_name: &str, table: &toml::map::Map<String, toml::Value>) -> bool {
-        matches!(Self::classify_section(type_name, table), SectionShape::MultiInstance)
+        matches!(
+            Self::classify_section(type_name, table),
+            SectionShape::MultiInstance
+        )
     }
 
     /// The shape of a `[processor.NAME]` section, and whether it is even
@@ -1235,13 +1392,15 @@ impl ProcessorConfig {
             // instance. See `multi_instance_requires_known_fields` in the docs.
             return SectionShape::SingleInstance;
         };
-        let known_fields: Vec<&str> = known.iter()
+        let known_fields: Vec<&str> = known
+            .iter()
             .chain(SCAN_CONFIG_FIELDS.iter())
             .chain(STANDARD_EXTRA_FIELDS.iter())
             .copied()
             .collect();
 
-        let field_keys: Vec<&str> = table.keys()
+        let field_keys: Vec<&str> = table
+            .keys()
             .filter(|k| known_fields.contains(&k.as_str()))
             .map(String::as_str)
             .collect();
@@ -1296,21 +1455,35 @@ impl ProcessorConfig {
                 // guarded while the value itself was still rewritten).
                 if matches!(
                     inst.provenance.get(*field),
-                    Some(FieldProvenance::UserToml { .. } | FieldProvenance::LocalToml { .. } | FieldProvenance::CliOverride),
+                    Some(
+                        FieldProvenance::UserToml { .. }
+                            | FieldProvenance::LocalToml { .. }
+                            | FieldProvenance::CliOverride
+                    ),
                 ) {
                     continue;
                 }
-                let Some(val) = inst.config_toml.get(field).and_then(|v| v.as_str()).map(std::string::ToString::to_string) else { continue };
+                let Some(val) = inst
+                    .config_toml
+                    .get(field)
+                    .and_then(|v| v.as_str())
+                    .map(std::string::ToString::to_string)
+                else {
+                    continue;
+                };
                 // Prefix matches must respect path boundaries: `out/marp`
                 // must not match `out/marpdeck/...`.
-                let type_rest = val.strip_prefix(&type_default_prefix)
+                let type_rest = val
+                    .strip_prefix(&type_default_prefix)
                     .filter(|r| r.is_empty() || r.starts_with('/'));
                 let new_val = if inst.instance_name != inst.type_name
-                    && let Some(rest) = type_rest {
+                    && let Some(rest) = type_rest
+                {
                     // Named instance: remap out/{type} → {global}/{instance}
                     format!("{instance_prefix}{rest}")
                 } else if global_output_dir != "out"
-                    && let Some(rest) = val.strip_prefix("out/") {
+                    && let Some(rest) = val.strip_prefix("out/")
+                {
                     // Global output dir override: remap out/ → {global}/
                     format!("{global_output_dir}/{rest}")
                 } else {
@@ -1319,7 +1492,8 @@ impl ProcessorConfig {
                 if let Some(table) = inst.config_toml.as_table_mut() {
                     table.insert(field.to_string(), toml::Value::String(new_val));
                 }
-                inst.provenance.insert((*field).to_string(), FieldProvenance::OutputDirDefault);
+                inst.provenance
+                    .insert((*field).to_string(), FieldProvenance::OutputDirDefault);
             }
         }
     }
@@ -1344,13 +1518,17 @@ impl ProcessorConfig {
         type_name: &str,
     ) -> Result<C> {
         if let Some(inst) = self.first_instance_of_type(type_name) {
-            return inst.config_toml.clone().try_into()
+            return inst
+                .config_toml
+                .clone()
+                .try_into()
                 .with_context(|| format!("Failed to parse [processor.{type_name}] config"));
         }
         let mut value = toml::Value::Table(toml::map::Map::new());
         let mut provenance = ProvenanceMap::new();
         crate::registries::processor::apply_all_defaults(type_name, &mut value, &mut provenance);
-        value.try_into()
+        value
+            .try_into()
             .with_context(|| format!("Failed to build default config for processor '{type_name}'"))
     }
 
@@ -1363,7 +1541,6 @@ impl ProcessorConfig {
             .map(std::string::ToString::to_string)
     }
 }
-
 
 pub fn default_cc_compiler() -> String {
     "gcc".into()
@@ -1390,7 +1567,9 @@ fn default_shells() -> Vec<String> {
 
 impl Default for CompletionsConfig {
     fn default() -> Self {
-        Self { shells: vec!["bash".into()] }
+        Self {
+            shells: vec!["bash".into()],
+        }
     }
 }
 
@@ -1419,7 +1598,10 @@ pub struct AnalyzerConfig {
 }
 
 impl Serialize for AnalyzerConfig {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
         use serde::ser::SerializeMap;
         let mut map = serializer.serialize_map(None)?;
         // Emit single instances directly; group named sub-instances under the type.
@@ -1447,7 +1629,9 @@ impl Serialize for AnalyzerConfig {
 }
 
 impl<'de> Deserialize<'de> for AnalyzerConfig {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
         let table = toml::Value::deserialize(deserializer)?;
         Self::from_toml(&table).map_err(serde::de::Error::custom)
     }
@@ -1468,7 +1652,9 @@ impl AnalyzerConfig {
         let mut instances = Vec::new();
         for (type_name, val) in table {
             if registry::find_analyzer_plugin(type_name).is_none() {
-                anyhow::bail!("Unknown analyzer '{type_name}'. Run 'rsconstruct analyzers list' to see available analyzers.");
+                anyhow::bail!(
+                    "Unknown analyzer '{type_name}'. Run 'rsconstruct analyzers list' to see available analyzers."
+                );
             }
             let Some(sub_table) = val.as_table() else {
                 anyhow::bail!("Expected [analyzer.{type_name}] to be a table");
@@ -1501,7 +1687,6 @@ impl AnalyzerConfig {
     fn is_multi_instance(table: &toml::map::Map<String, toml::Value>) -> bool {
         !table.is_empty() && table.values().all(toml::Value::is_table)
     }
-
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -1558,9 +1743,11 @@ impl FieldType {
             Self::String => value.is_str(),
             Self::Bool => value.as_bool().is_some(),
             Self::Integer => value.is_integer(),
-            Self::StringArray => value.as_array()
+            Self::StringArray => value
+                .as_array()
                 .is_some_and(|arr| arr.iter().all(toml::Value::is_str)),
-            Self::TableArray => value.as_array()
+            Self::TableArray => value
+                .as_array()
                 .is_some_and(|arr| arr.iter().all(toml::Value::is_table)),
             Self::Table => value.is_table(),
             Self::Array => value.is_array(),
@@ -1612,7 +1799,8 @@ fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
     // FieldSpec list (a ~120-arm (processor, field) match table used to
     // live here — dead arms in it were provably invisible to the tests).
     find_registry_entry(processor)?
-        .fields.iter()
+        .fields
+        .iter()
         .find(|s| s.name == field)
         .map(|s| s.ty)
 }
@@ -1642,14 +1830,17 @@ fn validate_single_processor(
             && !SCAN_CONFIG_FIELDS.contains(&key.as_str())
             && !STANDARD_EXTRA_FIELDS.contains(&key.as_str())
         {
-            let all_fields: Vec<&str> = own_fields.iter()
+            let all_fields: Vec<&str> = own_fields
+                .iter()
                 .chain(SCAN_CONFIG_FIELDS.iter())
                 .chain(STANDARD_EXTRA_FIELDS.iter())
                 .copied()
                 .collect();
             errors.push(format!(
                 "[{}]: unknown field '{}' (valid fields: {})",
-                section_label, key, all_fields.join(", ")
+                section_label,
+                key,
+                all_fields.join(", ")
             ));
             continue;
         }
@@ -1659,7 +1850,9 @@ fn validate_single_processor(
         {
             errors.push(format!(
                 "[{}]: field '{}' must be {}, got {} ({})",
-                section_label, key, expected.label(),
+                section_label,
+                key,
+                expected.label(),
                 FieldType::describe_value(field_value),
                 field_value,
             ));
@@ -1689,7 +1882,6 @@ fn validate_single_processor(
             }
         }
     }
-
 }
 
 /// Validate that all fields in `[processor.X]` sections are known fields for that processor
@@ -1729,20 +1921,39 @@ fn validate_dep_auto_exist(instances: &[ProcessorInstance], build: &BuildConfig)
     }
     let mut errors = Vec::new();
     for inst in instances {
-        let Some(source) = inst.provenance.get("dep_auto") else { continue };
-        let user_set = matches!(source,
-            FieldProvenance::UserToml { .. } | FieldProvenance::LocalToml { .. } | FieldProvenance::CliOverride);
+        let Some(source) = inst.provenance.get("dep_auto") else {
+            continue;
+        };
+        let user_set = matches!(
+            source,
+            FieldProvenance::UserToml { .. }
+                | FieldProvenance::LocalToml { .. }
+                | FieldProvenance::CliOverride
+        );
         if !user_set {
             continue;
         }
-        let disabled = inst.config_toml.get("enabled").and_then(toml::Value::as_bool) == Some(false);
+        let disabled = inst
+            .config_toml
+            .get("enabled")
+            .and_then(toml::Value::as_bool)
+            == Some(false);
         if disabled {
             continue;
         }
-        let Some(entries) = inst.config_toml.get("dep_auto").and_then(toml::Value::as_array) else { continue };
+        let Some(entries) = inst
+            .config_toml
+            .get("dep_auto")
+            .and_then(toml::Value::as_array)
+        else {
+            continue;
+        };
         for entry in entries.iter().filter_map(toml::Value::as_str) {
             if !Path::new(entry).exists() {
-                errors.push(format!("  [processor.{}] dep_auto file not found: {entry} ({source})", inst.instance_name));
+                errors.push(format!(
+                    "  [processor.{}] dep_auto file not found: {entry} ({source})",
+                    inst.instance_name
+                ));
             }
         }
     }
@@ -1752,7 +1963,8 @@ fn validate_dep_auto_exist(instances: &[ProcessorInstance], build: &BuildConfig)
     Err(crate::exit_code::config_error(format!(
         "Invalid config:\n{}\nEvery dep_auto entry listed in the config must exist — remove the entry, \
          or set [build] allow_missing_dep_auto = true to skip absent entries as before",
-        errors.join("\n"))))
+        errors.join("\n")
+    )))
 }
 
 fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
@@ -1775,12 +1987,12 @@ fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
 
         if !is_builtin_type(name) {
             // Check if there's a matching Lua plugin file
-            let plugins_dir = raw.get("plugins")
+            let plugins_dir = raw
+                .get("plugins")
                 .and_then(|p| p.get("dir"))
                 .and_then(|d| d.as_str())
                 .unwrap_or(DEFAULT_PLUGINS_DIR);
-            let plugin_path = std::path::Path::new(plugins_dir)
-                .join(format!("{name}.lua"));
+            let plugin_path = std::path::Path::new(plugins_dir).join(format!("{name}.lua"));
             if !plugin_path.exists() {
                 errors.push(format!(
                     "[processor.{}]: unknown processor type '{}' (not a builtin processor or Lua plugin at {})",
@@ -1815,8 +2027,16 @@ fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
                      '{name}', so this could be read either as config or as named \
                      instance{}. Rename the instance{}, or move the config fields to \
                      [processor.{name}] and keep only instances as sub-tables.",
-                    colliding.iter().map(|c| format!("'{c}'")).collect::<Vec<_>>().join(", "),
-                    if colliding.len() == 1 { "names" } else { "name" },
+                    colliding
+                        .iter()
+                        .map(|c| format!("'{c}'"))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    if colliding.len() == 1 {
+                        "names"
+                    } else {
+                        "name"
+                    },
                     if colliding.len() == 1 { "" } else { "s" },
                     if colliding.len() == 1 { "" } else { "s" },
                 ));
@@ -1885,7 +2105,9 @@ fn validate_analyzer_section(
         if !known.contains(&key.as_str()) {
             errors.push(format!(
                 "[{}]: unknown field '{}' (valid fields: {})",
-                section_label, key, known.join(", ")
+                section_label,
+                key,
+                known.join(", ")
             ));
         }
     }
@@ -1897,9 +2119,12 @@ fn validate_analyzer_section(
 fn read_and_substitute(path: &Path) -> Result<String> {
     let content = fs::read_to_string(path)
         .with_context(|| format!("Failed to read config file: {}", path.display()))?;
-    substitute_variables(&content)
-        .map_err(|e| crate::exit_code::config_error(
-            format!("Failed to substitute variables in {}: {e:#}", path.display())))
+    substitute_variables(&content).map_err(|e| {
+        crate::exit_code::config_error(format!(
+            "Failed to substitute variables in {}: {e:#}",
+            path.display()
+        ))
+    })
 }
 
 /// Deep-merge `overlay` into `base`: tables merge recursively, while arrays
@@ -1928,14 +2153,17 @@ impl Config {
         let config_path = Path::new(CONFIG_FILE);
         if !config_path.exists() {
             let message = if Path::new(LOCAL_CONFIG_FILE).exists() {
-                format!("{LOCAL_CONFIG_FILE} found without {CONFIG_FILE} — the local overlay only extends a main config file. Run 'rsconstruct init' to create one.")
+                format!(
+                    "{LOCAL_CONFIG_FILE} found without {CONFIG_FILE} — the local overlay only extends a main config file. Run 'rsconstruct init' to create one."
+                )
             } else {
                 "No rsconstruct.toml found. Run 'rsconstruct init' to create one.".to_string()
             };
             return Err(crate::exit_code::RsconstructError::new(
                 crate::exit_code::RsconstructExitCode::ConfigError,
                 message,
-            ).into());
+            )
+            .into());
         }
         Ok(())
     }
@@ -1965,7 +2193,9 @@ impl Config {
         let mut exclude: Vec<String> = Vec::new();
         exclude.extend(normalized(&self.build.output_dir));
         for inst in &self.processor.instances {
-            let Some(table) = inst.config_toml.as_table() else { continue };
+            let Some(table) = inst.config_toml.as_table() else {
+                continue;
+            };
             for field in ["output_dir", "output"] {
                 if let Some(v) = table.get(field).and_then(toml::Value::as_str) {
                     exclude.extend(normalized(v));
@@ -1984,11 +2214,18 @@ impl Config {
 
         let mut force: Vec<String> = Vec::new();
         for inst in &self.processor.instances {
-            let Some(dirs) = inst.config_toml.as_table()
+            let Some(dirs) = inst
+                .config_toml
+                .as_table()
                 .and_then(|t| t.get("src_dirs"))
-                .and_then(toml::Value::as_array) else { continue };
+                .and_then(toml::Value::as_array)
+            else {
+                continue;
+            };
             for v in dirs {
-                let Some(dir) = v.as_str().and_then(normalized) else { continue };
+                let Some(dir) = v.as_str().and_then(normalized) else {
+                    continue;
+                };
                 if exclude.iter().any(|root| Path::new(&dir).starts_with(root)) {
                     force.push(dir);
                 }
@@ -2004,60 +2241,80 @@ impl Config {
         let config_path = Path::new(CONFIG_FILE);
         let local_path = Path::new(LOCAL_CONFIG_FILE);
 
-        let (mut config, span_map, global_span_map, local_span_map, local_global_span_map) = if config_path.exists() {
-            let substituted = read_and_substitute(config_path)?;
-            let mut raw: toml::Value = toml::from_str(&substituted)
-                .map_err(|e| crate::exit_code::config_error(
-                    format!("Failed to parse config file {}: {e}", config_path.display())))?;
-            // Overlay: rsconstruct.local.toml, when present, is deep-merged
-            // over the main config. Tables merge recursively; arrays and
-            // scalars from the local file replace the main file's values.
-            // `[vars]` substitution is per-file: each file's `${...}`
-            // references resolve against its own `[vars]` section only.
-            let local_substituted = if local_path.exists() {
-                let local_content = read_and_substitute(local_path)?;
-                let local_raw: toml::Value = toml::from_str(&local_content)
-                    .map_err(|e| crate::exit_code::config_error(
-                        format!("Failed to parse config file {}: {e}", local_path.display())))?;
-                merge_toml_values(&mut raw, local_raw);
-                Some(local_content)
+        let (mut config, span_map, global_span_map, local_span_map, local_global_span_map) =
+            if config_path.exists() {
+                let substituted = read_and_substitute(config_path)?;
+                let mut raw: toml::Value = toml::from_str(&substituted).map_err(|e| {
+                    crate::exit_code::config_error(format!(
+                        "Failed to parse config file {}: {e}",
+                        config_path.display()
+                    ))
+                })?;
+                // Overlay: rsconstruct.local.toml, when present, is deep-merged
+                // over the main config. Tables merge recursively; arrays and
+                // scalars from the local file replace the main file's values.
+                // `[vars]` substitution is per-file: each file's `${...}`
+                // references resolve against its own `[vars]` section only.
+                let local_substituted = if local_path.exists() {
+                    let local_content = read_and_substitute(local_path)?;
+                    let local_raw: toml::Value = toml::from_str(&local_content).map_err(|e| {
+                        crate::exit_code::config_error(format!(
+                            "Failed to parse config file {}: {e}",
+                            local_path.display()
+                        ))
+                    })?;
+                    merge_toml_values(&mut raw, local_raw);
+                    Some(local_content)
+                } else {
+                    None
+                };
+                // Run both schema validators before serde sees the config, so users
+                // get pretty per-section errors instead of serde's raw messages.
+                // Errors from both validators are surfaced together under a single
+                // "Invalid config:" header.
+                let mut all_errors = validate_processor_fields_raw(&raw);
+                all_errors.extend(validate_analyzer_fields_raw(&raw));
+                if !all_errors.is_empty() {
+                    return Err(crate::exit_code::config_error(format!(
+                        "Invalid config:\n{}",
+                        all_errors.join("\n")
+                    )));
+                }
+                let config: Self = raw.try_into().map_err(|e| {
+                    crate::exit_code::config_error(format!(
+                        "Failed to parse config file {}: {e}",
+                        config_path.display()
+                    ))
+                })?;
+                validate_build_config(&config.build)?;
+                // Capture byte-level spans from the substituted sources so we can
+                // report user-set fields as `rsconstruct.toml:<line>` (or
+                // `rsconstruct.local.toml:<line>`) instead of the sentinel
+                // `line: 0` we seeded during deserialization.
+                let (spans, global_spans) = provenance::build_span_maps(&substituted);
+                let (local_spans, local_global_spans) = match &local_substituted {
+                    Some(content) => provenance::build_span_maps(content),
+                    None => (SpanMap::new(), provenance::GlobalSpanMap::new()),
+                };
+                (config, spans, global_spans, local_spans, local_global_spans)
             } else {
-                None
+                if local_path.exists() {
+                    anyhow::bail!(
+                        "{LOCAL_CONFIG_FILE} found without {CONFIG_FILE} — the local overlay only extends a main config file",
+                    );
+                }
+                (
+                    Self::default(),
+                    SpanMap::new(),
+                    provenance::GlobalSpanMap::new(),
+                    SpanMap::new(),
+                    provenance::GlobalSpanMap::new(),
+                )
             };
-            // Run both schema validators before serde sees the config, so users
-            // get pretty per-section errors instead of serde's raw messages.
-            // Errors from both validators are surfaced together under a single
-            // "Invalid config:" header.
-            let mut all_errors = validate_processor_fields_raw(&raw);
-            all_errors.extend(validate_analyzer_fields_raw(&raw));
-            if !all_errors.is_empty() {
-                return Err(crate::exit_code::config_error(
-                    format!("Invalid config:\n{}", all_errors.join("\n"))));
-            }
-            let config: Self = raw.try_into()
-                .map_err(|e| crate::exit_code::config_error(
-                    format!("Failed to parse config file {}: {e}", config_path.display())))?;
-            validate_build_config(&config.build)?;
-            // Capture byte-level spans from the substituted sources so we can
-            // report user-set fields as `rsconstruct.toml:<line>` (or
-            // `rsconstruct.local.toml:<line>`) instead of the sentinel
-            // `line: 0` we seeded during deserialization.
-            let (spans, global_spans) = provenance::build_span_maps(&substituted);
-            let (local_spans, local_global_spans) = match &local_substituted {
-                Some(content) => provenance::build_span_maps(content),
-                None => (SpanMap::new(), provenance::GlobalSpanMap::new()),
-            };
-            (config, spans, global_spans, local_spans, local_global_spans)
-        } else {
-            if local_path.exists() {
-                anyhow::bail!(
-                    "{LOCAL_CONFIG_FILE} found without {CONFIG_FILE} — the local overlay only extends a main config file",
-                );
-            }
-            (Self::default(), SpanMap::new(), provenance::GlobalSpanMap::new(), SpanMap::new(), provenance::GlobalSpanMap::new())
-        };
         config.processor.resolve_scan_defaults();
-        config.processor.apply_output_dir_defaults(&config.build.output_dir);
+        config
+            .processor
+            .apply_output_dir_defaults(&config.build.output_dir);
         config.apply_span_map(&span_map, &local_span_map);
         validate_dep_auto_exist(&config.processor.instances, &config.build)?;
         config.populate_global_provenance(&global_span_map, &local_global_span_map)?;
@@ -2082,15 +2339,25 @@ impl Config {
     pub(crate) fn apply_overrides(&mut self, iset: &[String], pset: &[String]) -> Result<()> {
         for raw in iset {
             let (iname, field, value) = parse_override_entry(raw, "--iset")?;
-            apply_override_to_instances(&mut self.processor.instances, field, &value, |inst| {
-                inst.instance_name == iname
-            }, "iname", iname)?;
+            apply_override_to_instances(
+                &mut self.processor.instances,
+                field,
+                &value,
+                |inst| inst.instance_name == iname,
+                "iname",
+                iname,
+            )?;
         }
         for raw in pset {
             let (pname, field, value) = parse_override_entry(raw, "--pset")?;
-            apply_override_to_instances(&mut self.processor.instances, field, &value, |inst| {
-                inst.type_name == pname
-            }, "pname", pname)?;
+            apply_override_to_instances(
+                &mut self.processor.instances,
+                field,
+                &value,
+                |inst| inst.type_name == pname,
+                "pname",
+                pname,
+            )?;
         }
 
         // Overrides bypass load-time validation (it runs on the raw TOML,
@@ -2106,8 +2373,10 @@ impl Config {
             }
         }
         if !errors.is_empty() {
-            return Err(crate::exit_code::config_error(
-                format!("Invalid config after CLI overrides:\n{}", errors.join("\n"))));
+            return Err(crate::exit_code::config_error(format!(
+                "Invalid config after CLI overrides:\n{}",
+                errors.join("\n")
+            )));
         }
         validate_dep_auto_exist(&self.processor.instances, &self.build)?;
         Ok(())
@@ -2126,14 +2395,18 @@ impl Config {
         // effective keys without reaching into every section struct.
         let serialized = toml::Value::try_from(&*self)
             .context("Failed to serialize config for global provenance walk")?;
-        let Some(root) = serialized.as_table() else { return Ok(()) };
+        let Some(root) = serialized.as_table() else {
+            return Ok(());
+        };
         for (section_name, section_value) in root {
             // Skip processor/analyzer — those are tracked per-instance in the
             // instances' own provenance maps.
             if section_name == "processor" || section_name == "analyzer" {
                 continue;
             }
-            let Some(section_table) = section_value.as_table() else { continue };
+            let Some(section_table) = section_value.as_table() else {
+                continue;
+            };
             let user_fields = global_spans.get(section_name);
             let local_fields = local_global_spans.get(section_name);
             let mut map = ProvenanceMap::new();
@@ -2160,10 +2433,22 @@ impl Config {
     /// "from rsconstruct.toml" without a line number).
     fn apply_span_map(&mut self, spans: &SpanMap, local_spans: &SpanMap) {
         for inst in &mut self.processor.instances {
-            apply_spans_to_instance(&mut inst.provenance, spans, local_spans, Section::Processor, &inst.instance_name);
+            apply_spans_to_instance(
+                &mut inst.provenance,
+                spans,
+                local_spans,
+                Section::Processor,
+                &inst.instance_name,
+            );
         }
         for inst in &mut self.analyzer.instances {
-            apply_spans_to_instance(&mut inst.provenance, spans, local_spans, Section::Analyzer, &inst.instance_name);
+            apply_spans_to_instance(
+                &mut inst.provenance,
+                spans,
+                local_spans,
+                Section::Analyzer,
+                &inst.instance_name,
+            );
         }
     }
 }
@@ -2198,14 +2483,16 @@ fn apply_spans_to_instance(
 /// array/table; if parsing fails it is treated as a bare string. Hard-errors on
 /// missing dot, missing equals, or empty name/field.
 fn parse_override_entry<'a>(raw: &'a str, flag: &str) -> Result<(&'a str, &'a str, toml::Value)> {
-    let (lhs, value_str) = raw.split_once('=').ok_or_else(|| anyhow::anyhow!(
-        "{flag} '{raw}': missing '=' (expected <name>.<field>=<value>)"
-    ))?;
+    let (lhs, value_str) = raw.split_once('=').ok_or_else(|| {
+        anyhow::anyhow!("{flag} '{raw}': missing '=' (expected <name>.<field>=<value>)")
+    })?;
     // Split on the LAST dot: instance names may contain dots (`pylint.core`)
     // while field names never do.
-    let (name, field) = lhs.rsplit_once('.').ok_or_else(|| anyhow::anyhow!(
-        "{flag} '{raw}': missing '.' between name and field (expected <name>.<field>=<value>)"
-    ))?;
+    let (name, field) = lhs.rsplit_once('.').ok_or_else(|| {
+        anyhow::anyhow!(
+            "{flag} '{raw}': missing '.' between name and field (expected <name>.<field>=<value>)"
+        )
+    })?;
     if name.is_empty() {
         anyhow::bail!("{flag} '{raw}': empty name before '.'");
     }
@@ -2215,7 +2502,9 @@ fn parse_override_entry<'a>(raw: &'a str, flag: &str) -> Result<(&'a str, &'a st
     // Parse as a TOML value via a synthetic "v = <value>" doc; fall back to a
     // bare string so users can write `--iset marp.command=marp` without quoting.
     let parsed: toml::Value = match toml::from_str::<toml::Value>(&format!("v = {value_str}")) {
-        Ok(toml::Value::Table(mut t)) => t.remove("v").unwrap_or_else(|| toml::Value::String(value_str.to_string())),
+        Ok(toml::Value::Table(mut t)) => t
+            .remove("v")
+            .unwrap_or_else(|| toml::Value::String(value_str.to_string())),
         _ => toml::Value::String(value_str.to_string()),
     };
     Ok((name, field, parsed))
@@ -2232,7 +2521,9 @@ fn apply_override_to_instances(
     name_kind: &str,
     name: &str,
 ) -> Result<()> {
-    let matching_indices: Vec<usize> = instances.iter().enumerate()
+    let matching_indices: Vec<usize> = instances
+        .iter()
+        .enumerate()
         .filter(|(_, inst)| predicate(inst))
         .map(|(i, _)| i)
         .collect();
@@ -2245,7 +2536,8 @@ fn apply_override_to_instances(
         validate_override_field(&type_name, field, value, &inst.instance_name)?;
         if let Some(table) = inst.config_toml.as_table_mut() {
             table.insert(field.to_string(), value.clone());
-            inst.provenance.insert(field.to_string(), FieldProvenance::CliOverride);
+            inst.provenance
+                .insert(field.to_string(), FieldProvenance::CliOverride);
         } else {
             anyhow::bail!(
                 "instance '{}' config is not a table (cannot apply override)",
@@ -2269,7 +2561,8 @@ fn validate_override_field(
         || SCAN_CONFIG_FIELDS.contains(&field)
         || STANDARD_EXTRA_FIELDS.contains(&field);
     if !is_known {
-        let mut all_fields: Vec<&str> = own_fields.iter()
+        let mut all_fields: Vec<&str> = own_fields
+            .iter()
             .chain(SCAN_CONFIG_FIELDS.iter())
             .chain(STANDARD_EXTRA_FIELDS.iter())
             .copied()
@@ -2307,7 +2600,11 @@ pub fn standard_config_from_toml(
         table
             .and_then(|t| t.get(key))
             .and_then(|v| v.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
     };
 
     let mut cfg = StandardConfig {
@@ -2321,13 +2618,28 @@ pub fn standard_config_from_toml(
     };
     // Fill defaults for None fields
     if cfg.src_dirs.is_none() {
-        cfg.src_dirs = Some(default_src_dirs.iter().map(std::string::ToString::to_string).collect());
+        cfg.src_dirs = Some(
+            default_src_dirs
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect(),
+        );
     }
     if cfg.src_extensions.is_none() {
-        cfg.src_extensions = Some(default_src_extensions.iter().map(std::string::ToString::to_string).collect());
+        cfg.src_extensions = Some(
+            default_src_extensions
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect(),
+        );
     }
     if cfg.src_exclude_dirs.is_none() {
-        cfg.src_exclude_dirs = Some(default_exclude_dirs.iter().map(std::string::ToString::to_string).collect());
+        cfg.src_exclude_dirs = Some(
+            default_exclude_dirs
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect(),
+        );
     }
     if cfg.src_exclude_files.is_none() {
         cfg.src_exclude_files = Some(Vec::new());

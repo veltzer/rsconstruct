@@ -1,15 +1,17 @@
-use std::fs;
 use crate::common::{run_rsconstruct, run_rsconstruct_with_env};
+use std::fs;
 use tempfile::TempDir;
 
 /// Set up a test project with the jinja2 processor enabled
 fn setup_jinja2_project() -> TempDir {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    fs::create_dir_all(temp_dir.path().join("templates.jinja2")).expect("Failed to create templates.jinja2 dir");
+    fs::create_dir_all(temp_dir.path().join("templates.jinja2"))
+        .expect("Failed to create templates.jinja2 dir");
     fs::write(
         temp_dir.path().join("rsconstruct.toml"),
-        "[processor.jinja2]\nsrc_dirs = [\"templates.jinja2\"]\n"
-    ).expect("Failed to write rsconstruct.toml");
+        "[processor.jinja2]\nsrc_dirs = [\"templates.jinja2\"]\n",
+    )
+    .expect("Failed to write rsconstruct.toml");
     temp_dir
 }
 
@@ -21,11 +23,16 @@ fn jinja2_basic_render() {
     // Create a simple jinja2 template
     fs::write(
         project_path.join("templates.jinja2/hello.txt.j2"),
-        "Hello, {{ 'World' }}!\nCount: {{ 2 + 3 }}\n"
-    ).expect("Failed to write jinja2 template");
+        "Hello, {{ 'World' }}!\nCount: {{ 2 + 3 }}\n",
+    )
+    .expect("Failed to write jinja2 template");
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "rsconstruct build failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "rsconstruct build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     let output_file = project_path.join("hello.txt");
     assert!(output_file.exists(), "Output file was not created");
@@ -43,14 +50,22 @@ fn jinja2_subdirectory_output() {
     fs::create_dir_all(project_path.join("templates.jinja2/config")).unwrap();
     fs::write(
         project_path.join("templates.jinja2/config/app.conf.j2"),
-        "[app]\nname = {{ 'TestApp' }}\n"
-    ).unwrap();
+        "[app]\nname = {{ 'TestApp' }}\n",
+    )
+    .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "rsconstruct build failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "rsconstruct build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     let output_file = project_path.join("config/app.conf");
-    assert!(output_file.exists(), "Output file config/app.conf was not created");
+    assert!(
+        output_file.exists(),
+        "Output file config/app.conf was not created"
+    );
 
     let content = fs::read_to_string(&output_file).unwrap();
     assert!(content.contains("name = TestApp"));
@@ -63,13 +78,15 @@ fn jinja2_multiple_templates() {
 
     fs::write(
         project_path.join("templates.jinja2/first.txt.j2"),
-        "First: {{ 1 + 1 }}\n"
-    ).unwrap();
+        "First: {{ 1 + 1 }}\n",
+    )
+    .unwrap();
 
     fs::write(
         project_path.join("templates.jinja2/second.conf.j2"),
-        "[section]\nvalue = {{ 'hello' }}\n"
-    ).unwrap();
+        "[section]\nvalue = {{ 'hello' }}\n",
+    )
+    .unwrap();
 
     let output = run_rsconstruct(project_path, &["build"]);
     assert!(output.status.success());
@@ -91,8 +108,9 @@ fn jinja2_incremental_build() {
 
     fs::write(
         project_path.join("templates.jinja2/simple.txt.j2"),
-        "Value: {{ 42 }}\n"
-    ).unwrap();
+        "Value: {{ 42 }}\n",
+    )
+    .unwrap();
 
     // First build
     let output1 = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
@@ -101,7 +119,8 @@ fn jinja2_incremental_build() {
     assert!(stdout1.contains("Processing:"));
 
     // Second build (should skip unchanged)
-    let output2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("[jinja2] Skipping (unchanged):"));
@@ -114,8 +133,9 @@ fn jinja2_clean() {
 
     fs::write(
         project_path.join("templates.jinja2/output.txt.j2"),
-        "content\n"
-    ).unwrap();
+        "content\n",
+    )
+    .unwrap();
 
     // Build
     let output = run_rsconstruct(project_path, &["build"]);
@@ -125,5 +145,8 @@ fn jinja2_clean() {
     // Clean
     let output = run_rsconstruct(project_path, &["clean", "outputs"]);
     assert!(output.status.success());
-    assert!(!project_path.join("output.txt").exists(), "Output should be removed after clean");
+    assert!(
+        !project_path.join("output.txt").exists(),
+        "Output should be removed after clean"
+    );
 }

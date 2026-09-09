@@ -5,11 +5,24 @@
 //! with the single `-o -` would be rejected. (`-o -` writes to stdout, which
 //! also avoids the non-portable /dev/null.)
 
-use crate::processors::SimpleChecker;
 use crate::config::SimpleCheckerParams;
+use crate::processors::SimpleChecker;
 
 fn create_svgo(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registries::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Validate SVG files using svgo (stdout discarded; non-zero exit = malformed SVG)", subcommand: None, prepend_args: &["--quiet", "-o", "-", "-i"], extra_tools: &[], fix_subcommand: None, fix_prepend_args: &[], fix_batch: None })))
+    crate::registries::deserialize_and_create(toml, |cfg| {
+        Box::new(SimpleChecker::new(
+            cfg,
+            SimpleCheckerParams {
+                description: "Validate SVG files using svgo (stdout discarded; non-zero exit = malformed SVG)",
+                subcommand: None,
+                prepend_args: &["--quiet", "-o", "-", "-i"],
+                extra_tools: &[],
+                fix_subcommand: None,
+                fix_prepend_args: &[],
+                fix_batch: None,
+            },
+        ))
+    })
 }
 inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,

@@ -7,11 +7,11 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::tables;
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{Processor};
+use crate::processors::Processor;
+use crate::tables;
 
 fn default_tags_output() -> String {
     "out/tags/tags.db".into()
@@ -21,9 +21,15 @@ fn default_tags_dir() -> String {
     "tags".into()
 }
 
-const fn default_tags_similar_files_limit() -> usize { 10 }
-const fn default_tags_suggested_tags_limit() -> usize { 15 }
-const fn default_tags_common_tags_limit() -> usize { 20 }
+const fn default_tags_similar_files_limit() -> usize {
+    10
+}
+const fn default_tags_suggested_tags_limit() -> usize {
+    15
+}
+const fn default_tags_common_tags_limit() -> usize {
+    20
+}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TagsConfig {
@@ -97,9 +103,7 @@ pub struct TagsProcessor {
 
 impl TagsProcessor {
     pub const fn new(config: TagsConfig) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 }
 
@@ -107,7 +111,6 @@ impl Processor for TagsProcessor {
     fn scan_config(&self) -> &crate::config::StandardConfig {
         &self.config.standard
     }
-
 
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
@@ -123,13 +126,20 @@ impl Processor for TagsProcessor {
         }
         // Require a tags_dir with at least one .txt file
         let dir = Path::new(&self.config.tags_dir);
-        dir.is_dir() && fs::read_dir(dir).is_ok_and(|entries| {
-            entries.filter_map(std::result::Result::ok)
-                .any(|e| e.path().extension().and_then(|x| x.to_str()) == Some("txt"))
-        })
+        dir.is_dir()
+            && fs::read_dir(dir).is_ok_and(|entries| {
+                entries
+                    .filter_map(std::result::Result::ok)
+                    .any(|e| e.path().extension().and_then(|x| x.to_str()) == Some("txt"))
+            })
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let files = file_index.scan(&self.config.standard, true);
         if files.is_empty() {
             return Ok(());
@@ -146,8 +156,9 @@ impl Processor for TagsProcessor {
             for entry in fs::read_dir(dir)
                 .with_context(|| format!("Failed to read tags_dir: {}", self.config.tags_dir))?
             {
-                let entry = entry
-                    .with_context(|| format!("Failed to read entry in tags_dir: {}", self.config.tags_dir))?;
+                let entry = entry.with_context(|| {
+                    format!("Failed to read entry in tags_dir: {}", self.config.tags_dir)
+                })?;
                 let path = entry.path();
                 if path.extension().and_then(|e| e.to_str()) == Some("txt") {
                     inputs.push(path);
@@ -160,7 +171,10 @@ impl Processor for TagsProcessor {
             inputs,
             vec![output],
             instance_name,
-            Some(output_config_hash(&self.config, &crate::config::checksum_fields_of(instance_name))),
+            Some(output_config_hash(
+                &self.config,
+                &crate::config::checksum_fields_of(instance_name),
+            )),
         )?;
 
         Ok(())
@@ -199,14 +213,15 @@ impl Processor for TagsProcessor {
                             serde_json::Value::Array(items) => {
                                 // Check sorted order if enabled
                                 if self.config.sorted_tags {
-                                    let strs: Vec<&str> = items.iter()
-                                        .filter_map(|i| i.as_str())
-                                        .collect();
+                                    let strs: Vec<&str> =
+                                        items.iter().filter_map(|i| i.as_str()).collect();
                                     for pair in strs.windows(2) {
                                         if pair[0] > pair[1] {
                                             unsorted_tags.push((
-                                                file_key.clone(), key.clone(),
-                                                pair[0].to_string(), pair[1].to_string(),
+                                                file_key.clone(),
+                                                key.clone(),
+                                                pair[0].to_string(),
+                                                pair[1].to_string(),
                                             ));
                                             break;
                                         }
@@ -217,7 +232,8 @@ impl Processor for TagsProcessor {
                                         if !file_tags.insert(s.to_string()) {
                                             duplicate_tags.push((file_key.clone(), s.to_string()));
                                         }
-                                        tag_to_files.entry(s.to_string())
+                                        tag_to_files
+                                            .entry(s.to_string())
                                             .or_default()
                                             .insert(file_key.clone());
                                     }
@@ -228,7 +244,8 @@ impl Processor for TagsProcessor {
                                 if !file_tags.insert(tag.clone()) {
                                     duplicate_tags.push((file_key.clone(), tag.clone()));
                                 }
-                                tag_to_files.entry(tag)
+                                tag_to_files
+                                    .entry(tag)
                                     .or_default()
                                     .insert(file_key.clone());
                             }
@@ -306,7 +323,10 @@ impl Processor for TagsProcessor {
                     })
                 });
                 if !satisfies_any {
-                    let group_strs: Vec<String> = self.config.required_field_groups.iter()
+                    let group_strs: Vec<String> = self
+                        .config
+                        .required_field_groups
+                        .iter()
                         .map(|g| format!("[{}]", g.join(", ")))
                         .collect();
                     failing.push((file_key, group_strs));
@@ -314,7 +334,9 @@ impl Processor for TagsProcessor {
             }
             if !failing.is_empty() {
                 failing.sort_by(|a, b| a.0.cmp(&b.0));
-                let mut msg = String::from("Files missing required field groups (must satisfy at least one):\n");
+                let mut msg = String::from(
+                    "Files missing required field groups (must satisfy at least one):\n",
+                );
                 for (file, groups) in &failing {
                     let _ = writeln!(msg, "  {}: none of {}", file, groups.join(" or "));
                 }
@@ -361,12 +383,14 @@ impl Processor for TagsProcessor {
             // Check for unused tags (in allowlist but not used by any file)
             if self.config.check_unused {
                 let used_tags: HashSet<&String> = tag_to_files.keys().collect();
-                let mut unused: Vec<&String> = allowed.iter()
-                    .filter(|t| !used_tags.contains(t))
-                    .collect();
+                let mut unused: Vec<&String> =
+                    allowed.iter().filter(|t| !used_tags.contains(t)).collect();
                 if !unused.is_empty() {
                     unused.sort();
-                    let mut msg = format!("Unused tags in {} (not used by any file):\n", self.config.tags_dir);
+                    let mut msg = format!(
+                        "Unused tags in {} (not used by any file):\n",
+                        self.config.tags_dir
+                    );
                     for tag in &unused {
                         let _ = writeln!(msg, "  {tag}");
                     }
@@ -380,7 +404,10 @@ impl Processor for TagsProcessor {
             unsorted_tags.sort();
             let mut msg = String::from("List tags are not in sorted order:\n");
             for (file, field, a, b) in &unsorted_tags {
-                let _ = writeln!(msg, "  {file} field '{field}': '{b}' should come after '{a}'");
+                let _ = writeln!(
+                    msg,
+                    "  {file} field '{field}': '{b}' should come after '{a}'"
+                );
             }
             bail!("{}", msg.trim_end());
         }
@@ -388,7 +415,11 @@ impl Processor for TagsProcessor {
         // Check required_values (scalar fields must have values in tags dir)
         if !self.config.required_values.is_empty() {
             let dir = Path::new(&self.config.tags_dir);
-            let allowed = if dir.is_dir() { load_tags_dir(dir)? } else { HashSet::new() };
+            let allowed = if dir.is_dir() {
+                load_tags_dir(dir)?
+            } else {
+                HashSet::new()
+            };
             let mut invalid: Vec<(String, String, String)> = Vec::new(); // (file, field, value)
             for (file_key, fm) in &all_frontmatter {
                 if let Some(obj) = fm.as_object() {
@@ -406,7 +437,11 @@ impl Processor for TagsProcessor {
                 invalid.sort();
                 let mut msg = String::from("Invalid values for validated fields:\n");
                 for (file, field, val) in &invalid {
-                    let _ = writeln!(msg, "  {}: {}={} (not in {}/{}.txt)", file, field, val, self.config.tags_dir, field);
+                    let _ = writeln!(
+                        msg,
+                        "  {}: {}={} (not in {}/{}.txt)",
+                        file, field, val, self.config.tags_dir, field
+                    );
                 }
                 bail!("{}", msg.trim_end());
             }
@@ -422,14 +457,14 @@ impl Processor for TagsProcessor {
                             let val_str = match val {
                                 serde_json::Value::String(s) => s.clone(),
                                 serde_json::Value::Array(items) => {
-                                    let strs: Vec<&str> = items.iter()
-                                        .filter_map(|i| i.as_str())
-                                        .collect();
+                                    let strs: Vec<&str> =
+                                        items.iter().filter_map(|i| i.as_str()).collect();
                                     strs.join(",")
                                 }
                                 _ => continue,
                             };
-                            field_values.entry((field.as_str(), val_str))
+                            field_values
+                                .entry((field.as_str(), val_str))
                                 .or_default()
                                 .push(file_key.clone());
                         }
@@ -480,13 +515,19 @@ impl Processor for TagsProcessor {
                                 let actual = match val {
                                     serde_json::Value::Array(_) => "list",
                                     serde_json::Value::String(s) => {
-                                        if s.parse::<f64>().is_ok() { "number" } else { "scalar" }
+                                        if s.parse::<f64>().is_ok() {
+                                            "number"
+                                        } else {
+                                            "scalar"
+                                        }
                                     }
                                     _ => "unknown",
                                 };
                                 type_errors.push((
-                                    file_key.clone(), field.clone(),
-                                    expected_type.clone(), actual.to_string(),
+                                    file_key.clone(),
+                                    field.clone(),
+                                    expected_type.clone(),
+                                    actual.to_string(),
                                 ));
                             }
                         }
@@ -505,29 +546,38 @@ impl Processor for TagsProcessor {
 
         // Delete old database to avoid stale entries from previous builds
         if output_path.exists() {
-            fs::remove_file(output_path)
-                .with_context(|| format!("Failed to remove old tags database: {}", output_path.display()))?;
+            fs::remove_file(output_path).with_context(|| {
+                format!(
+                    "Failed to remove old tags database: {}",
+                    output_path.display()
+                )
+            })?;
         }
         let db = crate::db::open_or_recreate(output_path, "tags database")?;
 
-        let write_txn = db.begin_write()
+        let write_txn = db
+            .begin_write()
             .context("Failed to begin write transaction")?;
         {
-            let mut fm_table = write_txn.open_table(FRONTMATTER)
+            let mut fm_table = write_txn
+                .open_table(FRONTMATTER)
                 .context("Failed to open frontmatter table")?;
             for (file, value) in &all_frontmatter {
                 let json = serde_json::to_string(value).expect(crate::errors::JSON_SERIALIZE);
-                fm_table.insert(file.as_str(), json.as_str())
+                fm_table
+                    .insert(file.as_str(), json.as_str())
                     .context("Failed to insert frontmatter")?;
             }
         }
         {
-            let mut tag_table = write_txn.open_table(TAG_INDEX)
+            let mut tag_table = write_txn
+                .open_table(TAG_INDEX)
                 .context("Failed to open tag_index table")?;
             for (tag, files) in &tag_to_files {
                 let files_vec: Vec<&String> = files.iter().collect();
                 let json = serde_json::to_string(&files_vec).expect(crate::errors::JSON_SERIALIZE);
-                tag_table.insert(tag.as_str(), json.as_str())
+                tag_table
+                    .insert(tag.as_str(), json.as_str())
                     .context("Failed to insert tag index")?;
             }
         }
@@ -535,7 +585,6 @@ impl Processor for TagsProcessor {
 
         Ok(())
     }
-
 }
 
 /// Parse YAML frontmatter from a markdown file.
@@ -558,8 +607,7 @@ fn parse_frontmatter(content: &str) -> Option<serde_json::Value> {
 /// Strip surrounding quotes (single or double) from a YAML value.
 fn strip_yaml_quotes(s: &str) -> &str {
     if s.len() >= 2
-        && ((s.starts_with('"') && s.ends_with('"'))
-            || (s.starts_with('\'') && s.ends_with('\'')))
+        && ((s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\'')))
     {
         return &s[1..s.len() - 1];
     }
@@ -598,7 +646,10 @@ fn parse_simple_yaml(block: &str) -> serde_json::Value {
         // If we were building a list, save it
         if in_list {
             if let Some(key) = current_key.take() {
-                map.insert(key, serde_json::Value::Array(std::mem::take(&mut current_list)));
+                map.insert(
+                    key,
+                    serde_json::Value::Array(std::mem::take(&mut current_list)),
+                );
             }
             in_list = false;
         }
@@ -619,7 +670,8 @@ fn parse_simple_yaml(block: &str) -> serde_json::Value {
                 if inner.trim().is_empty() {
                     map.insert(key, serde_json::Value::Array(Vec::new()));
                 } else {
-                    let items: Vec<serde_json::Value> = inner.split(',')
+                    let items: Vec<serde_json::Value> = inner
+                        .split(',')
                         .map(|s| {
                             let val = strip_yaml_quotes(s.trim());
                             serde_json::Value::String(val.to_string())
@@ -641,9 +693,7 @@ fn parse_simple_yaml(block: &str) -> serde_json::Value {
     }
 
     // Flush any trailing list
-    if in_list
-        && let Some(key) = current_key.take()
-    {
+    if in_list && let Some(key) = current_key.take() {
         map.insert(key, serde_json::Value::Array(current_list));
     }
 
@@ -656,15 +706,17 @@ pub fn open_tags_db(db_path: &str) -> Result<redb::Database> {
     if !path.exists() {
         anyhow::bail!("Tags database not found: {db_path}. Run 'rsconstruct build' first.");
     }
-    redb::Database::open(path)
-        .with_context(|| format!("Failed to open tags database: {db_path}"))
+    redb::Database::open(path).with_context(|| format!("Failed to open tags database: {db_path}"))
 }
 
 /// List all unique tags from the database.
 pub fn list_tags(db_path: &str) -> Result<()> {
     let tags = load_all_tags_sorted(db_path)?;
     if crate::json_output::is_json_mode() {
-        println!("{}", serde_json::to_string(&tags).expect(crate::errors::JSON_SERIALIZE));
+        println!(
+            "{}",
+            serde_json::to_string(&tags).expect(crate::errors::JSON_SERIALIZE)
+        );
     } else {
         for tag in &tags {
             println!("{tag}");
@@ -676,8 +728,13 @@ pub fn list_tags(db_path: &str) -> Result<()> {
 /// Search for tags containing a substring.
 pub fn grep_tags(db_path: &str, text: &str, ignore_case: bool) -> Result<()> {
     let all_tags = load_all_tags_sorted(db_path)?;
-    let needle = if ignore_case { text.to_lowercase() } else { text.to_string() };
-    let matches: Vec<&String> = all_tags.iter()
+    let needle = if ignore_case {
+        text.to_lowercase()
+    } else {
+        text.to_string()
+    };
+    let matches: Vec<&String> = all_tags
+        .iter()
         .filter(|t| {
             if ignore_case {
                 t.to_lowercase().contains(&needle)
@@ -687,7 +744,10 @@ pub fn grep_tags(db_path: &str, text: &str, ignore_case: bool) -> Result<()> {
         })
         .collect();
     if crate::json_output::is_json_mode() {
-        println!("{}", serde_json::to_string(&matches).expect(crate::errors::JSON_SERIALIZE));
+        println!(
+            "{}",
+            serde_json::to_string(&matches).expect(crate::errors::JSON_SERIALIZE)
+        );
     } else {
         for tag in &matches {
             println!("{tag}");
@@ -700,19 +760,23 @@ pub fn grep_tags(db_path: &str, text: &str, ignore_case: bool) -> Result<()> {
 pub fn files_for_tags(db_path: &str, tags: &[String], use_or: bool) -> Result<()> {
     let db = open_tags_db(db_path)?;
     let read_txn = crate::errors::ctx(db.begin_read(), "Failed to begin read transaction")?;
-    let table = crate::errors::ctx(read_txn.open_table(TAG_INDEX), "Failed to open tag_index table")?;
+    let table = crate::errors::ctx(
+        read_txn.open_table(TAG_INDEX),
+        "Failed to open tag_index table",
+    )?;
 
     let mut result: Option<BTreeSet<String>> = None;
 
     for tag in tags {
-        let files: BTreeSet<String> = match table.get(tag.as_str()).context("Failed to query tag")? {
-            Some(value) => {
-                let v: Vec<String> = serde_json::from_str(value.value())
-                    .context("Failed to parse tag file list")?;
-                v.into_iter().collect()
-            }
-            None => BTreeSet::new(),
-        };
+        let files: BTreeSet<String> =
+            match table.get(tag.as_str()).context("Failed to query tag")? {
+                Some(value) => {
+                    let v: Vec<String> = serde_json::from_str(value.value())
+                        .context("Failed to parse tag file list")?;
+                    v.into_iter().collect()
+                }
+                None => BTreeSet::new(),
+            };
         result = Some(match result {
             Some(acc) => {
                 if use_or {
@@ -727,7 +791,10 @@ pub fn files_for_tags(db_path: &str, tags: &[String], use_or: bool) -> Result<()
 
     let files: Vec<String> = result.unwrap_or_default().into_iter().collect();
     if crate::json_output::is_json_mode() {
-        println!("{}", serde_json::to_string(&files).expect(crate::errors::JSON_SERIALIZE));
+        println!(
+            "{}",
+            serde_json::to_string(&files).expect(crate::errors::JSON_SERIALIZE)
+        );
     } else if files.is_empty() {
         let mode = if use_or { "any" } else { "all" };
         println!("No files found matching {} tags: {}", mode, tags.join(", "));
@@ -747,12 +814,17 @@ pub fn count_tags(db_path: &str) -> Result<()> {
     entries.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
     if crate::json_output::is_json_mode() {
-        let json_entries: Vec<serde_json::Value> = entries.iter()
+        let json_entries: Vec<serde_json::Value> = entries
+            .iter()
             .map(|(tag, count)| serde_json::json!({"tag": tag, "count": count}))
             .collect();
-        println!("{}", serde_json::to_string(&json_entries).expect(crate::errors::JSON_SERIALIZE));
+        println!(
+            "{}",
+            serde_json::to_string(&json_entries).expect(crate::errors::JSON_SERIALIZE)
+        );
     } else {
-        let rows: Vec<Vec<String>> = entries.iter()
+        let rows: Vec<Vec<String>> = entries
+            .iter()
             .map(|(tag, count)| vec![count.to_string(), tag.clone()])
             .collect();
         tables::print_table(&["Count", "Tag"], &rows);
@@ -771,7 +843,8 @@ pub fn tree_tags(db_path: &str) -> Result<()> {
 
     for (tag, count) in &tag_counts {
         if let Some((key, value)) = tag.split_once(':') {
-            groups.entry(key.to_string())
+            groups
+                .entry(key.to_string())
                 .or_default()
                 .push((value.to_string(), *count));
         } else {
@@ -783,17 +856,22 @@ pub fn tree_tags(db_path: &str) -> Result<()> {
         let mut json_groups: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
         for (key, mut values) in groups {
             values.sort_by(|a, b| a.0.cmp(&b.0));
-            let entries: Vec<serde_json::Value> = values.iter()
+            let entries: Vec<serde_json::Value> = values
+                .iter()
                 .map(|(v, c)| serde_json::json!({"value": v, "count": c}))
                 .collect();
             json_groups.insert(key, serde_json::Value::Array(entries));
         }
         bare.sort_by(|a, b| a.0.cmp(&b.0));
-        let bare_entries: Vec<serde_json::Value> = bare.iter()
+        let bare_entries: Vec<serde_json::Value> = bare
+            .iter()
             .map(|(t, c)| serde_json::json!({"tag": t, "count": c}))
             .collect();
         json_groups.insert("_bare".to_string(), serde_json::Value::Array(bare_entries));
-        println!("{}", serde_json::to_string(&json_groups).expect(crate::errors::JSON_SERIALIZE));
+        println!(
+            "{}",
+            serde_json::to_string(&json_groups).expect(crate::errors::JSON_SERIALIZE)
+        );
     } else {
         // Print key=value groups
         for (key, mut values) in groups {
@@ -823,11 +901,17 @@ pub fn stats_tags(db_path: &str) -> Result<()> {
     let read_txn = crate::errors::ctx(db.begin_read(), "Failed to begin read transaction")?;
 
     // Count indexed files from the frontmatter table
-    let fm_table = crate::errors::ctx(read_txn.open_table(FRONTMATTER), "Failed to open frontmatter table")?;
+    let fm_table = crate::errors::ctx(
+        read_txn.open_table(FRONTMATTER),
+        "Failed to open frontmatter table",
+    )?;
     let file_count = crate::errors::ctx(fm_table.len(), "Failed to count frontmatter entries")?;
 
     // Count and classify tags, and sum total associations
-    let tag_table = crate::errors::ctx(read_txn.open_table(TAG_INDEX), "Failed to open tag_index table")?;
+    let tag_table = crate::errors::ctx(
+        read_txn.open_table(TAG_INDEX),
+        "Failed to open tag_index table",
+    )?;
     let mut bare_count: u64 = 0;
     let mut kv_count: u64 = 0;
     let mut total_associations: u64 = 0;
@@ -839,8 +923,8 @@ pub fn stats_tags(db_path: &str) -> Result<()> {
         } else {
             bare_count += 1;
         }
-        let files: Vec<String> = serde_json::from_str(value.value())
-            .context("Failed to parse tag file list")?;
+        let files: Vec<String> =
+            serde_json::from_str(value.value()).context("Failed to parse tag file list")?;
         total_associations += files.len() as u64;
     }
 
@@ -854,7 +938,10 @@ pub fn stats_tags(db_path: &str) -> Result<()> {
             "bare_tags": bare_count,
             "kv_tags": kv_count,
         });
-        println!("{}", serde_json::to_string(&stats).expect(crate::errors::JSON_SERIALIZE));
+        println!(
+            "{}",
+            serde_json::to_string(&stats).expect(crate::errors::JSON_SERIALIZE)
+        );
     } else {
         println!("Files indexed:    {file_count}");
         println!("Tag assignments:  {total_associations}");
@@ -870,14 +957,17 @@ pub fn stats_tags(db_path: &str) -> Result<()> {
 pub fn tags_for_file(db_path: &str, path: &str) -> Result<()> {
     let db = open_tags_db(db_path)?;
     let read_txn = crate::errors::ctx(db.begin_read(), "Failed to begin read transaction")?;
-    let table = crate::errors::ctx(read_txn.open_table(TAG_INDEX), "Failed to open tag_index table")?;
+    let table = crate::errors::ctx(
+        read_txn.open_table(TAG_INDEX),
+        "Failed to open tag_index table",
+    )?;
 
     let mut file_tags: Vec<String> = Vec::new();
     let iter = crate::errors::ctx(table.iter(), "Failed to iterate tag_index")?;
     for entry in iter {
         let (key, value) = crate::errors::ctx(entry, "Failed to read tag entry")?;
-        let files: Vec<String> = serde_json::from_str(value.value())
-            .context("Failed to parse tag file list")?;
+        let files: Vec<String> =
+            serde_json::from_str(value.value()).context("Failed to parse tag file list")?;
         if files.iter().any(|f| path_matches(f, path)) {
             file_tags.push(key.value().to_string());
         }
@@ -885,7 +975,10 @@ pub fn tags_for_file(db_path: &str, path: &str) -> Result<()> {
     file_tags.sort();
 
     if crate::json_output::is_json_mode() {
-        println!("{}", serde_json::to_string(&file_tags).expect(crate::errors::JSON_SERIALIZE));
+        println!(
+            "{}",
+            serde_json::to_string(&file_tags).expect(crate::errors::JSON_SERIALIZE)
+        );
     } else if file_tags.is_empty() {
         eprintln!("No tags found for: {path}");
     } else {
@@ -901,7 +994,10 @@ pub fn tags_for_file(db_path: &str, path: &str) -> Result<()> {
 pub fn frontmatter_for_file(db_path: &str, path: &str) -> Result<()> {
     let db = open_tags_db(db_path)?;
     let read_txn = crate::errors::ctx(db.begin_read(), "Failed to begin read transaction")?;
-    let table = crate::errors::ctx(read_txn.open_table(FRONTMATTER), "Failed to open frontmatter table")?;
+    let table = crate::errors::ctx(
+        read_txn.open_table(FRONTMATTER),
+        "Failed to open frontmatter table",
+    )?;
 
     // Try exact match first, then suffix match
     let (found_key, found_value): (Option<String>, Option<String>) =
@@ -918,7 +1014,11 @@ pub fn frontmatter_for_file(db_path: &str, path: &str) -> Result<()> {
                 }
             }
             if all_matches.len() > 1 {
-                eprintln!("Warning: '{}' matches {} files, showing first:", path, all_matches.len());
+                eprintln!(
+                    "Warning: '{}' matches {} files, showing first:",
+                    path,
+                    all_matches.len()
+                );
                 for (k, _) in &all_matches {
                     eprintln!("  {k}");
                 }
@@ -933,15 +1033,21 @@ pub fn frontmatter_for_file(db_path: &str, path: &str) -> Result<()> {
     match (found_key, found_value) {
         (Some(key), Some(json)) => {
             if crate::json_output::is_json_mode() {
-                let fm_value: serde_json::Value = serde_json::from_str(&json)
-                    .context("Failed to parse stored frontmatter")?;
+                let fm_value: serde_json::Value =
+                    serde_json::from_str(&json).context("Failed to parse stored frontmatter")?;
                 let output = serde_json::json!({"file": key, "frontmatter": fm_value});
-                println!("{}", serde_json::to_string(&output).expect(crate::errors::JSON_SERIALIZE));
+                println!(
+                    "{}",
+                    serde_json::to_string(&output).expect(crate::errors::JSON_SERIALIZE)
+                );
             } else {
                 println!("{key}:");
-                let value: serde_json::Value = serde_json::from_str(&json)
-                    .context("Failed to parse stored frontmatter")?;
-                println!("{}", serde_json::to_string_pretty(&value).expect(crate::errors::JSON_SERIALIZE));
+                let value: serde_json::Value =
+                    serde_json::from_str(&json).context("Failed to parse stored frontmatter")?;
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&value).expect(crate::errors::JSON_SERIALIZE)
+                );
             }
         }
         _ => {
@@ -966,9 +1072,7 @@ pub fn unused_tags(db_path: &str, tags_dir: &str, strict: bool) -> Result<()> {
     let allowed = load_tags_dir(dir)?;
     let db_tags = load_all_tags(db_path)?;
 
-    let mut unused: Vec<&String> = allowed.iter()
-        .filter(|t| !db_tags.contains(*t))
-        .collect();
+    let mut unused: Vec<&String> = allowed.iter().filter(|t| !db_tags.contains(*t)).collect();
     unused.sort();
 
     if strict && !unused.is_empty() {
@@ -980,7 +1084,10 @@ pub fn unused_tags(db_path: &str, tags_dir: &str, strict: bool) -> Result<()> {
     }
 
     if crate::json_output::is_json_mode() {
-        println!("{}", serde_json::to_string(&unused).expect(crate::errors::JSON_SERIALIZE));
+        println!(
+            "{}",
+            serde_json::to_string(&unused).expect(crate::errors::JSON_SERIALIZE)
+        );
     } else if unused.is_empty() {
         println!("All tags in {tags_dir} are in use.");
     } else {
@@ -1006,7 +1113,8 @@ pub fn collect_tags(db_path: &str, tags_dir: &str) -> Result<()> {
     let db_tags = load_all_tags(db_path)?;
 
     // Find tags in the database that are not in the allowlist
-    let mut missing: Vec<&String> = db_tags.iter()
+    let mut missing: Vec<&String> = db_tags
+        .iter()
         .filter(|t| !tag_matches_allowed(t, &allowed))
         .collect();
     missing.sort();
@@ -1020,11 +1128,13 @@ pub fn collect_tags(db_path: &str, tags_dir: &str) -> Result<()> {
     let mut by_file: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for tag in &missing {
         if let Some((key, value)) = tag.split_once(':') {
-            by_file.entry(format!("{key}.txt"))
+            by_file
+                .entry(format!("{key}.txt"))
                 .or_default()
                 .insert(value.to_string());
         } else {
-            by_file.entry("tags.txt".to_string())
+            by_file
+                .entry("tags.txt".to_string())
                 .or_default()
                 .insert((*tag).clone());
         }
@@ -1051,7 +1161,8 @@ pub fn collect_tags(db_path: &str, tags_dir: &str) -> Result<()> {
         if added > 0 {
             let mut sorted: Vec<&String> = existing.iter().collect();
             sorted.sort();
-            let content = sorted.iter()
+            let content = sorted
+                .iter()
                 .map(|s| s.as_str())
                 .collect::<Vec<_>>()
                 .join("\n");
@@ -1061,7 +1172,11 @@ pub fn collect_tags(db_path: &str, tags_dir: &str) -> Result<()> {
         }
     }
 
-    println!("Collected {} missing tag(s) into {}.", missing.len(), tags_dir);
+    println!(
+        "Collected {} missing tag(s) into {}.",
+        missing.len(),
+        tags_dir
+    );
     Ok(())
 }
 
@@ -1075,7 +1190,8 @@ pub fn validate_tags(db_path: &str, tags_dir: &str) -> Result<()> {
     // Single db open: get both tags and counts in one pass
     let tag_counts = load_tag_counts(db_path)?;
 
-    let mut unknown: Vec<String> = tag_counts.keys()
+    let mut unknown: Vec<String> = tag_counts
+        .keys()
         .filter(|t| !tag_matches_allowed(t, &allowed))
         .cloned()
         .collect();
@@ -1108,8 +1224,14 @@ pub fn validate_tags(db_path: &str, tags_dir: &str) -> Result<()> {
 pub fn matrix_tags(db_path: &str) -> Result<()> {
     let db = open_tags_db(db_path)?;
     let read_txn = crate::errors::ctx(db.begin_read(), "Failed to begin read transaction")?;
-    let fm_table = crate::errors::ctx(read_txn.open_table(FRONTMATTER), "Failed to open frontmatter table")?;
-    let tag_table = crate::errors::ctx(read_txn.open_table(TAG_INDEX), "Failed to open tag_index table")?;
+    let fm_table = crate::errors::ctx(
+        read_txn.open_table(FRONTMATTER),
+        "Failed to open frontmatter table",
+    )?;
+    let tag_table = crate::errors::ctx(
+        read_txn.open_table(TAG_INDEX),
+        "Failed to open tag_index table",
+    )?;
 
     // Collect all categories and per-file category presence
     let mut categories: BTreeSet<String> = BTreeSet::new();
@@ -1129,27 +1251,40 @@ pub fn matrix_tags(db_path: &str) -> Result<()> {
         let tag = key.value();
         let category = tag.split(':').next().unwrap_or(tag).to_string();
         categories.insert(category.clone());
-        let files: Vec<String> = serde_json::from_str(value.value())
-            .context("Failed to parse tag file list")?;
+        let files: Vec<String> =
+            serde_json::from_str(value.value()).context("Failed to parse tag file list")?;
         for file in files {
-            file_categories.entry(file).or_default().insert(category.clone());
+            file_categories
+                .entry(file)
+                .or_default()
+                .insert(category.clone());
         }
     }
 
     if crate::json_output::is_json_mode() {
-        println!("{}", serde_json::to_string_pretty(&file_categories).expect(crate::errors::JSON_SERIALIZE));
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&file_categories).expect(crate::errors::JSON_SERIALIZE)
+        );
     } else {
         let cats: Vec<&String> = categories.iter().collect();
         let mut headers: Vec<&str> = vec!["File"];
         headers.extend(cats.iter().map(|c| c.as_str()));
-        let rows: Vec<Vec<String>> = file_categories.iter().map(|(file, file_cats)| {
-            let short = file.rsplit('/').next().unwrap_or(file);
-            let mut row: Vec<String> = vec![short.to_string()];
-            for cat in &cats {
-                row.push(if file_cats.contains(*cat) { "Y".to_string() } else { "-".to_string() });
-            }
-            row
-        }).collect();
+        let rows: Vec<Vec<String>> = file_categories
+            .iter()
+            .map(|(file, file_cats)| {
+                let short = file.rsplit('/').next().unwrap_or(file);
+                let mut row: Vec<String> = vec![short.to_string()];
+                for cat in &cats {
+                    row.push(if file_cats.contains(*cat) {
+                        "Y".to_string()
+                    } else {
+                        "-".to_string()
+                    });
+                }
+                row
+            })
+            .collect();
         tables::print_table(&headers, &rows);
     }
     Ok(())
@@ -1159,10 +1294,17 @@ pub fn matrix_tags(db_path: &str) -> Result<()> {
 pub fn coverage_tags(db_path: &str) -> Result<()> {
     let db = open_tags_db(db_path)?;
     let read_txn = crate::errors::ctx(db.begin_read(), "Failed to begin read transaction")?;
-    let fm_table = crate::errors::ctx(read_txn.open_table(FRONTMATTER), "Failed to open frontmatter table")?;
-    let tag_table = crate::errors::ctx(read_txn.open_table(TAG_INDEX), "Failed to open tag_index table")?;
+    let fm_table = crate::errors::ctx(
+        read_txn.open_table(FRONTMATTER),
+        "Failed to open frontmatter table",
+    )?;
+    let tag_table = crate::errors::ctx(
+        read_txn.open_table(TAG_INDEX),
+        "Failed to open tag_index table",
+    )?;
 
-    let total_files = crate::errors::ctx(fm_table.len(), "Failed to count frontmatter entries")? as usize;
+    let total_files =
+        crate::errors::ctx(fm_table.len(), "Failed to count frontmatter entries")? as usize;
     if total_files == 0 {
         println!("No files indexed.");
         return Ok(());
@@ -1175,15 +1317,16 @@ pub fn coverage_tags(db_path: &str) -> Result<()> {
         let (key, value) = crate::errors::ctx(entry, "Failed to read tag entry")?;
         let tag = key.value();
         let category = tag.split(':').next().unwrap_or(tag).to_string();
-        let files: Vec<String> = serde_json::from_str(value.value())
-            .context("Failed to parse tag file list")?;
+        let files: Vec<String> =
+            serde_json::from_str(value.value()).context("Failed to parse tag file list")?;
         let cat_set = category_files.entry(category).or_default();
         for file in files {
             cat_set.insert(file);
         }
     }
 
-    let mut coverage: Vec<(String, usize, f64)> = category_files.iter()
+    let mut coverage: Vec<(String, usize, f64)> = category_files
+        .iter()
         .map(|(cat, files)| {
             let pct = (files.len() as f64 / total_files as f64) * 100.0;
             (cat.clone(), files.len(), pct)
@@ -1195,9 +1338,13 @@ pub fn coverage_tags(db_path: &str) -> Result<()> {
         let json: Vec<serde_json::Value> = coverage.iter()
             .map(|(cat, count, pct)| serde_json::json!({"category": cat, "files": count, "total": total_files, "percent": *pct as u32}))
             .collect();
-        println!("{}", serde_json::to_string_pretty(&json).expect(crate::errors::JSON_SERIALIZE));
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json).expect(crate::errors::JSON_SERIALIZE)
+        );
     } else {
-        let rows: Vec<Vec<String>> = coverage.iter()
+        let rows: Vec<Vec<String>> = coverage
+            .iter()
             .map(|(cat, count, pct)| vec![cat.clone(), count.to_string(), format!("{:.0}%", pct)])
             .collect();
         tables::print_table(&["Category", "Files", "Coverage"], &rows);
@@ -1210,16 +1357,22 @@ pub fn coverage_tags(db_path: &str) -> Result<()> {
 pub fn orphan_files(db_path: &str) -> Result<()> {
     let db = open_tags_db(db_path)?;
     let read_txn = crate::errors::ctx(db.begin_read(), "Failed to begin read transaction")?;
-    let fm_table = crate::errors::ctx(read_txn.open_table(FRONTMATTER), "Failed to open frontmatter table")?;
-    let tag_table = crate::errors::ctx(read_txn.open_table(TAG_INDEX), "Failed to open tag_index table")?;
+    let fm_table = crate::errors::ctx(
+        read_txn.open_table(FRONTMATTER),
+        "Failed to open frontmatter table",
+    )?;
+    let tag_table = crate::errors::ctx(
+        read_txn.open_table(TAG_INDEX),
+        "Failed to open tag_index table",
+    )?;
 
     // Collect all files that have at least one tag
     let mut tagged_files: HashSet<String> = HashSet::new();
     let tag_iter = crate::errors::ctx(tag_table.iter(), "Failed to iterate tag_index")?;
     for entry in tag_iter {
         let (_, value) = crate::errors::ctx(entry, "Failed to read tag entry")?;
-        let files: Vec<String> = serde_json::from_str(value.value())
-            .context("Failed to parse tag file list")?;
+        let files: Vec<String> =
+            serde_json::from_str(value.value()).context("Failed to parse tag file list")?;
         for file in files {
             tagged_files.insert(file);
         }
@@ -1238,7 +1391,10 @@ pub fn orphan_files(db_path: &str) -> Result<()> {
     orphans.sort();
 
     if crate::json_output::is_json_mode() {
-        println!("{}", serde_json::to_string(&orphans).expect(crate::errors::JSON_SERIALIZE));
+        println!(
+            "{}",
+            serde_json::to_string(&orphans).expect(crate::errors::JSON_SERIALIZE)
+        );
     } else if orphans.is_empty() {
         println!("All files have tags.");
     } else {
@@ -1277,12 +1433,14 @@ pub fn check_tags(config: &TagsConfig, warn_symlinks: bool) -> Result<()> {
                         serde_json::Value::Array(items) => {
                             // Check sorted order
                             if config.sorted_tags {
-                                let strs: Vec<&str> = items.iter()
-                                    .filter_map(|i| i.as_str())
-                                    .collect();
+                                let strs: Vec<&str> =
+                                    items.iter().filter_map(|i| i.as_str()).collect();
                                 for pair in strs.windows(2) {
                                     if pair[0] > pair[1] {
-                                        errors.push(format!("Unsorted: {} field '{}': '{}' before '{}'", file_key, key, pair[0], pair[1]));
+                                        errors.push(format!(
+                                            "Unsorted: {} field '{}': '{}' before '{}'",
+                                            file_key, key, pair[0], pair[1]
+                                        ));
                                         break;
                                     }
                                 }
@@ -1292,7 +1450,10 @@ pub fn check_tags(config: &TagsConfig, warn_symlinks: bool) -> Result<()> {
                                     if !file_tags.insert(s.to_string()) {
                                         errors.push(format!("Duplicate tag: {s} in {file_key}"));
                                     }
-                                    tag_to_files.entry(s.to_string()).or_default().insert(file_key.clone());
+                                    tag_to_files
+                                        .entry(s.to_string())
+                                        .or_default()
+                                        .insert(file_key.clone());
                                 }
                             }
                         }
@@ -1301,7 +1462,10 @@ pub fn check_tags(config: &TagsConfig, warn_symlinks: bool) -> Result<()> {
                             if !file_tags.insert(tag.clone()) {
                                 errors.push(format!("Duplicate tag: {tag} in {file_key}"));
                             }
-                            tag_to_files.entry(tag).or_default().insert(file_key.clone());
+                            tag_to_files
+                                .entry(tag)
+                                .or_default()
+                                .insert(file_key.clone());
                         }
                         _ => {}
                     }
@@ -1350,10 +1514,16 @@ pub fn check_tags(config: &TagsConfig, warn_symlinks: bool) -> Result<()> {
                 })
             });
             if !satisfies_any {
-                let group_strs: Vec<String> = config.required_field_groups.iter()
+                let group_strs: Vec<String> = config
+                    .required_field_groups
+                    .iter()
                     .map(|g| format!("[{}]", g.join(", ")))
                     .collect();
-                errors.push(format!("Missing required field group in {}: none of {}", file_key, group_strs.join(" or ")));
+                errors.push(format!(
+                    "Missing required field group in {}: none of {}",
+                    file_key,
+                    group_strs.join(" or ")
+                ));
             }
         }
     }
@@ -1365,7 +1535,8 @@ pub fn check_tags(config: &TagsConfig, warn_symlinks: bool) -> Result<()> {
 
         for (tag, tag_files) in &tag_to_files {
             if !allowed.contains(tag) {
-                let files_str: Vec<&str> = tag_files.iter().map(std::string::String::as_str).collect();
+                let files_str: Vec<&str> =
+                    tag_files.iter().map(std::string::String::as_str).collect();
                 errors.push(format!("Unknown tag '{}' in {}", tag, files_str.join(", ")));
             }
         }
@@ -1385,7 +1556,10 @@ pub fn check_tags(config: &TagsConfig, warn_symlinks: bool) -> Result<()> {
                     if let Some(serde_json::Value::String(val)) = obj.get(field) {
                         let tag = format!("{field}:{val}");
                         if !allowed.contains(&tag) {
-                            errors.push(format!("Invalid value {}={} in {} (not in {}/{}.txt)", field, val, file_key, config.tags_dir, field));
+                            errors.push(format!(
+                                "Invalid value {}={} in {} (not in {}/{}.txt)",
+                                field, val, file_key, config.tags_dir, field
+                            ));
                         }
                     }
                 }
@@ -1400,14 +1574,22 @@ pub fn check_tags(config: &TagsConfig, warn_symlinks: bool) -> Result<()> {
             if let Some(obj) = fm.as_object() {
                 for field in &config.unique_fields {
                     if let Some(serde_json::Value::String(val)) = obj.get(field) {
-                        field_values.entry((field.clone(), val.clone())).or_default().push(file_key.clone());
+                        field_values
+                            .entry((field.clone(), val.clone()))
+                            .or_default()
+                            .push(file_key.clone());
                     }
                 }
             }
         }
         for ((field, val), dup_files) in &field_values {
             if dup_files.len() > 1 {
-                errors.push(format!("Duplicate {}='{}' in {}", field, val, dup_files.join(", ")));
+                errors.push(format!(
+                    "Duplicate {}='{}' in {}",
+                    field,
+                    val,
+                    dup_files.join(", ")
+                ));
             }
         }
     }
@@ -1420,11 +1602,15 @@ pub fn check_tags(config: &TagsConfig, warn_symlinks: bool) -> Result<()> {
                     let ok = match expected_type.as_str() {
                         "list" => matches!(val, serde_json::Value::Array(_)),
                         "scalar" => matches!(val, serde_json::Value::String(_)),
-                        "number" => matches!(val, serde_json::Value::String(s) if s.parse::<f64>().is_ok()),
+                        "number" => {
+                            matches!(val, serde_json::Value::String(s) if s.parse::<f64>().is_ok())
+                        }
                         _ => true,
                     };
                     if !ok {
-                        errors.push(format!("Type mismatch: '{field}' in {file_key} expected {expected_type}"));
+                        errors.push(format!(
+                            "Type mismatch: '{field}' in {file_key} expected {expected_type}"
+                        ));
                     }
                 }
             }
@@ -1458,7 +1644,10 @@ pub fn check_tags(config: &TagsConfig, warn_symlinks: bool) -> Result<()> {
 pub fn suggest_tags(db_path: &str, path: &str, config: &TagsConfig) -> Result<()> {
     let db = open_tags_db(db_path)?;
     let read_txn = crate::errors::ctx(db.begin_read(), "Failed to begin read transaction")?;
-    let tag_table = crate::errors::ctx(read_txn.open_table(TAG_INDEX), "Failed to open tag_index table")?;
+    let tag_table = crate::errors::ctx(
+        read_txn.open_table(TAG_INDEX),
+        "Failed to open tag_index table",
+    )?;
 
     // Build file -> tags and tag -> files maps
     let mut file_tags: HashMap<String, HashSet<String>> = HashMap::new();
@@ -1466,15 +1655,16 @@ pub fn suggest_tags(db_path: &str, path: &str, config: &TagsConfig) -> Result<()
     for entry in tag_iter {
         let (key, value) = crate::errors::ctx(entry, "Failed to read tag entry")?;
         let tag = key.value().to_string();
-        let files: Vec<String> = serde_json::from_str(value.value())
-            .context("Failed to parse tag file list")?;
+        let files: Vec<String> =
+            serde_json::from_str(value.value()).context("Failed to parse tag file list")?;
         for file in files {
             file_tags.entry(file).or_default().insert(tag.clone());
         }
     }
 
     // Find the target file
-    let target_tags = file_tags.iter()
+    let target_tags = file_tags
+        .iter()
         .find(|(f, _)| path_matches(f, path))
         .map(|(_, tags)| tags.clone())
         .unwrap_or_default();
@@ -1528,15 +1718,22 @@ pub fn suggest_tags(db_path: &str, path: &str, config: &TagsConfig) -> Result<()
     sorted_suggestions.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
     if crate::json_output::is_json_mode() {
-        let json: Vec<serde_json::Value> = sorted_suggestions.iter().take(config.suggested_tags_limit)
+        let json: Vec<serde_json::Value> = sorted_suggestions
+            .iter()
+            .take(config.suggested_tags_limit)
             .map(|(tag, score)| serde_json::json!({"tag": tag, "score": format!("{:.2}", score)}))
             .collect();
-        println!("{}", serde_json::to_string_pretty(&json).expect(crate::errors::JSON_SERIALIZE));
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json).expect(crate::errors::JSON_SERIALIZE)
+        );
     } else if sorted_suggestions.is_empty() {
         println!("No suggestions — file already has all tags of similar files.");
     } else {
         println!("Suggested tags for {path}:");
-        let rows: Vec<Vec<String>> = sorted_suggestions.iter().take(config.suggested_tags_limit)
+        let rows: Vec<Vec<String>> = sorted_suggestions
+            .iter()
+            .take(config.suggested_tags_limit)
             .map(|(tag, score)| vec![tag.clone(), format!("{:.2}", score)])
             .collect();
         tables::print_table(&["Tag", "Score"], &rows);
@@ -1557,9 +1754,7 @@ fn path_matches(stored: &str, query: &str) -> bool {
     // so stored.len() - query.len() - 1 cannot underflow.
     if stored.len() > query.len() {
         let boundary = stored.len() - query.len() - 1;
-        if stored.as_bytes().get(boundary) == Some(&b'/')
-            && stored.ends_with(query)
-        {
+        if stored.as_bytes().get(boundary) == Some(&b'/') && stored.ends_with(query) {
             return true;
         }
     }
@@ -1570,7 +1765,10 @@ fn path_matches(stored: &str, query: &str) -> bool {
 fn load_all_tags(db_path: &str) -> Result<HashSet<String>> {
     let db = open_tags_db(db_path)?;
     let read_txn = crate::errors::ctx(db.begin_read(), "Failed to begin read transaction")?;
-    let table = crate::errors::ctx(read_txn.open_table(TAG_INDEX), "Failed to open tag_index table")?;
+    let table = crate::errors::ctx(
+        read_txn.open_table(TAG_INDEX),
+        "Failed to open tag_index table",
+    )?;
 
     let mut tags = HashSet::new();
     let iter = crate::errors::ctx(table.iter(), "Failed to iterate tag_index")?;
@@ -1593,14 +1791,17 @@ fn load_all_tags_sorted(db_path: &str) -> Result<Vec<String>> {
 fn load_tag_counts(db_path: &str) -> Result<HashMap<String, usize>> {
     let db = open_tags_db(db_path)?;
     let read_txn = crate::errors::ctx(db.begin_read(), "Failed to begin read transaction")?;
-    let table = crate::errors::ctx(read_txn.open_table(TAG_INDEX), "Failed to open tag_index table")?;
+    let table = crate::errors::ctx(
+        read_txn.open_table(TAG_INDEX),
+        "Failed to open tag_index table",
+    )?;
 
     let mut counts = HashMap::new();
     let iter = crate::errors::ctx(table.iter(), "Failed to iterate tag_index")?;
     for entry in iter {
         let (key, value) = crate::errors::ctx(entry, "Failed to read tag entry")?;
-        let files: Vec<String> = serde_json::from_str(value.value())
-            .context("Failed to parse tag file list")?;
+        let files: Vec<String> =
+            serde_json::from_str(value.value()).context("Failed to parse tag file list")?;
         counts.insert(key.value().to_string(), files.len());
     }
 
@@ -1626,7 +1827,8 @@ pub fn load_tags_dir(dir: &Path) -> Result<HashSet<String>> {
             continue;
         }
         let filename = path.file_name().unwrap().to_string_lossy().to_string();
-        let category = path.file_stem()
+        let category = path
+            .file_stem()
             .and_then(|s| s.to_str())
             .context("Invalid filename in tags_dir")?;
         let content = fs::read_to_string(&path)
@@ -1683,8 +1885,14 @@ pub fn merge_tags(tags_dir: &str, source_dir: &str) -> Result<()> {
     let mut merged_count = 0;
     let mut copied_count = 0;
 
-    for entry in crate::errors::ctx(fs::read_dir(src), &format!("Failed to read source directory {}", src.display()))? {
-        let entry = crate::errors::ctx(entry, &format!("Failed to read entry in source directory {}", src.display()))?;
+    for entry in crate::errors::ctx(
+        fs::read_dir(src),
+        &format!("Failed to read source directory {}", src.display()),
+    )? {
+        let entry = crate::errors::ctx(
+            entry,
+            &format!("Failed to read entry in source directory {}", src.display()),
+        )?;
         let path = entry.path();
         if path.extension().is_none_or(|e| e != "txt") {
             continue;
@@ -1692,7 +1900,10 @@ pub fn merge_tags(tags_dir: &str, source_dir: &str) -> Result<()> {
         let filename = path.file_name().unwrap();
         let dest_path = dest.join(filename);
 
-        let source_content = crate::errors::ctx(fs::read_to_string(&path), &format!("Failed to read tags source: {}", path.display()))?;
+        let source_content = crate::errors::ctx(
+            fs::read_to_string(&path),
+            &format!("Failed to read tags source: {}", path.display()),
+        )?;
         let source_entries: HashSet<String> = source_content
             .lines()
             .map(|l| l.trim().to_string())
@@ -1700,7 +1911,10 @@ pub fn merge_tags(tags_dir: &str, source_dir: &str) -> Result<()> {
             .collect();
 
         if dest_path.exists() {
-            let dest_content = crate::errors::ctx(fs::read_to_string(&dest_path), &format!("Failed to read tags dest: {}", dest_path.display()))?;
+            let dest_content = crate::errors::ctx(
+                fs::read_to_string(&dest_path),
+                &format!("Failed to read tags dest: {}", dest_path.display()),
+            )?;
             let mut all_entries: HashSet<String> = dest_content
                 .lines()
                 .map(|l| l.trim().to_string())
@@ -1712,22 +1926,41 @@ pub fn merge_tags(tags_dir: &str, source_dir: &str) -> Result<()> {
             if added > 0 {
                 let mut sorted: Vec<String> = all_entries.into_iter().collect();
                 sorted.sort();
-                crate::errors::ctx(fs::write(&dest_path, sorted.join("\n") + "\n"), &format!("Failed to write {}", dest_path.display()))?;
+                crate::errors::ctx(
+                    fs::write(&dest_path, sorted.join("\n") + "\n"),
+                    &format!("Failed to write {}", dest_path.display()),
+                )?;
                 merged_count += 1;
-                println!("  Merged: {} ({} new entries)", filename.to_string_lossy(), added);
+                println!(
+                    "  Merged: {} ({} new entries)",
+                    filename.to_string_lossy(),
+                    added
+                );
             }
         } else {
             let mut sorted: Vec<String> = source_entries.into_iter().collect();
             sorted.sort();
-            crate::errors::ctx(fs::write(&dest_path, sorted.join("\n") + "\n"), &format!("Failed to write {}", dest_path.display()))?;
+            crate::errors::ctx(
+                fs::write(&dest_path, sorted.join("\n") + "\n"),
+                &format!("Failed to write {}", dest_path.display()),
+            )?;
             copied_count += 1;
             println!("  Copied: {}", filename.to_string_lossy());
         }
     }
 
     // Copy files that exist in destination but not in source back to source
-    for entry in crate::errors::ctx(fs::read_dir(dest), &format!("Failed to read destination directory {}", dest.display()))? {
-        let entry = crate::errors::ctx(entry, &format!("Failed to read entry in destination directory {}", dest.display()))?;
+    for entry in crate::errors::ctx(
+        fs::read_dir(dest),
+        &format!("Failed to read destination directory {}", dest.display()),
+    )? {
+        let entry = crate::errors::ctx(
+            entry,
+            &format!(
+                "Failed to read entry in destination directory {}",
+                dest.display()
+            ),
+        )?;
         let path = entry.path();
         if path.extension().is_none_or(|e| e != "txt") {
             continue;
@@ -1735,7 +1968,14 @@ pub fn merge_tags(tags_dir: &str, source_dir: &str) -> Result<()> {
         let filename = path.file_name().unwrap();
         let src_path = src.join(filename);
         if !src_path.exists() {
-            crate::errors::ctx(fs::copy(&path, &src_path), &format!("Failed to copy {} to {}", path.display(), src_path.display()))?;
+            crate::errors::ctx(
+                fs::copy(&path, &src_path),
+                &format!(
+                    "Failed to copy {} to {}",
+                    path.display(),
+                    src_path.display()
+                ),
+            )?;
             copied_count += 1;
             println!("  Copied to source: {}", filename.to_string_lossy());
         }
@@ -1762,9 +2002,7 @@ fn find_similar_tag(tag: &str, allowed: &HashSet<String>) -> Option<String> {
             continue;
         }
         let dist = levenshtein(tag, candidate);
-        if dist > 0 && dist <= max_dist
-            && (best.is_none() || dist < best.as_ref().unwrap().1)
-        {
+        if dist > 0 && dist <= max_dist && (best.is_none() || dist < best.as_ref().unwrap().1) {
             best = Some((candidate.clone(), dist));
         }
     }
@@ -1779,8 +2017,12 @@ fn levenshtein(a: &str, b: &str) -> usize {
     let a_len = a_chars.len();
     let b_len = b_chars.len();
 
-    if a_len == 0 { return b_len; }
-    if b_len == 0 { return a_len; }
+    if a_len == 0 {
+        return b_len;
+    }
+    if b_len == 0 {
+        return a_len;
+    }
 
     let mut prev: Vec<usize> = (0..=b_len).collect();
     let mut curr = vec![0; b_len + 1];
@@ -1789,9 +2031,7 @@ fn levenshtein(a: &str, b: &str) -> usize {
         curr[0] = i + 1;
         for (j, cb) in b_chars.iter().enumerate() {
             let cost = usize::from(ca != cb);
-            curr[j + 1] = (prev[j] + cost)
-                .min(curr[j] + 1)
-                .min(prev[j + 1] + 1);
+            curr[j + 1] = (prev[j] + cost).min(curr[j] + 1).min(prev[j + 1] + 1);
         }
         std::mem::swap(&mut prev, &mut curr);
     }
@@ -2006,11 +2246,13 @@ mod tests {
 
     #[test]
     fn tag_allowed_exact() {
-        let allowed: HashSet<String> = ["docker", "python"].iter().map(ToString::to_string).collect();
+        let allowed: HashSet<String> = ["docker", "python"]
+            .iter()
+            .map(ToString::to_string)
+            .collect();
         assert!(tag_matches_allowed("docker", &allowed));
         assert!(!tag_matches_allowed("rust", &allowed));
     }
-
 }
 
 fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {

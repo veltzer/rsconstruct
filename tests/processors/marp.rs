@@ -1,6 +1,6 @@
+use crate::common::{require_tool, run_rsconstruct_with_env};
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsconstruct_with_env, require_tool};
 
 #[test]
 fn marp_ci_cap_sets_max_jobs_when_ci_true() {
@@ -9,23 +9,32 @@ fn marp_ci_cap_sets_max_jobs_when_ci_true() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[processor.marp]\nsrc_dirs = [\"marp\"]\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     let output = run_rsconstruct_with_env(
         project_path,
         &["--json", "processors", "config", "marp"],
         &[("NO_COLOR", "1"), ("CI", "true")],
     );
-    assert!(output.status.success(), "command failed: {}",
-        String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "command failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let parsed: serde_json::Value = serde_json::from_str(&stdout)
         .unwrap_or_else(|e| panic!("invalid JSON: {}\nstdout: {}", e, stdout));
-    let max_jobs = parsed.get("marp")
+    let max_jobs = parsed
+        .get("marp")
         .and_then(|m| m.get("max_jobs"))
         .unwrap_or_else(|| panic!("marp.max_jobs missing under CI=true; full dump: {}", stdout));
-    assert_eq!(max_jobs.as_i64(), Some(2),
-        "expected max_jobs=2 under CI=true, got {:?}", max_jobs);
+    assert_eq!(
+        max_jobs.as_i64(),
+        Some(2),
+        "expected max_jobs=2 under CI=true, got {:?}",
+        max_jobs
+    );
 }
 
 #[test]
@@ -35,7 +44,8 @@ fn marp_ci_cap_absent_when_ci_unset() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[processor.marp]\nsrc_dirs = [\"marp\"]\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     // CI=false should behave like unset (the hook only fires on CI=="true").
     let output = run_rsconstruct_with_env(
@@ -49,7 +59,8 @@ fn marp_ci_cap_absent_when_ci_unset() {
     let max_jobs = parsed.get("marp").and_then(|m| m.get("max_jobs"));
     assert!(
         max_jobs.is_none() || max_jobs == Some(&serde_json::Value::Null),
-        "expected max_jobs absent without CI=true, got {:?}", max_jobs
+        "expected max_jobs absent without CI=true, got {:?}",
+        max_jobs
     );
 }
 
@@ -60,7 +71,8 @@ fn marp_ci_cap_respects_user_set_max_jobs() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[processor.marp]\nmax_jobs = 5\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     let output = run_rsconstruct_with_env(
         project_path,
@@ -71,8 +83,12 @@ fn marp_ci_cap_respects_user_set_max_jobs() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     let max_jobs = parsed["marp"]["max_jobs"].as_i64();
-    assert_eq!(max_jobs, Some(5),
-        "user-set max_jobs must win over CI cap; got {:?}", max_jobs);
+    assert_eq!(
+        max_jobs,
+        Some(5),
+        "user-set max_jobs must win over CI cap; got {:?}",
+        max_jobs
+    );
 }
 
 #[test]

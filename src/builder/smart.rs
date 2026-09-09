@@ -8,9 +8,10 @@ const CONFIG_FILE: &str = "rsconstruct.toml";
 
 /// Load rsconstruct.toml as a `toml_edit` document.
 fn load_doc() -> Result<toml_edit::DocumentMut> {
-    let content = fs::read_to_string(CONFIG_FILE)
-        .with_context(|| format!("Failed to read {CONFIG_FILE}"))?;
-    content.parse()
+    let content =
+        fs::read_to_string(CONFIG_FILE).with_context(|| format!("Failed to read {CONFIG_FILE}"))?;
+    content
+        .parse()
         .with_context(|| format!("Failed to parse {CONFIG_FILE}"))
 }
 
@@ -115,7 +116,10 @@ pub fn enable_detected(detected: &HashSet<String>) -> Result<()> {
 
     for name in detected {
         if table.get(name.as_str()).is_none() {
-            table.insert(name.as_str(), toml_edit::Item::Table(toml_edit::Table::new()));
+            table.insert(
+                name.as_str(),
+                toml_edit::Item::Table(toml_edit::Table::new()),
+            );
             count += 1;
         }
     }
@@ -147,7 +151,10 @@ pub fn only(names: &[String]) -> Result<()> {
 
     // Add only the requested ones
     for name in names {
-        table.insert(name.as_str(), toml_edit::Item::Table(toml_edit::Table::new()));
+        table.insert(
+            name.as_str(),
+            toml_edit::Item::Table(toml_edit::Table::new()),
+        );
     }
 
     save_doc(&doc)?;
@@ -168,7 +175,10 @@ pub fn minimal(detected: &HashSet<String>) -> Result<()> {
 
     // Add detected
     for name in detected {
-        table.insert(name.as_str(), toml_edit::Item::Table(toml_edit::Table::new()));
+        table.insert(
+            name.as_str(),
+            toml_edit::Item::Table(toml_edit::Table::new()),
+        );
     }
 
     save_doc(&doc)?;
@@ -177,7 +187,14 @@ pub fn minimal(detected: &HashSet<String>) -> Result<()> {
     } else {
         let mut names: Vec<&String> = detected.iter().collect();
         names.sort();
-        println!("Minimal config: {}", names.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "));
+        println!(
+            "Minimal config: {}",
+            names
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
     Ok(())
 }
@@ -197,7 +214,10 @@ pub fn auto(available: &HashSet<String>) -> Result<()> {
 
     for name in available {
         if table.get(name.as_str()).is_none() {
-            table.insert(name.as_str(), toml_edit::Item::Table(toml_edit::Table::new()));
+            table.insert(
+                name.as_str(),
+                toml_edit::Item::Table(toml_edit::Table::new()),
+            );
             added.push(name.as_str());
         }
     }
@@ -227,13 +247,16 @@ fn delete_iname(section_table: &mut toml_edit::Table, iname: &str) -> bool {
     if let Some(dot) = iname.find('.') {
         let type_name = &iname[..dot];
         let sub_name = &iname[dot + 1..];
-        if let Some(type_table) = section_table.get_mut(type_name).and_then(|t| t.as_table_mut())
-            && type_table.remove(sub_name).is_some() {
-                if type_table.is_empty() {
-                    section_table.remove(type_name);
-                }
-                return true;
+        if let Some(type_table) = section_table
+            .get_mut(type_name)
+            .and_then(|t| t.as_table_mut())
+            && type_table.remove(sub_name).is_some()
+        {
+            if type_table.is_empty() {
+                section_table.remove(type_name);
             }
+            return true;
+        }
         false
     } else {
         section_table.remove(iname).is_some()
@@ -243,7 +266,12 @@ fn delete_iname(section_table: &mut toml_edit::Table, iname: &str) -> bool {
 /// Set `enabled = VALUE` on a single entry by iname from the given section table.
 /// Supports both simple inames ("ruff") and dotted named instances ("pylint.core").
 /// Returns an error if the iname is not found.
-fn set_enabled_iname(section_table: &mut toml_edit::Table, iname: &str, value: bool, section: &str) -> Result<()> {
+fn set_enabled_iname(
+    section_table: &mut toml_edit::Table,
+    iname: &str,
+    value: bool,
+    section: &str,
+) -> Result<()> {
     let entry = if let Some(dot) = iname.find('.') {
         let type_name = &iname[..dot];
         let sub_name = &iname[dot + 1..];
@@ -253,9 +281,7 @@ fn set_enabled_iname(section_table: &mut toml_edit::Table, iname: &str, value: b
             .and_then(|t| t.get_mut(sub_name))
             .and_then(|v| v.as_table_mut())
     } else {
-        section_table
-            .get_mut(iname)
-            .and_then(|v| v.as_table_mut())
+        section_table.get_mut(iname).and_then(|v| v.as_table_mut())
     };
 
     match entry {
@@ -368,7 +394,11 @@ pub fn remove_no_file_processors(empty_processors: &[String]) -> Result<()> {
         println!("No processors to remove.");
     } else {
         save_doc(&doc)?;
-        println!("Removed {} processor(s) with no files: {}", removed.len(), removed.join(", "));
+        println!(
+            "Removed {} processor(s) with no files: {}",
+            removed.len(),
+            removed.join(", ")
+        );
     }
     Ok(())
 }

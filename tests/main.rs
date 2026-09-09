@@ -13,10 +13,10 @@ mod complete;
 mod doctor;
 #[path = "tests_mod/dry_run.rs"]
 mod dry_run;
-#[path = "tests_mod/explain.rs"]
-mod explain;
 #[path = "tests_mod/exit_codes.rs"]
 mod exit_codes;
+#[path = "tests_mod/explain.rs"]
+mod explain;
 #[path = "tests_mod/graph.rs"]
 mod graph;
 #[path = "tests_mod/init.rs"]
@@ -42,29 +42,41 @@ mod watch;
 
 mod processors {
     pub mod a2x;
+    pub mod actionlint;
     pub mod ascii;
     pub mod aspell;
     pub mod black;
     pub mod cargo;
     pub mod cc;
-    pub mod clippy;
     pub mod cc_single_file;
+    pub mod checkstyle;
     pub mod clang_tidy;
+    pub mod clippy;
+    pub mod cmake;
     pub mod cppcheck;
+    pub mod creator;
     pub mod doctest;
     pub mod drawio;
     pub mod duplicate_files;
+    pub mod eslint;
     pub mod gem;
     pub mod generator;
+    pub mod hadolint;
+    pub mod htmlhint;
+    pub mod htmllint;
+    pub mod iyamlschema;
+    pub mod jekyll;
     pub mod jinja2;
     pub mod jq;
+    pub mod jshint;
+    pub mod jslint;
     pub mod json_schema;
     pub mod jsonlint;
     pub mod libreoffice;
     pub mod linux_module;
     pub mod luacheck;
-    pub mod mako;
     pub mod make;
+    pub mod mako;
     pub mod markdown;
     pub mod markdownlint;
     pub mod marp;
@@ -76,48 +88,36 @@ mod processors {
     pub mod pandoc;
     pub mod pdflatex;
     pub mod pdfunite;
+    pub mod perlcritic;
+    pub mod php_lint;
     pub mod pip;
-    pub mod requirements;
     pub mod protobuf;
     pub mod pylint;
-    pub mod pytest;
     pub mod pyrefly;
+    pub mod pytest;
+    pub mod requirements;
     pub mod ruff;
     pub mod rumdl;
     pub mod rust_single_file;
     pub mod sass;
     pub mod script;
+    pub mod shared_output_dir;
     pub mod shellcheck;
-    pub mod zspell;
+    pub mod slidev;
     pub mod sphinx;
+    pub mod standard;
+    pub mod stylelint;
+    pub mod svglint;
+    pub mod svgo;
+    pub mod tags;
     pub mod taplo;
     pub mod tera;
     pub mod terms;
-    pub mod yamllint;
-    pub mod tags;
-    pub mod eslint;
-    pub mod jshint;
-    pub mod htmlhint;
     pub mod tidy;
-    pub mod stylelint;
-    pub mod jslint;
-    pub mod standard;
-    pub mod htmllint;
-    pub mod iyamlschema;
-    pub mod php_lint;
-    pub mod perlcritic;
     pub mod xmllint;
-    pub mod svglint;
-    pub mod svgo;
-    pub mod checkstyle;
+    pub mod yamllint;
     pub mod yq;
-    pub mod cmake;
-    pub mod creator;
-    pub mod actionlint;
-    pub mod hadolint;
-    pub mod jekyll;
-    pub mod slidev;
-    pub mod shared_output_dir;
+    pub mod zspell;
 }
 
 /// Every test file on disk must be registered above — a file missing from
@@ -127,10 +127,15 @@ mod processors {
 fn every_test_file_is_registered() {
     let this = include_str!("main.rs");
     let mut missing: Vec<String> = Vec::new();
-    for (dir, prefix) in [("tests/tests_mod", "tests_mod"), ("tests/processors", "processors")] {
+    for (dir, prefix) in [
+        ("tests/tests_mod", "tests_mod"),
+        ("tests/processors", "processors"),
+    ] {
         for entry in std::fs::read_dir(dir).unwrap() {
             let path = entry.unwrap().path();
-            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else { continue };
+            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
             if path.extension().is_none_or(|e| e != "rs") {
                 continue;
             }
@@ -144,7 +149,9 @@ fn every_test_file_is_registered() {
         }
     }
     missing.sort();
-    assert!(missing.is_empty(),
+    assert!(
+        missing.is_empty(),
         "test files exist on disk but are not registered in tests/main.rs \
-         (they silently never run): {missing:#?}");
+         (they silently never run): {missing:#?}"
+    );
 }

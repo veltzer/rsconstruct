@@ -4,9 +4,9 @@
 //! - `rsconstruct.local.toml` — a per-repo overlay deep-merged over the main
 //!   config at load time.
 
+use crate::common::{run_rsconstruct, setup_project_with_config, write_file};
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsconstruct, setup_project_with_config, write_file};
 
 /// A src_dirs entry that doesn't exist scans nothing rather than failing.
 /// src_dirs scans only what it names, so naming an absent directory already
@@ -14,9 +14,8 @@ use crate::common::{run_rsconstruct, setup_project_with_config, write_file};
 /// rsconstruct.toml list every directory the family of repos might have.
 #[test]
 fn missing_src_dirs_scans_nothing() {
-    let temp_dir = setup_project_with_config(
-        "[processor.tera]\nsrc_dirs = [\"missing.templates\"]\n",
-    );
+    let temp_dir =
+        setup_project_with_config("[processor.tera]\nsrc_dirs = [\"missing.templates\"]\n");
     let output = run_rsconstruct(temp_dir.path(), &["build"]);
     assert!(
         output.status.success(),
@@ -86,7 +85,10 @@ fn missing_tool_fails_when_processor_has_products() {
     write_file(project, "checked/doc.md", "# doc");
 
     let output = run_rsconstruct(project, &["build"]);
-    assert!(!output.status.success(), "missing tool must fail when the processor has products");
+    assert!(
+        !output.status.success(),
+        "missing tool must fail when the processor has products"
+    );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("Missing required tools"),
@@ -132,7 +134,8 @@ fn local_overlay_disables_processor() {
     fs::write(
         project.join("rsconstruct.local.toml"),
         "[processor.tera]\nenabled = false\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     let output = run_rsconstruct(project, &["build"]);
     assert!(
@@ -160,7 +163,8 @@ fn local_overlay_adds_sections() {
             "[processor.zspell]\n",
             "src_dirs = [\"absent_docs\"]\n",
         ),
-    ).unwrap();
+    )
+    .unwrap();
 
     let output = run_rsconstruct(project, &["build"]);
     assert!(
@@ -182,14 +186,13 @@ fn local_overlay_adds_sections() {
 
 #[test]
 fn local_overlay_field_wins_over_main() {
-    let temp_dir = setup_project_with_config(
-        "[processor.tera]\ndep_inputs = [\"config/a.py\"]\n",
-    );
+    let temp_dir = setup_project_with_config("[processor.tera]\ndep_inputs = [\"config/a.py\"]\n");
     let project = temp_dir.path();
     fs::write(
         project.join("rsconstruct.local.toml"),
         "[processor.tera]\ndep_inputs = [\"config/b.py\"]\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     let output = run_rsconstruct(project, &["processors", "config", "tera"]);
     assert!(
@@ -198,8 +201,14 @@ fn local_overlay_field_wins_over_main() {
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("b.py"), "local value should win, got: {stdout}");
-    assert!(!stdout.contains("a.py"), "main value should be replaced, got: {stdout}");
+    assert!(
+        stdout.contains("b.py"),
+        "local value should win, got: {stdout}"
+    );
+    assert!(
+        !stdout.contains("a.py"),
+        "main value should be replaced, got: {stdout}"
+    );
 }
 
 #[test]
@@ -208,10 +217,14 @@ fn local_overlay_without_main_config_fails() {
     fs::write(
         temp_dir.path().join("rsconstruct.local.toml"),
         "[processor.tera]\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     let output = run_rsconstruct(temp_dir.path(), &["build"]);
-    assert!(!output.status.success(), "build should fail without a main config");
+    assert!(
+        !output.status.success(),
+        "build should fail without a main config"
+    );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("rsconstruct.local.toml found without rsconstruct.toml"),

@@ -6,29 +6,40 @@ use serde::{Deserialize, Serialize};
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{Processor, run_command, check_command_output};
+use crate::processors::{Processor, check_command_output, run_command};
 
 use super::TemplateItem;
 
 /// Mako template processor config. No custom fields.
 /// `command` is the Python interpreter used to render (default: python3).
 /// Unused `StandardConfig` fields: formats, `output_dir`.
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[derive(Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct MakoConfig {
     #[serde(flatten)]
     pub standard: StandardConfig,
 }
 
 /// Render a Mako template via the configured Python interpreter and write to output
-fn render_mako(ctx: &crate::build_context::BuildContext, python: &str, item: &TemplateItem) -> Result<()> {
+fn render_mako(
+    ctx: &crate::build_context::BuildContext,
+    python: &str,
+    item: &TemplateItem,
+) -> Result<()> {
     // Ensure parent directory of output exists
     crate::processors::ensure_output_dir(&item.output_path)?;
 
-    let source = item.source_path.display().to_string()
-        .replace('\\', "\\\\").replace('\'', "\\'");
-    let target = item.output_path.display().to_string()
-        .replace('\\', "\\\\").replace('\'', "\\'");
+    let source = item
+        .source_path
+        .display()
+        .to_string()
+        .replace('\\', "\\\\")
+        .replace('\'', "\\'");
+    let target = item
+        .output_path
+        .display()
+        .to_string()
+        .replace('\\', "\\\\")
+        .replace('\'', "\\'");
 
     let python_script = format!(
         r"
@@ -44,7 +55,10 @@ with open('{target}', 'w') as f:
     let mut cmd = Command::new(python);
     cmd.arg("-c").arg(&python_script);
     let output = run_command(ctx, &cmd)?;
-    check_command_output(&output, format!("mako render {}", item.source_path.display()))
+    check_command_output(
+        &output,
+        format!("mako render {}", item.source_path.display()),
+    )
 }
 
 pub struct MakoProcessor {
@@ -53,9 +67,7 @@ pub struct MakoProcessor {
 
 impl MakoProcessor {
     pub const fn new(config: MakoConfig) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 }
 
@@ -63,7 +75,6 @@ impl Processor for MakoProcessor {
     fn scan_config(&self) -> &crate::config::StandardConfig {
         &self.config.standard
     }
-
 
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
@@ -83,10 +94,18 @@ impl Processor for MakoProcessor {
         // console script from that same distribution — probing it is how a
         // library dependency becomes visible to the executable-based tool
         // registry, so `tools install` covers it like any other tool.
-        vec![self.config.standard.command.clone(), "mako-render".to_string()]
+        vec![
+            self.config.standard.command.clone(),
+            "mako-render".to_string(),
+        ]
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let items = super::find_templates(&self.config.standard, file_index);
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
@@ -98,7 +117,10 @@ impl Processor for MakoProcessor {
                 inputs,
                 vec![item.output_path.clone()],
                 instance_name,
-                Some(output_config_hash(&self.config, &crate::config::checksum_fields_of(instance_name))),
+                Some(output_config_hash(
+                    &self.config,
+                    &crate::config::checksum_fields_of(instance_name),
+                )),
             )?;
         }
 

@@ -32,7 +32,10 @@ pub struct TeraDepAnalyzer {
 
 impl TeraDepAnalyzer {
     pub fn new(iname: &str, config: TeraAnalyzerConfig) -> Self {
-        Self { iname: iname.to_string(), config }
+        Self {
+            iname: iname.to_string(),
+            config,
+        }
     }
 
     /// Scan a Tera template file for all dependency-affecting constructs.
@@ -54,7 +57,14 @@ impl TeraDepAnalyzer {
         // recursion on cyclic includes.
         let mut scanned: HashSet<PathBuf> = HashSet::new();
 
-        scan_template_recursive(ctx, source, &mut paths, &mut seen, &mut hash_pieces, &mut scanned)?;
+        scan_template_recursive(
+            ctx,
+            source,
+            &mut paths,
+            &mut seen,
+            &mut hash_pieces,
+            &mut scanned,
+        )?;
 
         Ok(ScanResult {
             deps: paths,
@@ -79,7 +89,9 @@ fn scan_template_recursive(
     hash_pieces: &mut Vec<String>,
     scanned: &mut HashSet<PathBuf>,
 ) -> Result<()> {
-    let canonical = source.canonicalize().unwrap_or_else(|_| source.to_path_buf());
+    let canonical = source
+        .canonicalize()
+        .unwrap_or_else(|_| source.to_path_buf());
     if !scanned.insert(canonical) {
         return Ok(());
     }
@@ -161,17 +173,15 @@ fn scan_template_recursive(
         Regex::new(r#"pattern\s*=\s*["']([^"']*)["']"#).expect(errors::INVALID_REGEX)
     });
     static GREP_COUNT_GLOB_RE: OnceLock<Regex> = OnceLock::new();
-    let grep_count_glob_re = GREP_COUNT_GLOB_RE.get_or_init(|| {
-        Regex::new(r#"glob\s*=\s*["']([^"']*)["']"#).expect(errors::INVALID_REGEX)
-    });
+    let grep_count_glob_re = GREP_COUNT_GLOB_RE
+        .get_or_init(|| Regex::new(r#"glob\s*=\s*["']([^"']*)["']"#).expect(errors::INVALID_REGEX));
 
     // shell_output(...) — full call. We pull out the command and depends_on
     // separately. The full body capture is intentionally lazy; a missing
     // depends_on must be diagnosed (analyzer-time error).
     static SHELL_OUTPUT_RE: OnceLock<Regex> = OnceLock::new();
-    let shell_re = SHELL_OUTPUT_RE.get_or_init(|| {
-        Regex::new(r"shell_output\s*\(([^)]*)\)").expect(errors::INVALID_REGEX)
-    });
+    let shell_re = SHELL_OUTPUT_RE
+        .get_or_init(|| Regex::new(r"shell_output\s*\(([^)]*)\)").expect(errors::INVALID_REGEX));
 
     // Inner extraction inside a shell_output(...) body.
     static SHELL_CMD_RE: OnceLock<Regex> = OnceLock::new();
@@ -179,13 +189,11 @@ fn scan_template_recursive(
         Regex::new(r#"command\s*=\s*["']([^"']*)["']"#).expect(errors::INVALID_REGEX)
     });
     static SHELL_DEPS_RE: OnceLock<Regex> = OnceLock::new();
-    let shell_deps_re = SHELL_DEPS_RE.get_or_init(|| {
-        Regex::new(r"depends_on\s*=\s*\[([^\]]*)\]").expect(errors::INVALID_REGEX)
-    });
+    let shell_deps_re = SHELL_DEPS_RE
+        .get_or_init(|| Regex::new(r"depends_on\s*=\s*\[([^\]]*)\]").expect(errors::INVALID_REGEX));
     static QUOTED_STR_RE: OnceLock<Regex> = OnceLock::new();
-    let quoted_str_re = QUOTED_STR_RE.get_or_init(|| {
-        Regex::new(r#"["']([^"']+)["']"#).expect(errors::INVALID_REGEX)
-    });
+    let quoted_str_re = QUOTED_STR_RE
+        .get_or_init(|| Regex::new(r#"["']([^"']+)["']"#).expect(errors::INVALID_REGEX));
 
     let source_dir = crate::processors::parent_dir(source);
 
@@ -265,20 +273,24 @@ fn scan_template_recursive(
     // changes invalidate the product.
     for caps in grep_count_re.captures_iter(&content) {
         let body = &caps[1];
-        let regex_pat = grep_count_pattern_re.captures(body)
+        let regex_pat = grep_count_pattern_re
+            .captures(body)
             .and_then(|c| c.get(1).map(|m| m.as_str().to_string()));
-        let file_glob = grep_count_glob_re.captures(body)
+        let file_glob = grep_count_glob_re
+            .captures(body)
             .and_then(|c| c.get(1).map(|m| m.as_str().to_string()));
         let Some(regex_pat) = regex_pat else {
             bail!(
                 "[tera] {}: grep_count(...) is missing pattern=\"<regex>\". Found: grep_count({})",
-                source.display(), body.trim(),
+                source.display(),
+                body.trim(),
             );
         };
         let Some(file_glob) = file_glob else {
             bail!(
                 "[tera] {}: grep_count(pattern=\"{}\") is missing glob=\"<file_glob>\".",
-                source.display(), regex_pat,
+                source.display(),
+                regex_pat,
             );
         };
         let matched = expand_glob(&file_glob)?;
@@ -302,9 +314,8 @@ fn scan_template_recursive(
     // processors/generators/tera.rs; this used to be untracked — a renamed
     // workflow left stale rendered output cached indefinitely.
     static WORKFLOW_NAMES_RE: OnceLock<Regex> = OnceLock::new();
-    let workflow_names_re = WORKFLOW_NAMES_RE.get_or_init(|| {
-        Regex::new(r"workflow_names\s*\(\s*\)").expect(errors::INVALID_REGEX)
-    });
+    let workflow_names_re = WORKFLOW_NAMES_RE
+        .get_or_init(|| Regex::new(r"workflow_names\s*\(\s*\)").expect(errors::INVALID_REGEX));
     if workflow_names_re.is_match(&content) {
         let matched = expand_glob(".github/workflows/*.yml")?;
         hash_pieces.push(format!("workflow_names_resolved:{}", matched.join("\n")));
@@ -320,16 +331,19 @@ fn scan_template_recursive(
     // 4) shell_output(...): require depends_on, harvest patterns and command
     for caps in shell_re.captures_iter(&content) {
         let body = &caps[1];
-        let command = shell_cmd_re.captures(body)
+        let command = shell_cmd_re
+            .captures(body)
             .and_then(|c| c.get(1).map(|m| m.as_str().to_string()));
-        let deps_block = shell_deps_re.captures(body)
+        let deps_block = shell_deps_re
+            .captures(body)
             .and_then(|c| c.get(1).map(|m| m.as_str().to_string()));
 
         let Some(command) = command else {
             bail!(
                 "[tera] {}: shell_output(...) call has no command= argument. \
                  Found: shell_output({})",
-                source.display(), body.trim(),
+                source.display(),
+                body.trim(),
             );
         };
         let Some(deps_block) = deps_block else {
@@ -340,7 +354,8 @@ fn scan_template_recursive(
                  list (e.g. depends_on=[\"marp/**/*.md\"]).\n\
                  If your command genuinely has no file dependencies, pass depends_on=[] \
                  to acknowledge that.",
-                source.display(), command,
+                source.display(),
+                command,
             );
         };
 
@@ -400,11 +415,11 @@ fn git_ls_files(ctx: &crate::build_context::BuildContext, pattern: &str) -> Vec<
 /// participate. The sorted order matters for the deterministic hash piece.
 fn expand_glob(pattern: &str) -> Result<Vec<String>> {
     let mut paths: Vec<String> = Vec::new();
-    for entry in glob::glob(pattern)
-        .map_err(|e| anyhow::anyhow!("Invalid glob pattern '{pattern}': {e}"))?
+    for entry in
+        glob::glob(pattern).map_err(|e| anyhow::anyhow!("Invalid glob pattern '{pattern}': {e}"))?
     {
-        let path = entry
-            .map_err(|e| anyhow::anyhow!("Glob iteration error for '{pattern}': {e}"))?;
+        let path =
+            entry.map_err(|e| anyhow::anyhow!("Glob iteration error for '{pattern}': {e}"))?;
         if path.is_file() {
             paths.push(path.to_string_lossy().into_owned());
         }
@@ -433,7 +448,11 @@ impl DepAnalyzer for TeraDepAnalyzer {
         }
         let source = &p.inputs[0];
         let ext = source.extension().and_then(|s| s.to_str()).unwrap_or("");
-        if ext == "tera" { Some(source.clone()) } else { None }
+        if ext == "tera" {
+            Some(source.clone())
+        } else {
+            None
+        }
     }
 
     fn analyze(

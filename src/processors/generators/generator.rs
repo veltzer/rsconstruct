@@ -5,14 +5,12 @@ use std::process::Command;
 use serde::{Deserialize, Serialize};
 
 use crate::config::StandardConfig;
+use crate::config::{output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use crate::processors::{
-    Processor,
-    run_command, check_command_output, execute_generator_batch,
-    config_file_inputs,
+    Processor, check_command_output, config_file_inputs, execute_generator_batch, run_command,
 };
-use crate::config::{output_config_hash, resolve_extra_inputs};
 
 fn default_generator_output_extension() -> String {
     "out".into()
@@ -42,25 +40,34 @@ pub struct GeneratorProcessor {
 
 impl GeneratorProcessor {
     pub const fn new(config: GeneratorConfig) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 
     const fn should_process(&self) -> bool {
         !self.config.standard.command.is_empty()
     }
 
-    fn execute_product(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+    fn execute_product(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        product: &Product,
+    ) -> Result<()> {
         self.run_pairs(ctx, &[(product.primary_input(), product.primary_output())])
     }
 
-    fn run_pairs(&self, ctx: &crate::build_context::BuildContext, pairs: &[(&Path, &Path)]) -> Result<()> {
+    fn run_pairs(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        pairs: &[(&Path, &Path)],
+    ) -> Result<()> {
         for pair in pairs {
             crate::processors::ensure_output_dir(pair.1)?;
         }
 
-        let command = self.config.standard.require_command(crate::processors::names::GENERATOR)?;
+        let command = self
+            .config
+            .standard
+            .require_command(crate::processors::names::GENERATOR)?;
         let mut cmd = Command::new(command);
         for arg in &self.config.standard.args {
             cmd.arg(arg);
@@ -79,7 +86,6 @@ impl Processor for GeneratorProcessor {
     fn scan_config(&self) -> &crate::config::StandardConfig {
         &self.config.standard
     }
-
 
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
@@ -101,7 +107,12 @@ impl Processor for GeneratorProcessor {
         }
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         if !self.should_process() {
             return Ok(());
         }
@@ -110,7 +121,10 @@ impl Processor for GeneratorProcessor {
             return Ok(());
         }
 
-        let hash = Some(output_config_hash(&self.config, &crate::config::checksum_fields_of(instance_name)));
+        let hash = Some(output_config_hash(
+            &self.config,
+            &crate::config::checksum_fields_of(instance_name),
+        ));
         let mut dep_inputs = self.config.standard.dep_inputs.clone();
         for ai in &self.config.standard.dep_auto {
             dep_inputs.extend(config_file_inputs(ai));
@@ -123,7 +137,10 @@ impl Processor for GeneratorProcessor {
 
         for source in &files {
             let output = super::output_path(
-                source, src_dirs, &self.config.standard.output_dir, &self.config.output_extension,
+                source,
+                src_dirs,
+                &self.config.standard.output_dir,
+                &self.config.output_extension,
             );
             let mut inputs = Vec::with_capacity(1 + extra.len());
             inputs.push(source.clone());
@@ -137,7 +154,11 @@ impl Processor for GeneratorProcessor {
         self.execute_product(ctx, product)
     }
 
-    fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
+    fn execute_batch(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        products: &[&Product],
+    ) -> Vec<Result<()>> {
         execute_generator_batch(ctx, products, |ctx, pairs| self.run_pairs(ctx, pairs))
     }
 }

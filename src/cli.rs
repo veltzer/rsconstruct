@@ -1,6 +1,6 @@
 use anyhow::{Result, bail};
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
-use clap_complete::{generate, Shell};
+use clap_complete::{Shell, generate};
 use std::str::FromStr;
 
 // The product-display types moved to `crate::display` so the core data model
@@ -130,7 +130,6 @@ pub enum BuildPhase {
     #[default]
     Build,
 }
-
 
 // Subcommand variants are kept in alphabetical order by their display name (kebab-case
 // of the variant). Clap renders subcommands in declaration order, so this list IS the
@@ -865,7 +864,9 @@ impl SharedBuildArgs {
             timings: self.timings,
             keep_going: self.keep_going,
             summary: !self.no_summary,
-            batch_size: self.batch_size.map(|n| if n < 0 { None } else { Some(n as usize) }),
+            batch_size: self
+                .batch_size
+                .map(|n| if n < 0 { None } else { Some(n as usize) }),
             stop_after,
             processor_filter: self.processors.clone(),
             exclude_filter: self.exclude_processors.clone(),
@@ -1024,7 +1025,8 @@ _rsconstruct_fixer_inames() {
         fi
     done
 }
-"#.replace("__RSCONSTRUCT_FIXER_TYPES__", &fixer_types.join("|"));
+"#
+    .replace("__RSCONSTRUCT_FIXER_TYPES__", &fixer_types.join("|"));
 
     // Replace instance-name targets to call _rsconstruct_inames at tab time.
     // For each target section, replace the early-return COMPREPLY with a call to our helper.
@@ -1100,7 +1102,8 @@ _rsconstruct_fixer_inames() {
     // Inject completion for --processors/-p in build/watch: inames only,
     // read from rsconstruct.toml at tab time via _rsconstruct_inames. You can
     // only build a processor that is declared in the project.
-    let old_processors = "                --processors)\n                    COMPREPLY=($(compgen -f \"${cur}\"))";
+    let old_processors =
+        "                --processors)\n                    COMPREPLY=($(compgen -f \"${cur}\"))";
     let new_processors = "                --processors)\n                    COMPREPLY=($(compgen -W \"$(_rsconstruct_inames)\" -- \"${cur}\"))".to_string();
     let old_p = "                -p)\n                    COMPREPLY=($(compgen -f \"${cur}\"))";
     let new_p = "                -p)\n                    COMPREPLY=($(compgen -W \"$(_rsconstruct_inames)\" -- \"${cur}\"))".to_string();
@@ -1109,7 +1112,12 @@ _rsconstruct_fixer_inames() {
     let old_x = "                -x)\n                    COMPREPLY=($(compgen -f \"${cur}\"))";
     let new_x = "                -x)\n                    COMPREPLY=($(compgen -W \"$(_rsconstruct_inames)\" -- \"${cur}\"))".to_string();
 
-    for (label, old) in [("--processors", old_processors), ("-p", old_p), ("--exclude-processors", old_exclude), ("-x", old_x)] {
+    for (label, old) in [
+        ("--processors", old_processors),
+        ("-p", old_p),
+        ("--exclude-processors", old_exclude),
+        ("-x", old_x),
+    ] {
         if !result.contains(old) {
             missed.push(format!("{label} flag completion"));
         }
@@ -1124,9 +1132,7 @@ _rsconstruct_fixer_inames() {
     // The `fix run` subcommand takes positional processor names — inject
     // our fixer helper so tab-completing shows only fix-capable processors
     // declared in the project.
-    let iname_targets_fix = [
-        "rsconstruct__subcmd__fix__subcmd__run)",
-    ];
+    let iname_targets_fix = ["rsconstruct__subcmd__fix__subcmd__run)"];
     for target in &iname_targets_fix {
         if let Some(section_start) = result.find(target) {
             let after_start = section_start + target.len();

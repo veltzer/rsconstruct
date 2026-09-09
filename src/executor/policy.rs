@@ -112,39 +112,79 @@ mod tests {
 
         let mut g = BuildGraph::new();
         let out = tmp.path().join("out.txt");
-        let gen_id = g.add_product(vec![tmp.path().join("in.txt")], vec![out.clone()], "gen", None).unwrap();
-        let chk_id = g.add_product(vec![tmp.path().join("in2.txt")], vec![], "check", None).unwrap();
+        let gen_id = g
+            .add_product(
+                vec![tmp.path().join("in.txt")],
+                vec![out.clone()],
+                "gen",
+                None,
+            )
+            .unwrap();
+        let chk_id = g
+            .add_product(vec![tmp.path().join("in2.txt")], vec![], "check", None)
+            .unwrap();
 
         // No descriptor at all: must build, whatever the flags say.
         let generator = g.get_product(gen_id).unwrap();
-        assert_eq!(policy.classify(&ctx, generator, &store, chk, false, false), ProductAction::Build);
+        assert_eq!(
+            policy.classify(&ctx, generator, &store, chk, false, false),
+            ProductAction::Build
+        );
 
         // Checker with a stored PASS marker: skip — unless a dependency
         // changed or the build is forced.
         let checker = g.get_product(chk_id).unwrap();
-        store.store_marker(&ctx, &checker.descriptor_key(chk)).unwrap();
-        assert_eq!(policy.classify(&ctx, checker, &store, chk, false, false), ProductAction::Skip);
-        assert_eq!(policy.classify(&ctx, checker, &store, chk, true, false), ProductAction::Build,
-            "dep_changed must invalidate a matching marker");
-        assert_eq!(policy.classify(&ctx, checker, &store, chk, false, true), ProductAction::Build,
-            "force must beat a matching marker");
+        store
+            .store_marker(&ctx, &checker.descriptor_key(chk))
+            .unwrap();
+        assert_eq!(
+            policy.classify(&ctx, checker, &store, chk, false, false),
+            ProductAction::Skip
+        );
+        assert_eq!(
+            policy.classify(&ctx, checker, &store, chk, true, false),
+            ProductAction::Build,
+            "dep_changed must invalidate a matching marker"
+        );
+        assert_eq!(
+            policy.classify(&ctx, checker, &store, chk, false, true),
+            ProductAction::Build,
+            "force must beat a matching marker"
+        );
 
         // Generator with cached blob and intact output: skip.
         fs::write(&out, b"built output").unwrap();
-        store.store_blob_descriptor(&ctx, &generator.descriptor_key(chk), &out).unwrap();
-        assert_eq!(policy.classify(&ctx, generator, &store, chk, false, false), ProductAction::Skip);
+        store
+            .store_blob_descriptor(&ctx, &generator.descriptor_key(chk), &out)
+            .unwrap();
+        assert_eq!(
+            policy.classify(&ctx, generator, &store, chk, false, false),
+            ProductAction::Skip
+        );
 
         // Output gone but the object is in the cache: restore, not build —
         // unless a dependency changed or the build is forced.
         fs::remove_file(&out).unwrap();
-        assert_eq!(policy.classify(&ctx, generator, &store, chk, false, false), ProductAction::Restore);
-        assert_eq!(policy.classify(&ctx, generator, &store, chk, true, false), ProductAction::Build,
-            "dep_changed must beat a restorable cache");
-        assert_eq!(policy.classify(&ctx, generator, &store, chk, false, true), ProductAction::Build,
-            "force must beat a restorable cache");
+        assert_eq!(
+            policy.classify(&ctx, generator, &store, chk, false, false),
+            ProductAction::Restore
+        );
+        assert_eq!(
+            policy.classify(&ctx, generator, &store, chk, true, false),
+            ProductAction::Build,
+            "dep_changed must beat a restorable cache"
+        );
+        assert_eq!(
+            policy.classify(&ctx, generator, &store, chk, false, true),
+            ProductAction::Build,
+            "force must beat a restorable cache"
+        );
 
         // A different input checksum is a different descriptor key: build.
-        assert_eq!(policy.classify(&ctx, generator, &store, "other993", false, false), ProductAction::Build);
+        assert_eq!(
+            policy.classify(&ctx, generator, &store, "other993", false, false),
+            ProductAction::Build
+        );
     }
 
     /// A corrupted output (exists, wrong content) with the blob still cached
@@ -163,13 +203,25 @@ mod tests {
 
         let mut g = BuildGraph::new();
         let out = tmp.path().join("out.bin");
-        let id = g.add_product(vec![tmp.path().join("in.bin")], vec![out.clone()], "gen", None).unwrap();
+        let id = g
+            .add_product(
+                vec![tmp.path().join("in.bin")],
+                vec![out.clone()],
+                "gen",
+                None,
+            )
+            .unwrap();
         let p = g.get_product(id).unwrap();
 
         fs::write(&out, b"good").unwrap();
-        store.store_blob_descriptor(&ctx, &p.descriptor_key(chk), &out).unwrap();
+        store
+            .store_blob_descriptor(&ctx, &p.descriptor_key(chk), &out)
+            .unwrap();
         fs::write(&out, b"corrupted").unwrap();
 
-        assert_eq!(policy.classify(&ctx, p, &store, chk, false, false), ProductAction::Restore);
+        assert_eq!(
+            policy.classify(&ctx, p, &store, chk, false, false),
+            ProductAction::Restore
+        );
     }
 }

@@ -1,6 +1,6 @@
+use crate::common::{run_rsconstruct, run_rsconstruct_with_env, setup_test_project};
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{setup_test_project, run_rsconstruct, run_rsconstruct_with_env};
 
 #[test]
 fn tera_to_file_translation() {
@@ -16,10 +16,8 @@ debug_mode = True
 features = ["logging", "caching", "metrics"]
 max_connections = 100
 "#;
-    fs::write(
-        project_path.join("config/test_config.py"),
-        config_content
-    ).expect("Failed to write config file");
+    fs::write(project_path.join("config/test_config.py"), config_content)
+        .expect("Failed to write config file");
 
     // Create a tera file
     let tera_content = r#"{% set cfg = load_python(path="config/test_config.py") %}
@@ -49,20 +47,25 @@ optimization = 3
 "#;
     fs::write(
         project_path.join("tera.templates/app.config.tera"),
-        tera_content
-    ).expect("Failed to write tera file");
+        tera_content,
+    )
+    .expect("Failed to write tera file");
 
     // Run rsconstruct build
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "rsconstruct build failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "rsconstruct build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     // Check that the output file was created
     let output_file = project_path.join("app.config");
     assert!(output_file.exists(), "Output file was not created");
 
     // Read and verify the generated file content
-    let generated_content = fs::read_to_string(&output_file)
-        .expect("Failed to read generated file");
+    let generated_content =
+        fs::read_to_string(&output_file).expect("Failed to read generated file");
 
     // Verify expected content in the generated file
     assert!(generated_content.contains("Generated configuration for TestProject"));
@@ -87,8 +90,9 @@ fn incremental_build() {
     // Create a simple config and tera
     fs::write(
         project_path.join("config/simple.py"),
-        "name = 'SimpleTest'\ncount = 42"
-    ).expect("Failed to write config");
+        "name = 'SimpleTest'\ncount = 42",
+    )
+    .expect("Failed to write config");
 
     fs::write(
         project_path.join("tera.templates/simple.txt.tera"),
@@ -102,7 +106,8 @@ fn incremental_build() {
     assert!(stdout1.contains("Processing:"));
 
     // Second build (should skip unchanged tera - use verbose to see skip message)
-    let output2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(stdout2.contains("[tera] Skipping (unchanged):"));
@@ -123,8 +128,9 @@ fn multiple_templates() {
     // Create multiple teras
     fs::write(
         project_path.join("tera.templates/first.txt.tera"),
-        "{% set c = load_python(path='config/shared.py') %}First: {{ c.shared_name }}"
-    ).unwrap();
+        "{% set c = load_python(path='config/shared.py') %}First: {{ c.shared_name }}",
+    )
+    .unwrap();
 
     fs::write(
         project_path.join("tera.templates/second.conf.tera"),
@@ -160,16 +166,14 @@ fn dep_inputs_triggers_rebuild() {
     let project_path = temp_dir.path();
 
     // Create a Python config file used as extra_input
-    fs::write(
-        project_path.join("config/settings.py"),
-        "name = 'Original'"
-    ).unwrap();
+    fs::write(project_path.join("config/settings.py"), "name = 'Original'").unwrap();
 
     // Create a tera
     fs::write(
         project_path.join("tera.templates/output.txt.tera"),
-        "{% set c = load_python(path='config/settings.py') %}Name: {{ c.name }}"
-    ).unwrap();
+        "{% set c = load_python(path='config/settings.py') %}Name: {{ c.name }}",
+    )
+    .unwrap();
 
     // Configure tera processor with dep_inputs pointing to the config file
     fs::write(
@@ -179,42 +183,58 @@ fn dep_inputs_triggers_rebuild() {
 
     // First build
     let output1 = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
-    assert!(output1.status.success(),
+    assert!(
+        output1.status.success(),
         "First build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output1.stdout),
-        String::from_utf8_lossy(&output1.stderr));
+        String::from_utf8_lossy(&output1.stderr)
+    );
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
-    assert!(stdout1.contains("Processing:"), "First build should process: {}", stdout1);
+    assert!(
+        stdout1.contains("Processing:"),
+        "First build should process: {}",
+        stdout1
+    );
 
     // Second build — should skip (nothing changed)
-    let output2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
-    assert!(stdout2.contains("[tera] Skipping (unchanged):"), "Second build should skip: {}", stdout2);
+    assert!(
+        stdout2.contains("[tera] Skipping (unchanged):"),
+        "Second build should skip: {}",
+        stdout2
+    );
 
     // Wait so mtime differs
     std::thread::sleep(std::time::Duration::from_millis(100));
 
     // Modify the extra input file (but not the tera itself)
-    fs::write(
-        project_path.join("config/settings.py"),
-        "name = 'Modified'"
-    ).unwrap();
+    fs::write(project_path.join("config/settings.py"), "name = 'Modified'").unwrap();
 
     // Third build — should rebuild because extra input changed
     let output3 = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
-    assert!(output3.status.success(),
+    assert!(
+        output3.status.success(),
         "Third build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output3.stdout),
-        String::from_utf8_lossy(&output3.stderr));
+        String::from_utf8_lossy(&output3.stderr)
+    );
     let stdout3 = String::from_utf8_lossy(&output3.stdout);
-    assert!(stdout3.contains("Processing:"),
-        "Build after extra_input change should reprocess, not skip: {}", stdout3);
+    assert!(
+        stdout3.contains("Processing:"),
+        "Build after extra_input change should reprocess, not skip: {}",
+        stdout3
+    );
 
     // Verify the output reflects the new config
     let content = fs::read_to_string(project_path.join("output.txt")).unwrap();
-    assert!(content.contains("Modified"),
-        "Output should reflect the modified config: {}", content);
+    assert!(
+        content.contains("Modified"),
+        "Output should reflect the modified config: {}",
+        content
+    );
 }
 
 #[test]
@@ -223,15 +243,13 @@ fn dep_inputs_nonexistent_file_fails() {
     let project_path = temp_dir.path();
 
     // Create a tera
-    fs::write(
-        project_path.join("config/simple.py"),
-        "val = 'test'"
-    ).unwrap();
+    fs::write(project_path.join("config/simple.py"), "val = 'test'").unwrap();
 
     fs::write(
         project_path.join("tera.templates/simple.txt.tera"),
-        "{% set c = load_python(path='config/simple.py') %}{{ c.val }}"
-    ).unwrap();
+        "{% set c = load_python(path='config/simple.py') %}{{ c.val }}",
+    )
+    .unwrap();
 
     // Configure with a nonexistent extra_input — should cause an error
     fs::write(
@@ -240,14 +258,19 @@ fn dep_inputs_nonexistent_file_fails() {
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(!output.status.success(),
+    assert!(
+        !output.status.success(),
         "Build should fail with nonexistent extra_input: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr));
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("dep_inputs file not found") || stderr.contains("nonexistent_file.txt"),
-        "Error should mention missing dep_inputs file: {}", stderr);
+    assert!(
+        stderr.contains("dep_inputs file not found") || stderr.contains("nonexistent_file.txt"),
+        "Error should mention missing dep_inputs file: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -259,15 +282,23 @@ fn subdirectory_output() {
     fs::create_dir_all(project_path.join("tera.templates/sub")).unwrap();
     fs::write(
         project_path.join("tera.templates/sub/output.txt.tera"),
-        "Hello from subdirectory"
-    ).unwrap();
+        "Hello from subdirectory",
+    )
+    .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "rsconstruct build failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "rsconstruct build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     // Output should be at sub/output.txt (tera.templates/ prefix stripped)
     let output_file = project_path.join("sub/output.txt");
-    assert!(output_file.exists(), "Output file sub/output.txt was not created");
+    assert!(
+        output_file.exists(),
+        "Output file sub/output.txt was not created"
+    );
 
     let content = fs::read_to_string(&output_file).unwrap();
     assert_eq!(content, "Hello from subdirectory");
@@ -295,11 +326,13 @@ fn setup_glob_project(template_body: &str) -> TempDir {
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n[analyzer.tera]\n",
-    ).unwrap();
+    )
+    .unwrap();
     fs::write(
         project_path.join("tera.templates/report.txt.tera"),
         template_body,
-    ).unwrap();
+    )
+    .unwrap();
     temp_dir
 }
 
@@ -316,10 +349,12 @@ fn glob_counts_matching_files() {
     fs::write(p.join("data/ignore.txt"), "x").unwrap();
 
     let output = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(),
+    assert!(
+        output.status.success(),
         "build failed: {}\n{}",
         String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr));
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     let report = fs::read_to_string(p.join("report.txt")).unwrap();
     assert_eq!(report.trim(), "Total: 3", "Got: {}", report);
@@ -335,22 +370,36 @@ fn glob_invalidates_when_file_added() {
 
     // First build: 2 files.
     let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
-    assert!(out1.status.success(), "first build failed: {}", String::from_utf8_lossy(&out1.stderr));
-    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Total: 2");
+    assert!(
+        out1.status.success(),
+        "first build failed: {}",
+        String::from_utf8_lossy(&out1.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(p.join("report.txt")).unwrap().trim(),
+        "Total: 2"
+    );
 
     // Add a third file.
     fs::write(p.join("data/c.md"), "c").unwrap();
 
     // Second build: should rebuild (not skip) and reflect 3 files.
     let out2 = run_rsconstruct_with_env(p, &["build", "--verbose"], &[("NO_COLOR", "1")]);
-    assert!(out2.status.success(), "second build failed: {}", String::from_utf8_lossy(&out2.stderr));
+    assert!(
+        out2.status.success(),
+        "second build failed: {}",
+        String::from_utf8_lossy(&out2.stderr)
+    );
     let stdout2 = String::from_utf8_lossy(&out2.stdout);
     assert!(
         !stdout2.contains("[tera] Skipping (unchanged):"),
         "Second build should NOT have skipped after adding a glob-matched file. stdout={}",
         stdout2,
     );
-    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Total: 3");
+    assert_eq!(
+        fs::read_to_string(p.join("report.txt")).unwrap().trim(),
+        "Total: 3"
+    );
 }
 
 #[test]
@@ -364,7 +413,10 @@ fn glob_invalidates_when_file_removed() {
 
     let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
     assert!(out1.status.success());
-    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Total: 3");
+    assert_eq!(
+        fs::read_to_string(p.join("report.txt")).unwrap().trim(),
+        "Total: 3"
+    );
 
     fs::remove_file(p.join("data/c.md")).unwrap();
 
@@ -376,7 +428,10 @@ fn glob_invalidates_when_file_removed() {
         "Second build should NOT have skipped after removing a glob-matched file. stdout={}",
         stdout2,
     );
-    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Total: 2");
+    assert_eq!(
+        fs::read_to_string(p.join("report.txt")).unwrap().trim(),
+        "Total: 2"
+    );
 }
 
 #[test]
@@ -384,9 +439,8 @@ fn glob_invalidates_when_file_renamed() {
     // Renaming a file with identical content otherwise produces the same
     // content-addressed cache key. The path-set fingerprint mixed into
     // config_hash is what makes this case work.
-    let project = setup_glob_project(
-        "Sorted: {{ glob(pattern=\"data/**/*.md\") | join(sep=\",\") }}\n",
-    );
+    let project =
+        setup_glob_project("Sorted: {{ glob(pattern=\"data/**/*.md\") | join(sep=\",\") }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("data")).unwrap();
     fs::write(p.join("data/old_name.md"), "same-content").unwrap();
@@ -414,9 +468,7 @@ fn glob_invalidates_when_file_renamed() {
 
 #[test]
 fn shell_output_without_depends_on_is_rejected() {
-    let project = setup_glob_project(
-        "Count: {{ shell_output(command=\"ls data | wc -l\") }}\n",
-    );
+    let project = setup_glob_project("Count: {{ shell_output(command=\"ls data | wc -l\") }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("data")).unwrap();
     fs::write(p.join("data/a.md"), "a").unwrap();
@@ -474,45 +526,73 @@ fn shell_output_invalidates_on_matching_file_change() {
     fs::write(p.join("data/a.md"), "one\ntwo\n").unwrap();
 
     let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
-    assert!(out1.status.success(), "first build failed: {}", String::from_utf8_lossy(&out1.stderr));
-    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Lines: 2");
+    assert!(
+        out1.status.success(),
+        "first build failed: {}",
+        String::from_utf8_lossy(&out1.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(p.join("report.txt")).unwrap().trim(),
+        "Lines: 2"
+    );
 
     // Edit the matching file: 2 lines → 3 lines.
     fs::write(p.join("data/a.md"), "one\ntwo\nthree\n").unwrap();
 
     let out2 = run_rsconstruct_with_env(p, &["build", "--verbose"], &[("NO_COLOR", "1")]);
-    assert!(out2.status.success(), "second build failed: {}", String::from_utf8_lossy(&out2.stderr));
+    assert!(
+        out2.status.success(),
+        "second build failed: {}",
+        String::from_utf8_lossy(&out2.stderr)
+    );
     let stdout2 = String::from_utf8_lossy(&out2.stdout);
     assert!(
         !stdout2.contains("[tera] Skipping (unchanged):"),
         "Second build should NOT have skipped after editing a depends_on-matched file. stdout={}",
         stdout2,
     );
-    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Lines: 3");
+    assert_eq!(
+        fs::read_to_string(p.join("report.txt")).unwrap().trim(),
+        "Lines: 3"
+    );
 }
 
 #[test]
 fn shell_output_invalidates_when_command_edited() {
     // The literal command string is part of the config_hash, so editing the
     // command should bust the cache even when no depends_on file changed.
-    let project = setup_glob_project(
-        "Out: {{ shell_output(command=\"echo first\", depends_on=[]) }}\n",
-    );
+    let project =
+        setup_glob_project("Out: {{ shell_output(command=\"echo first\", depends_on=[]) }}\n");
     let p = project.path();
 
     let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
-    assert!(out1.status.success(), "first build failed: {}", String::from_utf8_lossy(&out1.stderr));
-    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Out: first");
+    assert!(
+        out1.status.success(),
+        "first build failed: {}",
+        String::from_utf8_lossy(&out1.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(p.join("report.txt")).unwrap().trim(),
+        "Out: first"
+    );
 
     // Edit only the command, not the dependency list.
     fs::write(
         p.join("tera.templates/report.txt.tera"),
         "Out: {{ shell_output(command=\"echo second\", depends_on=[]) }}\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     let out2 = run_rsconstruct_with_env(p, &["build", "--verbose"], &[("NO_COLOR", "1")]);
-    assert!(out2.status.success(), "second build failed: {}", String::from_utf8_lossy(&out2.stderr));
-    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Out: second");
+    assert!(
+        out2.status.success(),
+        "second build failed: {}",
+        String::from_utf8_lossy(&out2.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(p.join("report.txt")).unwrap().trim(),
+        "Out: second"
+    );
 }
 
 // ----- git_count_files() ---------------------------------------------------
@@ -549,9 +629,7 @@ fn git_init_and_commit(project_path: &std::path::Path) {
 
 #[test]
 fn git_count_files_counts_only_tracked() {
-    let project = setup_glob_project(
-        "Total: {{ git_count_files(pattern=\"data/*.md\") }}\n",
-    );
+    let project = setup_glob_project("Total: {{ git_count_files(pattern=\"data/*.md\") }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("data")).unwrap();
     fs::write(p.join("data/a.md"), "a").unwrap();
@@ -562,10 +640,12 @@ fn git_count_files_counts_only_tracked() {
     fs::write(p.join("data/untracked.md"), "x").unwrap();
 
     let output = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(),
+    assert!(
+        output.status.success(),
         "build failed: {}\n{}",
         String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr));
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     let report = fs::read_to_string(p.join("report.txt")).unwrap();
     assert_eq!(report.trim(), "Total: 2", "Got: {}", report);
@@ -573,9 +653,7 @@ fn git_count_files_counts_only_tracked() {
 
 #[test]
 fn git_count_files_invalidates_when_file_committed() {
-    let project = setup_glob_project(
-        "Total: {{ git_count_files(pattern=\"data/*.md\") }}\n",
-    );
+    let project = setup_glob_project("Total: {{ git_count_files(pattern=\"data/*.md\") }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("data")).unwrap();
     fs::write(p.join("data/a.md"), "a").unwrap();
@@ -583,24 +661,46 @@ fn git_count_files_invalidates_when_file_committed() {
     git_init_and_commit(p);
 
     let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
-    assert!(out1.status.success(), "first build failed: {}", String::from_utf8_lossy(&out1.stderr));
-    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Total: 2");
+    assert!(
+        out1.status.success(),
+        "first build failed: {}",
+        String::from_utf8_lossy(&out1.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(p.join("report.txt")).unwrap().trim(),
+        "Total: 2"
+    );
 
     // Add a new file and commit it — `git ls-files` will now return 3.
     fs::write(p.join("data/c.md"), "c").unwrap();
     use std::process::Command;
-    Command::new("git").current_dir(p).args(["add", "data/c.md"]).output().unwrap();
-    Command::new("git").current_dir(p).args(["commit", "-q", "-m", "add c"]).output().unwrap();
+    Command::new("git")
+        .current_dir(p)
+        .args(["add", "data/c.md"])
+        .output()
+        .unwrap();
+    Command::new("git")
+        .current_dir(p)
+        .args(["commit", "-q", "-m", "add c"])
+        .output()
+        .unwrap();
 
     let out2 = run_rsconstruct_with_env(p, &["build", "--verbose"], &[("NO_COLOR", "1")]);
-    assert!(out2.status.success(), "second build failed: {}", String::from_utf8_lossy(&out2.stderr));
+    assert!(
+        out2.status.success(),
+        "second build failed: {}",
+        String::from_utf8_lossy(&out2.stderr)
+    );
     let stdout2 = String::from_utf8_lossy(&out2.stdout);
     assert!(
         !stdout2.contains("[tera] Skipping (unchanged):"),
         "Second build should NOT have skipped after committing a new tracked file. stdout={}",
         stdout2,
     );
-    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Total: 3");
+    assert_eq!(
+        fs::read_to_string(p.join("report.txt")).unwrap().trim(),
+        "Total: 3"
+    );
 }
 
 #[test]
@@ -608,9 +708,7 @@ fn git_count_files_skips_when_only_untracked_added() {
     // Adding an untracked file does not change the git ls-files output, so
     // the build should skip on the second run. This is the inverse of
     // glob_invalidates_when_file_added — different semantics, different cache.
-    let project = setup_glob_project(
-        "Total: {{ git_count_files(pattern=\"data/*.md\") }}\n",
-    );
+    let project = setup_glob_project("Total: {{ git_count_files(pattern=\"data/*.md\") }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("data")).unwrap();
     fs::write(p.join("data/a.md"), "a").unwrap();
@@ -619,7 +717,10 @@ fn git_count_files_skips_when_only_untracked_added() {
 
     let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
     assert!(out1.status.success());
-    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Total: 2");
+    assert_eq!(
+        fs::read_to_string(p.join("report.txt")).unwrap().trim(),
+        "Total: 2"
+    );
 
     // Add an untracked file — should NOT trigger a rebuild.
     fs::write(p.join("data/untracked.md"), "x").unwrap();
@@ -666,9 +767,7 @@ fn git_count_files_skips_when_tracked_file_content_changes() {
     // git_count_files() consumes the count of tracked files, not their
     // content. Editing a tracked matching file (without changing the
     // tracked path set) must NOT invalidate the product.
-    let project = setup_glob_project(
-        "Total: {{ git_count_files(pattern=\"data/*.md\") }}\n",
-    );
+    let project = setup_glob_project("Total: {{ git_count_files(pattern=\"data/*.md\") }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("data")).unwrap();
     fs::write(p.join("data/a.md"), "original").unwrap();
@@ -677,7 +776,10 @@ fn git_count_files_skips_when_tracked_file_content_changes() {
 
     let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
     assert!(out1.status.success());
-    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Total: 2");
+    assert_eq!(
+        fs::read_to_string(p.join("report.txt")).unwrap().trim(),
+        "Total: 2"
+    );
 
     // Edit a tracked file's content without changing the tracked set.
     fs::write(p.join("data/a.md"), "edited").unwrap();
@@ -700,19 +802,20 @@ fn git_count_files_skips_when_tracked_file_content_changes() {
 
 #[test]
 fn grep_count_counts_matching_lines() {
-    let project = setup_glob_project(
-        "TODOs: {{ grep_count(pattern=\"^TODO\", glob=\"src/**/*.txt\") }}\n",
-    );
+    let project =
+        setup_glob_project("TODOs: {{ grep_count(pattern=\"^TODO\", glob=\"src/**/*.txt\") }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("src")).unwrap();
     fs::write(p.join("src/a.txt"), "TODO: x\nfoo\nTODO: y\n").unwrap();
     fs::write(p.join("src/b.txt"), "no todos here\nTODO: z\n").unwrap();
 
     let output = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(),
+    assert!(
+        output.status.success(),
         "build failed: {}\n{}",
         String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr));
+        String::from_utf8_lossy(&output.stderr)
+    );
     let report = fs::read_to_string(p.join("report.txt")).unwrap();
     assert_eq!(report.trim(), "TODOs: 3", "Got: {}", report);
 }
@@ -721,53 +824,72 @@ fn grep_count_counts_matching_lines() {
 fn grep_count_invalidates_when_matched_file_content_changes() {
     // Editing a file inside the glob must trigger a rebuild — that's the
     // whole point of grep_count vs glob/git_count_files.
-    let project = setup_glob_project(
-        "TODOs: {{ grep_count(pattern=\"^TODO\", glob=\"src/**/*.txt\") }}\n",
-    );
+    let project =
+        setup_glob_project("TODOs: {{ grep_count(pattern=\"^TODO\", glob=\"src/**/*.txt\") }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("src")).unwrap();
     fs::write(p.join("src/a.txt"), "TODO: x\n").unwrap();
 
     let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
-    assert!(out1.status.success(), "first build failed: {}", String::from_utf8_lossy(&out1.stderr));
-    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "TODOs: 1");
+    assert!(
+        out1.status.success(),
+        "first build failed: {}",
+        String::from_utf8_lossy(&out1.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(p.join("report.txt")).unwrap().trim(),
+        "TODOs: 1"
+    );
 
     // Add another TODO line to the same file. Content changed; path set unchanged.
     fs::write(p.join("src/a.txt"), "TODO: x\nTODO: y\n").unwrap();
 
     let out2 = run_rsconstruct_with_env(p, &["build", "--verbose"], &[("NO_COLOR", "1")]);
-    assert!(out2.status.success(), "second build failed: {}", String::from_utf8_lossy(&out2.stderr));
+    assert!(
+        out2.status.success(),
+        "second build failed: {}",
+        String::from_utf8_lossy(&out2.stderr)
+    );
     let stdout2 = String::from_utf8_lossy(&out2.stdout);
     assert!(
         !stdout2.contains("[tera] Skipping (unchanged):"),
         "Second build should NOT skip — grep_count tracks content. stdout={}",
         stdout2,
     );
-    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "TODOs: 2");
+    assert_eq!(
+        fs::read_to_string(p.join("report.txt")).unwrap().trim(),
+        "TODOs: 2"
+    );
 }
 
 #[test]
 fn grep_count_invalidates_when_regex_changes() {
-    let project = setup_glob_project(
-        "Hits: {{ grep_count(pattern=\"^TODO\", glob=\"src/**/*.txt\") }}\n",
-    );
+    let project =
+        setup_glob_project("Hits: {{ grep_count(pattern=\"^TODO\", glob=\"src/**/*.txt\") }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("src")).unwrap();
     fs::write(p.join("src/a.txt"), "TODO: x\nFIXME: y\n").unwrap();
 
     let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
     assert!(out1.status.success());
-    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Hits: 1");
+    assert_eq!(
+        fs::read_to_string(p.join("report.txt")).unwrap().trim(),
+        "Hits: 1"
+    );
 
     // Change only the regex — same files, same content.
     fs::write(
         p.join("tera.templates/report.txt.tera"),
         "Hits: {{ grep_count(pattern=\"^FIXME\", glob=\"src/**/*.txt\") }}\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     let out2 = run_rsconstruct_with_env(p, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(out2.status.success());
-    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Hits: 1");
+    assert_eq!(
+        fs::read_to_string(p.join("report.txt")).unwrap().trim(),
+        "Hits: 1"
+    );
 }
 
 #[test]
@@ -783,22 +905,33 @@ fn glob_in_included_snippet_is_tracked() {
     fs::write(
         p.join("rsconstruct.toml"),
         "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n[analyzer.tera]\n",
-    ).unwrap();
+    )
+    .unwrap();
     fs::write(
         p.join("tera.templates/report.txt.tera"),
         "Header\n{% include \"tera.snippets/main.md.tera\" %}\nFooter\n",
-    ).unwrap();
+    )
+    .unwrap();
     fs::write(
         p.join("tera.snippets/main.md.tera"),
         "Total: {{ glob(pattern=\"data/**/*.md\") | length }}\n",
-    ).unwrap();
+    )
+    .unwrap();
     fs::write(p.join("data/a.md"), "a").unwrap();
     fs::write(p.join("data/b.md"), "b").unwrap();
 
     let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
-    assert!(out1.status.success(), "first build failed: {}", String::from_utf8_lossy(&out1.stderr));
+    assert!(
+        out1.status.success(),
+        "first build failed: {}",
+        String::from_utf8_lossy(&out1.stderr)
+    );
     let report = fs::read_to_string(p.join("report.txt")).unwrap();
-    assert!(report.contains("Total: 2"), "report should reflect 2 files: {}", report);
+    assert!(
+        report.contains("Total: 2"),
+        "report should reflect 2 files: {}",
+        report
+    );
 
     // Add a third matching file. The parent template body did not change,
     // and the snippet body did not change, so without recursive analysis
@@ -806,7 +939,11 @@ fn glob_in_included_snippet_is_tracked() {
     fs::write(p.join("data/c.md"), "c").unwrap();
 
     let out2 = run_rsconstruct_with_env(p, &["build", "--verbose"], &[("NO_COLOR", "1")]);
-    assert!(out2.status.success(), "second build failed: {}", String::from_utf8_lossy(&out2.stderr));
+    assert!(
+        out2.status.success(),
+        "second build failed: {}",
+        String::from_utf8_lossy(&out2.stderr)
+    );
     let stdout2 = String::from_utf8_lossy(&out2.stdout);
     assert!(
         !stdout2.contains("[tera] Skipping (unchanged):"),
@@ -814,22 +951,30 @@ fn glob_in_included_snippet_is_tracked() {
         stdout2,
     );
     let report2 = fs::read_to_string(p.join("report.txt")).unwrap();
-    assert!(report2.contains("Total: 3"), "report should reflect 3 files after add: {}", report2);
+    assert!(
+        report2.contains("Total: 3"),
+        "report should reflect 3 files after add: {}",
+        report2
+    );
 }
 
 #[test]
 fn glob_no_matches_returns_empty_list() {
-    let project = setup_glob_project(
-        "Total: {{ glob(pattern=\"nonexistent/**/*.md\") | length }}\n",
-    );
+    let project =
+        setup_glob_project("Total: {{ glob(pattern=\"nonexistent/**/*.md\") | length }}\n");
     let p = project.path();
 
     let output = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(),
+    assert!(
+        output.status.success(),
         "build with empty glob should succeed. stderr={}",
-        String::from_utf8_lossy(&output.stderr));
+        String::from_utf8_lossy(&output.stderr)
+    );
 
-    assert_eq!(fs::read_to_string(p.join("report.txt")).unwrap().trim(), "Total: 0");
+    assert_eq!(
+        fs::read_to_string(p.join("report.txt")).unwrap().trim(),
+        "Total: 0"
+    );
 }
 
 /// `analyzers show files <path> --hash-pieces` must surface the structured
@@ -839,9 +984,7 @@ fn glob_no_matches_returns_empty_list() {
 /// what's being tracked.
 #[test]
 fn show_files_hash_pieces_surfaces_glob_state() {
-    let project = setup_glob_project(
-        "Total: {{ glob(pattern=\"data/*.md\") | length }}\n",
-    );
+    let project = setup_glob_project("Total: {{ glob(pattern=\"data/*.md\") | length }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("data")).unwrap();
     fs::write(p.join("data/a.md"), "a").unwrap();
@@ -849,24 +992,45 @@ fn show_files_hash_pieces_surfaces_glob_state() {
 
     // Prime the deps cache so `analyzers show files` has an entry to read.
     let build = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
-    assert!(build.status.success(), "build failed: {}", String::from_utf8_lossy(&build.stderr));
+    assert!(
+        build.status.success(),
+        "build failed: {}",
+        String::from_utf8_lossy(&build.stderr)
+    );
 
     let out = run_rsconstruct_with_env(
         p,
-        &["analyzers", "show", "files", "tera.templates/report.txt.tera", "--hash-pieces"],
+        &[
+            "analyzers",
+            "show",
+            "files",
+            "tera.templates/report.txt.tera",
+            "--hash-pieces",
+        ],
         &[("NO_COLOR", "1")],
     );
-    assert!(out.status.success(),
+    assert!(
+        out.status.success(),
         "show files --hash-pieces failed: {}",
-        String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stderr)
+    );
     let stdout = String::from_utf8_lossy(&out.stdout);
 
-    assert!(stdout.contains("hash pieces:"),
-        "expected 'hash pieces:' header in output: {}", stdout);
-    assert!(stdout.contains("glob") && stdout.contains("data/*.md"),
-        "expected glob pattern in hash pieces: {}", stdout);
-    assert!(stdout.contains("data/a.md") && stdout.contains("data/b.md"),
-        "expected resolved file list in hash pieces: {}", stdout);
+    assert!(
+        stdout.contains("hash pieces:"),
+        "expected 'hash pieces:' header in output: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("glob") && stdout.contains("data/*.md"),
+        "expected glob pattern in hash pieces: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("data/a.md") && stdout.contains("data/b.md"),
+        "expected resolved file list in hash pieces: {}",
+        stdout
+    );
 }
 
 /// Same as the text test but verifies the JSON shape: `hash_pieces` is a
@@ -874,9 +1038,7 @@ fn show_files_hash_pieces_surfaces_glob_state() {
 /// only when --hash-pieces is passed).
 #[test]
 fn show_files_hash_pieces_json_shape() {
-    let project = setup_glob_project(
-        "Total: {{ glob(pattern=\"data/*.md\") | length }}\n",
-    );
+    let project = setup_glob_project("Total: {{ glob(pattern=\"data/*.md\") | length }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("data")).unwrap();
     fs::write(p.join("data/a.md"), "a").unwrap();
@@ -886,13 +1048,21 @@ fn show_files_hash_pieces_json_shape() {
 
     let out = run_rsconstruct_with_env(
         p,
-        &["--json", "analyzers", "show", "files",
-          "tera.templates/report.txt.tera", "--hash-pieces"],
+        &[
+            "--json",
+            "analyzers",
+            "show",
+            "files",
+            "tera.templates/report.txt.tera",
+            "--hash-pieces",
+        ],
         &[("NO_COLOR", "1")],
     );
-    assert!(out.status.success(),
+    assert!(
+        out.status.success(),
         "json show files --hash-pieces failed: {}",
-        String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stderr)
+    );
     let stdout = String::from_utf8_lossy(&out.stdout);
 
     let parsed: serde_json::Value = serde_json::from_str(&stdout)
@@ -900,17 +1070,25 @@ fn show_files_hash_pieces_json_shape() {
     let arr = parsed.as_array().expect("top-level JSON must be an array");
     assert_eq!(arr.len(), 1, "expected one entry, got: {}", stdout);
     let entry = &arr[0];
-    let pieces = entry.get("hash_pieces")
+    let pieces = entry
+        .get("hash_pieces")
         .and_then(|v| v.as_array())
         .unwrap_or_else(|| panic!("hash_pieces field missing or not array: {}", stdout));
-    let joined = pieces.iter()
+    let joined = pieces
+        .iter()
         .filter_map(|v| v.as_str())
         .collect::<Vec<_>>()
         .join("\n");
-    assert!(joined.contains("glob:data/*.md"),
-        "expected 'glob:data/*.md' piece, got: {}", joined);
-    assert!(joined.contains("data/a.md"),
-        "expected resolved file list to mention data/a.md, got: {}", joined);
+    assert!(
+        joined.contains("glob:data/*.md"),
+        "expected 'glob:data/*.md' piece, got: {}",
+        joined
+    );
+    assert!(
+        joined.contains("data/a.md"),
+        "expected resolved file list to mention data/a.md, got: {}",
+        joined
+    );
 }
 
 /// When `--hash-pieces` is omitted, the JSON shape must NOT include the
@@ -918,9 +1096,7 @@ fn show_files_hash_pieces_json_shape() {
 /// caller that doesn't opt in.
 #[test]
 fn show_files_without_hash_pieces_omits_field() {
-    let project = setup_glob_project(
-        "Total: {{ glob(pattern=\"data/*.md\") | length }}\n",
-    );
+    let project = setup_glob_project("Total: {{ glob(pattern=\"data/*.md\") | length }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("data")).unwrap();
     fs::write(p.join("data/a.md"), "a").unwrap();
@@ -930,7 +1106,13 @@ fn show_files_without_hash_pieces_omits_field() {
 
     let out = run_rsconstruct_with_env(
         p,
-        &["--json", "analyzers", "show", "files", "tera.templates/report.txt.tera"],
+        &[
+            "--json",
+            "analyzers",
+            "show",
+            "files",
+            "tera.templates/report.txt.tera",
+        ],
         &[("NO_COLOR", "1")],
     );
     assert!(out.status.success());
@@ -938,8 +1120,11 @@ fn show_files_without_hash_pieces_omits_field() {
     let parsed: serde_json::Value = serde_json::from_str(&stdout)
         .unwrap_or_else(|e| panic!("invalid JSON: {}\n---\n{}", e, stdout));
     let entry = &parsed.as_array().expect("array")[0];
-    assert!(entry.get("hash_pieces").is_none(),
-        "hash_pieces field must be absent when flag is omitted: {}", stdout);
+    assert!(
+        entry.get("hash_pieces").is_none(),
+        "hash_pieces field must be absent when flag is omitted: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -959,7 +1144,12 @@ fn copyright_years_falls_back_when_no_commits() {
 
     let report = fs::read_to_string(p.join("report.txt")).unwrap();
     let current_year = chrono::Local::now().format("%Y").to_string();
-    assert_eq!(report.trim(), format!("© {}", current_year), "Got: {}", report);
+    assert_eq!(
+        report.trim(),
+        format!("© {}", current_year),
+        "Got: {}",
+        report
+    );
 }
 
 #[test]
@@ -979,7 +1169,11 @@ fn copyright_years_uses_first_commit_year() {
     );
 
     let report = fs::read_to_string(p.join("report.txt")).unwrap();
-    let current_year: i32 = chrono::Local::now().format("%Y").to_string().parse().unwrap();
+    let current_year: i32 = chrono::Local::now()
+        .format("%Y")
+        .to_string()
+        .parse()
+        .unwrap();
     // Whatever the commit year was, the output must end with the current year
     // and contain it.
     assert!(
@@ -998,40 +1192,41 @@ fn analyzer_tracks_load_python_without_dep_inputs() {
     // the analyzer's own dependency discovery — no dep_inputs anywhere.
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[analyzer.tera]\n\n[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n"
-    ).unwrap();
+        "[analyzer.tera]\n\n[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n",
+    )
+    .unwrap();
 
-    fs::write(
-        project_path.join("config/tracked.py"),
-        "name = 'Original'"
-    ).unwrap();
+    fs::write(project_path.join("config/tracked.py"), "name = 'Original'").unwrap();
 
     // No dep_inputs anywhere: the analyzer alone must discover that the
     // template reads config/tracked.py through load_python(path="...").
     fs::write(
         project_path.join("tera.templates/tracked.txt.tera"),
-        "{% set c = load_python(path='config/tracked.py') %}Name: {{ c.name }}"
-    ).unwrap();
+        "{% set c = load_python(path='config/tracked.py') %}Name: {{ c.name }}",
+    )
+    .unwrap();
 
     let output1 = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
-    assert!(output1.status.success(),
+    assert!(
+        output1.status.success(),
         "First build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output1.stdout),
-        String::from_utf8_lossy(&output1.stderr));
+        String::from_utf8_lossy(&output1.stderr)
+    );
 
     // Wait so mtime differs
     std::thread::sleep(std::time::Duration::from_millis(100));
 
-    fs::write(
-        project_path.join("config/tracked.py"),
-        "name = 'Modified'"
-    ).unwrap();
+    fs::write(project_path.join("config/tracked.py"), "name = 'Modified'").unwrap();
 
     let output2 = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let content = fs::read_to_string(project_path.join("tracked.txt")).unwrap();
-    assert!(content.contains("Modified"),
-        "Editing a load_python config must rebuild the product: {}", content);
+    assert!(
+        content.contains("Modified"),
+        "Editing a load_python config must rebuild the product: {}",
+        content
+    );
 }
 
 #[test]
@@ -1043,42 +1238,43 @@ fn analyzer_tracks_version_str_default_path() {
     // the analyzer's own dependency discovery — no dep_inputs anywhere.
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[analyzer.tera]\n\n[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n"
-    ).unwrap();
+        "[analyzer.tera]\n\n[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n",
+    )
+    .unwrap();
 
     // version_str() with no arguments reads config/version.py; the analyzer
     // must track that default even though no path appears in the template.
-    fs::write(
-        project_path.join("config/version.py"),
-        "tup = (1, 2, 3)"
-    ).unwrap();
+    fs::write(project_path.join("config/version.py"), "tup = (1, 2, 3)").unwrap();
 
     fs::write(
         project_path.join("tera.templates/version.txt.tera"),
-        "version: {{ version_str() }}"
-    ).unwrap();
+        "version: {{ version_str() }}",
+    )
+    .unwrap();
 
     let output1 = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
-    assert!(output1.status.success(),
+    assert!(
+        output1.status.success(),
         "First build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output1.stdout),
-        String::from_utf8_lossy(&output1.stderr));
+        String::from_utf8_lossy(&output1.stderr)
+    );
     let content = fs::read_to_string(project_path.join("version.txt")).unwrap();
     assert!(content.contains("1.2.3"), "Got: {}", content);
 
     // Wait so mtime differs
     std::thread::sleep(std::time::Duration::from_millis(100));
 
-    fs::write(
-        project_path.join("config/version.py"),
-        "tup = (1, 2, 4)"
-    ).unwrap();
+    fs::write(project_path.join("config/version.py"), "tup = (1, 2, 4)").unwrap();
 
     let output2 = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let content = fs::read_to_string(project_path.join("version.txt")).unwrap();
-    assert!(content.contains("1.2.4"),
-        "Bumping config/version.py must rebuild a version_str() product: {}", content);
+    assert!(
+        content.contains("1.2.4"),
+        "Bumping config/version.py must rebuild a version_str() product: {}",
+        content
+    );
 }
 
 #[test]
@@ -1090,40 +1286,41 @@ fn analyzer_tracks_version_str_explicit_lua_path() {
     // the analyzer's own dependency discovery — no dep_inputs anywhere.
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[analyzer.tera]\n\n[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n"
-    ).unwrap();
+        "[analyzer.tera]\n\n[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n",
+    )
+    .unwrap();
 
-    fs::write(
-        project_path.join("config/version.lua"),
-        "tup = { 2, 0, 0 }"
-    ).unwrap();
+    fs::write(project_path.join("config/version.lua"), "tup = { 2, 0, 0 }").unwrap();
 
     fs::write(
         project_path.join("tera.templates/vlua.txt.tera"),
-        r#"version: {{ version_str(path="config/version.lua") }}"#
-    ).unwrap();
+        r#"version: {{ version_str(path="config/version.lua") }}"#,
+    )
+    .unwrap();
 
     let output1 = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
-    assert!(output1.status.success(),
+    assert!(
+        output1.status.success(),
         "First build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output1.stdout),
-        String::from_utf8_lossy(&output1.stderr));
+        String::from_utf8_lossy(&output1.stderr)
+    );
     let content = fs::read_to_string(project_path.join("vlua.txt")).unwrap();
     assert!(content.contains("2.0.0"), "Got: {}", content);
 
     // Wait so mtime differs
     std::thread::sleep(std::time::Duration::from_millis(100));
 
-    fs::write(
-        project_path.join("config/version.lua"),
-        "tup = { 2, 0, 1 }"
-    ).unwrap();
+    fs::write(project_path.join("config/version.lua"), "tup = { 2, 0, 1 }").unwrap();
 
     let output2 = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let content = fs::read_to_string(project_path.join("vlua.txt")).unwrap();
-    assert!(content.contains("2.0.1"),
-        "Bumping the version_str(path=...) file must rebuild the product: {}", content);
+    assert!(
+        content.contains("2.0.1"),
+        "Bumping the version_str(path=...) file must rebuild the product: {}",
+        content
+    );
 }
 
 #[test]
@@ -1133,8 +1330,9 @@ fn load_toml_and_toml_get_read_values() {
 
     fs::write(
         project_path.join("data.toml"),
-        "[project]\nname = \"demo\"\nversion = \"0.0.24\"\n\n[tool.ruff]\nline-length = 130\n"
-    ).unwrap();
+        "[project]\nname = \"demo\"\nversion = \"0.0.24\"\n\n[tool.ruff]\nline-length = 130\n",
+    )
+    .unwrap();
 
     fs::write(
         project_path.join("tera.templates/toml_out.txt.tera"),
@@ -1142,11 +1340,16 @@ fn load_toml_and_toml_get_read_values() {
             "get: {{ toml_get(path=\"data.toml\", key=\"project.version\") }}\n",
             "nested: {{ toml_get(path=\"data.toml\", key=\"tool.ruff.line-length\") }}\n",
             "load: {% set cfg = load_toml(path=\"data.toml\") %}{{ cfg.project.name }}\n",
-        )
-    ).unwrap();
+        ),
+    )
+    .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(output.status.success(), "build failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     let content = fs::read_to_string(project_path.join("toml_out.txt")).unwrap();
     assert!(content.contains("get: 0.0.24"), "Got: {}", content);
@@ -1164,23 +1367,28 @@ fn analyzer_tracks_toml_get_path() {
     // the analyzer's own dependency discovery — no dep_inputs anywhere.
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[analyzer.tera]\n\n[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n"
-    ).unwrap();
+        "[analyzer.tera]\n\n[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n",
+    )
+    .unwrap();
 
     fs::write(
         project_path.join("pyproject.toml"),
-        "[project]\nversion = \"2.0.0\"\n"
-    ).unwrap();
+        "[project]\nversion = \"2.0.0\"\n",
+    )
+    .unwrap();
     fs::write(
         project_path.join("tera.templates/vtoml.txt.tera"),
-        "version: {{ toml_get(path=\"pyproject.toml\", key=\"project.version\") }}\n"
-    ).unwrap();
+        "version: {{ toml_get(path=\"pyproject.toml\", key=\"project.version\") }}\n",
+    )
+    .unwrap();
 
     let output1 = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
-    assert!(output1.status.success(),
+    assert!(
+        output1.status.success(),
         "First build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output1.stdout),
-        String::from_utf8_lossy(&output1.stderr));
+        String::from_utf8_lossy(&output1.stderr)
+    );
     let content = fs::read_to_string(project_path.join("vtoml.txt")).unwrap();
     assert!(content.contains("2.0.0"), "Got: {}", content);
 
@@ -1189,14 +1397,18 @@ fn analyzer_tracks_toml_get_path() {
 
     fs::write(
         project_path.join("pyproject.toml"),
-        "[project]\nversion = \"2.0.1\"\n"
-    ).unwrap();
+        "[project]\nversion = \"2.0.1\"\n",
+    )
+    .unwrap();
 
     let output2 = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let content = fs::read_to_string(project_path.join("vtoml.txt")).unwrap();
-    assert!(content.contains("2.0.1"),
-        "Bumping the toml_get(path=...) file must rebuild the product: {}", content);
+    assert!(
+        content.contains("2.0.1"),
+        "Bumping the toml_get(path=...) file must rebuild the product: {}",
+        content
+    );
 }
 
 #[test]
@@ -1204,18 +1416,32 @@ fn toml_get_missing_key_is_an_error() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    fs::write(project_path.join("data.toml"), "[project]\nversion = \"1.0\"\n").unwrap();
+    fs::write(
+        project_path.join("data.toml"),
+        "[project]\nversion = \"1.0\"\n",
+    )
+    .unwrap();
     fs::write(
         project_path.join("tera.templates/bad.txt.tera"),
-        "{{ toml_get(path=\"data.toml\", key=\"project.nope\") }}\n"
-    ).unwrap();
+        "{{ toml_get(path=\"data.toml\", key=\"project.nope\") }}\n",
+    )
+    .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(!output.status.success(), "A missing key must fail the build, not render empty");
-    let combined = format!("{}{}",
+    assert!(
+        !output.status.success(),
+        "A missing key must fail the build, not render empty"
+    );
+    let combined = format!(
+        "{}{}",
         String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr));
-    assert!(combined.contains("no key 'project.nope'"), "Got: {}", combined);
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        combined.contains("no key 'project.nope'"),
+        "Got: {}",
+        combined
+    );
 }
 
 #[test]
@@ -1223,16 +1449,26 @@ fn toml_get_on_a_table_is_an_error() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    fs::write(project_path.join("data.toml"), "[project]\nversion = \"1.0\"\n").unwrap();
+    fs::write(
+        project_path.join("data.toml"),
+        "[project]\nversion = \"1.0\"\n",
+    )
+    .unwrap();
     fs::write(
         project_path.join("tera.templates/bad2.txt.tera"),
-        "{{ toml_get(path=\"data.toml\", key=\"project\") }}\n"
-    ).unwrap();
+        "{{ toml_get(path=\"data.toml\", key=\"project\") }}\n",
+    )
+    .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(!output.status.success(), "Interpolating a whole table must fail rather than emit JSON");
-    let combined = format!("{}{}",
+    assert!(
+        !output.status.success(),
+        "Interpolating a whole table must fail rather than emit JSON"
+    );
+    let combined = format!(
+        "{}{}",
         String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr));
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(combined.contains("not a scalar"), "Got: {}", combined);
 }

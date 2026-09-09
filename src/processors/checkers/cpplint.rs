@@ -1,10 +1,23 @@
 //! cpplint checker — registered as a {`SimpleChecker`}.
 
-use crate::processors::SimpleChecker;
 use crate::config::SimpleCheckerParams;
+use crate::processors::SimpleChecker;
 
 fn create_cpplint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registries::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint C/C++ files using cpplint", subcommand: None, prepend_args: &[], extra_tools: &[], fix_subcommand: None, fix_prepend_args: &[], fix_batch: None })))
+    crate::registries::deserialize_and_create(toml, |cfg| {
+        Box::new(SimpleChecker::new(
+            cfg,
+            SimpleCheckerParams {
+                description: "Lint C/C++ files using cpplint",
+                subcommand: None,
+                prepend_args: &[],
+                extra_tools: &[],
+                fix_subcommand: None,
+                fix_prepend_args: &[],
+                fix_batch: None,
+            },
+        ))
+    })
 }
 inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,

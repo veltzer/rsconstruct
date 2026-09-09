@@ -21,7 +21,10 @@ impl AsciiProcessor {
         let mut errors = Vec::new();
 
         for file in files {
-            let content = crate::errors::ctx(std::fs::read(file), &format!("Failed to read {}", file.display()))?;
+            let content = crate::errors::ctx(
+                std::fs::read(file),
+                &format!("Failed to read {}", file.display()),
+            )?;
             let mut line_num = 1usize;
             let mut col = 1usize;
             let mut line_errors: Vec<String> = Vec::new();
@@ -33,7 +36,10 @@ impl AsciiProcessor {
                 } else if !byte.is_ascii() {
                     line_errors.push(format!(
                         "{}:{}:{}: non-ASCII byte 0x{:02x}",
-                        file.display(), line_num, col, byte,
+                        file.display(),
+                        line_num,
+                        col,
+                        byte,
                     ));
                     col += 1;
                 } else {
@@ -63,14 +69,18 @@ impl crate::processors::Processor for AsciiProcessor {
         Vec::new()
     }
 
-
     fn execute(&self, _ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         self.execute_product(product)
     }
 
-
-    fn execute_batch(&self, _ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
-        crate::processors::execute_checker_batch_per_file(products, |file| self.check_files(&[file]))
+    fn execute_batch(
+        &self,
+        _ctx: &crate::build_context::BuildContext,
+        products: &[&Product],
+    ) -> Vec<Result<()>> {
+        crate::processors::execute_checker_batch_per_file(products, |file| {
+            self.check_files(&[file])
+        })
     }
 }
 

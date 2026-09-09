@@ -17,8 +17,9 @@ where
     E: std::error::Error + Send + Sync + 'static,
 {
     let loc = std::panic::Location::caller();
-    r.map_err(|e| anyhow::Error::new(e)
-        .context(format!("{} at {}:{}", msg, loc.file(), loc.line())))
+    r.map_err(|e| {
+        anyhow::Error::new(e).context(format!("{} at {}:{}", msg, loc.file(), loc.line()))
+    })
 }
 
 /// Like `ctx()` but for Option — converts None to an error with <file:line> location.
@@ -37,7 +38,8 @@ pub const INVALID_PRODUCT_ID: &str = "internal error: invalid product id";
 pub const EMPTY_PRODUCT_INPUTS: &str = "internal error: product has no inputs";
 pub const EMPTY_PRODUCT_OUTPUTS: &str = "internal error: product has no outputs";
 pub const PROCESSOR_NOT_IN_MAP: &str = "internal error: processor not in map";
-pub const PROCESSOR_NOT_IN_TOTALS: &str = "internal error: processor not in total_per_processor map";
+pub const PROCESSOR_NOT_IN_TOTALS: &str =
+    "internal error: processor not in total_per_processor map";
 
 // -- Progress bar --
 pub const INVALID_PROGRESS_TEMPLATE: &str = "internal error: invalid progress bar template";

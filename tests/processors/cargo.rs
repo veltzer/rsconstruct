@@ -1,6 +1,6 @@
+use crate::common::{require_tool, run_rsconstruct_with_env};
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsconstruct_with_env, require_tool};
 
 /// Config that builds only the dev profile for faster tests
 const SINGLE_PROFILE_CONFIG: &str = "[processor.cargo]\nprofiles = [\"dev\"]\nsrc_dirs = [\".\"]\n";
@@ -12,11 +12,7 @@ fn cargo_valid_project() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
-    fs::write(
-        project_path.join("rsconstruct.toml"),
-        SINGLE_PROFILE_CONFIG,
-    )
-    .unwrap();
+    fs::write(project_path.join("rsconstruct.toml"), SINGLE_PROFILE_CONFIG).unwrap();
 
     // Create a minimal Rust library project
     fs::create_dir_all(project_path.join("mylib/src")).unwrap();
@@ -56,11 +52,7 @@ fn cargo_incremental_skip() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
-    fs::write(
-        project_path.join("rsconstruct.toml"),
-        SINGLE_PROFILE_CONFIG,
-    )
-    .unwrap();
+    fs::write(project_path.join("rsconstruct.toml"), SINGLE_PROFILE_CONFIG).unwrap();
 
     fs::create_dir_all(project_path.join("mylib/src")).unwrap();
 
@@ -81,7 +73,8 @@ fn cargo_incremental_skip() {
     assert!(output1.status.success());
 
     // Second build should skip
-    let output2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
@@ -98,11 +91,7 @@ fn cargo_rebuild_on_source_change() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
-    fs::write(
-        project_path.join("rsconstruct.toml"),
-        SINGLE_PROFILE_CONFIG,
-    )
-    .unwrap();
+    fs::write(project_path.join("rsconstruct.toml"), SINGLE_PROFILE_CONFIG).unwrap();
 
     fs::create_dir_all(project_path.join("mylib/src")).unwrap();
 
@@ -175,11 +164,7 @@ fn cargo_build_failure() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
-    fs::write(
-        project_path.join("rsconstruct.toml"),
-        SINGLE_PROFILE_CONFIG,
-    )
-    .unwrap();
+    fs::write(project_path.join("rsconstruct.toml"), SINGLE_PROFILE_CONFIG).unwrap();
 
     fs::create_dir_all(project_path.join("badlib/src")).unwrap();
 

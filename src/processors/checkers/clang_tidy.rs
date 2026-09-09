@@ -5,12 +5,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::StandardConfig;
 use crate::graph::Product;
-use crate::processors::{run_command, check_command_output};
+use crate::processors::{check_command_output, run_command};
 
 /// `ClangTidy` config. Custom fields: `compiler_args`.
 /// Unused `StandardConfig` fields: command, formats, `output_dir`.
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[derive(Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct ClangTidyConfig {
     #[serde(default)]
     pub compiler_args: Vec<String>,
@@ -27,7 +26,11 @@ impl ClangTidyProcessor {
         Self { config }
     }
 
-    fn execute_product(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+    fn execute_product(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        product: &Product,
+    ) -> Result<()> {
         let mut cmd = Command::new("clang-tidy");
         for arg in &self.config.standard.args {
             cmd.arg(arg);
@@ -49,7 +52,6 @@ impl crate::processors::Processor for ClangTidyProcessor {
         &self.config.standard
     }
 
-
     fn auto_detect(&self, file_index: &crate::file_index::FileIndex) -> bool {
         crate::processors::checker_auto_detect(&self.config.standard, file_index)
     }
@@ -65,8 +67,11 @@ impl crate::processors::Processor for ClangTidyProcessor {
         instance_name: &str,
     ) -> anyhow::Result<()> {
         crate::processors::discover_checker_products(
-            graph, &self.config.standard, file_index,
-            &self.config.standard.dep_inputs, &self.config.standard.dep_auto,
+            graph,
+            &self.config.standard,
+            file_index,
+            &self.config.standard.dep_inputs,
+            &self.config.standard.dep_auto,
             &self.config,
             &crate::config::checksum_fields_of(instance_name),
             instance_name,

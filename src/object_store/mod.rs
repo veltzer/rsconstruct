@@ -7,10 +7,10 @@ mod operations;
 mod restore;
 
 use anyhow::{Context, Result};
+use redb::{Database, TableDefinition};
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
-use redb::{Database, TableDefinition};
 
 use crate::config::RestoreMethod;
 use crate::remote_cache::RemoteCache;
@@ -51,7 +51,10 @@ pub fn walk_files(dir: &Path) -> Vec<PathBuf> {
 /// come from a foreign descriptor.
 fn safe_entry_path(raw: &str) -> Result<&Path> {
     let path = Path::new(raw);
-    if path.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+    if path
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
         anyhow::bail!("cache descriptor entry path '{raw}' escapes the project root");
     }
     Ok(path)
@@ -142,9 +145,7 @@ pub enum CacheDescriptor {
         mode: Option<u32>,
     },
     #[serde(rename = "tree")]
-    Tree {
-        entries: Vec<TreeEntry>,
-    },
+    Tree { entries: Vec<TreeEntry> },
 }
 
 /// A single file entry in a tree descriptor.
@@ -193,8 +194,7 @@ impl ObjectStore {
         let objects_dir = rsconstruct_dir.join(OBJECTS_DIR);
         let db_path = rsconstruct_dir.join(DB_FILE);
 
-        fs::create_dir_all(&rsconstruct_dir)
-            .context("Failed to create .rsconstruct directory")?;
+        fs::create_dir_all(&rsconstruct_dir).context("Failed to create .rsconstruct directory")?;
 
         let db = crate::db::open_or_recreate(&db_path, "Cache database")?;
         let descriptors_dir = rsconstruct_dir.join(DESCRIPTORS_DIR);
@@ -243,7 +243,8 @@ impl ObjectStore {
         fs::create_dir_all(dir).unwrap();
         let mut store = Self::new_at(dir, db_name);
         store.remote = Some(Box::new(
-            crate::remote_cache::FileBackend::new(&format!("file://{}", remote_dir.display())).unwrap(),
+            crate::remote_cache::FileBackend::new(&format!("file://{}", remote_dir.display()))
+                .unwrap(),
         ));
         store.remote_push = true;
         store.remote_pull = true;

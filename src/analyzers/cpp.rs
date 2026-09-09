@@ -47,7 +47,9 @@ impl CppDepAnalyzer {
     /// Get the canonical project root path (lazily computed).
     fn canonical_root(&self) -> &Path {
         self.canonical_root.get_or_init(|| {
-            Path::new(".").canonicalize().unwrap_or_else(|_| PathBuf::from("."))
+            Path::new(".")
+                .canonicalize()
+                .unwrap_or_else(|_| PathBuf::from("."))
         })
     }
 
@@ -61,7 +63,12 @@ impl CppDepAnalyzer {
     /// Run configured `include_path_commands` to get additional include paths (lazy, cached).
     fn get_command_include_paths(&self, ctx: &crate::build_context::BuildContext) -> &[PathBuf] {
         self.command_include_paths.get_or_init(|| {
-            super::run_include_path_commands(ctx, "cpp", &self.config.include_path_commands, self.verbose)
+            super::run_include_path_commands(
+                ctx,
+                "cpp",
+                &self.config.include_path_commands,
+                self.verbose,
+            )
         })
     }
 
@@ -75,12 +82,24 @@ impl CppDepAnalyzer {
     /// Check if a source path matches any of the configured exclude-dir segments.
     fn is_excluded(&self, path: &Path) -> bool {
         let path_str = path.to_string_lossy();
-        self.config.src_exclude_dirs.iter().any(|seg| path_str.contains(seg))
+        self.config
+            .src_exclude_dirs
+            .iter()
+            .any(|seg| path_str.contains(seg))
     }
 
     /// Run gcc/g++ -MM to scan dependencies for a source file.
-    fn scan_dependencies_compiler(&self, ctx: &crate::build_context::BuildContext, source: &Path, is_cpp: bool) -> Result<Vec<PathBuf>> {
-        let compiler = if is_cpp { &self.config.cxx } else { &self.config.cc };
+    fn scan_dependencies_compiler(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        source: &Path,
+        is_cpp: bool,
+    ) -> Result<Vec<PathBuf>> {
+        let compiler = if is_cpp {
+            &self.config.cxx
+        } else {
+            &self.config.cc
+        };
 
         let mut cmd = Command::new(compiler);
         cmd.arg("-MM");
@@ -101,7 +120,11 @@ impl CppDepAnalyzer {
         }
 
         // Add compile flags
-        let flags = if is_cpp { &self.config.cxxflags } else { &self.config.cflags };
+        let flags = if is_cpp {
+            &self.config.cxxflags
+        } else {
+            &self.config.cflags
+        };
         for flag in flags {
             cmd.arg(flag);
         }
@@ -113,7 +136,10 @@ impl CppDepAnalyzer {
         }
 
         let output = run_command_capture(ctx, &cmd)?;
-        check_command_output(&output, format_args!("Dependency scan of {}", source.display()))?;
+        check_command_output(
+            &output,
+            format_args!("Dependency scan of {}", source.display()),
+        )?;
 
         let content = String::from_utf8_lossy(&output.stdout).to_string();
         Ok(self.parse_dep_file(&content))
@@ -153,7 +179,8 @@ impl CppDepAnalyzer {
                         if let Ok(rel) = path.strip_prefix(canonical_root) {
                             Some(rel.to_path_buf())
                         } else if let Ok(canonical) = path.canonicalize() {
-                            canonical.strip_prefix(canonical_root)
+                            canonical
+                                .strip_prefix(canonical_root)
                                 .ok()
                                 .map(std::path::Path::to_path_buf)
                         } else {
@@ -172,7 +199,12 @@ impl CppDepAnalyzer {
     }
 
     /// Scan dependencies using compiler -MM method.
-    fn scan_dependencies(&self, ctx: &crate::build_context::BuildContext, source: &Path, is_cpp: bool) -> Result<Vec<PathBuf>> {
+    fn scan_dependencies(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        source: &Path,
+        is_cpp: bool,
+    ) -> Result<Vec<PathBuf>> {
         self.scan_dependencies_compiler(ctx, source, is_cpp)
     }
 }
@@ -206,7 +238,11 @@ impl DepAnalyzer for CppDepAnalyzer {
             return None;
         }
         let ext = source.extension().and_then(|s| s.to_str()).unwrap_or("");
-        if CPP_MATCH_EXTENSIONS.contains(&ext) { Some(source.clone()) } else { None }
+        if CPP_MATCH_EXTENSIONS.contains(&ext) {
+            Some(source.clone())
+        } else {
+            None
+        }
     }
 
     fn analyze(

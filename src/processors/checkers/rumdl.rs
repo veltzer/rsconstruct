@@ -1,10 +1,23 @@
 //! rumdl checker — registered as a {`SimpleChecker`}.
 
-use crate::processors::SimpleChecker;
 use crate::config::SimpleCheckerParams;
+use crate::processors::SimpleChecker;
 
 fn create_rumdl(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registries::deserialize_and_create(toml, |cfg| Box::new(SimpleChecker::new(cfg, SimpleCheckerParams { description: "Lint Markdown files using rumdl", subcommand: Some("check"), prepend_args: &[], extra_tools: &[], fix_subcommand: None, fix_prepend_args: &["--fix"], fix_batch: None })))
+    crate::registries::deserialize_and_create(toml, |cfg| {
+        Box::new(SimpleChecker::new(
+            cfg,
+            SimpleCheckerParams {
+                description: "Lint Markdown files using rumdl",
+                subcommand: Some("check"),
+                prepend_args: &[],
+                extra_tools: &[],
+                fix_subcommand: None,
+                fix_prepend_args: &["--fix"],
+                fix_batch: None,
+            },
+        ))
+    })
 }
 inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,

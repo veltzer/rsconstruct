@@ -1,6 +1,6 @@
+use crate::common::{require_tool, run_rsconstruct_with_env};
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsconstruct_with_env, require_tool};
 
 #[test]
 fn mdl_valid_file() {
@@ -31,7 +31,8 @@ fn mdl_valid_file() {
     assert!(
         stdout.contains("Processing:") || stdout.contains("1 products"),
         "Should discover and attempt mdl processing: stdout={}, stderr={}",
-        stdout, stderr
+        stdout,
+        stderr
     );
 }
 
@@ -55,7 +56,8 @@ fn mdl_missing_src_dir_skips_without_affecting_others() {
     )
     .unwrap();
 
-    let output = run_rsconstruct_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
+    let output =
+        run_rsconstruct_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Build must succeed: the missing 'script' entry scans nothing. {}",

@@ -1,6 +1,6 @@
+use crate::common::{require_tool, run_rsconstruct_with_env};
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsconstruct_with_env, require_tool};
 
 #[test]
 fn mermaid_discovery() {
@@ -22,7 +22,8 @@ fn mermaid_discovery() {
     .unwrap();
 
     // Use dry-run to verify discovery (mmdc needs Chrome/Puppeteer for rendering)
-    let output = run_rsconstruct_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
+    let output =
+        run_rsconstruct_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Dry run should succeed with valid Mermaid file: stdout={}, stderr={}",

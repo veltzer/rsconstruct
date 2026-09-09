@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
-use parking_lot::Mutex;
 
 use crate::processors::{check_command_output, run_command_capture};
 
@@ -13,7 +13,11 @@ use crate::processors::{check_command_output, run_command_capture};
 static SHELL_COMMAND_CACHE: Mutex<Option<HashMap<String, Vec<String>>>> = Mutex::new(None);
 
 /// Get or compute flags from a shell command, caching the result.
-fn cached_shell_command(cmd_line: &str, runner: impl FnOnce(&crate::build_context::BuildContext, &str) -> Result<Vec<String>>, ctx: &crate::build_context::BuildContext) -> Result<Vec<String>> {
+fn cached_shell_command(
+    cmd_line: &str,
+    runner: impl FnOnce(&crate::build_context::BuildContext, &str) -> Result<Vec<String>>,
+    ctx: &crate::build_context::BuildContext,
+) -> Result<Vec<String>> {
     let mut guard = SHELL_COMMAND_CACHE.lock();
     let cache = guard.get_or_insert_with(HashMap::new);
 
@@ -78,7 +82,9 @@ fn should_exclude_for_profile(source: &Path, profile_name: &str) -> bool {
         return false;
     }
 
-    let Ok(content) = fs::read_to_string(source) else { return false };
+    let Ok(content) = fs::read_to_string(source) else {
+        return false;
+    };
 
     for line in content.lines() {
         let Some(value_part) = extract_comment_value(line) else {
@@ -87,9 +93,10 @@ fn should_exclude_for_profile(source: &Path, profile_name: &str) -> bool {
 
         if let Some(rest) = value_part.strip_prefix("EXCLUDE_PROFILE")
             && let Some(profiles_str) = rest.strip_prefix('=')
-            && profiles_str.split_whitespace().any(|p| p == profile_name) {
-                return true;
-            }
+            && profiles_str.split_whitespace().any(|p| p == profile_name)
+        {
+            return true;
+        }
     }
 
     false
@@ -120,7 +127,11 @@ fn should_exclude_for_profile(source: &Path, profile_name: &str) -> bool {
 /// The `profile_name` parameter specifies the current compiler profile name.
 /// Directives without a profile suffix apply to all profiles.
 /// Directives with a profile suffix (e.g., `[gcc]`) only apply when that profile is active.
-fn parse_source_flags(ctx: &crate::build_context::BuildContext, source: &Path, profile_name: &str) -> Result<SourceFlags> {
+fn parse_source_flags(
+    ctx: &crate::build_context::BuildContext,
+    source: &Path,
+    profile_name: &str,
+) -> Result<SourceFlags> {
     let content = fs::read_to_string(source)
         .with_context(|| format!("Failed to read source file: {}", source.display()))?;
 
@@ -133,15 +144,9 @@ fn parse_source_flags(ctx: &crate::build_context::BuildContext, source: &Path, p
         "EXTRA_LINK_FLAGS_AFTER",
     ];
 
-    let cmd_var_names = [
-        "EXTRA_COMPILE_CMD",
-        "EXTRA_LINK_CMD",
-    ];
+    let cmd_var_names = ["EXTRA_COMPILE_CMD", "EXTRA_LINK_CMD"];
 
-    let shell_var_names = [
-        "EXTRA_COMPILE_SHELL",
-        "EXTRA_LINK_SHELL",
-    ];
+    let shell_var_names = ["EXTRA_COMPILE_SHELL", "EXTRA_LINK_SHELL"];
 
     for line in content.lines() {
         let Some(value_part) = extract_comment_value(line) else {
@@ -149,50 +154,53 @@ fn parse_source_flags(ctx: &crate::build_context::BuildContext, source: &Path, p
         };
 
         for var_name in &args_var_names {
-            if let Some((rest, applies)) = match_directive_with_profile(value_part, var_name, profile_name)
+            if let Some((rest, applies)) =
+                match_directive_with_profile(value_part, var_name, profile_name)
                 && applies
-                    && let Some(raw_value) = rest.strip_prefix('=') {
-                        let expanded = expand_backticks(ctx, raw_value.trim())?;
-                        let args: Vec<String> = expanded
-                            .split_whitespace()
-                            .map(String::from)
-                            .collect();
-                        match *var_name {
-                            "EXTRA_COMPILE_FLAGS_BEFORE" => flags.compile_args_before.extend(args),
-                            "EXTRA_COMPILE_FLAGS_AFTER" => flags.compile_args_after.extend(args),
-                            "EXTRA_LINK_FLAGS_BEFORE" => flags.link_args_before.extend(args),
-                            "EXTRA_LINK_FLAGS_AFTER" => flags.link_args_after.extend(args),
-                            _ => {}
-                        }
-                    }
+                && let Some(raw_value) = rest.strip_prefix('=')
+            {
+                let expanded = expand_backticks(ctx, raw_value.trim())?;
+                let args: Vec<String> = expanded.split_whitespace().map(String::from).collect();
+                match *var_name {
+                    "EXTRA_COMPILE_FLAGS_BEFORE" => flags.compile_args_before.extend(args),
+                    "EXTRA_COMPILE_FLAGS_AFTER" => flags.compile_args_after.extend(args),
+                    "EXTRA_LINK_FLAGS_BEFORE" => flags.link_args_before.extend(args),
+                    "EXTRA_LINK_FLAGS_AFTER" => flags.link_args_after.extend(args),
+                    _ => {}
+                }
+            }
         }
 
         for var_name in &cmd_var_names {
-            if let Some((rest, applies)) = match_directive_with_profile(value_part, var_name, profile_name)
+            if let Some((rest, applies)) =
+                match_directive_with_profile(value_part, var_name, profile_name)
                 && applies
-                    && let Some(raw_value) = rest.strip_prefix('=') {
-                        let cmd = raw_value.trim();
-                        let args = cached_shell_command(cmd, run_command_for_flags, ctx)?;
-                        match *var_name {
-                            "EXTRA_COMPILE_CMD" => flags.compile_args_after.extend(args),
-                            "EXTRA_LINK_CMD" => flags.link_args_after.extend(args),
-                            _ => {}
-                        }
-                    }
+                && let Some(raw_value) = rest.strip_prefix('=')
+            {
+                let cmd = raw_value.trim();
+                let args = cached_shell_command(cmd, run_command_for_flags, ctx)?;
+                match *var_name {
+                    "EXTRA_COMPILE_CMD" => flags.compile_args_after.extend(args),
+                    "EXTRA_LINK_CMD" => flags.link_args_after.extend(args),
+                    _ => {}
+                }
+            }
         }
 
         for var_name in &shell_var_names {
-            if let Some((rest, applies)) = match_directive_with_profile(value_part, var_name, profile_name)
+            if let Some((rest, applies)) =
+                match_directive_with_profile(value_part, var_name, profile_name)
                 && applies
-                    && let Some(raw_value) = rest.strip_prefix('=') {
-                        let cmd = raw_value.trim();
-                        let args = cached_shell_command(cmd, run_shell_for_flags, ctx)?;
-                        match *var_name {
-                            "EXTRA_COMPILE_SHELL" => flags.compile_args_after.extend(args),
-                            "EXTRA_LINK_SHELL" => flags.link_args_after.extend(args),
-                            _ => {}
-                        }
-                    }
+                && let Some(raw_value) = rest.strip_prefix('=')
+            {
+                let cmd = raw_value.trim();
+                let args = cached_shell_command(cmd, run_shell_for_flags, ctx)?;
+                match *var_name {
+                    "EXTRA_COMPILE_SHELL" => flags.compile_args_after.extend(args),
+                    "EXTRA_LINK_SHELL" => flags.link_args_after.extend(args),
+                    _ => {}
+                }
+            }
         }
     }
 
@@ -209,7 +217,11 @@ fn parse_source_flags(ctx: &crate::build_context::BuildContext, source: &Path, p
 ///   "EXTRA_COMPILE_FLAGS_BEFORE=-g" with profile "gcc" -> Some(("=-g", true))
 ///   "`EXTRA_COMPILE_FLAGS_BEFORE`[gcc]=-g" with profile "gcc" -> Some(("=-g", true))
 ///   "`EXTRA_COMPILE_FLAGS_BEFORE`[clang]=-g" with profile "gcc" -> Some(("=-g", false))
-fn match_directive_with_profile<'a>(line: &'a str, directive: &str, profile_name: &str) -> Option<(&'a str, bool)> {
+fn match_directive_with_profile<'a>(
+    line: &'a str,
+    directive: &str,
+    profile_name: &str,
+) -> Option<(&'a str, bool)> {
     if let Some(rest) = line.strip_prefix(directive) {
         // Check for profile suffix [profile_name]
         if let Some(rest_after_bracket) = rest.strip_prefix('[') {
@@ -236,7 +248,10 @@ fn match_directive_with_profile<'a>(line: &'a str, directive: &str, profile_name
 ///
 /// These are user-specified commands (EXTRA_*_CMD directives), so we temporarily
 /// suspend the declared tools check to allow arbitrary programs.
-fn run_command_for_flags(ctx: &crate::build_context::BuildContext, cmd_line: &str) -> Result<Vec<String>> {
+fn run_command_for_flags(
+    ctx: &crate::build_context::BuildContext,
+    cmd_line: &str,
+) -> Result<Vec<String>> {
     let parts: Vec<&str> = cmd_line.split_whitespace().collect();
     if parts.is_empty() {
         return Ok(Vec::new());
@@ -258,7 +273,10 @@ fn run_command_for_flags(ctx: &crate::build_context::BuildContext, cmd_line: &st
 ///
 /// These are user-specified commands (EXTRA_*_SHELL directives), so we temporarily
 /// suspend the declared tools check to allow arbitrary programs.
-fn run_shell_for_flags(ctx: &crate::build_context::BuildContext, cmd_line: &str) -> Result<Vec<String>> {
+fn run_shell_for_flags(
+    ctx: &crate::build_context::BuildContext,
+    cmd_line: &str,
+) -> Result<Vec<String>> {
     if cmd_line.is_empty() {
         return Ok(Vec::new());
     }
@@ -277,7 +295,10 @@ fn run_shell_for_flags(ctx: &crate::build_context::BuildContext, cmd_line: &str)
 ///
 /// These are user-specified commands (backtick expansion), so we temporarily
 /// suspend the declared tools check to allow arbitrary programs.
-fn run_backtick_command(ctx: &crate::build_context::BuildContext, cmd_str: &str) -> Result<Vec<String>> {
+fn run_backtick_command(
+    ctx: &crate::build_context::BuildContext,
+    cmd_str: &str,
+) -> Result<Vec<String>> {
     let mut cmd = Command::new("sh");
     cmd.arg("-c").arg(cmd_str);
     let _guard = crate::processors::suspend_tool_check();
@@ -302,9 +323,9 @@ fn expand_backticks(ctx: &crate::build_context::BuildContext, value: &str) -> Re
     while let Some(start) = rest.find('`') {
         result.push_str(&rest[..start]);
         let after_start = &rest[start + 1..];
-        let end = after_start.find('`').ok_or_else(|| {
-            anyhow::anyhow!("Unmatched backtick in value: {value}")
-        })?;
+        let end = after_start
+            .find('`')
+            .ok_or_else(|| anyhow::anyhow!("Unmatched backtick in value: {value}"))?;
         let cmd_str = &after_start[..end];
         // Use cache for backtick commands too
         let cached = cached_shell_command(cmd_str, run_backtick_command, ctx)?;
@@ -316,7 +337,6 @@ fn expand_backticks(ctx: &crate::build_context::BuildContext, value: &str) -> Re
 
     Ok(result)
 }
-
 
 use std::path::PathBuf;
 
@@ -409,7 +429,11 @@ impl CcSingleFileConfig {
                 output_suffix: self.output_suffix.clone(),
             }]
         } else {
-            self.compilers.iter().filter(|p| p.enabled).cloned().collect()
+            self.compilers
+                .iter()
+                .filter(|p| p.enabled)
+                .cloned()
+                .collect()
         }
     }
 }
@@ -431,7 +455,6 @@ impl Default for CcSingleFileConfig {
     }
 }
 
-
 pub struct CcSingleFileProcessor {
     config: CcSingleFileConfig,
     profiles: Vec<CompilerProfile>,
@@ -451,7 +474,13 @@ impl CcSingleFileProcessor {
 
     /// Get the first source directory from scan config (relative path)
     fn source_dir(&self) -> PathBuf {
-        PathBuf::from(self.config.standard.src_dirs().first().map_or("", std::string::String::as_str))
+        PathBuf::from(
+            self.config
+                .standard
+                .src_dirs()
+                .first()
+                .map_or("", std::string::String::as_str),
+        )
     }
 
     /// Check if cc processing should be enabled
@@ -462,7 +491,8 @@ impl CcSingleFileProcessor {
 
     /// Find all C/C++ source files. Returns (path, `is_cpp`) pairs.
     fn find_source_files(&self, file_index: &FileIndex) -> Vec<(PathBuf, bool)> {
-        file_index.scan(&self.config.standard, true)
+        file_index
+            .scan(&self.config.standard, true)
             .into_iter()
             .map(|p| {
                 let is_cpp = p.extension().and_then(|s| s.to_str()) == Some("cc");
@@ -493,8 +523,18 @@ impl CcSingleFileProcessor {
     }
 
     /// Add include paths and compile flags (before, base, after) to a command.
-    fn add_compile_flags(&self, cmd: &mut Command, profile: &CompilerProfile, is_cpp: bool, source_flags: &SourceFlags) {
-        let flags = if is_cpp { &profile.cxxflags } else { &profile.cflags };
+    fn add_compile_flags(
+        &self,
+        cmd: &mut Command,
+        profile: &CompilerProfile,
+        is_cpp: bool,
+        source_flags: &SourceFlags,
+    ) {
+        let flags = if is_cpp {
+            &profile.cxxflags
+        } else {
+            &profile.cflags
+        };
         for inc in &self.config.include_paths {
             cmd.arg(format!("-I{inc}"));
         }
@@ -510,7 +550,14 @@ impl CcSingleFileProcessor {
     }
 
     /// Compile a single source file directly to an executable using a specific profile.
-    fn compile_source(&self, ctx: &crate::build_context::BuildContext, source: &Path, executable: &Path, profile: &CompilerProfile, is_cpp: bool) -> Result<()> {
+    fn compile_source(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        source: &Path,
+        executable: &Path,
+        profile: &CompilerProfile,
+        is_cpp: bool,
+    ) -> Result<()> {
         let compiler = if is_cpp { &profile.cxx } else { &profile.cc };
         let source_flags = parse_source_flags(ctx, source, &profile.name)?;
 
@@ -531,8 +578,17 @@ impl CcSingleFileProcessor {
         }
 
         if crate::runtime_flags::show_child_processes() {
-            let profile_tag = if profile.name.is_empty() { String::new() } else { format!(":{}", profile.name) };
-            println!("[{}{}] {}", crate::processors::names::CC_SINGLE_FILE, profile_tag, format_command(&cmd));
+            let profile_tag = if profile.name.is_empty() {
+                String::new()
+            } else {
+                format!(":{}", profile.name)
+            };
+            println!(
+                "[{}{}] {}",
+                crate::processors::names::CC_SINGLE_FILE,
+                profile_tag,
+                format_command(&cmd)
+            );
         }
 
         let output = run_command(ctx, &cmd)?;
@@ -544,23 +600,31 @@ impl CcSingleFileProcessor {
         // Profile name is stored in the output path structure
         // out/cc_single_file/<profile_name>/... or out/cc_single_file/... (legacy)
         if let Some(output) = product.outputs.first()
-            && let Ok(relative) = output.strip_prefix(&self.output_dir) {
-                // Check if first component is a profile name
-                if let Some(first) = relative.components().next() {
-                    let first_str = first.as_os_str().to_string_lossy();
-                    if let Some(profile) = self.find_profile(&first_str) {
-                        return Ok(profile);
-                    }
+            && let Ok(relative) = output.strip_prefix(&self.output_dir)
+        {
+            // Check if first component is a profile name
+            if let Some(first) = relative.components().next() {
+                let first_str = first.as_os_str().to_string_lossy();
+                if let Some(profile) = self.find_profile(&first_str) {
+                    return Ok(profile);
                 }
             }
+        }
         // Fall back to first profile (legacy mode)
-        self.profiles.first()
+        self.profiles
+            .first()
             .ok_or_else(|| anyhow::anyhow!("no compiler profiles configured"))
     }
 
     /// Shared implementation for discover and `discover_for_clean`.
     /// When `for_clean` is true, skips config hash and extra inputs (only needs output mapping).
-    fn discover_impl(&self, graph: &mut BuildGraph, file_index: &FileIndex, for_clean: bool, instance_name: &str) -> Result<()> {
+    fn discover_impl(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        for_clean: bool,
+        instance_name: &str,
+    ) -> Result<()> {
         if !self.should_process() {
             return Ok(());
         }
@@ -570,11 +634,26 @@ impl CcSingleFileProcessor {
             return Ok(());
         }
 
-        let cfg_hash = if for_clean { None } else { Some(output_config_hash(&self.config, &crate::config::checksum_fields_of(instance_name))) };
-        let extra = if for_clean { Vec::new() } else { resolve_extra_inputs(&self.config.standard.dep_inputs)? };
+        let cfg_hash = if for_clean {
+            None
+        } else {
+            Some(output_config_hash(
+                &self.config,
+                &crate::config::checksum_fields_of(instance_name),
+            ))
+        };
+        let extra = if for_clean {
+            Vec::new()
+        } else {
+            resolve_extra_inputs(&self.config.standard.dep_inputs)?
+        };
 
         for profile in &self.profiles {
-            let variant = if profile.name.is_empty() { None } else { Some(profile.name.as_str()) };
+            let variant = if profile.name.is_empty() {
+                None
+            } else {
+                Some(profile.name.as_str())
+            };
 
             for (source, _is_cpp) in &source_files {
                 if should_exclude_for_profile(source, &profile.name) {
@@ -606,7 +685,6 @@ impl Processor for CcSingleFileProcessor {
         &self.config.standard
     }
 
-
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
     }
@@ -621,7 +699,9 @@ impl Processor for CcSingleFileProcessor {
 
     fn required_tools(&self) -> Vec<String> {
         // Collect unique compilers from all profiles
-        let mut tools: Vec<String> = self.profiles.iter()
+        let mut tools: Vec<String> = self
+            .profiles
+            .iter()
             .flat_map(|p| vec![p.cc.clone(), p.cxx.clone()])
             .collect();
         tools.sort();
@@ -629,12 +709,22 @@ impl Processor for CcSingleFileProcessor {
         tools
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         self.discover_impl(graph, file_index, false, instance_name)
     }
 
     /// Fast discovery for clean: only find outputs, skip header scanning
-    fn discover_for_clean(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover_for_clean(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         self.discover_impl(graph, file_index, true, instance_name)
     }
 
@@ -645,7 +735,6 @@ impl Processor for CcSingleFileProcessor {
         let profile = self.get_profile_from_product(product)?;
         self.compile_source(ctx, source, executable, profile, is_cpp)
     }
-
 }
 
 fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {

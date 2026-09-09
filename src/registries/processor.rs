@@ -5,8 +5,8 @@
 //! at link time.
 
 use anyhow::Result;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use crate::processors::{Processor, ProcessorType};
 
@@ -96,8 +96,9 @@ pub fn description_of(name: &str) -> &'static str {
 
 /// Return the processor type for a processor by instance name, or `Checker` if unknown.
 pub fn processor_type_of(name: &str) -> crate::processors::ProcessorType {
-    find_plugin(name)
-        .map_or(crate::processors::ProcessorType::Checker, |p| p.processor_type)
+    find_plugin(name).map_or(crate::processors::ProcessorType::Checker, |p| {
+        p.processor_type
+    })
 }
 
 /// Return whether a processor is native (pure Rust) by instance name.
@@ -147,7 +148,8 @@ pub fn apply_all_defaults(
 /// Deserialize TOML into config type C and call the constructor.
 /// The TOML should already have defaults applied by the framework.
 pub fn deserialize_and_create<C: Default + DeserializeOwned>(
-    config_toml: &toml::Value, ctor: fn(C) -> Box<dyn Processor>,
+    config_toml: &toml::Value,
+    ctor: fn(C) -> Box<dyn Processor>,
 ) -> Result<Box<dyn Processor>> {
     let cfg: C = toml::from_str(&toml::to_string(config_toml)?)?;
     Ok(ctor(cfg))
@@ -156,14 +158,17 @@ pub fn deserialize_and_create<C: Default + DeserializeOwned>(
 /// Like [`deserialize_and_create`], for processors whose constructor can fail
 /// (e.g. reading a support file like a personal dictionary).
 pub fn deserialize_and_try_create<C: Default + DeserializeOwned>(
-    config_toml: &toml::Value, ctor: fn(C) -> Result<Box<dyn Processor>>,
+    config_toml: &toml::Value,
+    ctor: fn(C) -> Result<Box<dyn Processor>>,
 ) -> Result<Box<dyn Processor>> {
     let cfg: C = toml::from_str(&toml::to_string(config_toml)?)?;
     ctor(cfg)
 }
 
 /// Build default config JSON for a config type, applying defaults for the given processor name.
-pub fn default_config_json<C: Default + DeserializeOwned + Serialize>(name: &str) -> Option<String> {
+pub fn default_config_json<C: Default + DeserializeOwned + Serialize>(
+    name: &str,
+) -> Option<String> {
     let mut val = toml::Value::Table(toml::map::Map::new());
     let mut prov = crate::config::ProvenanceMap::new();
     apply_all_defaults(name, &mut val, &mut prov);
@@ -179,22 +184,28 @@ pub fn default_config_json<C: Default + DeserializeOwned + Serialize>(name: &str
     // `cargo test` can never compile. `cfg!` keeps it compiled everywhere
     // and evaluated only in debug builds.
     if cfg!(debug_assertions)
-        && let Some(obj) = json_val.as_object() {
-            use crate::config::KnownFields as _;
-            let known: std::collections::HashSet<&str> =
-                crate::config::ProcessorConfig::known_fields_for(name).unwrap_or_default()
-                    .into_iter()
-                    .chain(crate::config::StandardConfig::known_fields().iter().copied())
-                    .chain(crate::config::SCAN_CONFIG_FIELDS.iter().copied())
-                    .chain(crate::config::STANDARD_EXTRA_FIELDS.iter().copied())
-                    .collect();
-            for key in obj.keys() {
-                debug_assert!(
-                    known.contains(key.as_str()),
-                    "Processor '{name}': default config field '{key}' is serialized but not declared in its FieldSpec list or scan fields"
-                );
-            }
+        && let Some(obj) = json_val.as_object()
+    {
+        use crate::config::KnownFields as _;
+        let known: std::collections::HashSet<&str> =
+            crate::config::ProcessorConfig::known_fields_for(name)
+                .unwrap_or_default()
+                .into_iter()
+                .chain(
+                    crate::config::StandardConfig::known_fields()
+                        .iter()
+                        .copied(),
+                )
+                .chain(crate::config::SCAN_CONFIG_FIELDS.iter().copied())
+                .chain(crate::config::STANDARD_EXTRA_FIELDS.iter().copied())
+                .collect();
+        for key in obj.keys() {
+            debug_assert!(
+                known.contains(key.as_str()),
+                "Processor '{name}': default config field '{key}' is serialized but not declared in its FieldSpec list or scan fields"
+            );
         }
+    }
 
     serde_json::to_string_pretty(&json_val).ok()
 }
@@ -203,7 +214,9 @@ pub fn default_config_json<C: Default + DeserializeOwned + Serialize>(name: &str
 // (AnalyzerPlugin still carries metadata as fn pointers). Processor plugins
 // declare a FieldSpec list instead; do not use this in ProcessorPlugin
 // entries.
-pub fn typed_known_fields<C: crate::config::KnownFields>() -> &'static [&'static str] { C::known_fields() }
+pub fn typed_known_fields<C: crate::config::KnownFields>() -> &'static [&'static str] {
+    C::known_fields()
+}
 
 #[cfg(test)]
 mod tests {
@@ -219,15 +232,27 @@ mod tests {
     fn accessors_resolve_instance_names_like_type_names() {
         for plugin in all_plugins() {
             let instance = format!("{}.someinst", plugin.name);
-            assert_eq!(processor_version(&instance), Some(plugin.version),
-                "processor_version must strip the instance suffix for '{instance}'");
+            assert_eq!(
+                processor_version(&instance),
+                Some(plugin.version),
+                "processor_version must strip the instance suffix for '{instance}'"
+            );
             assert_eq!(processor_version(plugin.name), Some(plugin.version));
-            assert_eq!(is_native(&instance), is_native(plugin.name),
-                "is_native must strip the instance suffix for '{instance}'");
-            assert_eq!(can_fix(&instance), can_fix(plugin.name),
-                "can_fix must strip the instance suffix for '{instance}'");
-            assert_eq!(description_of(&instance), description_of(plugin.name),
-                "description_of must strip the instance suffix for '{instance}'");
+            assert_eq!(
+                is_native(&instance),
+                is_native(plugin.name),
+                "is_native must strip the instance suffix for '{instance}'"
+            );
+            assert_eq!(
+                can_fix(&instance),
+                can_fix(plugin.name),
+                "can_fix must strip the instance suffix for '{instance}'"
+            );
+            assert_eq!(
+                description_of(&instance),
+                description_of(plugin.name),
+                "description_of must strip the instance suffix for '{instance}'"
+            );
         }
     }
 }

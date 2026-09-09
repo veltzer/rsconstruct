@@ -1,16 +1,16 @@
 use std::collections::BTreeMap;
 // Aliased: `std::io::Write` is also in scope here (for stdout flushing), and
 // both traits define `write!`/`writeln!` methods.
+use super::{Builder, sorted_keys};
+use crate::cli::{GraphFormat, ToolsAction};
+use crate::color;
+use crate::json_output;
+use crate::tables;
+use crate::tool_lock;
+use anyhow::{Context, Result, bail};
 use std::fmt::Write as FmtWrite;
 use std::io::Write;
 use std::process::Command;
-use anyhow::{bail, Context, Result};
-use crate::cli::{GraphFormat, ToolsAction};
-use crate::color;
-use crate::tables;
-use crate::json_output;
-use crate::tool_lock;
-use super::{Builder, sorted_keys};
 
 /// Check if a system package is installed using the platform's package manager.
 /// Tries dpkg-query (Debian/Ubuntu), rpm (Fedora/RHEL), pacman (Arch), and brew (macOS).
@@ -24,12 +24,14 @@ use super::{Builder, sorted_keys};
 /// it with `which()` misreports in both directions — a binary-less package
 /// like aspell-en shows as missing forever, and a binary that happens to share
 /// the package's name shows as installed without the package being on.
-pub(super) fn is_system_package_installed(ctx: &crate::build_context::BuildContext, pkg: &str) -> bool {
+pub(super) fn is_system_package_installed(
+    ctx: &crate::build_context::BuildContext,
+    pkg: &str,
+) -> bool {
     let probe = |program: &str, args: &[&str]| -> bool {
         let mut cmd = Command::new(program);
         cmd.args(args);
-        crate::processors::run_command_capture(ctx, &cmd)
-            .is_ok_and(|o| o.status.success())
+        crate::processors::run_command_capture(ctx, &cmd).is_ok_and(|o| o.status.success())
     };
 
     if which::which("dpkg-query").is_ok() {
@@ -97,8 +99,7 @@ fn package_probe_succeeds(
 ) -> bool {
     let mut cmd = Command::new(program);
     cmd.args(args);
-    crate::processors::run_command_capture(ctx, &cmd)
-        .is_ok_and(|o| o.status.success())
+    crate::processors::run_command_capture(ctx, &cmd).is_ok_and(|o| o.status.success())
 }
 
 /// The project's pinned Python closure as `uv export` renders it from
@@ -107,14 +108,27 @@ fn package_probe_succeeds(
 /// with pyproject.toml instead of silently re-resolving).
 fn uv_export_reqs(ctx: &crate::build_context::BuildContext) -> Result<Vec<String>> {
     let mut cmd = Command::new("uv");
-    cmd.args(["export", "--frozen", "--no-hashes", "--no-annotate", "--no-header", "--no-emit-project"]);
-    let out = crate::processors::run_command_capture(ctx, &cmd)
-        .context("failed to run `uv export` — is uv installed? (`rsconstruct tools install uv`, \
-                  or set `python_installer = \"pip\"` under [dependencies] to install with pip)")?;
+    cmd.args([
+        "export",
+        "--frozen",
+        "--no-hashes",
+        "--no-annotate",
+        "--no-header",
+        "--no-emit-project",
+    ]);
+    let out = crate::processors::run_command_capture(ctx, &cmd).context(
+        "failed to run `uv export` — is uv installed? (`rsconstruct tools install uv`, \
+                  or set `python_installer = \"pip\"` under [dependencies] to install with pip)",
+    )?;
     if !out.status.success() {
-        bail!("`uv export` failed: {}", String::from_utf8_lossy(&out.stderr).trim());
+        bail!(
+            "`uv export` failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
     }
-    Ok(crate::config::parse_uv_export(&String::from_utf8_lossy(&out.stdout)))
+    Ok(crate::config::parse_uv_export(&String::from_utf8_lossy(
+        &out.stdout,
+    )))
 }
 
 /// Return the language runtime category for a tool.
@@ -129,7 +143,11 @@ fn tool_runtime(tool: &str) -> &'static str {
 /// Handle `rsconstruct tools` subcommands without a project config.
 /// Uses default processor configs so List, Stats, Install, and Graph work
 /// even outside a project directory.
-pub fn tools_no_config(ctx: &crate::build_context::BuildContext, action: ToolsAction, verbose: bool) -> Result<()> {
+pub fn tools_no_config(
+    ctx: &crate::build_context::BuildContext,
+    action: ToolsAction,
+    verbose: bool,
+) -> Result<()> {
     let processors = super::create_all_default_processors()?;
     run_tools_command(ctx, &processors, &|_name| true, action, verbose, None)
 }
@@ -139,10 +157,7 @@ impl Builder {
     /// Called at the start of build unless --ignore-tool-versions is passed.
     pub fn verify_tool_versions(&self, ctx: &crate::build_context::BuildContext) -> Result<()> {
         let processors = self.create_processors()?;
-        let tool_commands = tool_lock::collect_tool_commands(
-            &processors,
-            &|_name| true,
-        );
+        let tool_commands = tool_lock::collect_tool_commands(&processors, &|_name| true);
         if tool_commands.is_empty() {
             return Ok(());
         }
@@ -150,16 +165,14 @@ impl Builder {
     }
 
     /// Handle `rsconstruct tools` subcommands
-    pub fn tools(&self, ctx: &crate::build_context::BuildContext, action: ToolsAction, verbose: bool) -> Result<()> {
+    pub fn tools(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        action: ToolsAction,
+        verbose: bool,
+    ) -> Result<()> {
         let processors = self.create_processors()?;
-        run_tools_command(
-            ctx,
-            &processors,
-            &|_name| true,
-            action,
-            verbose,
-            Some(self),
-        )
+        run_tools_command(ctx, &processors, &|_name| true, action, verbose, Some(self))
     }
 }
 
@@ -174,10 +187,24 @@ fn run_tools_command(
     builder: Option<&Builder>,
 ) -> Result<()> {
     let show_all = matches!(&action, ToolsAction::ListConfigured { all: true, .. });
-    let show_methods = matches!(&action,
-        ToolsAction::ListConfigured { methods: true, .. } | ToolsAction::List { methods: true });
-    let install_interactive = matches!(&action, ToolsAction::Install { interactive: true, .. });
-    let install_no_eatmydata = matches!(&action, ToolsAction::Install { no_eatmydata: true, .. });
+    let show_methods = matches!(
+        &action,
+        ToolsAction::ListConfigured { methods: true, .. } | ToolsAction::List { methods: true }
+    );
+    let install_interactive = matches!(
+        &action,
+        ToolsAction::Install {
+            interactive: true,
+            ..
+        }
+    );
+    let install_no_eatmydata = matches!(
+        &action,
+        ToolsAction::Install {
+            no_eatmydata: true,
+            ..
+        }
+    );
     // eatmydata speeds up apt/dnf/pacman by no-op'ing fsync; the trade-off
     // is loss-on-power-cut. Off by default; the post-config phase hook
     // `eatmydata_ci_default` flips it on when CI=true. Users who want it
@@ -190,9 +217,8 @@ fn run_tools_command(
     let install_all = matches!(&action, ToolsAction::Install { all: true, .. });
     let config_enables_eatmydata = builder.is_some_and(|b| b.config.dependencies.eatmydata)
         || (install_all && crate::config::running_in_ci());
-    let install_use_eatmydata = !install_no_eatmydata
-        && config_enables_eatmydata
-        && which::which("eatmydata").is_ok();
+    let install_use_eatmydata =
+        !install_no_eatmydata && config_enables_eatmydata && which::which("eatmydata").is_ok();
 
     let mut tool_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for name in sorted_keys(processors) {
@@ -219,12 +245,14 @@ fn run_tools_command(
                         installed: which::which(info.name).is_ok(),
                         runtime: info.runtime.to_string(),
                         processors: Vec::new(),
-                        install_methods: info.install_methods.iter().map(|m| {
-                            json_output::ToolInstallMethodEntry {
+                        install_methods: info
+                            .install_methods
+                            .iter()
+                            .map(|m| json_output::ToolInstallMethodEntry {
                                 method: m.method.to_string(),
                                 command: m.command(),
-                            }
-                        }).collect(),
+                            })
+                            .collect(),
                     })
                     .collect();
                 println!("{}", serde_json::to_string_pretty(&entries)?);
@@ -242,40 +270,60 @@ fn run_tools_command(
             if show_install {
                 headers.push("Install");
             }
-            let rows: Vec<Vec<String>> = tools.iter().map(|info| {
-                let status = if which::which(info.name).is_ok() {
-                    color::green("installed")
-                } else {
-                    color::red("missing")
-                };
-                let mut row = vec![info.name.to_string(), status.to_string(), info.runtime.to_string()];
-                if show_install {
-                    let install_str = if show_methods {
-                        let methods: Vec<String> = info.install_methods.iter()
-                            .map(|m| format!("{}: {}", m.method, m.command()))
-                            .collect();
-                        if methods.is_empty() { "?".to_string() } else { methods.join(" | ") }
+            let rows: Vec<Vec<String>> = tools
+                .iter()
+                .map(|info| {
+                    let status = if which::which(info.name).is_ok() {
+                        color::green("installed")
                     } else {
-                        info.install_methods.first().map_or_else(|| "?".to_string(), crate::tools::InstallMethod::command)
+                        color::red("missing")
                     };
-                    row.push(install_str);
-                }
-                row
-            }).collect();
+                    let mut row = vec![
+                        info.name.to_string(),
+                        status.to_string(),
+                        info.runtime.to_string(),
+                    ];
+                    if show_install {
+                        let install_str = if show_methods {
+                            let methods: Vec<String> = info
+                                .install_methods
+                                .iter()
+                                .map(|m| format!("{}: {}", m.method, m.command()))
+                                .collect();
+                            if methods.is_empty() {
+                                "?".to_string()
+                            } else {
+                                methods.join(" | ")
+                            }
+                        } else {
+                            info.install_methods.first().map_or_else(
+                                || "?".to_string(),
+                                crate::tools::InstallMethod::command,
+                            )
+                        };
+                        row.push(install_str);
+                    }
+                    row
+                })
+                .collect();
             tables::print_table(&headers, &rows);
         }
         ToolsAction::ListConfigured { .. } => {
             if crate::json_output::is_json_mode() {
-                let entries: Vec<json_output::ToolListEntry> = tool_map.iter()
+                let entries: Vec<json_output::ToolListEntry> = tool_map
+                    .iter()
                     .map(|(tool, procs)| {
                         let info = crate::tools::tool_info(tool);
                         let install_methods = info
-                            .map(|i| i.install_methods.iter().map(|m| {
-                                json_output::ToolInstallMethodEntry {
-                                    method: m.method.to_string(),
-                                    command: m.command(),
-                                }
-                            }).collect())
+                            .map(|i| {
+                                i.install_methods
+                                    .iter()
+                                    .map(|m| json_output::ToolInstallMethodEntry {
+                                        method: m.method.to_string(),
+                                        command: m.command(),
+                                    })
+                                    .collect()
+                            })
                             .unwrap_or_default();
                         json_output::ToolListEntry {
                             tool: tool.clone(),
@@ -300,16 +348,30 @@ fn run_tools_command(
                 let runtime = info.map_or("unknown", |i| i.runtime);
                 let install_str = if show_methods {
                     let methods: Vec<String> = info
-                        .map(|i| i.install_methods.iter()
-                            .map(|m| format!("{}: {}", m.method, m.command()))
-                            .collect())
+                        .map(|i| {
+                            i.install_methods
+                                .iter()
+                                .map(|m| format!("{}: {}", m.method, m.command()))
+                                .collect()
+                        })
                         .unwrap_or_default();
-                    if methods.is_empty() { "?".to_string() } else { methods.join(" | ") }
+                    if methods.is_empty() {
+                        "?".to_string()
+                    } else {
+                        methods.join(" | ")
+                    }
                 } else {
-                    info.and_then(|i| i.install_methods.first()).map_or_else(|| "?".to_string(), crate::tools::InstallMethod::command)
+                    info.and_then(|i| i.install_methods.first())
+                        .map_or_else(|| "?".to_string(), crate::tools::InstallMethod::command)
                 };
-                println!("{} [{}] [{}] ({}) — {}",
-                    tool, installed, runtime, procs.join(", "), color::dim(&install_str));
+                println!(
+                    "{} [{}] [{}] ({}) — {}",
+                    tool,
+                    installed,
+                    runtime,
+                    procs.join(", "),
+                    color::dim(&install_str)
+                );
             }
         }
         ToolsAction::Check => {
@@ -319,14 +381,20 @@ fn run_tools_command(
             if crate::json_output::is_json_mode() {
                 let entries: Vec<serde_json::Value> = lock
                     .as_ref()
-                    .map(|l| l.tools.iter().map(|(name, info)| {
-                        let version = tool_lock::extract_semver(&info.version_output).unwrap_or("?");
-                        serde_json::json!({
-                            "tool": name,
-                            "status": "ok",
-                            "version": version,
-                        })
-                    }).collect())
+                    .map(|l| {
+                        l.tools
+                            .iter()
+                            .map(|(name, info)| {
+                                let version =
+                                    tool_lock::extract_semver(&info.version_output).unwrap_or("?");
+                                serde_json::json!({
+                                    "tool": name,
+                                    "status": "ok",
+                                    "version": version,
+                                })
+                            })
+                            .collect()
+                    })
                     .unwrap_or_default();
                 let out = serde_json::json!({
                     "match": true,
@@ -334,13 +402,13 @@ fn run_tools_command(
                 });
                 println!("{}", serde_json::to_string_pretty(&out)?);
             } else {
-                if verbose
-                    && let Some(lock) = &lock {
-                        for (name, info) in &lock.tools {
-                            let version = tool_lock::extract_semver(&info.version_output).unwrap_or("?");
-                            println!("{} {} {}", name, color::green("ok"), color::dim(version));
-                        }
+                if verbose && let Some(lock) = &lock {
+                    for (name, info) in &lock.tools {
+                        let version =
+                            tool_lock::extract_semver(&info.version_output).unwrap_or("?");
+                        println!("{} {} {}", name, color::green("ok"), color::dim(version));
                     }
+                }
                 println!("{}", color::green("Tool versions match lock file."));
             }
         }
@@ -349,14 +417,19 @@ fn run_tools_command(
             let lock = tool_lock::create_lock(ctx, &tool_commands)?;
             tool_lock::write_lock_file(&lock)?;
             if crate::json_output::is_json_mode() {
-                let entries: Vec<serde_json::Value> = lock.tools.iter().map(|(name, info)| {
-                    let version = tool_lock::extract_semver(&info.version_output).unwrap_or("?");
-                    serde_json::json!({
-                        "tool": name,
-                        "status": "locked",
-                        "version": version,
+                let entries: Vec<serde_json::Value> = lock
+                    .tools
+                    .iter()
+                    .map(|(name, info)| {
+                        let version =
+                            tool_lock::extract_semver(&info.version_output).unwrap_or("?");
+                        serde_json::json!({
+                            "tool": name,
+                            "status": "locked",
+                            "version": version,
+                        })
                     })
-                }).collect();
+                    .collect();
                 let out = serde_json::json!({
                     "lock_file": ".tools.versions",
                     "tools": entries,
@@ -365,7 +438,12 @@ fn run_tools_command(
             } else {
                 for (name, info) in &lock.tools {
                     let version = tool_lock::extract_semver(&info.version_output).unwrap_or("?");
-                    println!("{} {} {}", name, color::green("locked"), color::dim(version));
+                    println!(
+                        "{} {} {}",
+                        name,
+                        color::green("locked"),
+                        color::dim(version)
+                    );
                 }
                 println!("Wrote {}", color::bold(".tools.versions"));
             }
@@ -374,8 +452,9 @@ fn run_tools_command(
             if view {
                 let html_content = tools_graph_html(&tool_map);
                 let html_path = std::env::temp_dir().join("rsconstruct_tools_graph.html");
-                std::fs::write(&html_path, &html_content)
-                    .with_context(|| format!("Failed to write HTML file: {}", html_path.display()))?;
+                std::fs::write(&html_path, &html_content).with_context(|| {
+                    format!("Failed to write HTML file: {}", html_path.display())
+                })?;
                 if let Some(b) = builder {
                     b.open_file(&html_path)?;
                     println!("Opened tools graph in browser: {}", html_path.display());
@@ -415,7 +494,9 @@ fn run_tools_command(
 
             let mut runtime_map: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
             for stat in &tool_stats {
-                let entry = runtime_map.entry(tool_runtime(&stat.name)).or_insert((0, 0));
+                let entry = runtime_map
+                    .entry(tool_runtime(&stat.name))
+                    .or_insert((0, 0));
                 entry.0 += 1;
                 if stat.installed {
                     entry.1 += 1;
@@ -447,16 +528,19 @@ fn run_tools_command(
                 };
                 println!("{}", serde_json::to_string_pretty(&output)?);
             } else {
-                let rows: Vec<Vec<String>> = tool_stats.iter().map(|stat| {
-                    let status = if stat.installed {
-                        color::green("\u{2713}")
-                    } else {
-                        color::red("\u{2717}")
-                    };
-                    let procs = stat.processors.join(", ");
-                    let install = stat.install_command.as_deref().unwrap_or("").to_string();
-                    vec![stat.name.clone(), status.to_string(), procs, install]
-                }).collect();
+                let rows: Vec<Vec<String>> = tool_stats
+                    .iter()
+                    .map(|stat| {
+                        let status = if stat.installed {
+                            color::green("\u{2713}")
+                        } else {
+                            color::red("\u{2717}")
+                        };
+                        let procs = stat.processors.join(", ");
+                        let install = stat.install_command.as_deref().unwrap_or("").to_string();
+                        vec![stat.name.clone(), status.to_string(), procs, install]
+                    })
+                    .collect();
                 tables::print_table(&["Tool", "Status", "Processors", "Install"], &rows);
 
                 println!();
@@ -470,17 +554,20 @@ fn run_tools_command(
                     ("jvm", "JVM"),
                     ("system", "System"),
                 ];
-                let rt_rows: Vec<Vec<String>> = runtime_display.iter().filter_map(|(key, label)| {
-                    runtime_stats.iter().find(|r| r.runtime == *key).map(|rs| {
-                        let status_str = format!("{}/{}", rs.installed, rs.total);
-                        let line = if rs.missing > 0 {
-                            color::yellow(&status_str)
-                        } else {
-                            color::green(&status_str)
-                        };
-                        vec![label.to_string(), line.to_string()]
+                let rt_rows: Vec<Vec<String>> = runtime_display
+                    .iter()
+                    .filter_map(|(key, label)| {
+                        runtime_stats.iter().find(|r| r.runtime == *key).map(|rs| {
+                            let status_str = format!("{}/{}", rs.installed, rs.total);
+                            let line = if rs.missing > 0 {
+                                color::yellow(&status_str)
+                            } else {
+                                color::green(&status_str)
+                            };
+                            vec![label.to_string(), line.to_string()]
+                        })
                     })
-                }).collect();
+                    .collect();
                 tables::print_table(&["Runtime", "Installed"], &rt_rows);
 
                 println!();
@@ -525,7 +612,9 @@ fn run_tools_command(
                         manual_only.len(),
                     );
                     for info in &manual_only {
-                        let instructions = info.install_methods.first()
+                        let instructions = info
+                            .install_methods
+                            .first()
                             .map_or("no install method known", |m| m.package);
                         eprintln!("  {} — {}", color::bold(info.name), instructions);
                     }
@@ -534,12 +623,20 @@ fn run_tools_command(
                         format!(
                             "Cannot install {} tool(s) automatically: {}",
                             manual_only.len(),
-                            manual_only.iter().map(|i| i.name).collect::<Vec<_>>().join(", "),
+                            manual_only
+                                .iter()
+                                .map(|i| i.name)
+                                .collect::<Vec<_>>()
+                                .join(", "),
                         ),
-                    ).into());
+                    )
+                    .into());
                 }
                 if missing.is_empty() {
-                    println!("{}", color::green("All registry tools are already installed."));
+                    println!(
+                        "{}",
+                        color::green("All registry tools are already installed.")
+                    );
                     return Ok(());
                 }
                 missing
@@ -553,14 +650,16 @@ fn run_tools_command(
                         return Err(crate::exit_code::RsconstructError::new(
                             crate::exit_code::RsconstructExitCode::ToolError,
                             format!("No install method known for tool '{name}'"),
-                        ).into());
+                        )
+                        .into());
                     }
                 } else {
                     eprintln!("{}: Unknown tool '{}'", color::red("Error"), name);
                     return Err(crate::exit_code::RsconstructError::new(
                         crate::exit_code::RsconstructExitCode::ToolError,
                         format!("Unknown tool '{name}'"),
-                    ).into());
+                    )
+                    .into());
                 }
             } else {
                 // Build tool list from all enabled processors.
@@ -595,7 +694,11 @@ fn run_tools_command(
                             missing.push((info.name, &info.install_methods[0]));
                         }
                         _ => {
-                            eprintln!("{}: No install method for '{}'", color::red("Error"), tool_name);
+                            eprintln!(
+                                "{}: No install method for '{}'",
+                                color::red("Error"),
+                                tool_name
+                            );
                             any_unknown = true;
                         }
                     }
@@ -604,7 +707,8 @@ fn run_tools_command(
                     return Err(crate::exit_code::RsconstructError::new(
                         crate::exit_code::RsconstructExitCode::ToolError,
                         "Some tools have no known install procedure",
-                    ).into());
+                    )
+                    .into());
                 }
                 if missing.is_empty() {
                     println!("{}", color::green("All tools are already installed."));
@@ -617,22 +721,36 @@ fn run_tools_command(
             // that don't batch (binary, manual) keep one entry per package.
             let mut by_method: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
             for (_tool_name, method) in &missing_tools {
-                by_method.entry(method.method).or_default().push(method.package);
+                by_method
+                    .entry(method.method)
+                    .or_default()
+                    .push(method.package);
             }
 
             // Display the install plan
-            println!("Missing {} tool(s), grouped by install method:", missing_tools.len());
+            println!(
+                "Missing {} tool(s), grouped by install method:",
+                missing_tools.len()
+            );
             println!();
 
-            let method_order = &["pip", "apt", "brew", "npm", "cargo", "gem", "snap", "binary", "manual"];
+            let method_order = &[
+                "pip", "apt", "brew", "npm", "cargo", "gem", "snap", "binary", "manual",
+            ];
             let ctx = crate::tools::InstallCtx {
                 verbose,
                 use_eatmydata: install_use_eatmydata,
             };
             let mut any_failed = false;
             for method in method_order {
-                let Some(packages) = by_method.get(method) else { continue };
-                println!("  {} {}", color::bold(&format!("[{method}]")), packages.join(", "));
+                let Some(packages) = by_method.get(method) else {
+                    continue;
+                };
+                println!(
+                    "  {} {}",
+                    color::bold(&format!("[{method}]")),
+                    packages.join(", ")
+                );
                 for argv in crate::tools::describe(method, packages) {
                     println!("       {}", color::dim(&argv.join(" ")));
                 }
@@ -645,10 +763,12 @@ fn run_tools_command(
             // error — the user saw the command list and said no.
             if install_interactive {
                 print!("Proceed? [y/N] ");
-                std::io::stdout().flush()
+                std::io::stdout()
+                    .flush()
                     .context("Failed to flush stdout before install prompt")?;
                 let mut answer = String::new();
-                std::io::stdin().read_line(&mut answer)
+                std::io::stdin()
+                    .read_line(&mut answer)
                     .context("Failed to read install prompt answer")?;
                 let answer = answer.trim().to_lowercase();
                 if answer != "y" && answer != "yes" {
@@ -658,16 +778,29 @@ fn run_tools_command(
             }
 
             for method in method_order {
-                let Some(packages) = by_method.get(method) else { continue };
+                let Some(packages) = by_method.get(method) else {
+                    continue;
+                };
                 match crate::tools::run(method, packages, &ctx) {
-                    Ok(()) => println!("{} [{}] {}", color::green("OK"), method, packages.join(", ")),
+                    Ok(()) => println!(
+                        "{} [{}] {}",
+                        color::green("OK"),
+                        method,
+                        packages.join(", ")
+                    ),
                     Err(e) => {
                         // `{:#}`, not `{}`: the alternate form walks the
                         // whole anyhow cause chain. Plain Display prints
                         // only the outermost context, which turns a real
                         // diagnosis ("... : http status: 403") back into a
                         // bare "Failed to query GitHub releases API".
-                        println!("{} [{}] {}: {:#}", color::red("FAILED"), method, packages.join(", "), e);
+                        println!(
+                            "{} [{}] {}: {:#}",
+                            color::red("FAILED"),
+                            method,
+                            packages.join(", "),
+                            e
+                        );
                         any_failed = true;
                     }
                 }
@@ -677,20 +810,23 @@ fn run_tools_command(
                 return Err(crate::exit_code::RsconstructError::new(
                     crate::exit_code::RsconstructExitCode::ToolError,
                     "Some install commands failed",
-                ).into());
+                )
+                .into());
             }
             println!("{}", color::green("All tools installed successfully."));
         }
-        ToolsAction::InstallDeps { interactive, no_eatmydata } => {
-            let config = builder
-                .map(|b| &b.config.dependencies)
-                .ok_or_else(|| anyhow::anyhow!("install-deps requires a project with rsconstruct.toml"))?;
+        ToolsAction::InstallDeps {
+            interactive,
+            no_eatmydata,
+        } => {
+            let config = builder.map(|b| &b.config.dependencies).ok_or_else(|| {
+                anyhow::anyhow!("install-deps requires a project with rsconstruct.toml")
+            })?;
             // eatmydata: off by default; turned on by the post-config
             // phase hook when CI=true. CLI --no-eatmydata overrides.
             // Wrap also requires eatmydata to be on PATH.
-            let use_eatmydata = !no_eatmydata
-                && config.eatmydata
-                && which::which("eatmydata").is_ok();
+            let use_eatmydata =
+                !no_eatmydata && config.eatmydata && which::which("eatmydata").is_ok();
 
             // The Python set comes from uv.lock by default (pyproject.toml
             // in pyproject mode); [dependencies].pip entries merge in front.
@@ -710,14 +846,22 @@ fn run_tools_command(
                     // the uv binary is spawnable right after.
                     // Only when there is Python work to do — a repo with no
                     // pyproject.toml and no pip list needs no uv.
-                    let has_python_deps = std::path::Path::new("pyproject.toml").exists()
-                        || !config.pip.is_empty();
+                    let has_python_deps =
+                        std::path::Path::new("pyproject.toml").exists() || !config.pip.is_empty();
                     if has_python_deps && which::which("uv").is_err() {
                         println!("uv not found on PATH; bootstrapping it with pip");
-                        crate::tools::run("pip", &["uv"], &crate::tools::InstallCtx {
-                            verbose, use_eatmydata: false,
-                        }).context("failed to bootstrap uv with pip; install uv manually \
-                                    or set `python_installer = \"pip\"` under [dependencies]")?;
+                        crate::tools::run(
+                            "pip",
+                            &["uv"],
+                            &crate::tools::InstallCtx {
+                                verbose,
+                                use_eatmydata: false,
+                            },
+                        )
+                        .context(
+                            "failed to bootstrap uv with pip; install uv manually \
+                                    or set `python_installer = \"pip\"` under [dependencies]",
+                        )?;
                     }
                     config.effective_pip_uv(std::path::Path::new("."), || uv_export_reqs(ctx))?
                 }
@@ -756,10 +900,14 @@ fn run_tools_command(
             let mut skipped: Vec<String> = Vec::new();
             let mut groups: Vec<(&str, Vec<String>)> = Vec::new();
 
-            let system_missing: Vec<String> = config.system.iter()
+            let system_missing: Vec<String> = config
+                .system
+                .iter()
                 .filter(|pkg| {
                     let installed = is_system_package_installed(ctx, pkg);
-                    if installed { skipped.push(format!("[system] {pkg}")); }
+                    if installed {
+                        skipped.push(format!("[system] {pkg}"));
+                    }
                     !installed
                 })
                 .cloned()
@@ -778,7 +926,8 @@ fn run_tools_command(
                     }
                 }
                 crate::config::PythonInstaller::Pip => {
-                    let pip_missing: Vec<String> = pip_deps.iter()
+                    let pip_missing: Vec<String> = pip_deps
+                        .iter()
                         .filter(|pkg| {
                             // `pip show` only proves the base distribution is present;
                             // it says nothing about an extras entry like `pkg[extra]`,
@@ -788,8 +937,11 @@ fn run_tools_command(
                                 return true;
                             }
                             let name = crate::config::normalized_distribution_name(pkg);
-                            let installed = package_probe_succeeds(ctx, "pip", &["show", name.as_str()]);
-                            if installed { skipped.push(format!("[pip] {pkg}")); }
+                            let installed =
+                                package_probe_succeeds(ctx, "pip", &["show", name.as_str()]);
+                            if installed {
+                                skipped.push(format!("[pip] {pkg}"));
+                            }
                             !installed
                         })
                         .cloned()
@@ -800,10 +952,14 @@ fn run_tools_command(
                 }
             }
 
-            let npm_missing: Vec<String> = config.npm.iter()
+            let npm_missing: Vec<String> = config
+                .npm
+                .iter()
                 .filter(|pkg| {
                     let installed = package_probe_succeeds(ctx, "npm", &["ls", "-g", pkg]);
-                    if installed { skipped.push(format!("[npm] {pkg}")); }
+                    if installed {
+                        skipped.push(format!("[npm] {pkg}"));
+                    }
                     !installed
                 })
                 .cloned()
@@ -812,10 +968,14 @@ fn run_tools_command(
                 groups.push(("npm", npm_missing));
             }
 
-            let gem_missing: Vec<String> = config.gem.iter()
+            let gem_missing: Vec<String> = config
+                .gem
+                .iter()
                 .filter(|pkg| {
                     let installed = package_probe_succeeds(ctx, "gem", &["list", "-i", pkg]);
-                    if installed { skipped.push(format!("[gem] {pkg}")); }
+                    if installed {
+                        skipped.push(format!("[gem] {pkg}"));
+                    }
                     !installed
                 })
                 .cloned()
@@ -842,7 +1002,11 @@ fn run_tools_command(
                 let pkgs_ref: Vec<&str> = packages.iter().map(String::as_str).collect();
                 let preview = crate::tools::describe(method, &pkgs_ref);
                 let line = preview.first().map(|a| a.join(" ")).unwrap_or_default();
-                println!("  {} {}", color::bold(&format!("[{method}]")), color::dim(&line));
+                println!(
+                    "  {} {}",
+                    color::bold(&format!("[{method}]")),
+                    color::dim(&line)
+                );
             }
             println!();
 
@@ -850,10 +1014,12 @@ fn run_tools_command(
             if interactive {
                 use std::io::Write;
                 print!("Proceed? [y/N] ");
-                std::io::stdout().flush()
+                std::io::stdout()
+                    .flush()
                     .context("Failed to flush stdout before dependency install prompt")?;
                 let mut answer = String::new();
-                std::io::stdin().read_line(&mut answer)
+                std::io::stdin()
+                    .read_line(&mut answer)
                     .context("Failed to read dependency install prompt answer")?;
                 if !matches!(answer.trim().to_lowercase().as_str(), "y" | "yes") {
                     println!("Aborted.");
@@ -861,14 +1027,25 @@ fn run_tools_command(
                 }
             }
 
-            let ctx = crate::tools::InstallCtx { verbose, use_eatmydata };
+            let ctx = crate::tools::InstallCtx {
+                verbose,
+                use_eatmydata,
+            };
             let mut any_failed = false;
             for (method, packages) in &groups {
                 let pkgs_ref: Vec<&str> = packages.iter().map(String::as_str).collect();
                 match crate::tools::run(method, &pkgs_ref, &ctx) {
-                    Ok(()) => println!("{} [{}] {}", color::green("✓"), method, packages.join(", ")),
+                    Ok(()) => {
+                        println!("{} [{}] {}", color::green("✓"), method, packages.join(", "));
+                    }
                     Err(e) => {
-                        println!("{} [{}] {}: {}", color::red("✗"), method, packages.join(", "), e);
+                        println!(
+                            "{} [{}] {}: {}",
+                            color::red("✗"),
+                            method,
+                            packages.join(", "),
+                            e
+                        );
                         any_failed = true;
                     }
                 }
@@ -878,9 +1055,13 @@ fn run_tools_command(
                 return Err(crate::exit_code::RsconstructError::new(
                     crate::exit_code::RsconstructExitCode::ToolError,
                     "Some dependency installs failed",
-                ).into());
+                )
+                .into());
             }
-            println!("{}", color::green("All dependencies installed successfully."));
+            println!(
+                "{}",
+                color::green("All dependencies installed successfully.")
+            );
         }
     }
 
@@ -893,7 +1074,8 @@ fn sanitize_node_id(prefix: &str, name: &str) -> String {
 }
 
 fn tools_graph_dot(tool_map: &BTreeMap<String, Vec<String>>) -> String {
-    let mut out = String::from("digraph tools {\n    rankdir=LR;\n    node [fontname=\"sans-serif\"];\n");
+    let mut out =
+        String::from("digraph tools {\n    rankdir=LR;\n    node [fontname=\"sans-serif\"];\n");
 
     // Collect unique processor names
     let mut processors: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
@@ -972,12 +1154,15 @@ fn tools_graph_json(tool_map: &BTreeMap<String, Vec<String>>) -> Result<String> 
         .map(|(tool, procs)| {
             let info = crate::tools::tool_info(tool);
             let install_methods = info
-                .map(|i| i.install_methods.iter().map(|m| {
-                    crate::json_output::ToolInstallMethodEntry {
-                        method: m.method.to_string(),
-                        command: m.command(),
-                    }
-                }).collect())
+                .map(|i| {
+                    i.install_methods
+                        .iter()
+                        .map(|m| crate::json_output::ToolInstallMethodEntry {
+                            method: m.method.to_string(),
+                            command: m.command(),
+                        })
+                        .collect()
+                })
                 .unwrap_or_default();
             crate::json_output::ToolListEntry {
                 tool: tool.clone(),
@@ -993,7 +1178,8 @@ fn tools_graph_json(tool_map: &BTreeMap<String, Vec<String>>) -> Result<String> 
 
 fn tools_graph_html(tool_map: &BTreeMap<String, Vec<String>>) -> String {
     let mermaid_content = tools_graph_mermaid(tool_map);
-    format!(r#"<!DOCTYPE html>
+    format!(
+        r#"<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -1026,7 +1212,8 @@ fn tools_graph_html(tool_map: &BTreeMap<String, Vec<String>>) -> String {
     </script>
 </body>
 </html>
-"#)
+"#
+    )
 }
 
 fn tools_graph_svg(

@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{Processor, SiblingFilter, run_command, anchor_display_dir, check_command_output};
+use crate::processors::{
+    Processor, SiblingFilter, anchor_display_dir, check_command_output, run_command,
+};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 /// Sphinx config. Custom: `working_dir`, `cache_output_dir`.
@@ -36,15 +38,17 @@ pub struct SphinxProcessor {
 
 impl SphinxProcessor {
     pub const fn new(config: SphinxConfig) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 
     /// Run sphinx-build from the project root.
     /// Source dir is the directory containing conf.py (e.g. "sphinx"),
     /// output dir is at project root level (e.g. "docs").
-    fn execute_sphinx(&self, ctx: &crate::build_context::BuildContext, conf_py: &Path) -> Result<()> {
+    fn execute_sphinx(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        conf_py: &Path,
+    ) -> Result<()> {
         let mut cmd = Command::new(&self.config.standard.command);
         let anchor_dir = crate::processors::parent_dir_or_empty(conf_py);
         // Source dir is the directory containing conf.py (e.g. "sphinx")
@@ -62,7 +66,10 @@ impl SphinxProcessor {
             cmd.current_dir(dir);
         }
         let output = run_command(ctx, &cmd)?;
-        check_command_output(&output, format_args!("sphinx-build in {}", anchor_display_dir(conf_py)))
+        check_command_output(
+            &output,
+            format_args!("sphinx-build in {}", anchor_display_dir(conf_py)),
+        )
     }
 }
 
@@ -70,7 +77,6 @@ impl Processor for SphinxProcessor {
     fn scan_config(&self) -> &crate::config::StandardConfig {
         &self.config.standard
     }
-
 
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
@@ -84,26 +90,48 @@ impl Processor for SphinxProcessor {
         vec![self.config.standard.command.clone(), "python3".to_string()]
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let Some(files) = crate::processors::scan_or_skip(&self.config.standard, file_index) else {
             return Ok(());
         };
-        let hash = Some(output_config_hash(&self.config, &crate::config::checksum_fields_of(instance_name)));
+        let hash = Some(output_config_hash(
+            &self.config,
+            &crate::config::checksum_fields_of(instance_name),
+        ));
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
         let siblings = SiblingFilter {
             extensions: &[".rst", ".py", ".md"],
             excludes: &["/.git/", "/out/", "/.rsconstruct/", "/_build/", "/docs/"],
         };
         for anchor in files {
-            let anchor_dir = anchor.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+            let anchor_dir = anchor
+                .parent()
+                .map(std::path::Path::to_path_buf)
+                .unwrap_or_default();
             let sibling_files = file_index.query(
-                &anchor_dir, siblings.extensions, siblings.excludes, &[], &[], &[],
+                &anchor_dir,
+                siblings.extensions,
+                siblings.excludes,
+                &[],
+                &[],
+                &[],
             );
             let inputs = crate::processors::build_anchor_inputs(&anchor, &sibling_files, &extra);
             if self.config.cache_output_dir {
                 // output_dir is at project root, NOT joined with anchor_dir
                 let output_dir = PathBuf::from(&self.config.standard.output_dir);
-                graph.add_product_with_output_dir(inputs, vec![], instance_name, hash.clone(), output_dir)?;
+                graph.add_product_with_output_dir(
+                    inputs,
+                    vec![],
+                    instance_name,
+                    hash.clone(),
+                    output_dir,
+                )?;
             } else {
                 graph.add_product(inputs, vec![], instance_name, hash.clone())?;
             }

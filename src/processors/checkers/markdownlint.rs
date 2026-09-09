@@ -20,9 +20,7 @@ pub struct MarkdownlintProcessor {
 
 impl MarkdownlintProcessor {
     pub const fn new(config: MarkdownlintConfig) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 }
 
@@ -41,10 +39,18 @@ impl Processor for MarkdownlintProcessor {
         vec![self.config.standard.command.clone()]
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         crate::processors::discover_checker_products(
-            graph, &self.config.standard, file_index,
-            &self.config.standard.dep_inputs, &self.config.standard.dep_auto,
+            graph,
+            &self.config.standard,
+            file_index,
+            &self.config.standard.dep_inputs,
+            &self.config.standard.dep_auto,
             &self.config,
             &crate::config::checksum_fields_of(instance_name),
             instance_name,

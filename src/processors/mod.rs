@@ -1,7 +1,7 @@
 mod checkers;
+mod creators;
 mod explicit;
 pub mod generators;
-mod creators;
 pub mod lua;
 
 use anyhow::{Context, Result};
@@ -16,8 +16,8 @@ use std::time::Duration;
 
 use crate::color;
 use crate::config::{
-    output_config_hash, resolve_extra_inputs,
-    CheckerConfigWithCommand, SimpleCheckerParams, StandardConfig,
+    CheckerConfigWithCommand, SimpleCheckerParams, StandardConfig, output_config_hash,
+    resolve_extra_inputs,
 };
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
@@ -66,7 +66,6 @@ pub fn parent_dir_or_empty(path: &Path) -> &Path {
     path.parent().unwrap_or_else(|| Path::new(""))
 }
 
-
 // Thread-local holding the current processor's declared tools.
 // Set before execute()/execute_batch() and cleared after.
 // Used by the check in run_command_inner() to catch undeclared tool usage.
@@ -111,9 +110,7 @@ impl Drop for ToolCheckGuard {
 /// Format a `Command` as a shell-like string for display.
 pub fn format_command(cmd: &Command) -> String {
     let program = cmd.get_program().to_string_lossy();
-    let args: Vec<_> = cmd.get_args()
-        .map(|a| a.to_string_lossy())
-        .collect();
+    let args: Vec<_> = cmd.get_args().map(|a| a.to_string_lossy()).collect();
     if args.is_empty() {
         program.into_owned()
     } else {
@@ -124,14 +121,20 @@ pub fn format_command(cmd: &Command) -> String {
 /// If --show-child-processes is enabled, print the command that is about to be executed.
 pub fn log_command(cmd: &Command) {
     if crate::runtime_flags::show_child_processes() {
-        let cwd = cmd.get_current_dir()
+        let cwd = cmd
+            .get_current_dir()
             .map(|p| p.display().to_string())
             .unwrap_or_default();
         if cwd.is_empty() {
             eprintln!("{} {}", color::dim("[exec]"), format_command(cmd));
         } else {
             let cwd_info = format!("(in {cwd})");
-            eprintln!("{} {} {}", color::dim("[exec]"), format_command(cmd), color::dim(&cwd_info));
+            eprintln!(
+                "{} {} {}",
+                color::dim("[exec]"),
+                format_command(cmd),
+                color::dim(&cwd_info)
+            );
         }
     }
 }
@@ -175,7 +178,8 @@ fn run_command_inner(
     let program = cmd.get_program().to_os_string();
     let args: Vec<_> = cmd.get_args().map(std::ffi::OsStr::to_os_string).collect();
     let current_dir = cmd.get_current_dir().map(std::path::Path::to_path_buf);
-    let envs: Vec<_> = cmd.get_envs()
+    let envs: Vec<_> = cmd
+        .get_envs()
         .filter_map(|(k, v)| v.map(|val| (k.to_os_string(), val.to_os_string())))
         .collect();
 
@@ -290,12 +294,19 @@ pub fn run_command(ctx: &crate::build_context::BuildContext, cmd: &Command) -> R
     run_command_inner(ctx, cmd, show, ctx.command_timeout(), None)
 }
 
-pub fn run_command_with_timeout(ctx: &crate::build_context::BuildContext, cmd: &Command, timeout: Duration) -> Result<Output> {
+pub fn run_command_with_timeout(
+    ctx: &crate::build_context::BuildContext,
+    cmd: &Command,
+    timeout: Duration,
+) -> Result<Output> {
     let show = crate::runtime_flags::show_output();
     run_command_inner(ctx, cmd, show, Some(timeout), None)
 }
 
-pub fn run_command_capture(ctx: &crate::build_context::BuildContext, cmd: &Command) -> Result<Output> {
+pub fn run_command_capture(
+    ctx: &crate::build_context::BuildContext,
+    cmd: &Command,
+) -> Result<Output> {
     run_command_inner(ctx, cmd, false, ctx.command_timeout(), None)
 }
 
@@ -312,7 +323,6 @@ pub fn run_command_with_stdin(
 ) -> Result<Output> {
     run_command_inner(ctx, cmd, false, ctx.command_timeout(), Some(stdin_data))
 }
-
 
 /// Check that a command exited successfully.
 /// On failure, includes any captured stdout/stderr in the error message for debugging.
@@ -378,19 +388,21 @@ pub fn flush_words(
     let mut known: HashSet<String> = existing.clone();
     match std::fs::read_to_string(words_path) {
         Ok(content) => {
-            known.extend(content.lines()
-                .map(str::trim)
-                .filter(|l| !l.is_empty())
-                .map(str::to_string));
+            known.extend(
+                content
+                    .lines()
+                    .map(str::trim)
+                    .filter(|l| !l.is_empty())
+                    .map(str::to_string),
+            );
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => {
-            return Err(e).with_context(|| format!("Failed to read words file: {}", words_path.display()));
+            return Err(e)
+                .with_context(|| format!("Failed to read words file: {}", words_path.display()));
         }
     }
-    let to_add: Vec<_> = new_words.iter()
-        .filter(|w| !known.contains(*w))
-        .collect();
+    let to_add: Vec<_> = new_words.iter().filter(|w| !known.contains(*w)).collect();
     if to_add.is_empty() {
         return Ok(());
     }
@@ -405,14 +417,21 @@ pub fn flush_words(
         .append(true)
         .open(words_path)
         .with_context(|| format!("Failed to open words file: {}", words_path.display()))?;
-    if !file_exists
-        && let Some(header) = header_line {
-            writeln!(file, "{header}")
-                .with_context(|| format!("Failed to write header to words file: {}", words_path.display()))?;
+    if !file_exists && let Some(header) = header_line {
+        writeln!(file, "{header}").with_context(|| {
+            format!(
+                "Failed to write header to words file: {}",
+                words_path.display()
+            )
+        })?;
     }
     for word in &sorted {
-        writeln!(file, "{word}")
-            .with_context(|| format!("Failed to append word to words file: {}", words_path.display()))?;
+        writeln!(file, "{word}").with_context(|| {
+            format!(
+                "Failed to append word to words file: {}",
+                words_path.display()
+            )
+        })?;
     }
     if crate::json_output::human_output_enabled() {
         println!("Added {} word(s) to {}", sorted.len(), words_path.display());
@@ -447,9 +466,19 @@ pub fn clean_output_dir(product: &Product, processor_name: &str, verbose: bool) 
     for output_dir in &product.output_dirs {
         if output_dir.exists() {
             if verbose {
-                println!("Removing {} output directory: {}", processor_name, output_dir.display());
+                println!(
+                    "Removing {} output directory: {}",
+                    processor_name,
+                    output_dir.display()
+                );
             }
-            crate::errors::ctx(fs::remove_dir_all(output_dir.as_ref()), &format!("Failed to remove output directory: {}", output_dir.display()))?;
+            crate::errors::ctx(
+                fs::remove_dir_all(output_dir.as_ref()),
+                &format!(
+                    "Failed to remove output directory: {}",
+                    output_dir.display()
+                ),
+            )?;
             count += 1;
         }
     }
@@ -458,7 +487,11 @@ pub fn clean_output_dir(product: &Product, processor_name: &str, verbose: bool) 
 
 /// Build the input list for creators: anchor first, then sibling files
 /// (excluding the anchor to avoid duplicates), then extra inputs.
-pub fn build_anchor_inputs(anchor: &Path, sibling_files: &[PathBuf], extra: &[PathBuf]) -> Vec<PathBuf> {
+pub fn build_anchor_inputs(
+    anchor: &Path,
+    sibling_files: &[PathBuf],
+    extra: &[PathBuf],
+) -> Vec<PathBuf> {
     let mut inputs: Vec<PathBuf> = Vec::with_capacity(1 + sibling_files.len() + extra.len());
     inputs.push(anchor.to_path_buf());
     for file in sibling_files {
@@ -472,7 +505,10 @@ pub fn build_anchor_inputs(anchor: &Path, sibling_files: &[PathBuf], extra: &[Pa
 
 /// Scan and skip-if-empty, the pattern creators repeat in their `discover()`
 /// methods. Returns None if no files were found, otherwise the file list.
-pub fn scan_or_skip(scan: &crate::config::StandardConfig, file_index: &FileIndex) -> Option<Vec<PathBuf>> {
+pub fn scan_or_skip(
+    scan: &crate::config::StandardConfig,
+    file_index: &FileIndex,
+) -> Option<Vec<PathBuf>> {
     let files = file_index.scan(scan, true);
     if files.is_empty() {
         return None;
@@ -494,8 +530,13 @@ pub fn clean_outputs(product: &Product, label: &str, verbose: bool) -> Result<us
                 }
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(anyhow::Error::from(e)
-                .context(format!("Failed to remove {} output: {}", label, output.display()))),
+            Err(e) => {
+                return Err(anyhow::Error::from(e).context(format!(
+                    "Failed to remove {} output: {}",
+                    label,
+                    output.display()
+                )));
+            }
         }
     }
     Ok(count)
@@ -535,7 +576,16 @@ pub fn discover_directory_products(
     graph: &mut BuildGraph,
     opts: DirectoryProductOpts<'_, impl serde::Serialize>,
 ) -> Result<()> {
-    let DirectoryProductOpts { scan, file_index, dep_inputs, cfg_hash, checksum_fields, siblings, processor_name, output_dir_name } = opts;
+    let DirectoryProductOpts {
+        scan,
+        file_index,
+        dep_inputs,
+        cfg_hash,
+        checksum_fields,
+        siblings,
+        processor_name,
+        output_dir_name,
+    } = opts;
     let files = file_index.scan(scan, true);
     if files.is_empty() {
         return Ok(());
@@ -545,7 +595,10 @@ pub fn discover_directory_products(
     let extra = resolve_extra_inputs(dep_inputs)?;
 
     for anchor in files {
-        let anchor_dir = anchor.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+        let anchor_dir = anchor
+            .parent()
+            .map(std::path::Path::to_path_buf)
+            .unwrap_or_default();
 
         // Collect all matching sibling files under the anchor's directory as inputs
         let sibling_files = file_index.query(
@@ -565,7 +618,13 @@ pub fn discover_directory_products(
             } else {
                 anchor_dir.join(dir_name)
             };
-            graph.add_product_with_output_dir(inputs, vec![], processor_name, hash.clone(), output_dir)?;
+            graph.add_product_with_output_dir(
+                inputs,
+                vec![],
+                processor_name,
+                hash.clone(),
+                output_dir,
+            )?;
         } else {
             // Empty outputs: cache entry = success record
             graph.add_product(inputs, vec![], processor_name, hash.clone())?;
@@ -630,8 +689,13 @@ pub fn checker_auto_detect(scan: &crate::config::StandardConfig, file_index: &Fi
 /// Run a command in the parent directory of an anchor file (e.g., Makefile, Cargo.toml).
 /// Sets `current_dir` to the parent directory (unless it's the project root).
 /// Returns a display-friendly directory name for error messages.
-pub fn run_in_anchor_dir(ctx: &crate::build_context::BuildContext, cmd: &mut Command, anchor: &Path) -> Result<Output> {
-    let anchor_dir = anchor.parent()
+pub fn run_in_anchor_dir(
+    ctx: &crate::build_context::BuildContext,
+    cmd: &mut Command,
+    anchor: &Path,
+) -> Result<Output> {
+    let anchor_dir = anchor
+        .parent()
         .context("Anchor file has no parent directory")?;
     if !anchor_dir.as_os_str().is_empty() {
         cmd.current_dir(anchor_dir);
@@ -642,8 +706,15 @@ pub fn run_in_anchor_dir(ctx: &crate::build_context::BuildContext, cmd: &mut Com
 /// Format the parent directory of an anchor file for display.
 /// Returns `"."` for root-level files.
 pub fn anchor_display_dir(anchor: &Path) -> &str {
-    anchor.parent()
-        .and_then(|p| if p.as_os_str().is_empty() { None } else { p.to_str() })
+    anchor
+        .parent()
+        .and_then(|p| {
+            if p.as_os_str().is_empty() {
+                None
+            } else {
+                p.to_str()
+            }
+        })
         .unwrap_or(".")
 }
 
@@ -695,7 +766,11 @@ pub fn run_checker(
 /// re-pays `base_len` (tool + subcommand + config args). A single path longer
 /// than the limit still gets its own over-limit chunk so packing always makes
 /// progress.
-fn checker_chunk_ranges(base_len: usize, files: &[&Path], max_arg_len: usize) -> Vec<(usize, usize)> {
+fn checker_chunk_ranges(
+    base_len: usize,
+    files: &[&Path],
+    max_arg_len: usize,
+) -> Vec<(usize, usize)> {
     let mut ranges = Vec::new();
     let mut chunk_start = 0;
     while chunk_start < files.len() {
@@ -740,14 +815,14 @@ fn run_checker_once(
 /// own result, so under --keep-going one bad file fails only its own product
 /// instead of the whole chunk (the processor contract requires per-file
 /// results from internal processors).
-pub fn execute_checker_batch_per_file<F>(
-    products: &[&Product],
-    check_fn: F,
-) -> Vec<Result<()>>
+pub fn execute_checker_batch_per_file<F>(products: &[&Product], check_fn: F) -> Vec<Result<()>>
 where
     F: Fn(&Path) -> Result<()>,
 {
-    products.iter().map(|p| check_fn(p.primary_input())).collect()
+    products
+        .iter()
+        .map(|p| check_fn(p.primary_input()))
+        .collect()
 }
 
 /// Single-invocation batch execution for external-tool checkers. The tool
@@ -761,15 +836,16 @@ pub fn execute_checker_batch<F>(
 where
     F: Fn(&crate::build_context::BuildContext, &[&Path]) -> Result<()>,
 {
-    let input_paths: Vec<&Path> = products.iter()
-        .map(|p| p.primary_input())
-        .collect();
+    let input_paths: Vec<&Path> = products.iter().map(|p| p.primary_input()).collect();
 
     match batch_fn(ctx, &input_paths) {
         Ok(()) => products.iter().map(|_| Ok(())).collect(),
         Err(e) => {
             let err_msg = e.to_string();
-            products.iter().map(|_| Err(anyhow::anyhow!("{err_msg}"))).collect()
+            products
+                .iter()
+                .map(|_| Err(anyhow::anyhow!("{err_msg}")))
+                .collect()
         }
     }
 }
@@ -782,7 +858,8 @@ pub fn execute_generator_batch<F>(
 where
     F: Fn(&crate::build_context::BuildContext, &[(&Path, &Path)]) -> Result<()>,
 {
-    let pairs: Vec<(&Path, &Path)> = products.iter()
+    let pairs: Vec<(&Path, &Path)> = products
+        .iter()
         .map(|p| (p.primary_input(), p.primary_output()))
         .collect();
 
@@ -790,7 +867,10 @@ where
         Ok(()) => products.iter().map(|_| Ok(())).collect(),
         Err(e) => {
             let err_msg = e.to_string();
-            products.iter().map(|_| Err(anyhow::anyhow!("{err_msg}"))).collect()
+            products
+                .iter()
+                .map(|_| Err(anyhow::anyhow!("{err_msg}")))
+                .collect()
         }
     }
 }
@@ -825,8 +905,7 @@ pub type ProcessorMap = HashMap<String, Box<dyn Processor>>;
 ///
 /// This design ensures that `rsconstruct clean && rsconstruct build` is fast for all types - generators
 /// restore from cache, checkers skip entirely, creators re-run only when inputs change.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(strum::EnumIter)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumIter)]
 pub enum ProcessorType {
     /// Generates new output files from input files (e.g., tera, `cc_single_file`).
     /// Products have non-empty `outputs` which are cached and can be restored.
@@ -861,14 +940,17 @@ impl ProcessorType {
     /// Returns a human-readable description of this processor type.
     pub const fn description(self) -> &'static str {
         match self {
-            Self::Generator => "Generates output files from input files (1 input -> 1 output per format)",
+            Self::Generator => {
+                "Generates output files from input files (1 input -> 1 output per format)"
+            }
             Self::Checker => "Validates input files without producing outputs",
             Self::Creator => "Runs a command and caches declared output files and directories",
-            Self::Explicit => "Many inputs aggregated into (possibly) many output files and/or directories",
+            Self::Explicit => {
+                "Many inputs aggregated into (possibly) many output files and/or directories"
+            }
             Self::Lua => "User-defined processor implemented in Lua via the plugin runtime",
         }
     }
-
 }
 
 /// Helper namespace for processor boilerplate (`config_json`, clean, `clean_output_dir`).
@@ -932,7 +1014,6 @@ impl ProcessorBase {
 ///
 /// Must be Sync + Send for parallel execution support.
 pub trait Processor: Sync + Send {
-
     /// Access the standard config fields shared by every processor.
     ///
     /// Required, and the single accessor: there used to be a second,
@@ -946,13 +1027,32 @@ pub trait Processor: Sync + Send {
 
     /// Discover all products this processor can produce.
     /// Default: standard checker discover using `dep_inputs/dep_auto` from `scan_config`.
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let cfg = self.scan_config();
-        discover_checker_products(graph, cfg, file_index, &cfg.dep_inputs, &cfg.dep_auto, cfg, <crate::config::StandardConfig as crate::config::KnownFields>::checksum_fields(), instance_name)
+        discover_checker_products(
+            graph,
+            cfg,
+            file_index,
+            &cfg.dep_inputs,
+            &cfg.dep_auto,
+            cfg,
+            <crate::config::StandardConfig as crate::config::KnownFields>::checksum_fields(),
+            instance_name,
+        )
     }
 
     /// Discover products for clean operation (outputs only, skip expensive dependency scanning).
-    fn discover_for_clean(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover_for_clean(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         self.discover(graph, file_index, instance_name)
     }
 
@@ -986,7 +1086,11 @@ pub trait Processor: Sync + Send {
     /// Execute multiple products in one invocation.
     /// Only called when the plugin's `supports_batch` flag is true AND the
     /// user config has `batch = true`.
-    fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
+    fn execute_batch(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        products: &[&Product],
+    ) -> Vec<Result<()>> {
         products.iter().map(|p| self.execute(ctx, p)).collect()
     }
 
@@ -1012,7 +1116,11 @@ pub trait Processor: Sync + Send {
 
     /// Fix multiple products in one invocation.
     /// Only called when `supports_fix_batch()` returns true.
-    fn fix_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
+    fn fix_batch(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        products: &[&Product],
+    ) -> Vec<Result<()>> {
         products.iter().map(|p| self.fix(ctx, p)).collect()
     }
 
@@ -1049,13 +1157,35 @@ impl SimpleChecker {
     }
 
     fn check_files(&self, ctx: &crate::build_context::BuildContext, files: &[&Path]) -> Result<()> {
-        let tool = self.config.standard.require_command(self.params.description)?;
+        let tool = self
+            .config
+            .standard
+            .require_command(self.params.description)?;
         if self.params.prepend_args.is_empty() {
-            run_checker(ctx, tool, self.params.subcommand, &self.config.standard.args, files, ctx.max_arg_len())
+            run_checker(
+                ctx,
+                tool,
+                self.params.subcommand,
+                &self.config.standard.args,
+                files,
+                ctx.max_arg_len(),
+            )
         } else {
-            let mut combined_args: Vec<String> = self.params.prepend_args.iter().map(std::string::ToString::to_string).collect();
+            let mut combined_args: Vec<String> = self
+                .params
+                .prepend_args
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect();
             combined_args.extend_from_slice(&self.config.standard.args);
-            run_checker(ctx, tool, self.params.subcommand, &combined_args, files, ctx.max_arg_len())
+            run_checker(
+                ctx,
+                tool,
+                self.params.subcommand,
+                &combined_args,
+                files,
+                ctx.max_arg_len(),
+            )
         }
     }
 
@@ -1064,14 +1194,36 @@ impl SimpleChecker {
     }
 
     fn fix_files(&self, ctx: &crate::build_context::BuildContext, files: &[&Path]) -> Result<()> {
-        let tool = self.config.standard.require_command(self.params.description)?;
+        let tool = self
+            .config
+            .standard
+            .require_command(self.params.description)?;
         let subcommand = self.params.fix_subcommand.or(self.params.subcommand);
         if self.params.fix_prepend_args.is_empty() {
-            run_checker(ctx, tool, subcommand, &self.config.standard.args, files, ctx.max_arg_len())
+            run_checker(
+                ctx,
+                tool,
+                subcommand,
+                &self.config.standard.args,
+                files,
+                ctx.max_arg_len(),
+            )
         } else {
-            let mut combined_args: Vec<String> = self.params.fix_prepend_args.iter().map(std::string::ToString::to_string).collect();
+            let mut combined_args: Vec<String> = self
+                .params
+                .fix_prepend_args
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect();
             combined_args.extend_from_slice(&self.config.standard.args);
-            run_checker(ctx, tool, subcommand, &combined_args, files, ctx.max_arg_len())
+            run_checker(
+                ctx,
+                tool,
+                subcommand,
+                &combined_args,
+                files,
+                ctx.max_arg_len(),
+            )
         }
     }
 }
@@ -1114,7 +1266,11 @@ impl Processor for SimpleChecker {
         self.check_files(ctx, &[product.primary_input()])
     }
 
-    fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
+    fn execute_batch(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        products: &[&Product],
+    ) -> Vec<Result<()>> {
         execute_checker_batch(ctx, products, |ctx, files| self.check_files(ctx, files))
     }
 
@@ -1126,7 +1282,11 @@ impl Processor for SimpleChecker {
         self.has_fix() && self.params.fix_batch.unwrap_or(self.config.standard.batch)
     }
 
-    fn fix_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
+    fn fix_batch(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        products: &[&Product],
+    ) -> Vec<Result<()>> {
         execute_checker_batch(ctx, products, |ctx, files| self.fix_files(ctx, files))
     }
 }
@@ -1183,10 +1343,7 @@ pub struct SimpleGenerator<C> {
 
 impl<C> SimpleGenerator<C> {
     pub const fn new(config: C, params: SimpleGeneratorParams<C>) -> Self {
-        Self {
-            config,
-            params,
-        }
+        Self { config, params }
     }
 }
 
@@ -1223,7 +1380,12 @@ where
         tools
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let scan = self.config.as_ref();
         let params = generators::DiscoverParams {
             scan,
@@ -1335,10 +1497,13 @@ mod tests {
                 param_sites += src.matches("SimpleGeneratorParams {").count();
             }
         }
-        assert_eq!(simple_generators.len(), param_sites,
+        assert_eq!(
+            simple_generators.len(),
+            param_sites,
             "SimpleGenerator construction sites and this list disagree — a \
              new SimpleGenerator must be added here so its is_native \
-             declarations stay pinned");
+             declarations stay pinned"
+        );
 
         for (name, params_native) in simple_generators {
             let registry_native = crate::registries::is_native(name);
@@ -1351,7 +1516,6 @@ mod tests {
         }
     }
 
-
     /// Chunks must respect the limit, and their concatenation must be
     /// exactly the input — no file dropped, none duplicated.
     #[test]
@@ -1363,8 +1527,11 @@ mod tests {
 
         assert_eq!(ranges, vec![(0, 2), (2, 4), (4, 6)]);
         for &(start, end) in &ranges {
-            let cost: usize = 10 + files[start..end].iter()
-                .map(|f| f.as_os_str().len() + 1).sum::<usize>();
+            let cost: usize = 10
+                + files[start..end]
+                    .iter()
+                    .map(|f| f.as_os_str().len() + 1)
+                    .sum::<usize>();
             assert!(cost <= 20, "chunk {start}..{end} costs {cost}");
         }
     }
@@ -1377,8 +1544,11 @@ mod tests {
         let small = PathBuf::from("ok");
         let files: Vec<&Path> = vec![long.as_path(), small.as_path()];
         let ranges = checker_chunk_ranges(5, &files, 20);
-        assert_eq!(ranges, vec![(0, 1), (1, 2)],
-            "oversized path alone, then the rest");
+        assert_eq!(
+            ranges,
+            vec![(0, 1), (1, 2)],
+            "oversized path alone, then the rest"
+        );
     }
 
     /// Every chunk re-pays the base command length — with a base that
@@ -1389,8 +1559,11 @@ mod tests {
         let files: Vec<&Path> = bufs.iter().map(PathBuf::as_path).collect();
         // base 18 + one file of cost 2 = 20; a second file would need 22.
         let ranges = checker_chunk_ranges(18, &files, 20);
-        assert_eq!(ranges.len(), files.len(),
-            "base_len must be budgeted in every chunk, not only the first");
+        assert_eq!(
+            ranges.len(),
+            files.len(),
+            "base_len must be budgeted in every chunk, not only the first"
+        );
     }
 
     /// External-tool batches have one exit status for the whole chunk, so a
@@ -1400,7 +1573,8 @@ mod tests {
         let ctx = crate::build_context::BuildContext::new();
         let mut g = crate::graph::BuildGraph::new();
         for name in ["a.py", "b.py", "c.py"] {
-            g.add_product(vec![PathBuf::from(name)], vec![], "check", None).unwrap();
+            g.add_product(vec![PathBuf::from(name)], vec![], "check", None)
+                .unwrap();
         }
         let products: Vec<&crate::graph::Product> = g.products().iter().collect();
 
@@ -1424,7 +1598,8 @@ mod tests {
     fn checker_batch_per_file_fails_only_its_own_product() {
         let mut g = crate::graph::BuildGraph::new();
         for name in ["good1.py", "bad.py", "good2.py"] {
-            g.add_product(vec![PathBuf::from(name)], vec![], "check", None).unwrap();
+            g.add_product(vec![PathBuf::from(name)], vec![], "check", None)
+                .unwrap();
         }
         let products: Vec<&crate::graph::Product> = g.products().iter().collect();
 
@@ -1453,8 +1628,11 @@ mod tests {
         let mut cmd = Command::new("cat");
         let output = run_command_with_stdin(&ctx, &cmd, payload.as_bytes()).unwrap();
         assert!(output.status.success());
-        assert_eq!(output.stdout.len(), payload.len(),
-            "cat must echo every byte we wrote");
+        assert_eq!(
+            output.stdout.len(),
+            payload.len(),
+            "cat must echo every byte we wrote"
+        );
 
         // A child that ignores stdin entirely must not hang or error: it
         // closes the pipe early (EPIPE on our side), which is normal.

@@ -2,7 +2,6 @@
 #![warn(clippy::pedantic)]
 #![warn(clippy::nursery)]
 #![deny(warnings)]
-
 // The pedantic/nursery allow list. Every entry below is a decision, not a
 // backlog item: each was measured, the alternative was written out, and the
 // alternative lost. Lints that were merely noisy have already been removed
@@ -21,49 +20,40 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_sign_loss)]
-
 // Local `static REGEX: OnceLock<Regex>` declarations sit immediately above
 // the `get_or_init` that uses them — 8 of them in analyzers/tera.rs alone.
 // Hoisting them to the top of the function to satisfy this lint would
 // separate each regex from the code explaining what it matches.
 #![allow(clippy::items_after_statements)]
-
 // Match arms are kept separate when they mean different things, even where
 // they currently share a body. Merging them optimizes for today's
 // implementation at the cost of the arm list no longer reading as an
 // enumeration of the cases.
 #![allow(clippy::match_same_arms)]
-
 // Fires on trait implementations whose signature is fixed by the trait, and
 // on `by value` suggestions that would force callers to clone.
 #![allow(clippy::needless_pass_by_value)]
-
 // Suggests `map_or`/`map_or_else`, which is less readable than `if let`
 // once the branches are more than an expression each. Where the branch
 // really is trivial, `is_ok_and`/`is_some_and` is the better form and is
 // used directly — clippy's own `unnecessary_map_or` lint agrees.
 #![allow(clippy::option_if_let_else)]
-
 // Fires on the CLI dispatch match in main.rs and the per-command handlers.
 // These are flat dispatch tables; splitting them produces indirection
 // without reducing the amount to read.
 #![allow(clippy::too_many_lines)]
-
 // Trait methods that don't happen to read `self` in one implementation.
 // The signature belongs to the trait, not the impl.
 #![allow(clippy::unused_self)]
-
 // Fires on doc comments containing Rust array/slice literals like
 // `["a", "b"]`, which it mistakes for intra-doc links. Every hit in this
 // codebase is that false positive, so there is nothing to fix per-site.
 #![allow(clippy::doc_link_with_quotes)]
-
 // CLI argument structs and config structs are flag bags by nature — clap
 // derives one bool per `--flag`, and the config mirrors the TOML. Grouping
 // them into sub-structs to satisfy a 3-bool limit would obscure the
 // one-field-per-option mapping that makes them readable.
 #![allow(clippy::struct_excessive_bools)]
-
 // Mutex/lock guard tightening. The lint flags every guard whose scope
 // extends past the last use, even by one statement. In practice our
 // guards are held for short cache lookups and ad-hoc tightening
@@ -72,9 +62,6 @@
 // shows real contention.
 #![allow(clippy::significant_drop_tightening)]
 
-
-mod registries;
-mod errors;
 mod analyzers;
 mod build_context;
 mod builder;
@@ -87,6 +74,7 @@ mod db;
 mod deps_cache;
 mod display;
 mod download;
+mod errors;
 mod executor;
 mod exit_code;
 mod file_index;
@@ -99,21 +87,22 @@ mod phases;
 mod platform;
 mod processors;
 mod progress;
-pub(crate) mod word_manager;
-mod runtime_flags;
+mod registries;
 mod remote_cache;
+mod runtime_flags;
 mod stats;
 mod tables;
 mod tool_lock;
 mod tools;
 mod watcher;
 mod webcache;
+pub(crate) mod word_manager;
 
-use anyhow::{Context, bail, Result};
+use anyhow::{Context, Result, bail};
+use builder::Builder;
 use cli::{BuildPhase, CleanAction, Commands, WebCacheAction, parse_shell, print_completions};
 use config::Config;
-use builder::Builder;
-use exit_code::{RsconstructExitCode, RsconstructError, classify_error};
+use exit_code::{RsconstructError, RsconstructExitCode, classify_error};
 use std::env;
 use std::fs;
 use std::sync::Arc;
@@ -149,11 +138,7 @@ fn main() -> std::process::ExitCode {
     // Final status line — only for build/watch/clean where pass/fail matters.
     // Suppressed in quiet mode, JSON mode, and for informational commands.
     if show_status && !runtime_flags::quiet_or_default() && !runtime_flags::json_mode_or_default() {
-        let line = format!(
-            "Exited with {} ({})",
-            exit_code.name(),
-            exit_code.code(),
-        );
+        let line = format!("Exited with {} ({})", exit_code.name(), exit_code.code());
         if exit_code == RsconstructExitCode::Success {
             eprintln!("{}", color::green(&line));
         } else {
@@ -175,17 +160,18 @@ fn run() -> (Result<()>, bool) {
     let t = Instant::now();
     // JSON mode never emits color: stdout must be machine-readable, and
     // --color=always must not smuggle ANSI escapes into it.
-    let color_enabled = !cli.json && match cli.color {
-        cli::ColorMode::Always => true,
-        cli::ColorMode::Never => false,
-        cli::ColorMode::Auto => {
-            // Disable if NO_COLOR is set to a non-empty value (per the
-            // no-color.org spec, an empty value does NOT disable color)
-            // or if stdout is not a tty.
-            std::env::var_os("NO_COLOR").is_none_or(|v| v.is_empty())
-                && std::io::IsTerminal::is_terminal(&std::io::stdout())
-        }
-    };
+    let color_enabled = !cli.json
+        && match cli.color {
+            cli::ColorMode::Always => true,
+            cli::ColorMode::Never => false,
+            cli::ColorMode::Auto => {
+                // Disable if NO_COLOR is set to a non-empty value (per the
+                // no-color.org spec, an empty value does NOT disable color)
+                // or if stdout is not a tty.
+                std::env::var_os("NO_COLOR").is_none_or(|v| v.is_empty())
+                    && std::io::IsTerminal::is_terminal(&std::io::stdout())
+            }
+        };
     runtime_flags::init(runtime_flags::RuntimeFlags {
         show_child_processes: cli.show_child_processes,
         show_output: cli.show_output,
@@ -237,88 +223,112 @@ fn run() -> (Result<()>, bool) {
     }
     let init_dur = t.elapsed();
 
-    let show_status = matches!(cli.command,
-        Commands::Build { .. } | Commands::Watch { .. } | Commands::Clean { .. } | Commands::Fix { .. }
+    let show_status = matches!(
+        cli.command,
+        Commands::Build { .. }
+            | Commands::Watch { .. }
+            | Commands::Clean { .. }
+            | Commands::Fix { .. }
     );
 
     // Wrap the body in a closure so `?` works naturally inside, then pair the
     // result with show_status at the end.
     let result = (|| -> Result<()> {
-
-    match cli.command {
-        Commands::Build { force, dry_run, verify_tool_versions, stop_after, ref shared } => {
-            if dry_run {
-                let builder = Builder::new_with_overrides(&ctx, &shared.iset, &shared.pset)?;
-                builder.dry_run(&ctx, force, shared.explain)?;
-            } else {
-                let t = Instant::now();
-                let mut builder = Builder::new_with_overrides(&ctx, &shared.iset, &shared.pset)?;
-                let builder_new_dur = t.elapsed();
-                let t = Instant::now();
-                if verify_tool_versions {
-                    builder.verify_tool_versions(&ctx)?;
-                }
-                let verify_tools_dur = t.elapsed();
-                let init_timings = vec![
-                    ("cli_parse".to_string(), cli_parse_dur),
-                    ("init".to_string(), init_dur),
-                    ("builder_new".to_string(), builder_new_dur),
-                    ("verify_tools".to_string(), verify_tools_dur),
-                ];
-                let opts = shared.to_build_options(&cli, force, stop_after);
-                builder.build(&ctx, &opts, init_timings)?;
-            }
-        }
-        Commands::Cache { action } => {
-            builder::cache_cmd::handle(&ctx, action)?;
-        }
-        Commands::Clean { action } => {
-            let action = action.ok_or_else(|| anyhow::anyhow!(
-                "Missing subcommand. Usage: rsconstruct clean <outputs|all|git|unknown>"
-            ))?;
-            match action {
-                CleanAction::Outputs { processors, no_empty_dirs } => {
-                    let builder = Builder::new(&ctx)?;
-                    let filter = if processors.is_empty() { None } else { Some(processors) };
-                    builder.clean(&ctx, cli.verbose, filter.as_deref(), !no_empty_dirs)?;
-                }
-                CleanAction::All => {
-                    let builder = Builder::new(&ctx)?;
-                    builder.distclean()?;
-                }
-                CleanAction::Git => {
-                    let builder = Builder::new(&ctx)?;
-                    builder.hardclean(&ctx)?;
-                }
-                CleanAction::Unknown { dry_run, no_gitignore } => {
-                    let builder = Builder::new(&ctx)?;
-                    builder.clean_unknown(&ctx, !dry_run, cli.verbose, !no_gitignore)?;
+        match cli.command {
+            Commands::Build {
+                force,
+                dry_run,
+                verify_tool_versions,
+                stop_after,
+                ref shared,
+            } => {
+                if dry_run {
+                    let builder = Builder::new_with_overrides(&ctx, &shared.iset, &shared.pset)?;
+                    builder.dry_run(&ctx, force, shared.explain)?;
+                } else {
+                    let t = Instant::now();
+                    let mut builder =
+                        Builder::new_with_overrides(&ctx, &shared.iset, &shared.pset)?;
+                    let builder_new_dur = t.elapsed();
+                    let t = Instant::now();
+                    if verify_tool_versions {
+                        builder.verify_tool_versions(&ctx)?;
+                    }
+                    let verify_tools_dur = t.elapsed();
+                    let init_timings = vec![
+                        ("cli_parse".to_string(), cli_parse_dur),
+                        ("init".to_string(), init_dur),
+                        ("builder_new".to_string(), builder_new_dur),
+                        ("verify_tools".to_string(), verify_tools_dur),
+                    ];
+                    let opts = shared.to_build_options(&cli, force, stop_after);
+                    builder.build(&ctx, &opts, init_timings)?;
                 }
             }
-        }
-        Commands::Complete { shells } => {
-            let shells_to_generate = if shells.is_empty() {
-                // Load from config file
-                let config = Config::load()?;
-                let mut parsed_shells = Vec::new();
-                for shell_name in &config.completions.shells {
-                    match parse_shell(shell_name) {
-                        Some(shell) => parsed_shells.push(shell),
-                        None => return Err(crate::exit_code::config_error(
-                            format!("Unknown shell in config: {shell_name}"))),
+            Commands::Cache { action } => {
+                builder::cache_cmd::handle(&ctx, action)?;
+            }
+            Commands::Clean { action } => {
+                let action = action.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Missing subcommand. Usage: rsconstruct clean <outputs|all|git|unknown>"
+                    )
+                })?;
+                match action {
+                    CleanAction::Outputs {
+                        processors,
+                        no_empty_dirs,
+                    } => {
+                        let builder = Builder::new(&ctx)?;
+                        let filter = if processors.is_empty() {
+                            None
+                        } else {
+                            Some(processors)
+                        };
+                        builder.clean(&ctx, cli.verbose, filter.as_deref(), !no_empty_dirs)?;
+                    }
+                    CleanAction::All => {
+                        let builder = Builder::new(&ctx)?;
+                        builder.distclean()?;
+                    }
+                    CleanAction::Git => {
+                        let builder = Builder::new(&ctx)?;
+                        builder.hardclean(&ctx)?;
+                    }
+                    CleanAction::Unknown {
+                        dry_run,
+                        no_gitignore,
+                    } => {
+                        let builder = Builder::new(&ctx)?;
+                        builder.clean_unknown(&ctx, !dry_run, cli.verbose, !no_gitignore)?;
                     }
                 }
-                parsed_shells
-            } else {
-                shells
-            };
-
-            for shell in shells_to_generate {
-                print_completions(shell)?;
             }
-        }
-        Commands::Analyzers { action } => {
-            match &action {
+            Commands::Complete { shells } => {
+                let shells_to_generate = if shells.is_empty() {
+                    // Load from config file
+                    let config = Config::load()?;
+                    let mut parsed_shells = Vec::new();
+                    for shell_name in &config.completions.shells {
+                        match parse_shell(shell_name) {
+                            Some(shell) => parsed_shells.push(shell),
+                            None => {
+                                return Err(crate::exit_code::config_error(format!(
+                                    "Unknown shell in config: {shell_name}"
+                                )));
+                            }
+                        }
+                    }
+                    parsed_shells
+                } else {
+                    shells
+                };
+
+                for shell in shells_to_generate {
+                    print_completions(shell)?;
+                }
+            }
+            Commands::Analyzers { action } => match &action {
                 cli::AnalyzersAction::List => {
                     builder::analyzers::list_analyzers(cli.verbose);
                 }
@@ -341,124 +351,134 @@ fn run() -> (Result<()>, bool) {
                     let builder = Builder::new(&ctx)?;
                     builder.analyzers(&ctx, action, cli.verbose)?;
                 }
+            },
+            Commands::Doctor => {
+                let builder = Builder::new(&ctx)?;
+                builder.doctor(&ctx)?;
             }
-        }
-        Commands::Doctor => {
-            let builder = Builder::new(&ctx)?;
-            builder.doctor(&ctx)?;
-        }
-        Commands::Errors => {
-            list_exit_codes(cli.verbose)?;
-        }
-        Commands::Fix { action } => {
-            let builder = Builder::new(&ctx)?;
-            match action {
-                cli::FixAction::Run { processors } => {
-                    if processors.is_empty() {
-                        bail!("No processors specified. Usage: rsconstruct fix run <processor1,processor2,...>");
+            Commands::Errors => {
+                list_exit_codes(cli.verbose)?;
+            }
+            Commands::Fix { action } => {
+                let builder = Builder::new(&ctx)?;
+                match action {
+                    cli::FixAction::Run { processors } => {
+                        if processors.is_empty() {
+                            bail!(
+                                "No processors specified. Usage: rsconstruct fix run <processor1,processor2,...>"
+                            );
+                        }
+                        builder.fix(&ctx, Some(&processors))?;
                     }
-                    builder.fix(&ctx, Some(&processors))?;
-                }
-                cli::FixAction::List => {
-                    builder.fix_list()?;
+                    cli::FixAction::List => {
+                        builder.fix_list()?;
+                    }
                 }
             }
-        }
-        Commands::Graph { action } => {
-            let builder = Builder::new(&ctx)?;
-            builder.graph(&ctx, action)?;
-        }
-        Commands::Info { action } => {
-            match action {
+            Commands::Graph { action } => {
+                let builder = Builder::new(&ctx)?;
+                builder.graph(&ctx, action)?;
+            }
+            Commands::Info { action } => match action {
                 cli::InfoAction::Source => {
                     let builder = Builder::new(&ctx)?;
                     builder.info_source(&ctx)?;
                 }
+            },
+            Commands::Init => {
+                init_project()?;
             }
-        }
-        Commands::Init => {
-            init_project()?;
-        }
-        Commands::Pages { action } => {
-            match action {
-                cli::PagesAction::Dir => {
-                    config::Config::require_config()?;
-                    let config = config::Config::load()?;
-                    if json_output::is_json_mode() {
-                        println!("{}", serde_json::json!({
-                            "configured": config.pages.is_some(),
-                            "dir": config.pages.as_ref().map_or("", |p| p.dir.as_str()),
-                        }));
-                    } else if let Some(pages) = &config.pages {
-                        println!("{}", pages.dir);
+            Commands::Pages { action } => {
+                match action {
+                    cli::PagesAction::Dir => {
+                        config::Config::require_config()?;
+                        let config = config::Config::load()?;
+                        if json_output::is_json_mode() {
+                            println!(
+                                "{}",
+                                serde_json::json!({
+                                    "configured": config.pages.is_some(),
+                                    "dir": config.pages.as_ref().map_or("", |p| p.dir.as_str()),
+                                })
+                            );
+                        } else if let Some(pages) = &config.pages {
+                            println!("{}", pages.dir);
+                        }
+                        // Not configured: print nothing, exit 0 — CI branches on
+                        // empty output, not on exit codes.
                     }
-                    // Not configured: print nothing, exit 0 — CI branches on
-                    // empty output, not on exit codes.
                 }
             }
-        }
-        Commands::Hooks => {
-            list_hooks(cli.verbose)?;
-        }
-        Commands::Processors { action } => {
-            let has_config = std::path::Path::new("rsconstruct.toml").exists();
-            match action {
-                cli::ProcessorAction::List { ref processor_type } => {
-                    builder::processors::list_processors_no_config(cli.verbose, processor_type.as_deref())?;
-                }
-                cli::ProcessorAction::Types => {
-                    builder::processors::list_processor_types(cli.verbose)?;
-                }
-                cli::ProcessorAction::Recommend => {
-                    builder::processors::list_recommendations();
-                }
-                cli::ProcessorAction::Defconfig { ref pname } => {
-                    builder::processors::processor_defconfig(pname, cli.verbose)?;
-                }
-                cli::ProcessorAction::Add { ref pname, dry_run } => {
-                    builder::add_processor(pname, dry_run)?;
-                }
-                cli::ProcessorAction::Search { ref query } => {
-                    builder::processors::search_processors(query)?;
-                }
-                cli::ProcessorAction::Delete { ref iname } => {
-                    builder::smart::delete_processor(iname)?;
-                }
-                cli::ProcessorAction::Disable { ref iname } => {
-                    builder::smart::disable_processor(iname)?;
-                }
-                cli::ProcessorAction::Enable { ref iname } => {
-                    builder::smart::enable_processor(iname)?;
-                }
-                cli::ProcessorAction::Config { .. } if !has_config => {
-                    bail!("No rsconstruct.toml found. Use 'processors defconfig <name>' to see default config without a project.");
-                }
-                action => {
-                    let builder = Builder::new(&ctx)?;
-                    builder.processor(&ctx, action, cli.verbose)?;
+            Commands::Hooks => {
+                list_hooks(cli.verbose)?;
+            }
+            Commands::Processors { action } => {
+                let has_config = std::path::Path::new("rsconstruct.toml").exists();
+                match action {
+                    cli::ProcessorAction::List { ref processor_type } => {
+                        builder::processors::list_processors_no_config(
+                            cli.verbose,
+                            processor_type.as_deref(),
+                        )?;
+                    }
+                    cli::ProcessorAction::Types => {
+                        builder::processors::list_processor_types(cli.verbose)?;
+                    }
+                    cli::ProcessorAction::Recommend => {
+                        builder::processors::list_recommendations();
+                    }
+                    cli::ProcessorAction::Defconfig { ref pname } => {
+                        builder::processors::processor_defconfig(pname, cli.verbose)?;
+                    }
+                    cli::ProcessorAction::Add { ref pname, dry_run } => {
+                        builder::add_processor(pname, dry_run)?;
+                    }
+                    cli::ProcessorAction::Search { ref query } => {
+                        builder::processors::search_processors(query)?;
+                    }
+                    cli::ProcessorAction::Delete { ref iname } => {
+                        builder::smart::delete_processor(iname)?;
+                    }
+                    cli::ProcessorAction::Disable { ref iname } => {
+                        builder::smart::disable_processor(iname)?;
+                    }
+                    cli::ProcessorAction::Enable { ref iname } => {
+                        builder::smart::enable_processor(iname)?;
+                    }
+                    cli::ProcessorAction::Config { .. } if !has_config => {
+                        bail!(
+                            "No rsconstruct.toml found. Use 'processors defconfig <name>' to see default config without a project."
+                        );
+                    }
+                    action => {
+                        let builder = Builder::new(&ctx)?;
+                        builder.processor(&ctx, action, cli.verbose)?;
+                    }
                 }
             }
-        }
-        Commands::Product { action } => {
-            let builder = Builder::new(&ctx)?;
-            match action {
-                cli::ProductAction::Show { ref path } => {
-                    builder.product_show(&ctx, path, cli.verbose)?;
+            Commands::Product { action } => {
+                let builder = Builder::new(&ctx)?;
+                match action {
+                    cli::ProductAction::Show { ref path } => {
+                        builder.product_show(&ctx, path, cli.verbose)?;
+                    }
                 }
             }
-        }
-        Commands::Sloc { cocomo, salary } => {
-            // Generated files are not project code: exclude configured
-            // output roots from the count. Config::load falls back to
-            // defaults when no rsconstruct.toml exists, so sloc still works
-            // outside a project.
-            let config = Config::load()?;
-            let (exclude_roots, _) = config.file_index_walk_dirs();
-            let file_index = file_index::FileIndex::build_with_force_dirs(&[], &exclude_roots, config.build.warn_symlinks)?;
-            builder::sloc::run_sloc(&file_index, cocomo, salary)?;
-        }
-        Commands::Smart { action } => {
-            match action {
+            Commands::Sloc { cocomo, salary } => {
+                // Generated files are not project code: exclude configured
+                // output roots from the count. Config::load falls back to
+                // defaults when no rsconstruct.toml exists, so sloc still works
+                // outside a project.
+                let config = Config::load()?;
+                let (exclude_roots, _) = config.file_index_walk_dirs();
+                let file_index = file_index::FileIndex::build_with_force_dirs(
+                    &[],
+                    &exclude_roots,
+                    config.build.warn_symlinks,
+                )?;
+                builder::sloc::run_sloc(&file_index, cocomo, salary)?;
+            }
+            Commands::Smart { action } => match action {
                 cli::SmartAction::DisableAll => {
                     builder::smart::disable_all()?;
                 }
@@ -502,148 +522,180 @@ fn run() -> (Result<()>, bool) {
                     let empty = builder.no_file_processors(&ctx)?;
                     builder::smart::remove_no_file_processors(&empty)?;
                 }
+            },
+            Commands::Status { breakdown } => {
+                let builder = Builder::new(&ctx)?;
+                builder.status(&ctx, cli.verbose, breakdown)?;
             }
-        }
-        Commands::Status { breakdown } => {
-            let builder = Builder::new(&ctx)?;
-            builder.status(&ctx, cli.verbose, breakdown)?;
-        }
-        Commands::SymlinkInstall => {
-            let config = Config::load()?;
-            builder::symlink_install::run(&config.command.symlink_install)?;
-        }
-        Commands::Terms { action } => {
-            let config = Config::load()?;
-            let terms_config: processors::terms::TermsConfig =
-                config.processor.instance_config_or_default("terms")?;
-            match action {
-                cli::TermsAction::Fix { remove_non_terms } => {
-                    processors::terms::fix_all(&terms_config, remove_non_terms, config.build.warn_symlinks)?;
-                }
-                cli::TermsAction::Merge { path } => {
-                    processors::terms::merge_terms(&terms_config, &path)?;
-                }
-                cli::TermsAction::Stats => {
-                    processors::terms::stats(&terms_config)?;
-                }
+            Commands::SymlinkInstall => {
+                let config = Config::load()?;
+                builder::symlink_install::run(&config.command.symlink_install)?;
             }
-        }
-        Commands::Tags { action } => {
-            let config = Config::load()?;
-            let db_path = config.processor.instance_field_str("tags", "output")
-                .unwrap_or_else(|| "out/tags/tags.db".into());
-            let tags_dir = config.processor.instance_field_str("tags", "tags_dir")
-                .unwrap_or_else(|| "tags".into());
-            match action {
-                cli::TagsAction::Files { tags, or } => processors::tags_cmd::files_for_tags(&db_path, &tags, or)?,
-                cli::TagsAction::Grep { text, ignore_case } => processors::tags_cmd::grep_tags(&db_path, &text, ignore_case)?,
-                cli::TagsAction::List => processors::tags_cmd::list_tags(&db_path)?,
-                cli::TagsAction::Count => processors::tags_cmd::count_tags(&db_path)?,
-                cli::TagsAction::Tree => processors::tags_cmd::tree_tags(&db_path)?,
-                cli::TagsAction::Stats => processors::tags_cmd::stats_tags(&db_path)?,
-                cli::TagsAction::ForFile { path } => processors::tags_cmd::tags_for_file(&db_path, &path)?,
-                cli::TagsAction::Frontmatter { path } => processors::tags_cmd::frontmatter_for_file(&db_path, &path)?,
-                cli::TagsAction::Unused { strict } => processors::tags_cmd::unused_tags(&db_path, &tags_dir, strict)?,
-                cli::TagsAction::Validate => processors::tags_cmd::validate_tags(&db_path, &tags_dir)?,
-                cli::TagsAction::Matrix => processors::tags_cmd::matrix_tags(&db_path)?,
-                cli::TagsAction::Coverage => processors::tags_cmd::coverage_tags(&db_path)?,
-                cli::TagsAction::Orphans => processors::tags_cmd::orphan_files(&db_path)?,
-                cli::TagsAction::Check => {
-                    let tags_config: processors::tags_cmd::TagsConfig =
-                        config.processor.instance_config_or_default("tags")?;
-                    processors::tags_cmd::check_tags(&tags_config, config.build.warn_symlinks)?;
-                }
-                cli::TagsAction::Suggest { path } => {
-                    let tags_config: processors::tags_cmd::TagsConfig =
-                        config.processor.instance_config_or_default("tags")?;
-                    processors::tags_cmd::suggest_tags(&db_path, &path, &tags_config)?;
-                }
-                cli::TagsAction::Merge { path } => processors::tags_cmd::merge_tags(&tags_dir, &path)?,
-                cli::TagsAction::Collect => processors::tags_cmd::collect_tags(&db_path, &tags_dir)?,
-            }
-        }
-        Commands::Toml { action } => {
-            match action {
-                cli::TomlAction::Check => {
-                    config::Config::require_config()?;
-                    // Config::load() validates all fields — unknown fields, types, required fields.
-                    // If it succeeds, the config is valid.
-                    let _config = config::Config::load()?;
-                    if json_output::is_json_mode() {
-                        println!("{}", serde_json::json!({ "valid": true }));
-                    } else {
-                        output::info("rsconstruct.toml is valid.");
+            Commands::Terms { action } => {
+                let config = Config::load()?;
+                let terms_config: processors::terms::TermsConfig =
+                    config.processor.instance_config_or_default("terms")?;
+                match action {
+                    cli::TermsAction::Fix { remove_non_terms } => {
+                        processors::terms::fix_all(
+                            &terms_config,
+                            remove_non_terms,
+                            config.build.warn_symlinks,
+                        )?;
+                    }
+                    cli::TermsAction::Merge { path } => {
+                        processors::terms::merge_terms(&terms_config, &path)?;
+                    }
+                    cli::TermsAction::Stats => {
+                        processors::terms::stats(&terms_config)?;
                     }
                 }
             }
-        }
-        Commands::Functions { action } => {
-            use cli::FunctionsAction;
-            use processors::generators::tera::TERA_FUNCTIONS;
-            match action {
-                FunctionsAction::List => {
-                    if json_output::is_json_mode() {
-                        let arr: Vec<serde_json::Value> = TERA_FUNCTIONS.iter().map(|f| {
-                            serde_json::json!({
-                                "name": f.name,
-                                "summary": f.summary,
-                                "args": f.args,
-                                "returns": f.returns,
-                                "dep_tracking": f.dep_tracking,
-                                "example": f.example,
-                            })
-                        }).collect();
-                        println!("{}", serde_json::to_string_pretty(&serde_json::Value::Array(arr))?);
-                    } else {
-                        for f in TERA_FUNCTIONS {
-                            println!("{}({})", f.name, f.args);
-                            println!("  {}", f.summary);
-                            println!("  returns:       {}", f.returns);
-                            println!("  dep tracking:  {}", f.dep_tracking);
-                            println!("  example:       {}", f.example);
-                            println!();
+            Commands::Tags { action } => {
+                let config = Config::load()?;
+                let db_path = config
+                    .processor
+                    .instance_field_str("tags", "output")
+                    .unwrap_or_else(|| "out/tags/tags.db".into());
+                let tags_dir = config
+                    .processor
+                    .instance_field_str("tags", "tags_dir")
+                    .unwrap_or_else(|| "tags".into());
+                match action {
+                    cli::TagsAction::Files { tags, or } => {
+                        processors::tags_cmd::files_for_tags(&db_path, &tags, or)?;
+                    }
+                    cli::TagsAction::Grep { text, ignore_case } => {
+                        processors::tags_cmd::grep_tags(&db_path, &text, ignore_case)?;
+                    }
+                    cli::TagsAction::List => processors::tags_cmd::list_tags(&db_path)?,
+                    cli::TagsAction::Count => processors::tags_cmd::count_tags(&db_path)?,
+                    cli::TagsAction::Tree => processors::tags_cmd::tree_tags(&db_path)?,
+                    cli::TagsAction::Stats => processors::tags_cmd::stats_tags(&db_path)?,
+                    cli::TagsAction::ForFile { path } => {
+                        processors::tags_cmd::tags_for_file(&db_path, &path)?;
+                    }
+                    cli::TagsAction::Frontmatter { path } => {
+                        processors::tags_cmd::frontmatter_for_file(&db_path, &path)?;
+                    }
+                    cli::TagsAction::Unused { strict } => {
+                        processors::tags_cmd::unused_tags(&db_path, &tags_dir, strict)?;
+                    }
+                    cli::TagsAction::Validate => {
+                        processors::tags_cmd::validate_tags(&db_path, &tags_dir)?;
+                    }
+                    cli::TagsAction::Matrix => processors::tags_cmd::matrix_tags(&db_path)?,
+                    cli::TagsAction::Coverage => processors::tags_cmd::coverage_tags(&db_path)?,
+                    cli::TagsAction::Orphans => processors::tags_cmd::orphan_files(&db_path)?,
+                    cli::TagsAction::Check => {
+                        let tags_config: processors::tags_cmd::TagsConfig =
+                            config.processor.instance_config_or_default("tags")?;
+                        processors::tags_cmd::check_tags(&tags_config, config.build.warn_symlinks)?;
+                    }
+                    cli::TagsAction::Suggest { path } => {
+                        let tags_config: processors::tags_cmd::TagsConfig =
+                            config.processor.instance_config_or_default("tags")?;
+                        processors::tags_cmd::suggest_tags(&db_path, &path, &tags_config)?;
+                    }
+                    cli::TagsAction::Merge { path } => {
+                        processors::tags_cmd::merge_tags(&tags_dir, &path)?;
+                    }
+                    cli::TagsAction::Collect => {
+                        processors::tags_cmd::collect_tags(&db_path, &tags_dir)?;
+                    }
+                }
+            }
+            Commands::Toml { action } => {
+                match action {
+                    cli::TomlAction::Check => {
+                        config::Config::require_config()?;
+                        // Config::load() validates all fields — unknown fields, types, required fields.
+                        // If it succeeds, the config is valid.
+                        let _config = config::Config::load()?;
+                        if json_output::is_json_mode() {
+                            println!("{}", serde_json::json!({ "valid": true }));
+                        } else {
+                            output::info("rsconstruct.toml is valid.");
                         }
                     }
                 }
             }
-        }
-        Commands::Tools { action } => {
-            // Fall back to default config only if no config file exists.
-            // If config exists but is broken, fail — don't silently use defaults.
-            if std::path::Path::new("rsconstruct.toml").exists() {
-                let builder = Builder::new(&ctx)?;
-                builder.tools(&ctx, action, cli.verbose)?;
-            } else {
-                builder::tools::tools_no_config(&ctx, action, cli.verbose)?;
+            Commands::Functions { action } => {
+                use cli::FunctionsAction;
+                use processors::generators::tera::TERA_FUNCTIONS;
+                match action {
+                    FunctionsAction::List => {
+                        if json_output::is_json_mode() {
+                            let arr: Vec<serde_json::Value> = TERA_FUNCTIONS
+                                .iter()
+                                .map(|f| {
+                                    serde_json::json!({
+                                        "name": f.name,
+                                        "summary": f.summary,
+                                        "args": f.args,
+                                        "returns": f.returns,
+                                        "dep_tracking": f.dep_tracking,
+                                        "example": f.example,
+                                    })
+                                })
+                                .collect();
+                            println!(
+                                "{}",
+                                serde_json::to_string_pretty(&serde_json::Value::Array(arr))?
+                            );
+                        } else {
+                            for f in TERA_FUNCTIONS {
+                                println!("{}({})", f.name, f.args);
+                                println!("  {}", f.summary);
+                                println!("  returns:       {}", f.returns);
+                                println!("  dep tracking:  {}", f.dep_tracking);
+                                println!("  example:       {}", f.example);
+                                println!();
+                            }
+                        }
+                    }
+                }
             }
-        }
-        Commands::Version => {
-            if json_output::is_json_mode() {
-                let info = serde_json::json!({
-                    "version": env!("CARGO_PKG_VERSION"),
-                    "authors": env!("CARGO_PKG_AUTHORS"),
-                    "git_describe": env!("GIT_DESCRIBE"),
-                    "git_sha": env!("GIT_SHA"),
-                    "git_branch": env!("GIT_BRANCH"),
-                    "git_dirty": env!("GIT_DIRTY"),
-                    "rustc_semver": env!("RUSTC_SEMVER"),
-                    "rust_edition": env!("RUST_EDITION"),
-                    "build_timestamp": env!("BUILD_TIMESTAMP"),
-                });
-                println!("{}", serde_json::to_string_pretty(&info)?);
-            } else {
-                println!("rsconstruct {} by {}", env!("CARGO_PKG_VERSION"), env!("CARGO_PKG_AUTHORS"));
-                println!("GIT_DESCRIBE: {}", env!("GIT_DESCRIBE"));
-                println!("GIT_SHA: {}", env!("GIT_SHA"));
-                println!("GIT_BRANCH: {}", env!("GIT_BRANCH"));
-                println!("GIT_DIRTY: {}", env!("GIT_DIRTY"));
-                println!("RUSTC_SEMVER: {}", env!("RUSTC_SEMVER"));
-                println!("RUST_EDITION: {}", env!("RUST_EDITION"));
-                println!("BUILD_TIMESTAMP: {}", env!("BUILD_TIMESTAMP"));
+            Commands::Tools { action } => {
+                // Fall back to default config only if no config file exists.
+                // If config exists but is broken, fail — don't silently use defaults.
+                if std::path::Path::new("rsconstruct.toml").exists() {
+                    let builder = Builder::new(&ctx)?;
+                    builder.tools(&ctx, action, cli.verbose)?;
+                } else {
+                    builder::tools::tools_no_config(&ctx, action, cli.verbose)?;
+                }
             }
-        }
-        Commands::WebCache { action } => {
-            match action {
+            Commands::Version => {
+                if json_output::is_json_mode() {
+                    let info = serde_json::json!({
+                        "version": env!("CARGO_PKG_VERSION"),
+                        "authors": env!("CARGO_PKG_AUTHORS"),
+                        "git_describe": env!("GIT_DESCRIBE"),
+                        "git_sha": env!("GIT_SHA"),
+                        "git_branch": env!("GIT_BRANCH"),
+                        "git_dirty": env!("GIT_DIRTY"),
+                        "rustc_semver": env!("RUSTC_SEMVER"),
+                        "rust_edition": env!("RUST_EDITION"),
+                        "build_timestamp": env!("BUILD_TIMESTAMP"),
+                    });
+                    println!("{}", serde_json::to_string_pretty(&info)?);
+                } else {
+                    println!(
+                        "rsconstruct {} by {}",
+                        env!("CARGO_PKG_VERSION"),
+                        env!("CARGO_PKG_AUTHORS")
+                    );
+                    println!("GIT_DESCRIBE: {}", env!("GIT_DESCRIBE"));
+                    println!("GIT_SHA: {}", env!("GIT_SHA"));
+                    println!("GIT_BRANCH: {}", env!("GIT_BRANCH"));
+                    println!("GIT_DIRTY: {}", env!("GIT_DIRTY"));
+                    println!("RUSTC_SEMVER: {}", env!("RUSTC_SEMVER"));
+                    println!("RUST_EDITION: {}", env!("RUST_EDITION"));
+                    println!("BUILD_TIMESTAMP: {}", env!("BUILD_TIMESTAMP"));
+                }
+            }
+            Commands::WebCache { action } => match action {
                 WebCacheAction::Clear => {
                     let count = webcache::clear()?;
                     if json_output::is_json_mode() {
@@ -658,44 +710,53 @@ fn run() -> (Result<()>, bool) {
                         let out = serde_json::json!({ "bytes": bytes, "entries": count });
                         println!("{}", serde_json::to_string_pretty(&out)?);
                     } else {
-                        println!("Web cache: {} ({} entries)",
-                            humansize::format_size(bytes, humansize::BINARY), count);
+                        println!(
+                            "Web cache: {} ({} entries)",
+                            humansize::format_size(bytes, humansize::BINARY),
+                            count
+                        );
                     }
                 }
                 WebCacheAction::List => {
                     let entries = webcache::list()?;
                     if json_output::is_json_mode() {
-                        let rows: Vec<serde_json::Value> = entries.iter().map(|e| {
-                            serde_json::json!({
-                                "url": e.url,
-                                "size": e.size,
-                                "age_secs": e.age_secs,
-                                "expired": e.expired,
+                        let rows: Vec<serde_json::Value> = entries
+                            .iter()
+                            .map(|e| {
+                                serde_json::json!({
+                                    "url": e.url,
+                                    "size": e.size,
+                                    "age_secs": e.age_secs,
+                                    "expired": e.expired,
+                                })
                             })
-                        }).collect();
+                            .collect();
                         println!("{}", serde_json::to_string_pretty(&rows)?);
                     } else if entries.is_empty() {
                         println!("Web cache is empty.");
                     } else {
-                        let rows: Vec<Vec<String>> = entries.iter().map(|entry| vec![
-                            entry.url.clone(),
-                            humansize::format_size(entry.size, humansize::BINARY),
-                            format_age(entry.age_secs),
-                            if entry.expired { "expired" } else { "fresh" }.to_string(),
-                        ]).collect();
+                        let rows: Vec<Vec<String>> = entries
+                            .iter()
+                            .map(|entry| {
+                                vec![
+                                    entry.url.clone(),
+                                    humansize::format_size(entry.size, humansize::BINARY),
+                                    format_age(entry.age_secs),
+                                    if entry.expired { "expired" } else { "fresh" }.to_string(),
+                                ]
+                            })
+                            .collect();
                         tables::print_table(&["URL", "Size", "Age", "State"], &rows);
                     }
                 }
+            },
+            Commands::Watch { ref shared } => {
+                let opts = shared.to_build_options(&cli, false, BuildPhase::Build);
+                watcher::watch(&ctx, &opts)?;
             }
         }
-        Commands::Watch { ref shared } => {
-            let opts = shared.to_build_options(&cli, false, BuildPhase::Build);
-            watcher::watch(&ctx, &opts)?;
-        }
-    }
 
-    Ok(())
-
+        Ok(())
     })(); // end closure
     (result, show_status)
 }
@@ -720,14 +781,22 @@ fn format_age(secs: u64) -> String {
 
 /// List all exit codes and their meanings.
 fn list_exit_codes(verbose: bool) -> Result<()> {
-    use strum::IntoEnumIterator;
     use exit_code::RsconstructExitCode;
+    use strum::IntoEnumIterator;
 
     if json_output::is_json_mode() {
         #[derive(serde::Serialize)]
-        struct Entry { code: u8, name: &'static str, description: &'static str }
+        struct Entry {
+            code: u8,
+            name: &'static str,
+            description: &'static str,
+        }
         let entries: Vec<Entry> = RsconstructExitCode::iter()
-            .map(|e| Entry { code: e.code(), name: e.name(), description: e.description() })
+            .map(|e| Entry {
+                code: e.code(),
+                name: e.name(),
+                description: e.description(),
+            })
             .collect();
         println!("{}", serde_json::to_string_pretty(&entries)?);
         return Ok(());
@@ -735,7 +804,13 @@ fn list_exit_codes(verbose: bool) -> Result<()> {
 
     if verbose {
         let rows: Vec<Vec<String>> = RsconstructExitCode::iter()
-            .map(|e| vec![e.code().to_string(), e.name().to_string(), e.description().to_string()])
+            .map(|e| {
+                vec![
+                    e.code().to_string(),
+                    e.name().to_string(),
+                    e.description().to_string(),
+                ]
+            })
             .collect();
         tables::print_table(&["Code", "Name", "Description"], &rows);
     } else {
@@ -757,7 +832,8 @@ fn list_hooks(verbose: bool) -> Result<()> {
             function: &'static str,
             location: &'static str,
         }
-        let entries: Vec<Entry> = hooks.iter()
+        let entries: Vec<Entry> = hooks
+            .iter()
             .map(|h| Entry {
                 name: h.name,
                 description: h.description,
@@ -767,17 +843,21 @@ fn list_hooks(verbose: bool) -> Result<()> {
             .collect();
         println!("{}", serde_json::to_string_pretty(&entries)?);
     } else if verbose {
-        let rows: Vec<Vec<String>> = hooks.iter()
-            .map(|h| vec![
-                h.name.to_string(),
-                h.function.to_string(),
-                h.location.to_string(),
-                h.description.to_string(),
-            ])
+        let rows: Vec<Vec<String>> = hooks
+            .iter()
+            .map(|h| {
+                vec![
+                    h.name.to_string(),
+                    h.function.to_string(),
+                    h.location.to_string(),
+                    h.description.to_string(),
+                ]
+            })
             .collect();
         tables::print_table(&["Hook", "Function", "Location", "Description"], &rows);
     } else {
-        let rows: Vec<Vec<String>> = hooks.iter()
+        let rows: Vec<Vec<String>> = hooks
+            .iter()
             .map(|h| vec![h.name.to_string(), h.description.to_string()])
             .collect();
         tables::print_table(&["Hook", "Description"], &rows);
@@ -787,15 +867,15 @@ fn list_hooks(verbose: bool) -> Result<()> {
 
 /// Initialize a new rsconstruct project in the current directory
 fn init_project() -> Result<()> {
-    let cwd = env::current_dir()
-        .context("Failed to get current directory for project init")?;
+    let cwd = env::current_dir().context("Failed to get current directory for project init")?;
     let config_path = cwd.join("rsconstruct.toml");
 
     if config_path.exists() {
         return Err(RsconstructError::new(
             RsconstructExitCode::ConfigError,
             "rsconstruct.toml already exists in the current directory",
-        ).into());
+        )
+        .into());
     }
 
     // Create rsconstruct.toml with commented defaults
@@ -854,7 +934,10 @@ fn init_project() -> Result<()> {
 # [plugins]
 # dir = "plugins"  # directory containing .lua processor plugins
 "#;
-    crate::errors::ctx(fs::write(&config_path, config_content), &format!("Failed to write {}", config_path.display()))?;
+    crate::errors::ctx(
+        fs::write(&config_path, config_content),
+        &format!("Failed to write {}", config_path.display()),
+    )?;
     println!("Created {}", config_path.display());
 
     // Create .rsconstructignore if it doesn't exist
@@ -871,12 +954,17 @@ fn init_project() -> Result<()> {
 # /experiments/     # Exclude experimental code
 # *.bak             # Exclude backup files
 ";
-        crate::errors::ctx(fs::write(&rsconstructignore_path, rsconstructignore_content), "Failed to write .rsconstructignore")?;
+        crate::errors::ctx(
+            fs::write(&rsconstructignore_path, rsconstructignore_content),
+            "Failed to write .rsconstructignore",
+        )?;
         println!("Created .rsconstructignore");
     }
 
     println!("{}", color::green("Project initialized successfully!"));
-    println!("{}", color::dim("Hint: edit .rsconstructignore to exclude files from processing"));
+    println!(
+        "{}",
+        color::dim("Hint: edit .rsconstructignore to exclude files from processing")
+    );
     Ok(())
 }
-

@@ -32,7 +32,13 @@ pub struct Product {
 }
 
 impl Product {
-    pub fn new(inputs: Vec<PathBuf>, outputs: Vec<PathBuf>, processor: &str, id: usize, config_hash: Option<String>) -> Self {
+    pub fn new(
+        inputs: Vec<PathBuf>,
+        outputs: Vec<PathBuf>,
+        processor: &str,
+        id: usize,
+        config_hash: Option<String>,
+    ) -> Self {
         Self {
             inputs,
             outputs,
@@ -45,7 +51,14 @@ impl Product {
     }
 
     /// Create a new product with a variant/profile name
-    pub fn with_variant(inputs: Vec<PathBuf>, outputs: Vec<PathBuf>, processor: &str, id: usize, config_hash: Option<String>, variant: &str) -> Self {
+    pub fn with_variant(
+        inputs: Vec<PathBuf>,
+        outputs: Vec<PathBuf>,
+        processor: &str,
+        id: usize,
+        config_hash: Option<String>,
+        variant: &str,
+    ) -> Self {
         let mut cache_key = CacheKey::from_config_hash(config_hash);
         cache_key.push(KeyComponent::Variant, variant);
         Self {
@@ -86,18 +99,18 @@ impl Product {
     /// Compute the content-addressed descriptor key for this product.
     /// Composition lives in `CacheKey` — see `src/cache_key.rs`.
     pub fn descriptor_key(&self, input_checksum: &str) -> String {
-        self.cache_key.descriptor_key(&self.processor, input_checksum)
+        self.cache_key
+            .descriptor_key(&self.processor, input_checksum)
     }
 
     /// Format a path according to the given format
     fn format_path(path: &Path, format: PathFormat) -> String {
         match format {
-            PathFormat::Basename => {
-                path.file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("?")
-                    .to_string()
-            }
+            PathFormat::Basename => path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("?")
+                .to_string(),
             PathFormat::Path => path.display().to_string(),
         }
     }
@@ -107,20 +120,27 @@ impl Product {
     pub fn display(&self, opts: DisplayOptions) -> String {
         // For checkers (empty outputs), display the input file instead
         if self.outputs.is_empty() {
-            return self.inputs.first().map_or_else(|| "?".to_string(), |p| Self::format_path(p, opts.path_format));
+            return self.inputs.first().map_or_else(
+                || "?".to_string(),
+                |p| Self::format_path(p, opts.path_format),
+            );
         }
 
         // Format output part
         let output_part = match opts.output {
             OutputDisplay::None => String::new(),
             OutputDisplay::Basename => {
-                let names: Vec<_> = self.outputs.iter()
+                let names: Vec<_> = self
+                    .outputs
+                    .iter()
                     .map(|p| Self::format_path(p, PathFormat::Basename))
                     .collect();
                 names.join(", ")
             }
             OutputDisplay::Path => {
-                let paths: Vec<_> = self.outputs.iter()
+                let paths: Vec<_> = self
+                    .outputs
+                    .iter()
                     .map(|p| Self::format_path(p, PathFormat::Path))
                     .collect();
                 paths.join(", ")
@@ -130,12 +150,14 @@ impl Product {
         // Format input part
         let input_part = match opts.input {
             InputDisplay::None => None,
-            InputDisplay::Source => {
-                self.inputs.first()
-                    .map(|p| Self::format_path(p, opts.path_format))
-            }
+            InputDisplay::Source => self
+                .inputs
+                .first()
+                .map(|p| Self::format_path(p, opts.path_format)),
             InputDisplay::All => {
-                let inputs: Vec<_> = self.inputs.iter()
+                let inputs: Vec<_> = self
+                    .inputs
+                    .iter()
                     .map(|p| Self::format_path(p, opts.path_format))
                     .collect();
                 if inputs.is_empty() {
@@ -154,7 +176,6 @@ impl Product {
             (false, Some(inp)) => format!("{output_part} <- {inp}"),
         }
     }
-
 }
 
 /// Per-process integer ID assigned to a path by `PathInterner`.
@@ -243,37 +264,57 @@ impl BuildGraph {
         }
         let old_set: HashSet<&PathBuf> = existing.inputs.iter().collect();
         // Collect index updates before mutating products, to satisfy the borrow checker.
-        let to_remove: Vec<PathBuf> = existing.inputs.iter()
+        let to_remove: Vec<PathBuf> = existing
+            .inputs
+            .iter()
             .filter(|p| !new_set.contains(p))
             .cloned()
             .collect();
-        let to_add: Vec<PathBuf> = new_inputs.iter()
+        let to_add: Vec<PathBuf> = new_inputs
+            .iter()
             .filter(|p| !old_set.contains(p))
             .cloned()
             .collect();
         self.products[product_id].inputs = new_inputs;
         for path in &to_remove {
             if let Some(path_id) = self.interner.get(path)
-                && let Some(ids) = self.input_to_products.get_mut(&path_id) {
-                    ids.retain(|&x| x != product_id);
-                }
+                && let Some(ids) = self.input_to_products.get_mut(&path_id)
+            {
+                ids.retain(|&x| x != product_id);
+            }
         }
         for path in &to_add {
             let path_id = self.interner.intern(path);
-            self.input_to_products.entry(path_id).or_default().push(product_id);
+            self.input_to_products
+                .entry(path_id)
+                .or_default()
+                .push(product_id);
         }
         true
     }
 
     /// Add a product to the graph.
     /// Returns an error if any output path is already claimed by another product.
-    pub fn add_product(&mut self, inputs: Vec<PathBuf>, outputs: Vec<PathBuf>, processor: &str, config_hash: Option<String>) -> Result<usize> {
+    pub fn add_product(
+        &mut self,
+        inputs: Vec<PathBuf>,
+        outputs: Vec<PathBuf>,
+        processor: &str,
+        config_hash: Option<String>,
+    ) -> Result<usize> {
         self.add_product_with_variant(inputs, outputs, processor, config_hash, None)
     }
 
     /// Add a product to the graph with an optional variant/profile name.
     /// Returns an error if any output path is already claimed by another product.
-    pub fn add_product_with_variant(&mut self, inputs: Vec<PathBuf>, outputs: Vec<PathBuf>, processor: &str, config_hash: Option<String>, variant: Option<&str>) -> Result<usize> {
+    pub fn add_product_with_variant(
+        &mut self,
+        inputs: Vec<PathBuf>,
+        outputs: Vec<PathBuf>,
+        processor: &str,
+        config_hash: Option<String>,
+        variant: Option<&str>,
+    ) -> Result<usize> {
         let id = self.products.len();
 
         // During fixed-point discovery, processors re-run and may re-declare
@@ -284,51 +325,63 @@ impl BuildGraph {
         // primary input, and variant. If the new inputs are a superset (e.g. globs
         // resolved more files in a later fixed-point pass), update the product's
         // inputs so dependency resolution sees the full set.
-        if outputs.is_empty() && !inputs.is_empty()
-            && let Some(primary_id) = self.interner.get(&inputs[0]) {
-                let key = (processor.to_string(), primary_id, variant.map(str::to_string));
-                if let Some(&existing_id) = self.checker_dedup.get(&key) {
-                    // A non-superset re-declaration is a real disagreement about
-                    // what this product consumes, and it used to be swallowed:
-                    // `try_update_inputs`'s `false` was discarded, so the second
-                    // declaration's inputs were silently dropped and the checker
-                    // ran against the first set. The generator path a few lines
-                    // below hard-errors on the equivalent conflict; matching that
-                    // here removes the weaker of two identity schemes.
-                    let attempted = inputs.clone();
-                    if !self.try_update_inputs(existing_id, inputs) {
-                        let existing = self.products.get(existing_id)
-                            .expect(crate::errors::INVALID_PRODUCT_ID);
-                        return Err(crate::exit_code::RsconstructError::new(
-                            crate::exit_code::RsconstructExitCode::GraphError,
-                            format!(
-                                "Input conflict: [{}] declared product for {} twice with \
+        if outputs.is_empty()
+            && !inputs.is_empty()
+            && let Some(primary_id) = self.interner.get(&inputs[0])
+        {
+            let key = (
+                processor.to_string(),
+                primary_id,
+                variant.map(str::to_string),
+            );
+            if let Some(&existing_id) = self.checker_dedup.get(&key) {
+                // A non-superset re-declaration is a real disagreement about
+                // what this product consumes, and it used to be swallowed:
+                // `try_update_inputs`'s `false` was discarded, so the second
+                // declaration's inputs were silently dropped and the checker
+                // ran against the first set. The generator path a few lines
+                // below hard-errors on the equivalent conflict; matching that
+                // here removes the weaker of two identity schemes.
+                let attempted = inputs.clone();
+                if !self.try_update_inputs(existing_id, inputs) {
+                    let existing = self
+                        .products
+                        .get(existing_id)
+                        .expect(crate::errors::INVALID_PRODUCT_ID);
+                    return Err(crate::exit_code::RsconstructError::new(
+                        crate::exit_code::RsconstructExitCode::GraphError,
+                        format!(
+                            "Input conflict: [{}] declared product for {} twice with \
                                  incompatible inputs ({:?} then {:?}). A re-declaration may \
                                  only add inputs, not change them.",
-                                processor,
-                                existing.primary_input().display(),
-                                existing.inputs,
-                                attempted,
-                            ),
-                        ).into());
-                    }
-                    return Ok(existing_id);
+                            processor,
+                            existing.primary_input().display(),
+                            existing.inputs,
+                            attempted,
+                        ),
+                    )
+                    .into());
                 }
+                return Ok(existing_id);
             }
+        }
 
         // For generators: check output conflicts and deduplicate re-declarations.
         for output in &outputs {
-            let Some(output_id) = self.interner.get(output) else { continue };
+            let Some(output_id) = self.interner.get(output) else {
+                continue;
+            };
             if let Some(&existing_id) = self.output_to_product.get(&output_id) {
-                let existing = self.products.get(existing_id).expect(crate::errors::INVALID_PRODUCT_ID);
+                let existing = self
+                    .products
+                    .get(existing_id)
+                    .expect(crate::errors::INVALID_PRODUCT_ID);
                 let same_processor = existing.processor == processor;
                 let same_outputs = existing.outputs == outputs;
                 let existing_proc_name = existing.processor.clone();
                 // Same processor re-declaring the same outputs: update inputs if
                 // they grew (virtual files from upstream generators were added).
-                if same_processor && same_outputs
-                    && self.try_update_inputs(existing_id, inputs)
-                {
+                if same_processor && same_outputs && self.try_update_inputs(existing_id, inputs) {
                     return Ok(existing_id);
                 }
                 return Err(crate::exit_code::RsconstructError::new(
@@ -339,7 +392,8 @@ impl BuildGraph {
                         existing_proc_name,
                         processor,
                     ),
-                ).into());
+                )
+                .into());
             }
         }
 
@@ -379,7 +433,11 @@ impl BuildGraph {
         // with the same (processor, primary_input, variant) returns this id.
         if product.outputs.is_empty() && !product.inputs.is_empty() {
             let primary_id = self.interner.intern(&product.inputs[0]);
-            let key = (product.processor.clone(), primary_id, product.variant.clone());
+            let key = (
+                product.processor.clone(),
+                primary_id,
+                product.variant.clone(),
+            );
             self.checker_dedup.insert(key, id);
         }
 
@@ -390,17 +448,54 @@ impl BuildGraph {
 
     /// Add a product with an output directory for creator caching.
     /// The `output_dir` is the directory whose contents will be cached/restored as a whole.
-    pub fn add_product_with_output_dir(&mut self, inputs: Vec<PathBuf>, outputs: Vec<PathBuf>, processor: &str, config_hash: Option<String>, output_dir: PathBuf) -> Result<usize> {
-        self.add_product_with_output_dirs_and_variant(inputs, outputs, processor, config_hash, vec![output_dir], None)
+    pub fn add_product_with_output_dir(
+        &mut self,
+        inputs: Vec<PathBuf>,
+        outputs: Vec<PathBuf>,
+        processor: &str,
+        config_hash: Option<String>,
+        output_dir: PathBuf,
+    ) -> Result<usize> {
+        self.add_product_with_output_dirs_and_variant(
+            inputs,
+            outputs,
+            processor,
+            config_hash,
+            vec![output_dir],
+            None,
+        )
     }
 
     /// Add a product with an output directory and an optional variant/profile name.
-    pub fn add_product_with_output_dir_and_variant(&mut self, inputs: Vec<PathBuf>, outputs: Vec<PathBuf>, processor: &str, config_hash: Option<String>, output_dir: PathBuf, variant: Option<&str>) -> Result<usize> {
-        self.add_product_with_output_dirs_and_variant(inputs, outputs, processor, config_hash, vec![output_dir], variant)
+    pub fn add_product_with_output_dir_and_variant(
+        &mut self,
+        inputs: Vec<PathBuf>,
+        outputs: Vec<PathBuf>,
+        processor: &str,
+        config_hash: Option<String>,
+        output_dir: PathBuf,
+        variant: Option<&str>,
+    ) -> Result<usize> {
+        self.add_product_with_output_dirs_and_variant(
+            inputs,
+            outputs,
+            processor,
+            config_hash,
+            vec![output_dir],
+            variant,
+        )
     }
 
     /// Add a product with multiple output directories and an optional variant/profile name.
-    pub fn add_product_with_output_dirs_and_variant(&mut self, inputs: Vec<PathBuf>, outputs: Vec<PathBuf>, processor: &str, config_hash: Option<String>, output_dirs: Vec<PathBuf>, variant: Option<&str>) -> Result<usize> {
+    pub fn add_product_with_output_dirs_and_variant(
+        &mut self,
+        inputs: Vec<PathBuf>,
+        outputs: Vec<PathBuf>,
+        processor: &str,
+        config_hash: Option<String>,
+        output_dirs: Vec<PathBuf>,
+        variant: Option<&str>,
+    ) -> Result<usize> {
         let id = self.add_product_with_variant(inputs, outputs, processor, config_hash, variant)?;
         self.products[id].output_dirs = output_dirs.into_iter().map(Arc::new).collect();
         Ok(id)
@@ -413,7 +508,9 @@ impl BuildGraph {
     pub fn apply_tool_version_hashes(&mut self, processor_tool_hashes: &HashMap<String, String>) {
         for product in &mut self.products {
             if let Some(tool_hash) = processor_tool_hashes.get(&product.processor) {
-                product.cache_key.push(KeyComponent::ToolVersion, tool_hash.clone());
+                product
+                    .cache_key
+                    .push(KeyComponent::ToolVersion, tool_hash.clone());
             }
         }
     }
@@ -421,11 +518,14 @@ impl BuildGraph {
     /// Resolve dependencies between products
     pub fn resolve_dependencies(&mut self) {
         // Collect edges first to avoid borrow conflict with self.products
-        let edges: Vec<(usize, usize)> = self.products.iter()
+        let edges: Vec<(usize, usize)> = self
+            .products
+            .iter()
             .flat_map(|product| {
                 product.inputs.iter().filter_map(|input| {
                     let input_id = self.interner.get(input)?;
-                    self.output_to_product.get(&input_id)
+                    self.output_to_product
+                        .get(&input_id)
                         .copied()
                         .filter(|&producer_id| producer_id != product.id)
                         .map(|producer_id| (producer_id, product.id))
@@ -434,20 +534,25 @@ impl BuildGraph {
             .collect();
 
         for (producer_id, consumer_id) in edges {
-            self.dependents.get_mut(producer_id).expect(crate::errors::INVALID_PRODUCT_ID).push(consumer_id);
-            self.dependencies.get_mut(consumer_id).expect(crate::errors::INVALID_PRODUCT_ID).push(producer_id);
+            self.dependents
+                .get_mut(producer_id)
+                .expect(crate::errors::INVALID_PRODUCT_ID)
+                .push(consumer_id);
+            self.dependencies
+                .get_mut(consumer_id)
+                .expect(crate::errors::INVALID_PRODUCT_ID)
+                .push(producer_id);
         }
     }
 
     /// Topological sort - returns product ids in execution order
     /// Returns error if there's a cycle
     pub fn topological_sort(&self) -> Result<Vec<usize>> {
-        let mut in_degree: Vec<usize> = self.dependencies.iter()
-            .map(std::vec::Vec::len)
-            .collect();
+        let mut in_degree: Vec<usize> = self.dependencies.iter().map(std::vec::Vec::len).collect();
 
         // Start with products that have no dependencies (BTreeSet keeps sorted order)
-        let mut queue: BTreeSet<usize> = in_degree.iter()
+        let mut queue: BTreeSet<usize> = in_degree
+            .iter()
             .enumerate()
             .filter(|&(_, deg)| *deg == 0)
             .map(|(id, _)| id)
@@ -459,7 +564,11 @@ impl BuildGraph {
             result.push(id);
 
             // Reduce in-degree of dependents
-            for &dep_id in self.dependents.get(id).expect(crate::errors::INVALID_PRODUCT_ID) {
+            for &dep_id in self
+                .dependents
+                .get(id)
+                .expect(crate::errors::INVALID_PRODUCT_ID)
+            {
                 in_degree[dep_id] = in_degree[dep_id].saturating_sub(1);
                 if in_degree[dep_id] == 0 {
                     queue.insert(dep_id);
@@ -471,7 +580,8 @@ impl BuildGraph {
             return Err(crate::exit_code::RsconstructError::new(
                 crate::exit_code::RsconstructExitCode::GraphError,
                 "Cycle detected in build graph",
-            ).into());
+            )
+            .into());
         }
 
         Ok(result)
@@ -501,7 +611,9 @@ impl BuildGraph {
     /// corruption, which is exactly the "identity by convention" this finding
     /// is about.
     pub fn retain_products(&mut self, f: impl Fn(&Product) -> bool) {
-        let keep: HashSet<usize> = self.products.iter()
+        let keep: HashSet<usize> = self
+            .products
+            .iter()
             .filter(|p| f(p))
             .map(|p| p.id)
             .collect();
@@ -560,7 +672,9 @@ impl BuildGraph {
 
     /// Get dependencies of a product (products that must be built before this one)
     pub fn get_dependencies(&self, id: usize) -> &[usize] {
-        self.dependencies.get(id).expect(crate::errors::INVALID_PRODUCT_ID)
+        self.dependencies
+            .get(id)
+            .expect(crate::errors::INVALID_PRODUCT_ID)
     }
 
     /// Get processor-level dependencies: returns a map from processor name
@@ -569,10 +683,16 @@ impl BuildGraph {
         let mut deps: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
         for product in &self.products {
             deps.entry(product.processor.clone()).or_default();
-            for &dep_id in self.dependencies.get(product.id).expect(crate::errors::INVALID_PRODUCT_ID) {
+            for &dep_id in self
+                .dependencies
+                .get(product.id)
+                .expect(crate::errors::INVALID_PRODUCT_ID)
+            {
                 let dep_proc = &self.products[dep_id].processor;
                 if dep_proc != &product.processor {
-                    deps.entry(product.processor.clone()).or_default().insert(dep_proc.clone());
+                    deps.entry(product.processor.clone())
+                        .or_default()
+                        .insert(dep_proc.clone());
                 }
             }
         }
@@ -587,16 +707,18 @@ impl BuildGraph {
     /// Filter the graph to only include products whose input files match any of the target patterns.
     /// Uses glob matching. Products not matching any pattern are removed.
     pub fn filter_by_targets(&mut self, patterns: &[String]) -> anyhow::Result<()> {
-        let compiled: Vec<glob::Pattern> = patterns.iter()
-            .map(|p| glob::Pattern::new(p)
-                .with_context(|| format!("Invalid glob pattern: {p}")))
+        let compiled: Vec<glob::Pattern> = patterns
+            .iter()
+            .map(|p| glob::Pattern::new(p).with_context(|| format!("Invalid glob pattern: {p}")))
             .collect::<anyhow::Result<_>>()?;
         if compiled.is_empty() {
             return Ok(());
         }
 
         // Collect IDs to keep
-        let mut keep: HashSet<usize> = self.products.iter()
+        let mut keep: HashSet<usize> = self
+            .products
+            .iter()
             .filter(|product| {
                 product.inputs.iter().any(|input| {
                     let input_str = input.display().to_string();
@@ -663,7 +785,8 @@ impl BuildGraph {
             if self.dependencies.len() != self.products.len() {
                 errors.push(format!(
                     "dependency table has {} rows for {} products",
-                    self.dependencies.len(), self.products.len(),
+                    self.dependencies.len(),
+                    self.products.len(),
                 ));
             }
             for (id, deps) in self.dependencies.iter().enumerate() {
@@ -704,14 +827,14 @@ impl BuildGraph {
 
         // Check 4: early cycle detection
         if config.validate_early_cycles
-            && let Err(e) = self.topological_sort() {
-                errors.push(format!("{e}"));
-            }
+            && let Err(e) = self.topological_sort()
+        {
+            errors.push(format!("{e}"));
+        }
 
         errors
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -720,8 +843,12 @@ mod tests {
     #[test]
     fn add_product_assigns_incrementing_ids() {
         let mut g = BuildGraph::new();
-        let id0 = g.add_product(vec!["a.c".into()], vec!["a.o".into()], "cc", None).unwrap();
-        let id1 = g.add_product(vec!["b.c".into()], vec!["b.o".into()], "cc", None).unwrap();
+        let id0 = g
+            .add_product(vec!["a.c".into()], vec!["a.o".into()], "cc", None)
+            .unwrap();
+        let id1 = g
+            .add_product(vec!["b.c".into()], vec!["b.o".into()], "cc", None)
+            .unwrap();
         assert_eq!(id0, 0);
         assert_eq!(id1, 1);
         assert_eq!(g.products().len(), 2);
@@ -730,7 +857,8 @@ mod tests {
     #[test]
     fn output_conflict_is_detected() {
         let mut g = BuildGraph::new();
-        g.add_product(vec!["a.c".into()], vec!["out.o".into()], "cc", None).unwrap();
+        g.add_product(vec!["a.c".into()], vec!["out.o".into()], "cc", None)
+            .unwrap();
         let result = g.add_product(vec!["b.c".into()], vec!["out.o".into()], "cc", None);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Output conflict"));
@@ -739,9 +867,12 @@ mod tests {
     #[test]
     fn topological_sort_no_dependencies() {
         let mut g = BuildGraph::new();
-        g.add_product(vec!["c.c".into()], vec![], "check", None).unwrap();
-        g.add_product(vec!["b.c".into()], vec![], "check", None).unwrap();
-        g.add_product(vec!["a.c".into()], vec![], "check", None).unwrap();
+        g.add_product(vec!["c.c".into()], vec![], "check", None)
+            .unwrap();
+        g.add_product(vec!["b.c".into()], vec![], "check", None)
+            .unwrap();
+        g.add_product(vec!["a.c".into()], vec![], "check", None)
+            .unwrap();
         g.resolve_dependencies();
         let order = g.topological_sort().unwrap();
         // All products have no dependencies, order should contain all ids
@@ -755,9 +886,16 @@ mod tests {
     fn topological_sort_respects_dependencies() {
         let mut g = BuildGraph::new();
         // Product 0: generates lib.o
-        g.add_product(vec!["lib.c".into()], vec!["lib.o".into()], "cc", None).unwrap();
+        g.add_product(vec!["lib.c".into()], vec!["lib.o".into()], "cc", None)
+            .unwrap();
         // Product 1: consumes lib.o (depends on product 0)
-        g.add_product(vec!["main.c".into(), "lib.o".into()], vec!["main".into()], "cc", None).unwrap();
+        g.add_product(
+            vec!["main.c".into(), "lib.o".into()],
+            vec!["main".into()],
+            "cc",
+            None,
+        )
+        .unwrap();
         g.resolve_dependencies();
         let order = g.topological_sort().unwrap();
         assert_eq!(order.len(), 2);
@@ -771,9 +909,12 @@ mod tests {
     fn topological_sort_chain() {
         let mut g = BuildGraph::new();
         // A -> B -> C chain
-        g.add_product(vec!["a.c".into()], vec!["a.o".into()], "cc", None).unwrap();
-        g.add_product(vec!["a.o".into()], vec!["b.o".into()], "link", None).unwrap();
-        g.add_product(vec!["b.o".into()], vec!["c.out".into()], "link", None).unwrap();
+        g.add_product(vec!["a.c".into()], vec!["a.o".into()], "cc", None)
+            .unwrap();
+        g.add_product(vec!["a.o".into()], vec!["b.o".into()], "link", None)
+            .unwrap();
+        g.add_product(vec!["b.o".into()], vec!["c.out".into()], "link", None)
+            .unwrap();
         g.resolve_dependencies();
         let order = g.topological_sort().unwrap();
         assert_eq!(order, vec![0, 1, 2]);
@@ -783,8 +924,10 @@ mod tests {
     fn cycle_detection() {
         let mut g = BuildGraph::new();
         // Create a cycle: 0 produces a.o, 1 produces b.o, but each consumes the other
-        g.add_product(vec!["b.o".into()], vec!["a.o".into()], "cc", None).unwrap();
-        g.add_product(vec!["a.o".into()], vec!["b.o".into()], "cc", None).unwrap();
+        g.add_product(vec!["b.o".into()], vec!["a.o".into()], "cc", None)
+            .unwrap();
+        g.add_product(vec!["a.o".into()], vec!["b.o".into()], "cc", None)
+            .unwrap();
         g.resolve_dependencies();
         let result = g.topological_sort();
         assert!(result.is_err());
@@ -794,8 +937,10 @@ mod tests {
     #[test]
     fn resolve_dependencies_links_products() {
         let mut g = BuildGraph::new();
-        g.add_product(vec!["src.c".into()], vec!["obj.o".into()], "cc", None).unwrap();
-        g.add_product(vec!["obj.o".into()], vec!["app".into()], "link", None).unwrap();
+        g.add_product(vec!["src.c".into()], vec!["obj.o".into()], "cc", None)
+            .unwrap();
+        g.add_product(vec!["obj.o".into()], vec!["app".into()], "link", None)
+            .unwrap();
         g.resolve_dependencies();
         // Product 1 depends on product 0
         assert_eq!(g.get_dependencies(1), &[0]);
@@ -813,18 +958,45 @@ mod tests {
         // passes the format as the variant component (see
         // discover_multi_format), and that variant is what separates them.
         let p_pdf = Product::with_variant(
-            vec!["doc.md".into()], vec!["out/doc.pdf".into()], "pandoc", 0, Some("h".into()), "pdf");
+            vec!["doc.md".into()],
+            vec!["out/doc.pdf".into()],
+            "pandoc",
+            0,
+            Some("h".into()),
+            "pdf",
+        );
         let p_html = Product::with_variant(
-            vec!["doc.md".into()], vec!["out/doc.html".into()], "pandoc", 0, Some("h".into()), "html");
+            vec!["doc.md".into()],
+            vec!["out/doc.html".into()],
+            "pandoc",
+            0,
+            Some("h".into()),
+            "html",
+        );
         let p_docx = Product::with_variant(
-            vec!["doc.md".into()], vec!["out/doc.docx".into()], "pandoc", 0, Some("h".into()), "docx");
+            vec!["doc.md".into()],
+            vec!["out/doc.docx".into()],
+            "pandoc",
+            0,
+            Some("h".into()),
+            "docx",
+        );
 
-        assert_ne!(p_pdf.descriptor_key("chk"), p_html.descriptor_key("chk"),
-            "PDF and HTML products must have different descriptor keys");
-        assert_ne!(p_html.descriptor_key("chk"), p_docx.descriptor_key("chk"),
-            "HTML and DOCX products must have different descriptor keys");
-        assert_ne!(p_pdf.descriptor_key("chk"), p_docx.descriptor_key("chk"),
-            "PDF and DOCX products must have different descriptor keys");
+        assert_ne!(
+            p_pdf.descriptor_key("chk"),
+            p_html.descriptor_key("chk"),
+            "PDF and HTML products must have different descriptor keys"
+        );
+        assert_ne!(
+            p_html.descriptor_key("chk"),
+            p_docx.descriptor_key("chk"),
+            "HTML and DOCX products must have different descriptor keys"
+        );
+        assert_ne!(
+            p_pdf.descriptor_key("chk"),
+            p_docx.descriptor_key("chk"),
+            "PDF and DOCX products must have different descriptor keys"
+        );
     }
 
     #[test]
@@ -837,8 +1009,10 @@ mod tests {
     #[test]
     fn apply_tool_version_hashes() {
         let mut g = BuildGraph::new();
-        g.add_product(vec!["a.c".into()], vec![], "cc", Some("cfg1".into())).unwrap();
-        g.add_product(vec!["b.py".into()], vec![], "ruff", None).unwrap();
+        g.add_product(vec!["a.c".into()], vec![], "cc", Some("cfg1".into()))
+            .unwrap();
+        g.add_product(vec!["b.py".into()], vec![], "ruff", None)
+            .unwrap();
         let before_cc = g.get_product(0).unwrap().descriptor_key("chk");
         let before_ruff = g.get_product(1).unwrap().descriptor_key("chk");
 
@@ -848,12 +1022,17 @@ mod tests {
 
         // The cc product keeps its config component and gains a tool component.
         let cc_key = &g.get_product(0).unwrap().cache_key;
-        let components: Vec<_> = cc_key.components().iter()
+        let components: Vec<_> = cc_key
+            .components()
+            .iter()
             .map(|(c, v)| (c.tag(), v.as_str()))
             .collect();
         assert_eq!(components, vec![("config", "cfg1"), ("tool", "toolv1")]);
-        assert_ne!(before_cc, g.get_product(0).unwrap().descriptor_key("chk"),
-            "a tool version change must invalidate the descriptor key");
+        assert_ne!(
+            before_cc,
+            g.get_product(0).unwrap().descriptor_key("chk"),
+            "a tool version change must invalidate the descriptor key"
+        );
 
         // The ruff product has no tool hash mapping and is untouched.
         assert!(g.get_product(1).unwrap().cache_key.is_empty());
@@ -866,12 +1045,31 @@ mod tests {
         // config_hash; they are now a normal component, so a variant change
         // is visible in `product show` like every other contributor.
         let plain = Product::new(vec!["a.c".into()], vec![], "cc", 0, Some("cfg".into()));
-        let debug = Product::with_variant(vec!["a.c".into()], vec![], "cc", 0, Some("cfg".into()), "debug");
-        let release = Product::with_variant(vec!["a.c".into()], vec![], "cc", 0, Some("cfg".into()), "release");
+        let debug = Product::with_variant(
+            vec!["a.c".into()],
+            vec![],
+            "cc",
+            0,
+            Some("cfg".into()),
+            "debug",
+        );
+        let release = Product::with_variant(
+            vec!["a.c".into()],
+            vec![],
+            "cc",
+            0,
+            Some("cfg".into()),
+            "release",
+        );
         assert_ne!(plain.descriptor_key("chk"), debug.descriptor_key("chk"));
         assert_ne!(debug.descriptor_key("chk"), release.descriptor_key("chk"));
         assert_eq!(
-            debug.cache_key.components().iter().map(|(c, _)| c.tag()).collect::<Vec<_>>(),
+            debug
+                .cache_key
+                .components()
+                .iter()
+                .map(|(c, _)| c.tag())
+                .collect::<Vec<_>>(),
             vec!["config", "variant"],
         );
     }
@@ -909,31 +1107,37 @@ mod tests {
         let mut g = BuildGraph::new();
 
         // Pass 0: upstream generator declares output _site/page.html
-        let gen_id = g.add_product(
-            vec!["src/page.md".into()],
-            vec!["_site/page.html".into()],
-            "pandoc",
-            None,
-        ).unwrap();
+        let gen_id = g
+            .add_product(
+                vec!["src/page.md".into()],
+                vec!["_site/page.html".into()],
+                "pandoc",
+                None,
+            )
+            .unwrap();
 
         // Pass 0: explicit processor discovered with only literal inputs
         // (input_globs matched nothing because _site/ files don't exist yet)
-        let explicit_id = g.add_product(
-            vec!["resources/index.html".into()],
-            vec![],
-            "explicit.build_site",
-            None,
-        ).unwrap();
+        let explicit_id = g
+            .add_product(
+                vec!["resources/index.html".into()],
+                vec![],
+                "explicit.build_site",
+                None,
+            )
+            .unwrap();
         assert_ne!(gen_id, explicit_id);
 
         // Pass 1: explicit processor re-discovered with expanded inputs
         // (virtual files from pandoc now visible to input_globs)
-        let redeclared_id = g.add_product(
-            vec!["resources/index.html".into(), "_site/page.html".into()],
-            vec![],
-            "explicit.build_site",
-            None,
-        ).unwrap();
+        let redeclared_id = g
+            .add_product(
+                vec!["resources/index.html".into(), "_site/page.html".into()],
+                vec![],
+                "explicit.build_site",
+                None,
+            )
+            .unwrap();
 
         // Dedup should return the same product id
         assert_eq!(redeclared_id, explicit_id);
@@ -954,8 +1158,10 @@ mod tests {
         let order = g.topological_sort().unwrap();
         let gen_pos = order.iter().position(|&id| id == gen_id).unwrap();
         let explicit_pos = order.iter().position(|&id| id == explicit_id).unwrap();
-        assert!(gen_pos < explicit_pos,
-            "pandoc (pos {gen_pos}) must run before explicit (pos {explicit_pos})");
+        assert!(
+            gen_pos < explicit_pos,
+            "pandoc (pos {gen_pos}) must run before explicit (pos {explicit_pos})"
+        );
     }
 
     /// `filter_by_targets` rebuilds the graph with new ids; the edges between
@@ -969,9 +1175,12 @@ mod tests {
     #[test]
     fn retain_products_rebuilds_indexes() {
         let mut g = BuildGraph::new();
-        g.add_product(vec!["a.py".into()], vec![], "ruff", None).unwrap();
-        g.add_product(vec!["b.md".into()], vec!["b.html".into()], "pandoc", None).unwrap();
-        g.add_product(vec!["c.py".into()], vec![], "ruff", None).unwrap();
+        g.add_product(vec!["a.py".into()], vec![], "ruff", None)
+            .unwrap();
+        g.add_product(vec!["b.md".into()], vec!["b.html".into()], "pandoc", None)
+            .unwrap();
+        g.add_product(vec!["c.py".into()], vec![], "ruff", None)
+            .unwrap();
 
         // Drop the FIRST product, so every survivor's id must shift.
         g.retain_products(|p| p.processor != "ruff" || p.primary_input() != Path::new("a.py"));
@@ -980,12 +1189,17 @@ mod tests {
         for (idx, product) in g.products().iter().enumerate() {
             assert_eq!(product.id, idx, "id must equal index after retain");
             let fetched = g.get_product(product.id).expect("id must resolve");
-            assert_eq!(fetched.inputs, product.inputs, "get_product(id) must return that product");
+            assert_eq!(
+                fetched.inputs, product.inputs,
+                "get_product(id) must return that product"
+            );
             // Dependency adjacency must be sized for the new id space.
             assert!(g.get_dependencies(product.id).is_empty() || product.id < g.products().len());
         }
         // Output ownership must point at the survivor's new id, not the old one.
-        let owner = g.path_owner(Path::new("b.html")).expect("output owner must survive");
+        let owner = g
+            .path_owner(Path::new("b.html"))
+            .expect("output owner must survive");
         assert_eq!(g.products()[owner].primary_input(), Path::new("b.md"));
         // The dropped product's output must no longer be owned.
         assert!(g.path_owner(Path::new("a.py")).is_none());
@@ -996,38 +1210,49 @@ mod tests {
     #[test]
     fn filter_by_targets_preserves_dependencies() {
         let mut g = BuildGraph::new();
-        g.add_product(vec!["other.txt".into()], vec![], "check", None).unwrap();
-        let producer = g.add_product(
-            vec!["a.md".into()],
-            vec!["out.html".into()],
-            "pandoc",
-            None,
-        ).unwrap();
-        let consumer = g.add_product(
-            vec!["out.html".into()],
-            vec!["final.pdf".into()],
-            "chromium",
-            None,
-        ).unwrap();
+        g.add_product(vec!["other.txt".into()], vec![], "check", None)
+            .unwrap();
+        let producer = g
+            .add_product(vec!["a.md".into()], vec!["out.html".into()], "pandoc", None)
+            .unwrap();
+        let consumer = g
+            .add_product(
+                vec!["out.html".into()],
+                vec!["final.pdf".into()],
+                "chromium",
+                None,
+            )
+            .unwrap();
         g.resolve_dependencies();
         assert_eq!(g.get_dependencies(consumer), &[producer]);
 
         // Filter keeps the producer/consumer pair, drops the checker
-        g.filter_by_targets(&["a.md".to_string(), "out.html".to_string()]).unwrap();
+        g.filter_by_targets(&["a.md".to_string(), "out.html".to_string()])
+            .unwrap();
         assert_eq!(g.products().len(), 2);
 
         // Ids were reassigned; the consumer must still depend on the producer
-        let new_producer = g.products().iter()
-            .find(|p| p.processor == "pandoc").unwrap().id;
-        let new_consumer = g.products().iter()
-            .find(|p| p.processor == "chromium").unwrap().id;
+        let new_producer = g
+            .products()
+            .iter()
+            .find(|p| p.processor == "pandoc")
+            .unwrap()
+            .id;
+        let new_consumer = g
+            .products()
+            .iter()
+            .find(|p| p.processor == "chromium")
+            .unwrap()
+            .id;
         assert_eq!(g.get_dependencies(new_consumer), &[new_producer]);
 
         let order = g.topological_sort().unwrap();
         let prod_pos = order.iter().position(|&id| id == new_producer).unwrap();
         let cons_pos = order.iter().position(|&id| id == new_consumer).unwrap();
-        assert!(prod_pos < cons_pos,
-            "producer (pos {prod_pos}) must run before consumer (pos {cons_pos})");
+        assert!(
+            prod_pos < cons_pos,
+            "producer (pos {prod_pos}) must run before consumer (pos {cons_pos})"
+        );
     }
 
     /// `filter_by_targets` rebuilds the graph from scratch, and used to carry
@@ -1039,20 +1264,27 @@ mod tests {
     #[test]
     fn filtering_preserves_every_index_and_product_field() {
         let mut g = BuildGraph::new();
-        g.add_product(vec!["drop.txt".into()], vec![], "check", None).unwrap();
+        g.add_product(vec!["drop.txt".into()], vec![], "check", None)
+            .unwrap();
         g.add_product_with_output_dir(
             vec!["keep.rs".into()],
             vec!["keep.bin".into()],
             "cargo",
             Some("cfg".into()),
             PathBuf::from("target/debug"),
-        ).unwrap();
+        )
+        .unwrap();
         // A checker on the kept input, to exercise the dedup index.
-        g.add_product(vec!["keep.rs".into()], vec![], "clippy", None).unwrap();
+        g.add_product(vec!["keep.rs".into()], vec![], "clippy", None)
+            .unwrap();
         g.resolve_dependencies();
 
         g.filter_by_targets(&["keep.rs".to_string()]).unwrap();
-        assert_eq!(g.products().len(), 2, "only the two keep.rs products survive");
+        assert_eq!(
+            g.products().len(),
+            2,
+            "only the two keep.rs products survive"
+        );
 
         // id == index holds by construction after the rebuild.
         for (i, p) in g.products().iter().enumerate() {
@@ -1060,20 +1292,34 @@ mod tests {
         }
 
         // Output ownership index survived and points at the right product.
-        let owner = g.path_owner(Path::new("keep.bin")).expect("output must still be owned");
+        let owner = g
+            .path_owner(Path::new("keep.bin"))
+            .expect("output must still be owned");
         assert_eq!(g.get_product(owner).unwrap().processor, "cargo");
 
         // Per-product state that lives outside the constructor args survived
         // the move through the rebuild.
-        let cargo = g.products().iter().find(|p| p.processor == "cargo").unwrap();
+        let cargo = g
+            .products()
+            .iter()
+            .find(|p| p.processor == "cargo")
+            .unwrap();
         assert_eq!(cargo.output_dirs.len(), 1);
-        assert_eq!(cargo.output_dirs[0].as_ref(), &PathBuf::from("target/debug"));
-        assert!(cargo.cache_key.digest().is_some(), "config hash must survive");
+        assert_eq!(
+            cargo.output_dirs[0].as_ref(),
+            &PathBuf::from("target/debug")
+        );
+        assert!(
+            cargo.cache_key.digest().is_some(),
+            "config hash must survive"
+        );
 
         // The checker dedup index was rebuilt: re-declaring the same checker
         // returns the existing id instead of adding a duplicate.
         let before = g.products().len();
-        let dup = g.add_product(vec!["keep.rs".into()], vec![], "clippy", None).unwrap();
+        let dup = g
+            .add_product(vec!["keep.rs".into()], vec![], "clippy", None)
+            .unwrap();
         assert_eq!(g.products().len(), before, "re-declared checker must dedup");
         assert_eq!(g.get_product(dup).unwrap().processor, "clippy");
     }
@@ -1083,17 +1329,35 @@ mod tests {
     #[test]
     fn filter_by_targets_closes_over_producers() {
         let mut g = BuildGraph::new();
-        g.add_product(vec!["other.txt".into()], vec![], "check", None).unwrap();
-        g.add_product(vec!["a.md".into()], vec!["out.html".into()], "pandoc", None).unwrap();
-        g.add_product(vec!["out.html".into()], vec!["final.pdf".into()], "chromium", None).unwrap();
+        g.add_product(vec!["other.txt".into()], vec![], "check", None)
+            .unwrap();
+        g.add_product(vec!["a.md".into()], vec!["out.html".into()], "pandoc", None)
+            .unwrap();
+        g.add_product(
+            vec!["out.html".into()],
+            vec!["final.pdf".into()],
+            "chromium",
+            None,
+        )
+        .unwrap();
         g.resolve_dependencies();
 
         // Only the consumer's input matches; the producer must be pulled in.
         g.filter_by_targets(&["out.html".to_string()]).unwrap();
         assert_eq!(g.products().len(), 2, "producer must be kept transitively");
 
-        let new_producer = g.products().iter().find(|p| p.processor == "pandoc").unwrap().id;
-        let new_consumer = g.products().iter().find(|p| p.processor == "chromium").unwrap().id;
+        let new_producer = g
+            .products()
+            .iter()
+            .find(|p| p.processor == "pandoc")
+            .unwrap()
+            .id;
+        let new_consumer = g
+            .products()
+            .iter()
+            .find(|p| p.processor == "chromium")
+            .unwrap()
+            .id;
         assert_eq!(g.get_dependencies(new_consumer), &[new_producer]);
     }
 
@@ -1103,9 +1367,12 @@ mod tests {
     fn filter_by_targets_closure_is_transitive_and_upstream_only() {
         fn chain() -> BuildGraph {
             let mut g = BuildGraph::new();
-            g.add_product(vec!["a.src".into()], vec!["a.mid".into()], "gen1", None).unwrap();
-            g.add_product(vec!["a.mid".into()], vec!["a.out".into()], "gen2", None).unwrap();
-            g.add_product(vec!["a.out".into()], vec!["a.final".into()], "gen3", None).unwrap();
+            g.add_product(vec!["a.src".into()], vec!["a.mid".into()], "gen1", None)
+                .unwrap();
+            g.add_product(vec!["a.mid".into()], vec!["a.out".into()], "gen2", None)
+                .unwrap();
+            g.add_product(vec!["a.out".into()], vec!["a.final".into()], "gen3", None)
+                .unwrap();
             g.resolve_dependencies();
             g
         }
@@ -1113,7 +1380,11 @@ mod tests {
         // Targeting the tail keeps the whole upstream chain.
         let mut tail = chain();
         tail.filter_by_targets(&["a.out".to_string()]).unwrap();
-        assert_eq!(tail.products().len(), 3, "whole upstream chain must survive");
+        assert_eq!(
+            tail.products().len(),
+            3,
+            "whole upstream chain must survive"
+        );
 
         // Targeting the head keeps only the head — no downstream pull-in.
         let mut head = chain();
@@ -1127,18 +1398,12 @@ mod tests {
     #[test]
     fn checker_dedup_identical_redeclaration() {
         let mut g = BuildGraph::new();
-        let id1 = g.add_product(
-            vec!["a.py".into(), "b.py".into()],
-            vec![],
-            "ruff",
-            None,
-        ).unwrap();
-        let id2 = g.add_product(
-            vec!["a.py".into(), "b.py".into()],
-            vec![],
-            "ruff",
-            None,
-        ).unwrap();
+        let id1 = g
+            .add_product(vec!["a.py".into(), "b.py".into()], vec![], "ruff", None)
+            .unwrap();
+        let id2 = g
+            .add_product(vec!["a.py".into(), "b.py".into()], vec![], "ruff", None)
+            .unwrap();
         assert_eq!(id1, id2);
         assert_eq!(g.products().len(), 1);
         assert_eq!(g.get_product(id1).unwrap().inputs.len(), 2);
@@ -1152,23 +1417,19 @@ mod tests {
     #[test]
     fn checker_dedup_non_superset_is_an_error() {
         let mut g = BuildGraph::new();
-        g.add_product(
-            vec!["a.py".into(), "b.py".into()],
-            vec![],
-            "ruff",
-            None,
-        ).unwrap();
+        g.add_product(vec!["a.py".into(), "b.py".into()], vec![], "ruff", None)
+            .unwrap();
         // Same processor + primary input, but drops b.py and adds c.py —
         // not a superset, so the two declarations genuinely disagree.
-        let err = g.add_product(
-            vec!["a.py".into(), "c.py".into()],
-            vec![],
-            "ruff",
-            None,
-        ).expect_err("non-superset checker re-declaration must be rejected");
+        let err = g
+            .add_product(vec!["a.py".into(), "c.py".into()], vec![], "ruff", None)
+            .expect_err("non-superset checker re-declaration must be rejected");
         let msg = format!("{err}");
         assert!(msg.contains("Input conflict"), "unexpected message: {msg}");
-        assert!(msg.contains("ruff"), "message should name the processor: {msg}");
+        assert!(
+            msg.contains("ruff"),
+            "message should name the processor: {msg}"
+        );
     }
 
     /// When a no-output product is re-declared with inputs that are NOT a
@@ -1176,18 +1437,12 @@ mod tests {
     #[test]
     fn checker_dedup_different_primary_input_creates_new() {
         let mut g = BuildGraph::new();
-        let id1 = g.add_product(
-            vec!["a.py".into()],
-            vec![],
-            "ruff",
-            None,
-        ).unwrap();
-        let id2 = g.add_product(
-            vec!["b.py".into()],
-            vec![],
-            "ruff",
-            None,
-        ).unwrap();
+        let id1 = g
+            .add_product(vec!["a.py".into()], vec![], "ruff", None)
+            .unwrap();
+        let id2 = g
+            .add_product(vec!["b.py".into()], vec![], "ruff", None)
+            .unwrap();
         assert_ne!(id1, id2);
         assert_eq!(g.products().len(), 2);
     }
@@ -1197,19 +1452,23 @@ mod tests {
     #[test]
     fn generator_dedup_updates_inputs_on_superset() {
         let mut g = BuildGraph::new();
-        let id1 = g.add_product(
-            vec!["a.md".into()],
-            vec!["out/a.html".into()],
-            "pandoc",
-            None,
-        ).unwrap();
+        let id1 = g
+            .add_product(
+                vec!["a.md".into()],
+                vec!["out/a.html".into()],
+                "pandoc",
+                None,
+            )
+            .unwrap();
         // Re-declare with a superset of inputs (e.g. dep_inputs resolved more files)
-        let id2 = g.add_product(
-            vec!["a.md".into(), "style.css".into()],
-            vec!["out/a.html".into()],
-            "pandoc",
-            None,
-        ).unwrap();
+        let id2 = g
+            .add_product(
+                vec!["a.md".into(), "style.css".into()],
+                vec!["out/a.html".into()],
+                "pandoc",
+                None,
+            )
+            .unwrap();
         assert_eq!(id1, id2);
         assert_eq!(g.products().len(), 1);
         assert_eq!(g.get_product(id1).unwrap().inputs.len(), 2);
@@ -1220,18 +1479,9 @@ mod tests {
     #[test]
     fn generator_dedup_non_superset_is_conflict() {
         let mut g = BuildGraph::new();
-        g.add_product(
-            vec!["a.c".into()],
-            vec!["out.o".into()],
-            "cc",
-            None,
-        ).unwrap();
-        let result = g.add_product(
-            vec!["b.c".into()],
-            vec!["out.o".into()],
-            "cc",
-            None,
-        );
+        g.add_product(vec!["a.c".into()], vec!["out.o".into()], "cc", None)
+            .unwrap();
+        let result = g.add_product(vec!["b.c".into()], vec!["out.o".into()], "cc", None);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Output conflict"));
     }

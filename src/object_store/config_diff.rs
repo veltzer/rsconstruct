@@ -4,22 +4,28 @@ use std::collections::BTreeMap;
 
 use crate::color;
 
-use super::{ObjectStore, CONFIGS_TABLE};
+use super::{CONFIGS_TABLE, ObjectStore};
 
 impl ObjectStore {
     /// Store a processor's config JSON for later comparison.
     /// Returns the previous config if it existed and was different.
-    pub fn store_processor_config(&self, processor: &str, config_json: &str) -> Result<Option<String>> {
+    pub fn store_processor_config(
+        &self,
+        processor: &str,
+        config_json: &str,
+    ) -> Result<Option<String>> {
         // Read old value
         let old_value = {
-            let read_txn = self.db.begin_read()
+            let read_txn = self
+                .db
+                .begin_read()
                 .context("Failed to begin read transaction")?;
             match read_txn.open_table(CONFIGS_TABLE) {
-                Ok(table) => {
-                    table.get(processor).ok()
-                        .flatten()
-                        .and_then(|bytes| String::from_utf8(bytes.value().to_vec()).ok())
-                }
+                Ok(table) => table
+                    .get(processor)
+                    .ok()
+                    .flatten()
+                    .and_then(|bytes| String::from_utf8(bytes.value().to_vec()).ok()),
                 Err(_) => None,
             }
         };
@@ -27,24 +33,25 @@ impl ObjectStore {
         // Only update if changed
         let changed = old_value.as_ref() != Some(&config_json.to_string());
         if changed {
-            let write_txn = self.db.begin_write()
+            let write_txn = self
+                .db
+                .begin_write()
                 .context("Failed to begin write transaction")?;
             {
-                let mut table = write_txn.open_table(CONFIGS_TABLE)
+                let mut table = write_txn
+                    .open_table(CONFIGS_TABLE)
                     .context("Failed to open configs table")?;
-                table.insert(processor, config_json.as_bytes())
+                table
+                    .insert(processor, config_json.as_bytes())
                     .context("Failed to store processor config")?;
             }
-            write_txn.commit()
+            write_txn
+                .commit()
                 .context("Failed to commit processor config")?;
         }
 
         // Return old value only if it was different
-        if changed {
-            Ok(old_value)
-        } else {
-            Ok(None)
-        }
+        if changed { Ok(old_value) } else { Ok(None) }
     }
 
     /// Generate a colored diff between old and new config JSON.

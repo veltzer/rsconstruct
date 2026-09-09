@@ -5,15 +5,15 @@ mod policy;
 pub use policy::{BuildPolicy, IncrementalPolicy, ProductAction};
 
 use anyhow::Result;
-use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
 use indicatif::ProgressBar;
 use parking_lot::Mutex;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
+use crate::color;
 use crate::display::DisplayOptions;
 use crate::errors;
-use crate::color;
 use crate::graph::BuildGraph;
 use crate::object_store::{ExplainAction, ObjectStore};
 use crate::processors::ProcessorMap;
@@ -123,16 +123,31 @@ pub fn classify_products(
 
     for &id in order {
         let product = graph.get_product(id).expect(errors::INVALID_PRODUCT_ID);
-        let dep_changed = graph.get_dependencies(id).iter().any(|d| will_change.contains(d));
+        let dep_changed = graph
+            .get_dependencies(id)
+            .iter()
+            .any(|d| will_change.contains(d));
 
-        let Ok(input_checksum) = crate::checksum::combined_input_checksum(ctx, &product.inputs) else {
+        let Ok(input_checksum) = crate::checksum::combined_input_checksum(ctx, &product.inputs)
+        else {
             build_count += 1;
             will_change.insert(id);
-            products.push(ClassifiedProduct { id, action: ProductAction::Build, input_checksum: String::new() });
+            products.push(ClassifiedProduct {
+                id,
+                action: ProductAction::Build,
+                input_checksum: String::new(),
+            });
             continue;
         };
 
-        let action = policy.classify(ctx, product, object_store, &input_checksum, dep_changed, force);
+        let action = policy.classify(
+            ctx,
+            product,
+            object_store,
+            &input_checksum,
+            dep_changed,
+            force,
+        );
         match action {
             ProductAction::Skip => {
                 skip_count += 1;
@@ -146,10 +161,19 @@ pub fn classify_products(
                 will_change.insert(id);
             }
         }
-        products.push(ClassifiedProduct { id, action, input_checksum });
+        products.push(ClassifiedProduct {
+            id,
+            action,
+            input_checksum,
+        });
     }
 
-    Classification { skip_count, restore_count, build_count, products }
+    Classification {
+        skip_count,
+        restore_count,
+        build_count,
+        products,
+    }
 }
 
 /// Unlink the on-disk outputs of every product classified as Build or Restore.
@@ -244,10 +268,13 @@ impl<'a> Executor<'a> {
             ExplainAction::Restore(_) => color::cyan("RESTORE"),
             ExplainAction::Rebuild(_) => color::yellow("BUILD"),
         };
-        crate::output::info(&format!("[{}] {} {} ({})", product.processor,
+        crate::output::info(&format!(
+            "[{}] {} {} ({})",
+            product.processor,
             styled,
             self.product_display(product),
-            action));
+            action
+        ));
     }
 
     /// Clean all products.
@@ -289,7 +316,8 @@ pub fn compute_parallel_levels(graph: &BuildGraph, order: &[usize]) -> Vec<Vec<u
 
     for &id in order {
         // Find the maximum level of all dependencies
-        let max_dep_level = graph.get_dependencies(id)
+        let max_dep_level = graph
+            .get_dependencies(id)
             .iter()
             .filter_map(|&dep_id| product_level.get(&dep_id))
             .max()
@@ -325,11 +353,26 @@ mod tests {
     #[test]
     fn parallel_levels_diamond() {
         let mut graph = BuildGraph::new();
-        let top = graph.add_product(vec!["a.src".into()], vec!["a.o".into()], "cc", None).unwrap();
-        let left = graph.add_product(vec!["a.o".into()], vec!["b.o".into()], "cc", None).unwrap();
-        let right = graph.add_product(vec!["a.o".into()], vec!["c.o".into()], "cc", None).unwrap();
-        let bottom = graph.add_product(vec!["b.o".into(), "c.o".into()], vec!["d.o".into()], "cc", None).unwrap();
-        let lone = graph.add_product(vec!["x.src".into()], vec!["x.o".into()], "cc", None).unwrap();
+        let top = graph
+            .add_product(vec!["a.src".into()], vec!["a.o".into()], "cc", None)
+            .unwrap();
+        let left = graph
+            .add_product(vec!["a.o".into()], vec!["b.o".into()], "cc", None)
+            .unwrap();
+        let right = graph
+            .add_product(vec!["a.o".into()], vec!["c.o".into()], "cc", None)
+            .unwrap();
+        let bottom = graph
+            .add_product(
+                vec!["b.o".into(), "c.o".into()],
+                vec!["d.o".into()],
+                "cc",
+                None,
+            )
+            .unwrap();
+        let lone = graph
+            .add_product(vec!["x.src".into()], vec!["x.o".into()], "cc", None)
+            .unwrap();
         graph.resolve_dependencies();
         let order = graph.topological_sort().unwrap();
 
@@ -341,7 +384,11 @@ mod tests {
             ids
         };
 
-        assert_eq!(levels.len(), 3, "diamond plus a free node is three levels: {levels:?}");
+        assert_eq!(
+            levels.len(),
+            3,
+            "diamond plus a free node is three levels: {levels:?}"
+        );
         assert_eq!(sorted(levels[0].clone()), sorted(vec![top, lone]));
         assert_eq!(sorted(levels[1].clone()), sorted(vec![left, right]));
         assert_eq!(levels[2], vec![bottom]);
@@ -352,9 +399,12 @@ mod tests {
     #[test]
     fn parallel_levels_cover_all_products() {
         let mut g = BuildGraph::new();
-        g.add_product(vec!["a.src".into()], vec!["a.o".into()], "cc", None).unwrap();
-        g.add_product(vec!["a.o".into()], vec!["b.o".into()], "cc", None).unwrap();
-        g.add_product(vec!["free.src".into()], vec!["free.o".into()], "cc", None).unwrap();
+        g.add_product(vec!["a.src".into()], vec!["a.o".into()], "cc", None)
+            .unwrap();
+        g.add_product(vec!["a.o".into()], vec!["b.o".into()], "cc", None)
+            .unwrap();
+        g.add_product(vec!["free.src".into()], vec!["free.o".into()], "cc", None)
+            .unwrap();
         g.resolve_dependencies();
         let order = g.topological_sort().unwrap();
 
@@ -369,15 +419,29 @@ mod tests {
     #[test]
     fn failed_dependency_is_direct_only() {
         let mut g = BuildGraph::new();
-        let a = g.add_product(vec!["a.src".into()], vec!["a.o".into()], "cc", None).unwrap();
-        let b = g.add_product(vec!["a.o".into()], vec!["b.o".into()], "cc", None).unwrap();
-        let c = g.add_product(vec!["b.o".into()], vec!["c.o".into()], "cc", None).unwrap();
+        let a = g
+            .add_product(vec!["a.src".into()], vec!["a.o".into()], "cc", None)
+            .unwrap();
+        let b = g
+            .add_product(vec!["a.o".into()], vec!["b.o".into()], "cc", None)
+            .unwrap();
+        let c = g
+            .add_product(vec!["b.o".into()], vec!["c.o".into()], "cc", None)
+            .unwrap();
         g.resolve_dependencies();
 
         let failed: HashSet<usize> = [a].into();
-        assert!(has_failed_dependency(&g, b, &failed), "b directly depends on failed a");
-        assert!(!has_failed_dependency(&g, c, &failed),
-            "c depends on a only through b; direct check must not see it");
-        assert!(!has_failed_dependency(&g, a, &failed), "a has no dependencies");
+        assert!(
+            has_failed_dependency(&g, b, &failed),
+            "b directly depends on failed a"
+        );
+        assert!(
+            !has_failed_dependency(&g, c, &failed),
+            "c depends on a only through b; direct check must not see it"
+        );
+        assert!(
+            !has_failed_dependency(&g, a, &failed),
+            "a has no dependencies"
+        );
     }
 }

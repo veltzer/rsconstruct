@@ -90,7 +90,6 @@ pub enum BuildEvent {
         #[serde(skip_serializing_if = "Vec::is_empty")]
         errors: Vec<String>,
     },
-
 }
 
 /// Processor file entry for `rsconstruct processors files --json`.
@@ -268,4 +267,3 @@ pub fn emit_build_summary(
         errors: errors.to_vec(),
     });
 }
-

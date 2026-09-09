@@ -17,12 +17,21 @@ use serde::{Deserialize, Serialize};
 use crate::config::StandardConfig;
 use crate::graph::Product;
 use crate::processors::{
-    DiscoverMode, SimpleGenerator, SimpleGeneratorParams,
-    run_command, check_command_output, ensure_output_dir,
+    DiscoverMode, SimpleGenerator, SimpleGeneratorParams, check_command_output, ensure_output_dir,
+    run_command,
 };
 
 /// Engines accepted for `pandoc.pdf_engine`. Empty string means "use pandoc's default".
-pub const PANDOC_PDF_ENGINES: &[&str] = &["pdflatex", "xelatex", "lualatex", "tectonic", "wkhtmltopdf", "weasyprint", "prince", "context"];
+pub const PANDOC_PDF_ENGINES: &[&str] = &[
+    "pdflatex",
+    "xelatex",
+    "lualatex",
+    "tectonic",
+    "wkhtmltopdf",
+    "weasyprint",
+    "prince",
+    "context",
+];
 
 /// Pandoc processor config. Custom field: `pdf_engine` (forwarded to --pdf-engine
 /// when format == pdf). Empty string keeps pandoc's default engine.
@@ -67,7 +76,8 @@ fn execute_pandoc(
 ) -> Result<()> {
     let input = product.primary_input();
     let output = product.primary_output();
-    let format = output.extension()
+    let format = output
+        .extension()
         .context("pandoc output has no extension")?
         .to_string_lossy();
     ensure_output_dir(output)?;
@@ -87,7 +97,9 @@ fn execute_pandoc(
             cmd.arg(format!("--pdf-engine={engine}"));
         }
     }
-    for arg in &config.standard.args { cmd.arg(arg); }
+    for arg in &config.standard.args {
+        cmd.arg(arg);
+    }
     cmd.arg(input);
     cmd.arg("-o").arg(output);
 
@@ -98,13 +110,16 @@ fn execute_pandoc(
 fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
     let cfg: PandocConfig = ::toml::from_str(&::toml::to_string(toml)?)?;
     validate_pdf_engine(&cfg.pdf_engine)?;
-    Ok(Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams {
-        extra_tools: &[],
-        extra_tools_fn: Some(pdf_engine_tools),
-        discover_mode: DiscoverMode::MultiFormat,
-        execute_fn: execute_pandoc,
-        is_native: false,
-    })))
+    Ok(Box::new(SimpleGenerator::new(
+        cfg,
+        SimpleGeneratorParams {
+            extra_tools: &[],
+            extra_tools_fn: Some(pdf_engine_tools),
+            discover_mode: DiscoverMode::MultiFormat,
+            execute_fn: execute_pandoc,
+            is_native: false,
+        },
+    )))
 }
 inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,

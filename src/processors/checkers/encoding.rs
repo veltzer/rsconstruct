@@ -21,7 +21,10 @@ impl EncodingProcessor {
         let mut errors = Vec::new();
 
         for file in files {
-            let bytes = crate::errors::ctx(std::fs::read(file), &format!("Failed to read {}", file.display()))?;
+            let bytes = crate::errors::ctx(
+                std::fs::read(file),
+                &format!("Failed to read {}", file.display()),
+            )?;
             if let Err(msg) = validate_utf8(&bytes) {
                 errors.push(format!("{}: {}", file.display(), msg));
             }
@@ -53,7 +56,9 @@ fn validate_utf8(bytes: &[u8]) -> std::result::Result<(), String> {
         // validation, so a whole dependency for it would not pay for itself.
         #[allow(clippy::naive_bytecount)]
         let line_num = bytes[..byte_pos].iter().filter(|&&b| b == b'\n').count() + 1;
-        return Err(format!("invalid UTF-8 at byte {byte_pos} (line {line_num})"));
+        return Err(format!(
+            "invalid UTF-8 at byte {byte_pos} (line {line_num})"
+        ));
     }
     Ok(())
 }
@@ -67,14 +72,18 @@ impl crate::processors::Processor for EncodingProcessor {
         Vec::new()
     }
 
-
     fn execute(&self, _ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         self.execute_product(product)
     }
 
-
-    fn execute_batch(&self, _ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
-        crate::processors::execute_checker_batch_per_file(products, |file| self.check_files(&[file]))
+    fn execute_batch(
+        &self,
+        _ctx: &crate::build_context::BuildContext,
+        products: &[&Product],
+    ) -> Vec<Result<()>> {
+        crate::processors::execute_checker_batch_per_file(products, |file| {
+            self.check_files(&[file])
+        })
     }
 }
 

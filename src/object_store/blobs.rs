@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::{ObjectStore, CHECKSUM_PREFIX_LEN};
+use super::{CHECKSUM_PREFIX_LEN, ObjectStore};
 use crate::checksum;
 use crate::config::RestoreMethod;
 
@@ -38,7 +38,10 @@ impl ObjectStore {
     /// object only exists at `compressed_object_path`, and stat'ing the plain
     /// path silently reports zero.
     pub(super) fn object_size(&self, checksum: &str) -> u64 {
-        for path in [self.object_path(checksum), self.compressed_object_path(checksum)] {
+        for path in [
+            self.object_path(checksum),
+            self.compressed_object_path(checksum),
+        ] {
             if let Ok(metadata) = fs::metadata(&path) {
                 return metadata.len();
             }
@@ -67,14 +70,14 @@ impl ObjectStore {
         if object_path.exists() {
             return Ok(checksum);
         }
-        let parent = object_path.parent()
+        let parent = object_path
+            .parent()
             .context("Object path has no parent directory")?;
         fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create object directory: {}", parent.display()))?;
 
         let blob = if self.compression {
-            zstd::encode_all(content, 0)
-                .context("Failed to zstd-compress object")?
+            zstd::encode_all(content, 0).context("Failed to zstd-compress object")?
         } else {
             content.to_vec()
         };
@@ -87,11 +90,20 @@ impl ObjectStore {
         fs::write(&tmp_path, &blob)
             .with_context(|| format!("Failed to write object temp file: {}", tmp_path.display()))?;
         let mut perms = fs::metadata(&tmp_path)
-            .with_context(|| format!("Failed to read object temp file metadata: {}", tmp_path.display()))?
+            .with_context(|| {
+                format!(
+                    "Failed to read object temp file metadata: {}",
+                    tmp_path.display()
+                )
+            })?
             .permissions();
         perms.set_readonly(true);
-        fs::set_permissions(&tmp_path, perms)
-            .with_context(|| format!("Failed to set object temp file read-only: {}", tmp_path.display()))?;
+        fs::set_permissions(&tmp_path, perms).with_context(|| {
+            format!(
+                "Failed to set object temp file read-only: {}",
+                tmp_path.display()
+            )
+        })?;
 
         if let Err(e) = fs::rename(&tmp_path, &object_path) {
             // A concurrent store may have placed the identical object first;
@@ -103,7 +115,12 @@ impl ObjectStore {
             }
             let _ = fs::remove_file(&tmp_path);
             if !object_path.exists() {
-                return Err(e).with_context(|| format!("Failed to move object into place: {}", object_path.display()));
+                return Err(e).with_context(|| {
+                    format!(
+                        "Failed to move object into place: {}",
+                        object_path.display()
+                    )
+                });
             }
         }
 
@@ -125,17 +142,32 @@ impl ObjectStore {
     /// later in-place write would silently corrupt it. Files whose stored mode
     /// needs exec bits are restored by copy so the mode can be applied
     /// faithfully.
-    pub(super) fn restore_file(&self, checksum: &str, output_path: &Path, mode: Option<u32>) -> Result<()> {
+    pub(super) fn restore_file(
+        &self,
+        checksum: &str,
+        output_path: &Path,
+        mode: Option<u32>,
+    ) -> Result<()> {
         let object_path = self.object_path(checksum);
 
         if !object_path.exists() {
             // Only the compressed variant exists: decompress into the output.
-            let content = self.read_object(checksum)
+            let content = self
+                .read_object(checksum)
                 .with_context(|| format!("Failed to read cached object: {checksum}"))?;
-            fs::write(output_path, &content)
-                .with_context(|| format!("Failed to write decompressed output: {}", output_path.display()))?;
+            fs::write(output_path, &content).with_context(|| {
+                format!(
+                    "Failed to write decompressed output: {}",
+                    output_path.display()
+                )
+            })?;
             crate::platform::set_permissions_mode(output_path, mode.unwrap_or(0o644))
-                .with_context(|| format!("Failed to set permissions on restored file: {}", output_path.display()))?;
+                .with_context(|| {
+                    format!(
+                        "Failed to set permissions on restored file: {}",
+                        output_path.display()
+                    )
+                })?;
             return Ok(());
         }
 
@@ -149,7 +181,12 @@ impl ObjectStore {
                 fs::copy(&object_path, output_path)
                     .with_context(|| format!("Failed to copy from cache: {checksum}"))?;
                 crate::platform::set_permissions_mode(output_path, mode.unwrap_or(0o644))
-                    .with_context(|| format!("Failed to set permissions on restored file: {}", output_path.display()))?;
+                    .with_context(|| {
+                        format!(
+                            "Failed to set permissions on restored file: {}",
+                            output_path.display()
+                        )
+                    })?;
             }
             RestoreMethod::Auto => unreachable!("Auto should be resolved before use"),
         }
@@ -204,11 +241,16 @@ mod tests {
         store.restore_file(&checksum, &out, Some(0o644)).unwrap();
 
         let obj_meta = fs::metadata(store.object_path(&checksum)).unwrap();
-        assert!(obj_meta.permissions().readonly(),
-            "cache object must stay read-only after a hardlink restore");
+        assert!(
+            obj_meta.permissions().readonly(),
+            "cache object must stay read-only after a hardlink restore"
+        );
         let mode = crate::platform::get_mode(&fs::metadata(&out).unwrap());
-        assert_eq!(mode & 0o222, 0,
-            "hardlink-restored output shares the object inode and must stay read-only");
+        assert_eq!(
+            mode & 0o222,
+            0,
+            "hardlink-restored output shares the object inode and must stay read-only"
+        );
     }
 
     /// Objects written under one `compression` setting must stay readable and
@@ -218,23 +260,42 @@ mod tests {
     fn compression_toggle_roundtrip() {
         let tmp = tempfile::TempDir::new().unwrap();
 
-        let compressed_store = ObjectStore { compression: true, ..store_with_db(tmp.path(), "db1.redb") };
-        let checksum = compressed_store.store_object(b"compressed at store time").unwrap();
+        let compressed_store = ObjectStore {
+            compression: true,
+            ..store_with_db(tmp.path(), "db1.redb")
+        };
+        let checksum = compressed_store
+            .store_object(b"compressed at store time")
+            .unwrap();
         assert!(compressed_store.compressed_object_path(&checksum).exists());
 
         // Same on-disk store, compression now off
         let plain_store = store_with_db(tmp.path(), "db2.redb");
-        assert!(plain_store.has_object(&checksum), "toggled store must still see the object");
-        assert_eq!(plain_store.read_object(&checksum).unwrap(), b"compressed at store time",
-            "read must decompress based on the object's actual format");
+        assert!(
+            plain_store.has_object(&checksum),
+            "toggled store must still see the object"
+        );
+        assert_eq!(
+            plain_store.read_object(&checksum).unwrap(),
+            b"compressed at store time",
+            "read must decompress based on the object's actual format"
+        );
         let out = tmp.path().join("restored.txt");
-        plain_store.restore_file(&checksum, &out, Some(0o644)).unwrap();
-        assert_eq!(fs::read(&out).unwrap(), b"compressed at store time",
-            "restore must never emit raw zstd bytes as file content");
+        plain_store
+            .restore_file(&checksum, &out, Some(0o644))
+            .unwrap();
+        assert_eq!(
+            fs::read(&out).unwrap(),
+            b"compressed at store time",
+            "restore must never emit raw zstd bytes as file content"
+        );
 
         // And the reverse direction: plain object read with compression on
         let checksum2 = plain_store.store_object(b"plain at store time").unwrap();
-        assert_eq!(compressed_store.read_object(&checksum2).unwrap(), b"plain at store time");
+        assert_eq!(
+            compressed_store.read_object(&checksum2).unwrap(),
+            b"plain at store time"
+        );
     }
 
     /// Executable outputs cannot be restored by hardlink (the mode would have
@@ -247,8 +308,13 @@ mod tests {
         let out = tmp.path().join("script.sh");
         store.restore_file(&checksum, &out, Some(0o755)).unwrap();
 
-        assert!(fs::metadata(store.object_path(&checksum)).unwrap().permissions().readonly(),
-            "cache object must stay read-only after an exec-mode restore");
+        assert!(
+            fs::metadata(store.object_path(&checksum))
+                .unwrap()
+                .permissions()
+                .readonly(),
+            "cache object must stay read-only after an exec-mode restore"
+        );
         let mode = crate::platform::get_mode(&fs::metadata(&out).unwrap());
         assert_ne!(mode & 0o111, 0, "restored script must be executable");
         assert_ne!(mode & 0o200, 0, "copy-restored file must be writable");

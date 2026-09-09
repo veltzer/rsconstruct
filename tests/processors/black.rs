@@ -1,6 +1,6 @@
+use crate::common::run_rsconstruct_with_env;
 use std::fs;
 use tempfile::TempDir;
-use crate::common::run_rsconstruct_with_env;
 
 test_checker!(black, tool: "black", processor: "black",
     files: [("hello.py", "def hello():\n    return \"world\"\n")]);

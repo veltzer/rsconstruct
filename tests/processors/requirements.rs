@@ -1,6 +1,6 @@
+use crate::common::run_rsconstruct_with_env;
 use std::fs;
 use tempfile::TempDir;
-use crate::common::run_rsconstruct_with_env;
 
 /// Baseline: imports get derived to a sorted requirements.txt.
 #[test]
@@ -30,7 +30,11 @@ fn requirements_derives_from_imports() {
 
     let req = fs::read_to_string(project_path.join("requirements.txt")).unwrap();
     assert!(req.contains("flask"), "expected flask in output: {}", req);
-    assert!(req.contains("requests"), "expected requests in output: {}", req);
+    assert!(
+        req.contains("requests"),
+        "expected requests in output: {}",
+        req
+    );
 }
 
 /// `extra` adds distributions that no `import` references — the use case
@@ -51,11 +55,7 @@ fn requirements_extra_adds_undeclared_dep() {
     .unwrap();
 
     // Note: no `import setuptools` anywhere — that's the whole point.
-    fs::write(
-        project_path.join("app.py"),
-        "import flask\n",
-    )
-    .unwrap();
+    fs::write(project_path.join("app.py"), "import flask\n").unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(
@@ -71,7 +71,11 @@ fn requirements_extra_adds_undeclared_dep() {
         "extra=[setuptools] should appear in requirements.txt even though no import references it: {}",
         req
     );
-    assert!(req.contains("flask"), "import-derived flask should still appear: {}", req);
+    assert!(
+        req.contains("flask"),
+        "import-derived flask should still appear: {}",
+        req
+    );
 }
 
 /// `extra` should bypass `exclude` — exclude operates on import names of
@@ -121,7 +125,11 @@ fn requirements_extra_change_triggers_rebuild() {
     let out1 = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(out1.status.success());
     let req1 = fs::read_to_string(project_path.join("requirements.txt")).unwrap();
-    assert!(!req1.contains("setuptools"), "round 1 should not have setuptools: {}", req1);
+    assert!(
+        !req1.contains("setuptools"),
+        "round 1 should not have setuptools: {}",
+        req1
+    );
 
     // Now add extra — the config hash should change, forcing a rebuild.
     fs::write(

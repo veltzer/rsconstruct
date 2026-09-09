@@ -13,8 +13,8 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use crate::config::IcppAnalyzerConfig;
-use crate::errors;
 use crate::deps_cache::DepsCache;
+use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 
@@ -46,27 +46,45 @@ impl IcppDepAnalyzer {
 
     fn is_excluded(&self, path: &Path) -> bool {
         let path_str = path.to_string_lossy();
-        self.config.src_exclude_dirs.iter().any(|seg| path_str.contains(seg))
+        self.config
+            .src_exclude_dirs
+            .iter()
+            .any(|seg| path_str.contains(seg))
     }
 
     /// Query pkg-config for include paths (lazy, cached).
     fn get_pkg_config_include_paths(&self, ctx: &crate::build_context::BuildContext) -> &[PathBuf] {
         self.pkg_config_include_paths.get_or_init(|| {
-            super::query_pkg_config_include_paths(ctx, "icpp", &self.config.pkg_config, self.verbose)
+            super::query_pkg_config_include_paths(
+                ctx,
+                "icpp",
+                &self.config.pkg_config,
+                self.verbose,
+            )
         })
     }
 
     /// Run configured `include_path_commands` to get additional include paths (lazy, cached).
     fn get_command_include_paths(&self, ctx: &crate::build_context::BuildContext) -> &[PathBuf] {
         self.command_include_paths.get_or_init(|| {
-            super::run_include_path_commands(ctx, "icpp", &self.config.include_path_commands, self.verbose)
+            super::run_include_path_commands(
+                ctx,
+                "icpp",
+                &self.config.include_path_commands,
+                self.verbose,
+            )
         })
     }
 
     /// Resolve a single `#include` directive to a file, if any.
     /// Searches in order: including file's directory, configured `include_paths`,
     /// pkg-config-discovered include paths, then include paths from configured commands.
-    fn resolve_include(&self, ctx: &crate::build_context::BuildContext, include: &str, including_dir: &Path) -> Option<PathBuf> {
+    fn resolve_include(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        include: &str,
+        including_dir: &Path,
+    ) -> Option<PathBuf> {
         let candidate = including_dir.join(include);
         if candidate.is_file() {
             return Some(candidate);
@@ -95,8 +113,15 @@ impl IcppDepAnalyzer {
     /// Scan a single file for `#include` directives. Returns resolved dep paths.
     /// Errors if a `"quoted"` include can't be resolved (system headers via `<angle>`
     /// are allowed to be unresolved — they may live in system include paths).
-    fn scan_file_includes(&self, ctx: &crate::build_context::BuildContext, source: &Path) -> Result<Vec<PathBuf>> {
-        let content = errors::ctx(fs::read_to_string(source), &format!("Failed to read {}", source.display()))?;
+    fn scan_file_includes(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        source: &Path,
+    ) -> Result<Vec<PathBuf>> {
+        let content = errors::ctx(
+            fs::read_to_string(source),
+            &format!("Failed to read {}", source.display()),
+        )?;
 
         static INCLUDE_RE: OnceLock<Regex> = OnceLock::new();
         let re = INCLUDE_RE.get_or_init(|| {
@@ -118,7 +143,8 @@ impl IcppDepAnalyzer {
                     None if is_quoted && !self.config.skip_not_found => {
                         anyhow::bail!(
                             "Include not found: #include \"{}\" in {}",
-                            include, source.display()
+                            include,
+                            source.display()
                         );
                     }
                     None => {}
@@ -131,7 +157,11 @@ impl IcppDepAnalyzer {
     /// Recursively scan `source` for transitive includes. Returns the full set
     /// of project-local header files it depends on (excluding the source itself).
     /// Propagates errors from `scan_file_includes` (including "Include not found").
-    fn scan_includes(&self, ctx: &crate::build_context::BuildContext, source: &Path) -> Result<Vec<PathBuf>> {
+    fn scan_includes(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        source: &Path,
+    ) -> Result<Vec<PathBuf>> {
         let mut seen: HashSet<PathBuf> = HashSet::new();
         let mut headers: Vec<PathBuf> = Vec::new();
         let mut queue: Vec<PathBuf> = vec![source.to_path_buf()];
@@ -178,7 +208,11 @@ impl DepAnalyzer for IcppDepAnalyzer {
             return None;
         }
         let ext = source.extension().and_then(|s| s.to_str()).unwrap_or("");
-        if CPP_MATCH_EXTENSIONS.contains(&ext) { Some(source.clone()) } else { None }
+        if CPP_MATCH_EXTENSIONS.contains(&ext) {
+            Some(source.clone())
+        } else {
+            None
+        }
     }
 
     fn analyze(

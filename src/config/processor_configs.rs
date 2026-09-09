@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{default_true, KnownFields};
+use super::{KnownFields, default_true};
 
 /// Universal processor config with all standard fields.
 /// Checkers, generators, and simple processors all use this.
@@ -76,22 +76,34 @@ impl Default for StandardConfig {
 
 impl StandardConfig {
     pub(crate) fn src_dirs(&self) -> &[String] {
-        self.src_dirs.as_deref().expect(crate::errors::SCAN_CONFIG_NOT_RESOLVED)
+        self.src_dirs
+            .as_deref()
+            .expect(crate::errors::SCAN_CONFIG_NOT_RESOLVED)
     }
     pub(crate) fn src_extensions(&self) -> &[String] {
-        self.src_extensions.as_deref().expect(crate::errors::SCAN_CONFIG_NOT_RESOLVED)
+        self.src_extensions
+            .as_deref()
+            .expect(crate::errors::SCAN_CONFIG_NOT_RESOLVED)
     }
     pub(crate) fn src_exclude_dirs(&self) -> &[String] {
-        self.src_exclude_dirs.as_deref().expect(crate::errors::SCAN_CONFIG_NOT_RESOLVED)
+        self.src_exclude_dirs
+            .as_deref()
+            .expect(crate::errors::SCAN_CONFIG_NOT_RESOLVED)
     }
     pub(crate) fn src_exclude_files(&self) -> &[String] {
-        self.src_exclude_files.as_deref().expect(crate::errors::SCAN_CONFIG_NOT_RESOLVED)
+        self.src_exclude_files
+            .as_deref()
+            .expect(crate::errors::SCAN_CONFIG_NOT_RESOLVED)
     }
     pub(crate) fn src_exclude_paths(&self) -> &[String] {
-        self.src_exclude_paths.as_deref().expect(crate::errors::SCAN_CONFIG_NOT_RESOLVED)
+        self.src_exclude_paths
+            .as_deref()
+            .expect(crate::errors::SCAN_CONFIG_NOT_RESOLVED)
     }
     pub(crate) fn src_files(&self) -> &[String] {
-        self.src_files.as_deref().expect(crate::errors::SCAN_CONFIG_NOT_RESOLVED)
+        self.src_files
+            .as_deref()
+            .expect(crate::errors::SCAN_CONFIG_NOT_RESOLVED)
     }
 
     /// Return the command string, or error with context if it was never set.
@@ -116,7 +128,17 @@ impl KnownFields for StandardConfig {
     fn known_fields() -> &'static [&'static str] {
         // Note: "enabled" is universal — declared once in
         // STANDARD_EXTRA_FIELDS and merged in by the validator, not repeated here.
-        &["command", "formats", "args", "dep_inputs", "dep_auto", "output_dir", "required_tools", "batch", "max_jobs"]
+        &[
+            "command",
+            "formats",
+            "args",
+            "dep_inputs",
+            "dep_auto",
+            "output_dir",
+            "required_tools",
+            "batch",
+            "max_jobs",
+        ]
     }
     fn checksum_fields() -> &'static [&'static str] {
         // formats and output_dir are excluded: format is encoded as a per-product
@@ -127,27 +149,38 @@ impl KnownFields for StandardConfig {
     fn field_descriptions() -> &'static [(&'static str, &'static str)] {
         // The "enabled" description lives in SHARED_FIELD_DESCRIPTIONS.
         &[
-            ("command",    "Path to the tool executable"),
-            ("formats",    "Output formats to generate"),
-            ("args",       "Extra arguments passed to the tool"),
-            ("output_dir", "Directory where generated output files are written"),
-            ("required_tools", "Extra tools needed beyond `command` (for wrapper scripts)"),
+            ("command", "Path to the tool executable"),
+            ("formats", "Output formats to generate"),
+            ("args", "Extra arguments passed to the tool"),
+            (
+                "output_dir",
+                "Directory where generated output files are written",
+            ),
+            (
+                "required_tools",
+                "Extra tools needed beyond `command` (for wrapper scripts)",
+            ),
         ]
     }
 }
 
 /// Simple checker config. No custom fields.
 /// Unused `StandardConfig` fields: formats, `output_dir`.
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[derive(Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct CheckerConfig {
     #[serde(flatten)]
     pub standard: StandardConfig,
 }
 impl KnownFields for CheckerConfig {
-    fn known_fields() -> &'static [&'static str] { StandardConfig::known_fields() }
-    fn checksum_fields() -> &'static [&'static str] { StandardConfig::checksum_fields() }
-    fn field_descriptions() -> &'static [(&'static str, &'static str)] { StandardConfig::field_descriptions() }
+    fn known_fields() -> &'static [&'static str] {
+        StandardConfig::known_fields()
+    }
+    fn checksum_fields() -> &'static [&'static str] {
+        StandardConfig::checksum_fields()
+    }
+    fn field_descriptions() -> &'static [(&'static str, &'static str)] {
+        StandardConfig::field_descriptions()
+    }
 }
 
 /// Alias for `CheckerConfig` (used by `SimpleChecker`).
@@ -179,13 +212,6 @@ pub type MarpImagesConfig = CheckerConfig;
 
 // MakeConfig lives in src/processors/checkers/make.rs.
 
-
-
-
-
-
-
-
 pub type JsonSchemaConfig = CheckerConfig;
 
 // TagsConfig lives in src/processors/generators/tags.rs.
@@ -208,27 +234,15 @@ pub type JsonSchemaConfig = CheckerConfig;
 
 // MdlConfig lives in src/processors/checkers/mdl.rs.
 
-
-
 // MarkdownlintConfig lives in src/processors/checkers/markdownlint.rs.
-
 
 pub type AsciiConfig = CheckerConfig;
 
 // TermsConfig lives in src/processors/checkers/terms.rs.
 
-
-
-
 // PdflatexConfig lives in src/processors/generators/pdflatex.rs.
 
 // GemConfig lives in src/processors/creators/gem.rs.
-
-
-
-
-
-
 
 pub type IjqConfig = CheckerConfig;
 
@@ -243,8 +257,6 @@ pub type ItaploConfig = CheckerConfig;
 // PdfuniteConfig lives in src/processors/generators/pdfunite.rs.
 
 // IpdfuniteConfig lives in src/processors/generators/ipdfunite.rs.
-
-
 
 // --- tidy (HTML validator) ---
 
@@ -289,4 +301,3 @@ pub type DuplicateFilesConfig = CheckerConfig;
 
 // --- license_header (verify license headers in source files) ---
 // LicenseHeaderConfig lives in src/processors/checkers/license_header.rs.
-

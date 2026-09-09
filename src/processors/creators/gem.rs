@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{Processor, SiblingFilter, run_in_anchor_dir, anchor_display_dir, check_command_output};
+use crate::processors::{
+    Processor, SiblingFilter, anchor_display_dir, check_command_output, run_in_anchor_dir,
+};
 
 fn default_gem_home() -> String {
     "gems".into()
@@ -39,9 +41,7 @@ pub struct GemProcessor {
 
 impl GemProcessor {
     pub const fn new(config: GemConfig) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 
     /// Run bundle install in the Gemfile's directory
@@ -55,7 +55,10 @@ impl GemProcessor {
             cmd.arg(arg);
         }
         let output = run_in_anchor_dir(ctx, &mut cmd, gemfile)?;
-        check_command_output(&output, format_args!("bundle {} in {}", subcommand, anchor_display_dir(gemfile)))
+        check_command_output(
+            &output,
+            format_args!("bundle {} in {}", subcommand, anchor_display_dir(gemfile)),
+        )
     }
 }
 
@@ -78,12 +81,20 @@ impl Processor for GemProcessor {
         vec![self.config.standard.command.clone(), "ruby".to_string()]
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let Some(files) = crate::processors::scan_or_skip(&self.config.standard, file_index) else {
             return Ok(());
         };
 
-        let hash = Some(output_config_hash(&self.config, &crate::config::checksum_fields_of(instance_name)));
+        let hash = Some(output_config_hash(
+            &self.config,
+            &crate::config::checksum_fields_of(instance_name),
+        ));
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
         let siblings = SiblingFilter {
@@ -92,7 +103,10 @@ impl Processor for GemProcessor {
         };
 
         for anchor in files {
-            let anchor_dir = anchor.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+            let anchor_dir = anchor
+                .parent()
+                .map(std::path::Path::to_path_buf)
+                .unwrap_or_default();
 
             let sibling_files = file_index.query(
                 &anchor_dir,
@@ -111,7 +125,13 @@ impl Processor for GemProcessor {
                 } else {
                     anchor_dir.join(&self.config.gem_home)
                 };
-                graph.add_product_with_output_dir(inputs, vec![], instance_name, hash.clone(), output_dir)?;
+                graph.add_product_with_output_dir(
+                    inputs,
+                    vec![],
+                    instance_name,
+                    hash.clone(),
+                    output_dir,
+                )?;
             } else {
                 graph.add_product(inputs, vec![], instance_name, hash.clone())?;
             }

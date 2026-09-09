@@ -26,7 +26,9 @@ pub fn create_bar(total: u64, hidden: bool) -> ProgressBar {
     let pb = ProgressBar::new(total);
     pb.set_style(
         ProgressStyle::default_bar()
-            .template(&format!("[{{elapsed_precise}}] {{bar:{BAR_WIDTH}}} {{pos}}/{{len}} {{msg}}"))
+            .template(&format!(
+                "[{{elapsed_precise}}] {{bar:{BAR_WIDTH}}} {{pos}}/{{len}} {{msg}}"
+            ))
             .expect(errors::INVALID_PROGRESS_TEMPLATE)
             .progress_chars("=> "),
     );

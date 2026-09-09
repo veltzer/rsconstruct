@@ -29,7 +29,10 @@ impl MarpImagesProcessor {
         let mut errors = Vec::new();
 
         for &file in files {
-            let content = crate::errors::ctx(std::fs::read_to_string(file), &format!("Failed to read {}", file.display()))?;
+            let content = crate::errors::ctx(
+                std::fs::read_to_string(file),
+                &format!("Failed to read {}", file.display()),
+            )?;
             let dir = crate::processors::parent_dir(file);
 
             for (line_num, line) in content.lines().enumerate() {
@@ -72,14 +75,18 @@ impl crate::processors::Processor for MarpImagesProcessor {
         Vec::new()
     }
 
-
     fn execute(&self, _ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         self.execute_product(product)
     }
 
-
-    fn execute_batch(&self, _ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
-        crate::processors::execute_checker_batch_per_file(products, |file| self.check_files(&[file]))
+    fn execute_batch(
+        &self,
+        _ctx: &crate::build_context::BuildContext,
+        products: &[&Product],
+    ) -> Vec<Result<()>> {
+        crate::processors::execute_checker_batch_per_file(products, |file| {
+            self.check_files(&[file])
+        })
     }
 }
 

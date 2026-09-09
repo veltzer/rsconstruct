@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize};
 use crate::config::StandardConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{Processor, SiblingFilter, DirectoryProductOpts, discover_directory_products, run_in_anchor_dir, anchor_display_dir, check_command_output};
+use crate::processors::{
+    DirectoryProductOpts, Processor, SiblingFilter, anchor_display_dir, check_command_output,
+    discover_directory_products, run_in_anchor_dir,
+};
 
 /// Make config. Custom: target.
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -24,13 +27,15 @@ pub struct MakeProcessor {
 
 impl MakeProcessor {
     pub const fn new(config: MakeConfig) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 
     /// Run make in the Makefile's directory
-    fn execute_make(&self, ctx: &crate::build_context::BuildContext, makefile: &Path) -> Result<()> {
+    fn execute_make(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        makefile: &Path,
+    ) -> Result<()> {
         let mut cmd = Command::new(&self.config.standard.command);
         for arg in &self.config.standard.args {
             cmd.arg(arg);
@@ -39,7 +44,10 @@ impl MakeProcessor {
             cmd.arg(&self.config.target);
         }
         let output = run_in_anchor_dir(ctx, &mut cmd, makefile)?;
-        check_command_output(&output, format_args!("make in {}", anchor_display_dir(makefile)))
+        check_command_output(
+            &output,
+            format_args!("make in {}", anchor_display_dir(makefile)),
+        )
     }
 }
 
@@ -47,7 +55,6 @@ impl Processor for MakeProcessor {
     fn scan_config(&self) -> &crate::config::StandardConfig {
         &self.config.standard
     }
-
 
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
@@ -57,20 +64,28 @@ impl Processor for MakeProcessor {
         vec![self.config.standard.command.clone()]
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
-        discover_directory_products(graph, DirectoryProductOpts {
-            scan: &self.config.standard,
-            file_index,
-            dep_inputs: &self.config.standard.dep_inputs,
-            cfg_hash: &self.config,
-            checksum_fields: crate::config::checksum_fields_of(instance_name),
-            siblings: &SiblingFilter {
-                extensions: &[""],
-                excludes: &["/.git/", "/out/", "/.rsconstruct/"],
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
+        discover_directory_products(
+            graph,
+            DirectoryProductOpts {
+                scan: &self.config.standard,
+                file_index,
+                dep_inputs: &self.config.standard.dep_inputs,
+                cfg_hash: &self.config,
+                checksum_fields: crate::config::checksum_fields_of(instance_name),
+                siblings: &SiblingFilter {
+                    extensions: &[""],
+                    excludes: &["/.git/", "/out/", "/.rsconstruct/"],
+                },
+                processor_name: instance_name,
+                output_dir_name: None,
             },
-            processor_name: instance_name,
-            output_dir_name: None,
-        })
+        )
     }
 
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {

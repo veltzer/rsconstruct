@@ -40,7 +40,9 @@ pub fn scan_python_imports(source: &Path) -> Result<Vec<String>> {
             continue;
         }
 
-        let Some(caps) = import_re.captures(line) else { continue };
+        let Some(caps) = import_re.captures(line) else {
+            continue;
+        };
         let module_path = caps.get(1).or_else(|| caps.get(2)).map(|m| m.as_str());
         let Some(module) = module_path else { continue };
 
@@ -64,7 +66,10 @@ pub struct PythonDepAnalyzer {
 
 impl PythonDepAnalyzer {
     pub fn new(iname: &str, config: PythonAnalyzerConfig) -> Self {
-        Self { iname: iname.to_string(), config }
+        Self {
+            iname: iname.to_string(),
+            config,
+        }
     }
 
     /// Scan a Python file for import statements and return paths to local
@@ -76,17 +81,23 @@ impl PythonDepAnalyzer {
         let mut seen = HashSet::new();
         for module_name in modules {
             if let Some(path) = self.resolve_module(source, &module_name, file_index)
-                && !seen.contains(&path) {
-                    seen.insert(path.clone());
-                    imports.push(path);
-                }
+                && !seen.contains(&path)
+            {
+                seen.insert(path.clone());
+                imports.push(path);
+            }
         }
         Ok(imports)
     }
 
     /// Try to resolve a Python module name to a local file path.
     /// Returns None for stdlib/external modules.
-    fn resolve_module(&self, source: &Path, module: &str, file_index: &FileIndex) -> Option<PathBuf> {
+    fn resolve_module(
+        &self,
+        source: &Path,
+        module: &str,
+        file_index: &FileIndex,
+    ) -> Option<PathBuf> {
         // Convert module.path to module/path
         let module_path = module.replace('.', "/");
 
@@ -143,7 +154,11 @@ impl DepAnalyzer for PythonDepAnalyzer {
         }
         let source = &p.inputs[0];
         let ext = source.extension().and_then(|s| s.to_str()).unwrap_or("");
-        if ext == "py" { Some(source.clone()) } else { None }
+        if ext == "py" {
+            Some(source.clone())
+        } else {
+            None
+        }
     }
 
     fn analyze(

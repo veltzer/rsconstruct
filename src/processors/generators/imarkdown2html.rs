@@ -1,20 +1,24 @@
 //! imarkdown2html generator — registered as a `SimpleGenerator` with a custom execute fn.
 
-use std::fs;
 use anyhow::{Context, Result};
+use std::fs;
 
 use crate::config::StandardConfig;
 use crate::graph::Product;
 use crate::processors::ensure_output_dir;
 
-use crate::processors::{SimpleGenerator, SimpleGeneratorParams, DiscoverMode};
+use crate::processors::{DiscoverMode, SimpleGenerator, SimpleGeneratorParams};
 
-fn execute_imarkdown2html(_ctx: &crate::build_context::BuildContext, _config: &StandardConfig, product: &Product) -> Result<()> {
+fn execute_imarkdown2html(
+    _ctx: &crate::build_context::BuildContext,
+    _config: &StandardConfig,
+    product: &Product,
+) -> Result<()> {
     let input = product.primary_input();
     let output = product.primary_output();
     ensure_output_dir(output)?;
-    let contents = fs::read_to_string(input)
-        .with_context(|| format!("Failed to read {}", input.display()))?;
+    let contents =
+        fs::read_to_string(input).with_context(|| format!("Failed to read {}", input.display()))?;
     let parser = pulldown_cmark::Parser::new(&contents);
     let mut html_output = String::new();
     pulldown_cmark::html::push_html(&mut html_output, parser);
@@ -23,9 +27,21 @@ fn execute_imarkdown2html(_ctx: &crate::build_context::BuildContext, _config: &S
     Ok(())
 }
 
-
-fn create_imarkdown2html(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registries::deserialize_and_create(toml, |cfg| Box::new(SimpleGenerator::new(cfg, SimpleGeneratorParams { extra_tools: &[], extra_tools_fn: None, discover_mode: DiscoverMode::SingleFormat("html"), execute_fn: execute_imarkdown2html, is_native: true })))
+fn create_imarkdown2html(
+    toml: &toml::Value,
+) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
+    crate::registries::deserialize_and_create(toml, |cfg| {
+        Box::new(SimpleGenerator::new(
+            cfg,
+            SimpleGeneratorParams {
+                extra_tools: &[],
+                extra_tools_fn: None,
+                discover_mode: DiscoverMode::SingleFormat("html"),
+                execute_fn: execute_imarkdown2html,
+                is_native: true,
+            },
+        ))
+    })
 }
 inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,

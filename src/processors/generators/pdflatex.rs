@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::config::StandardConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{Processor, run_command, check_command_output};
+use crate::processors::{Processor, check_command_output, run_command};
 
 use super::DiscoverParams;
 
@@ -47,9 +47,7 @@ pub struct PdflatexProcessor {
 
 impl PdflatexProcessor {
     pub const fn new(config: PdflatexConfig) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 }
 
@@ -76,7 +74,12 @@ impl Processor for PdflatexProcessor {
         tools
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let params = DiscoverParams {
             scan: &self.config.standard,
             dep_inputs: &self.config.standard.dep_inputs,
@@ -94,7 +97,8 @@ impl Processor for PdflatexProcessor {
 
         // pdflatex writes output next to the input or in -output-directory
         // We use a temp directory for the build, then move the PDF to the final output location.
-        let input_stem = input.file_stem()
+        let input_stem = input
+            .file_stem()
             .context("pdflatex input has no file stem")?
             .to_string_lossy();
 
@@ -110,10 +114,16 @@ impl Processor for PdflatexProcessor {
         // marp solved with a per-invocation namespace. The scratch dir also
         // makes cleanup a single remove_dir_all instead of a by-extension
         // guess list.
-        let scratch = build_dir.join(format!(".pdflatex-{}",
-            &crate::checksum::bytes_checksum(input.display().to_string().as_bytes())[..12]));
-        fs::create_dir_all(&scratch)
-            .with_context(|| format!("Failed to create pdflatex scratch dir: {}", scratch.display()))?;
+        let scratch = build_dir.join(format!(
+            ".pdflatex-{}",
+            &crate::checksum::bytes_checksum(input.display().to_string().as_bytes())[..12]
+        ));
+        fs::create_dir_all(&scratch).with_context(|| {
+            format!(
+                "Failed to create pdflatex scratch dir: {}",
+                scratch.display()
+            )
+        })?;
 
         // Run pdflatex N times into the scratch dir. Nothing is cleaned
         // between runs: the .aux/.toc written by run N is exactly what run
@@ -136,7 +146,10 @@ impl Processor for PdflatexProcessor {
             cmd.arg(input);
 
             let out = run_command(ctx, &cmd)?;
-            check_command_output(&out, format_args!("pdflatex run {} of {}", run + 1, input.display()))?;
+            check_command_output(
+                &out,
+                format_args!("pdflatex run {} of {}", run + 1, input.display()),
+            )?;
         }
 
         let pdf_in_scratch = scratch.join(format!("{input_stem}.pdf"));
@@ -161,14 +174,21 @@ impl Processor for PdflatexProcessor {
 
         // Move the finished PDF into place (same filesystem: scratch lives
         // under the output parent), then drop the scratch dir wholesale.
-        fs::rename(&pdf_in_scratch, final_output)
-            .with_context(|| format!("Failed to move pdflatex output into place: {}", final_output.display()))?;
-        fs::remove_dir_all(&scratch)
-            .with_context(|| format!("Failed to remove pdflatex scratch dir: {}", scratch.display()))?;
+        fs::rename(&pdf_in_scratch, final_output).with_context(|| {
+            format!(
+                "Failed to move pdflatex output into place: {}",
+                final_output.display()
+            )
+        })?;
+        fs::remove_dir_all(&scratch).with_context(|| {
+            format!(
+                "Failed to remove pdflatex scratch dir: {}",
+                scratch.display()
+            )
+        })?;
 
         Ok(())
     }
-
 }
 
 fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {

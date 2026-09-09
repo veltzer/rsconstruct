@@ -1,6 +1,6 @@
-use std::fs;
 use crate::common::{make_executable, run_rsconstruct_with_env, setup_project_with_config};
 use serde_json::Value;
+use std::fs;
 
 /// The regression this guards: `doctor` used to probe `[dependencies] system`
 /// entries with `which()`, treating packages as if they were tools. That
@@ -46,8 +46,11 @@ fn doctor_system_dependency_is_probed_as_package_not_tool() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let parsed: Value = serde_json::from_slice(&output.stdout).expect("doctor --json should emit valid JSON");
-    let checks = parsed["checks"].as_array().expect("doctor --json should have a checks array");
+    let parsed: Value =
+        serde_json::from_slice(&output.stdout).expect("doctor --json should emit valid JSON");
+    let checks = parsed["checks"]
+        .as_array()
+        .expect("doctor --json should have a checks array");
     let check = checks
         .iter()
         .find(|c| {

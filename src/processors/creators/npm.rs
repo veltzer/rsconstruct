@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{Processor, SiblingFilter, run_in_anchor_dir, anchor_display_dir, check_command_output};
+use crate::processors::{
+    Processor, SiblingFilter, anchor_display_dir, check_command_output, run_in_anchor_dir,
+};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 /// Npm config. Custom: `cache_output_dir`.
@@ -33,13 +35,15 @@ pub struct NpmProcessor {
 
 impl NpmProcessor {
     pub const fn new(config: NpmConfig) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 
     /// Run npm install in the package.json's directory
-    fn execute_npm(&self, ctx: &crate::build_context::BuildContext, package_json: &Path) -> Result<()> {
+    fn execute_npm(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        package_json: &Path,
+    ) -> Result<()> {
         let subcommand = "install";
         let mut cmd = Command::new(&self.config.standard.command);
         cmd.arg(subcommand);
@@ -47,7 +51,10 @@ impl NpmProcessor {
             cmd.arg(arg);
         }
         let output = run_in_anchor_dir(ctx, &mut cmd, package_json)?;
-        check_command_output(&output, format_args!("npm {} in {}", subcommand, anchor_display_dir(package_json)))
+        check_command_output(
+            &output,
+            format_args!("npm {} in {}", subcommand, anchor_display_dir(package_json)),
+        )
     }
 }
 
@@ -55,7 +62,6 @@ impl Processor for NpmProcessor {
     fn scan_config(&self) -> &crate::config::StandardConfig {
         &self.config.standard
     }
-
 
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
@@ -69,12 +75,20 @@ impl Processor for NpmProcessor {
         vec![self.config.standard.command.clone(), "node".to_string()]
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let Some(files) = crate::processors::scan_or_skip(&self.config.standard, file_index) else {
             return Ok(());
         };
 
-        let hash = Some(output_config_hash(&self.config, &crate::config::checksum_fields_of(instance_name)));
+        let hash = Some(output_config_hash(
+            &self.config,
+            &crate::config::checksum_fields_of(instance_name),
+        ));
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
         let siblings = SiblingFilter {
@@ -83,7 +97,10 @@ impl Processor for NpmProcessor {
         };
 
         for anchor in files {
-            let anchor_dir = anchor.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+            let anchor_dir = anchor
+                .parent()
+                .map(std::path::Path::to_path_buf)
+                .unwrap_or_default();
 
             let sibling_files = file_index.query(
                 &anchor_dir,
@@ -102,7 +119,13 @@ impl Processor for NpmProcessor {
                 } else {
                     anchor_dir.join("node_modules")
                 };
-                graph.add_product_with_output_dir(inputs, vec![], instance_name, hash.clone(), output_dir)?;
+                graph.add_product_with_output_dir(
+                    inputs,
+                    vec![],
+                    instance_name,
+                    hash.clone(),
+                    output_dir,
+                )?;
             } else {
                 graph.add_product(inputs, vec![], instance_name, hash.clone())?;
             }

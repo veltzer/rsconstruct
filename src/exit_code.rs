@@ -106,7 +106,10 @@ pub fn classify_error(err: &anyhow::Error) -> RsconstructExitCode {
     if let Some(rsconstruct_err) = err.downcast_ref::<RsconstructError>() {
         return rsconstruct_err.exit_code;
     }
-    if err.chain().any(|c| c.downcast_ref::<std::io::Error>().is_some()) {
+    if err
+        .chain()
+        .any(|c| c.downcast_ref::<std::io::Error>().is_some())
+    {
         // A raw IO error anywhere in the chain: filesystem-level failure.
         return RsconstructExitCode::IoError;
     }
@@ -119,10 +122,12 @@ mod tests {
 
     #[test]
     fn classify_rsconstruct_error_downcast() {
-        let err: anyhow::Error = RsconstructError::new(RsconstructExitCode::ConfigError, "bad config").into();
+        let err: anyhow::Error =
+            RsconstructError::new(RsconstructExitCode::ConfigError, "bad config").into();
         assert_eq!(classify_error(&err), RsconstructExitCode::ConfigError);
 
-        let err: anyhow::Error = RsconstructError::new(RsconstructExitCode::GraphError, "cycle").into();
+        let err: anyhow::Error =
+            RsconstructError::new(RsconstructExitCode::GraphError, "cycle").into();
         assert_eq!(classify_error(&err), RsconstructExitCode::GraphError);
     }
 
@@ -130,7 +135,8 @@ mod tests {
     /// `downcast_ref` on anyhow searches the whole chain.
     #[test]
     fn classify_typed_error_survives_context_wrapping() {
-        let err: anyhow::Error = RsconstructError::new(RsconstructExitCode::ToolError, "tool gone").into();
+        let err: anyhow::Error =
+            RsconstructError::new(RsconstructExitCode::ToolError, "tool gone").into();
         let wrapped = err.context("while preflighting").context("during build");
         assert_eq!(classify_error(&wrapped), RsconstructExitCode::ToolError);
     }
@@ -156,8 +162,11 @@ mod tests {
             "tool output: tool version mismatch",
             "something totally unexpected",
         ] {
-            assert_eq!(classify_error(&anyhow::anyhow!("{msg}")), RsconstructExitCode::BuildError,
-                "untyped message must default to BuildError: {msg}");
+            assert_eq!(
+                classify_error(&anyhow::anyhow!("{msg}")),
+                RsconstructExitCode::BuildError,
+                "untyped message must default to BuildError: {msg}"
+            );
         }
     }
 

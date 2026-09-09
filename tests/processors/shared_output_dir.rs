@@ -6,9 +6,9 @@
 //! ownership of files declared as outputs by other products — so that restore
 //! never clobbers another processor's output.
 
+use crate::common::run_rsconstruct_with_env;
 use std::fs;
 use tempfile::TempDir;
-use crate::common::run_rsconstruct_with_env;
 
 /// Set up a project with:
 ///   - `explicit.pandoc` owns `_site/about.html`
@@ -21,25 +21,33 @@ fn setup_shared_site_project() -> TempDir {
 
     // ---- mkdocs: a creator that builds the whole site, except about.html ----
     let mkdocs_script = project_path.join("mkdocs.sh");
-    fs::write(&mkdocs_script, concat!(
-        "#!/bin/bash\n",
-        "set -e\n",
-        "mkdir -p _site/assets\n",
-        "echo 'mkdocs-index' > _site/index.html\n",
-        "echo 'mkdocs-css'   > _site/assets/style.css\n",
-        // Intentionally DO NOT create about.html here; pandoc owns it.
-    )).unwrap();
+    fs::write(
+        &mkdocs_script,
+        concat!(
+            "#!/bin/bash\n",
+            "set -e\n",
+            "mkdir -p _site/assets\n",
+            "echo 'mkdocs-index' > _site/index.html\n",
+            "echo 'mkdocs-css'   > _site/assets/style.css\n",
+            // Intentionally DO NOT create about.html here; pandoc owns it.
+        ),
+    )
+    .unwrap();
 
     // ---- pandoc-like explicit: produces a specific file inside _site/ ----
     let pandoc_script = project_path.join("pandoc.sh");
-    fs::write(&pandoc_script, concat!(
-        "#!/bin/bash\n",
-        "set -e\n",
-        "mkdir -p _site\n",
-        "echo 'pandoc-about' > _site/about.html\n",
-    )).unwrap();
+    fs::write(
+        &pandoc_script,
+        concat!(
+            "#!/bin/bash\n",
+            "set -e\n",
+            "mkdir -p _site\n",
+            "echo 'pandoc-about' > _site/about.html\n",
+        ),
+    )
+    .unwrap();
 
-        {
+    {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&mkdocs_script, fs::Permissions::from_mode(0o755)).unwrap();
         fs::set_permissions(&pandoc_script, fs::Permissions::from_mode(0o755)).unwrap();
@@ -65,7 +73,8 @@ fn setup_shared_site_project() -> TempDir {
             "output_files = [\"_site/about.html\"]\n",
             "src_dirs = [\".\"]\n",
         ),
-    ).unwrap();
+    )
+    .unwrap();
 
     temp_dir
 }
@@ -84,18 +93,32 @@ fn shared_dir_both_build_successfully() {
     );
 
     // All three files produced by the two processors should exist.
-    assert!(project_path.join("_site/index.html").exists(),
-        "mkdocs should have created _site/index.html");
-    assert!(project_path.join("_site/assets/style.css").exists(),
-        "mkdocs should have created _site/assets/style.css");
-    assert!(project_path.join("_site/about.html").exists(),
+    assert!(
+        project_path.join("_site/index.html").exists(),
+        "mkdocs should have created _site/index.html"
+    );
+    assert!(
+        project_path.join("_site/assets/style.css").exists(),
+        "mkdocs should have created _site/assets/style.css"
+    );
+    assert!(
+        project_path.join("_site/about.html").exists(),
         "pandoc (explicit) should have created _site/about.html; \
-         when the Creator runs after the Generator, it must NOT wipe the shared _site/ dir.");
+         when the Creator runs after the Generator, it must NOT wipe the shared _site/ dir."
+    );
 
-    assert_eq!(fs::read_to_string(project_path.join("_site/index.html")).unwrap().trim(),
-        "mkdocs-index");
-    assert_eq!(fs::read_to_string(project_path.join("_site/about.html")).unwrap().trim(),
-        "pandoc-about");
+    assert_eq!(
+        fs::read_to_string(project_path.join("_site/index.html"))
+            .unwrap()
+            .trim(),
+        "mkdocs-index"
+    );
+    assert_eq!(
+        fs::read_to_string(project_path.join("_site/about.html"))
+            .unwrap()
+            .trim(),
+        "pandoc-about"
+    );
 }
 
 #[test]
@@ -105,33 +128,54 @@ fn shared_dir_clean_and_restore_preserves_ownership() {
 
     // Initial build
     let build = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(build.status.success(),
-        "Initial build failed: stderr={}", String::from_utf8_lossy(&build.stderr));
+    assert!(
+        build.status.success(),
+        "Initial build failed: stderr={}",
+        String::from_utf8_lossy(&build.stderr)
+    );
 
     // Clean outputs (preserves cache)
     let clean = run_rsconstruct_with_env(project_path, &["clean", "outputs"], &[("NO_COLOR", "1")]);
-    assert!(clean.status.success(),
-        "Clean failed: stderr={}", String::from_utf8_lossy(&clean.stderr));
-    assert!(!project_path.join("_site").exists(), "_site should be gone after clean");
+    assert!(
+        clean.status.success(),
+        "Clean failed: stderr={}",
+        String::from_utf8_lossy(&clean.stderr)
+    );
+    assert!(
+        !project_path.join("_site").exists(),
+        "_site should be gone after clean"
+    );
 
     // Rebuild — should restore from cache
-    let restore = run_rsconstruct_with_env(
-        project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
-    assert!(restore.status.success(),
+    let restore =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(
+        restore.status.success(),
         "Restore build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&restore.stdout),
-        String::from_utf8_lossy(&restore.stderr));
+        String::from_utf8_lossy(&restore.stderr)
+    );
 
     // All three files should be back, regardless of restore order.
-    assert!(project_path.join("_site/index.html").exists(),
-        "mkdocs file should be restored");
-    assert!(project_path.join("_site/assets/style.css").exists(),
-        "mkdocs nested file should be restored");
-    assert!(project_path.join("_site/about.html").exists(),
-        "pandoc file should be restored");
-    assert_eq!(fs::read_to_string(project_path.join("_site/about.html")).unwrap().trim(),
+    assert!(
+        project_path.join("_site/index.html").exists(),
+        "mkdocs file should be restored"
+    );
+    assert!(
+        project_path.join("_site/assets/style.css").exists(),
+        "mkdocs nested file should be restored"
+    );
+    assert!(
+        project_path.join("_site/about.html").exists(),
+        "pandoc file should be restored"
+    );
+    assert_eq!(
+        fs::read_to_string(project_path.join("_site/about.html"))
+            .unwrap()
+            .trim(),
         "pandoc-about",
-        "about.html must still have pandoc's content — the Creator must not have claimed it");
+        "about.html must still have pandoc's content — the Creator must not have claimed it"
+    );
 }
 
 /// Regression test for the core invariant: a Creator's tree descriptor must
@@ -149,8 +193,11 @@ fn creator_tree_does_not_include_foreign_outputs() {
 
     // Initial build — caches both processors
     let build = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(build.status.success(),
-        "Initial build failed: stderr={}", String::from_utf8_lossy(&build.stderr));
+    assert!(
+        build.status.success(),
+        "Initial build failed: stderr={}",
+        String::from_utf8_lossy(&build.stderr)
+    );
 
     // Clean only the cache for the explicit processor's product by wiping
     // .rsconstruct (simplest way — forces all processors to rebuild their work)
@@ -171,23 +218,31 @@ fn creator_tree_does_not_include_foreign_outputs() {
         &["build", "-p", "creator.mkdocs", "--verbose"],
         &[("NO_COLOR", "1")],
     );
-    assert!(restore_mkdocs_only.status.success(),
+    assert!(
+        restore_mkdocs_only.status.success(),
         "Partial build failed: stdout={}, stderr={}",
         String::from_utf8_lossy(&restore_mkdocs_only.stdout),
-        String::from_utf8_lossy(&restore_mkdocs_only.stderr));
+        String::from_utf8_lossy(&restore_mkdocs_only.stderr)
+    );
 
     // mkdocs's own files must be back.
-    assert!(project_path.join("_site/index.html").exists(),
-        "mkdocs's index.html should be restored");
-    assert!(project_path.join("_site/assets/style.css").exists(),
-        "mkdocs's style.css should be restored");
+    assert!(
+        project_path.join("_site/index.html").exists(),
+        "mkdocs's index.html should be restored"
+    );
+    assert!(
+        project_path.join("_site/assets/style.css").exists(),
+        "mkdocs's style.css should be restored"
+    );
 
     // The critical invariant: about.html is NOT in mkdocs's tree, so it
     // must NOT have been restored when only mkdocs ran.
-    assert!(!project_path.join("_site/about.html").exists(),
+    assert!(
+        !project_path.join("_site/about.html").exists(),
         "_site/about.html must NOT be restored by the Creator alone \
          — it is owned by the explicit.pandoc processor and must not \
-         appear in the Creator's tree descriptor.");
+         appear in the Creator's tree descriptor."
+    );
 }
 
 /// Ownership is exclusive: if two processors declare the same literal output path,
@@ -204,7 +259,7 @@ fn two_processors_declaring_same_output_file_errors() {
 
     let script = project_path.join("touch.sh");
     fs::write(&script, "#!/bin/bash\ntouch \"$1\"\n").unwrap();
-        {
+    {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
     }
@@ -226,7 +281,8 @@ fn two_processors_declaring_same_output_file_errors() {
             "output_files = [\"_site/index.html\"]\n",
             "src_dirs = [\".\"]\n",
         ),
-    ).unwrap();
+    )
+    .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(
@@ -248,7 +304,11 @@ fn two_processors_declaring_same_output_file_errors() {
         "Expected an 'Output conflict' error in the output, got: {}",
         combined,
     );
-    assert_eq!(output.status.code(), Some(4),
+    assert_eq!(
+        output.status.code(),
+        Some(4),
         "Expected GraphError exit code (4), got {:?}. Output: {}",
-        output.status.code(), combined);
+        output.status.code(),
+        combined
+    );
 }

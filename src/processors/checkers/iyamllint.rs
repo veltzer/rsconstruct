@@ -23,7 +23,7 @@ impl IyamllintProcessor {
         for file in files {
             let contents = std::fs::read_to_string(file)
                 .with_context(|| format!("Failed to read {}", file.display()))?;
-            if let Err(e) = serde_yml::from_str::<serde_yml::Value>(&contents) {
+            if let Err(e) = serde_yaml_ng::from_str::<serde_yaml_ng::Value>(&contents) {
                 errors.push(format!("{}: {}", file.display(), e));
             }
         }
@@ -45,14 +45,18 @@ impl crate::processors::Processor for IyamllintProcessor {
         Vec::new()
     }
 
-
     fn execute(&self, _ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         self.execute_product(product)
     }
 
-
-    fn execute_batch(&self, _ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
-        crate::processors::execute_checker_batch_per_file(products, |file| self.check_files(&[file]))
+    fn execute_batch(
+        &self,
+        _ctx: &crate::build_context::BuildContext,
+        products: &[&Product],
+    ) -> Vec<Result<()>> {
+        crate::processors::execute_checker_batch_per_file(products, |file| {
+            self.check_files(&[file])
+        })
     }
 }
 

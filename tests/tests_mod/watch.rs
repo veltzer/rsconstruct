@@ -1,7 +1,7 @@
+use crate::common::setup_test_project;
 use std::fs;
 use std::process::Command;
 use std::time::Duration;
-use crate::common::setup_test_project;
 
 #[test]
 fn watch_does_initial_build() {
@@ -10,8 +10,9 @@ fn watch_does_initial_build() {
 
     fs::write(
         project_path.join("tera.templates/watch_init.txt.tera"),
-        "hello"
-    ).unwrap();
+        "hello",
+    )
+    .unwrap();
 
     let rsconstruct_path = env!("CARGO_BIN_EXE_rsconstruct");
     let mut child = Command::new(rsconstruct_path)
@@ -32,8 +33,11 @@ fn watch_does_initial_build() {
 
     // Verify via stdout that the build processed the file
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("initial build") || stdout.contains("Processing"),
-        "Watch output should mention initial build: {}", stdout);
+    assert!(
+        stdout.contains("initial build") || stdout.contains("Processing"),
+        "Watch output should mention initial build: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -43,8 +47,9 @@ fn watch_rebuilds_on_change() {
 
     fs::write(
         project_path.join("tera.templates/watch_change.txt.tera"),
-        "hello"
-    ).unwrap();
+        "hello",
+    )
+    .unwrap();
 
     let rsconstruct_path = env!("CARGO_BIN_EXE_rsconstruct");
     let mut child = Command::new(rsconstruct_path)
@@ -60,7 +65,11 @@ fn watch_rebuilds_on_change() {
     std::thread::sleep(Duration::from_secs(2));
 
     // Modify the template file to trigger rebuild
-    fs::write(project_path.join("tera.templates/watch_change.txt.tera"), "changed").unwrap();
+    fs::write(
+        project_path.join("tera.templates/watch_change.txt.tera"),
+        "changed",
+    )
+    .unwrap();
 
     // Wait for rebuild
     std::thread::sleep(Duration::from_secs(2));
@@ -70,6 +79,9 @@ fn watch_rebuilds_on_change() {
     let output = child.wait_with_output().expect("Failed to wait on child");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Change detected"),
-        "Watch should detect and report changes: {}", stdout);
+    assert!(
+        stdout.contains("Change detected"),
+        "Watch should detect and report changes: {}",
+        stdout
+    );
 }

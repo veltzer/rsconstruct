@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use anyhow::Result;
 use crate::tables;
+use anyhow::Result;
 
 use crate::file_index::FileIndex;
 use crate::json_output::{self, SlocCocomoEstimate, SlocLanguageEntry, SlocOutput, SlocTotals};
@@ -75,7 +75,11 @@ fn language_map() -> HashMap<&'static str, LanguageInfo> {
     let entries: &[(&[&str], &str, &CommentStyle)] = &[
         (&[".rs"], "Rust", c_style),
         (&[".c", ".h"], "C", c_style),
-        (&[".cc", ".cpp", ".cxx", ".hh", ".hpp", ".hxx"], "C++", c_style),
+        (
+            &[".cc", ".cpp", ".cxx", ".hh", ".hpp", ".hxx"],
+            "C++",
+            c_style,
+        ),
         (&[".cs"], "C#", c_style),
         (&[".java"], "Java", c_style),
         (&[".js", ".mjs", ".cjs"], "JavaScript", c_style),
@@ -124,12 +128,48 @@ fn language_map() -> HashMap<&'static str, LanguageInfo> {
     }
 
     // Special filename mappings (no extension dot prefix — matched by exact filename)
-    m.insert("Makefile", LanguageInfo { name: "Makefile", comment: hash });
-    m.insert("Dockerfile", LanguageInfo { name: "Dockerfile", comment: hash });
-    m.insert("CMakeLists.txt", LanguageInfo { name: "CMake", comment: hash });
-    m.insert("Vagrantfile", LanguageInfo { name: "Ruby", comment: hash });
-    m.insert("Rakefile", LanguageInfo { name: "Ruby", comment: hash });
-    m.insert("Gemfile", LanguageInfo { name: "Ruby", comment: hash });
+    m.insert(
+        "Makefile",
+        LanguageInfo {
+            name: "Makefile",
+            comment: hash,
+        },
+    );
+    m.insert(
+        "Dockerfile",
+        LanguageInfo {
+            name: "Dockerfile",
+            comment: hash,
+        },
+    );
+    m.insert(
+        "CMakeLists.txt",
+        LanguageInfo {
+            name: "CMake",
+            comment: hash,
+        },
+    );
+    m.insert(
+        "Vagrantfile",
+        LanguageInfo {
+            name: "Ruby",
+            comment: hash,
+        },
+    );
+    m.insert(
+        "Rakefile",
+        LanguageInfo {
+            name: "Ruby",
+            comment: hash,
+        },
+    );
+    m.insert(
+        "Gemfile",
+        LanguageInfo {
+            name: "Ruby",
+            comment: hash,
+        },
+    );
 
     m
 }
@@ -142,7 +182,11 @@ struct LineCounts {
 
 fn count_lines(path: &Path, comment: &CommentStyle) -> LineCounts {
     let Ok(content) = fs::read_to_string(path) else {
-        return LineCounts { blank: 0, comment: 0, code: 0 };
+        return LineCounts {
+            blank: 0,
+            comment: 0,
+            code: 0,
+        };
     };
 
     let mut blank = 0usize;
@@ -169,7 +213,11 @@ fn count_lines(path: &Path, comment: &CommentStyle) -> LineCounts {
         }
 
         // Check single-line comments
-        if comment.single.iter().any(|prefix| trimmed.starts_with(prefix)) {
+        if comment
+            .single
+            .iter()
+            .any(|prefix| trimmed.starts_with(prefix))
+        {
             comment_lines += 1;
             continue;
         }
@@ -190,7 +238,11 @@ fn count_lines(path: &Path, comment: &CommentStyle) -> LineCounts {
         code += 1;
     }
 
-    LineCounts { blank, comment: comment_lines, code }
+    LineCounts {
+        blank,
+        comment: comment_lines,
+        code,
+    }
 }
 
 struct LanguageStats {
@@ -206,7 +258,8 @@ pub fn run_sloc(file_index: &FileIndex, cocomo: bool, salary: u64) -> Result<()>
 
     for path in file_index.files() {
         // Try extension first, then exact filename
-        let info = path.extension()
+        let info = path
+            .extension()
             .and_then(|ext| ext.to_str())
             .and_then(|ext| {
                 let dot_ext = format!(".{ext}");
@@ -225,7 +278,10 @@ pub fn run_sloc(file_index: &FileIndex, cocomo: bool, salary: u64) -> Result<()>
         let counts = count_lines(path, info.comment);
 
         let entry = stats.entry(info.name).or_insert(LanguageStats {
-            files: 0, blank: 0, comment: 0, code: 0,
+            files: 0,
+            blank: 0,
+            comment: 0,
+            code: 0,
         });
         entry.files += 1;
         entry.blank += counts.blank;
@@ -248,7 +304,11 @@ pub fn run_sloc(file_index: &FileIndex, cocomo: bool, salary: u64) -> Result<()>
         let ksloc = total_code as f64 / 1000.0;
         let effort = 2.4 * ksloc.powf(1.05);
         let schedule = 2.5 * effort.powf(0.38);
-        let people = if schedule > 0.0 { effort / schedule } else { 0.0 };
+        let people = if schedule > 0.0 {
+            effort / schedule
+        } else {
+            0.0
+        };
         let cost = effort * (salary as f64 / 12.0);
         Some(SlocCocomoEstimate {
             effort_person_months: effort,
@@ -263,13 +323,16 @@ pub fn run_sloc(file_index: &FileIndex, cocomo: bool, salary: u64) -> Result<()>
 
     if json_output::is_json_mode() {
         let output = SlocOutput {
-            languages: sorted.iter().map(|(name, s)| SlocLanguageEntry {
-                language: name.to_string(),
-                files: s.files,
-                blank: s.blank,
-                comment: s.comment,
-                code: s.code,
-            }).collect(),
+            languages: sorted
+                .iter()
+                .map(|(name, s)| SlocLanguageEntry {
+                    language: name.to_string(),
+                    files: s.files,
+                    blank: s.blank,
+                    comment: s.comment,
+                    code: s.code,
+                })
+                .collect(),
             total: SlocTotals {
                 files: total_files,
                 blank: total_blank,
@@ -280,15 +343,24 @@ pub fn run_sloc(file_index: &FileIndex, cocomo: bool, salary: u64) -> Result<()>
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        let rows: Vec<Vec<String>> = sorted.iter().map(|(name, s)| {
-            vec![
-                name.to_string(), s.files.to_string(), s.blank.to_string(),
-                s.comment.to_string(), s.code.to_string(),
-            ]
-        }).collect();
+        let rows: Vec<Vec<String>> = sorted
+            .iter()
+            .map(|(name, s)| {
+                vec![
+                    name.to_string(),
+                    s.files.to_string(),
+                    s.blank.to_string(),
+                    s.comment.to_string(),
+                    s.code.to_string(),
+                ]
+            })
+            .collect();
         let total = vec![
-            "Total".to_string(), total_files.to_string(), total_blank.to_string(),
-            total_comment.to_string(), total_code.to_string(),
+            "Total".to_string(),
+            total_files.to_string(),
+            total_blank.to_string(),
+            total_comment.to_string(),
+            total_code.to_string(),
         ];
         tables::print_table_with_total(
             &["Language", "Files", "Blank", "Comment", "Code"],
@@ -302,7 +374,10 @@ pub fn run_sloc(file_index: &FileIndex, cocomo: bool, salary: u64) -> Result<()>
             println!("  Effort:   {:.1} person-months", est.effort_person_months);
             println!("  Schedule: {:.1} months", est.schedule_months);
             println!("  People:   {:.1}", est.people);
-            println!("  Cost:     ${:.0} (at ${}/yr salary)", est.cost, est.salary);
+            println!(
+                "  Cost:     ${:.0} (at ${}/yr salary)",
+                est.cost, est.salary
+            );
         }
     }
 

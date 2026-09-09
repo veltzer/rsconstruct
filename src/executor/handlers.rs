@@ -1,5 +1,5 @@
 use crate::color;
-use crate::json_output::{emit_product_complete, ProductStatus};
+use crate::json_output::{ProductStatus, emit_product_complete};
 use crate::stats::ProcessStats;
 
 use super::{Executor, HandlerContext, RestoreOutcome, SharedState};
@@ -42,7 +42,10 @@ impl Executor<'_> {
             ctx.shared.failed_messages.lock().push(msg);
         } else {
             if mark_processor_failed {
-                ctx.shared.failed_processors.lock().insert(ctx.proc_name.to_string());
+                ctx.shared
+                    .failed_processors
+                    .lock()
+                    .insert(ctx.proc_name.to_string());
             }
             ctx.shared.errors.lock().push(prefixed_error);
         }
@@ -51,14 +54,16 @@ impl Executor<'_> {
     /// Handle the "skip (unchanged)" case for a product.
     /// Logs, emits JSON event, increments stats. Does NOT advance the progress bar
     /// since skips are instant and the bar total excludes them.
-    pub(super) fn handle_skip(
-        &self,
-        product: &crate::graph::Product,
-        shared: &SharedState,
-    ) {
-        crate::output::detail(self.verbose, &format!("[{}] {} {}", product.processor,
-            color::dim("Skipping (unchanged):"),
-            self.product_display(product)));
+    pub(super) fn handle_skip(&self, product: &crate::graph::Product, shared: &SharedState) {
+        crate::output::detail(
+            self.verbose,
+            &format!(
+                "[{}] {} {}",
+                product.processor,
+                color::dim("Skipping (unchanged):"),
+                self.product_display(product)
+            ),
+        );
         emit_product_complete(
             &self.product_display(product),
             &product.processor,
@@ -84,15 +89,22 @@ impl Executor<'_> {
             return RestoreOutcome::NotRestorable;
         }
         let desc_key = ctx.product.descriptor_key(ctx.input_checksum);
-        let restore_result = object_store.restore_from_descriptor(self.build_ctx, &desc_key, &ctx.product.outputs);
+        let restore_result =
+            object_store.restore_from_descriptor(self.build_ctx, &desc_key, &ctx.product.outputs);
         match restore_result {
             Ok(true) => {
                 // The restore rewrote the outputs on disk; evict any
                 // pre-restore checksums from the in-session cache.
                 crate::checksum::forget_in_session(self.build_ctx, &ctx.product.outputs);
-                crate::output::detail(self.verbose, &format!("[{}] {} {}", ctx.product.processor,
-                    color::cyan("Restored from cache:"),
-                    self.product_display(ctx.product)));
+                crate::output::detail(
+                    self.verbose,
+                    &format!(
+                        "[{}] {} {}",
+                        ctx.product.processor,
+                        color::cyan("Restored from cache:"),
+                        self.product_display(ctx.product)
+                    ),
+                );
                 emit_product_complete(
                     &self.product_display(ctx.product),
                     &ctx.product.processor,
@@ -176,24 +188,29 @@ impl Executor<'_> {
         //     the file, so the post-execution hash matches what next classify
         //     will see.
         // Both cases break if we use the classify-time checksum.
-        let post_input_checksum = match crate::checksum::combined_input_checksum(self.build_ctx, &ctx.product.inputs) {
-            Ok(cs) => cs,
-            Err(e) => {
-                emit_product_complete(
-                    &self.product_display(ctx.product),
-                    &ctx.product.processor,
-                    ProductStatus::Failed,
-                    duration,
-                    Some(&format!("Failed to compute post-execution input checksum: {e}")),
-                );
-                self.record_failure(ctx, e, false);
-                return false;
-            }
-        };
+        let post_input_checksum =
+            match crate::checksum::combined_input_checksum(self.build_ctx, &ctx.product.inputs) {
+                Ok(cs) => cs,
+                Err(e) => {
+                    emit_product_complete(
+                        &self.product_display(ctx.product),
+                        &ctx.product.processor,
+                        ProductStatus::Failed,
+                        duration,
+                        Some(&format!(
+                            "Failed to compute post-execution input checksum: {e}"
+                        )),
+                    );
+                    self.record_failure(ctx, e, false);
+                    return false;
+                }
+            };
         let desc_key = ctx.product.descriptor_key(&post_input_checksum);
         let cache_result = if ctx.product.outputs.is_empty() && !ctx.product.has_output_dirs() {
             // Checker: no outputs, just mark as passed
-            object_store.store_marker(self.build_ctx, &desc_key).map(|()| false)
+            object_store
+                .store_marker(self.build_ctx, &desc_key)
+                .map(|()| false)
         } else if ctx.product.outputs.len() == 1 && !ctx.product.has_output_dirs() {
             // Generator: single output file → blob
             object_store.store_blob_descriptor(self.build_ctx, &desc_key, &ctx.product.outputs[0])
@@ -204,7 +221,13 @@ impl Executor<'_> {
             let is_foreign = |path: &std::path::Path| -> bool {
                 matches!(graph.path_owner(path), Some(owner) if owner != ctx.id)
             };
-            object_store.store_tree_descriptor(self.build_ctx, &desc_key, &ctx.product.output_dirs, &ctx.product.outputs, &is_foreign)
+            object_store.store_tree_descriptor(
+                self.build_ctx,
+                &desc_key,
+                &ctx.product.output_dirs,
+                &ctx.product.outputs,
+                &is_foreign,
+            )
         };
         match cache_result {
             Ok(_changed) => {}

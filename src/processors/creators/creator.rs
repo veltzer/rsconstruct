@@ -1,14 +1,15 @@
+use anyhow::Result;
 use std::path::PathBuf;
 use std::process::Command;
-use anyhow::Result;
 
 use serde::{Deserialize, Serialize};
 
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{ProcessorBase, Processor,
-    run_in_anchor_dir, anchor_display_dir, check_command_output};
+use crate::processors::{
+    Processor, ProcessorBase, anchor_display_dir, check_command_output, run_in_anchor_dir,
+};
 
 /// Config for Creator processors — run a command and cache declared outputs.
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -47,9 +48,7 @@ pub struct CreatorProcessor {
 
 impl CreatorProcessor {
     pub const fn new(config: CreatorConfig) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 }
 
@@ -74,16 +73,27 @@ impl Processor for CreatorProcessor {
         }
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let Some(files) = crate::processors::scan_or_skip(&self.config.standard, file_index) else {
             return Ok(());
         };
 
-        let hash = Some(output_config_hash(&self.config, &crate::config::checksum_fields_of(instance_name)));
+        let hash = Some(output_config_hash(
+            &self.config,
+            &crate::config::checksum_fields_of(instance_name),
+        ));
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
         for anchor in files {
-            let anchor_dir = anchor.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+            let anchor_dir = anchor
+                .parent()
+                .map(std::path::Path::to_path_buf)
+                .unwrap_or_default();
 
             let mut inputs = Vec::with_capacity(1 + extra.len());
             inputs.push(anchor.clone());
@@ -97,19 +107,26 @@ impl Processor for CreatorProcessor {
                 }
             };
 
-            let output_files: Vec<PathBuf> = self.config.output_files.iter()
+            let output_files: Vec<PathBuf> = self
+                .config
+                .output_files
+                .iter()
                 .map(|f| resolve(f))
                 .collect();
 
-            let output_dirs: Vec<PathBuf> = self.config.output_dirs.iter()
-                .map(|d| resolve(d))
-                .collect();
+            let output_dirs: Vec<PathBuf> =
+                self.config.output_dirs.iter().map(|d| resolve(d)).collect();
 
             if output_dirs.is_empty() {
                 graph.add_product(inputs, output_files, instance_name, hash.clone())?;
             } else {
                 graph.add_product_with_output_dirs_and_variant(
-                    inputs, output_files, instance_name, hash.clone(), output_dirs, None,
+                    inputs,
+                    output_files,
+                    instance_name,
+                    hash.clone(),
+                    output_dirs,
+                    None,
                 )?;
             }
         }
@@ -125,7 +142,10 @@ impl Processor for CreatorProcessor {
             cmd.arg(arg);
         }
         let output = run_in_anchor_dir(ctx, &mut cmd, anchor)?;
-        check_command_output(&output, format_args!("{} in {}", command, anchor_display_dir(anchor)))
+        check_command_output(
+            &output,
+            format_args!("{} in {}", command, anchor_display_dir(anchor)),
+        )
     }
 }
 

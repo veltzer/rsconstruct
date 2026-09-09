@@ -1,8 +1,8 @@
-use std::process::Command;
+use super::{Builder, sorted_keys};
+use crate::color;
 use anyhow::Result;
 use serde::Serialize;
-use crate::color;
-use super::{Builder, sorted_keys};
+use std::process::Command;
 
 #[derive(Serialize)]
 struct DoctorCheck {
@@ -24,7 +24,14 @@ impl Builder {
         let mut warn_count = 0usize;
         let mut checks: Vec<DoctorCheck> = Vec::new();
 
-        let mut record = |name: String, status: &'static str, category: &'static str, detail: Option<String>, install_hint: Option<String>, ok: &mut usize, fail: &mut usize, warn: &mut usize| {
+        let mut record = |name: String,
+                          status: &'static str,
+                          category: &'static str,
+                          detail: Option<String>,
+                          install_hint: Option<String>,
+                          ok: &mut usize,
+                          fail: &mut usize,
+                          warn: &mut usize| {
             match status {
                 "ok" => *ok += 1,
                 "fail" => *fail += 1,
@@ -32,8 +39,14 @@ impl Builder {
                 _ => {}
             }
             if !json_mode {
-                let detail_str = detail.as_deref().map(|d| format!(" ({d})")).unwrap_or_default();
-                let hint_str = install_hint.as_deref().map(|h| format!("  install: {h}")).unwrap_or_default();
+                let detail_str = detail
+                    .as_deref()
+                    .map(|d| format!(" ({d})"))
+                    .unwrap_or_default();
+                let hint_str = install_hint
+                    .as_deref()
+                    .map(|h| format!("  install: {h}"))
+                    .unwrap_or_default();
                 let tag: String = match status {
                     "ok" => color::green("[ok]").to_string(),
                     "fail" => color::red("[FAIL]").to_string(),
@@ -42,21 +55,63 @@ impl Builder {
                 };
                 println!("{tag} {name}{detail_str}{hint_str}");
             }
-            checks.push(DoctorCheck { name, status, category, detail, install_hint });
+            checks.push(DoctorCheck {
+                name,
+                status,
+                category,
+                detail,
+                install_hint,
+            });
         };
 
         // Check rsconstruct.toml
         if std::path::Path::new("rsconstruct.toml").exists() {
-            record("rsconstruct.toml found and valid".to_string(), "ok", "config", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
+            record(
+                "rsconstruct.toml found and valid".to_string(),
+                "ok",
+                "config",
+                None,
+                None,
+                &mut ok_count,
+                &mut fail_count,
+                &mut warn_count,
+            );
         } else {
-            record("rsconstruct.toml not found".to_string(), "fail", "config", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
+            record(
+                "rsconstruct.toml not found".to_string(),
+                "fail",
+                "config",
+                None,
+                None,
+                &mut ok_count,
+                &mut fail_count,
+                &mut warn_count,
+            );
         }
 
         // Check .rsconstructignore
         if std::path::Path::new(".rsconstructignore").exists() {
-            record(".rsconstructignore found".to_string(), "ok", "config", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
+            record(
+                ".rsconstructignore found".to_string(),
+                "ok",
+                "config",
+                None,
+                None,
+                &mut ok_count,
+                &mut fail_count,
+                &mut warn_count,
+            );
         } else {
-            record(".rsconstructignore not found (optional)".to_string(), "warn", "config", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
+            record(
+                ".rsconstructignore not found (optional)".to_string(),
+                "warn",
+                "config",
+                None,
+                None,
+                &mut ok_count,
+                &mut fail_count,
+                &mut warn_count,
+            );
         }
 
         // Check tools for enabled processors
@@ -70,10 +125,28 @@ impl Builder {
                     continue;
                 }
                 if let Some(version) = tool_version(ctx, &tool) {
-                    record(format!("{tool} available"), "ok", "tool", Some(version), None, &mut ok_count, &mut fail_count, &mut warn_count);
+                    record(
+                        format!("{tool} available"),
+                        "ok",
+                        "tool",
+                        Some(version),
+                        None,
+                        &mut ok_count,
+                        &mut fail_count,
+                        &mut warn_count,
+                    );
                 } else {
                     let install_hint = crate::tools::tool_install_command(&tool);
-                    record(format!("{tool} not found"), "fail", "tool", None, install_hint, &mut ok_count, &mut fail_count, &mut warn_count);
+                    record(
+                        format!("{tool} not found"),
+                        "fail",
+                        "tool",
+                        None,
+                        install_hint,
+                        &mut ok_count,
+                        &mut fail_count,
+                        &mut warn_count,
+                    );
                 }
             }
         }
@@ -95,9 +168,27 @@ impl Builder {
                 // binary named after themselves, so which() reported them
                 // as missing even right after install-deps put them on.
                 if super::tools::is_system_package_installed(ctx, pkg) {
-                    record(format!("{pkg} (system)"), "ok", "dependency", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
+                    record(
+                        format!("{pkg} (system)"),
+                        "ok",
+                        "dependency",
+                        None,
+                        None,
+                        &mut ok_count,
+                        &mut fail_count,
+                        &mut warn_count,
+                    );
                 } else {
-                    record(format!("{pkg} not found"), "fail", "dependency", Some("system".to_string()), Some("rsconstruct tools install-deps".to_string()), &mut ok_count, &mut fail_count, &mut warn_count);
+                    record(
+                        format!("{pkg} not found"),
+                        "fail",
+                        "dependency",
+                        Some("system".to_string()),
+                        Some("rsconstruct tools install-deps".to_string()),
+                        &mut ok_count,
+                        &mut fail_count,
+                        &mut warn_count,
+                    );
                 }
             }
 
@@ -105,27 +196,81 @@ impl Builder {
                 let name = crate::config::normalized_distribution_name(pkg);
                 let found = package_installed(ctx, "pip", &["show", "--quiet", name.as_str()]);
                 if found {
-                    record(format!("{pkg} (pip)"), "ok", "dependency", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
+                    record(
+                        format!("{pkg} (pip)"),
+                        "ok",
+                        "dependency",
+                        None,
+                        None,
+                        &mut ok_count,
+                        &mut fail_count,
+                        &mut warn_count,
+                    );
                 } else {
-                    record(format!("{pkg} not installed"), "fail", "dependency", Some("pip".to_string()), Some(format!("pip install {pkg}")), &mut ok_count, &mut fail_count, &mut warn_count);
+                    record(
+                        format!("{pkg} not installed"),
+                        "fail",
+                        "dependency",
+                        Some("pip".to_string()),
+                        Some(format!("pip install {pkg}")),
+                        &mut ok_count,
+                        &mut fail_count,
+                        &mut warn_count,
+                    );
                 }
             }
 
             for pkg in &deps.npm {
                 let found = package_installed(ctx, "npm", &["list", "--depth=0", pkg]);
                 if found {
-                    record(format!("{pkg} (npm)"), "ok", "dependency", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
+                    record(
+                        format!("{pkg} (npm)"),
+                        "ok",
+                        "dependency",
+                        None,
+                        None,
+                        &mut ok_count,
+                        &mut fail_count,
+                        &mut warn_count,
+                    );
                 } else {
-                    record(format!("{pkg} not installed"), "fail", "dependency", Some("npm".to_string()), Some(format!("npm install {pkg}")), &mut ok_count, &mut fail_count, &mut warn_count);
+                    record(
+                        format!("{pkg} not installed"),
+                        "fail",
+                        "dependency",
+                        Some("npm".to_string()),
+                        Some(format!("npm install {pkg}")),
+                        &mut ok_count,
+                        &mut fail_count,
+                        &mut warn_count,
+                    );
                 }
             }
 
             for pkg in &deps.gem {
                 let found = package_installed(ctx, "gem", &["list", "--installed", "--exact", pkg]);
                 if found {
-                    record(format!("{pkg} (gem)"), "ok", "dependency", None, None, &mut ok_count, &mut fail_count, &mut warn_count);
+                    record(
+                        format!("{pkg} (gem)"),
+                        "ok",
+                        "dependency",
+                        None,
+                        None,
+                        &mut ok_count,
+                        &mut fail_count,
+                        &mut warn_count,
+                    );
                 } else {
-                    record(format!("{pkg} not installed"), "fail", "dependency", Some("gem".to_string()), Some(format!("gem install {pkg}")), &mut ok_count, &mut fail_count, &mut warn_count);
+                    record(
+                        format!("{pkg} not installed"),
+                        "fail",
+                        "dependency",
+                        Some("gem".to_string()),
+                        Some(format!("gem install {pkg}")),
+                        &mut ok_count,
+                        &mut fail_count,
+                        &mut warn_count,
+                    );
                 }
             }
         }
@@ -166,8 +311,7 @@ fn package_installed(
 ) -> bool {
     let mut cmd = Command::new(program);
     cmd.args(args);
-    crate::processors::run_command_capture(ctx, &cmd)
-        .is_ok_and(|o| o.status.success())
+    crate::processors::run_command_capture(ctx, &cmd).is_ok_and(|o| o.status.success())
 }
 
 /// Try to get the version string of a tool by running `tool --version`.

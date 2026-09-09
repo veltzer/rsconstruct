@@ -20,7 +20,10 @@ impl DuplicateFilesProcessor {
         let mut checksums: HashMap<Vec<u8>, Vec<&Path>> = HashMap::new();
 
         for &file in files {
-            let bytes = crate::errors::ctx(std::fs::read(file), &format!("Failed to read {}", file.display()))?;
+            let bytes = crate::errors::ctx(
+                std::fs::read(file),
+                &format!("Failed to read {}", file.display()),
+            )?;
             let hash = Sha256::digest(&bytes).to_vec();
             checksums.entry(hash).or_default().push(file);
         }
@@ -58,7 +61,12 @@ impl crate::processors::Processor for DuplicateFilesProcessor {
     /// Duplicate detection is a whole-set property: a single product spanning
     /// every scanned file. Per-file products would be chunked and cache-skipped
     /// by the executor, so pairs of duplicates could never be compared.
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let scan = &self.config.standard;
         let mut inputs = file_index.scan(scan, true);
         if inputs.is_empty() {
@@ -78,13 +86,19 @@ impl crate::processors::Processor for DuplicateFilesProcessor {
     }
 
     fn execute(&self, _ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
-        let files: Vec<&Path> = product.inputs.iter().map(std::path::PathBuf::as_path).collect();
+        let files: Vec<&Path> = product
+            .inputs
+            .iter()
+            .map(std::path::PathBuf::as_path)
+            .collect();
         self.check_files(&files)
     }
 }
 
 fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registries::deserialize_and_create(toml, |cfg| Box::new(DuplicateFilesProcessor::new(cfg)))
+    crate::registries::deserialize_and_create(toml, |cfg| {
+        Box::new(DuplicateFilesProcessor::new(cfg))
+    })
 }
 inventory::submit! {
     crate::registries::ProcessorPlugin {

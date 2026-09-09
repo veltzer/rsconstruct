@@ -46,10 +46,7 @@ fn should_ignore(path: &Path, output_dir: &str) -> bool {
 }
 
 /// Register watch paths with the watcher, returning the list of paths being watched.
-fn register_watches(
-    watcher: &mut impl Watcher,
-    paths: &[PathBuf],
-) {
+fn register_watches(watcher: &mut impl Watcher, paths: &[PathBuf]) {
     for path in paths {
         let mode = if path.is_dir() {
             RecursiveMode::Recursive
@@ -82,7 +79,10 @@ pub fn watch(ctx: &crate::build_context::BuildContext, opts: &BuildOptions) -> R
     }
     drop(builder);
 
-    println!("{}", color::green("Watching for changes... (Ctrl+C to stop)"));
+    println!(
+        "{}",
+        color::green("Watching for changes... (Ctrl+C to stop)")
+    );
 
     let debounce_duration = Duration::from_millis(200);
     let poll_interval = Duration::from_millis(500);
@@ -161,7 +161,10 @@ pub fn watch(ctx: &crate::build_context::BuildContext, opts: &BuildOptions) -> R
             }
         }
 
-        println!("{}", color::green("Watching for changes... (Ctrl+C to stop)"));
+        println!(
+            "{}",
+            color::green("Watching for changes... (Ctrl+C to stop)")
+        );
     }
 
     Ok(())

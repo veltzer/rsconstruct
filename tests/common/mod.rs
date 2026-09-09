@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
+use serde::Deserialize;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;
-use serde::Deserialize;
 
 /// Assert that an external tool is available on PATH.
 /// Panics if the tool is missing — a missing tool must fail the test,
@@ -29,7 +29,8 @@ pub fn setup_test_project() -> TempDir {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
 
     // Create directories
-    fs::create_dir_all(temp_dir.path().join("tera.templates")).expect("Failed to create tera.templates dir");
+    fs::create_dir_all(temp_dir.path().join("tera.templates"))
+        .expect("Failed to create tera.templates dir");
     fs::create_dir_all(temp_dir.path().join("config")).expect("Failed to create config dir");
 
     // Only enable the tera processor so config/*.py files aren't picked up by linters.
@@ -37,8 +38,9 @@ pub fn setup_test_project() -> TempDir {
     // a bare [processor.tera] matches no files at all.
     fs::write(
         temp_dir.path().join("rsconstruct.toml"),
-        "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n"
-    ).expect("Failed to write rsconstruct.toml");
+        "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n",
+    )
+    .expect("Failed to write rsconstruct.toml");
 
     temp_dir
 }
@@ -54,7 +56,11 @@ pub fn run_rsconstruct(dir: &Path, args: &[&str]) -> std::process::Output {
 }
 
 /// Helper to run rsconstruct command with extra environment variables
-pub fn run_rsconstruct_with_env(dir: &Path, args: &[&str], env_vars: &[(&str, &str)]) -> std::process::Output {
+pub fn run_rsconstruct_with_env(
+    dir: &Path,
+    args: &[&str],
+    env_vars: &[(&str, &str)],
+) -> std::process::Output {
     let rsconstruct_path = env!("CARGO_BIN_EXE_rsconstruct");
     let mut cmd = Command::new(rsconstruct_path);
     cmd.current_dir(dir).args(args);
@@ -95,8 +101,9 @@ pub fn setup_cc_project(project_path: &Path) {
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.cc_single_file]\nsrc_dirs = [\"src\"]\n[analyzer.icpp]\n"
-    ).unwrap();
+        "[processor.cc_single_file]\nsrc_dirs = [\"src\"]\n[analyzer.icpp]\n",
+    )
+    .unwrap();
 }
 
 // --- JSON output parsing for tests ---
@@ -110,7 +117,11 @@ pub fn run_rsconstruct_json(dir: &Path, args: &[&str]) -> BuildResult {
 }
 
 /// Run rsconstruct with --json flag and extra environment variables
-pub fn run_rsconstruct_json_with_env(dir: &Path, args: &[&str], env_vars: &[(&str, &str)]) -> BuildResult {
+pub fn run_rsconstruct_json_with_env(
+    dir: &Path,
+    args: &[&str],
+    env_vars: &[(&str, &str)],
+) -> BuildResult {
     let mut full_args = vec!["--json"];
     full_args.extend(args);
     let output = run_rsconstruct_with_env(dir, &full_args, env_vars);
@@ -187,7 +198,13 @@ impl BuildResult {
                     BuildEvent::BuildStart { total_products } => {
                         result.total_products = total_products;
                     }
-                    BuildEvent::ProductComplete { product, processor, status, duration_ms, error } => {
+                    BuildEvent::ProductComplete {
+                        product,
+                        processor,
+                        status,
+                        duration_ms,
+                        error,
+                    } => {
                         result.products.push(ProductResult {
                             product,
                             processor,
@@ -196,7 +213,15 @@ impl BuildResult {
                             error,
                         });
                     }
-                    BuildEvent::BuildSummary { total: _, success, failed, skipped, restored, duration_ms, errors } => {
+                    BuildEvent::BuildSummary {
+                        total: _,
+                        success,
+                        failed,
+                        skipped,
+                        restored,
+                        duration_ms,
+                        errors,
+                    } => {
                         result.success = success;
                         result.failed = failed;
                         result.skipped = skipped;
@@ -217,12 +242,17 @@ impl BuildResult {
 
     /// Check if a product with given name was processed with given status
     pub fn has_product(&self, name: &str, status: &str) -> bool {
-        self.products.iter().any(|p| p.product.contains(name) && p.status == status)
+        self.products
+            .iter()
+            .any(|p| p.product.contains(name) && p.status == status)
     }
 
     /// Get all products with a specific status
     pub fn products_with_status(&self, status: &str) -> Vec<&ProductResult> {
-        self.products.iter().filter(|p| p.status == status).collect()
+        self.products
+            .iter()
+            .filter(|p| p.status == status)
+            .collect()
     }
 }
 

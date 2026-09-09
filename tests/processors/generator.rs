@@ -1,7 +1,7 @@
-use std::fs;
-use tempfile::TempDir;
 use crate::common::run_rsconstruct_with_env;
+use std::fs;
 use std::os::unix::fs::PermissionsExt;
+use tempfile::TempDir;
 
 #[test]
 fn generator_rebuilds_when_command_file_changes() {
@@ -23,10 +23,15 @@ fn generator_rebuilds_when_command_file_changes() {
 
     // First build
     let out1 = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(out1.status.success(), "First build should succeed: stderr={}", String::from_utf8_lossy(&out1.stderr));
+    assert!(
+        out1.status.success(),
+        "First build should succeed: stderr={}",
+        String::from_utf8_lossy(&out1.stderr)
+    );
 
     // Second build: unchanged — should skip
-    let out2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let out2 =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(out2.status.success());
     assert!(
         String::from_utf8_lossy(&out2.stdout).contains("Skipping"),
@@ -38,7 +43,8 @@ fn generator_rebuilds_when_command_file_changes() {
     fs::write(&script_path, "#!/bin/bash\ncp \"$1\" \"$2\"\n# changed\n").unwrap();
 
     // Third build: command changed — must rebuild
-    let out3 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let out3 =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(out3.status.success());
     let stdout3 = String::from_utf8_lossy(&out3.stdout);
     assert!(

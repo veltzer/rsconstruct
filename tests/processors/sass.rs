@@ -1,6 +1,6 @@
+use crate::common::{require_tool, run_rsconstruct_with_env};
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsconstruct_with_env, require_tool};
 
 fn setup_sass_project() -> TempDir {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -37,7 +37,10 @@ fn sass_basic_compile() {
     assert!(output_file.exists(), "Output CSS file was not created");
 
     let content = fs::read_to_string(&output_file).unwrap();
-    assert!(content.contains("red"), "CSS should contain the color value");
+    assert!(
+        content.contains("red"),
+        "CSS should contain the color value"
+    );
 }
 
 #[test]
@@ -51,7 +54,8 @@ fn sass_dry_run() {
     )
     .unwrap();
 
-    let output = run_rsconstruct_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
+    let output =
+        run_rsconstruct_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Dry run should succeed: stdout={}, stderr={}",

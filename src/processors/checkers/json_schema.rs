@@ -42,7 +42,8 @@ fn check_property_ordering(value: &Value, path: &str, errors: &mut Vec<String>) 
     match value {
         Value::Object(map) => {
             // Check if this is a JSON Schema object definition
-            let is_object_type = map.get("type")
+            let is_object_type = map
+                .get("type")
                 .and_then(|v| v.as_str())
                 .is_some_and(|t| t == "object");
 
@@ -70,9 +71,7 @@ fn check_property_ordering(value: &Value, path: &str, errors: &mut Vec<String>) 
                         ));
                     }
                     if !extra.is_empty() {
-                        errors.push(format!(
-                            "  {path}: extra in propertyOrdering: {extra:?}"
-                        ));
+                        errors.push(format!("  {path}: extra in propertyOrdering: {extra:?}"));
                     }
                 }
             }
@@ -102,11 +101,9 @@ impl crate::processors::Processor for JsonSchemaProcessor {
         Vec::new()
     }
 
-
     fn execute(&self, _ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         self.execute_product(product)
     }
-
 }
 
 fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {

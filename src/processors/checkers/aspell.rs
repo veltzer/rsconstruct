@@ -55,10 +55,7 @@ impl AspellProcessor {
             config.words_file.clone(),
             Some("personal_ws-1.1 en 0"),
         );
-        Ok(Self {
-            config,
-            words,
-        })
+        Ok(Self { config, words })
     }
 
     /// Load custom words from the aspell personal word list (.pws) file.
@@ -68,8 +65,9 @@ impl AspellProcessor {
         if !words_path.exists() {
             return Ok(HashSet::new());
         }
-        let content = std::fs::read_to_string(words_path)
-            .with_context(|| format!("Failed to read aspell words file: {}", words_path.display()))?;
+        let content = std::fs::read_to_string(words_path).with_context(|| {
+            format!("Failed to read aspell words file: {}", words_path.display())
+        })?;
         Ok(content
             .lines()
             .filter(|l| !l.starts_with("personal_ws"))
@@ -98,17 +96,23 @@ impl AspellProcessor {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("aspell failed for {}: {}", file.display(), stderr.trim_end());
+            anyhow::bail!(
+                "aspell failed for {}: {}",
+                file.display(),
+                stderr.trim_end()
+            );
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let misspelled: Vec<&str> = stdout.lines()
+        let misspelled: Vec<&str> = stdout
+            .lines()
             .map(str::trim)
             .filter(|l| !l.is_empty())
             .filter(|l| !self.words.is_known(&l.to_lowercase()))
             .collect();
 
-        self.words.handle_misspelled(&misspelled, file, self.config.auto_add_words)
+        self.words
+            .handle_misspelled(&misspelled, file, self.config.auto_add_words)
     }
 }
 
@@ -160,7 +164,11 @@ impl Processor for AspellProcessor {
         )
     }
 
-    fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
+    fn execute_batch(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        products: &[&Product],
+    ) -> Vec<Result<()>> {
         self.words.execute_batch_with_flush(
             products,
             self.config.auto_add_words,
@@ -171,7 +179,9 @@ impl Processor for AspellProcessor {
 }
 
 fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registries::deserialize_and_try_create(toml, |cfg| Ok(Box::new(AspellProcessor::new(cfg)?)))
+    crate::registries::deserialize_and_try_create(toml, |cfg| {
+        Ok(Box::new(AspellProcessor::new(cfg)?))
+    })
 }
 inventory::submit! {
     crate::registries::ProcessorPlugin {

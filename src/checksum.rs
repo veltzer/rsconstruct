@@ -33,7 +33,10 @@ fn get_mtime_db(ctx: &BuildContext) -> Result<std::sync::MutexGuard<'_, Option<r
     let mut guard = ctx.mtime_db.lock().unwrap();
     if guard.is_none() {
         let dir = PathBuf::from(".rsconstruct");
-        crate::errors::ctx(fs::create_dir_all(&dir), "Failed to create .rsconstruct directory")?;
+        crate::errors::ctx(
+            fs::create_dir_all(&dir),
+            "Failed to create .rsconstruct directory",
+        )?;
         let db = crate::db::open_or_recreate(&dir.join("mtime.redb"), "Mtime cache")?;
         *guard = Some(db);
     }
@@ -86,7 +89,8 @@ fn stream_file_checksum(path: &Path) -> Result<String> {
     let mut hasher = Sha256::new();
     let mut buf = vec![0u8; HASH_BUF_SIZE];
     loop {
-        let n = file.read(&mut buf)
+        let n = file
+            .read(&mut buf)
             .with_context(|| format!("Failed to read file for checksum: {}", path.display()))?;
         if n == 0 {
             break;
@@ -103,12 +107,18 @@ type DirtyMtimeEntry = (String, MtimeEntry);
 /// Returns the checksum, which path was taken, and optionally a dirty mtime
 /// entry to flush (absent for cache hits and for recently-modified files,
 /// which are deliberately not cached — see below).
-fn fast_checksum(ctx: &BuildContext, path: &Path) -> Result<(String, ChecksumPath, Option<DirtyMtimeEntry>)> {
-    let metadata = fs::metadata(path)
-        .with_context(|| format!("Failed to stat file: {}", path.display()))?;
-    let mtime = metadata.modified()
+fn fast_checksum(
+    ctx: &BuildContext,
+    path: &Path,
+) -> Result<(String, ChecksumPath, Option<DirtyMtimeEntry>)> {
+    let metadata =
+        fs::metadata(path).with_context(|| format!("Failed to stat file: {}", path.display()))?;
+    let mtime = metadata
+        .modified()
         .with_context(|| format!("Failed to get mtime: {}", path.display()))?;
-    let duration = mtime.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default();
+    let duration = mtime
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default();
     let mtime_secs = i64::try_from(duration.as_secs()).unwrap_or(i64::MAX);
     let mtime_nanos = duration.subsec_nanos();
 
@@ -117,13 +127,16 @@ fn fast_checksum(ctx: &BuildContext, path: &Path) -> Result<(String, ChecksumPat
     // Check mtime cache in DB
     let db_guard = get_mtime_db(ctx)?;
     let cached = if let Some(ref db) = *db_guard {
-        let read_txn = crate::errors::ctx(db.begin_read(), "Failed to begin read transaction for mtime cache")?;
+        let read_txn = crate::errors::ctx(
+            db.begin_read(),
+            "Failed to begin read transaction for mtime cache",
+        )?;
         match read_txn.open_table(MTIME_TABLE) {
-            Ok(table) => {
-                table.get(path_str.as_str()).ok()
-                    .flatten()
-                    .and_then(|data| serde_json::from_slice::<MtimeEntry>(data.value()).ok())
-            }
+            Ok(table) => table
+                .get(path_str.as_str())
+                .ok()
+                .flatten()
+                .and_then(|data| serde_json::from_slice::<MtimeEntry>(data.value()).ok()),
             Err(_) => None,
         }
     } else {
@@ -132,7 +145,8 @@ fn fast_checksum(ctx: &BuildContext, path: &Path) -> Result<(String, ChecksumPat
     drop(db_guard);
 
     if let Some(ref entry) = cached
-        && entry.mtime_secs == mtime_secs && entry.mtime_nanos == mtime_nanos
+        && entry.mtime_secs == mtime_secs
+        && entry.mtime_nanos == mtime_nanos
     {
         let mut guard = ctx.checksum_cache.lock().unwrap();
         let cache = guard.get_or_insert_with(HashMap::new);
@@ -170,7 +184,11 @@ fn fast_checksum(ctx: &BuildContext, path: &Path) -> Result<(String, ChecksumPat
         checksum: checksum.clone(),
     };
 
-    Ok((checksum, ChecksumPath::FullRead, Some((path_str, new_entry))))
+    Ok((
+        checksum,
+        ChecksumPath::FullRead,
+        Some((path_str, new_entry)),
+    ))
 }
 
 /// Flush a batch of dirty mtime entries in a single write transaction.
@@ -180,14 +198,18 @@ fn flush_mtime_entries(ctx: &BuildContext, dirty: Vec<(String, MtimeEntry)>) -> 
     }
     let db_guard = get_mtime_db(ctx)?;
     let db = crate::errors::ctx_opt(db_guard.as_ref(), "Mtime database not available")?;
-    let write_txn = crate::errors::ctx(db.begin_write(), "Failed to begin write transaction for mtime cache")?;
+    let write_txn = crate::errors::ctx(
+        db.begin_write(),
+        "Failed to begin write transaction for mtime cache",
+    )?;
     {
-        let mut table = write_txn.open_table(MTIME_TABLE)
+        let mut table = write_txn
+            .open_table(MTIME_TABLE)
             .context("Failed to open mtime cache table")?;
         for (path_str, entry) in &dirty {
-            let value = serde_json::to_vec(entry)
-                .context("Failed to serialize mtime entry")?;
-            table.insert(path_str.as_str(), value.as_slice())
+            let value = serde_json::to_vec(entry).context("Failed to serialize mtime entry")?;
+            table
+                .insert(path_str.as_str(), value.as_slice())
                 .context("Failed to insert mtime entry")?;
         }
     }
@@ -245,8 +267,13 @@ pub fn prune_mtime_cache(ctx: &BuildContext) -> Result<usize> {
 
     let stale: Vec<String> = {
         let db_guard = get_mtime_db(ctx)?;
-        let Some(db) = db_guard.as_ref() else { return Ok(0) };
-        let read_txn = crate::errors::ctx(db.begin_read(), "Failed to begin read transaction for mtime prune")?;
+        let Some(db) = db_guard.as_ref() else {
+            return Ok(0);
+        };
+        let read_txn = crate::errors::ctx(
+            db.begin_read(),
+            "Failed to begin read transaction for mtime prune",
+        )?;
         let Ok(table) = read_txn.open_table(MTIME_TABLE) else {
             return Ok(0);
         };
@@ -267,12 +294,17 @@ pub fn prune_mtime_cache(ctx: &BuildContext) -> Result<usize> {
 
     let db_guard = get_mtime_db(ctx)?;
     let db = crate::errors::ctx_opt(db_guard.as_ref(), "Mtime database not available")?;
-    let write_txn = crate::errors::ctx(db.begin_write(), "Failed to begin write transaction for mtime prune")?;
+    let write_txn = crate::errors::ctx(
+        db.begin_write(),
+        "Failed to begin write transaction for mtime prune",
+    )?;
     {
-        let mut table = write_txn.open_table(MTIME_TABLE)
+        let mut table = write_txn
+            .open_table(MTIME_TABLE)
             .context("Failed to open mtime cache table for prune")?;
         for path_str in &stale {
-            table.remove(path_str.as_str())
+            table
+                .remove(path_str.as_str())
                 .with_context(|| format!("Failed to remove mtime entry for {path_str}"))?;
         }
     }
@@ -359,10 +391,16 @@ mod tests {
         let joined_right = hash_checksums(&["a".to_string(), "b:c".to_string()]);
         assert_ne!(joined_left, joined_right);
 
-        assert_ne!(hash_checksums(&[]), hash_checksums(&[String::new()]),
-            "no elements and one empty element must differ");
-        assert_eq!(hash_checksums(&["x".to_string()]), hash_checksums(&["x".to_string()]),
-            "must be deterministic");
+        assert_ne!(
+            hash_checksums(&[]),
+            hash_checksums(&[String::new()]),
+            "no elements and one empty element must differ"
+        );
+        assert_eq!(
+            hash_checksums(&["x".to_string()]),
+            hash_checksums(&["x".to_string()]),
+            "must be deterministic"
+        );
     }
 
     /// The streaming hasher must agree with the one-shot hasher at every
@@ -374,8 +412,11 @@ mod tests {
             let data = vec![0xABu8; size];
             let path = tmp.path().join(format!("f{size}"));
             fs::write(&path, &data).unwrap();
-            assert_eq!(stream_file_checksum(&path).unwrap(), bytes_checksum(&data),
-                "stream and one-shot checksums diverge at {size} bytes");
+            assert_eq!(
+                stream_file_checksum(&path).unwrap(),
+                bytes_checksum(&data),
+                "stream and one-shot checksums diverge at {size} bytes"
+            );
         }
     }
 
@@ -422,15 +463,21 @@ mod tests {
         fs::write(&path, b"one").unwrap();
         let first = file_checksum(&ctx, &path).unwrap();
         fs::write(&path, b"two").unwrap();
-        assert_eq!(file_checksum(&ctx, &path).unwrap(), first,
-            "un-evicted reads serve the in-session cached checksum");
+        assert_eq!(
+            file_checksum(&ctx, &path).unwrap(),
+            first,
+            "un-evicted reads serve the in-session cached checksum"
+        );
 
         forget_in_session(&ctx, std::slice::from_ref(&path));
         let second = file_checksum(&ctx, &path).unwrap();
         assert_ne!(second, first, "eviction must expose the new content");
 
         let fresh_ctx = BuildContext::new();
-        assert_eq!(file_checksum(&fresh_ctx, &path).unwrap(), second,
-            "post-eviction value must match a fresh context's view");
+        assert_eq!(
+            file_checksum(&fresh_ctx, &path).unwrap(),
+            second,
+            "post-eviction value must match a fresh context's view"
+        );
     }
 }

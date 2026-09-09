@@ -7,9 +7,11 @@ use serde::{Deserialize, Serialize};
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{Processor, run_command, check_command_output};
+use crate::processors::{Processor, check_command_output, run_command};
 
-fn default_rust_single_file_output_suffix() -> String { ".elf".into() }
+fn default_rust_single_file_output_suffix() -> String {
+    ".elf".into()
+}
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct RustSingleFileConfig {
     #[serde(default)]
@@ -36,21 +38,22 @@ pub struct RustSingleFileProcessor {
 
 impl RustSingleFileProcessor {
     pub const fn new(config: RustSingleFileConfig) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 
     fn get_output_path(&self, source: &Path) -> PathBuf {
         let src_dirs = self.config.standard.src_dirs();
         let full_parent = crate::processors::parent_dir_or_empty(source);
-        let parent = src_dirs.iter()
+        let parent = src_dirs
+            .iter()
             .filter(|d| !d.is_empty())
             .find_map(|d| full_parent.strip_prefix(d).ok())
             .unwrap_or(full_parent);
         let stem = source.file_stem().unwrap_or_default();
         let output_name = format!("{}{}", stem.to_string_lossy(), self.config.output_suffix);
-        Path::new(&self.config.standard.output_dir).join(parent).join(output_name)
+        Path::new(&self.config.standard.output_dir)
+            .join(parent)
+            .join(output_name)
     }
 }
 
@@ -73,13 +76,21 @@ impl Processor for RustSingleFileProcessor {
         vec![self.config.standard.command.clone()]
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let files = file_index.scan(&self.config.standard, true);
         if files.is_empty() {
             return Ok(());
         }
 
-        let hash = Some(output_config_hash(&self.config, &crate::config::checksum_fields_of(instance_name)));
+        let hash = Some(output_config_hash(
+            &self.config,
+            &crate::config::checksum_fields_of(instance_name),
+        ));
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
         for source in &files {
@@ -89,12 +100,7 @@ impl Processor for RustSingleFileProcessor {
             inputs.push(source.clone());
             inputs.extend_from_slice(&extra);
 
-            graph.add_product(
-                inputs,
-                vec![output],
-                instance_name,
-                hash.clone(),
-            )?;
+            graph.add_product(inputs, vec![output], instance_name, hash.clone())?;
         }
 
         Ok(())
@@ -115,11 +121,12 @@ impl Processor for RustSingleFileProcessor {
         let out = run_command(ctx, &cmd)?;
         check_command_output(&out, format_args!("rustc {}", source.display()))
     }
-
 }
 
 fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {
-    crate::registries::deserialize_and_create(toml, |cfg| Box::new(RustSingleFileProcessor::new(cfg)))
+    crate::registries::deserialize_and_create(toml, |cfg| {
+        Box::new(RustSingleFileProcessor::new(cfg))
+    })
 }
 inventory::submit! {
     crate::registries::ProcessorPlugin {

@@ -30,7 +30,10 @@ struct WebCacheRetriever {
 }
 
 impl jsonschema::Retrieve for WebCacheRetriever {
-    fn retrieve(&self, uri: &jsonschema::Uri<String>) -> std::result::Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+    fn retrieve(
+        &self,
+        uri: &jsonschema::Uri<String>,
+    ) -> std::result::Result<Value, Box<dyn std::error::Error + Send + Sync>> {
         let url = uri.as_str();
         let body = crate::webcache::fetch(url, self.ttl_secs)?;
         let value: Value = serde_json::from_str(&body)?;
@@ -47,7 +50,11 @@ impl IyamlschemaProcessor {
         Self { config }
     }
 
-    fn execute_product(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
+    fn execute_product(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        product: &Product,
+    ) -> Result<()> {
         self.check_files(ctx, &[product.primary_input()])
     }
 
@@ -73,11 +80,12 @@ impl IyamlschemaProcessor {
             .with_context(|| format!("Failed to read {}", path.display()))?;
 
         // Parse YAML into a JSON Value (for jsonschema validation)
-        let data: Value = serde_yml::from_str(&contents)
+        let data: Value = serde_yaml_ng::from_str(&contents)
             .with_context(|| format!("Failed to parse YAML in {}", path.display()))?;
 
         // Extract $schema URL
-        let schema_url = data.get("$schema")
+        let schema_url = data
+            .get("$schema")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("no $schema field found"))?;
 
@@ -93,12 +101,16 @@ impl IyamlschemaProcessor {
             .build(&schema)
             .with_context(|| format!("Failed to compile schema from {schema_url}"))?;
 
-        let validation_errors: Vec<String> = validator.iter_errors(&data)
+        let validation_errors: Vec<String> = validator
+            .iter_errors(&data)
             .map(|e| format!("  {}: {}", e.instance_path(), e))
             .collect();
 
         if !validation_errors.is_empty() {
-            bail!("schema validation errors:\n{}", validation_errors.join("\n"));
+            bail!(
+                "schema validation errors:\n{}",
+                validation_errors.join("\n")
+            );
         }
 
         // Check property ordering
@@ -117,32 +129,27 @@ impl IyamlschemaProcessor {
 
 /// Recursively check that data object keys match the `propertyOrdering`
 /// declared in the schema.
-fn check_property_ordering(
-    data: &Value,
-    schema: &Value,
-    path: &str,
-    errors: &mut Vec<String>,
-) {
+fn check_property_ordering(data: &Value, schema: &Value, path: &str, errors: &mut Vec<String>) {
     match (data, schema) {
         (Value::Object(data_map), Value::Object(schema_map)) => {
             // Check ordering at this level
             if let Some(Value::Array(expected_order)) = schema_map.get("propertyOrdering") {
-                let expected: Vec<&str> = expected_order.iter()
-                    .filter_map(|v| v.as_str())
-                    .collect();
+                let expected: Vec<&str> =
+                    expected_order.iter().filter_map(|v| v.as_str()).collect();
 
-                let actual_keys: Vec<&str> = data_map.keys()
-                    .map(std::string::String::as_str)
-                    .collect();
+                let actual_keys: Vec<&str> =
+                    data_map.keys().map(std::string::String::as_str).collect();
 
                 // Filter actual keys to only those in the expected list
-                let actual_ordered: Vec<&str> = actual_keys.iter()
+                let actual_ordered: Vec<&str> = actual_keys
+                    .iter()
                     .copied()
                     .filter(|k| expected.contains(k))
                     .collect();
 
                 // Filter expected to only those present in data
-                let expected_ordered: Vec<&str> = expected.iter()
+                let expected_ordered: Vec<&str> = expected
+                    .iter()
                     .copied()
                     .filter(|k| actual_keys.contains(k))
                     .collect();
@@ -222,8 +229,11 @@ impl crate::processors::Processor for IyamlschemaProcessor {
         instance_name: &str,
     ) -> anyhow::Result<()> {
         crate::processors::discover_checker_products(
-            graph, &self.config.standard, file_index,
-            &self.config.standard.dep_inputs, &self.config.standard.dep_auto,
+            graph,
+            &self.config.standard,
+            file_index,
+            &self.config.standard.dep_inputs,
+            &self.config.standard.dep_auto,
             &self.config,
             &crate::config::checksum_fields_of(instance_name),
             instance_name,
@@ -234,8 +244,14 @@ impl crate::processors::Processor for IyamlschemaProcessor {
         self.execute_product(ctx, product)
     }
 
-    fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
-        crate::processors::execute_checker_batch_per_file(products, |file| self.check_files(ctx, &[file]))
+    fn execute_batch(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        products: &[&Product],
+    ) -> Vec<Result<()>> {
+        crate::processors::execute_checker_batch_per_file(products, |file| {
+            self.check_files(ctx, &[file])
+        })
     }
 }
 

@@ -1,28 +1,38 @@
-use std::collections::{BTreeMap, HashSet};
-use std::fs;
-use std::path::{Path, PathBuf};
-use anyhow::{Context, Result};
+use super::Builder;
 use crate::cli::{GraphAction, GraphFormat, GraphViewer};
 use crate::color;
 use crate::json_output;
 use crate::processors::log_command;
-use super::Builder;
+use anyhow::{Context, Result};
+use std::collections::{BTreeMap, HashSet};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 impl Builder {
     /// Dispatch graph subcommands
-    pub fn graph(&self, ctx: &crate::build_context::BuildContext, action: GraphAction) -> Result<()> {
+    pub fn graph(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        action: GraphAction,
+    ) -> Result<()> {
         match action {
             GraphAction::Show { format } => self.print_graph(ctx, format),
             GraphAction::View { viewer } => self.view_graph(ctx, viewer),
             GraphAction::Stats => self.graph_stats(ctx),
-            GraphAction::Unreferenced { extensions, rm } => self.graph_unreferenced(ctx, extensions, rm),
+            GraphAction::Unreferenced { extensions, rm } => {
+                self.graph_unreferenced(ctx, extensions, rm)
+            }
             GraphAction::LookupFwd { files } => self.graph_lookup_fwd(ctx, files),
             GraphAction::LookupRev { files } => self.graph_lookup_rev(ctx, files),
         }
     }
 
     /// Print the dependency graph in the specified format
-    fn print_graph(&self, ctx: &crate::build_context::BuildContext, format: GraphFormat) -> Result<()> {
+    fn print_graph(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        format: GraphFormat,
+    ) -> Result<()> {
         let graph = self.build_graph(ctx)?;
 
         // Output in the requested format
@@ -39,7 +49,11 @@ impl Builder {
     }
 
     /// View the dependency graph in a viewer
-    fn view_graph(&self, ctx: &crate::build_context::BuildContext, viewer: GraphViewer) -> Result<()> {
+    fn view_graph(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        viewer: GraphViewer,
+    ) -> Result<()> {
         use std::process::Command;
 
         let graph = self.build_graph(ctx)?;
@@ -51,8 +65,9 @@ impl Builder {
             GraphViewer::Mermaid => {
                 let html_path = temp_dir.join("rsconstruct_graph.html");
                 let html_content = graph.to_html();
-                fs::write(&html_path, html_content)
-                    .with_context(|| format!("Failed to write HTML file: {}", html_path.display()))?;
+                fs::write(&html_path, html_content).with_context(|| {
+                    format!("Failed to write HTML file: {}", html_path.display())
+                })?;
 
                 // Open in browser
                 self.open_file(&html_path)?;
@@ -64,7 +79,9 @@ impl Builder {
                 dot_check_cmd.arg("-V");
                 let dot_check = crate::processors::run_command_capture(ctx, &dot_check_cmd);
                 if dot_check.map_or(true, |o| !o.status.success()) {
-                    anyhow::bail!("Graphviz 'dot' command not found. Install Graphviz or use --view=mermaid");
+                    anyhow::bail!(
+                        "Graphviz 'dot' command not found. Install Graphviz or use --view=mermaid"
+                    );
                 }
 
                 let dot_path = temp_dir.join("rsconstruct_graph.dot");
@@ -105,7 +122,9 @@ impl Builder {
         let mut total_edges = 0usize;
 
         for product in products {
-            let entry = per_processor.entry(product.processor.as_str()).or_insert((0, 0, 0));
+            let entry = per_processor
+                .entry(product.processor.as_str())
+                .or_insert((0, 0, 0));
             entry.0 += 1; // product count
             entry.1 += product.inputs.len();
             entry.2 += product.outputs.len();
@@ -113,14 +132,17 @@ impl Builder {
         }
 
         if json_output::is_json_mode() {
-            let stats: Vec<serde_json::Value> = per_processor.iter().map(|(proc, (count, inputs, outputs))| {
-                serde_json::json!({
-                    "processor": proc,
-                    "products": count,
-                    "inputs": inputs,
-                    "outputs": outputs,
+            let stats: Vec<serde_json::Value> = per_processor
+                .iter()
+                .map(|(proc, (count, inputs, outputs))| {
+                    serde_json::json!({
+                        "processor": proc,
+                        "products": count,
+                        "inputs": inputs,
+                        "outputs": outputs,
+                    })
                 })
-            }).collect();
+                .collect();
             let json = serde_json::json!({
                 "processors": stats,
                 "total_products": products.len(),
@@ -129,35 +151,62 @@ impl Builder {
             println!("{}", serde_json::to_string_pretty(&json)?);
         } else {
             for (proc, (count, inputs, outputs)) in &per_processor {
-                println!("{}: {} products, {} inputs, {} outputs",
-                    color::bold(proc), count, inputs, outputs);
+                println!(
+                    "{}: {} products, {} inputs, {} outputs",
+                    color::bold(proc),
+                    count,
+                    inputs,
+                    outputs
+                );
             }
             println!();
-            println!("{}: {} products, {} dependency edges",
-                color::bold("Total"), products.len(), total_edges);
+            println!(
+                "{}: {} products, {} dependency edges",
+                color::bold("Total"),
+                products.len(),
+                total_edges
+            );
         }
 
         Ok(())
     }
 
     /// List files on disk not referenced by any product input (primary or dependency).
-    fn graph_unreferenced(&self, ctx: &crate::build_context::BuildContext, extensions: Vec<String>, rm: bool) -> Result<()> {
+    fn graph_unreferenced(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        extensions: Vec<String>,
+        rm: bool,
+    ) -> Result<()> {
         let graph = self.build_graph(ctx)?;
 
         // Collect every file that appears in any product's inputs
-        let referenced: HashSet<PathBuf> = graph.products()
+        let referenced: HashSet<PathBuf> = graph
+            .products()
             .iter()
             .flat_map(|p| p.inputs.iter().cloned())
             .collect();
 
         // Normalise extensions: ensure they start with '.'
-        let exts: Vec<String> = extensions.iter()
-            .map(|e| if e.starts_with('.') { e.clone() } else { format!(".{e}") })
+        let exts: Vec<String> = extensions
+            .iter()
+            .map(|e| {
+                if e.starts_with('.') {
+                    e.clone()
+                } else {
+                    format!(".{e}")
+                }
+            })
             .collect();
 
         // Walk the project directory for matching files
         let mut unreferenced: Vec<PathBuf> = Vec::new();
-        collect_unreferenced(std::path::Path::new("."), &exts, &referenced, &mut unreferenced)?;
+        collect_unreferenced(
+            std::path::Path::new("."),
+            &exts,
+            &referenced,
+            &mut unreferenced,
+        )?;
 
         unreferenced.sort();
 
@@ -203,7 +252,11 @@ impl Builder {
     /// Shows: the queried file → each consuming product's processor + outputs.
     ///
     /// Reports per file. Files that are not inputs to any product are listed as such.
-    fn graph_lookup_fwd(&self, ctx: &crate::build_context::BuildContext, files: Vec<String>) -> Result<()> {
+    fn graph_lookup_fwd(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        files: Vec<String>,
+    ) -> Result<()> {
         let graph = self.build_graph(ctx)?;
         let queries = normalize_query_paths(&files);
 
@@ -218,16 +271,24 @@ impl Builder {
                 file: String,
                 consumers: Vec<Consumer<'a>>,
             }
-            let entries: Vec<Entry> = queries.iter().map(|q| {
-                let consumers: Vec<Consumer> = graph.products_consuming(q).iter()
-                    .map(|&id| &graph.products()[id])
-                    .map(|p| Consumer {
-                        processor: &p.processor,
-                        outputs: p.outputs.iter().map(|o| o.display().to_string()).collect(),
-                    })
-                    .collect();
-                Entry { file: q.display().to_string(), consumers }
-            }).collect();
+            let entries: Vec<Entry> = queries
+                .iter()
+                .map(|q| {
+                    let consumers: Vec<Consumer> = graph
+                        .products_consuming(q)
+                        .iter()
+                        .map(|&id| &graph.products()[id])
+                        .map(|p| Consumer {
+                            processor: &p.processor,
+                            outputs: p.outputs.iter().map(|o| o.display().to_string()).collect(),
+                        })
+                        .collect();
+                    Entry {
+                        file: q.display().to_string(),
+                        consumers,
+                    }
+                })
+                .collect();
             println!("{}", serde_json::to_string_pretty(&entries)?);
             return Ok(());
         }
@@ -243,8 +304,11 @@ impl Builder {
                     if product.outputs.is_empty() {
                         println!("  [{}] (no outputs — checker)", product.processor);
                     } else {
-                        let outs: Vec<String> = product.outputs.iter()
-                            .map(|o| o.display().to_string()).collect();
+                        let outs: Vec<String> = product
+                            .outputs
+                            .iter()
+                            .map(|o| o.display().to_string())
+                            .collect();
                         println!("  [{}] -> {}", product.processor, outs.join(", "));
                     }
                 }
@@ -258,7 +322,11 @@ impl Builder {
     ///
     /// By construction every declared output belongs to exactly one product
     /// (enforced at graph-build time via the output-conflict check).
-    fn graph_lookup_rev(&self, ctx: &crate::build_context::BuildContext, files: Vec<String>) -> Result<()> {
+    fn graph_lookup_rev(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        files: Vec<String>,
+    ) -> Result<()> {
         let graph = self.build_graph(ctx)?;
         let queries = normalize_query_paths(&files);
 
@@ -273,16 +341,22 @@ impl Builder {
                 file: String,
                 producer: Option<Producer<'a>>,
             }
-            let entries: Vec<Entry> = queries.iter().map(|q| {
-                let producer = graph.path_owner(q).map(|id| {
-                    let p = &graph.products()[id];
-                    Producer {
-                        processor: &p.processor,
-                        inputs: p.inputs.iter().map(|i| i.display().to_string()).collect(),
+            let entries: Vec<Entry> = queries
+                .iter()
+                .map(|q| {
+                    let producer = graph.path_owner(q).map(|id| {
+                        let p = &graph.products()[id];
+                        Producer {
+                            processor: &p.processor,
+                            inputs: p.inputs.iter().map(|i| i.display().to_string()).collect(),
+                        }
+                    });
+                    Entry {
+                        file: q.display().to_string(),
+                        producer,
                     }
-                });
-                Entry { file: q.display().to_string(), producer }
-            }).collect();
+                })
+                .collect();
             println!("{}", serde_json::to_string_pretty(&entries)?);
             return Ok(());
         }
@@ -295,8 +369,8 @@ impl Builder {
                     if p.inputs.is_empty() {
                         println!("  [{}] (no inputs declared)", p.processor);
                     } else {
-                        let ins: Vec<String> = p.inputs.iter()
-                            .map(|i| i.display().to_string()).collect();
+                        let ins: Vec<String> =
+                            p.inputs.iter().map(|i| i.display().to_string()).collect();
                         println!("  [{}] <- {}", p.processor, ins.join(", "));
                     }
                 }
@@ -310,10 +384,13 @@ impl Builder {
 /// Normalize user-supplied paths: strip a leading `./` so queries match graph paths
 /// which are stored without that prefix.
 fn normalize_query_paths(files: &[String]) -> Vec<PathBuf> {
-    files.iter().map(|s| {
-        let p = Path::new(s);
-        p.strip_prefix("./").unwrap_or(p).to_path_buf()
-    }).collect()
+    files
+        .iter()
+        .map(|s| {
+            let p = Path::new(s);
+            p.strip_prefix("./").unwrap_or(p).to_path_buf()
+        })
+        .collect()
 }
 
 /// Recursively collect files whose extension matches `exts` and are not in `referenced`.
@@ -323,7 +400,9 @@ fn collect_unreferenced(
     referenced: &HashSet<PathBuf>,
     out: &mut Vec<PathBuf>,
 ) -> Result<()> {
-    for entry in fs::read_dir(dir).with_context(|| format!("Failed to read dir {}", dir.display()))? {
+    for entry in
+        fs::read_dir(dir).with_context(|| format!("Failed to read dir {}", dir.display()))?
+    {
         let entry = entry.with_context(|| format!("Failed to read entry in {}", dir.display()))?;
         let path = entry.path();
         if path.is_dir() {

@@ -1,5 +1,5 @@
 use crate::config::variables::{
-    value_to_toml_inline, remove_vars_section, extract_var_names, substitute_variables,
+    extract_var_names, remove_vars_section, substitute_variables, value_to_toml_inline,
 };
 
 // Tests for value_to_toml_inline
@@ -143,8 +143,14 @@ fn remove_vars_section_preserves_line_numbers() {
 fn substitute_variables_nested_reference_any_order() {
     let content = "[vars]\nb = \"x\"\nz = \"${b}\"\n\n[other]\nkey = \"${z}\"\n";
     let result = substitute_variables(content).unwrap();
-    assert!(result.contains("key = \"x\""), "nested var must resolve: {result}");
-    assert!(!result.contains("${"), "no raw references may remain: {result}");
+    assert!(
+        result.contains("key = \"x\""),
+        "nested var must resolve: {result}"
+    );
+    assert!(
+        !result.contains("${"),
+        "no raw references may remain: {result}"
+    );
 }
 
 /// A reference cycle in [vars] must be a clear error, not a hang.
@@ -152,7 +158,10 @@ fn substitute_variables_nested_reference_any_order() {
 fn substitute_variables_cycle_errors() {
     let content = "[vars]\na = \"${b}\"\nb = \"${a}\"\n\n[other]\nkey = \"${a}\"\n";
     let err = substitute_variables(content).unwrap_err();
-    assert!(err.to_string().contains("cycle"), "should mention cycle: {err}");
+    assert!(
+        err.to_string().contains("cycle"),
+        "should mention cycle: {err}"
+    );
 }
 
 /// `${...}` inside a comment must not fail the undefined-variable check.
@@ -185,15 +194,27 @@ fn line_preservation_invariant_holds() {
     let before = content.lines().count();
     let result = substitute_variables(content).unwrap();
     assert_eq!(
-        result.lines().count(), before,
+        result.lines().count(),
+        before,
         "substitution changed the line count, which silently corrupts every \
          provenance line number below the change:\n{result}"
     );
     // And the substituted values must still be on their original lines.
     let lines: Vec<&str> = result.lines().collect();
-    assert!(lines[6].contains("[\"a\", \"b\", \"c\"]"), "line 7 was: {}", lines[6]);
-    assert!(!lines[7].contains('\n'), "embedded newline leaked into the output");
-    assert!(lines[7].contains("\\n"), "newlines must be escaped, line 8 was: {}", lines[7]);
+    assert!(
+        lines[6].contains("[\"a\", \"b\", \"c\"]"),
+        "line 7 was: {}",
+        lines[6]
+    );
+    assert!(
+        !lines[7].contains('\n'),
+        "embedded newline leaked into the output"
+    );
+    assert!(
+        lines[7].contains("\\n"),
+        "newlines must be escaped, line 8 was: {}",
+        lines[7]
+    );
 }
 
 /// The blanking half of the same invariant, isolated: `remove_vars_section`
@@ -203,8 +224,15 @@ fn remove_vars_section_preserves_line_count() {
     let content = "[vars]\na = \"1\"\nb = \"2\"\n\n[processor.ruff]\nsrc_dirs = [\"src\"]\n";
     let before = content.lines().count();
     let result = remove_vars_section(content);
-    assert_eq!(result.lines().count(), before, "vars removal must not shift lines");
-    assert!(!result.contains("[vars]"), "the section header must be gone");
+    assert_eq!(
+        result.lines().count(),
+        before,
+        "vars removal must not shift lines"
+    );
+    assert!(
+        !result.contains("[vars]"),
+        "the section header must be gone"
+    );
     // The surviving section must still be at its original line index.
     let lines: Vec<&str> = result.lines().collect();
     assert_eq!(lines[4], "[processor.ruff]", "line 5 moved: {lines:?}");
@@ -267,9 +295,13 @@ fn extract_var_names_ignores_equals_inside_array_items() {
 /// though an array item happens to start with `a=`.
 #[test]
 fn equals_in_array_item_does_not_define_a_variable() {
-    let content = "[vars]\npatterns = [\n  \"a=b\",\n]\n\n[processor.tera]\nsrc_dirs = [\"${a}\"]\n";
+    let content =
+        "[vars]\npatterns = [\n  \"a=b\",\n]\n\n[processor.tera]\nsrc_dirs = [\"${a}\"]\n";
     let err = substitute_variables(content).unwrap_err().to_string();
-    assert!(err.contains("Undefined variable"), "expected undefined-variable error, got: {err}");
+    assert!(
+        err.contains("Undefined variable"),
+        "expected undefined-variable error, got: {err}"
+    );
 }
 
 #[test]
@@ -370,7 +402,7 @@ fn substitute_variables_boolean() {
 // push schema errors past config-load and into the Builder where they produce
 // worse messages.
 
-use crate::config::{validate_processor_fields_raw, validate_analyzer_fields_raw};
+use crate::config::{validate_analyzer_fields_raw, validate_processor_fields_raw};
 
 fn toml_of(s: &str) -> toml::Value {
     toml::from_str(s).expect("test fixture must be valid TOML")
@@ -413,14 +445,19 @@ fn analyzer_validator_rejects_unknown_field() {
 
 #[test]
 fn analyzer_validator_collects_multiple_errors() {
-    let raw = toml_of(r"
+    let raw = toml_of(
+        r"
 [analyzer.python]
 enabeld = false
 
 [analyzer.nonsense]
-");
+",
+    );
     let errors = validate_analyzer_fields_raw(&raw);
-    assert!(errors.len() >= 2, "expected multiple errors, got: {errors:?}");
+    assert!(
+        errors.len() >= 2,
+        "expected multiple errors, got: {errors:?}"
+    );
     assert!(errors.iter().any(|e| e.contains("enabeld")));
     assert!(errors.iter().any(|e| e.contains("nonsense")));
 }
@@ -429,13 +466,15 @@ enabeld = false
 fn analyzer_validator_handles_multi_instance() {
     // `[analyzer.cpp.kernel]` and `[analyzer.cpp.userspace]` — multi-instance
     // syntax. Each sub-section must still reject unknown fields.
-    let raw = toml_of(r#"
+    let raw = toml_of(
+        r#"
 [analyzer.cpp.kernel]
 include_paths = ["kernel/include"]
 
 [analyzer.cpp.userspace]
 typo_field = true
-"#);
+"#,
+    );
     let errors = validate_analyzer_fields_raw(&raw);
     assert_eq!(errors.len(), 1);
     assert!(errors[0].contains("typo_field"));
@@ -469,15 +508,24 @@ fn merge_arrays_replace_wholesale() {
     let mut base = toml_of("[processor.ruff]\nsrc_dirs = [\"src\", \"config\"]\n");
     let overlay = toml_of("[processor.ruff]\nsrc_dirs = [\"scripts\"]\n");
     merge_toml_values(&mut base, overlay);
-    let dirs = base.get("processor").unwrap().get("ruff").unwrap()
-        .get("src_dirs").unwrap().as_array().unwrap().clone();
+    let dirs = base
+        .get("processor")
+        .unwrap()
+        .get("ruff")
+        .unwrap()
+        .get("src_dirs")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .clone();
     assert_eq!(dirs, vec![toml::Value::String("scripts".into())]);
 }
 
 #[test]
 fn merge_adds_overlay_only_sections() {
     let mut base = toml_of("[processor.tera]\n");
-    let overlay = toml_of("[dependencies]\npip = [\"requests\"]\n\n[processor.ruff]\nsrc_dirs = [\"src\"]\n");
+    let overlay =
+        toml_of("[dependencies]\npip = [\"requests\"]\n\n[processor.ruff]\nsrc_dirs = [\"src\"]\n");
     merge_toml_values(&mut base, overlay);
     assert!(base.get("dependencies").is_some());
     assert!(base.get("processor").unwrap().get("tera").is_some());
@@ -489,7 +537,14 @@ fn merge_scalar_replaces_scalar() {
     let mut base = toml_of("[build]\noutput_dir = \"out\"\n");
     let overlay = toml_of("[build]\noutput_dir = \"dist\"\n");
     merge_toml_values(&mut base, overlay);
-    assert_eq!(base.get("build").unwrap().get("output_dir").unwrap().as_str(), Some("dist"));
+    assert_eq!(
+        base.get("build")
+            .unwrap()
+            .get("output_dir")
+            .unwrap()
+            .as_str(),
+        Some("dist")
+    );
 }
 
 #[test]
@@ -497,17 +552,25 @@ fn processor_and_analyzer_validators_are_independent() {
     // Processor errors and analyzer errors must both be reported — neither
     // short-circuits the other. This is the regression that would return if
     // somebody changed `Config::load` to `?` on the first validator.
-    let raw = toml_of(r#"
+    let raw = toml_of(
+        r#"
 [processor.ruff]
 unknown_proc_field = "x"
 
 [analyzer.python]
 enabeld = false
-"#);
+"#,
+    );
     let proc_errors = validate_processor_fields_raw(&raw);
     let analyzer_errors = validate_analyzer_fields_raw(&raw);
-    assert!(!proc_errors.is_empty(), "processor validator should have caught something");
-    assert!(!analyzer_errors.is_empty(), "analyzer validator should have caught something");
+    assert!(
+        !proc_errors.is_empty(),
+        "processor validator should have caught something"
+    );
+    assert!(
+        !analyzer_errors.is_empty(),
+        "analyzer validator should have caught something"
+    );
 }
 
 /// A reference embedded in a larger string ("${base}/src") can't be
@@ -517,8 +580,10 @@ enabeld = false
 fn substitute_variables_rejects_partial_references() {
     let content = "[vars]\nbase = \"proj\"\n\n[processor.tera]\nsrc_dirs = [\"${base}/src\"]\n";
     let err = substitute_variables(content).unwrap_err();
-    assert!(err.to_string().contains("entire quoted value"),
-        "expected the partial-reference error, got: {err}");
+    assert!(
+        err.to_string().contains("entire quoted value"),
+        "expected the partial-reference error, got: {err}"
+    );
 }
 
 /// A partial reference to an *undefined* variable must also error — before
@@ -527,8 +592,10 @@ fn substitute_variables_rejects_partial_references() {
 fn substitute_variables_rejects_partial_undefined_references() {
     let content = "[processor.tera]\nsrc_dirs = [\"${nope}/src\"]\n";
     let err = substitute_variables(content).unwrap_err();
-    assert!(err.to_string().contains("Unresolved variable reference"),
-        "expected the residual-reference error, got: {err}");
+    assert!(
+        err.to_string().contains("Unresolved variable reference"),
+        "expected the residual-reference error, got: {err}"
+    );
 }
 
 // Schema tests.
@@ -561,16 +628,25 @@ fn every_field_spec_is_well_formed() {
                 bad.push(format!("{}.{}: empty doc", plugin.name, spec.name));
             }
             if !seen.insert(spec.name) {
-                bad.push(format!("{}.{}: duplicate FieldSpec", plugin.name, spec.name));
+                bad.push(format!(
+                    "{}.{}: duplicate FieldSpec",
+                    plugin.name, spec.name
+                ));
             }
             if SCAN_CONFIG_FIELDS.contains(&spec.name) {
-                bad.push(format!("{}.{}: FieldSpec shadows a scan field", plugin.name, spec.name));
+                bad.push(format!(
+                    "{}.{}: FieldSpec shadows a scan field",
+                    plugin.name, spec.name
+                ));
             }
         }
         for omitted in plugin.omit_standard_fields {
             use crate::config::KnownFields as _;
             if !crate::config::StandardConfig::known_fields().contains(omitted) {
-                bad.push(format!("{}: omit_standard_fields names non-standard field '{omitted}'", plugin.name));
+                bad.push(format!(
+                    "{}: omit_standard_fields names non-standard field '{omitted}'",
+                    plugin.name
+                ));
             }
         }
     }
@@ -588,15 +664,41 @@ fn every_field_spec_is_well_formed() {
 #[test]
 fn every_plugin_has_docs_and_tests() {
     const DOCS_ALLOWLIST: &[&str] = &[
-        "creator", "duplicate_files", "encoding", "ijq", "ijsonlint",
-        "ipdfunite", "isass", "itaplo", "iyamllint", "license_header",
-        "marp_images", "prettier", "svglint", "svgo",
+        "creator",
+        "duplicate_files",
+        "encoding",
+        "ijq",
+        "ijsonlint",
+        "ipdfunite",
+        "isass",
+        "itaplo",
+        "iyamllint",
+        "license_header",
+        "marp_images",
+        "prettier",
+        "svglint",
+        "svgo",
     ];
     const TESTS_ALLOWLIST: &[&str] = &[
-        "checkpatch", "chromium", "cpplint", "encoding", "explicit",
-        "ijq", "ijsonlint", "imarkdown2html", "ipdfunite", "isass",
-        "itaplo", "iyamllint", "license_header", "linux_module",
-        "markdown2html", "marp_images", "objdump", "prettier", "yaml2json",
+        "checkpatch",
+        "chromium",
+        "cpplint",
+        "encoding",
+        "explicit",
+        "ijq",
+        "ijsonlint",
+        "imarkdown2html",
+        "ipdfunite",
+        "isass",
+        "itaplo",
+        "iyamllint",
+        "license_header",
+        "linux_module",
+        "markdown2html",
+        "marp_images",
+        "objdump",
+        "prettier",
+        "yaml2json",
     ];
 
     let mut missing: Vec<String> = Vec::new();
@@ -614,9 +716,11 @@ fn every_plugin_has_docs_and_tests() {
         }
     }
     missing.sort();
-    assert!(missing.is_empty(),
+    assert!(
+        missing.is_empty(),
         "processors missing their out-of-file touch-points (add the file, or — for \
-         pre-existing gaps only — the allowlist entry): {missing:#?}");
+         pre-existing gaps only — the allowlist entry): {missing:#?}"
+    );
 }
 
 /// Every `.rs` file under `src/processors/<category>/` must be declared in
@@ -626,13 +730,19 @@ fn every_plugin_has_docs_and_tests() {
 #[test]
 fn every_processor_file_is_declared() {
     let mut missing: Vec<String> = Vec::new();
-    for dir in ["src/processors/checkers", "src/processors/generators",
-                "src/processors/creators", "src/processors/explicit",
-                "src/processors/lua"] {
+    for dir in [
+        "src/processors/checkers",
+        "src/processors/generators",
+        "src/processors/creators",
+        "src/processors/explicit",
+        "src/processors/lua",
+    ] {
         let mod_src = std::fs::read_to_string(format!("{dir}/mod.rs")).unwrap();
         for entry in std::fs::read_dir(dir).unwrap() {
             let path = entry.unwrap().path();
-            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else { continue };
+            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
             if stem == "mod" || path.extension().is_none_or(|e| e != "rs") {
                 continue;
             }
@@ -642,8 +752,10 @@ fn every_processor_file_is_declared() {
         }
     }
     missing.sort();
-    assert!(missing.is_empty(),
-        "processor files invisible to the build (missing mod declaration): {missing:#?}");
+    assert!(
+        missing.is_empty(),
+        "processor files invisible to the build (missing mod declaration): {missing:#?}"
+    );
 }
 
 // Tests for processor section shape classification (finding 11)
@@ -652,9 +764,13 @@ use crate::config::{ProcessorConfig, SectionShape};
 
 fn classify(toml_src: &str) -> SectionShape {
     let value: toml::Value = toml::from_str(toml_src).unwrap();
-    let table = value.get("processor").unwrap()
-        .get("pylint").unwrap()
-        .as_table().unwrap();
+    let table = value
+        .get("processor")
+        .unwrap()
+        .get("pylint")
+        .unwrap()
+        .as_table()
+        .unwrap();
     ProcessorConfig::classify_section("pylint", table)
 }
 
@@ -669,14 +785,19 @@ fn section_with_config_fields_is_single_instance() {
 #[test]
 fn section_with_only_subtables_is_multi_instance() {
     assert_eq!(
-        classify("[processor.pylint.core]\nargs = [\"--x\"]\n\n[processor.pylint.tests]\nargs = [\"--y\"]\n"),
+        classify(
+            "[processor.pylint.core]\nargs = [\"--x\"]\n\n[processor.pylint.tests]\nargs = [\"--y\"]\n"
+        ),
         SectionShape::MultiInstance,
     );
 }
 
 #[test]
 fn empty_section_is_single_instance() {
-    assert_eq!(classify("[processor.pylint]\n"), SectionShape::SingleInstance);
+    assert_eq!(
+        classify("[processor.pylint]\n"),
+        SectionShape::SingleInstance
+    );
 }
 
 /// An instance named after a known config field reads as both shapes. This
@@ -686,7 +807,7 @@ fn empty_section_is_single_instance() {
 #[test]
 fn instance_named_after_a_config_field_is_ambiguous() {
     let shape = classify(
-        "[processor.pylint.args]\nargs = [\"--x\"]\n\n[processor.pylint.other]\nargs = [\"--y\"]\n"
+        "[processor.pylint.args]\nargs = [\"--x\"]\n\n[processor.pylint.other]\nargs = [\"--y\"]\n",
     );
     match shape {
         SectionShape::Ambiguous { colliding } => {
@@ -702,9 +823,12 @@ fn instance_named_after_a_config_field_is_ambiguous() {
 #[test]
 fn instance_named_after_a_scan_field_is_ambiguous() {
     let shape = classify(
-        "[processor.pylint.src_dirs]\nargs = [\"--x\"]\n\n[processor.pylint.other]\nargs = [\"--y\"]\n"
+        "[processor.pylint.src_dirs]\nargs = [\"--x\"]\n\n[processor.pylint.other]\nargs = [\"--y\"]\n",
     );
-    assert!(matches!(shape, SectionShape::Ambiguous { .. }), "got {shape:?}");
+    assert!(
+        matches!(shape, SectionShape::Ambiguous { .. }),
+        "got {shape:?}"
+    );
 }
 
 /// A single known field holding a table is config, not an ambiguity —
@@ -714,7 +838,9 @@ fn instance_named_after_a_scan_field_is_ambiguous() {
 #[test]
 fn mixed_scalar_and_table_values_are_single_instance() {
     assert_eq!(
-        classify("[processor.pylint]\nargs = [\"--x\"]\n\n[processor.pylint.core]\nargs = [\"--y\"]\n"),
+        classify(
+            "[processor.pylint]\nargs = [\"--x\"]\n\n[processor.pylint.core]\nargs = [\"--y\"]\n"
+        ),
         SectionShape::SingleInstance,
     );
 }
@@ -778,7 +904,9 @@ fn pyproject_python_deps_missing_file_is_empty() {
 fn pyproject_python_deps_collects_all_sections() {
     let tmp = tempfile::TempDir::new().unwrap();
     let path = tmp.path().join("pyproject.toml");
-    std::fs::write(&path, r#"
+    std::fs::write(
+        &path,
+        r#"
 [project]
 name = "demo"
 dependencies = ["flask", "requests>=2.0"]
@@ -789,11 +917,16 @@ docs = ["sphinx"]
 [dependency-groups]
 dev = ["mypy", {include-group = "test"}]
 test = ["pytest"]
-"#).unwrap();
+"#,
+    )
+    .unwrap();
     let deps = crate::config::pyproject_python_deps(&path).expect("should parse");
     let mut sorted = deps.clone();
     sorted.sort();
-    assert_eq!(sorted, vec!["flask", "mypy", "pytest", "requests>=2.0", "sphinx"]);
+    assert_eq!(
+        sorted,
+        vec!["flask", "mypy", "pytest", "requests>=2.0", "sphinx"]
+    );
     // include-group tables are skipped, not errors, and groups are read anyway
     assert!(deps.contains(&"pytest".to_string()));
 }
@@ -809,11 +942,15 @@ fn pyproject_python_deps_invalid_toml_errors() {
 #[test]
 fn effective_pip_pyproject_mode_merges_and_dedupes_by_normalized_name() {
     let tmp = tempfile::TempDir::new().unwrap();
-    std::fs::write(tmp.path().join("pyproject.toml"), r#"
+    std::fs::write(
+        tmp.path().join("pyproject.toml"),
+        r#"
 [project]
 name = "demo"
 dependencies = ["Flask", "gunicorn"]
-"#).unwrap();
+"#,
+    )
+    .unwrap();
     let deps = crate::config::DependenciesConfig {
         pip: vec!["flask==2.0".to_string(), "types-requests".to_string()],
         pip_source: crate::config::PipSource::Pyproject,
@@ -833,7 +970,9 @@ fn effective_pip_without_pyproject_is_pip_list() {
     };
     // No pyproject and no lock: nothing to install beyond the pip list, in
     // either mode — the default uv-lock mode must not error here.
-    let merged = deps.effective_pip(tmp.path()).expect("no pyproject is fine");
+    let merged = deps
+        .effective_pip(tmp.path())
+        .expect("no pyproject is fine");
     assert_eq!(merged, vec!["termcolor"]);
 }
 
@@ -841,7 +980,9 @@ fn effective_pip_without_pyproject_is_pip_list() {
 fn uv_lock_pinned_deps_pins_registry_packages_and_skips_the_project() {
     let tmp = tempfile::TempDir::new().unwrap();
     let lock = tmp.path().join("uv.lock");
-    std::fs::write(&lock, r#"
+    std::fs::write(
+        &lock,
+        r#"
 version = 1
 requires-python = ">=3.14"
 
@@ -859,7 +1000,9 @@ source = { registry = "https://pypi.org/simple" }
 name = "gunicorn"
 version = "23.0.0"
 source = { registry = "https://pypi.org/simple" }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
     let pins = crate::config::uv_lock_pinned_deps(&lock).expect("should parse");
     assert_eq!(pins, vec!["flask==3.1.0", "gunicorn==23.0.0"]);
 }
@@ -868,26 +1011,36 @@ source = { registry = "https://pypi.org/simple" }
 fn uv_lock_pinned_deps_rejects_unknown_source_kinds() {
     let tmp = tempfile::TempDir::new().unwrap();
     let lock = tmp.path().join("uv.lock");
-    std::fs::write(&lock, r#"
+    std::fs::write(
+        &lock,
+        r#"
 version = 1
 
 [[package]]
 name = "somelib"
 version = "1.0.0"
 source = { git = "https://example.com/somelib.git" }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
     assert!(crate::config::uv_lock_pinned_deps(&lock).is_err());
 }
 
 #[test]
 fn effective_pip_default_mode_installs_the_lock_closure() {
     let tmp = tempfile::TempDir::new().unwrap();
-    std::fs::write(tmp.path().join("pyproject.toml"), r#"
+    std::fs::write(
+        tmp.path().join("pyproject.toml"),
+        r#"
 [project]
 name = "demo"
 dependencies = ["flask"]
-"#).unwrap();
-    std::fs::write(tmp.path().join("uv.lock"), r#"
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        tmp.path().join("uv.lock"),
+        r#"
 version = 1
 
 [[package]]
@@ -904,7 +1057,9 @@ source = { registry = "https://pypi.org/simple" }
 name = "werkzeug"
 version = "3.1.3"
 source = { registry = "https://pypi.org/simple" }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
     let deps = crate::config::DependenciesConfig {
         pip: vec!["flask==2.0".to_string()],
         ..Default::default()
@@ -918,22 +1073,35 @@ source = { registry = "https://pypi.org/simple" }
 #[test]
 fn effective_pip_default_mode_errors_without_a_lock() {
     let tmp = tempfile::TempDir::new().unwrap();
-    std::fs::write(tmp.path().join("pyproject.toml"), r#"
+    std::fs::write(
+        tmp.path().join("pyproject.toml"),
+        r#"
 [project]
 name = "demo"
 dependencies = ["flask"]
-"#).unwrap();
+"#,
+    )
+    .unwrap();
     let deps = crate::config::DependenciesConfig::default();
     let err = deps.effective_pip(tmp.path()).unwrap_err().to_string();
-    assert!(err.contains("uv lock"), "error should point at uv lock: {err}");
-    assert!(err.contains("pip_source"), "error should mention the escape hatch: {err}");
+    assert!(
+        err.contains("uv lock"),
+        "error should point at uv lock: {err}"
+    );
+    assert!(
+        err.contains("pip_source"),
+        "error should mention the escape hatch: {err}"
+    );
 }
 
 #[test]
 fn requirement_extras_parses_and_normalizes() {
     use crate::config::requirement_extras as ex;
     assert_eq!(ex("manim-voiceover[gtts]"), "gtts");
-    assert_eq!(ex("uvicorn[standard,Watchfiles]>=0.30"), "standard,watchfiles");
+    assert_eq!(
+        ex("uvicorn[standard,Watchfiles]>=0.30"),
+        "standard,watchfiles"
+    );
     assert_eq!(ex("uvicorn[watchfiles, standard]"), "standard,watchfiles");
     assert_eq!(ex("flask"), "");
 }
@@ -941,11 +1109,15 @@ fn requirement_extras_parses_and_normalizes() {
 #[test]
 fn effective_pip_keeps_extras_variant_distinct_from_bare_name() {
     let tmp = tempfile::TempDir::new().unwrap();
-    std::fs::write(tmp.path().join("pyproject.toml"), r#"
+    std::fs::write(
+        tmp.path().join("pyproject.toml"),
+        r#"
 [project]
 name = "demo"
 dependencies = ["manim_voiceover", "manim-voiceover[gtts]"]
-"#).unwrap();
+"#,
+    )
+    .unwrap();
     let deps = crate::config::DependenciesConfig {
         pip_source: crate::config::PipSource::Pyproject,
         ..Default::default()
@@ -974,21 +1146,28 @@ pywin32==312 ; sys_platform == 'win32'
 --index-url https://pypi.org/simple
 werkzeug==3.1.3
 ";
-    assert_eq!(crate::config::parse_uv_export(out), vec![
-        "flask==3.1.0",
-        "pywin32==312 ; sys_platform == 'win32'",
-        "werkzeug==3.1.3",
-    ]);
+    assert_eq!(
+        crate::config::parse_uv_export(out),
+        vec![
+            "flask==3.1.0",
+            "pywin32==312 ; sys_platform == 'win32'",
+            "werkzeug==3.1.3",
+        ]
+    );
 }
 
 #[test]
 fn effective_pip_uv_merges_export_with_pip_overriding() {
     let tmp = tempfile::TempDir::new().unwrap();
-    std::fs::write(tmp.path().join("pyproject.toml"), r#"
+    std::fs::write(
+        tmp.path().join("pyproject.toml"),
+        r#"
 [project]
 name = "demo"
 dependencies = ["flask"]
-"#).unwrap();
+"#,
+    )
+    .unwrap();
     // Content is irrelevant — the uv installer takes the pins from the
     // export closure, not from parsing the lock; the file only has to exist.
     std::fs::write(tmp.path().join("uv.lock"), "version = 1\n").unwrap();
@@ -996,26 +1175,42 @@ dependencies = ["flask"]
         pip: vec!["flask==2.0".to_string()],
         ..Default::default()
     };
-    let merged = deps.effective_pip_uv(tmp.path(), || Ok(vec![
-        "flask==3.1.0".to_string(),
-        "pywin32==312 ; sys_platform == 'win32'".to_string(),
-    ])).expect("should merge");
+    let merged = deps
+        .effective_pip_uv(tmp.path(), || {
+            Ok(vec![
+                "flask==3.1.0".to_string(),
+                "pywin32==312 ; sys_platform == 'win32'".to_string(),
+            ])
+        })
+        .expect("should merge");
     // The pip-list entry wins over the exported pin; markers survive.
-    assert_eq!(merged, vec!["flask==2.0", "pywin32==312 ; sys_platform == 'win32'"]);
+    assert_eq!(
+        merged,
+        vec!["flask==2.0", "pywin32==312 ; sys_platform == 'win32'"]
+    );
 }
 
 #[test]
 fn effective_pip_uv_errors_without_a_lock() {
     let tmp = tempfile::TempDir::new().unwrap();
-    std::fs::write(tmp.path().join("pyproject.toml"), r#"
+    std::fs::write(
+        tmp.path().join("pyproject.toml"),
+        r#"
 [project]
 name = "demo"
 dependencies = ["flask"]
-"#).unwrap();
+"#,
+    )
+    .unwrap();
     let deps = crate::config::DependenciesConfig::default();
-    let err = deps.effective_pip_uv(tmp.path(), || panic!("export must not run without a lock"))
-        .unwrap_err().to_string();
-    assert!(err.contains("uv lock"), "error should point at uv lock: {err}");
+    let err = deps
+        .effective_pip_uv(tmp.path(), || panic!("export must not run without a lock"))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("uv lock"),
+        "error should point at uv lock: {err}"
+    );
 }
 
 /// `[build] command_timeout_secs` is opt-in: absent means 0 (no limit), and

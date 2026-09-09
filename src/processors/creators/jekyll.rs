@@ -5,7 +5,10 @@ use std::process::Command;
 use crate::config::JekyllConfig;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{Processor, SiblingFilter, DirectoryProductOpts, discover_directory_products, run_in_anchor_dir, anchor_display_dir, check_command_output};
+use crate::processors::{
+    DirectoryProductOpts, Processor, SiblingFilter, anchor_display_dir, check_command_output,
+    discover_directory_products, run_in_anchor_dir,
+};
 
 pub struct JekyllProcessor {
     config: JekyllConfig,
@@ -13,16 +16,18 @@ pub struct JekyllProcessor {
 
 impl JekyllProcessor {
     pub const fn new(config: JekyllConfig) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 
     const fn should_process(&self) -> bool {
         true
     }
 
-    fn execute_jekyll(&self, ctx: &crate::build_context::BuildContext, config_yml: &Path) -> Result<()> {
+    fn execute_jekyll(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        config_yml: &Path,
+    ) -> Result<()> {
         let command = self.config.standard.require_command("jekyll")?;
         let mut cmd = Command::new(command);
         cmd.arg("build");
@@ -30,7 +35,10 @@ impl JekyllProcessor {
             cmd.arg(arg);
         }
         let output = run_in_anchor_dir(ctx, &mut cmd, config_yml)?;
-        check_command_output(&output, format_args!("jekyll build in {}", anchor_display_dir(config_yml)))
+        check_command_output(
+            &output,
+            format_args!("jekyll build in {}", anchor_display_dir(config_yml)),
+        )
     }
 }
 
@@ -42,7 +50,6 @@ impl Processor for JekyllProcessor {
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
     }
-
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
         crate::processors::ProcessorBase::clean_output_dir(product, &product.processor, verbose)
@@ -56,24 +63,32 @@ impl Processor for JekyllProcessor {
         vec![self.config.standard.command.clone(), "ruby".to_string()]
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         if !self.should_process() {
             return Ok(());
         }
 
-        discover_directory_products(graph, DirectoryProductOpts {
-            scan: &self.config.standard,
-            file_index,
-            dep_inputs: &self.config.standard.dep_inputs,
-            cfg_hash: &self.config,
-            checksum_fields: crate::config::checksum_fields_of(instance_name),
-            siblings: &SiblingFilter {
-                extensions: &[""],
-                excludes: &["/.git/", "/out/", "/.rsconstruct/", "/_site/"],
+        discover_directory_products(
+            graph,
+            DirectoryProductOpts {
+                scan: &self.config.standard,
+                file_index,
+                dep_inputs: &self.config.standard.dep_inputs,
+                cfg_hash: &self.config,
+                checksum_fields: crate::config::checksum_fields_of(instance_name),
+                siblings: &SiblingFilter {
+                    extensions: &[""],
+                    excludes: &["/.git/", "/out/", "/.rsconstruct/", "/_site/"],
+                },
+                processor_name: instance_name,
+                output_dir_name: Some("_site"),
             },
-            processor_name: instance_name,
-            output_dir_name: Some("_site"),
-        })
+        )
     }
 
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {

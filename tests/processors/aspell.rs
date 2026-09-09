@@ -1,6 +1,6 @@
+use crate::common::{require_tool, run_rsconstruct_with_env};
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsconstruct_with_env, require_tool};
 
 #[test]
 fn aspell_valid_file() {
@@ -16,11 +16,7 @@ fn aspell_valid_file() {
     .unwrap();
 
     // Create aspell config
-    fs::write(
-        project_path.join(".aspell.conf"),
-        "lang en_US\n",
-    )
-    .unwrap();
+    fs::write(project_path.join(".aspell.conf"), "lang en_US\n").unwrap();
 
     fs::write(
         project_path.join("doc.md"),
@@ -57,24 +53,17 @@ fn aspell_incremental_skip() {
     )
     .unwrap();
 
-    fs::write(
-        project_path.join(".aspell.conf"),
-        "lang en_US\n",
-    )
-    .unwrap();
+    fs::write(project_path.join(".aspell.conf"), "lang en_US\n").unwrap();
 
-    fs::write(
-        project_path.join("doc.md"),
-        "# Hello\n\nThis is correct.\n",
-    )
-    .unwrap();
+    fs::write(project_path.join("doc.md"), "# Hello\n\nThis is correct.\n").unwrap();
 
     // First build
     let output1 = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
 
     // Second build should skip
-    let output2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let output2 =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(

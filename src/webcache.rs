@@ -75,12 +75,14 @@ fn get_fresh(url: &str, ttl_secs: u64) -> Result<Option<String>> {
         return Ok(None);
     }
     with_db(|db| {
-        let read_txn = db.begin_read()
+        let read_txn = db
+            .begin_read()
             .context("Failed to begin read transaction on webcache")?;
         let Ok(table) = read_txn.open_table(TABLE) else {
             return Ok(None);
         };
-        let Some(raw) = table.get(url)
+        let Some(raw) = table
+            .get(url)
             .with_context(|| format!("Failed to read webcache entry for {url}"))?
         else {
             return Ok(None);
@@ -124,18 +126,23 @@ pub fn fetch(url: &str, ttl_secs: u64) -> Result<String> {
     let stored = serde_json::to_vec(&StoredEntry {
         fetched_at_secs: now_secs(),
         body: body.clone(),
-    }).context("Failed to serialize webcache entry")?;
+    })
+    .context("Failed to serialize webcache entry")?;
 
     with_db(|db| {
-        let write_txn = db.begin_write()
+        let write_txn = db
+            .begin_write()
             .context("Failed to begin write transaction on webcache")?;
         {
-            let mut table = write_txn.open_table(TABLE)
+            let mut table = write_txn
+                .open_table(TABLE)
                 .context("Failed to open webcache table for write")?;
-            table.insert(url, stored.as_slice())
+            table
+                .insert(url, stored.as_slice())
                 .with_context(|| format!("Failed to insert webcache entry for {url}"))?;
         }
-        write_txn.commit()
+        write_txn
+            .commit()
             .context("Failed to commit webcache write")?;
         Ok(())
     })?;
@@ -150,11 +157,14 @@ pub fn clear() -> Result<usize> {
     }
     let count = list()?.len();
     with_db(|db| {
-        let write_txn = db.begin_write()
+        let write_txn = db
+            .begin_write()
             .context("Failed to begin write transaction for webcache clear")?;
-        write_txn.delete_table(TABLE)
+        write_txn
+            .delete_table(TABLE)
             .context("Failed to delete webcache table")?;
-        write_txn.commit()
+        write_txn
+            .commit()
             .context("Failed to commit webcache clear")?;
         Ok(())
     })?;
@@ -169,7 +179,8 @@ pub fn prune(ttl_secs: u64) -> Result<usize> {
     if !db_exists() {
         return Ok(0);
     }
-    let expired: Vec<String> = list_with_ttl(ttl_secs)?.into_iter()
+    let expired: Vec<String> = list_with_ttl(ttl_secs)?
+        .into_iter()
         .filter(|e| e.expired)
         .map(|e| e.url)
         .collect();
@@ -177,17 +188,21 @@ pub fn prune(ttl_secs: u64) -> Result<usize> {
         return Ok(0);
     }
     with_db(|db| {
-        let write_txn = db.begin_write()
+        let write_txn = db
+            .begin_write()
             .context("Failed to begin write transaction for webcache prune")?;
         {
-            let mut table = write_txn.open_table(TABLE)
+            let mut table = write_txn
+                .open_table(TABLE)
                 .context("Failed to open webcache table for prune")?;
             for url in &expired {
-                table.remove(url.as_str())
+                table
+                    .remove(url.as_str())
                     .with_context(|| format!("Failed to remove webcache entry {url}"))?;
             }
         }
-        write_txn.commit()
+        write_txn
+            .commit()
             .context("Failed to commit webcache prune")?;
         Ok(())
     })?;
@@ -212,7 +227,8 @@ pub fn list_with_ttl(ttl_secs: u64) -> Result<Vec<CacheEntry>> {
     }
     let now = now_secs();
     with_db(|db| {
-        let read_txn = db.begin_read()
+        let read_txn = db
+            .begin_read()
             .context("Failed to begin read transaction on webcache")?;
         let Ok(table) = read_txn.open_table(TABLE) else {
             return Ok(Vec::new());
@@ -257,7 +273,10 @@ mod tests {
     /// exactly at the boundary is expired rather than served.
     #[test]
     fn expiry_is_at_the_boundary() {
-        let entry = StoredEntry { fetched_at_secs: 1000, body: "b".into() };
+        let entry = StoredEntry {
+            fetched_at_secs: 1000,
+            body: "b".into(),
+        };
         let age = 2000u64.saturating_sub(entry.fetched_at_secs);
         assert_eq!(age, 1000);
         assert!(age >= 1000, "an entry exactly at the TTL is expired");

@@ -1,6 +1,6 @@
+use crate::common::run_rsconstruct_with_env;
 use std::fs;
 use tempfile::TempDir;
-use crate::common::run_rsconstruct_with_env;
 
 /// Create a test project with a creator processor that produces two output directories.
 /// The script creates dir_a/file_a.txt and dir_b/file_b.txt.
@@ -10,14 +10,18 @@ fn setup_creator_project() -> TempDir {
 
     // Write the creator script
     let script = project_path.join("create.sh");
-    fs::write(&script, concat!(
-        "#!/bin/bash\n",
-        "set -e\n",
-        "mkdir -p dir_a dir_b\n",
-        "echo 'content_a' > dir_a/file_a.txt\n",
-        "echo 'content_b' > dir_b/file_b.txt\n",
-    )).unwrap();
-        {
+    fs::write(
+        &script,
+        concat!(
+            "#!/bin/bash\n",
+            "set -e\n",
+            "mkdir -p dir_a dir_b\n",
+            "echo 'content_a' > dir_a/file_a.txt\n",
+            "echo 'content_b' > dir_b/file_b.txt\n",
+        ),
+    )
+    .unwrap();
+    {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
     }
@@ -35,7 +39,8 @@ fn setup_creator_project() -> TempDir {
             "src_dirs = [\".\"]\n",
             "output_dirs = [\"dir_a\", \"dir_b\"]\n",
         ),
-    ).unwrap();
+    )
+    .unwrap();
 
     temp_dir
 }
@@ -54,10 +59,26 @@ fn creator_produces_two_output_dirs() {
     );
 
     // Verify both dirs and files were created
-    assert!(project_path.join("dir_a/file_a.txt").exists(), "dir_a/file_a.txt should exist");
-    assert!(project_path.join("dir_b/file_b.txt").exists(), "dir_b/file_b.txt should exist");
-    assert_eq!(fs::read_to_string(project_path.join("dir_a/file_a.txt")).unwrap().trim(), "content_a");
-    assert_eq!(fs::read_to_string(project_path.join("dir_b/file_b.txt")).unwrap().trim(), "content_b");
+    assert!(
+        project_path.join("dir_a/file_a.txt").exists(),
+        "dir_a/file_a.txt should exist"
+    );
+    assert!(
+        project_path.join("dir_b/file_b.txt").exists(),
+        "dir_b/file_b.txt should exist"
+    );
+    assert_eq!(
+        fs::read_to_string(project_path.join("dir_a/file_a.txt"))
+            .unwrap()
+            .trim(),
+        "content_a"
+    );
+    assert_eq!(
+        fs::read_to_string(project_path.join("dir_b/file_b.txt"))
+            .unwrap()
+            .trim(),
+        "content_b"
+    );
 }
 
 #[test]
@@ -80,10 +101,19 @@ fn creator_clean_removes_output_dirs() {
     );
 
     // Verify dirs are gone
-    assert!(!project_path.join("dir_a").exists(), "dir_a should be removed after clean");
-    assert!(!project_path.join("dir_b").exists(), "dir_b should be removed after clean");
+    assert!(
+        !project_path.join("dir_a").exists(),
+        "dir_a should be removed after clean"
+    );
+    assert!(
+        !project_path.join("dir_b").exists(),
+        "dir_b should be removed after clean"
+    );
     // Cache should still exist
-    assert!(project_path.join(".rsconstruct").exists(), "cache should be preserved");
+    assert!(
+        project_path.join(".rsconstruct").exists(),
+        "cache should be preserved"
+    );
 }
 
 #[test]
@@ -102,7 +132,8 @@ fn creator_restores_output_dirs_from_cache() {
     assert!(!project_path.join("dir_b").exists());
 
     // Rebuild — should restore from cache
-    let restore = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let restore =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(
         restore.status.success(),
         "Restore build should succeed: stdout={}, stderr={}",
@@ -118,10 +149,26 @@ fn creator_restores_output_dirs_from_cache() {
     );
 
     // Verify restored content is correct
-    assert!(project_path.join("dir_a/file_a.txt").exists(), "dir_a/file_a.txt should be restored");
-    assert!(project_path.join("dir_b/file_b.txt").exists(), "dir_b/file_b.txt should be restored");
-    assert_eq!(fs::read_to_string(project_path.join("dir_a/file_a.txt")).unwrap().trim(), "content_a");
-    assert_eq!(fs::read_to_string(project_path.join("dir_b/file_b.txt")).unwrap().trim(), "content_b");
+    assert!(
+        project_path.join("dir_a/file_a.txt").exists(),
+        "dir_a/file_a.txt should be restored"
+    );
+    assert!(
+        project_path.join("dir_b/file_b.txt").exists(),
+        "dir_b/file_b.txt should be restored"
+    );
+    assert_eq!(
+        fs::read_to_string(project_path.join("dir_a/file_a.txt"))
+            .unwrap()
+            .trim(),
+        "content_a"
+    );
+    assert_eq!(
+        fs::read_to_string(project_path.join("dir_b/file_b.txt"))
+            .unwrap()
+            .trim(),
+        "content_b"
+    );
 }
 
 #[test]
@@ -134,7 +181,8 @@ fn creator_incremental_skip() {
     assert!(build1.status.success());
 
     // Second build — should skip
-    let build2 = run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    let build2 =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
     assert!(
         build2.status.success(),
         "Second build should succeed: stdout={}, stderr={}",

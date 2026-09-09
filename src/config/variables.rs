@@ -32,7 +32,14 @@ use crate::errors;
 /// **Must never emit a newline** — see the module-level invariant.
 pub(super) fn value_to_toml_inline(value: &toml::Value) -> String {
     match value {
-        toml::Value::String(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "\\r").replace('\t', "\\t")),
+        toml::Value::String(s) => format!(
+            "\"{}\"",
+            s.replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace('\n', "\\n")
+                .replace('\r', "\\r")
+                .replace('\t', "\\t")
+        ),
         toml::Value::Integer(i) => i.to_string(),
         toml::Value::Float(f) => f.to_string(),
         toml::Value::Boolean(b) => b.to_string(),
@@ -76,7 +83,8 @@ fn is_vars_header(trimmed: &str) -> bool {
 /// line number, so provenance spans built from the result stay correct.
 pub(super) fn remove_vars_section(content: &str) -> String {
     let mut in_vars_section = false;
-    let lines: Vec<&str> = content.lines()
+    let lines: Vec<&str> = content
+        .lines()
         .map(|line| {
             let trimmed = line.trim();
             if is_vars_header(trimmed) {
@@ -98,7 +106,7 @@ pub(super) fn remove_vars_section(content: &str) -> String {
 /// Used only for the undefined-variable scan, so `${...}` inside comments
 /// doesn't fail config loading.
 fn strip_toml_comment(line: &str) -> &str {
-    let mut in_basic = false;   // "..."
+    let mut in_basic = false; // "..."
     let mut in_literal = false; // '...'
     let mut escaped = false;
     for (i, c) in line.char_indices() {
@@ -128,27 +136,32 @@ fn resolve_var_value(
         return Err(crate::exit_code::RsconstructError::new(
             crate::exit_code::RsconstructExitCode::ConfigError,
             "Variable reference cycle in [vars] (nesting exceeds 32 levels)".to_string(),
-        ).into());
+        )
+        .into());
     }
     match value {
         toml::Value::String(s) => {
             if let Some(name) = s.strip_prefix("${").and_then(|r| r.strip_suffix('}'))
-                && !name.contains('}') {
+                && !name.contains('}')
+            {
                 let Some(referenced) = vars.get(name) else {
                     return Err(crate::exit_code::RsconstructError::new(
                         crate::exit_code::RsconstructExitCode::ConfigError,
                         format!("Undefined variable: ${{{name}}}"),
-                    ).into());
+                    )
+                    .into());
                 };
                 return resolve_var_value(referenced, vars, depth + 1);
             }
             Ok(value.clone())
         }
-        toml::Value::Array(arr) => arr.iter()
+        toml::Value::Array(arr) => arr
+            .iter()
             .map(|v| resolve_var_value(v, vars, depth + 1))
             .collect::<Result<Vec<_>>>()
             .map(toml::Value::Array),
-        toml::Value::Table(table) => table.iter()
+        toml::Value::Table(table) => table
+            .iter()
             .map(|(k, v)| resolve_var_value(v, vars, depth + 1).map(|rv| (k.clone(), rv)))
             .collect::<Result<toml::map::Map<_, _>>>()
             .map(toml::Value::Table),
@@ -192,7 +205,8 @@ pub(super) fn extract_var_names(content: &str) -> Vec<String> {
 
 /// The `[vars]` keys of an already-parsed document.
 fn var_names_of(parsed: &toml::Value) -> Vec<String> {
-    parsed.get("vars")
+    parsed
+        .get("vars")
         .and_then(toml::Value::as_table)
         .map(|vars| vars.keys().cloned().collect())
         .unwrap_or_default()
@@ -208,7 +222,8 @@ pub(super) fn substitute_variables(content: &str) -> Result<String> {
     // Matches quoted variable references like "${var_name}" (including the surrounding double quotes,
     // since variables in TOML values are written as "value" = "${var}").
     static VAR_PATTERN: OnceLock<Regex> = OnceLock::new();
-    let var_pattern = VAR_PATTERN.get_or_init(|| Regex::new(r#""\$\{([^}]+)\}""#).expect(errors::INVALID_REGEX));
+    let var_pattern =
+        VAR_PATTERN.get_or_init(|| Regex::new(r#""\$\{([^}]+)\}""#).expect(errors::INVALID_REGEX));
 
     // One parse serves both the name check and the value lookup below.
     // A parse failure is deliberately not fatal here: the undefined-variable
@@ -221,12 +236,16 @@ pub(super) fn substitute_variables(content: &str) -> Result<String> {
     // Check for undefined variable references, ignoring `${...}` in comments
     for line in content.lines() {
         for captures in var_pattern.captures_iter(strip_toml_comment(line)) {
-            let var_name = captures.get(1).expect(errors::CAPTURE_GROUP_MISSING).as_str();
+            let var_name = captures
+                .get(1)
+                .expect(errors::CAPTURE_GROUP_MISSING)
+                .as_str();
             if !defined_vars.iter().any(|v| v == var_name) {
                 return Err(crate::exit_code::RsconstructError::new(
                     crate::exit_code::RsconstructExitCode::ConfigError,
                     format!("Undefined variable: ${{{var_name}}}"),
-                ).into());
+                )
+                .into());
             }
         }
     }
@@ -270,10 +289,14 @@ pub(super) fn substitute_variables(content: &str) -> Result<String> {
 /// literal. Comments are exempt, like everywhere else in this pipeline.
 fn check_no_residual_references(content: &str) -> Result<()> {
     static RESIDUAL_PATTERN: OnceLock<Regex> = OnceLock::new();
-    let residual = RESIDUAL_PATTERN.get_or_init(|| Regex::new(r"\$\{([^}]+)\}").expect(errors::INVALID_REGEX));
+    let residual =
+        RESIDUAL_PATTERN.get_or_init(|| Regex::new(r"\$\{([^}]+)\}").expect(errors::INVALID_REGEX));
     for line in content.lines() {
         if let Some(captures) = residual.captures(strip_toml_comment(line)) {
-            let var_name = captures.get(1).expect(errors::CAPTURE_GROUP_MISSING).as_str();
+            let var_name = captures
+                .get(1)
+                .expect(errors::CAPTURE_GROUP_MISSING)
+                .as_str();
             return Err(crate::exit_code::RsconstructError::new(
                 crate::exit_code::RsconstructExitCode::ConfigError,
                 format!(

@@ -61,7 +61,10 @@ impl BuildGraph {
             if !output_files.contains(file) {
                 let node_id = Self::path_node_id(file);
                 let label = Self::file_label(file);
-                let _ = writeln!(buf, "    {node_id} [label=\"{label}\" shape=note style=filled fillcolor=white];");
+                let _ = writeln!(
+                    buf,
+                    "    {node_id} [label=\"{label}\" shape=note style=filled fillcolor=white];"
+                );
             }
         }
 
@@ -69,8 +72,15 @@ impl BuildGraph {
         for file in &output_files {
             let node_id = Self::path_node_id(file);
             let label = Self::file_label(file);
-            let color = if input_files.contains(file) { "lightgreen" } else { "lightyellow" };
-            let _ = writeln!(buf, "    {node_id} [label=\"{label}\" shape=note style=filled fillcolor={color}];");
+            let color = if input_files.contains(file) {
+                "lightgreen"
+            } else {
+                "lightyellow"
+            };
+            let _ = writeln!(
+                buf,
+                "    {node_id} [label=\"{label}\" shape=note style=filled fillcolor={color}];"
+            );
         }
 
         let _ = writeln!(buf, "\n    // Processors");
@@ -81,8 +91,11 @@ impl BuildGraph {
                 proc_names::CC_SINGLE_FILE => "lightsalmon",
                 _ => "lightgray",
             };
-            let _ = writeln!(buf, "    {} [label=\"{}\" shape=box style=filled fillcolor={}];",
-                node_id, product.processor, color);
+            let _ = writeln!(
+                buf,
+                "    {} [label=\"{}\" shape=box style=filled fillcolor={}];",
+                node_id, product.processor, color
+            );
         }
 
         let _ = writeln!(buf, "\n    // Edges");
@@ -165,11 +178,15 @@ impl BuildGraph {
         }
 
         // Add styling
-        let tera_procs: Vec<_> = self.products.iter()
+        let tera_procs: Vec<_> = self
+            .products
+            .iter()
             .filter(|p| p.processor == proc_names::TERA)
             .map(Self::processor_node_id)
             .collect();
-        let cc_procs: Vec<_> = self.products.iter()
+        let cc_procs: Vec<_> = self
+            .products
+            .iter()
             .filter(|p| p.processor == proc_names::CC_SINGLE_FILE)
             .map(Self::processor_node_id)
             .collect();
@@ -224,27 +241,40 @@ impl BuildGraph {
 
         for id in order {
             let product = self.products.get(id).expect(errors::INVALID_PRODUCT_ID);
-            let inputs: Vec<_> = product.inputs.iter()
+            let inputs: Vec<_> = product
+                .inputs
+                .iter()
                 .filter_map(|p| p.file_name())
                 .filter_map(|n| n.to_str())
                 .collect();
-            let outputs: Vec<_> = product.outputs.iter()
+            let outputs: Vec<_> = product
+                .outputs
+                .iter()
                 .filter_map(|p| p.file_name())
                 .filter_map(|n| n.to_str())
                 .collect();
 
-            let _ = writeln!(buf, "[{}] {} -> {}",
+            let _ = writeln!(
+                buf,
+                "[{}] {} -> {}",
                 product.processor,
                 inputs.join(", "),
-                outputs.join(", "));
+                outputs.join(", ")
+            );
 
             // Show dependencies
-            let deps = self.dependencies.get(product.id).expect(errors::INVALID_PRODUCT_ID);
+            let deps = self
+                .dependencies
+                .get(product.id)
+                .expect(errors::INVALID_PRODUCT_ID);
             if !deps.is_empty() {
-                let dep_names: Vec<_> = deps.iter()
+                let dep_names: Vec<_> = deps
+                    .iter()
                     .map(|&d| {
                         let dep = self.products.get(d).expect(errors::INVALID_PRODUCT_ID);
-                        let out: Vec<_> = dep.outputs.iter()
+                        let out: Vec<_> = dep
+                            .outputs
+                            .iter()
                             .filter_map(|p| p.file_name())
                             .filter_map(|n| n.to_str())
                             .collect();
@@ -271,7 +301,8 @@ impl BuildGraph {
     /// Generate a self-contained HTML file with Mermaid diagram
     pub fn to_html(&self) -> String {
         let mermaid_content = self.to_mermaid();
-        format!(r#"<!DOCTYPE html>
+        format!(
+            r#"<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -304,6 +335,7 @@ impl BuildGraph {
     </script>
 </body>
 </html>
-"#)
+"#
+        )
     }
 }

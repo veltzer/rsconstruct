@@ -32,8 +32,7 @@ pub fn all_hooks() -> impl Iterator<Item = &'static PhaseHook> {
 /// Run every registered post-config hook, in inventory order.
 pub fn run_post_config_hooks(config: &mut Config) -> Result<()> {
     for hook in all_hooks() {
-        (hook.run)(config)
-            .map_err(|e| e.context(format!("post-config hook '{}'", hook.name)))?;
+        (hook.run)(config).map_err(|e| e.context(format!("post-config hook '{}'", hook.name)))?;
     }
     Ok(())
 }

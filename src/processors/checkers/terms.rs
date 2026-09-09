@@ -133,8 +133,14 @@ impl crate::processors::Processor for TermsProcessor {
             watched_dirs.push(&self.config.dir_terms_ambiguous);
         }
         for dir in watched_dirs {
-            for entry in crate::errors::ctx(fs::read_dir(dir), &format!("Failed to read terms directory {dir}"))? {
-                let entry = crate::errors::ctx(entry, &format!("Failed to read entry in terms directory {dir}"))?;
+            for entry in crate::errors::ctx(
+                fs::read_dir(dir),
+                &format!("Failed to read terms directory {dir}"),
+            )? {
+                let entry = crate::errors::ctx(
+                    entry,
+                    &format!("Failed to read entry in terms directory {dir}"),
+                )?;
                 let path = entry.path();
                 if path.extension().is_some_and(|e| e == "txt") {
                     dep_inputs.push(path.to_string_lossy().into_owned());
@@ -142,8 +148,12 @@ impl crate::processors::Processor for TermsProcessor {
             }
         }
         discover_checker_products(
-            graph, &self.config.standard, file_index, &dep_inputs,
-            &self.config.standard.dep_auto, &self.config,
+            graph,
+            &self.config.standard,
+            file_index,
+            &dep_inputs,
+            &self.config.standard.dep_auto,
+            &self.config,
             &crate::config::checksum_fields_of(instance_name),
             instance_name,
         )
@@ -153,8 +163,14 @@ impl crate::processors::Processor for TermsProcessor {
         self.execute_product(product)
     }
 
-    fn execute_batch(&self, _ctx: &crate::build_context::BuildContext, products: &[&Product]) -> Vec<Result<()>> {
-        crate::processors::execute_checker_batch_per_file(products, |file| self.check_files(&[file]))
+    fn execute_batch(
+        &self,
+        _ctx: &crate::build_context::BuildContext,
+        products: &[&Product],
+    ) -> Vec<Result<()>> {
+        crate::processors::execute_checker_batch_per_file(products, |file| {
+            self.check_files(&[file])
+        })
     }
 }
 
@@ -169,19 +185,26 @@ pub fn load_terms(dir_path: &str) -> Result<HashSet<String>> {
         bail!("terms directory `{dir_path}` does not exist or is not a directory");
     }
     // Map each term to (file, line_number) where it first appeared
-    let mut seen: std::collections::HashMap<String, (String, usize)> = std::collections::HashMap::new();
+    let mut seen: std::collections::HashMap<String, (String, usize)> =
+        std::collections::HashMap::new();
     let mut duplicates = Vec::new();
 
-    let mut entries: Vec<_> = crate::errors::ctx(fs::read_dir(dir), &format!("Failed to read terms directory {}", dir.display()))?
-        .filter_map(std::result::Result::ok)
-        .collect();
+    let mut entries: Vec<_> = crate::errors::ctx(
+        fs::read_dir(dir),
+        &format!("Failed to read terms directory {}", dir.display()),
+    )?
+    .filter_map(std::result::Result::ok)
+    .collect();
     entries.sort_by_key(std::fs::DirEntry::path);
 
     for entry in &entries {
         let path = entry.path();
         if path.extension().is_some_and(|e| e == "txt") {
             let filename = path.file_name().unwrap().to_string_lossy().to_string();
-            let content = crate::errors::ctx(fs::read_to_string(&path), &format!("Failed to read terms file: {}", path.display()))?;
+            let content = crate::errors::ctx(
+                fs::read_to_string(&path),
+                &format!("Failed to read terms file: {}", path.display()),
+            )?;
             for (line_idx, line) in content.lines().enumerate() {
                 let term = line.trim();
                 if term.is_empty() {
@@ -190,7 +213,11 @@ pub fn load_terms(dir_path: &str) -> Result<HashSet<String>> {
                 if let Some((prev_file, prev_line)) = seen.get(term) {
                     duplicates.push(format!(
                         "  `{}` in {}:{} (first seen in {}:{})",
-                        term, filename, line_idx + 1, prev_file, prev_line,
+                        term,
+                        filename,
+                        line_idx + 1,
+                        prev_file,
+                        prev_line,
                     ));
                 } else {
                     seen.insert(term.to_string(), (filename.clone(), line_idx + 1));
@@ -200,7 +227,11 @@ pub fn load_terms(dir_path: &str) -> Result<HashSet<String>> {
     }
 
     if !duplicates.is_empty() {
-        bail!("Duplicate terms in {}:\n{}", dir_path, duplicates.join("\n"));
+        bail!(
+            "Duplicate terms in {}:\n{}",
+            dir_path,
+            duplicates.join("\n")
+        );
     }
 
     Ok(seen.into_keys().collect())
@@ -270,7 +301,11 @@ fn excluded_ranges(text: &str) -> Vec<(usize, usize)> {
 
     // YAML frontmatter: must start at the very beginning of the file
     if text.starts_with("---\n") || text.starts_with("---\r\n") {
-        let skip = if text.as_bytes().get(3) == Some(&b'\r') { 5 } else { 4 };
+        let skip = if text.as_bytes().get(3) == Some(&b'\r') {
+            5
+        } else {
+            4
+        };
         if let Some(end_idx) = text[skip..].find("\n---") {
             let mut end = skip + end_idx + 4; // past the closing ---
             // Skip to end of line
@@ -288,7 +323,11 @@ fn excluded_ranges(text: &str) -> Vec<(usize, usize)> {
     let mut pos = 0;
     let bytes = text.as_bytes();
     while pos < bytes.len() {
-        if bytes[pos] == b'`' && pos + 2 < bytes.len() && bytes[pos + 1] == b'`' && bytes[pos + 2] == b'`' {
+        if bytes[pos] == b'`'
+            && pos + 2 < bytes.len()
+            && bytes[pos + 1] == b'`'
+            && bytes[pos + 2] == b'`'
+        {
             let start = pos;
             pos += 3;
             while pos < bytes.len() && bytes[pos] == b'`' {
@@ -396,7 +435,13 @@ fn url_ranges(text: &str) -> Vec<(usize, usize)> {
             let mut end = start;
             while end < bytes.len() {
                 let c = bytes[end];
-                if c.is_ascii_whitespace() || c == b')' || c == b']' || c == b'`' || c == b'<' || c == b'>' {
+                if c.is_ascii_whitespace()
+                    || c == b')'
+                    || c == b']'
+                    || c == b'`'
+                    || c == b'<'
+                    || c == b'>'
+                {
                     break;
                 }
                 end += 1;
@@ -534,7 +579,9 @@ fn looks_like_term_reference(inner: &str) -> bool {
     if is_file_path(inner) {
         return false;
     }
-    let code_chars = ['(', ')', '{', '}', '[', ']', ';', '=', '>', '<', '|', '\\', '"', '\'', '~'];
+    let code_chars = [
+        '(', ')', '{', '}', '[', ']', ';', '=', '>', '<', '|', '\\', '"', '\'', '~',
+    ];
     for part in &parts {
         if part.contains(' ') || part.chars().any(|c| code_chars.contains(&c)) {
             return false;
@@ -594,7 +641,9 @@ fn find_non_tech_backticked_positions(
             continue;
         }
         let parts = split_backticked(inner);
-        let all_non_tech = parts.iter().all(|p| !single.contains(p) && !ambiguous.contains(p));
+        let all_non_tech = parts
+            .iter()
+            .all(|p| !single.contains(p) && !ambiguous.contains(p));
         if all_non_tech {
             results.push((start, end));
         }
@@ -618,7 +667,8 @@ fn find_backticked_ambiguous_positions(
             continue;
         }
         let parts = split_backticked(inner);
-        let hits: Vec<String> = parts.into_iter()
+        let hits: Vec<String> = parts
+            .into_iter()
             .filter(|p| ambiguous.contains(p))
             .collect();
         if !hits.is_empty() {
@@ -653,10 +703,11 @@ fn fix_content(
 ) -> String {
     // Step 1: when forbidding, strip backticks around ambiguous terms (`server` → server).
     let after_amb = if forbid_ambiguous_backticks {
-        let mut amb_removals: Vec<(usize, usize, String)> = find_backticked_ambiguous_positions(original, &terms.ambiguous)
-            .into_iter()
-            .map(|(s, e, _)| (s, e, original[s + 1..e - 1].to_string()))
-            .collect();
+        let mut amb_removals: Vec<(usize, usize, String)> =
+            find_backticked_ambiguous_positions(original, &terms.ambiguous)
+                .into_iter()
+                .map(|(s, e, _)| (s, e, original[s + 1..e - 1].to_string()))
+                .collect();
         if amb_removals.is_empty() {
             original.to_string()
         } else {
@@ -668,10 +719,11 @@ fn fix_content(
 
     // Step 2: optionally remove backticks from non-terms (e.g. `CI`/`CD` → CI/CD).
     let cleaned = if remove_non_terms {
-        let mut removals: Vec<(usize, usize, String)> = find_non_tech_backticked_positions(&after_amb, &terms.single, &terms.ambiguous)
-            .into_iter()
-            .map(|(s, e)| (s, e, after_amb[s + 1..e - 1].to_string()))
-            .collect();
+        let mut removals: Vec<(usize, usize, String)> =
+            find_non_tech_backticked_positions(&after_amb, &terms.single, &terms.ambiguous)
+                .into_iter()
+                .map(|(s, e)| (s, e, after_amb[s + 1..e - 1].to_string()))
+                .collect();
         if removals.is_empty() {
             after_amb
         } else {
@@ -683,10 +735,11 @@ fn fix_content(
 
     // Step 3: add backticks to unquoted unambiguous terms (on the cleaned text,
     // so e.g. CI/CD is now found if its backticks were just stripped).
-    let mut additions: Vec<(usize, usize, String)> = find_unquoted_positions(&cleaned, sorted_terms)
-        .into_iter()
-        .map(|(s, e, m)| (s, e, format!("`{m}`")))
-        .collect();
+    let mut additions: Vec<(usize, usize, String)> =
+        find_unquoted_positions(&cleaned, sorted_terms)
+            .into_iter()
+            .map(|(s, e, m)| (s, e, format!("`{m}`")))
+            .collect();
     if additions.is_empty() {
         cleaned
     } else {
@@ -696,8 +749,15 @@ fn fix_content(
 
 /// Check a file and return a formatted issue summary, or an empty string if clean.
 /// Reports both unquoted unambiguous terms and ambiguous terms found inside backticks.
-fn check_file_detail(path: &Path, sorted_terms: &[&str], ambiguous: &HashSet<String>) -> Result<String> {
-    let content = crate::errors::ctx(fs::read_to_string(path), &format!("Failed to read {}", path.display()))?;
+fn check_file_detail(
+    path: &Path,
+    sorted_terms: &[&str],
+    ambiguous: &HashSet<String>,
+) -> Result<String> {
+    let content = crate::errors::ctx(
+        fs::read_to_string(path),
+        &format!("Failed to read {}", path.display()),
+    )?;
 
     let unquoted = find_unquoted_positions(&content, sorted_terms);
     let mut unquoted_terms: Vec<String> = unquoted.into_iter().map(|(_, _, t)| t).collect();
@@ -714,7 +774,10 @@ fn check_file_detail(path: &Path, sorted_terms: &[&str], ambiguous: &HashSet<Str
         parts.push(format!("missing backticks: {}", unquoted_terms.join(", ")));
     }
     if !amb_terms.is_empty() {
-        parts.push(format!("ambiguous terms must not be backticked: {}", amb_terms.join(", ")));
+        parts.push(format!(
+            "ambiguous terms must not be backticked: {}",
+            amb_terms.join(", ")
+        ));
     }
     Ok(parts.join("; "))
 }
@@ -727,12 +790,24 @@ pub fn fix_file(
     remove_non_terms: bool,
     forbid_ambiguous_backticks: bool,
 ) -> Result<bool> {
-    let original = crate::errors::ctx(fs::read_to_string(path), &format!("Failed to read {}", path.display()))?;
-    let fixed = fix_content(&original, terms, sorted_terms, remove_non_terms, forbid_ambiguous_backticks);
+    let original = crate::errors::ctx(
+        fs::read_to_string(path),
+        &format!("Failed to read {}", path.display()),
+    )?;
+    let fixed = fix_content(
+        &original,
+        terms,
+        sorted_terms,
+        remove_non_terms,
+        forbid_ambiguous_backticks,
+    );
     if fixed == original {
         Ok(false)
     } else {
-        crate::errors::ctx(fs::write(path, &fixed), &format!("Failed to write {}", path.display()))?;
+        crate::errors::ctx(
+            fs::write(path, &fixed),
+            &format!("Failed to write {}", path.display()),
+        )?;
         Ok(true)
     }
 }
@@ -747,7 +822,12 @@ pub fn fix_all(config: &TermsConfig, remove_non_terms: bool, warn_symlinks: bool
     // directories like `out/generator` that are gitignored. The build path
     // sees those via `add_virtual_files` after the discover loop runs;
     // `terms fix` runs standalone so it must walk them itself.
-    let force_dirs: Vec<&str> = config.standard.src_dirs().iter().map(std::string::String::as_str).collect();
+    let force_dirs: Vec<&str> = config
+        .standard
+        .src_dirs()
+        .iter()
+        .map(std::string::String::as_str)
+        .collect();
     let file_index = FileIndex::build_with_force_dirs(&force_dirs, &[], warn_symlinks)?;
     let md_files = file_index.scan(&config.standard, true);
 
@@ -758,18 +838,30 @@ pub fn fix_all(config: &TermsConfig, remove_non_terms: bool, warn_symlinks: bool
 
     println!(
         "Checking {} markdown files against {} unambiguous + {} ambiguous terms...",
-        md_files.len(), terms.single.len(), terms.ambiguous.len(),
+        md_files.len(),
+        terms.single.len(),
+        terms.ambiguous.len(),
     );
 
     let mut modified_count = 0;
     for file in &md_files {
-        if fix_file(file, &terms, &sorted, remove_non_terms, config.forbid_backticked_ambiguous)? {
+        if fix_file(
+            file,
+            &terms,
+            &sorted,
+            remove_non_terms,
+            config.forbid_backticked_ambiguous,
+        )? {
             modified_count += 1;
             println!("  Fixed: {}", file.display());
         }
     }
 
-    println!("Done. Modified {} of {} files.", modified_count, md_files.len());
+    println!(
+        "Done. Modified {} of {} files.",
+        modified_count,
+        md_files.len()
+    );
     Ok(())
 }
 
@@ -784,14 +876,23 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
     }
     let dest = Path::new(&config.dir_terms_unambiguous);
     if !dest.is_dir() {
-        bail!("Terms directory `{}` does not exist or is not a directory", config.dir_terms_unambiguous);
+        bail!(
+            "Terms directory `{}` does not exist or is not a directory",
+            config.dir_terms_unambiguous
+        );
     }
 
     let mut merged_count = 0;
     let mut copied_count = 0;
 
-    for entry in crate::errors::ctx(fs::read_dir(src), &format!("Failed to read source directory {}", src.display()))? {
-        let entry = crate::errors::ctx(entry, &format!("Failed to read entry in source directory {}", src.display()))?;
+    for entry in crate::errors::ctx(
+        fs::read_dir(src),
+        &format!("Failed to read source directory {}", src.display()),
+    )? {
+        let entry = crate::errors::ctx(
+            entry,
+            &format!("Failed to read entry in source directory {}", src.display()),
+        )?;
         let path = entry.path();
         if path.extension().is_none_or(|e| e != "txt") {
             continue;
@@ -799,7 +900,10 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
         let filename = path.file_name().unwrap();
         let dest_path = dest.join(filename);
 
-        let source_content = crate::errors::ctx(fs::read_to_string(&path), &format!("Failed to read terms source: {}", path.display()))?;
+        let source_content = crate::errors::ctx(
+            fs::read_to_string(&path),
+            &format!("Failed to read terms source: {}", path.display()),
+        )?;
         let source_terms: HashSet<String> = source_content
             .lines()
             .map(|l| l.trim().to_string())
@@ -807,7 +911,10 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
             .collect();
 
         if dest_path.exists() {
-            let dest_content = crate::errors::ctx(fs::read_to_string(&dest_path), &format!("Failed to read terms dest: {}", dest_path.display()))?;
+            let dest_content = crate::errors::ctx(
+                fs::read_to_string(&dest_path),
+                &format!("Failed to read terms dest: {}", dest_path.display()),
+            )?;
             let dest_terms: HashSet<String> = dest_content
                 .lines()
                 .map(|l| l.trim().to_string())
@@ -819,26 +926,48 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
             sorted.sort();
             let content = sorted.join("\n") + "\n";
             if content != source_content || content != dest_content {
-                crate::errors::ctx(fs::write(&dest_path, &content), &format!("Failed to write {}", dest_path.display()))?;
-                crate::errors::ctx(fs::write(&path, &content), &format!("Failed to write {}", path.display()))?;
+                crate::errors::ctx(
+                    fs::write(&dest_path, &content),
+                    &format!("Failed to write {}", dest_path.display()),
+                )?;
+                crate::errors::ctx(
+                    fs::write(&path, &content),
+                    &format!("Failed to write {}", path.display()),
+                )?;
                 merged_count += 1;
                 let added_to_dest = sorted.len() - dest_terms.len();
                 let added_to_src = sorted.len() - source_terms.len();
-                println!("  Merged: {} (+{} to dest, +{} to source)",
-                    filename.to_string_lossy(), added_to_dest, added_to_src);
+                println!(
+                    "  Merged: {} (+{} to dest, +{} to source)",
+                    filename.to_string_lossy(),
+                    added_to_dest,
+                    added_to_src
+                );
             }
         } else {
             let mut sorted: Vec<String> = source_terms.into_iter().collect();
             sorted.sort();
-            crate::errors::ctx(fs::write(&dest_path, sorted.join("\n") + "\n"), &format!("Failed to write {}", dest_path.display()))?;
+            crate::errors::ctx(
+                fs::write(&dest_path, sorted.join("\n") + "\n"),
+                &format!("Failed to write {}", dest_path.display()),
+            )?;
             copied_count += 1;
             println!("  Copied to dest: {}", filename.to_string_lossy());
         }
     }
 
     // Copy files that exist in destination but not in source back to source
-    for entry in crate::errors::ctx(fs::read_dir(dest), &format!("Failed to read destination directory {}", dest.display()))? {
-        let entry = crate::errors::ctx(entry, &format!("Failed to read entry in destination directory {}", dest.display()))?;
+    for entry in crate::errors::ctx(
+        fs::read_dir(dest),
+        &format!("Failed to read destination directory {}", dest.display()),
+    )? {
+        let entry = crate::errors::ctx(
+            entry,
+            &format!(
+                "Failed to read entry in destination directory {}",
+                dest.display()
+            ),
+        )?;
         let path = entry.path();
         if path.extension().is_none_or(|e| e != "txt") {
             continue;
@@ -846,7 +975,14 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
         let filename = path.file_name().unwrap();
         let src_path = src.join(filename);
         if !src_path.exists() {
-            crate::errors::ctx(fs::copy(&path, &src_path), &format!("Failed to copy {} to {}", path.display(), src_path.display()))?;
+            crate::errors::ctx(
+                fs::copy(&path, &src_path),
+                &format!(
+                    "Failed to copy {} to {}",
+                    path.display(),
+                    src_path.display()
+                ),
+            )?;
             copied_count += 1;
             println!("  Copied to source: {}", filename.to_string_lossy());
         }
@@ -877,7 +1013,10 @@ pub fn stats(config: &TermsConfig) -> Result<()> {
             "ambiguous_term_files": amb_files,
             "total_ambiguous_terms": amb_terms,
         });
-        println!("{}", serde_json::to_string_pretty(&out).expect(crate::errors::JSON_SERIALIZE));
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&out).expect(crate::errors::JSON_SERIALIZE)
+        );
     } else {
         println!("{single_files} term file(s), {single_terms} total terms (unambiguous)");
         if amb_dir_exists {
@@ -894,11 +1033,20 @@ fn count_terms_in_dir(dir_str: &str) -> Result<(usize, usize)> {
     }
     let mut file_count = 0;
     let mut total_terms = 0;
-    for entry in crate::errors::ctx(fs::read_dir(dir), &format!("Failed to read terms directory {}", dir.display()))? {
-        let entry = crate::errors::ctx(entry, &format!("Failed to read entry in terms directory {}", dir.display()))?;
+    for entry in crate::errors::ctx(
+        fs::read_dir(dir),
+        &format!("Failed to read terms directory {}", dir.display()),
+    )? {
+        let entry = crate::errors::ctx(
+            entry,
+            &format!("Failed to read entry in terms directory {}", dir.display()),
+        )?;
         if entry.path().extension().is_some_and(|e| e == "txt") {
             file_count += 1;
-            let content = crate::errors::ctx(fs::read_to_string(entry.path()), &format!("Failed to read {}", entry.path().display()))?;
+            let content = crate::errors::ctx(
+                fs::read_to_string(entry.path()),
+                &format!("Failed to read {}", entry.path().display()),
+            )?;
             total_terms += content.lines().filter(|l| !l.trim().is_empty()).count();
         }
     }

@@ -128,7 +128,10 @@ fn iset_max_jobs_zero_rejected() {
     let temp = setup_project_with_config("[processor.tera]\n");
     create_tera_templates(temp.path());
     let out = run_rsconstruct(temp.path(), &["build", "--iset", "tera.max_jobs=0"]);
-    assert!(!out.status.success(), "expected failure for max_jobs=0 override");
+    assert!(
+        !out.status.success(),
+        "expected failure for max_jobs=0 override"
+    );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         stderr.contains("max_jobs") && stderr.contains("greater than 0"),

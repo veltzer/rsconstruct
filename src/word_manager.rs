@@ -1,10 +1,10 @@
 use anyhow::Result;
+use parking_lot::Mutex;
 use std::collections::HashSet;
 use std::path::Path;
-use parking_lot::Mutex;
 
-use crate::processors::flush_words;
 use crate::graph::Product;
+use crate::processors::flush_words;
 
 /// Shared word-file management for spell-checking processors (aspell, zspell).
 ///
@@ -75,12 +75,7 @@ impl WordManager {
         }
         let mut custom_words = self.custom_words.lock();
         let words_path = Path::new(&self.words_file);
-        flush_words(
-            &custom_words,
-            &words_to_add,
-            words_path,
-            self.header_line,
-        )?;
+        flush_words(&custom_words, &words_to_add, words_path, self.header_line)?;
         custom_words.extend(words_to_add.drain());
         Ok(())
     }
@@ -96,10 +91,10 @@ impl WordManager {
         processor_name: &str,
     ) -> Result<()> {
         let result = check_fn(product.primary_input());
-        if auto_add_words
-            && let Err(e) = self.flush()
-        {
-            return result.and(Err(e.context(format!("Failed to flush {processor_name} words file"))));
+        if auto_add_words && let Err(e) = self.flush() {
+            return result.and(Err(
+                e.context(format!("Failed to flush {processor_name} words file"))
+            ));
         }
         result
     }
@@ -120,9 +115,7 @@ impl WordManager {
             .map(|p| check_fn(p.primary_input()))
             .collect();
 
-        if auto_add_words
-            && let Err(e) = self.flush()
-        {
+        if auto_add_words && let Err(e) = self.flush() {
             let msg = format!("Failed to flush {processor_name} words file: {e:#}");
             for r in &mut results {
                 if r.is_ok() {
@@ -145,25 +138,29 @@ mod tests {
     fn flush_does_not_reappend_words() {
         let tmp = tempfile::TempDir::new().unwrap();
         let words_file = tmp.path().join("words.txt");
-        let mgr = WordManager::new(
-            HashSet::new(),
-            words_file.display().to_string(),
-            None,
-        );
+        let mgr = WordManager::new(HashSet::new(), words_file.display().to_string(), None);
 
-        mgr.handle_misspelled(&["Frobnicate"], Path::new("a.md"), true).unwrap();
+        mgr.handle_misspelled(&["Frobnicate"], Path::new("a.md"), true)
+            .unwrap();
         mgr.flush().unwrap();
         assert!(mgr.is_known("frobnicate"), "flushed word must become known");
 
         // Later products flush again (and may re-collect nothing new)
         mgr.flush().unwrap();
-        mgr.handle_misspelled(&["quuxify"], Path::new("b.md"), true).unwrap();
+        mgr.handle_misspelled(&["quuxify"], Path::new("b.md"), true)
+            .unwrap();
         mgr.flush().unwrap();
 
         let content = std::fs::read_to_string(&words_file).unwrap();
         let frob_count = content.lines().filter(|l| *l == "frobnicate").count();
         let quux_count = content.lines().filter(|l| *l == "quuxify").count();
-        assert_eq!(frob_count, 1, "word must appear exactly once, got:\n{content}");
-        assert_eq!(quux_count, 1, "word must appear exactly once, got:\n{content}");
+        assert_eq!(
+            frob_count, 1,
+            "word must appear exactly once, got:\n{content}"
+        );
+        assert_eq!(
+            quux_count, 1,
+            "word must appear exactly once, got:\n{content}"
+        );
     }
 }

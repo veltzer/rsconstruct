@@ -11,7 +11,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 use crate::color;
 use crate::deps_cache::DepsCache;
@@ -21,7 +21,12 @@ use super::Builder;
 
 impl Builder {
     /// Implement `rsconstruct product show <path>`.
-    pub fn product_show(&self, ctx: &crate::build_context::BuildContext, path: &str, verbose: bool) -> Result<()> {
+    pub fn product_show(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        path: &str,
+        verbose: bool,
+    ) -> Result<()> {
         let graph = self.build_graph_for_cache(ctx)?;
         let target = PathBuf::from(path);
 
@@ -36,7 +41,8 @@ impl Builder {
         // Group analyzer-attributed inputs by analyzer name. The analyzer
         // attaches deps to the *primary input*, so that's the lookup key.
         let analyzer_entries = deps_cache.get_raw_for_path(product.primary_input());
-        let analyzer_inputs: BTreeMap<String, Vec<PathBuf>> = analyzer_entries.iter()
+        let analyzer_inputs: BTreeMap<String, Vec<PathBuf>> = analyzer_entries
+            .iter()
             .map(|(deps, name)| (name.clone(), deps.clone()))
             .collect();
 
@@ -46,7 +52,8 @@ impl Builder {
         let mut hash_pieces: BTreeMap<String, Vec<String>> = BTreeMap::new();
         for (name, analyzer) in &analyzers {
             if let Ok(Some(pieces)) = analyzer.scan_hash_pieces(ctx, product.primary_input())
-                && !pieces.is_empty() {
+                && !pieces.is_empty()
+            {
                 hash_pieces.insert(name.clone(), pieces);
             }
         }
@@ -61,13 +68,29 @@ impl Builder {
         let descriptor_key = product.descriptor_key(&input_checksum);
 
         // Cache state: what the executor would do with this descriptor right now.
-        let cache_state = self.object_store()
-            .explain_descriptor(ctx, &descriptor_key, &product.outputs, false);
+        let cache_state =
+            self.object_store()
+                .explain_descriptor(ctx, &descriptor_key, &product.outputs, false);
 
         if crate::json_output::is_json_mode() {
-            print_json(product, &input_checksum, &descriptor_key, &analyzer_inputs, &hash_pieces, &cache_state)?;
+            print_json(
+                product,
+                &input_checksum,
+                &descriptor_key,
+                &analyzer_inputs,
+                &hash_pieces,
+                &cache_state,
+            )?;
         } else {
-            print_text(product, &input_checksum, &descriptor_key, &analyzer_inputs, &hash_pieces, &cache_state, verbose);
+            print_text(
+                product,
+                &input_checksum,
+                &descriptor_key,
+                &analyzer_inputs,
+                &hash_pieces,
+                &cache_state,
+                verbose,
+            );
         }
 
         Ok(())
@@ -103,7 +126,11 @@ fn print_text(
     cache_state: &crate::object_store::ExplainAction,
     verbose: bool,
 ) {
-    println!("{} {}", color::dim("processor:"), color::cyan(&product.processor));
+    println!(
+        "{} {}",
+        color::dim("processor:"),
+        color::cyan(&product.processor)
+    );
     if let Some(v) = &product.variant {
         println!("{} {}", color::dim("variant:"), v);
     }
@@ -119,9 +146,8 @@ fn print_text(
 
     println!("{}", color::dim("inputs:"));
     let primary = product.primary_input();
-    let analyzer_added: std::collections::HashSet<&PathBuf> = analyzer_inputs.values()
-        .flatten()
-        .collect();
+    let analyzer_added: std::collections::HashSet<&PathBuf> =
+        analyzer_inputs.values().flatten().collect();
     println!("  {} {}", color::cyan("primary"), primary.display());
     let mut other_count = 0;
     for inp in product.inputs.iter().skip(1) {
@@ -148,7 +174,11 @@ fn print_text(
     // contributed them. A changed descriptor_key is always attributable to
     // exactly one of these lines (or to input_checksum below).
     if product.cache_key.is_empty() {
-        println!("{} {}", color::dim("cache_key:"), color::dim("(inputs only)"));
+        println!(
+            "{} {}",
+            color::dim("cache_key:"),
+            color::dim("(inputs only)")
+        );
     } else {
         println!(
             "{} {}",
@@ -183,7 +213,11 @@ fn print_text(
             for piece in pieces {
                 let (kind, body) = piece.split_once(':').unwrap_or((piece.as_str(), ""));
                 if !verbose && kind.ends_with("_resolved") {
-                    let n = if body.is_empty() { 0 } else { body.lines().count() };
+                    let n = if body.is_empty() {
+                        0
+                    } else {
+                        body.lines().count()
+                    };
                     println!(
                         "    {} {}",
                         color::cyan(kind),
@@ -217,24 +251,40 @@ fn print_json(
     cache_state: &crate::object_store::ExplainAction,
 ) -> Result<()> {
     let primary = product.primary_input();
-    let analyzer_added: std::collections::HashSet<&PathBuf> = analyzer_inputs.values()
-        .flatten()
-        .collect();
-    let configured: Vec<String> = product.inputs.iter().skip(1)
+    let analyzer_added: std::collections::HashSet<&PathBuf> =
+        analyzer_inputs.values().flatten().collect();
+    let configured: Vec<String> = product
+        .inputs
+        .iter()
+        .skip(1)
         .filter(|p| !analyzer_added.contains(*p))
         .map(|p| p.display().to_string())
         .collect();
-    let analyzer_inputs_json: serde_json::Map<String, serde_json::Value> = analyzer_inputs.iter()
-        .map(|(k, v)| (
-            k.clone(),
-            serde_json::Value::Array(v.iter().map(|p| serde_json::Value::String(p.display().to_string())).collect()),
-        ))
+    let analyzer_inputs_json: serde_json::Map<String, serde_json::Value> = analyzer_inputs
+        .iter()
+        .map(|(k, v)| {
+            (
+                k.clone(),
+                serde_json::Value::Array(
+                    v.iter()
+                        .map(|p| serde_json::Value::String(p.display().to_string()))
+                        .collect(),
+                ),
+            )
+        })
         .collect();
-    let hash_pieces_json: serde_json::Map<String, serde_json::Value> = hash_pieces.iter()
-        .map(|(k, v)| (
-            k.clone(),
-            serde_json::Value::Array(v.iter().map(|s| serde_json::Value::String(s.clone())).collect()),
-        ))
+    let hash_pieces_json: serde_json::Map<String, serde_json::Value> = hash_pieces
+        .iter()
+        .map(|(k, v)| {
+            (
+                k.clone(),
+                serde_json::Value::Array(
+                    v.iter()
+                        .map(|s| serde_json::Value::String(s.clone()))
+                        .collect(),
+                ),
+            )
+        })
         .collect();
 
     let cache_state_str = cache_state.to_string();

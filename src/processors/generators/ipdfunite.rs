@@ -50,9 +50,7 @@ pub struct IpdfuniteProcessor {
 
 impl IpdfuniteProcessor {
     pub const fn new(config: IpdfuniteConfig) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 
     /// Source files under `source_dir` with the configured extension, grouped
@@ -107,8 +105,13 @@ fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
         max_id = doc.max_id + 1;
 
         for object_id in doc.get_pages().into_values() {
-            let obj = doc.get_object(object_id)
-                .with_context(|| format!("PDF object {object_id:?} referenced by Pages tree not found in document"))?
+            let obj = doc
+                .get_object(object_id)
+                .with_context(|| {
+                    format!(
+                        "PDF object {object_id:?} referenced by Pages tree not found in document"
+                    )
+                })?
                 .to_owned();
             documents_pages.insert(object_id, obj);
         }
@@ -120,7 +123,8 @@ fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
     let mut pages_object: Option<(ObjectId, Object)> = None;
 
     for (object_id, object) in &documents_objects {
-        let type_name = object.as_dict()
+        let type_name = object
+            .as_dict()
             .ok()
             .and_then(|d| d.get(b"Type").ok())
             .and_then(|t| t.as_name().ok())
@@ -145,7 +149,7 @@ fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
                     ));
                 }
             }
-            Some(b"Page") => {} // handled separately
+            Some(b"Page") => {}                  // handled separately
             Some(b"Outlines" | b"Outline") => {} // not supported
             _ => {
                 document.objects.insert(*object_id, object.clone());
@@ -153,17 +157,17 @@ fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
         }
     }
 
-    let catalog_object = catalog_object
-        .context("No PDF Catalog found in input documents")?;
-    let pages_object = pages_object
-        .context("No PDF Pages tree found in input documents")?;
+    let catalog_object = catalog_object.context("No PDF Catalog found in input documents")?;
+    let pages_object = pages_object.context("No PDF Pages tree found in input documents")?;
 
     // Set page parents and insert into document
     for (object_id, object) in &documents_pages {
         if let Ok(dictionary) = object.as_dict() {
             let mut dictionary = dictionary.clone();
             dictionary.set("Parent", pages_object.0);
-            document.objects.insert(*object_id, Object::Dictionary(dictionary));
+            document
+                .objects
+                .insert(*object_id, Object::Dictionary(dictionary));
         }
     }
 
@@ -173,11 +177,14 @@ fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
         dictionary.set("Count", documents_pages.len() as u32);
         dictionary.set(
             "Kids",
-            documents_pages.into_keys()
+            documents_pages
+                .into_keys()
                 .map(Object::Reference)
                 .collect::<Vec<_>>(),
         );
-        document.objects.insert(pages_object.0, Object::Dictionary(dictionary));
+        document
+            .objects
+            .insert(pages_object.0, Object::Dictionary(dictionary));
     }
 
     // Build new Catalog
@@ -185,7 +192,9 @@ fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
         let mut dictionary = dictionary.clone();
         dictionary.set("Pages", pages_object.0);
         dictionary.remove(b"Outlines");
-        document.objects.insert(catalog_object.0, Object::Dictionary(dictionary));
+        document
+            .objects
+            .insert(catalog_object.0, Object::Dictionary(dictionary));
     }
 
     document.trailer.set("Root", catalog_object.0);
@@ -199,7 +208,8 @@ fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
     }
     document.compress();
 
-    document.save(output)
+    document
+        .save(output)
         .with_context(|| format!("Failed to write merged PDF: {}", output.display()))?;
 
     Ok(())
@@ -228,10 +238,18 @@ impl Processor for IpdfuniteProcessor {
         Vec::new()
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let base = Path::new(&self.config.source_dir);
 
-        let hash = Some(output_config_hash(&self.config, &crate::config::checksum_fields_of(instance_name)));
+        let hash = Some(output_config_hash(
+            &self.config,
+            &crate::config::checksum_fields_of(instance_name),
+        ));
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
         let upstream_scan_dir = Path::new(&self.config.source_dir)
@@ -242,16 +260,31 @@ impl Processor for IpdfuniteProcessor {
         let upstream_scan_dirs = [upstream_scan_dir];
 
         for (dir_path, source_files) in self.source_dirs(file_index) {
-            let inputs: Vec<PathBuf> = source_files.iter().map(|src| {
-                super::output_path(src, &upstream_scan_dirs, &self.config.source_output_dir, "pdf")
-            }).chain(extra.iter().cloned()).collect();
+            let inputs: Vec<PathBuf> = source_files
+                .iter()
+                .map(|src| {
+                    super::output_path(
+                        src,
+                        &upstream_scan_dirs,
+                        &self.config.source_output_dir,
+                        "pdf",
+                    )
+                })
+                .chain(extra.iter().cloned())
+                .collect();
 
             let relative = dir_path.strip_prefix(base).unwrap_or(&dir_path);
             let parent = crate::processors::parent_dir_or_empty(relative);
-            let leaf = relative.file_name()
-                .with_context(|| format!("Cannot extract leaf directory name from {}", dir_path.display()))?;
+            let leaf = relative.file_name().with_context(|| {
+                format!(
+                    "Cannot extract leaf directory name from {}",
+                    dir_path.display()
+                )
+            })?;
             let outputs = vec![
-                Path::new(&self.config.standard.output_dir).join(parent).join(format!("{}.pdf", leaf.to_string_lossy())),
+                Path::new(&self.config.standard.output_dir)
+                    .join(parent)
+                    .join(format!("{}.pdf", leaf.to_string_lossy())),
             ];
 
             graph.add_product(inputs, outputs, instance_name, hash.clone())?;
@@ -264,7 +297,9 @@ impl Processor for IpdfuniteProcessor {
         let output = product.primary_output();
         crate::processors::ensure_output_dir(output)?;
 
-        let pdf_inputs: Vec<PathBuf> = product.inputs.iter()
+        let pdf_inputs: Vec<PathBuf> = product
+            .inputs
+            .iter()
             .filter(|p| p.extension().is_some_and(|e| e == "pdf"))
             .cloned()
             .collect();
@@ -275,7 +310,6 @@ impl Processor for IpdfuniteProcessor {
 
         merge_pdfs(&pdf_inputs, output)
     }
-
 }
 
 fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {

@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::{CacheDescriptor, ObjectStore, TreeEntry, CHECKSUM_PREFIX_LEN, walk_files};
+use super::{CHECKSUM_PREFIX_LEN, CacheDescriptor, ObjectStore, TreeEntry, walk_files};
 
 impl ObjectStore {
     pub(super) fn descriptor_path(&self, descriptor_key: &str) -> PathBuf {
@@ -17,31 +17,45 @@ impl ObjectStore {
     /// previous read-only file without the chmod dance (which raced with
     /// concurrent writers and could leave a torn descriptor — permanently
     /// breaking `cache trim`, which fails closed on a parse error).
-    pub(super) fn store_descriptor(&self, cache_key: &str, descriptor: &CacheDescriptor) -> Result<()> {
+    pub(super) fn store_descriptor(
+        &self,
+        cache_key: &str,
+        descriptor: &CacheDescriptor,
+    ) -> Result<()> {
         let path = self.descriptor_path(cache_key);
-        let parent = path.parent()
+        let parent = path
+            .parent()
             .with_context(|| format!("Descriptor path has no parent: {}", path.display()))?;
-        fs::create_dir_all(parent)
-            .context("Failed to create descriptor directory")?;
-        let data = serde_json::to_vec(descriptor)
-            .context("Failed to serialize cache descriptor")?;
+        fs::create_dir_all(parent).context("Failed to create descriptor directory")?;
+        let data =
+            serde_json::to_vec(descriptor).context("Failed to serialize cache descriptor")?;
 
         let tmp_path = parent.join(format!(
             ".tmp-{}-{}",
             std::process::id(),
             super::blobs::NEXT_TMP_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
-        fs::write(&tmp_path, &data)
-            .with_context(|| format!("Failed to write descriptor temp file: {}", tmp_path.display()))?;
+        fs::write(&tmp_path, &data).with_context(|| {
+            format!(
+                "Failed to write descriptor temp file: {}",
+                tmp_path.display()
+            )
+        })?;
         let mut perms = fs::metadata(&tmp_path)
-            .with_context(|| format!("Failed to read descriptor temp file metadata: {}", tmp_path.display()))?
+            .with_context(|| {
+                format!(
+                    "Failed to read descriptor temp file metadata: {}",
+                    tmp_path.display()
+                )
+            })?
             .permissions();
         perms.set_readonly(true);
         // Checked like the identical operation in blobs.rs: trim/remove_stale
         // justify their chmod-then-unlink dance with "descriptors are
         // read-only" — an invariant a swallowed error here would unmake.
-        fs::set_permissions(&tmp_path, perms)
-            .with_context(|| format!("Failed to set descriptor read-only: {}", tmp_path.display()))?;
+        fs::set_permissions(&tmp_path, perms).with_context(|| {
+            format!("Failed to set descriptor read-only: {}", tmp_path.display())
+        })?;
 
         if let Err(e) = fs::rename(&tmp_path, &path) {
             let mut writable = fs::metadata(&tmp_path).map(|m| m.permissions());
@@ -50,7 +64,9 @@ impl ObjectStore {
                 let _ = fs::set_permissions(&tmp_path, perms.clone());
             }
             let _ = fs::remove_file(&tmp_path);
-            return Err(e).with_context(|| format!("Failed to move descriptor into place: {}", path.display()));
+            return Err(e).with_context(|| {
+                format!("Failed to move descriptor into place: {}", path.display())
+            });
         }
         Ok(())
     }
@@ -87,7 +103,9 @@ impl ObjectStore {
         match self.try_fetch_descriptor_from_remote(ctx, cache_key) {
             Ok(descriptor) => descriptor,
             Err(e) => {
-                crate::output::warn(&format!("failed to fetch descriptor from remote cache: {e}"));
+                crate::output::warn(&format!(
+                    "failed to fetch descriptor from remote cache: {e}"
+                ));
                 None
             }
         }
@@ -97,7 +115,8 @@ impl ObjectStore {
     pub fn previous_tree_paths(&self, cache_key: &str) -> Vec<PathBuf> {
         match self.get_descriptor(cache_key) {
             Some(CacheDescriptor::Tree { entries }) => {
-                entries.into_iter()
+                entries
+                    .into_iter()
                     .filter_map(|e| match super::safe_entry_path(&e.path) {
                         Ok(_) => Some(PathBuf::from(e.path)),
                         // These paths feed fs::remove_file — never delete
@@ -134,16 +153,26 @@ impl ObjectStore {
     /// Store a marker descriptor (checker passed), publishing it to the
     /// remote cache when push is enabled — the same contract as
     /// `store_blob_descriptor` and `store_tree_descriptor`.
-    pub fn store_marker(&self, ctx: &crate::build_context::BuildContext, cache_key: &str) -> Result<()> {
+    pub fn store_marker(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        cache_key: &str,
+    ) -> Result<()> {
         self.store_and_push_descriptor(ctx, cache_key, &CacheDescriptor::Marker)
     }
 
     /// Store a blob descriptor (generator produced a single output).
-    pub fn store_blob_descriptor(&self, ctx: &crate::build_context::BuildContext, cache_key: &str, output_path: &Path) -> Result<bool> {
+    pub fn store_blob_descriptor(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        cache_key: &str,
+        output_path: &Path,
+    ) -> Result<bool> {
         let content = fs::read(output_path)
             .with_context(|| format!("Failed to read output: {}", output_path.display()))?;
         let checksum = self.store_object(&content)?;
-        let mode = fs::metadata(output_path).ok()
+        let mode = fs::metadata(output_path)
+            .ok()
             .map(|m| crate::platform::get_mode(&m));
 
         let changed = match self.get_descriptor(cache_key) {
@@ -155,10 +184,7 @@ impl ObjectStore {
             self.try_push_object_to_remote(ctx, &checksum)?;
         }
 
-        self.store_and_push_descriptor(ctx, cache_key, &CacheDescriptor::Blob {
-            checksum,
-            mode,
-        })?;
+        self.store_and_push_descriptor(ctx, cache_key, &CacheDescriptor::Blob { checksum, mode })?;
 
         Ok(changed)
     }
@@ -177,8 +203,11 @@ impl ObjectStore {
 
         for dir in output_dirs {
             let dir: &Path = dir;
-            anyhow::ensure!(dir.exists() && dir.is_dir(),
-                "Expected output directory not produced: {}", dir.display());
+            anyhow::ensure!(
+                dir.exists() && dir.is_dir(),
+                "Expected output directory not produced: {}",
+                dir.display()
+            );
             for file_path in walk_files(dir) {
                 if is_foreign(&file_path) {
                     continue;
@@ -186,7 +215,8 @@ impl ObjectStore {
                 let content = fs::read(&file_path)
                     .with_context(|| format!("Failed to read: {}", file_path.display()))?;
                 let checksum = self.store_object(&content)?;
-                let mode = fs::metadata(&file_path).ok()
+                let mode = fs::metadata(&file_path)
+                    .ok()
                     .map(|m| crate::platform::get_mode(&m));
                 if self.remote_push {
                     self.try_push_object_to_remote(ctx, &checksum)?;
@@ -200,12 +230,16 @@ impl ObjectStore {
         }
 
         for file_path in output_files {
-            anyhow::ensure!(file_path.exists(),
-                "Expected output file not produced: {}", file_path.display());
+            anyhow::ensure!(
+                file_path.exists(),
+                "Expected output file not produced: {}",
+                file_path.display()
+            );
             let content = fs::read(file_path)
                 .with_context(|| format!("Failed to read: {}", file_path.display()))?;
             let checksum = self.store_object(&content)?;
-            let mode = fs::metadata(file_path).ok()
+            let mode = fs::metadata(file_path)
+                .ok()
                 .map(|m| crate::platform::get_mode(&m));
             if self.remote_push {
                 self.try_push_object_to_remote(ctx, &checksum)?;
@@ -222,9 +256,14 @@ impl ObjectStore {
         entries.sort_by(|a, b| a.path.cmp(&b.path));
 
         let changed = match prev {
-            Some(CacheDescriptor::Tree { entries: ref prev_entries }) => {
+            Some(CacheDescriptor::Tree {
+                entries: ref prev_entries,
+            }) => {
                 entries.len() != prev_entries.len()
-                    || entries.iter().zip(prev_entries.iter()).any(|(a, b)| a.checksum != b.checksum || a.path != b.path)
+                    || entries
+                        .iter()
+                        .zip(prev_entries.iter())
+                        .any(|(a, b)| a.checksum != b.checksum || a.path != b.path)
             }
             _ => true,
         };
@@ -247,8 +286,11 @@ mod tests {
         let store = ObjectStore::new_in(tmp.path());
 
         let path = store.descriptor_path("abcdef");
-        assert!(path.ends_with(Path::new("ab").join("cdef")),
-            "expected ab/cdef sharding, got {}", path.display());
+        assert!(
+            path.ends_with(Path::new("ab").join("cdef")),
+            "expected ab/cdef sharding, got {}",
+            path.display()
+        );
 
         // One-char key: must not panic on split_at.
         let short = store.descriptor_path("a");
@@ -271,14 +313,26 @@ mod tests {
         fs::write(outdir.join("b.txt"), b"two").unwrap();
         let dirs = [std::sync::Arc::new(outdir.clone())];
 
-        assert!(store.store_tree_descriptor(&ctx, key, &dirs, &[], &|_| false).unwrap(),
-            "first store is always a change");
-        assert!(!store.store_tree_descriptor(&ctx, key, &dirs, &[], &|_| false).unwrap(),
-            "identical re-store must not read as a change");
+        assert!(
+            store
+                .store_tree_descriptor(&ctx, key, &dirs, &[], &|_| false)
+                .unwrap(),
+            "first store is always a change"
+        );
+        assert!(
+            !store
+                .store_tree_descriptor(&ctx, key, &dirs, &[], &|_| false)
+                .unwrap(),
+            "identical re-store must not read as a change"
+        );
 
         fs::write(outdir.join("a.txt"), b"changed").unwrap();
-        assert!(store.store_tree_descriptor(&ctx, key, &dirs, &[], &|_| false).unwrap(),
-            "content change must be detected");
+        assert!(
+            store
+                .store_tree_descriptor(&ctx, key, &dirs, &[], &|_| false)
+                .unwrap(),
+            "content change must be detected"
+        );
     }
 
     /// Descriptors are stored read-only; a second store over the same key
@@ -291,6 +345,9 @@ mod tests {
 
         store.store_marker(&ctx, "cdcd1212").unwrap();
         store.store_marker(&ctx, "cdcd1212").unwrap();
-        assert!(matches!(store.get_descriptor("cdcd1212"), Some(CacheDescriptor::Marker)));
+        assert!(matches!(
+            store.get_descriptor("cdcd1212"),
+            Some(CacheDescriptor::Marker)
+        ));
     }
 }

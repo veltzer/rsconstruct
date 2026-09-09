@@ -5,10 +5,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::config::{output_config_hash, standard_config_from_toml, StandardConfig};
+use crate::config::{StandardConfig, output_config_hash, standard_config_from_toml};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{clean_outputs, ensure_stub_dir, run_command, Processor};
+use crate::processors::{Processor, clean_outputs, ensure_stub_dir, run_command};
 
 /// Convert a `LuaResult` to an `anyhow::Result` with a contextual message.
 fn lua_context<T>(result: LuaResult<T>, msg: impl std::fmt::Display) -> Result<T> {
@@ -40,9 +40,9 @@ impl CtxPtr {
 /// start of `execute()`, which holds a &`BuildContext` for the entire Lua call,
 /// and removed again before `execute()` returns.
 fn get_ctx_from_lua(lua: &Lua) -> Result<&crate::build_context::BuildContext, LuaError> {
-    let guard = lua.app_data_ref::<CtxPtr>().ok_or_else(|| LuaError::external(
-        "rsconstruct.run_command is only available during execute()"
-    ))?;
+    let guard = lua.app_data_ref::<CtxPtr>().ok_or_else(|| {
+        LuaError::external("rsconstruct.run_command is only available during execute()")
+    })?;
     Ok(unsafe { &*guard.0 })
 }
 
@@ -56,21 +56,24 @@ pub struct LuaProcessor {
 
 impl LuaProcessor {
     /// Create a new `LuaProcessor` from a plugin script file.
-    pub fn new(
-        name: String,
-        script_path: &Path,
-        config_value: toml::Value,
-    ) -> Result<Self> {
+    pub fn new(name: String, script_path: &Path, config_value: toml::Value) -> Result<Self> {
         let lua = Lua::new();
 
         // Register the rsconstruct API before loading the script
         Self::register_api(&lua, &name)?;
 
         // Load and execute the Lua script
-        let script = fs::read_to_string(script_path)
-            .map_err(|e| anyhow::anyhow!("Failed to read Lua plugin '{}': {}", script_path.display(), e))?;
+        let script = fs::read_to_string(script_path).map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to read Lua plugin '{}': {}",
+                script_path.display(),
+                e
+            )
+        })?;
         lua_context(
-            lua.load(&script).set_name(script_path.to_string_lossy()).exec(),
+            lua.load(&script)
+                .set_name(script_path.to_string_lossy())
+                .exec(),
             format!("Failed to load Lua plugin '{name}'"),
         )?;
 
@@ -101,7 +104,13 @@ impl LuaProcessor {
 
         let mut plugins = Vec::new();
         let mut entries: Vec<_> = fs::read_dir(dir)
-            .map_err(|e| anyhow::anyhow!("Failed to read plugins directory '{}': {}", dir.display(), e))?
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to read plugins directory '{}': {}",
+                    dir.display(),
+                    e
+                )
+            })?
             .filter_map(std::result::Result::ok)
             .collect();
         entries.sort_by_key(std::fs::DirEntry::file_name);
@@ -109,7 +118,8 @@ impl LuaProcessor {
         for entry in entries {
             let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) == Some("lua") {
-                let name = path.file_stem()
+                let name = path
+                    .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or("")
                     .to_string();
@@ -122,11 +132,7 @@ impl LuaProcessor {
                     .cloned()
                     .unwrap_or_else(|| toml::Value::Table(toml::map::Map::new()));
 
-                let proc = Self::new(
-                    name.clone(),
-                    &path,
-                    config_value,
-                )?;
+                let proc = Self::new(name.clone(), &path, config_value)?;
                 plugins.push((name, proc));
             }
         }
@@ -148,7 +154,10 @@ impl LuaProcessor {
             }),
             "Failed to create stub_path function",
         )?;
-        lua_context(rsconstruct.set("stub_path", stub_path_fn), "Failed to set stub_path")?;
+        lua_context(
+            rsconstruct.set("stub_path", stub_path_fn),
+            "Failed to set stub_path",
+        )?;
 
         // rsconstruct.run_command(program, args)
         let run_cmd_fn = lua_context(
@@ -159,9 +168,8 @@ impl LuaProcessor {
                     let arg: String = args.get(i)?;
                     cmd.arg(&arg);
                 }
-                let output = run_command(ctx, &cmd).map_err(|e| {
-                    LuaError::external(format!("Failed to run '{program}': {e}"))
-                })?;
+                let output = run_command(ctx, &cmd)
+                    .map_err(|e| LuaError::external(format!("Failed to run '{program}': {e}")))?;
                 if !output.status.success() {
                     let stdout = String::from_utf8_lossy(&output.stdout);
                     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -177,7 +185,10 @@ impl LuaProcessor {
             }),
             "Failed to create run_command function",
         )?;
-        lua_context(rsconstruct.set("run_command", run_cmd_fn), "Failed to set run_command")?;
+        lua_context(
+            rsconstruct.set("run_command", run_cmd_fn),
+            "Failed to set run_command",
+        )?;
 
         // rsconstruct.run_command_cwd(program, args, cwd)
         let run_cmd_cwd_fn = lua_context(
@@ -189,9 +200,8 @@ impl LuaProcessor {
                     cmd.arg(&arg);
                 }
                 cmd.current_dir(&cwd);
-                let output = run_command(ctx, &cmd).map_err(|e| {
-                    LuaError::external(format!("Failed to run '{program}': {e}"))
-                })?;
+                let output = run_command(ctx, &cmd)
+                    .map_err(|e| LuaError::external(format!("Failed to run '{program}': {e}")))?;
                 if !output.status.success() {
                     let stdout = String::from_utf8_lossy(&output.stdout);
                     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -207,7 +217,10 @@ impl LuaProcessor {
             }),
             "Failed to create run_command_cwd function",
         )?;
-        lua_context(rsconstruct.set("run_command_cwd", run_cmd_cwd_fn), "Failed to set run_command_cwd")?;
+        lua_context(
+            rsconstruct.set("run_command_cwd", run_cmd_cwd_fn),
+            "Failed to set run_command_cwd",
+        )?;
 
         // rsconstruct.write_stub(path, content)
         let write_stub_fn = lua_context(
@@ -225,7 +238,10 @@ impl LuaProcessor {
             }),
             "Failed to create write_stub function",
         )?;
-        lua_context(rsconstruct.set("write_stub", write_stub_fn), "Failed to set write_stub")?;
+        lua_context(
+            rsconstruct.set("write_stub", write_stub_fn),
+            "Failed to set write_stub",
+        )?;
 
         // rsconstruct.remove_file(path)
         let remove_file_fn = lua_context(
@@ -240,28 +256,34 @@ impl LuaProcessor {
             }),
             "Failed to create remove_file function",
         )?;
-        lua_context(rsconstruct.set("remove_file", remove_file_fn), "Failed to set remove_file")?;
+        lua_context(
+            rsconstruct.set("remove_file", remove_file_fn),
+            "Failed to set remove_file",
+        )?;
 
         // rsconstruct.file_exists(path)
         let file_exists_fn = lua_context(
-            lua.create_function(|_, path: String| {
-                Ok(PathBuf::from(&path).exists())
-            }),
+            lua.create_function(|_, path: String| Ok(PathBuf::from(&path).exists())),
             "Failed to create file_exists function",
         )?;
-        lua_context(rsconstruct.set("file_exists", file_exists_fn), "Failed to set file_exists")?;
+        lua_context(
+            rsconstruct.set("file_exists", file_exists_fn),
+            "Failed to set file_exists",
+        )?;
 
         // rsconstruct.read_file(path)
         let read_file_fn = lua_context(
             lua.create_function(|_, path: String| {
-                let content = fs::read_to_string(&path).map_err(|e| {
-                    LuaError::external(format!("Failed to read '{path}': {e}"))
-                })?;
+                let content = fs::read_to_string(&path)
+                    .map_err(|e| LuaError::external(format!("Failed to read '{path}': {e}")))?;
                 Ok(content)
             }),
             "Failed to create read_file function",
         )?;
-        lua_context(rsconstruct.set("read_file", read_file_fn), "Failed to set read_file")?;
+        lua_context(
+            rsconstruct.set("read_file", read_file_fn),
+            "Failed to set read_file",
+        )?;
 
         // rsconstruct.path_join(parts...) - takes a table of path components
         let path_join_fn = lua_context(
@@ -275,7 +297,10 @@ impl LuaProcessor {
             }),
             "Failed to create path_join function",
         )?;
-        lua_context(rsconstruct.set("path_join", path_join_fn), "Failed to set path_join")?;
+        lua_context(
+            rsconstruct.set("path_join", path_join_fn),
+            "Failed to set path_join",
+        )?;
 
         // rsconstruct.log(message)
         let proc_name_owned = proc_name.to_string();
@@ -288,7 +313,10 @@ impl LuaProcessor {
         )?;
         lua_context(rsconstruct.set("log", log_fn), "Failed to set log")?;
 
-        lua_context(lua.globals().set("rsconstruct", rsconstruct), "Failed to set rsconstruct global")?;
+        lua_context(
+            lua.globals().set("rsconstruct", rsconstruct),
+            "Failed to set rsconstruct global",
+        )?;
 
         Ok(())
     }
@@ -320,9 +348,7 @@ impl LuaProcessor {
 
     /// Check if a Lua global function exists.
     fn has_function(&self, name: &str) -> bool {
-        self.lua.lock().globals()
-            .get::<LuaFunction>(name)
-            .is_ok()
+        self.lua.lock().globals().get::<LuaFunction>(name).is_ok()
     }
 
     /// Build a Lua table representing a product (inputs + outputs as string arrays).
@@ -336,7 +362,10 @@ impl LuaProcessor {
                 "Failed to set input",
             )?;
         }
-        lua_context(product_table.set("inputs", inputs_table), "Failed to set inputs")?;
+        lua_context(
+            product_table.set("inputs", inputs_table),
+            "Failed to set inputs",
+        )?;
 
         let outputs_table = lua_context(lua.create_table(), "Failed to create outputs table")?;
         for (i, output) in product.outputs.iter().enumerate() {
@@ -345,7 +374,10 @@ impl LuaProcessor {
                 "Failed to set output",
             )?;
         }
-        lua_context(product_table.set("outputs", outputs_table), "Failed to set outputs")?;
+        lua_context(
+            product_table.set("outputs", outputs_table),
+            "Failed to set outputs",
+        )?;
 
         Ok(product_table)
     }
@@ -356,8 +388,12 @@ impl Processor for LuaProcessor {
         &self.scan_config
     }
 
-
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let files = file_index.scan(&self.scan_config, true);
         if files.is_empty() {
             return Ok(());
@@ -384,7 +420,10 @@ impl Processor for LuaProcessor {
         // project_root is always "." since RSConstruct runs from the project root
         let discover_fn: LuaFunction = lua_context(
             lua.globals().get("discover"),
-            format!("Lua plugin '{}' must define a discover() function", self.name),
+            format!(
+                "Lua plugin '{}' must define a discover() function",
+                self.name
+            ),
         )?;
 
         let products_table: LuaTable = lua_context(
@@ -396,7 +435,9 @@ impl Processor for LuaProcessor {
         // hashing API, we synthesize an allowlist at runtime from every top-level
         // key present in the TOML value — so the hash behavior matches "hash the
         // whole config," which is the safest default for arbitrary user plugins.
-        let keys: Vec<String> = self.config_value.as_table()
+        let keys: Vec<String> = self
+            .config_value
+            .as_table()
             .map(|t| t.keys().cloned().collect())
             .unwrap_or_default();
         let key_refs: Vec<&str> = keys.iter().map(std::string::String::as_str).collect();
@@ -407,8 +448,10 @@ impl Processor for LuaProcessor {
         for i in 1..=len {
             let product: LuaTable = lua_context(products_table.get(i), "Failed to get product")?;
 
-            let inputs_table: LuaTable = lua_context(product.get("inputs"), "Failed to get inputs")?;
-            let outputs_table: LuaTable = lua_context(product.get("outputs"), "Failed to get outputs")?;
+            let inputs_table: LuaTable =
+                lua_context(product.get("inputs"), "Failed to get inputs")?;
+            let outputs_table: LuaTable =
+                lua_context(product.get("outputs"), "Failed to get outputs")?;
 
             let mut inputs = Vec::new();
             let inputs_len = lua_context(inputs_table.len(), "Failed to get inputs length")?;
@@ -443,7 +486,10 @@ impl Processor for LuaProcessor {
         let result = Self::product_to_lua(&lua, product).and_then(|product_table| {
             let execute_fn: LuaFunction = lua_context(
                 lua.globals().get("execute"),
-                format!("Lua plugin '{}' must define an execute() function", self.name),
+                format!(
+                    "Lua plugin '{}' must define an execute() function",
+                    self.name
+                ),
             )?;
             lua_context(
                 execute_fn.call::<()>(product_table),
@@ -484,11 +530,15 @@ impl Processor for LuaProcessor {
                 return !files.is_empty();
             };
             for (i, file) in files.iter().enumerate() {
-                if files_table.set(i + 1, file.to_string_lossy().to_string()).is_err() {
+                if files_table
+                    .set(i + 1, file.to_string_lossy().to_string())
+                    .is_err()
+                {
                     return !files.is_empty();
                 }
             }
-            match lua.globals()
+            match lua
+                .globals()
                 .get::<LuaFunction>("auto_detect")
                 .and_then(|f| f.call::<bool>(files_table))
             {
@@ -496,7 +546,10 @@ impl Processor for LuaProcessor {
                 Err(e) => {
                     // The trait can't propagate errors; a broken plugin must
                     // not be silently treated as detected/undetected.
-                    eprintln!("Warning: Lua plugin '{}': auto_detect() failed: {e}", self.name);
+                    eprintln!(
+                        "Warning: Lua plugin '{}': auto_detect() failed: {e}",
+                        self.name
+                    );
                     !files.is_empty()
                 }
             }
@@ -507,7 +560,10 @@ impl Processor for LuaProcessor {
 
     fn required_tools(&self) -> Vec<String> {
         if self.has_function("required_tools") {
-            let result = self.lua.lock().globals()
+            let result = self
+                .lua
+                .lock()
+                .globals()
                 .get::<LuaFunction>("required_tools")
                 .and_then(|f| f.call::<LuaTable>(()))
                 .and_then(|table| {
@@ -523,7 +579,10 @@ impl Processor for LuaProcessor {
                 Err(e) => {
                     // The trait can't propagate errors; an empty tool list
                     // would silently skip the tool pre-flight for this plugin.
-                    eprintln!("Warning: Lua plugin '{}': required_tools() failed: {e}", self.name);
+                    eprintln!(
+                        "Warning: Lua plugin '{}': required_tools() failed: {e}",
+                        self.name
+                    );
                     Vec::new()
                 }
             }

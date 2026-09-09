@@ -1,6 +1,6 @@
+use crate::common::{require_tool, run_rsconstruct_with_env};
 use std::fs;
 use tempfile::TempDir;
-use crate::common::{run_rsconstruct_with_env, require_tool};
 
 #[test]
 fn pdfunite_no_project_discovered() {
@@ -47,7 +47,8 @@ fn pdfunite_discovers_courses() {
     .unwrap();
 
     // Run with dry-run to check discovery without needing actual PDFs
-    let output = run_rsconstruct_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
+    let output =
+        run_rsconstruct_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "Dry run should succeed: stdout={}, stderr={}",

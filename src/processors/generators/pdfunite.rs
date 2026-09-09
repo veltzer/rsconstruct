@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{Processor, run_command, check_command_output};
+use crate::processors::{Processor, check_command_output, run_command};
 
 fn default_pdfunite_source_dir() -> String {
     "marp/courses".into()
@@ -51,9 +51,7 @@ pub struct PdfuniteProcessor {
 
 impl PdfuniteProcessor {
     pub const fn new(config: PdfuniteConfig) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 
     /// Source files under `source_dir` with the configured extension, grouped
@@ -108,10 +106,18 @@ impl Processor for PdfuniteProcessor {
         vec![self.config.standard.command.clone()]
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let base = Path::new(&self.config.source_dir);
 
-        let hash = Some(output_config_hash(&self.config, &crate::config::checksum_fields_of(instance_name)));
+        let hash = Some(output_config_hash(
+            &self.config,
+            &crate::config::checksum_fields_of(instance_name),
+        ));
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
         // Compute upstream scan dir once
@@ -123,18 +129,33 @@ impl Processor for PdfuniteProcessor {
         let upstream_scan_dirs = [upstream_scan_dir];
 
         for (dir_path, source_files) in self.source_dirs(file_index) {
-            let inputs: Vec<PathBuf> = source_files.iter().map(|src| {
-                super::output_path(src, &upstream_scan_dirs, &self.config.source_output_dir, "pdf")
-            }).chain(extra.iter().cloned()).collect();
+            let inputs: Vec<PathBuf> = source_files
+                .iter()
+                .map(|src| {
+                    super::output_path(
+                        src,
+                        &upstream_scan_dirs,
+                        &self.config.source_output_dir,
+                        "pdf",
+                    )
+                })
+                .chain(extra.iter().cloned())
+                .collect();
 
             // Mirror the directory structure from source_dir into output_dir,
             // naming each merged PDF after its leaf directory.
             let relative = dir_path.strip_prefix(base).unwrap_or(&dir_path);
             let parent = crate::processors::parent_dir_or_empty(relative);
-            let leaf = relative.file_name()
-                .with_context(|| format!("Cannot extract leaf directory name from {}", dir_path.display()))?;
+            let leaf = relative.file_name().with_context(|| {
+                format!(
+                    "Cannot extract leaf directory name from {}",
+                    dir_path.display()
+                )
+            })?;
             let outputs = vec![
-                Path::new(&self.config.standard.output_dir).join(parent).join(format!("{}.pdf", leaf.to_string_lossy())),
+                Path::new(&self.config.standard.output_dir)
+                    .join(parent)
+                    .join(format!("{}.pdf", leaf.to_string_lossy())),
             ];
 
             graph.add_product(inputs, outputs, instance_name, hash.clone())?;
@@ -150,7 +171,9 @@ impl Processor for PdfuniteProcessor {
 
         // Inputs also carry dep_inputs (extra rebuild triggers); only actual
         // PDFs may be passed to pdfunite as pages.
-        let pdf_inputs: Vec<&PathBuf> = product.inputs.iter()
+        let pdf_inputs: Vec<&PathBuf> = product
+            .inputs
+            .iter()
             .filter(|p| p.extension().is_some_and(|e| e == "pdf"))
             .collect();
         if pdf_inputs.is_empty() {
@@ -170,7 +193,6 @@ impl Processor for PdfuniteProcessor {
         let out = run_command(ctx, &cmd)?;
         check_command_output(&out, format_args!("pdfunite {}", output.display()))
     }
-
 }
 
 fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processors::Processor>> {

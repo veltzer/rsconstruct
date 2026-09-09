@@ -1,5 +1,5 @@
+use crate::common::{run_rsconstruct_with_env, setup_test_project};
 use std::fs;
-use crate::common::{setup_test_project, run_rsconstruct_with_env};
 
 fn write_terms_dirs(project_path: &std::path::Path, unambiguous: &[&str], ambiguous: &[&str]) {
     let una_dir = project_path.join("terms.unambiguous");
@@ -15,12 +15,17 @@ fn terms_two_dirs_disjoint_passes() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    write_terms_dirs(project_path, &["Kubernetes", "Docker"], &["server", "client"]);
+    write_terms_dirs(
+        project_path,
+        &["Kubernetes", "Docker"],
+        &["server", "client"],
+    );
 
     fs::write(
         project_path.join("README.md"),
         "# Doc\n\nWe deploy on `Kubernetes` with `Docker`.\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     fs::write(
         project_path.join("rsconstruct.toml"),
@@ -42,7 +47,11 @@ fn terms_two_dirs_overlap_fails() {
     let project_path = temp_dir.path();
 
     // "Docker" appears in both -> must fail
-    write_terms_dirs(project_path, &["Kubernetes", "Docker"], &["Docker", "client"]);
+    write_terms_dirs(
+        project_path,
+        &["Kubernetes", "Docker"],
+        &["Docker", "client"],
+    );
 
     fs::write(project_path.join("README.md"), "# Doc\n").unwrap();
     fs::write(
@@ -51,7 +60,10 @@ fn terms_two_dirs_overlap_fails() {
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(!output.status.success(), "Build should fail when terms overlap");
+    assert!(
+        !output.status.success(),
+        "Build should fail when terms overlap"
+    );
 
     let combined = format!(
         "{}{}",
@@ -77,14 +89,18 @@ fn terms_backticked_ambiguous_fails_by_default() {
     fs::write(
         project_path.join("README.md"),
         "# Doc\n\nThe `server` runs on `Kubernetes`.\n",
-    ).unwrap();
+    )
+    .unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[processor.terms]\ndir_terms_unambiguous = \"terms.unambiguous\"\ndir_terms_ambiguous = \"terms.ambiguous\"\nsrc_dirs = [\".\"]\n",
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(!output.status.success(), "Backticked ambiguous term must fail by default");
+    assert!(
+        !output.status.success(),
+        "Backticked ambiguous term must fail by default"
+    );
 
     let combined = format!(
         "{}{}",
@@ -108,7 +124,8 @@ fn terms_backticked_ambiguous_allowed_when_flag_off() {
     fs::write(
         project_path.join("README.md"),
         "# Doc\n\nThe `server` runs on `Kubernetes`.\n",
-    ).unwrap();
+    )
+    .unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[processor.terms]\ndir_terms_unambiguous = \"terms.unambiguous\"\ndir_terms_ambiguous = \"terms.ambiguous\"\nforbid_backticked_ambiguous = false\nsrc_dirs = [\".\"]\n",
@@ -133,7 +150,8 @@ fn terms_fix_strips_ambiguous_backticks() {
     fs::write(
         project_path.join("README.md"),
         "# Doc\n\nThe `server` runs on `Kubernetes`.\n",
-    ).unwrap();
+    )
+    .unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[processor.terms]\ndir_terms_unambiguous = \"terms.unambiguous\"\ndir_terms_ambiguous = \"terms.ambiguous\"\nsrc_dirs = [\".\"]\n",
@@ -167,14 +185,18 @@ fn terms_fix_fails_when_no_terms_found() {
     fs::write(
         project_path.join("README.md"),
         "# Doc\n\nWe deploy on Kubernetes.\n",
-    ).unwrap();
+    )
+    .unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[processor.terms]\ndir_terms_unambiguous = \"terms.unambiguous\"\ndir_terms_ambiguous = \"terms.ambiguous\"\nsrc_dirs = [\".\"]\n",
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["terms", "fix"], &[("NO_COLOR", "1")]);
-    assert!(!output.status.success(), "terms fix must fail when no terms are loaded");
+    assert!(
+        !output.status.success(),
+        "terms fix must fail when no terms are loaded"
+    );
 
     let combined = format!(
         "{}{}",
@@ -197,14 +219,18 @@ fn terms_build_fails_when_no_terms_found() {
     fs::write(
         project_path.join("README.md"),
         "# Doc\n\nWe deploy on Kubernetes.\n",
-    ).unwrap();
+    )
+    .unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[processor.terms]\ndir_terms_unambiguous = \"terms.unambiguous\"\ndir_terms_ambiguous = \"terms.ambiguous\"\nsrc_dirs = [\".\"]\n",
     ).unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(!output.status.success(), "build must fail when the terms processor loads zero terms");
+    assert!(
+        !output.status.success(),
+        "build must fail when the terms processor loads zero terms"
+    );
 
     let combined = format!(
         "{}{}",
@@ -230,11 +256,13 @@ fn terms_matching_is_case_sensitive() {
     fs::write(
         project_path.join("README.md"),
         "# Doc\n\nWe run docker on every host.\n",
-    ).unwrap();
+    )
+    .unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[processor.terms]\ndir_terms_unambiguous = \"terms.unambiguous\"\nsrc_dirs = [\".\"]\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(
@@ -248,9 +276,13 @@ fn terms_matching_is_case_sensitive() {
     fs::write(
         project_path.join("README.md"),
         "# Doc\n\nWe run Docker on every host.\n",
-    ).unwrap();
+    )
+    .unwrap();
     let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
-    assert!(!output.status.success(), "Canonical casing 'Docker' must be flagged");
+    assert!(
+        !output.status.success(),
+        "Canonical casing 'Docker' must be flagged"
+    );
 }
 
 #[test]
@@ -265,7 +297,8 @@ fn terms_ambiguous_terms_are_not_flagged() {
     fs::write(
         project_path.join("README.md"),
         "# Doc\n\nThe server runs on `Kubernetes`.\n",
-    ).unwrap();
+    )
+    .unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[processor.terms]\ndir_terms_unambiguous = \"terms.unambiguous\"\ndir_terms_ambiguous = \"terms.ambiguous\"\nsrc_dirs = [\".\"]\n",
@@ -296,7 +329,8 @@ fn terms_inside_urls_are_ignored() {
          * [Bash Manual](https://www.gnu.org/software/bash/manual/)\n\
          * [Manual](https://stedolan.github.io/jq/manual/)\n\
          * https://example.com/bash/jq/index.html\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     fs::write(
         project_path.join("rsconstruct.toml"),
@@ -324,7 +358,8 @@ fn terms_in_prose_still_flagged_alongside_urls() {
         project_path.join("README.md"),
         "# Doc\n\n\
          See [manual](https://www.gnu.org/software/bash/manual/) for bash usage.\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     fs::write(
         project_path.join("rsconstruct.toml"),

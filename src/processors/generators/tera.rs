@@ -20,8 +20,7 @@ use super::TemplateItem;
 
 /// Tera template processor config. No custom fields.
 /// Unused `StandardConfig` fields: command, formats, `output_dir`.
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[derive(Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct TeraConfig {
     #[serde(flatten)]
     pub standard: StandardConfig,
@@ -49,12 +48,19 @@ impl CtxPtr {
 /// `.tera` files registered for `{% include %}` resolution — sourced from
 /// the file index at discover time, so ignored trees (`node_modules`, vendored
 /// code) never contribute templates.
-fn render_template(ctx: &crate::build_context::BuildContext, item: &TemplateItem, includable: &[PathBuf]) -> Result<()> {
+fn render_template(
+    ctx: &crate::build_context::BuildContext,
+    item: &TemplateItem,
+    includable: &[PathBuf],
+) -> Result<()> {
     // Ensure parent directory of output exists
     crate::processors::ensure_output_dir(&item.output_path)?;
 
     // Read template content
-    let template_content = crate::errors::ctx(fs::read_to_string(&item.source_path), &format!("Failed to read template: {}", item.source_path.display()))?;
+    let template_content = crate::errors::ctx(
+        fs::read_to_string(&item.source_path),
+        &format!("Failed to read template: {}", item.source_path.display()),
+    )?;
 
     // Create a new Tera instance for this template
     let mut tera = Tera::default();
@@ -110,7 +116,10 @@ fn render_template(ctx: &crate::build_context::BuildContext, item: &TemplateItem
         .with_context(|| format!("Failed to render template: {}", item.source_path.display()))?;
 
     // Write to output file
-    crate::errors::ctx(fs::write(&item.output_path, rendered), &format!("Failed to write output: {}", item.output_path.display()))?;
+    crate::errors::ctx(
+        fs::write(&item.output_path, rendered),
+        &format!("Failed to write output: {}", item.output_path.display()),
+    )?;
 
     Ok(())
 }
@@ -140,7 +149,6 @@ impl Processor for TeraProcessor {
         &self.config.standard
     }
 
-
     fn config_json(&self) -> Option<String> {
         crate::processors::ProcessorBase::config_json(&self.config)
     }
@@ -157,12 +165,19 @@ impl Processor for TeraProcessor {
         vec!["python3".to_string(), "sh".to_string(), "git".to_string()]
     }
 
-    fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex, instance_name: &str) -> Result<()> {
+    fn discover(
+        &self,
+        graph: &mut BuildGraph,
+        file_index: &FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
         let items = super::find_templates(&self.config.standard, file_index);
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
         // Capture the includable-template set for execute (see the field doc).
-        *self.includable_templates.lock().unwrap() = file_index.files().iter()
+        *self.includable_templates.lock().unwrap() = file_index
+            .files()
+            .iter()
             .filter(|p| p.to_string_lossy().ends_with(".tera"))
             .cloned()
             .collect();
@@ -175,7 +190,10 @@ impl Processor for TeraProcessor {
                 inputs,
                 vec![item.output_path.clone()],
                 instance_name,
-                Some(output_config_hash(&self.config, &crate::config::checksum_fields_of(instance_name))),
+                Some(output_config_hash(
+                    &self.config,
+                    &crate::config::checksum_fields_of(instance_name),
+                )),
             )?;
         }
 
@@ -193,7 +211,9 @@ impl Processor for TeraProcessor {
 }
 
 /// Custom Tera function to load Python configuration files
-struct LoadPythonFunction { ctx: CtxPtr }
+struct LoadPythonFunction {
+    ctx: CtxPtr,
+}
 
 impl Function for LoadPythonFunction {
     fn call(&self, args: &HashMap<String, TeraValue>) -> tera::Result<TeraValue> {
@@ -207,7 +227,11 @@ impl Function for LoadPythonFunction {
         let result = load_python_config(self.ctx.get(), Path::new(path))
             .map_err(|e| tera::Error::msg(format!("Failed to load Python config: {e}")))?;
 
-        to_value(result).map_err(|e| tera::Error::msg(format!("Failed to convert Python config to template value: {e}")))
+        to_value(result).map_err(|e| {
+            tera::Error::msg(format!(
+                "Failed to convert Python config to template value: {e}"
+            ))
+        })
     }
 }
 
@@ -224,7 +248,11 @@ impl Function for LoadLuaFunction {
         let result = load_lua_config(Path::new(path))
             .map_err(|e| tera::Error::msg(format!("Failed to load Lua config: {e}")))?;
 
-        to_value(result).map_err(|e| tera::Error::msg(format!("Failed to convert Lua config to template value: {e}")))
+        to_value(result).map_err(|e| {
+            tera::Error::msg(format!(
+                "Failed to convert Lua config to template value: {e}"
+            ))
+        })
     }
 }
 
@@ -241,7 +269,11 @@ impl Function for LoadTomlFunction {
         let result = load_toml_config(Path::new(path))
             .map_err(|e| tera::Error::msg(format!("Failed to load TOML config: {e}")))?;
 
-        to_value(result).map_err(|e| tera::Error::msg(format!("Failed to convert TOML config to template value: {e}")))
+        to_value(result).map_err(|e| {
+            tera::Error::msg(format!(
+                "Failed to convert TOML config to template value: {e}"
+            ))
+        })
     }
 }
 
@@ -260,18 +292,18 @@ impl Function for TomlGetFunction {
             .get("path")
             .and_then(|v| v.as_str())
             .ok_or_else(|| tera::Error::msg("toml_get requires a 'path' argument"))?;
-        let key = args
-            .get("key")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| tera::Error::msg("toml_get requires a 'key' argument (dotted path, e.g. \"project.version\")"))?;
+        let key = args.get("key").and_then(|v| v.as_str()).ok_or_else(|| {
+            tera::Error::msg(
+                "toml_get requires a 'key' argument (dotted path, e.g. \"project.version\")",
+            )
+        })?;
 
         let config = load_toml_config(Path::new(path))
             .map_err(|e| tera::Error::msg(format!("toml_get: failed to load {path}: {e}")))?;
 
         let root = Value::Object(config);
-        let found = lookup_dotted(&root, key).ok_or_else(|| {
-            tera::Error::msg(format!("toml_get: no key '{key}' in {path}"))
-        })?;
+        let found = lookup_dotted(&root, key)
+            .ok_or_else(|| tera::Error::msg(format!("toml_get: no key '{key}' in {path}")))?;
 
         // Scalars render as their bare text; a table or array would otherwise
         // interpolate as debug-ish JSON into the output file, which is never
@@ -288,7 +320,9 @@ impl Function for TomlGetFunction {
 
 /// Load a Python file containing a `tup` variable and return a dot-joined version string.
 /// e.g. `tup = (0, 0, 1)` → `"0.0.1"`
-struct VersionStrFunction { ctx: CtxPtr }
+struct VersionStrFunction {
+    ctx: CtxPtr,
+}
 
 impl Function for VersionStrFunction {
     fn call(&self, args: &HashMap<String, TeraValue>) -> tera::Result<TeraValue> {
@@ -323,8 +357,7 @@ impl Function for VersionStrFunction {
             })
             .collect();
 
-        to_value(version.join("."))
-            .map_err(|e| tera::Error::msg(format!("version_str: {e}")))
+        to_value(version.join(".")).map_err(|e| tera::Error::msg(format!("version_str: {e}")))
     }
 }
 
@@ -333,7 +366,9 @@ impl Function for VersionStrFunction {
 ///
 /// If the directory isn't a git repo or has no commits yet, falls back to just the
 /// current year — a fresh project shouldn't fail to render its README on day zero.
-struct CopyrightYearsFunction { ctx: CtxPtr }
+struct CopyrightYearsFunction {
+    ctx: CtxPtr,
+}
 
 impl Function for CopyrightYearsFunction {
     fn call(&self, _args: &HashMap<String, TeraValue>) -> tera::Result<TeraValue> {
@@ -353,31 +388,38 @@ impl Function for CopyrightYearsFunction {
                 match stdout.lines().next() {
                     None => current_year, // repo with zero commits
                     Some(line) => line.trim().parse().map_err(|e| {
-                        tera::Error::msg(format!("copyright_years: cannot parse git year {line:?}: {e}"))
+                        tera::Error::msg(format!(
+                            "copyright_years: cannot parse git year {line:?}: {e}"
+                        ))
                     })?,
                 }
             }
             Ok(_) => {
                 // Non-zero exit: not a repo / no HEAD yet. Legitimate
                 // fallback, but say so — silence here masked real failures.
-                crate::output::warn("copyright_years: git log failed (not a repository or no commits yet); using the current year");
+                crate::output::warn(
+                    "copyright_years: git log failed (not a repository or no commits yet); using the current year",
+                );
                 current_year
             }
             Err(e) => {
-                return Err(tera::Error::msg(format!("copyright_years: failed to run git: {e}")));
+                return Err(tera::Error::msg(format!(
+                    "copyright_years: failed to run git: {e}"
+                )));
             }
         };
 
         let first_year = first_year.min(current_year);
         let years: Vec<String> = (first_year..=current_year).map(|y| y.to_string()).collect();
 
-        to_value(years.join(", "))
-            .map_err(|e| tera::Error::msg(format!("copyright_years: {e}")))
+        to_value(years.join(", ")).map_err(|e| tera::Error::msg(format!("copyright_years: {e}")))
     }
 }
 
 /// Run `git ls-files -- "{pattern}"` and return the count of matching files.
-struct GitCountFilesFunction { ctx: CtxPtr }
+struct GitCountFilesFunction {
+    ctx: CtxPtr,
+}
 
 impl Function for GitCountFilesFunction {
     fn call(&self, args: &HashMap<String, TeraValue>) -> tera::Result<TeraValue> {
@@ -398,8 +440,7 @@ impl Function for GitCountFilesFunction {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let count = stdout.lines().filter(|l| !l.is_empty()).count();
 
-        to_value(count)
-            .map_err(|e| tera::Error::msg(format!("git_count_files: {e}")))
+        to_value(count).map_err(|e| tera::Error::msg(format!("git_count_files: {e}")))
     }
 }
 
@@ -415,14 +456,16 @@ impl Function for WorkflowNamesFunction {
         for entry in glob::glob(pattern)
             .map_err(|e| tera::Error::msg(format!("workflow_names: invalid glob: {e}")))?
         {
-            let path = entry
-                .map_err(|e| tera::Error::msg(format!("workflow_names: glob error: {e}")))?;
+            let path =
+                entry.map_err(|e| tera::Error::msg(format!("workflow_names: glob error: {e}")))?;
 
-            let content = fs::read_to_string(&path)
-                .map_err(|e| tera::Error::msg(format!("workflow_names: read {}: {e}", path.display())))?;
+            let content = fs::read_to_string(&path).map_err(|e| {
+                tera::Error::msg(format!("workflow_names: read {}: {e}", path.display()))
+            })?;
 
-            let yaml: serde_yml::Value = serde_yml::from_str(&content)
-                .map_err(|e| tera::Error::msg(format!("workflow_names: parse {}: {e}", path.display())))?;
+            let yaml: serde_yaml_ng::Value = serde_yaml_ng::from_str(&content).map_err(|e| {
+                tera::Error::msg(format!("workflow_names: parse {}: {e}", path.display()))
+            })?;
 
             let name = yaml
                 .get("name")
@@ -442,8 +485,7 @@ impl Function for WorkflowNamesFunction {
             results.push(Value::Object(entry_map));
         }
 
-        to_value(results)
-            .map_err(|e| tera::Error::msg(format!("workflow_names: {e}")))
+        to_value(results).map_err(|e| tera::Error::msg(format!("workflow_names: {e}")))
     }
 }
 
@@ -457,7 +499,9 @@ impl Function for WorkflowNamesFunction {
 /// the command and returning the result. The arg validation here is a safety
 /// net: rendering must not silently succeed when the user forgot `depends_on`,
 /// even if (somehow) the analyzer didn't run for this template.
-struct ShellOutputFunction { ctx: CtxPtr }
+struct ShellOutputFunction {
+    ctx: CtxPtr,
+}
 
 impl Function for ShellOutputFunction {
     fn call(&self, args: &HashMap<String, TeraValue>) -> tera::Result<TeraValue> {
@@ -490,12 +534,13 @@ impl Function for ShellOutputFunction {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(tera::Error::msg(format!("shell_output: command failed: {stderr}")));
+            return Err(tera::Error::msg(format!(
+                "shell_output: command failed: {stderr}"
+            )));
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        to_value(stdout)
-            .map_err(|e| tera::Error::msg(format!("shell_output: {e}")))
+        to_value(stdout).map_err(|e| tera::Error::msg(format!("shell_output: {e}")))
     }
 }
 
@@ -519,8 +564,9 @@ impl Function for GlobFunction {
         for entry in glob::glob(pattern)
             .map_err(|e| tera::Error::msg(format!("glob: invalid pattern '{pattern}': {e}")))?
         {
-            let path = entry
-                .map_err(|e| tera::Error::msg(format!("glob: iteration error for '{pattern}': {e}")))?;
+            let path = entry.map_err(|e| {
+                tera::Error::msg(format!("glob: iteration error for '{pattern}': {e}"))
+            })?;
             if path.is_file() {
                 paths.push(path.to_string_lossy().into_owned());
             }
@@ -528,8 +574,7 @@ impl Function for GlobFunction {
         paths.sort();
         paths.dedup();
 
-        to_value(paths)
-            .map_err(|e| tera::Error::msg(format!("glob: {e}")))
+        to_value(paths).map_err(|e| tera::Error::msg(format!("glob: {e}")))
     }
 }
 
@@ -556,16 +601,18 @@ impl Function for GrepCountFunction {
             .map_err(|e| tera::Error::msg(format!("grep_count: invalid regex '{pattern}': {e}")))?;
 
         let mut count: usize = 0;
-        for entry in glob::glob(glob_pattern)
-            .map_err(|e| tera::Error::msg(format!("grep_count: invalid glob '{glob_pattern}': {e}")))?
-        {
-            let path = entry
-                .map_err(|e| tera::Error::msg(format!("grep_count: glob error for '{glob_pattern}': {e}")))?;
+        for entry in glob::glob(glob_pattern).map_err(|e| {
+            tera::Error::msg(format!("grep_count: invalid glob '{glob_pattern}': {e}"))
+        })? {
+            let path = entry.map_err(|e| {
+                tera::Error::msg(format!("grep_count: glob error for '{glob_pattern}': {e}"))
+            })?;
             if !path.is_file() {
                 continue;
             }
-            let content = fs::read_to_string(&path)
-                .map_err(|e| tera::Error::msg(format!("grep_count: read {}: {e}", path.display())))?;
+            let content = fs::read_to_string(&path).map_err(|e| {
+                tera::Error::msg(format!("grep_count: read {}: {e}", path.display()))
+            })?;
             for line in content.lines() {
                 if re.is_match(line) {
                     count += 1;
@@ -573,8 +620,7 @@ impl Function for GrepCountFunction {
             }
         }
 
-        to_value(count)
-            .map_err(|e| tera::Error::msg(format!("grep_count: {e}")))
+        to_value(count).map_err(|e| tera::Error::msg(format!("grep_count: {e}")))
     }
 }
 
@@ -637,7 +683,10 @@ fn lookup_dotted<'a>(root: &'a Value, key: &str) -> Option<&'a Value> {
 }
 
 /// Load configuration from a Python file
-fn load_python_config(ctx: &crate::build_context::BuildContext, python_file: &Path) -> Result<Map<String, Value>> {
+fn load_python_config(
+    ctx: &crate::build_context::BuildContext,
+    python_file: &Path,
+) -> Result<Map<String, Value>> {
     // Resolve the path relative to current working directory
     let absolute_path = if python_file.is_absolute() {
         python_file.to_path_buf()
@@ -653,10 +702,16 @@ fn load_python_config(ctx: &crate::build_context::BuildContext, python_file: &Pa
 
     // Create a Python script that will execute the config file and output variables as JSON.
     // Escape backslashes and single quotes for safe embedding in Python string literals.
-    let config_dir = crate::processors::parent_dir(&absolute_path).display().to_string()
-        .replace('\\', "\\\\").replace('\'', "\\'");
-    let config_path = absolute_path.display().to_string()
-        .replace('\\', "\\\\").replace('\'', "\\'");
+    let config_dir = crate::processors::parent_dir(&absolute_path)
+        .display()
+        .to_string()
+        .replace('\\', "\\\\")
+        .replace('\'', "\\'");
+    let config_path = absolute_path
+        .display()
+        .to_string()
+        .replace('\\', "\\\\")
+        .replace('\'', "\\'");
     let python_script = format!(
         r"
 import sys
@@ -703,19 +758,49 @@ print(json.dumps(result))
 
     // Parse the JSON output
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let variables: Map<String, Value> =
-        crate::errors::ctx(serde_json::from_str(&stdout), "Failed to parse Python config output")?;
+    let variables: Map<String, Value> = crate::errors::ctx(
+        serde_json::from_str(&stdout),
+        "Failed to parse Python config output",
+    )?;
 
     Ok(variables)
 }
 
 /// Names of Lua built-in globals to skip when extracting user-defined variables.
 const LUA_BUILTIN_GLOBALS: &[&str] = &[
-    "string", "table", "math", "io", "os", "debug", "coroutine", "utf8", "package",
-    "assert", "collectgarbage", "dofile", "error", "getmetatable", "ipairs", "load",
-    "loadfile", "next", "pairs", "pcall", "print", "rawequal", "rawget", "rawlen",
-    "rawset", "require", "select", "setmetatable", "tonumber", "tostring", "type",
-    "warn", "xpcall",
+    "string",
+    "table",
+    "math",
+    "io",
+    "os",
+    "debug",
+    "coroutine",
+    "utf8",
+    "package",
+    "assert",
+    "collectgarbage",
+    "dofile",
+    "error",
+    "getmetatable",
+    "ipairs",
+    "load",
+    "loadfile",
+    "next",
+    "pairs",
+    "pcall",
+    "print",
+    "rawequal",
+    "rawget",
+    "rawlen",
+    "rawset",
+    "require",
+    "select",
+    "setmetatable",
+    "tonumber",
+    "tostring",
+    "type",
+    "warn",
+    "xpcall",
 ];
 
 /// Load configuration from a Lua file
@@ -736,10 +821,13 @@ fn load_lua_config(lua_file: &Path) -> Result<Map<String, Value>> {
 
     // Set up package.path so require() works relative to the file's directory
     if let Some(dir) = absolute_path.parent() {
-        let package: LuaTable = lua.globals().get("package")
+        let package: LuaTable = lua
+            .globals()
+            .get("package")
             .map_err(|e| anyhow::anyhow!("Failed to get Lua package table: {e}"))?;
         let new_path = format!("{}/?.lua;{}/?.lua", dir.display(), dir.display());
-        package.set("path", new_path)
+        package
+            .set("path", new_path)
             .map_err(|e| anyhow::anyhow!("Failed to set Lua package.path: {e}"))?;
     }
 
@@ -749,15 +837,20 @@ fn load_lua_config(lua_file: &Path) -> Result<Map<String, Value>> {
     lua.load(&script)
         .set_name(absolute_path.to_string_lossy())
         .exec()
-        .map_err(|e| anyhow::anyhow!("Failed to execute Lua config '{}': {e}", absolute_path.display()))?;
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to execute Lua config '{}': {e}",
+                absolute_path.display()
+            )
+        })?;
 
     // Extract user-defined globals
     let globals = lua.globals();
     let mut result = Map::new();
 
     for pair in globals.pairs::<String, LuaValue>() {
-        let (key, value) = pair
-            .map_err(|e| anyhow::anyhow!("Failed to iterate Lua globals: {e}"))?;
+        let (key, value) =
+            pair.map_err(|e| anyhow::anyhow!("Failed to iterate Lua globals: {e}"))?;
 
         // Skip built-in globals and names starting with _
         if key.starts_with('_') || LUA_BUILTIN_GLOBALS.contains(&key.as_str()) {
@@ -766,13 +859,16 @@ fn load_lua_config(lua_file: &Path) -> Result<Map<String, Value>> {
 
         // Skip functions and non-serializable types
         match &value {
-            LuaValue::Function(_) | LuaValue::Thread(_) | LuaValue::UserData(_)
+            LuaValue::Function(_)
+            | LuaValue::Thread(_)
+            | LuaValue::UserData(_)
             | LuaValue::LightUserData(_) => continue,
             _ => {}
         }
 
         // Convert to serde_json::Value using mlua's serde support
-        let json_value: Value = lua.from_value(value)
+        let json_value: Value = lua
+            .from_value(value)
             .map_err(|e| anyhow::anyhow!("Failed to convert Lua global '{key}' to JSON: {e}"))?;
         result.insert(key, json_value);
     }

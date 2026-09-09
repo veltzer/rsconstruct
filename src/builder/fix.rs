@@ -1,8 +1,8 @@
-use std::collections::HashSet;
-use anyhow::Result;
+use super::{Builder, sorted_keys};
 use crate::color;
 use crate::tables;
-use super::{Builder, sorted_keys};
+use anyhow::Result;
+use std::collections::HashSet;
 
 /// Fix capability is either static (plugin `can_fix`) or config-dependent
 /// (e.g. script's `fix_command`). `fix` and `fix list` must agree on this
@@ -14,15 +14,20 @@ fn is_fixable(processors: &crate::builder::ProcessorMap, name: &str) -> bool {
 
 impl Builder {
     /// Run fix mode on all (or filtered) checker processors that have fix capability.
-    pub fn fix(&self, ctx: &crate::build_context::BuildContext, processor_filter: Option<&[String]>) -> Result<()> {
+    pub fn fix(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        processor_filter: Option<&[String]>,
+    ) -> Result<()> {
         let processors = self.create_processors()?;
         let mut graph = self.build_graph_with_processors(ctx, &processors)?;
 
         // Filter to only processors with fix capability
-        let filter_set: Option<HashSet<&str>> = processor_filter
-            .map(|names| names.iter().map(std::string::String::as_str).collect());
+        let filter_set: Option<HashSet<&str>> =
+            processor_filter.map(|names| names.iter().map(std::string::String::as_str).collect());
 
-        let fixable: Vec<&str> = processors.keys()
+        let fixable: Vec<&str> = processors
+            .keys()
             .filter(|name| {
                 if !is_fixable(&processors, name.as_str()) {
                     return false;
@@ -37,7 +42,9 @@ impl Builder {
 
         if fixable.is_empty() {
             if processor_filter.is_some() {
-                crate::output::info(&color::yellow("No matching processors with fix capability."));
+                crate::output::info(&color::yellow(
+                    "No matching processors with fix capability.",
+                ));
             } else {
                 crate::output::info(&color::yellow("No processors with fix capability found."));
             }
@@ -64,13 +71,19 @@ impl Builder {
         let mut error_count = 0usize;
 
         // Group products by processor for batch execution
-        let mut by_processor: std::collections::BTreeMap<&str, Vec<&crate::graph::Product>> = std::collections::BTreeMap::new();
+        let mut by_processor: std::collections::BTreeMap<&str, Vec<&crate::graph::Product>> =
+            std::collections::BTreeMap::new();
         for product in &products {
-            by_processor.entry(&product.processor).or_default().push(product);
+            by_processor
+                .entry(&product.processor)
+                .or_default()
+                .push(product);
         }
 
         for (proc_name, proc_products) in &by_processor {
-            let Some(processor) = processors.get(*proc_name) else { continue };
+            let Some(processor) = processors.get(*proc_name) else {
+                continue;
+            };
 
             if processor.supports_fix_batch() && proc_products.len() > 1 {
                 // Batch fix
@@ -120,7 +133,8 @@ impl Builder {
         let processors = self.create_processors()?;
         let proc_names = sorted_keys(&processors);
 
-        let fixers: Vec<&String> = proc_names.iter()
+        let fixers: Vec<&String> = proc_names
+            .iter()
             .filter(|name| is_fixable(&processors, name.as_str()))
             .copied()
             .collect();
@@ -132,7 +146,9 @@ impl Builder {
             if crate::json_output::is_json_mode() {
                 println!("[]");
             } else {
-                crate::output::info(&color::yellow("No fix-capable processors declared in this project."));
+                crate::output::info(&color::yellow(
+                    "No fix-capable processors declared in this project.",
+                ));
             }
             return Ok(());
         }
@@ -149,13 +165,18 @@ impl Builder {
             return Ok(());
         }
 
-        let rows: Vec<Vec<String>> = fixers.iter().map(|name| {
-            vec![
-                (*name).clone(),
-                crate::registries::processor::processor_type_of(name.as_str()).as_str().to_string(),
-                crate::registries::processor::description_of(name.as_str()).to_string(),
-            ]
-        }).collect();
+        let rows: Vec<Vec<String>> = fixers
+            .iter()
+            .map(|name| {
+                vec![
+                    (*name).clone(),
+                    crate::registries::processor::processor_type_of(name.as_str())
+                        .as_str()
+                        .to_string(),
+                    crate::registries::processor::description_of(name.as_str()).to_string(),
+                ]
+            })
+            .collect();
         tables::print_table(&["Name", "Type", "Description"], &rows);
 
         Ok(())
