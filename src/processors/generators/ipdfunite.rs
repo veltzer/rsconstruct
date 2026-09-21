@@ -339,6 +339,7 @@ inventory::submit! {
         keywords: &["pdf", "merger", "generator"],
         description: "Merge PDFs from subdirectories into course bundles (in-process)",
         is_native: true,
+        is_rust: true,
         can_fix: false,
         supports_batch: false,
         max_jobs_cap: Some(1),

@@ -30,6 +30,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     keywords: &["php", "linter"],
     description: "Check PHP syntax using php -l",
     is_native: false,
+    is_rust: false,
     can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,

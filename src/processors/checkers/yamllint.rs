@@ -30,6 +30,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     keywords: &["yaml", "yml", "linter", "validator", "pip"],
     description: "Lint YAML files using yamllint",
     is_native: false,
+    is_rust: false,
     can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,

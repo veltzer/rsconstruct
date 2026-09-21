@@ -32,6 +32,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     keywords: &["github", "actions", "workflow", "ci", "linter", "yaml"],
     description: "Lint GitHub Actions workflow files using actionlint",
     is_native: false,
+    is_rust: false,
     can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,

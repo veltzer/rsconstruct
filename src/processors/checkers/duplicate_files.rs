@@ -114,6 +114,7 @@ inventory::submit! {
         keywords: &["checker", "duplicates", "files"],
         description: "Detect duplicate files by content (SHA-256)",
         is_native: true,
+        is_rust: true,
         can_fix: false,
         supports_batch: false,
         max_jobs_cap: None,

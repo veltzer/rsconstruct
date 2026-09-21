@@ -345,6 +345,7 @@ inventory::submit! {
         keywords: &["c", "linux", "kernel", "module", "builder"],
         description: "Build Linux kernel modules from linux-module.yaml manifests",
         is_native: false,
+        is_rust: false,
         can_fix: false,
         supports_batch: false,
         max_jobs_cap: None,

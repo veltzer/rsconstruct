@@ -62,6 +62,14 @@ pub struct ProcessorPlugin {
     pub description: &'static str,
     /// Whether this is a native (pure Rust) processor.
     pub is_native: bool,
+    /// Whether the code that does the work is written in Rust. Every native
+    /// processor is (it is rsconstruct itself); an external processor is only
+    /// when the tool it runs is (ruff, taplo, rumdl, clippy, cargo, mdbook,
+    /// pyrefly, rustc). Processors that run a user-supplied command (script,
+    /// explicit, generator, creator) are `false`: the language is unknown.
+    /// Shown by `processors list` and `status` so the language of the toolchain
+    /// can be read off the table.
+    pub is_rust: bool,
     /// Whether this processor has fix capability (`rsconstruct fix`).
     pub can_fix: bool,
     /// Whether this processor can execute multiple products in one invocation.
@@ -104,6 +112,12 @@ pub fn processor_type_of(name: &str) -> crate::processors::ProcessorType {
 /// Return whether a processor is native (pure Rust) by instance name.
 pub fn is_native(name: &str) -> bool {
     find_plugin(name).is_some_and(|p| p.is_native)
+}
+
+/// Return whether a processor's implementation is written in Rust, by instance
+/// name. See [`ProcessorPlugin::is_rust`].
+pub fn is_rust(name: &str) -> bool {
+    find_plugin(name).is_some_and(|p| p.is_rust)
 }
 
 /// Return whether a processor can fix by instance name.
@@ -244,6 +258,11 @@ mod tests {
                 "is_native must strip the instance suffix for '{instance}'"
             );
             assert_eq!(
+                is_rust(&instance),
+                is_rust(plugin.name),
+                "is_rust must strip the instance suffix for '{instance}'"
+            );
+            assert_eq!(
                 can_fix(&instance),
                 can_fix(plugin.name),
                 "can_fix must strip the instance suffix for '{instance}'"
@@ -253,6 +272,23 @@ mod tests {
                 description_of(plugin.name),
                 "description_of must strip the instance suffix for '{instance}'"
             );
+        }
+    }
+
+    /// A native processor is rsconstruct's own Rust code, so `is_rust` cannot
+    /// be false for it. The two flags are declared separately because the
+    /// reverse does not hold (ruff is external and Rust), and a plugin entry
+    /// that says native but not Rust is a copy-paste mistake.
+    #[test]
+    fn native_processors_are_rust() {
+        for plugin in all_plugins() {
+            if plugin.is_native {
+                assert!(
+                    plugin.is_rust,
+                    "Processor '{}' is native (pure Rust) but declares is_rust: false",
+                    plugin.name
+                );
+            }
         }
     }
 }

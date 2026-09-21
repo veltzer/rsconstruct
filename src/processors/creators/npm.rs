@@ -160,6 +160,7 @@ inventory::submit! {
         keywords: &["javascript", "typescript", "node", "npm", "package-manager", "web", "frontend"],
         description: "Install Node.js dependencies using npm",
         is_native: false,
+        is_rust: false,
         can_fix: false,
         supports_batch: false,
         max_jobs_cap: Some(1),

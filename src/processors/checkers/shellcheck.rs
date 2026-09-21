@@ -30,6 +30,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     keywords: &["shell", "bash", "sh", "linter", "script"],
     description: "Lint shell scripts using shellcheck",
     is_native: false,
+    is_rust: false,
     can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,

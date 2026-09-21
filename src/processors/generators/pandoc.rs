@@ -136,6 +136,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     keywords: &["markdown", "converter", "pdf", "html", "docx", "generator"],
     description: "Convert documents using pandoc",
     is_native: false,
+    is_rust: false,
     can_fix: false,
     supports_batch: false,
     max_jobs_cap: None,

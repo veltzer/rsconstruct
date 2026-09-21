@@ -57,6 +57,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     keywords: &["binary", "disassembler", "c", "cpp", "generator"],
     description: "Disassemble object files using objdump",
     is_native: false,
+    is_rust: false,
     can_fix: false,
     supports_batch: false,
     max_jobs_cap: None,

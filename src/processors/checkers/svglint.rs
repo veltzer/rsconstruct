@@ -30,6 +30,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     keywords: &["svg", "linter", "xml", "validator", "node", "npm"],
     description: "Lint SVG files using svglint",
     is_native: false,
+    is_rust: false,
     can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,

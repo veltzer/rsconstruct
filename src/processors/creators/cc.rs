@@ -642,6 +642,7 @@ inventory::submit! {
         keywords: &["c", "cpp", "builder", "compiler", "gcc", "clang", "cc", "h", "hpp"],
         description: "Build C/C++ projects from cc.yaml manifests",
         is_native: false,
+        is_rust: false,
         can_fix: false,
         supports_batch: false,
         max_jobs_cap: Some(1),

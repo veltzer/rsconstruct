@@ -30,6 +30,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     keywords: &["c", "cpp", "linter", "google", "cc", "h", "hpp"],
     description: "Lint C/C++ files using cpplint",
     is_native: false,
+    is_rust: false,
     can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,

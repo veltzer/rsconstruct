@@ -129,6 +129,7 @@ inventory::submit! {
         keywords: &["rust", "linter", "cargo", "rs"],
         description: "Lint Rust projects using Cargo Clippy",
         is_native: false,
+        is_rust: true,
         can_fix: false,
         supports_batch: false,
         max_jobs_cap: None,

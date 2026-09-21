@@ -35,6 +35,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     keywords: &["svg", "optimizer", "xml", "node", "npm"],
     description: "Validate SVG files using svgo (stdout discarded; non-zero exit = malformed SVG)",
     is_native: false,
+    is_rust: false,
     can_fix: false,
     supports_batch: false,
     max_jobs_cap: None,

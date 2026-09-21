@@ -30,6 +30,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     keywords: &["markdown", "md", "linter", "rust"],
     description: "Lint Markdown files using rumdl",
     is_native: false,
+    is_rust: true,
     can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,

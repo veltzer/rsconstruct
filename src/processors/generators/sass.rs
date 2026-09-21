@@ -52,6 +52,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     keywords: &["sass", "scss", "css", "converter", "web", "frontend"],
     description: "Compile Sass/SCSS to CSS",
     is_native: false,
+    is_rust: false,
     can_fix: false,
     supports_batch: false,
     max_jobs_cap: None,

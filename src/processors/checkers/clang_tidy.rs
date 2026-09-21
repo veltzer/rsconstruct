@@ -108,6 +108,7 @@ inventory::submit! {
         keywords: &["c", "cpp", "linter", "clang", "checker", "cc", "h", "hpp"],
         description: "Run clang-tidy static analysis on C/C++ source files",
         is_native: false,
+        is_rust: false,
         can_fix: false,
         supports_batch: false,
         max_jobs_cap: None,

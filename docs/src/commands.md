@@ -166,7 +166,16 @@ Show product status — whether each product is up-to-date, stale, or restorable
 rsconstruct status                     # Show per-processor and total summary
 rsconstruct status -v                  # Show per-product status
 rsconstruct status --breakdown         # Show source file counts by processor and extension
+rsconstruct --json status              # Same summary as JSON
 ```
+
+The per-processor table (and each entry of `--json`'s `processors` array) carries
+two flags after the counts: `native`, whether the processor is pure Rust inside
+rsconstruct, and `rust`, whether the code that does the work is written in Rust at
+all — always so for a native processor, and for an external one only when the tool
+it runs is (ruff, taplo, rumdl, clippy, cargo, mdbook, pyrefly, rustc). Processors
+that run a user-supplied command (`script`, `explicit`, `generator`, `creator`)
+report `rust: false`, since the language is unknown.
 
 ## `rsconstruct smart auto`
 
@@ -374,6 +383,8 @@ rsconstruct smart remove-no-file-processors  # Remove processors that don't matc
 ```bash
 rsconstruct processors list              # List declared processors and descriptions
 rsconstruct processors list -a           # Show all built-in processors
+rsconstruct processors list -v           # ...with descriptions
+rsconstruct --json processors list       # Same list as JSON
 rsconstruct processors files             # Show source and target files for each declared processor
 rsconstruct processors files ruff        # Show files for a specific processor
 rsconstruct processors files              # Show files for enabled processors
@@ -388,6 +399,16 @@ rsconstruct processors graph --format dot    # Graphviz DOT format
 rsconstruct processors graph --format mermaid # Mermaid format
 rsconstruct processors files --headers   # Show files with processor headers
 ```
+
+`list` prints one row per processor with its type and three flags: `Native`
+(pure Rust inside rsconstruct, or `external` when it runs another program),
+`Rust` (whether the code that does the work is written in Rust — every native
+processor, plus external ones whose tool is Rust: ruff, taplo, rumdl, clippy,
+cargo, mdbook, pyrefly, rustc) and `Fix` (supports `rsconstruct fix`). The JSON
+form carries the same as `native`, `rust` and `fix` booleans. `rust` is what to
+read when the question is "how much of this project's toolchain is Rust";
+`native` is what to read when the question is "which processors need no tool
+installed".
 
 ## `rsconstruct tools`
 

@@ -30,6 +30,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     keywords: &["c", "cpp", "checker", "linter", "cc", "h", "hpp"],
     description: "Static analysis for C/C++ using cppcheck",
     is_native: false,
+    is_rust: false,
     can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,

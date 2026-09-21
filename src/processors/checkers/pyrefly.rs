@@ -30,6 +30,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     keywords: &["python", "type-checker", "types", "py", "pip"],
     description: "Type-check Python files using pyrefly",
     is_native: false,
+    is_rust: true,
     can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,

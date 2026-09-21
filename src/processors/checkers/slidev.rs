@@ -30,6 +30,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     keywords: &["markdown", "presentation", "slides", "vue", "web", "frontend", "node", "npm"],
     description: "Build Slidev presentations",
     is_native: false,
+    is_rust: false,
     can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,

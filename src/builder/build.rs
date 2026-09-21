@@ -534,6 +534,7 @@ impl Builder {
                 verbose: true,
                 all_processor_names: &[],
                 native_processors: &std::collections::HashSet::new(),
+                rust_processors: &std::collections::HashSet::new(),
             },
         );
         Ok(())
@@ -572,6 +573,11 @@ impl Builder {
             .filter(|(name, _)| crate::registries::processor::is_native(name.as_str()))
             .map(|(name, _)| name.as_str())
             .collect();
+        let rust_set: std::collections::HashSet<&str> = processors
+            .iter()
+            .filter(|(name, _)| crate::registries::processor::is_rust(name.as_str()))
+            .map(|(name, _)| name.as_str())
+            .collect();
         self.print_product_status(
             ctx,
             &products,
@@ -583,6 +589,7 @@ impl Builder {
                 verbose,
                 all_processor_names: &all_proc_names,
                 native_processors: &native_set,
+                rust_processors: &rust_set,
             },
         );
 
@@ -771,6 +778,7 @@ impl Builder {
                         "new": pc[3],
                         "total": pc[0] + pc[1] + pc[2] + pc[3],
                         "native": opts.native_processors.contains(name),
+                        "rust": opts.rust_processors.contains(name),
                     })
                 })
                 .collect();
@@ -803,6 +811,7 @@ impl Builder {
             .iter()
             .map(|(name, pc)| {
                 let native = crate::tables::yes_no(opts.native_processors.contains(name));
+                let rust = crate::tables::yes_no(opts.rust_processors.contains(name));
                 vec![
                     name.to_string(),
                     pc[0].to_string(),
@@ -810,6 +819,7 @@ impl Builder {
                     pc[2].to_string(),
                     pc[3].to_string(),
                     native.to_string(),
+                    rust.to_string(),
                 ]
             })
             .collect();
@@ -820,6 +830,7 @@ impl Builder {
             counts[2].to_string(),
             counts[3].to_string(),
             String::new(),
+            String::new(),
         ];
         tables::print_table_with_total(
             &[
@@ -829,6 +840,7 @@ impl Builder {
                 col_labels[2],
                 col_labels[3],
                 "native",
+                "rust",
             ],
             &rows,
             &total,

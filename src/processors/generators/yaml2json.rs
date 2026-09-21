@@ -56,6 +56,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     keywords: &["yaml", "json", "converter", "yml", "generator"],
     description: "Convert YAML files to JSON (in-process)",
     is_native: true,
+    is_rust: true,
     can_fix: false,
     supports_batch: false,
     max_jobs_cap: None,

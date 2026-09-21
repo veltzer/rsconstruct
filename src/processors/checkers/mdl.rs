@@ -147,6 +147,7 @@ inventory::submit! {
         keywords: &["markdown", "md", "linter", "ruby", "gem"],
         description: "Lint Markdown files using mdl (markdownlint)",
         is_native: false,
+        is_rust: false,
         can_fix: false,
         supports_batch: false,
         max_jobs_cap: None,

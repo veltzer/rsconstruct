@@ -78,6 +78,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     keywords: &["document", "converter", "pdf", "docx", "odt", "generator"],
     description: "Convert documents using LibreOffice",
     is_native: false,
+    is_rust: false,
     can_fix: false,
     supports_batch: false,
     max_jobs_cap: None,

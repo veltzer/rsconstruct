@@ -30,6 +30,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     keywords: &["javascript", "typescript", "css", "html", "json", "markdown", "yaml", "formatter", "web", "frontend", "node", "npm"],
     description: "Check formatting with prettier",
     is_native: false,
+    is_rust: false,
     can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,

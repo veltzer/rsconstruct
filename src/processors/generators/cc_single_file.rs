@@ -782,6 +782,7 @@ inventory::submit! {
         keywords: &["c", "cpp", "compiler", "gcc", "clang", "binary", "executable"],
         description: "Compile C/C++ source files into executables (single-file)",
         is_native: false,
+        is_rust: false,
         can_fix: false,
         supports_batch: false,
         max_jobs_cap: None,

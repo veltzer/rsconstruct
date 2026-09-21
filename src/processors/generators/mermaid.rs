@@ -53,6 +53,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     keywords: &["diagram", "mermaid", "svg", "png", "generator", "node", "npm"],
     description: "Render Mermaid diagrams to images",
     is_native: false,
+    is_rust: false,
     can_fix: false,
     supports_batch: false,
     max_jobs_cap: None,

@@ -130,6 +130,7 @@ inventory::submit! {
         keywords: &["markdown", "md", "rust", "documentation", "book", "html"],
         description: "Build mdbook documentation",
         is_native: false,
+        is_rust: true,
         can_fix: false,
         supports_batch: false,
         max_jobs_cap: Some(1),

@@ -276,6 +276,7 @@ inventory::submit! {
         keywords: &["yaml", "yml", "schema", "validator"],
         description: "Validate YAML files against JSON schemas (in-process)",
         is_native: true,
+        is_rust: true,
         can_fix: false,
         supports_batch: true,
         max_jobs_cap: None,

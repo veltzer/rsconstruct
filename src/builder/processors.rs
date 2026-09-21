@@ -129,6 +129,7 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
                 detected: false,
                 batch: false, // not available from static metadata
                 native: p.is_native,
+                rust: p.is_rust,
                 fix: p.can_fix,
                 description: p.description.to_string(),
             })
@@ -142,32 +143,39 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
             .iter()
             .map(|p| {
                 let native_tag = if p.is_native { "native" } else { "external" };
+                let rust_tag = tables::yes_no(p.is_rust);
                 let fix_tag = tables::yes_no(p.can_fix);
                 vec![
                     p.name.to_string(),
                     p.processor_type.as_str().to_string(),
                     native_tag.to_string(),
+                    rust_tag.to_string(),
                     fix_tag.to_string(),
                     p.description.to_string(),
                 ]
             })
             .collect();
-        tables::print_table(&["Name", "Type", "Native", "Fix", "Description"], &rows);
+        tables::print_table(
+            &["Name", "Type", "Native", "Rust", "Fix", "Description"],
+            &rows,
+        );
     } else {
         let rows: Vec<Vec<String>> = plugins
             .iter()
             .map(|p| {
                 let native_tag = if p.is_native { "native" } else { "external" };
+                let rust_tag = tables::yes_no(p.is_rust);
                 let fix_tag = tables::yes_no(p.can_fix);
                 vec![
                     p.name.to_string(),
                     p.processor_type.as_str().to_string(),
                     native_tag.to_string(),
+                    rust_tag.to_string(),
                     fix_tag.to_string(),
                 ]
             })
             .collect();
-        tables::print_table(&["Name", "Type", "Native", "Fix"], &rows);
+        tables::print_table(&["Name", "Type", "Native", "Rust", "Fix"], &rows);
     }
 
     Ok(())

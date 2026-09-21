@@ -35,6 +35,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     keywords: &["python", "formatter", "py", "pip"],
     description: "Check Python code formatting using black",
     is_native: false,
+    is_rust: false,
     can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,

@@ -152,6 +152,7 @@ inventory::submit! {
         keywords: &["checker", "license", "header", "copyright"],
         description: "Verify source files contain required license headers",
         is_native: true,
+        is_rust: true,
         can_fix: false,
         supports_batch: true,
         max_jobs_cap: None,

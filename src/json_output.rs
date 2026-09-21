@@ -110,6 +110,9 @@ pub struct ProcessorListEntry {
     pub detected: bool,
     pub batch: bool,
     pub native: bool,
+    /// Whether the implementation (rsconstruct itself for a native processor,
+    /// the external tool otherwise) is written in Rust.
+    pub rust: bool,
     pub fix: bool,
     pub description: String,
 }
