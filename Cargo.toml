@@ -42,7 +42,7 @@ jsonschema = { version = "0.45.1", default-features = false, features = ["resolv
 # private `proc_macro` extern, which future Rust rejects (rust#127909). We
 # build tables through `Builder` and never use `#[derive(Tabled)]`, so the
 # derive macro was dead weight. `std` is required for `Builder`/`Table`.
-tabled = { version = "0.21.0", default-features = false, features = ["ansi", "std"] }
+tabled = { version = "0.22.0", default-features = false, features = ["ansi", "std"] }
 ureq = "3"
 strum = { version = "0.28.0", features = ["derive"] }
 inventory = "0.3.24"
