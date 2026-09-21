@@ -50,14 +50,23 @@ pub fn setup_test_project() -> TempDir {
     temp_dir
 }
 
+/// The one place a test builds a command for the rsconstruct binary. Every
+/// spawn goes through here so every test is hermetic: it never reads the
+/// developer's ~/.config/rsconstruct/config.toml, whose `[build]` keys
+/// (`reject_dot_src_dirs = true`, say) would otherwise change what the
+/// binary under test accepts. A test that wants a user config sets
+/// XDG_CONFIG_HOME itself, which overrides this because later env() calls win.
+pub fn rsconstruct_command(dir: &Path) -> Command {
+    let rsconstruct_path = env!("CARGO_BIN_EXE_rsconstruct");
+    let mut cmd = Command::new(rsconstruct_path);
+    cmd.env("XDG_CONFIG_HOME", no_user_config_dir());
+    cmd.current_dir(dir);
+    cmd
+}
+
 /// Helper to run rsconstruct command in a directory
 pub fn run_rsconstruct(dir: &Path, args: &[&str]) -> std::process::Output {
-    let rsconstruct_path = env!("CARGO_BIN_EXE_rsconstruct");
-    Command::new(rsconstruct_path)
-        .current_dir(dir)
-        .args(args)
-        .output()
-        .expect("Failed to execute rsconstruct")
+    run_rsconstruct_with_env(dir, args, &[])
 }
 
 /// Helper to run rsconstruct command with extra environment variables
@@ -66,13 +75,8 @@ pub fn run_rsconstruct_with_env(
     args: &[&str],
     env_vars: &[(&str, &str)],
 ) -> std::process::Output {
-    let rsconstruct_path = env!("CARGO_BIN_EXE_rsconstruct");
-    let mut cmd = Command::new(rsconstruct_path);
-    // Hermetic: never read the developer's ~/.config/rsconstruct/config.toml.
-    // A test that wants a user config sets XDG_CONFIG_HOME itself, which
-    // overrides this because later env() calls win.
-    cmd.env("XDG_CONFIG_HOME", no_user_config_dir());
-    cmd.current_dir(dir).args(args);
+    let mut cmd = rsconstruct_command(dir);
+    cmd.args(args);
     for (key, val) in env_vars {
         cmd.env(key, val);
     }

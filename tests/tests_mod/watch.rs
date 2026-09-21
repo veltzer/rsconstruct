@@ -1,6 +1,5 @@
-use crate::common::setup_test_project;
+use crate::common::{rsconstruct_command, setup_test_project};
 use std::fs;
-use std::process::Command;
 use std::time::Duration;
 
 #[test]
@@ -14,9 +13,7 @@ fn watch_does_initial_build() {
     )
     .unwrap();
 
-    let rsconstruct_path = env!("CARGO_BIN_EXE_rsconstruct");
-    let mut child = Command::new(rsconstruct_path)
-        .current_dir(project_path)
+    let mut child = rsconstruct_command(project_path)
         .args(["watch"])
         .env("NO_COLOR", "1")
         .stdout(std::process::Stdio::piped())
@@ -51,9 +48,7 @@ fn watch_rebuilds_on_change() {
     )
     .unwrap();
 
-    let rsconstruct_path = env!("CARGO_BIN_EXE_rsconstruct");
-    let mut child = Command::new(rsconstruct_path)
-        .current_dir(project_path)
+    let mut child = rsconstruct_command(project_path)
         .args(["watch"])
         .env("NO_COLOR", "1")
         .stdout(std::process::Stdio::piped())
