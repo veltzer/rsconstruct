@@ -285,7 +285,7 @@ macro_rules! test_checker {
     // Full test: valid file + incremental skip
     ($mod_name:ident, tool: $tool:expr, processor: $proc:expr,
      files: [ $( ($fname:expr, $content:expr) ),+ $(,)? ]) => {
-        paste::paste! {
+        pastey::paste! {
             #[test]
             fn [<$mod_name _valid>]() {
                 crate::common::require_tool($tool);
@@ -342,7 +342,7 @@ macro_rules! test_checker {
 
     // No-project test: just verify the processor works with no matching files
     ($mod_name:ident, tool: $tool:expr, processor: $proc:expr, no_project) => {
-        paste::paste! {
+        pastey::paste! {
             #[test]
             fn [<$mod_name _no_project_discovered>]() {
                 crate::common::require_tool($tool);
@@ -371,7 +371,7 @@ macro_rules! test_checker {
     ($mod_name:ident, tool: $tool:expr, processor: $proc:expr,
      config: $config:expr,
      files: [ $( ($fname:expr, $content:expr) ),+ $(,)? ]) => {
-        paste::paste! {
+        pastey::paste! {
             #[test]
             fn [<$mod_name _valid>]() {
                 crate::common::require_tool($tool);

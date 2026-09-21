@@ -1,0 +1,66 @@
+# rsconstruct build configuration for this repository.
+#
+# Mirrors .github/workflows/ci.yml step for step: what CI runs is what
+# `rsconstruct build` runs here, so a green local build means a green CI
+# run. Every cargo invocation goes through rsconstruct rather than being
+# typed by hand.
+
+[build]
+# src_dirs entries name directories; "." (the whole tree) is a config error
+reject_dot_src_dirs = true
+
+# ─── analyzers ───────────────────────────────────────────────────────────────
+
+[analyzer.tera]
+
+# ─── templating ──────────────────────────────────────────────────────────────
+
+# Convention: tera configs are Lua (config/*.lua). Every dep_auto entry
+# listed here must exist: rsconstruct rejects a missing one at config load.
+[processor.tera]
+dep_auto = ["config/project.lua"]
+src_dirs = ["tera.templates"]
+
+# ─── rust ────────────────────────────────────────────────────────────────────
+
+# `cargo build`. CI builds the dev profile only; release binaries come from
+# the cross-target release job, which is not a local concern.
+# target/ is not cached: it is many gigabytes and cargo already keeps its
+# own incremental state there, so copying it into the rsconstruct store
+# would cost far more than it could ever save.
+[processor.cargo]
+src_files = ["Cargo.toml"]
+profiles = ["dev"]
+cache_output_dir = false
+
+# The clippy processor is "run `cargo <command> <args>` once per Cargo.toml,
+# re-run when any .rs or .toml under it changes". That is exactly the shape
+# of every other cargo check CI runs, so each one is an instance of it with
+# a different command. Arguments are CI's, verbatim.
+
+# cargo fmt --all --check
+[processor.clippy.fmt]
+src_files = ["Cargo.toml"]
+command = "fmt"
+args = ["--all", "--check"]
+
+# cargo clippy --all-targets -- -D warnings
+[processor.clippy.lint]
+src_files = ["Cargo.toml"]
+args = ["--all-targets", "--", "-D", "warnings"]
+
+# cargo deny check: Cargo.lock against the RustSec advisory database
+[processor.clippy.deny]
+src_files = ["Cargo.toml"]
+command = "deny"
+args = ["check"]
+
+# cargo nextest run: the test suite, with .config/nextest.toml's profile
+[processor.clippy.nextest]
+src_files = ["Cargo.toml"]
+command = "nextest"
+args = ["run"]
+
+# No doctest instance: nextest does not run doctests, but `cargo test --doc`
+# errors outright on a binary-only crate, and this crate has no src/lib.rs.
+# CI skips its doctest step on the same condition.
