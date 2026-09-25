@@ -436,7 +436,7 @@ rsconstruct tools install ruff      # Install a specific tool by name
 rsconstruct tools install --all     # Install every tool in the registry, ignoring the config (no config needed)
 rsconstruct tools install -i        # Ask for confirmation first (default: install without asking)
 rsconstruct tools install --no-eatmydata        # Don't wrap apt/dnf/pacman with eatmydata
-rsconstruct tools install-deps      # Install declared [dependencies] (pip set from uv.lock by default) in fixed order: system → pip → npm → gem
+rsconstruct tools install-deps      # Install declared [dependencies] (pip set from uv.lock, npm set from package-lock.json by default) in fixed order: system → pip → npm → gem
 rsconstruct tools install-deps -i   # Ask for confirmation first (default: install without asking)
 rsconstruct tools install-deps --no-eatmydata   # Don't wrap apt/dnf/pacman with eatmydata
 rsconstruct tools stats             # Show tool availability and language runtime breakdown
@@ -464,6 +464,14 @@ resolvable, every rsconstruct invocation appends the user gem bin dirs that
 exist (`$GEM_HOME/bin`, `~/.gem/ruby/*/bin`, `~/.local/share/gem/ruby/*/bin`)
 to its own `PATH` at startup — tool probes and spawned processors see them
 without any workflow- or shell-level `GEM_HOME`/`PATH` setup.
+
+### Node.js packages from the project's `node_modules`
+
+The same startup step prepends the project's `node_modules/.bin`, when it
+exists, so the packages `install-deps` put there from `package.json` (with
+`npm ci`, see `[dependencies]` in the configuration reference) resolve ahead
+of any global copy. `tools install` therefore finds a locked tool already
+installed and does not add a global one on top.
 
 ## `rsconstruct tags`
 

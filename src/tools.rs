@@ -102,6 +102,12 @@ pub fn describe(method: &str, packages: &[&str]) -> Vec<Vec<String>> {
             a.extend(packages.iter().map(|s| (*s).to_string()));
             a
         }],
+        // The project's own package set: the command takes no package
+        // names, it reads package.json (and, for `ci`, package-lock.json)
+        // in the working directory. `packages` is the declared list, kept
+        // for the skip/preview display only.
+        "npm-ci" => vec![strs(&["npm", "ci"])],
+        "npm-install" => vec![strs(&["npm", "install"])],
         "cargo" => vec![{
             let mut a = strs(&["cargo", "install"]);
             a.extend(packages.iter().map(|s| (*s).to_string()));
@@ -222,6 +228,11 @@ pub fn run(method: &str, packages: &[&str], ctx: &InstallCtx) -> anyhow::Result<
             argv.extend(packages.iter().map(|s| (*s).to_string()));
             exec(&argv)
         }
+        // See `describe`: these read the project's manifest and lock, so
+        // the declared names are not passed (to `npm install` they would
+        // mean "add these to package.json").
+        "npm-ci" => exec(&["npm".to_string(), "ci".to_string()]),
+        "npm-install" => exec(&["npm".to_string(), "install".to_string()]),
         "cargo" => {
             let mut argv = vec!["cargo".to_string(), "install".to_string()];
             argv.extend(packages.iter().map(|s| (*s).to_string()));
@@ -416,6 +427,46 @@ fn nearest_existing_ancestor_is_writable(path: &std::path::Path) -> bool {
             None => return false,
         }
     }
+}
+
+/// Make the project's own Node.js executables resolvable: prepend
+/// `./node_modules/.bin`, when it exists, to this process's PATH, so
+/// `which`-based tool probes and every spawned child (tools, processor
+/// scripts) see the packages `install-deps` put there from package.json.
+/// Prepended, not appended: the version the project's lock pins must win
+/// over a global install of the same tool, which is the whole point of
+/// installing from the lock. This is what `npm run` does for scripts.
+///
+/// Called once at the top of `main()`, before any thread exists — the
+/// safety condition of `platform::set_env`.
+pub fn augment_path_with_node_modules_bin() {
+    let Ok(cwd) = std::env::current_dir() else {
+        return;
+    };
+    let bin = cwd.join("node_modules").join(".bin");
+    if !bin.is_dir() {
+        return;
+    }
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    if let Some(new_path) = path_with_prepended_dir(&path, &bin) {
+        crate::platform::set_env("PATH", &new_path);
+    }
+}
+
+/// `path` with `dir` moved to the front, or `None` when it is already
+/// first. An occurrence further back is dropped rather than duplicated.
+fn path_with_prepended_dir(
+    path: &std::ffi::OsStr,
+    dir: &std::path::Path,
+) -> Option<std::ffi::OsString> {
+    let existing: Vec<std::path::PathBuf> = std::env::split_paths(path).collect();
+    if existing.first().is_some_and(|first| first == dir) {
+        return None;
+    }
+    let rest = existing.into_iter().filter(|p| p != dir);
+    // join_paths only errors on an entry containing the separator, which
+    // can't happen: every entry came from split_paths or is a real dir.
+    std::env::join_paths(std::iter::once(dir.to_path_buf()).chain(rest)).ok()
 }
 
 /// Make user-installed gem executables resolvable: append the user gem bin
@@ -1781,6 +1832,26 @@ mod tests {
 
         assert!(path_with_appended_dirs(&new_path, &dirs).is_none());
         assert!(path_with_appended_dirs(&path, &[]).is_none());
+    }
+
+    /// `node_modules/.bin` goes first so the locked version shadows a global
+    /// install; an occurrence further back is moved, not duplicated; and a
+    /// PATH that already leads with it is left alone.
+    #[test]
+    fn path_with_prepended_dir_puts_dir_first_once() {
+        use std::path::Path;
+        let bin = Path::new("/proj/node_modules/.bin");
+        let path = std::ffi::OsString::from("/usr/bin:/proj/node_modules/.bin:/bin");
+        let new_path = path_with_prepended_dir(&path, bin).unwrap();
+        assert_eq!(new_path, "/proj/node_modules/.bin:/usr/bin:/bin");
+
+        assert!(path_with_prepended_dir(&new_path, bin).is_none());
+
+        let without = std::ffi::OsString::from("/usr/bin:/bin");
+        assert_eq!(
+            path_with_prepended_dir(&without, bin).unwrap(),
+            "/proj/node_modules/.bin:/usr/bin:/bin"
+        );
     }
 
     /// A missing path is judged by its nearest existing ancestor — that is

@@ -155,7 +155,11 @@ impl Builder {
         // default (pyproject.toml in pyproject mode) plus [dependencies].pip.
         let deps = &self.config.dependencies;
         let pip_deps = deps.effective_pip(std::path::Path::new("."))?;
-        if !deps.is_empty() || !pip_deps.is_empty() {
+        // The Node set comes from package.json; installed means present in
+        // the project's node_modules (a global copy is not what the lock
+        // asked for).
+        let node_deps = deps.node_deps(std::path::Path::new("."))?;
+        if !deps.is_empty() || !pip_deps.is_empty() || !node_deps.is_empty() {
             if !json_mode {
                 println!();
                 println!("{}:", color::bold("Declared dependencies"));
@@ -240,6 +244,35 @@ impl Builder {
                         "dependency",
                         Some("npm".to_string()),
                         Some(format!("npm install {pkg}")),
+                        &mut ok_count,
+                        &mut fail_count,
+                        &mut warn_count,
+                    );
+                }
+            }
+
+            for pkg in &node_deps {
+                let found =
+                    crate::config::installed_node_package_version(std::path::Path::new("."), pkg)
+                        .is_some();
+                if found {
+                    record(
+                        format!("{pkg} (package.json)"),
+                        "ok",
+                        "dependency",
+                        None,
+                        None,
+                        &mut ok_count,
+                        &mut fail_count,
+                        &mut warn_count,
+                    );
+                } else {
+                    record(
+                        format!("{pkg} not installed in node_modules"),
+                        "fail",
+                        "dependency",
+                        Some("npm".to_string()),
+                        Some("rsconstruct tools install-deps".to_string()),
                         &mut ok_count,
                         &mut fail_count,
                         &mut warn_count,

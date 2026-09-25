@@ -355,7 +355,8 @@ Declare project dependencies by package manager. Used by `rsconstruct doctor` to
 | `pip` | array of strings | `[]` | Python packages to install via `pip install`. Supports version specifiers (e.g., `"ruff>=0.4"`). |
 | `pip_source` | string | `"uv-lock"` | Where the Python package set comes from: `"uv-lock"` installs the pinned closure from `uv.lock`; `"pyproject"` resolves the names pyproject.toml declares at install time. |
 | `python_installer` | string | `"uv"` | Which tool installs the Python package set: `"uv"` runs `uv pip install --python python3`; `"pip"` runs `pip install`. See below for why the two differ on the same lock. |
-| `npm` | array of strings | `[]` | Node.js packages to install via `npm install`. |
+| `npm` | array of strings | `[]` | Node.js packages to install globally via `npm install -g`, on top of the project's own package.json set. |
+| `npm_source` | string | `"package-lock"` | Where the project's Node.js package set comes from: `"package-lock"` installs the closure package-lock.json pins with `npm ci`; `"package-json"` resolves package.json's ranges with `npm install`. |
 | `gem` | array of strings | `[]` | Ruby gems to install via `gem install`. |
 | `system` | array of strings | `[]` | System packages installed via the detected package manager (`apt-get`, `dnf`, `pacman`, or `brew`). |
 
@@ -415,13 +416,46 @@ know which installer rsconstruct uses.
 Set `python_installer = "pip"` to keep the pre-uv behavior: per-package
 `pip show` probing followed by `pip install` of the flattened set.
 
+#### Node.js dependencies come from `package-lock.json` by default
+
+The Node side works the same way. A project's Node.js packages are declared
+in its `package.json` (`dependencies`, `devDependencies` and
+`optionalDependencies` — the three sections `npm ci` installs) and pinned by
+the `package-lock.json` beside it. In the default `npm_source =
+"package-lock"` mode, `install-deps` runs `npm ci` in the project root, which
+installs exactly the lock's closure into the project's own `node_modules/`
+and fails if the lock is out of sync with the manifest instead of silently
+re-resolving. A `package.json` that declares packages but has no
+`package-lock.json` is an error: run `npm install --package-lock-only`, or
+opt out per repo with `npm_source = "package-json"`, which runs `npm install`
+and lets the versions float.
+
+The install is skipped when every declared package is already present in
+`node_modules/` at the version the lock pins — `npm ci` wipes `node_modules/`
+before installing, so a needless run is not free. `doctor` reports each
+declared package the same way: installed means present in the project's
+`node_modules/`, not somewhere global.
+
+To make the installed executables resolvable, every rsconstruct invocation
+prepends the project's `node_modules/.bin`, when it exists, to its own
+`PATH` at startup (the same mechanism that appends the user gem bin dirs, see
+`rsconstruct tools` in the commands reference). Prepended, so the version the
+lock pins wins over a global install of the same tool — processors keep
+invoking `stylelint` or `mmdc` plainly, and `tools install` sees the locked
+copy and does not install a global one. This is what `npm run` does for
+scripts.
+
+`[dependencies].npm` remains for a package that must be global; it is
+installed with `npm install -g` alongside, and is not the place for a
+project's own tools.
+
 #### Install order
 
 `rsconstruct tools install-deps` always installs in this fixed order:
 
 1. **`system`** — OS packages (apt, dnf, pacman, brew)
 2. **`pip`** — Python packages
-3. **`npm`** — Node.js packages
+3. **`npm`** — Node.js packages (the global `npm` list, then the project's `npm ci`)
 4. **`gem`** — Ruby gems
 
 This order is deliberate and must not be changed. Language-level packages frequently build native extensions that link against system libraries at install time. For example, installing `manim` via pip pulls in `manimpango`, which compiles a C extension and uses `pkg-config` to find `pangocairo` — so `libpango1.0-dev` must already be on the system before `pip install` runs. Running `pip` (or `gem`, or `npm`) before `system` causes wheel/extension builds to fail with messages like `Package 'pangocairo' was not found`.

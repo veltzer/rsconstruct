@@ -2,6 +2,72 @@ use crate::common::{make_executable, run_rsconstruct_with_env, setup_project_wit
 use serde_json::Value;
 use std::fs;
 
+/// A package.json dependency is a project-local install: doctor judges it
+/// by the project's own node_modules, not by a global copy or a binary on
+/// PATH, and the fix it names is install-deps (which runs `npm ci`).
+#[test]
+fn doctor_checks_package_json_dependencies_in_node_modules() {
+    let temp_dir = setup_project_with_config("[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n");
+    let project_path = temp_dir.path();
+    fs::create_dir_all(project_path.join("tera.templates")).unwrap();
+    fs::write(
+        project_path.join("package.json"),
+        r#"{"devDependencies": {"rsconstruct-fake-installed": "1.0.0", "rsconstruct-fake-missing": "1.0.0"}}"#,
+    )
+    .unwrap();
+    fs::write(
+        project_path.join("package-lock.json"),
+        r#"{"lockfileVersion": 3, "packages": {"node_modules/rsconstruct-fake-installed": {"version": "1.0.0"}, "node_modules/rsconstruct-fake-missing": {"version": "1.0.0"}}}"#,
+    )
+    .unwrap();
+    let installed = project_path.join("node_modules/rsconstruct-fake-installed");
+    fs::create_dir_all(&installed).unwrap();
+    fs::write(installed.join("package.json"), r#"{"version": "1.0.0"}"#).unwrap();
+
+    let output =
+        run_rsconstruct_with_env(project_path, &["--json", "doctor"], &[("NO_COLOR", "1")]);
+    let parsed: Value =
+        serde_json::from_slice(&output.stdout).expect("doctor --json should emit valid JSON");
+    let checks = parsed["checks"]
+        .as_array()
+        .expect("doctor --json should have a checks array");
+    let find = |prefix: &str| {
+        checks
+            .iter()
+            .find(|c| c["name"].as_str().is_some_and(|n| n.starts_with(prefix)))
+            .unwrap_or_else(|| panic!("doctor should report {prefix}"))
+    };
+    assert_eq!(find("rsconstruct-fake-installed")["status"], "ok");
+    let missing = find("rsconstruct-fake-missing");
+    assert_eq!(missing["status"], "fail");
+    assert_eq!(missing["install_hint"], "rsconstruct tools install-deps");
+}
+
+/// The lock is what makes the install reproducible, so a manifest that
+/// declares packages without one is an error, not a floating install.
+#[test]
+fn doctor_rejects_package_json_without_lock() {
+    let temp_dir = setup_project_with_config("[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n");
+    let project_path = temp_dir.path();
+    fs::create_dir_all(project_path.join("tera.templates")).unwrap();
+    fs::write(
+        project_path.join("package.json"),
+        r#"{"devDependencies": {"stylelint": "latest"}}"#,
+    )
+    .unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["doctor"], &[("NO_COLOR", "1")]);
+    assert!(
+        !output.status.success(),
+        "doctor should fail without a lock"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("package-lock.json"),
+        "error should name the missing lock: {stderr}"
+    );
+}
+
 /// The regression this guards: `doctor` used to probe `[dependencies] system`
 /// entries with `which()`, treating packages as if they were tools. That
 /// misreports in both directions — a binary-less package like aspell-en (a

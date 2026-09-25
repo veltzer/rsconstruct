@@ -458,6 +458,27 @@ pub enum PythonInstaller {
     Pip,
 }
 
+/// Where `install-deps` takes the project's Node.js package set from.
+///
+/// The Node analog of `PipSource`: package.json declares the names,
+/// package-lock.json pins the closure, and `npm ci` installs exactly the
+/// lock into the project's `node_modules/`. Every rsconstruct invocation
+/// prepends that `node_modules/.bin` to its PATH at startup, so the
+/// installed executables are what processors and tool probes see.
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum NpmSource {
+    /// Run `npm ci`: install the exact closure package-lock.json pins. A
+    /// project whose package.json declares dependencies but has no
+    /// package-lock.json is an error: run `npm install --package-lock-only`
+    /// to create it, or set `npm_source = "package-json"`.
+    #[default]
+    PackageLock,
+    /// Run `npm install`: resolve package.json's declared ranges at install
+    /// time (versions float to whatever npm resolves that day).
+    PackageJson,
+}
+
 /// Declared project dependencies by package manager.
 /// Used by `rsconstruct doctor` to verify and `rsconstruct tools install-deps` to install.
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -476,9 +497,17 @@ pub struct DependenciesConfig {
     /// lock.
     #[serde(default)]
     pub python_installer: PythonInstaller,
-    /// Node.js packages (installed via npm)
+    /// Node.js packages installed globally with `npm install -g`, on top of
+    /// whatever the project's own package.json declares. The manifest is
+    /// the normal home for a Node dependency; this list is for a package
+    /// that must be global.
     #[serde(default)]
     pub npm: Vec<String>,
+    /// Source of the project's Node.js package set: `"package-lock"`
+    /// (default) installs the closure package-lock.json pins with `npm ci`;
+    /// `"package-json"` resolves package.json's ranges with `npm install`.
+    #[serde(default)]
+    pub npm_source: NpmSource,
     /// Ruby gems (installed via gem)
     #[serde(default)]
     pub gem: Vec<String>,
@@ -594,6 +623,103 @@ impl DependenciesConfig {
         }
         merged
     }
+
+    /// The Node.js package names the project rooted at `project_root`
+    /// declares in its package.json, according to `npm_source`, or an empty
+    /// list when there is no package.json. Owns the "declared dependencies
+    /// but no lock" error: in package-lock mode a manifest that declares
+    /// packages without a package-lock.json beside it is an error, the same
+    /// way pyproject.toml without uv.lock is.
+    pub fn node_deps(&self, project_root: &Path) -> Result<Vec<String>> {
+        let manifest = project_root.join("package.json");
+        let names = package_json_deps(&manifest)?;
+        if names.is_empty() {
+            return Ok(names);
+        }
+        let lock = project_root.join("package-lock.json");
+        if self.npm_source == NpmSource::PackageLock && !lock.exists() {
+            anyhow::bail!(
+                "{} declares Node.js dependencies but {} does not exist; \
+                 run `npm install --package-lock-only` to create it, or set \
+                 `npm_source = \"package-json\"` under [dependencies] to resolve \
+                 the declared ranges at install time",
+                manifest.display(),
+                lock.display(),
+            );
+        }
+        Ok(names)
+    }
+}
+
+/// Node.js package names a `package.json` declares, or an empty list when
+/// the file does not exist. Collects `dependencies`, `devDependencies` and
+/// `optionalDependencies` — the three sections `npm ci` installs — in
+/// that order.
+pub fn package_json_deps(package_json: &Path) -> Result<Vec<String>> {
+    if !package_json.exists() {
+        return Ok(Vec::new());
+    }
+    let content = fs::read_to_string(package_json)
+        .with_context(|| format!("Failed to read {}", package_json.display()))?;
+    let root: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
+        crate::exit_code::config_error(format!("Failed to parse {}: {e}", package_json.display()))
+    })?;
+    let mut names: Vec<String> = Vec::new();
+    for section in ["dependencies", "devDependencies", "optionalDependencies"] {
+        if let Some(map) = root.get(section).and_then(serde_json::Value::as_object) {
+            for name in map.keys() {
+                if !names.contains(name) {
+                    names.push(name.clone());
+                }
+            }
+        }
+    }
+    Ok(names)
+}
+
+/// The versions a `package-lock.json` pins for the packages installed
+/// directly under the project's `node_modules/`, by package name. Nested
+/// installs (`node_modules/a/node_modules/b`) are another package's
+/// private copy and are not top-level pins. Understands lockfile versions
+/// 2 and 3, which both carry the `packages` map; a version 1 lock (npm 6)
+/// has no such map and yields an empty result, so every declared package
+/// then reads as not installed and `npm ci` runs.
+pub fn package_lock_pins(lock: &Path) -> Result<std::collections::BTreeMap<String, String>> {
+    let content =
+        fs::read_to_string(lock).with_context(|| format!("Failed to read {}", lock.display()))?;
+    let root: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
+        crate::exit_code::config_error(format!("Failed to parse {}: {e}", lock.display()))
+    })?;
+    let mut pins = std::collections::BTreeMap::new();
+    let Some(packages) = root.get("packages").and_then(serde_json::Value::as_object) else {
+        return Ok(pins);
+    };
+    for (path, entry) in packages {
+        let Some(name) = path.strip_prefix("node_modules/") else {
+            continue;
+        };
+        if name.contains("/node_modules/") {
+            continue;
+        }
+        if let Some(version) = entry.get("version").and_then(serde_json::Value::as_str) {
+            pins.insert(name.to_string(), version.to_string());
+        }
+    }
+    Ok(pins)
+}
+
+/// The version of the package installed at `node_modules/<name>`, read
+/// from its own package.json, or `None` when it is not installed.
+pub fn installed_node_package_version(project_root: &Path, name: &str) -> Option<String> {
+    let manifest = project_root
+        .join("node_modules")
+        .join(name)
+        .join("package.json");
+    let content = fs::read_to_string(manifest).ok()?;
+    let root: serde_json::Value = serde_json::from_str(&content).ok()?;
+    root.get("version")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
 }
 
 /// Parse the stdout of `uv export --format requirements.txt` into requirement

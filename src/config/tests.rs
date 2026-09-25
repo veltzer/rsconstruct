@@ -940,6 +940,125 @@ fn pyproject_python_deps_invalid_toml_errors() {
 }
 
 #[test]
+fn package_json_deps_missing_file_is_empty() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let deps = crate::config::package_json_deps(&tmp.path().join("package.json"))
+        .expect("missing file should not error");
+    assert!(deps.is_empty());
+}
+
+/// All three sections `npm ci` installs are collected, in section order,
+/// and a name declared twice is listed once.
+#[test]
+fn package_json_deps_collects_all_sections() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let path = tmp.path().join("package.json");
+    std::fs::write(
+        &path,
+        r#"{
+  "name": "demo",
+  "dependencies": {"@mermaid-js/mermaid-cli": "latest", "express": "^5"},
+  "devDependencies": {"stylelint": "latest", "express": "^5"},
+  "optionalDependencies": {"fsevents": "*"}
+}"#,
+    )
+    .unwrap();
+    let deps = crate::config::package_json_deps(&path).expect("should parse");
+    assert_eq!(
+        deps,
+        vec![
+            "@mermaid-js/mermaid-cli",
+            "express",
+            "stylelint",
+            "fsevents"
+        ]
+    );
+}
+
+#[test]
+fn package_json_deps_invalid_json_errors() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let path = tmp.path().join("package.json");
+    std::fs::write(&path, "{not json").unwrap();
+    assert!(crate::config::package_json_deps(&path).is_err());
+}
+
+/// Only the packages directly under `node_modules` are top-level pins; a
+/// nested copy belongs to the package that carries it, and the root entry
+/// (the project itself) has no version to pin.
+#[test]
+fn package_lock_pins_reads_top_level_entries_only() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let path = tmp.path().join("package-lock.json");
+    std::fs::write(
+        &path,
+        r#"{
+  "lockfileVersion": 3,
+  "packages": {
+    "": {"devDependencies": {"stylelint": "latest"}},
+    "node_modules/stylelint": {"version": "17.14.1"},
+    "node_modules/@scope/pkg": {"version": "2.0.0"},
+    "node_modules/stylelint/node_modules/nested": {"version": "9.9.9"}
+  }
+}"#,
+    )
+    .unwrap();
+    let pins = crate::config::package_lock_pins(&path).expect("should parse");
+    assert_eq!(pins.get("stylelint").map(String::as_str), Some("17.14.1"));
+    assert_eq!(pins.get("@scope/pkg").map(String::as_str), Some("2.0.0"));
+    assert!(!pins.contains_key("nested"));
+    assert_eq!(pins.len(), 2);
+}
+
+#[test]
+fn installed_node_package_version_reads_node_modules() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let pkg = tmp.path().join("node_modules").join("@scope").join("pkg");
+    std::fs::create_dir_all(&pkg).unwrap();
+    std::fs::write(pkg.join("package.json"), r#"{"version": "1.2.3"}"#).unwrap();
+    assert_eq!(
+        crate::config::installed_node_package_version(tmp.path(), "@scope/pkg").as_deref(),
+        Some("1.2.3")
+    );
+    assert!(crate::config::installed_node_package_version(tmp.path(), "absent").is_none());
+}
+
+/// package-lock mode mirrors uv-lock mode: a manifest that declares
+/// packages without a lock beside it is an error, an empty manifest is
+/// fine, and package-json mode needs no lock.
+#[test]
+fn node_deps_requires_lock_in_package_lock_mode() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let deps = crate::config::DependenciesConfig::default();
+
+    assert!(deps.node_deps(tmp.path()).unwrap().is_empty());
+
+    std::fs::write(tmp.path().join("package.json"), r#"{"name": "demo"}"#).unwrap();
+    assert!(deps.node_deps(tmp.path()).unwrap().is_empty());
+
+    std::fs::write(
+        tmp.path().join("package.json"),
+        r#"{"devDependencies": {"stylelint": "latest"}}"#,
+    )
+    .unwrap();
+    let err = deps.node_deps(tmp.path()).unwrap_err().to_string();
+    assert!(err.contains("package-lock.json"), "{err}");
+
+    let floating = crate::config::DependenciesConfig {
+        npm_source: crate::config::NpmSource::PackageJson,
+        ..Default::default()
+    };
+    assert_eq!(floating.node_deps(tmp.path()).unwrap(), vec!["stylelint"]);
+
+    std::fs::write(
+        tmp.path().join("package-lock.json"),
+        r#"{"lockfileVersion": 3, "packages": {}}"#,
+    )
+    .unwrap();
+    assert_eq!(deps.node_deps(tmp.path()).unwrap(), vec!["stylelint"]);
+}
+
+#[test]
 fn effective_pip_pyproject_mode_merges_and_dedupes_by_normalized_name() {
     let tmp = tempfile::TempDir::new().unwrap();
     std::fs::write(

@@ -302,7 +302,19 @@ fn tools_list_uses_only_implemented_install_methods() {
 
     // Kept in sync with the `match method` arms in tools::run().
     const IMPLEMENTED: &[&str] = &[
-        "apt", "dnf", "pacman", "brew", "snap", "pip", "npm", "cargo", "gem", "binary", "manual",
+        "apt",
+        "dnf",
+        "pacman",
+        "brew",
+        "snap",
+        "pip",
+        "npm",
+        "npm-ci",
+        "npm-install",
+        "cargo",
+        "gem",
+        "binary",
+        "manual",
     ];
 
     let parsed: Value =

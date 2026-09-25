@@ -870,8 +870,15 @@ fn run_tools_command(
                 }
             };
 
-            if config.is_empty() && pip_deps.is_empty() {
-                println!("No dependencies declared in [dependencies] or pyproject.toml.");
+            // The Node set comes from package.json (and, by default, the
+            // closure package-lock.json pins); [dependencies].npm entries
+            // are global extras installed alongside.
+            let node_deps = config.node_deps(std::path::Path::new("."))?;
+
+            if config.is_empty() && pip_deps.is_empty() && node_deps.is_empty() {
+                println!(
+                    "No dependencies declared in [dependencies], pyproject.toml or package.json."
+                );
                 return Ok(());
             }
 
@@ -966,6 +973,42 @@ fn run_tools_command(
                 .collect();
             if !npm_missing.is_empty() {
                 groups.push(("npm", npm_missing));
+            }
+
+            // The project's own Node.js set: package.json declares the
+            // names, and in package-lock mode `npm ci` installs exactly the
+            // pinned closure into ./node_modules (the PATH augmentation at
+            // startup makes its .bin resolvable to the NEXT invocation).
+            // Skipped only when every declared package is already there at
+            // the locked version; `npm ci` wipes node_modules first, so a
+            // needless run is not cheap.
+            if !node_deps.is_empty() {
+                let root = std::path::Path::new(".");
+                let (method, up_to_date) = match config.npm_source {
+                    crate::config::NpmSource::PackageLock => {
+                        let pins =
+                            crate::config::package_lock_pins(&root.join("package-lock.json"))?;
+                        let up_to_date = node_deps.iter().all(|name| {
+                            let installed =
+                                crate::config::installed_node_package_version(root, name);
+                            installed.is_some() && installed == pins.get(name).cloned()
+                        });
+                        ("npm-ci", up_to_date)
+                    }
+                    crate::config::NpmSource::PackageJson => {
+                        let up_to_date = node_deps.iter().all(|name| {
+                            crate::config::installed_node_package_version(root, name).is_some()
+                        });
+                        ("npm-install", up_to_date)
+                    }
+                };
+                if up_to_date {
+                    for name in &node_deps {
+                        skipped.push(format!("[{method}] {name}"));
+                    }
+                } else {
+                    groups.push((method, node_deps));
+                }
             }
 
             let gem_missing: Vec<String> = config
