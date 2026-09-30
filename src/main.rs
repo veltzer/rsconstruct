@@ -5,7 +5,7 @@
 // The pedantic/nursery allow list. Every entry below is a decision, not a
 // backlog item: each was measured, the alternative was written out, and the
 // alternative lost. Lints that were merely noisy have already been removed
-// and their hits fixed — see doc/strictness-pass.md for the history.
+// and their hits fixed — see docs/src/internal/strictness-pass.md for the history.
 //
 // The bar for adding to this list is: clippy's preferred form is not
 // clearly better here, AND the lint fires broadly enough that a per-site

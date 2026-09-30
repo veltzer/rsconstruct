@@ -127,7 +127,7 @@ The sweep was focused on `#[allow]` attributes. Broader strictness knobs were le
 
 ## Subsequent pedantic/nursery sweep
 
-A later pass (see `doc/strictness-pass.md`) enabled `clippy::pedantic` and `clippy::nursery` at `warn` level. That sweep autofixed about 830 occurrences across ~13 lints (notably `uninlined_format_args`, `redundant_pub_crate`, `redundant_closure_for_method_calls`, `missing_const_for_fn`) and added ~45 explicit per-lint allows for the remainder. See the per-lint allow block in `src/main.rs` and the design doc for the breakdown.
+A later pass (see [Strictness Pass](strictness-pass.md)) enabled `clippy::pedantic` and `clippy::nursery` at `warn` level. That sweep autofixed about 830 occurrences across ~13 lints (notably `uninlined_format_args`, `redundant_pub_crate`, `redundant_closure_for_method_calls`, `missing_const_for_fn`) and added ~45 explicit per-lint allows for the remainder. See the per-lint allow block in `src/main.rs` and the design doc for the breakdown.
 
 ## Adding a new `#[allow]`
 

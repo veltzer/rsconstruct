@@ -11,6 +11,7 @@ use tera::{Context as TeraContext, Function, Tera, Value as TeraValue, to_value}
 
 use serde::{Deserialize, Serialize};
 
+use crate::build_context::CtxPtr;
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
@@ -24,24 +25,6 @@ use super::TemplateItem;
 pub struct TeraConfig {
     #[serde(flatten)]
     pub standard: StandardConfig,
-}
-
-/// Wrapper around a `&BuildContext` reference that can be stored in Tera function structs.
-/// Tera's `Function` trait requires `Send + Sync + 'static`, so we cannot use a borrow.
-/// Safety: the pointer is only dereferenced during `render_template`, which holds the
-/// original `&BuildContext` reference for the entire duration of the Tera render call.
-#[derive(Clone, Copy)]
-struct CtxPtr(*const crate::build_context::BuildContext);
-
-// SAFETY: BuildContext is Sync + Send; the pointer is only live while render_template runs.
-unsafe impl Send for CtxPtr {}
-unsafe impl Sync for CtxPtr {}
-
-impl CtxPtr {
-    const fn get(&self) -> &crate::build_context::BuildContext {
-        // SAFETY: caller guarantees the BuildContext outlives all uses of CtxPtr.
-        unsafe { &*self.0 }
-    }
 }
 
 /// Render a template item and write to output. `includable` is the set of
@@ -66,7 +49,10 @@ fn render_template(
     let mut tera = Tera::default();
 
     // Register template functions
-    let ctx_ptr = CtxPtr(std::ptr::from_ref(ctx));
+    // The function structs below outlive this borrow only inside `tera`, which
+    // is dropped before this function returns, so every `ctx_ptr.get()` they
+    // make happens while `ctx` is still held.
+    let ctx_ptr = CtxPtr::new(ctx);
     tera.register_function("load_python", LoadPythonFunction { ctx: ctx_ptr });
     tera.register_function("load_lua", LoadLuaFunction);
     tera.register_function("load_toml", LoadTomlFunction);
@@ -224,7 +210,7 @@ impl Function for LoadPythonFunction {
             .ok_or_else(|| tera::Error::msg("load_python requires a 'path' argument"))?;
 
         // Execute Python and load the config
-        let result = load_python_config(self.ctx.get(), Path::new(path))
+        let result = load_python_config(unsafe { self.ctx.get() }, Path::new(path))
             .map_err(|e| tera::Error::msg(format!("Failed to load Python config: {e}")))?;
 
         to_value(result).map_err(|e| {
@@ -338,7 +324,7 @@ impl Function for VersionStrFunction {
         let config = if path.ends_with(".lua") {
             load_lua_config(Path::new(path))
         } else {
-            load_python_config(self.ctx.get(), Path::new(path))
+            load_python_config(unsafe { self.ctx.get() }, Path::new(path))
         }
         .map_err(|e| tera::Error::msg(format!("version_str: failed to load {path}: {e}")))?;
 
@@ -382,7 +368,7 @@ impl Function for CopyrightYearsFunction {
         // silent fallback renders "© 2026" instead of the full range, gets
         // cached, and differs between machines (e.g. shallow CI clones,
         // which this cannot detect at all).
-        let first_year: i32 = match run_command_capture(self.ctx.get(), &cmd) {
+        let first_year: i32 = match run_command_capture(unsafe { self.ctx.get() }, &cmd) {
             Ok(output) if output.status.success() => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 match stdout.lines().next() {
@@ -430,7 +416,7 @@ impl Function for GitCountFilesFunction {
 
         let mut cmd = Command::new("git");
         cmd.args(["ls-files", "--", pattern]);
-        let output = run_command_capture(self.ctx.get(), &cmd)
+        let output = run_command_capture(unsafe { self.ctx.get() }, &cmd)
             .map_err(|e| tera::Error::msg(format!("git_count_files: {e}")))?;
 
         if !output.status.success() {
@@ -529,7 +515,7 @@ impl Function for ShellOutputFunction {
 
         let mut cmd = Command::new("sh");
         cmd.args(["-c", command]);
-        let output = run_command_capture(self.ctx.get(), &cmd)
+        let output = run_command_capture(unsafe { self.ctx.get() }, &cmd)
             .map_err(|e| tera::Error::msg(format!("shell_output: {e}")))?;
 
         if !output.status.success() {

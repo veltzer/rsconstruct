@@ -5,6 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::build_context::CtxPtr;
 use crate::config::{StandardConfig, output_config_hash, standard_config_from_toml};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
@@ -15,35 +16,17 @@ fn lua_context<T>(result: LuaResult<T>, msg: impl std::fmt::Display) -> Result<T
     result.map_err(|e| anyhow::anyhow!("{msg}: {e}"))
 }
 
-/// Wrapper around a `&BuildContext` pointer stored in Lua app data.
-/// Safety: the pointer is only dereferenced during `execute()`, which holds the
-/// original `&BuildContext` reference for the entire duration of the Lua call.
-#[derive(Clone, Copy)]
-struct CtxPtr(*const crate::build_context::BuildContext);
-
-unsafe impl Send for CtxPtr {}
-unsafe impl Sync for CtxPtr {}
-
-impl CtxPtr {
-    #[allow(dead_code)]
-    const fn get(&self) -> &crate::build_context::BuildContext {
-        // SAFETY: caller guarantees the BuildContext outlives all uses.
-        unsafe { &*self.0 }
-    }
-}
-
 /// Retrieve the `BuildContext` from Lua app data. Returns a Lua error when
 /// called outside `execute()` — e.g. from `clean()` or `auto_detect()` — instead of
 /// panicking or dereferencing a stale pointer.
-///
-/// SAFETY: The raw pointer stored in `CtxPtr` is valid because it is set at the
-/// start of `execute()`, which holds a &`BuildContext` for the entire Lua call,
-/// and removed again before `execute()` returns.
 fn get_ctx_from_lua(lua: &Lua) -> Result<&crate::build_context::BuildContext, LuaError> {
     let guard = lua.app_data_ref::<CtxPtr>().ok_or_else(|| {
         LuaError::external("rsconstruct.run_command is only available during execute()")
     })?;
-    Ok(unsafe { &*guard.0 })
+    // SAFETY: the `CtxPtr` is stored in app data at the start of `execute()`,
+    // which holds a `&BuildContext` for the entire Lua call, and is removed
+    // again before `execute()` returns.
+    Ok(unsafe { guard.get() })
 }
 
 pub struct LuaProcessor {
@@ -478,7 +461,7 @@ impl Processor for LuaProcessor {
         ensure_stub_dir(&self.stub_dir, &self.name)?;
 
         let lua = self.lua.lock();
-        lua.set_app_data(CtxPtr(std::ptr::from_ref(ctx)));
+        lua.set_app_data(CtxPtr::new(ctx));
 
         // The pointer must not outlive this call: clear it on every exit path
         // so later callbacks (clean, auto_detect) can't dereference a stale

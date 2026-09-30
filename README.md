@@ -22,16 +22,16 @@ Full documentation: <https://veltzer.github.io/rsconstruct/>
 
 ## Installation
 
-### Download pre-built binary (Linux)
+### Download pre-built binary
 
-Pre-built binaries are available for x86_64 and aarch64 (arm64).
+Every release ships four binaries: `rsconstruct-linux-x86_64`,
+`rsconstruct-linux-aarch64`, `rsconstruct-macos-x86_64` and
+`rsconstruct-macos-aarch64`. Pick the one for your platform.
 
 ```bash
-# x86_64
-gh release download latest --repo veltzer/rsconstruct --pattern 'rsconstruct-x86_64-unknown-linux-gnu' --output rsconstruct --clobber
-
-# aarch64 / arm64
-gh release download latest --repo veltzer/rsconstruct --pattern 'rsconstruct-aarch64-unknown-linux-gnu' --output rsconstruct --clobber
+# Linux x86_64 (use rsconstruct-linux-aarch64, rsconstruct-macos-x86_64 or
+# rsconstruct-macos-aarch64 for the other platforms)
+gh release download --repo veltzer/rsconstruct --pattern 'rsconstruct-linux-x86_64' --output rsconstruct --clobber
 
 chmod +x rsconstruct
 sudo mv rsconstruct /usr/local/bin/
@@ -40,11 +40,8 @@ sudo mv rsconstruct /usr/local/bin/
 Or without the GitHub CLI:
 
 ```bash
-# x86_64
-curl -Lo rsconstruct https://github.com/veltzer/rsconstruct/releases/download/latest/rsconstruct-x86_64-unknown-linux-gnu
-
-# aarch64 / arm64
-curl -Lo rsconstruct https://github.com/veltzer/rsconstruct/releases/download/latest/rsconstruct-aarch64-unknown-linux-gnu
+# Linux x86_64 (substitute the asset name for the other platforms)
+curl -Lo rsconstruct https://github.com/veltzer/rsconstruct/releases/latest/download/rsconstruct-linux-x86_64
 
 chmod +x rsconstruct
 sudo mv rsconstruct /usr/local/bin/
@@ -68,5 +65,5 @@ rsconstruct status                   # Show what needs rebuilding
 rsconstruct watch                    # Watch for changes and rebuild
 rsconstruct clean                    # Remove build artifacts
 rsconstruct graph --view             # Visualize dependency graph
-rsconstruct processor list           # List available processors
+rsconstruct processors list          # List available processors
 ```

@@ -84,7 +84,7 @@ rsconstruct defconfig release      # writes a release toml
 ```
 
 Today the closest analogues are `rsconstruct smart enable-detected`
-and the `[[profile]]` proposal in `doc/variants.md`. A real defconfig
+and the `[[profile]]` proposal in [Variants](variants.md). A real defconfig
 system would let users name and version their full configs and
 distribute them as files.
 

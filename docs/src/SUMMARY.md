@@ -147,3 +147,18 @@ The chapters below cover the internal design and implementation of rsconstruct. 
 - [Suggestions](internal/suggestions.md)
 - [Suggestions Done](internal/suggestions-done.md)
 - [TODO](internal/todo.md)
+
+## Design Proposals
+
+Feature designs awaiting review. Each opens with a status line; the two
+marked done are kept as the record of what was decided.
+
+- [Batch Parallelism](internal/batch-parallelism.md)
+- [Checksum Performance (done)](internal/checksum-perf.md)
+- [Deps in Source Code](internal/feature-deps.md)
+- [Kernel-style Config System](internal/kernel-config-system.md)
+- [Python Dependency Analyzer Extensions](internal/python-dep-analysis-extensions.md)
+- [Strictness Pass (done)](internal/strictness-pass.md)
+- [Structured Errors](internal/structured-errors.md)
+- [Tera Graph Access](internal/tera-graph-access.md)
+- [Variants](internal/variants.md)

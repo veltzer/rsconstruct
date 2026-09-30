@@ -1,17 +1,22 @@
 # Installation
 
-## Download pre-built binary (Linux)
+## Download pre-built binary
 
-Pre-built binaries are available for x86_64 and aarch64 (arm64).
+Every release ships four binaries, named by platform (see
+[Binary Releases](binary-releases.md) for the full table):
 
-Using the GitHub CLI:
+| Platform | Asset |
+|---|---|
+| Linux x86_64 | `rsconstruct-linux-x86_64` |
+| Linux aarch64 | `rsconstruct-linux-aarch64` |
+| macOS x86_64 | `rsconstruct-macos-x86_64` |
+| macOS aarch64 (Apple Silicon) | `rsconstruct-macos-aarch64` |
+
+Using the GitHub CLI (omitting the tag downloads the latest release;
+substitute the asset name for your platform):
 
 ```bash
-# x86_64
-gh release download latest --repo veltzer/rsconstruct --pattern 'rsconstruct-x86_64-unknown-linux-gnu' --output rsconstruct --clobber
-
-# aarch64 / arm64
-gh release download latest --repo veltzer/rsconstruct --pattern 'rsconstruct-aarch64-unknown-linux-gnu' --output rsconstruct --clobber
+gh release download --repo veltzer/rsconstruct --pattern 'rsconstruct-linux-x86_64' --output rsconstruct --clobber
 
 chmod +x rsconstruct
 sudo mv rsconstruct /usr/local/bin/
@@ -20,11 +25,7 @@ sudo mv rsconstruct /usr/local/bin/
 Or with curl:
 
 ```bash
-# x86_64
-curl -Lo rsconstruct https://github.com/veltzer/rsconstruct/releases/download/latest/rsconstruct-x86_64-unknown-linux-gnu
-
-# aarch64 / arm64
-curl -Lo rsconstruct https://github.com/veltzer/rsconstruct/releases/download/latest/rsconstruct-aarch64-unknown-linux-gnu
+curl -Lo rsconstruct https://github.com/veltzer/rsconstruct/releases/latest/download/rsconstruct-linux-x86_64
 
 chmod +x rsconstruct
 sudo mv rsconstruct /usr/local/bin/

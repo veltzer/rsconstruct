@@ -8,6 +8,42 @@ use tokio::sync::watch;
 
 use crate::errors;
 
+/// A `BuildContext` pointer that can live in a `'static` place. Tera function
+/// structs and Lua app data both require `Send + Sync + 'static`, which a
+/// borrow cannot satisfy. One is created from a `&BuildContext` at the start
+/// of a render/execute call, and every dereference happens before that call
+/// returns, while the original borrow is still held.
+#[derive(Clone, Copy)]
+pub struct CtxPtr(*const BuildContext);
+
+// SAFETY: `BuildContext` is itself `Send + Sync` (asserted below), so sharing
+// a pointer to it adds no concurrency hazard; the only obligation is the
+// lifetime rule that `get` documents.
+unsafe impl Send for CtxPtr {}
+unsafe impl Sync for CtxPtr {}
+
+const _: () = {
+    const fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<BuildContext>();
+};
+
+impl CtxPtr {
+    pub const fn new(ctx: &BuildContext) -> Self {
+        Self(std::ptr::from_ref(ctx))
+    }
+
+    /// # Safety
+    ///
+    /// The `BuildContext` this pointer was created from must still be alive,
+    /// and the returned reference must not outlive it. Callers uphold this
+    /// by holding a `&BuildContext` for the whole call in which they
+    /// dereference.
+    pub const unsafe fn get<'a>(self) -> &'a BuildContext {
+        // SAFETY: the caller upholds the lifetime contract documented above.
+        unsafe { &*self.0 }
+    }
+}
+
 /// Owns the per-build runtime state that was previously stored in process
 /// globals: the tokio runtime, the interrupt flag, the interrupt broadcast
 /// channel, and the checksum/mtime caches. Creating a fresh `BuildContext`

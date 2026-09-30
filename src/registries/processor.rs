@@ -82,8 +82,6 @@ pub struct ProcessorPlugin {
     pub max_jobs_cap: Option<usize>,
 }
 
-unsafe impl Sync for ProcessorPlugin {}
-
 inventory::collect!(ProcessorPlugin);
 
 pub fn all_plugins() -> impl Iterator<Item = &'static ProcessorPlugin> {

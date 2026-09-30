@@ -25,8 +25,6 @@ pub struct AnalyzerPlugin {
     pub known_fields: fn() -> &'static [&'static str],
 }
 
-unsafe impl Sync for AnalyzerPlugin {}
-
 inventory::collect!(AnalyzerPlugin);
 
 pub fn all_analyzer_plugins() -> impl Iterator<Item = &'static AnalyzerPlugin> {

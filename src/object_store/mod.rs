@@ -132,7 +132,6 @@ pub struct ObjectStore {
     pub(super) compression: bool,
     pub(super) remote: Option<Box<dyn RemoteCache>>,
     pub(super) remote_push: bool,
-    #[allow(dead_code)]
     pub(super) remote_pull: bool,
 }
 

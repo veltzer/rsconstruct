@@ -286,10 +286,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Download all artifacts
+      # Only the binaries from the build matrix. Without the pattern this
+      # also fetched the docs job's `github-pages` artifact (it runs in the
+      # same workflow on the same release condition), and its artifact.tar
+      # was published as a release asset alongside the binaries.
+      - name: Download release binaries
         uses: actions/download-artifact@v8
         with:
           path: artifacts
+          pattern: ${{ github.event.repository.name }}-*
           merge-multiple: true
 
       - name: Compute release tag from Cargo.toml
