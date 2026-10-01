@@ -11,11 +11,12 @@ reject_dot_src_dirs = true
 
 # ─── dependencies ────────────────────────────────────────────────────────────
 
-# The crates the build and release of this repo run, installed with
+# The crates every rs* repo's build and release run, installed with
 # `rsconstruct tools install-deps` (cargo install --locked, by crate name).
-# cargo-deny and cargo-nextest back the clippy.deny and clippy.nextest
-# instances below; mdbook builds docs/; cargo-release reads release.toml.
-# rustfmt and clippy are rustup components, not crates, so they are absent.
+# cargo-deny and cargo-nextest are what the shared ci.yml runs, mdbook builds
+# docs/, and cargo-release reads release.toml. rustfmt and clippy are rustup
+# components, not crates, so they are absent. This block is byte-identical
+# across all rs* repos: change it everywhere or nowhere.
 [dependencies]
 cargo = ["cargo-deny", "cargo-nextest", "cargo-release", "mdbook"]
 
