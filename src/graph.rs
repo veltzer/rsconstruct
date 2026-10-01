@@ -964,7 +964,7 @@ mod tests {
         // Product 1 depends on product 0
         assert_eq!(g.get_dependencies(1), &[0]);
         // Product 0 has no dependencies
-        assert!(g.get_dependencies(0).is_empty());
+        assert_eq!(g.get_dependencies(0), &[] as &[usize]);
     }
 
     #[test]
@@ -1112,7 +1112,7 @@ mod tests {
     fn empty_graph_sorts_ok() {
         let g = BuildGraph::new();
         let order = g.topological_sort().unwrap();
-        assert!(order.is_empty());
+        assert!(order.is_empty(), "{order:?}");
     }
 
     /// Simulate the fixed-point discovery bug: a product with no outputs

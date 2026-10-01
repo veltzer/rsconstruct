@@ -308,14 +308,14 @@ fn equals_in_array_item_does_not_define_a_variable() {
 fn extract_var_names_no_vars_section() {
     let content = "[other]\nkey = \"value\"\n";
     let names = extract_var_names(content);
-    assert!(names.is_empty());
+    assert!(names.is_empty(), "{names:?}");
 }
 
 #[test]
 fn extract_var_names_empty_vars_section() {
     let content = "[vars]\n\n[other]\nkey = \"value\"\n";
     let names = extract_var_names(content);
-    assert!(names.is_empty());
+    assert!(names.is_empty(), "{names:?}");
 }
 
 #[test]
@@ -485,7 +485,7 @@ typo_field = true
 fn analyzer_validator_is_noop_without_analyzer_section() {
     let raw = toml_of("[processor.ruff]\nsrc_dirs = [\".\"]\n");
     let errors = validate_analyzer_fields_raw(&raw);
-    assert!(errors.is_empty());
+    assert!(errors.is_empty(), "{errors:?}");
 }
 
 // Tests for merge_toml_values (rsconstruct.local.toml overlay semantics)
@@ -875,7 +875,7 @@ fn required_tools_deserializes_from_toml() {
 fn required_tools_defaults_to_empty() {
     let cfg: crate::config::StandardConfig =
         toml::from_str("command = \"eslint\"\n").expect("should deserialize");
-    assert!(cfg.required_tools.is_empty());
+    assert!(cfg.required_tools.is_empty(), "{:?}", cfg.required_tools);
 }
 
 // Tests for pyproject.toml dependency reading (effective_pip and friends)
@@ -897,7 +897,7 @@ fn pyproject_python_deps_missing_file_is_empty() {
     let tmp = tempfile::TempDir::new().unwrap();
     let deps = crate::config::pyproject_python_deps(&tmp.path().join("pyproject.toml"))
         .expect("missing file should not error");
-    assert!(deps.is_empty());
+    assert!(deps.is_empty(), "{deps:?}");
 }
 
 #[test]
@@ -944,7 +944,7 @@ fn package_json_deps_missing_file_is_empty() {
     let tmp = tempfile::TempDir::new().unwrap();
     let deps = crate::config::package_json_deps(&tmp.path().join("package.json"))
         .expect("missing file should not error");
-    assert!(deps.is_empty());
+    assert!(deps.is_empty(), "{deps:?}");
 }
 
 /// All three sections `npm ci` installs are collected, in section order,
@@ -1031,10 +1031,12 @@ fn node_deps_requires_lock_in_package_lock_mode() {
     let tmp = tempfile::TempDir::new().unwrap();
     let deps = crate::config::DependenciesConfig::default();
 
-    assert!(deps.node_deps(tmp.path()).unwrap().is_empty());
+    let without_manifest = deps.node_deps(tmp.path()).unwrap();
+    assert!(without_manifest.is_empty(), "{without_manifest:?}");
 
     std::fs::write(tmp.path().join("package.json"), r#"{"name": "demo"}"#).unwrap();
-    assert!(deps.node_deps(tmp.path()).unwrap().is_empty());
+    let without_deps = deps.node_deps(tmp.path()).unwrap();
+    assert!(without_deps.is_empty(), "{without_deps:?}");
 
     std::fs::write(
         tmp.path().join("package.json"),

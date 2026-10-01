@@ -1847,7 +1847,7 @@ mod tests {
         if crate::platform::needs_sudo() {
             assert_eq!(prefix, &["sudo"]);
         } else {
-            assert!(prefix.is_empty());
+            assert!(prefix.is_empty(), "{prefix:?}");
         }
     }
 
@@ -1857,7 +1857,8 @@ mod tests {
     #[test]
     fn user_gem_bin_dirs_collects_existing_layouts() {
         let home = tempfile::TempDir::new().unwrap();
-        assert!(user_gem_bin_dirs(home.path(), None).is_empty());
+        let none_yet = user_gem_bin_dirs(home.path(), None);
+        assert!(none_yet.is_empty(), "{none_yet:?}");
 
         let upstream = home.path().join(".gem/ruby/3.2.0/bin");
         let debian = home.path().join(".local/share/gem/ruby/3.3.0/bin");

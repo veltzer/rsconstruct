@@ -2115,7 +2115,7 @@ mod tests {
         let block = "tags: []";
         let v = parse_simple_yaml(block);
         let tags = v["tags"].as_array().unwrap();
-        assert!(tags.is_empty());
+        assert!(tags.is_empty(), "{tags:?}");
     }
 
     #[test]
