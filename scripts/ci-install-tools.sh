@@ -25,5 +25,10 @@ cargo run -- tools install --all
 
 # The cargo subcommands the workflow's later steps run (cargo deny, cargo
 # nextest) are declared under [dependencies] cargo in rsconstruct.toml, the
-# fleet's one list of them; the binary just built reads it.
-cargo run -- tools install-deps
+# fleet's one list of them; the binary just built reads it. Test job only:
+# TARGET is set by ci.yml's build job, which runs nothing but `cargo build
+# --release` and would compile the crates for no caller, once per release
+# target (an hour per Linux release job, run 36876289729).
+if [[ -z "${TARGET:-}" ]]; then
+	cargo run -- tools install-deps
+fi
