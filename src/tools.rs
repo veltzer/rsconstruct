@@ -274,14 +274,20 @@ fn sudo_argv() -> &'static [&'static str] {
 /// The argv prefix for installing crates. `--locked` builds each crate with
 /// the Cargo.lock it was published with instead of re-resolving its
 /// dependencies on the installing machine, so the same crate version yields
-/// the same binary everywhere; it is what CI's own `cargo install` lines
-/// pass. Used by both `describe` and `run` so the printed plan matches what
-/// executes.
+/// the same binary everywhere. `--force` makes cargo replace a binary of the
+/// same name that it did not install itself — without it cargo refuses with
+/// "binary `x` already exists in destination", which is exactly what a CI
+/// cache holding a prebuilt nextest tarball produced once the crate list
+/// took over. It never causes extra work: only crates absent from `cargo
+/// install --list` (or tools absent from PATH) reach this command, so the
+/// build was going to happen anyway. Used by both `describe` and `run` so
+/// the printed plan matches what executes.
 fn cargo_install_argv() -> Vec<String> {
     vec![
         "cargo".to_string(),
         "install".to_string(),
         "--locked".to_string(),
+        "--force".to_string(),
     ]
 }
 
@@ -1969,15 +1975,24 @@ mod tests {
         assert_eq!(&install[pkgmgr_idx + 3..], &["foo", "bar", "baz"]);
     }
 
-    /// `cargo` describe is `cargo install --locked <crates>`: no sudo, and
-    /// `--locked` so the crate builds with its published Cargo.lock.
+    /// `cargo` describe is `cargo install --locked --force <crates>`: no
+    /// sudo, `--locked` so the crate builds with its published Cargo.lock,
+    /// and `--force` so a same-named binary cargo did not install (a
+    /// prebuilt tarball in a CI cache) is replaced instead of refused.
     #[test]
-    fn cargo_describe_is_locked_without_sudo() {
+    fn cargo_describe_is_locked_and_forced_without_sudo() {
         let steps = describe("cargo", &["cargo-deny", "mdbook"]);
         assert_eq!(steps.len(), 1);
         assert_eq!(
             steps[0],
-            vec!["cargo", "install", "--locked", "cargo-deny", "mdbook"]
+            vec![
+                "cargo",
+                "install",
+                "--locked",
+                "--force",
+                "cargo-deny",
+                "mdbook"
+            ]
         );
     }
 

@@ -468,8 +468,10 @@ on PATH. That is exact (a crate's binary need not carry its name: `ripgrep`
 ships `rg`) and it is cheap, where an unconditional `cargo install` would
 rebuild every crate that has a newer release on each run. The flip side is
 that a binary obtained any other way — a prebuilt tarball, a distro package
-— is not in the listing and is treated as missing. `doctor` reports each
-declared crate the same way.
+— is not in the listing and is treated as missing; the install passes
+`--force` so such a binary is replaced rather than refused with "binary
+already exists in destination" (a CI cache holding a prebuilt nextest did
+exactly that). `doctor` reports each declared crate the same way.
 
 Components rustup manages (`rustfmt`, `clippy`) are not crates and do not
 belong in this list.

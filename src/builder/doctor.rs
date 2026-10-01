@@ -329,7 +329,7 @@ impl Builder {
                             "fail",
                             "dependency",
                             Some("cargo".to_string()),
-                            Some(format!("cargo install --locked {pkg}")),
+                            Some(format!("cargo install --locked --force {pkg}")),
                             &mut ok_count,
                             &mut fail_count,
                             &mut warn_count,

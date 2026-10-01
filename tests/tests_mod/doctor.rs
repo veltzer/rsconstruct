@@ -32,7 +32,7 @@ fn doctor_checks_cargo_dependencies_against_cargo_install_list() {
     assert_eq!(missing["category"], "dependency");
     assert_eq!(
         missing["install_hint"],
-        "cargo install --locked rsconstruct-fake-missing-crate"
+        "cargo install --locked --force rsconstruct-fake-missing-crate"
     );
 }
 
