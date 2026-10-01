@@ -109,7 +109,7 @@ pub fn describe(method: &str, packages: &[&str]) -> Vec<Vec<String>> {
         "npm-ci" => vec![strs(&["npm", "ci"])],
         "npm-install" => vec![strs(&["npm", "install"])],
         "cargo" => vec![{
-            let mut a = strs(&["cargo", "install"]);
+            let mut a = cargo_install_argv();
             a.extend(packages.iter().map(|s| (*s).to_string()));
             a
         }],
@@ -234,7 +234,7 @@ pub fn run(method: &str, packages: &[&str], ctx: &InstallCtx) -> anyhow::Result<
         "npm-ci" => exec(&["npm".to_string(), "ci".to_string()]),
         "npm-install" => exec(&["npm".to_string(), "install".to_string()]),
         "cargo" => {
-            let mut argv = vec!["cargo".to_string(), "install".to_string()];
+            let mut argv = cargo_install_argv();
             argv.extend(packages.iter().map(|s| (*s).to_string()));
             exec(&argv)
         }
@@ -269,6 +269,58 @@ fn sudo_argv() -> &'static [&'static str] {
     } else {
         &[]
     }
+}
+
+/// The argv prefix for installing crates. `--locked` builds each crate with
+/// the Cargo.lock it was published with instead of re-resolving its
+/// dependencies on the installing machine, so the same crate version yields
+/// the same binary everywhere; it is what CI's own `cargo install` lines
+/// pass. Used by both `describe` and `run` so the printed plan matches what
+/// executes.
+fn cargo_install_argv() -> Vec<String> {
+    vec![
+        "cargo".to_string(),
+        "install".to_string(),
+        "--locked".to_string(),
+    ]
+}
+
+/// The crate names `cargo install` has put into `$CARGO_HOME/bin`, from
+/// `cargo install --list`. This is how `[dependencies].cargo` entries are
+/// judged present: by crate, not by a binary on PATH, because the listing
+/// is exact and a crate's binary need not carry its name. A binary obtained
+/// any other way (a prebuilt tarball, a distro package) is not in the
+/// listing and so does not count.
+pub fn installed_cargo_crates(
+    ctx: &crate::build_context::BuildContext,
+) -> anyhow::Result<std::collections::BTreeSet<String>> {
+    use anyhow::Context as _;
+    let mut cmd = std::process::Command::new("cargo");
+    cmd.args(["install", "--list"]);
+    let out = crate::processors::run_command_capture(ctx, &cmd)
+        .context("failed to run `cargo install --list` — is cargo installed?")?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "`cargo install --list` failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(parse_cargo_install_list(&String::from_utf8_lossy(
+        &out.stdout,
+    )))
+}
+
+/// Parse `cargo install --list` output into the set of installed crate
+/// names. The listing has one unindented `name vX.Y.Z[ (source)]:` line per
+/// crate, each followed by indented lines naming the binaries it ships;
+/// only the unindented lines carry crate names.
+pub fn parse_cargo_install_list(listing: &str) -> std::collections::BTreeSet<String> {
+    listing
+        .lines()
+        .filter(|line| !line.is_empty() && !line.starts_with(char::is_whitespace))
+        .filter_map(|line| line.split_whitespace().next())
+        .map(str::to_string)
+        .collect()
 }
 
 /// The argv prefix for installing gems. Appends `--user-install` when a
@@ -1915,6 +1967,34 @@ mod tests {
             .position(|s| s == "apt-get")
             .expect("apt-get in argv");
         assert_eq!(&install[pkgmgr_idx + 3..], &["foo", "bar", "baz"]);
+    }
+
+    /// `cargo` describe is `cargo install --locked <crates>`: no sudo, and
+    /// `--locked` so the crate builds with its published Cargo.lock.
+    #[test]
+    fn cargo_describe_is_locked_without_sudo() {
+        let steps = describe("cargo", &["cargo-deny", "mdbook"]);
+        assert_eq!(steps.len(), 1);
+        assert_eq!(
+            steps[0],
+            vec!["cargo", "install", "--locked", "cargo-deny", "mdbook"]
+        );
+    }
+
+    /// `cargo install --list` names each crate on an unindented line and
+    /// its binaries on indented ones; only the crate names come out, with
+    /// the version and any source suffix dropped.
+    #[test]
+    fn parse_cargo_install_list_takes_crate_names_only() {
+        let listing = "cargo-deny v0.20.2:\n    cargo-deny\n\
+                       ripgrep v14.1.0:\n    rg\n\
+                       uv v0.9.0 (https://github.com/astral-sh/uv#abcdef12):\n    uv\n    uvx\n";
+        let crates = parse_cargo_install_list(listing);
+        assert_eq!(
+            crates.iter().map(String::as_str).collect::<Vec<_>>(),
+            vec!["cargo-deny", "ripgrep", "uv"]
+        );
+        assert!(parse_cargo_install_list("").is_empty());
     }
 
     /// `pip` describe never uses sudo, regardless of runtime state.

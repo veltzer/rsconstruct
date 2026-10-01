@@ -9,6 +9,16 @@
 # src_dirs entries name directories; "." (the whole tree) is a config error
 reject_dot_src_dirs = true
 
+# ─── dependencies ────────────────────────────────────────────────────────────
+
+# The crates the build and release of this repo run, installed with
+# `rsconstruct tools install-deps` (cargo install --locked, by crate name).
+# cargo-deny and cargo-nextest back the clippy.deny and clippy.nextest
+# instances below; mdbook builds docs/; cargo-release reads release.toml.
+# rustfmt and clippy are rustup components, not crates, so they are absent.
+[dependencies]
+cargo = ["cargo-deny", "cargo-nextest", "cargo-release", "mdbook"]
+
 # ─── analyzers ───────────────────────────────────────────────────────────────
 
 [analyzer.tera]

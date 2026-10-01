@@ -511,6 +511,15 @@ pub struct DependenciesConfig {
     /// Ruby gems (installed via gem)
     #[serde(default)]
     pub gem: Vec<String>,
+    /// Crates installed from crates.io with `cargo install --locked`, by
+    /// crate name: the cargo subcommands and other Rust-built tools the
+    /// project's build runs (`cargo-deny`, `cargo-nextest`, `mdbook`).
+    /// Bare names only — the version floats to the latest release, and
+    /// `--locked` builds each crate with its own Cargo.lock. Presence is
+    /// judged by `cargo install --list`, so a crate whose binary has a
+    /// different name (`ripgrep` → `rg`) is handled the same.
+    #[serde(default)]
+    pub cargo: Vec<String>,
     /// System packages (checked via `which`, not auto-installed)
     #[serde(default)]
     pub system: Vec<String>,
@@ -534,7 +543,11 @@ pub struct DependenciesConfig {
 
 impl DependenciesConfig {
     pub const fn is_empty(&self) -> bool {
-        self.pip.is_empty() && self.npm.is_empty() && self.gem.is_empty() && self.system.is_empty()
+        self.pip.is_empty()
+            && self.npm.is_empty()
+            && self.gem.is_empty()
+            && self.cargo.is_empty()
+            && self.system.is_empty()
     }
 
     /// The full pip requirement list for the project rooted at

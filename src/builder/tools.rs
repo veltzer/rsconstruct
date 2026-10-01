@@ -882,7 +882,7 @@ fn run_tools_command(
                 return Ok(());
             }
 
-            // Install order is FIXED and load-bearing: system → pip → npm → gem.
+            // Install order is FIXED and load-bearing: system → pip → npm → gem → cargo.
             // Language-level packages (pip, gem, npm) often build native
             // extensions at install time that link against system libraries
             // via pkg-config — system deps must be present first.
@@ -1025,6 +1025,28 @@ fn run_tools_command(
                 .collect();
             if !gem_missing.is_empty() {
                 groups.push(("gem", gem_missing));
+            }
+
+            // Crates are judged by `cargo install --list`, one call for the
+            // whole set, rather than by a binary on PATH: the listing is
+            // exact and a crate's binary need not carry its name.
+            if !config.cargo.is_empty() {
+                let installed = crate::tools::installed_cargo_crates(ctx)?;
+                let cargo_missing: Vec<String> = config
+                    .cargo
+                    .iter()
+                    .filter(|pkg| {
+                        let present = installed.contains(pkg.as_str());
+                        if present {
+                            skipped.push(format!("[cargo] {pkg}"));
+                        }
+                        !present
+                    })
+                    .cloned()
+                    .collect();
+                if !cargo_missing.is_empty() {
+                    groups.push(("cargo", cargo_missing));
+                }
             }
 
             if !skipped.is_empty() {

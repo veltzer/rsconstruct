@@ -2,6 +2,40 @@ use crate::common::{make_executable, run_rsconstruct_with_env, setup_project_wit
 use serde_json::Value;
 use std::fs;
 
+/// A `[dependencies] cargo` entry is a crate, judged by `cargo install
+/// --list`: a name no crate carries is reported missing, and the fix doctor
+/// names is the same `cargo install --locked` that install-deps runs.
+#[test]
+fn doctor_checks_cargo_dependencies_against_cargo_install_list() {
+    let temp_dir = setup_project_with_config(
+        "[dependencies]\ncargo = [\"rsconstruct-fake-missing-crate\"]\n\n[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n",
+    );
+    let project_path = temp_dir.path();
+    fs::create_dir_all(project_path.join("tera.templates")).unwrap();
+
+    let output =
+        run_rsconstruct_with_env(project_path, &["--json", "doctor"], &[("NO_COLOR", "1")]);
+    let parsed: Value =
+        serde_json::from_slice(&output.stdout).expect("doctor --json should emit valid JSON");
+    let checks = parsed["checks"]
+        .as_array()
+        .expect("doctor --json should have a checks array");
+    let missing = checks
+        .iter()
+        .find(|c| {
+            c["name"]
+                .as_str()
+                .is_some_and(|n| n.starts_with("rsconstruct-fake-missing-crate"))
+        })
+        .expect("doctor should report the declared crate");
+    assert_eq!(missing["status"], "fail");
+    assert_eq!(missing["category"], "dependency");
+    assert_eq!(
+        missing["install_hint"],
+        "cargo install --locked rsconstruct-fake-missing-crate"
+    );
+}
+
 /// A package.json dependency is a project-local install: doctor judges it
 /// by the project's own node_modules, not by a global copy or a binary on
 /// PATH, and the fix it names is install-deps (which runs `npm ci`).

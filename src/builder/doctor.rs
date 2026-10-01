@@ -306,6 +306,37 @@ impl Builder {
                     );
                 }
             }
+
+            // Crates are judged by `cargo install --list`, the same probe
+            // install-deps uses, not by a binary on PATH.
+            if !deps.cargo.is_empty() {
+                let installed = crate::tools::installed_cargo_crates(ctx)?;
+                for pkg in &deps.cargo {
+                    if installed.contains(pkg) {
+                        record(
+                            format!("{pkg} (cargo)"),
+                            "ok",
+                            "dependency",
+                            None,
+                            None,
+                            &mut ok_count,
+                            &mut fail_count,
+                            &mut warn_count,
+                        );
+                    } else {
+                        record(
+                            format!("{pkg} not installed"),
+                            "fail",
+                            "dependency",
+                            Some("cargo".to_string()),
+                            Some(format!("cargo install --locked {pkg}")),
+                            &mut ok_count,
+                            &mut fail_count,
+                            &mut warn_count,
+                        );
+                    }
+                }
+            }
         }
 
         let total = ok_count + fail_count;
