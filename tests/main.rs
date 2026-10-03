@@ -47,6 +47,7 @@ mod processors {
     pub mod actionlint;
     pub mod ascii;
     pub mod aspell;
+    pub mod biome;
     pub mod black;
     pub mod cargo;
     pub mod cc;

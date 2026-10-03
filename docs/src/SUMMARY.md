@@ -22,6 +22,7 @@
     - [Actionlint](processors/actionlint.md)
     - [ASCII](processors/ascii.md)
     - [Aspell](processors/aspell.md)
+    - [Biome](processors/biome.md)
     - [Black](processors/black.md)
     - [Cargo](processors/cargo.md)
     - [CC](processors/cc.md)

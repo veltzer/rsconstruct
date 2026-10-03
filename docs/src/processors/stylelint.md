@@ -4,6 +4,9 @@
 
 Lints CSS, SCSS, Sass, and Less files using [stylelint](https://stylelint.io/).
 
+A Rust alternative for plain CSS is [biome](biome.md): a single static binary
+that needs no node runtime. It does not parse SCSS, Sass or Less.
+
 ## How It Works
 
 Discovers `.css`, `.scss`, `.sass`, and `.less` files in the project (excluding

@@ -1,4 +1,5 @@
 mod actionlint;
+mod biome;
 mod black;
 mod checkpatch;
 mod checkstyle;
