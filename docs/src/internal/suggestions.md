@@ -374,6 +374,50 @@ Grades:
 - Add `batch_size` field to individual processor configs, overriding the global default.
 - **Urgency**: medium | **Complexity**: low
 
+### Namespace processor sections by type
+- Today a section is `[processor.NAME]` or `[processor.NAME.INSTANCE]`, and nothing in
+  the section header says whether `NAME` is a checker, a generator, a creator, or an
+  explicit processor. Reading someone else's `rsconstruct.toml` you have to already
+  know that `make` checks, `cargo` creates, and `tags` generates.
+- Proposal: put the processor type into the section path, so every section is
+  `[processor.TYPE.NAME]` for a single instance and `[processor.TYPE.NAME.INSTANCE]`
+  for named instances:
+  ```toml
+  [processor.checker.ruff]
+  [processor.checker.pylint.core]
+  [processor.generator.marp.slides]
+  [processor.creator.cargo]
+  ```
+- Benefits:
+  - Self-documenting config: the role of every section is visible in its header.
+  - Fixed-depth section paths. Today the second segment is a type or an instance
+    depending on how many segments there are; with the type prefix the depth alone
+    says single vs. named instance.
+  - Reads like the existing `@checkers` / `@generators` group shortcuts for `-p`.
+  - A wrong type is a config error the loader can report, which doubles as a
+    check that the user knows what they declared.
+- Costs and open questions:
+  - Redundant information: the type of `ruff` is fixed by its plugin entry, so the
+    user is repeating what the tool already knows. The only thing the loader can
+    do with it is reject a mismatch.
+  - Instance names leak everywhere: `-p pylint.core`, `out/pylint.core`, cache keys,
+    build stats. Either the iname becomes `checker.pylint.core` (longer `-p`, longer
+    output dirs, every cache key changes) or the section path and the iname stop
+    matching (new thing to learn). Decide this first; it drives everything else.
+  - `explicit` is both a processor type and a processor name, so the naive form is
+    `[processor.explicit.explicit.foo]`. Either rename the explicit processor or
+    treat `explicit` as a type with a single implicit processor.
+  - Four-level TOML headers for named instances.
+  - Migration touches every `[processor.*]` section in every fleet repo (about 155
+    distinct sections as of 2026-10-03). No back-compat shim; one pass over the
+    fleet, then `rsmultigit check-same` clean.
+- Related, smaller fix to do first: rename the `script` checker to `checker` so the
+  four generic user-command processors (`checker`, `generator`, `creator`,
+  `explicit`) all carry their role in their name. About six in ten fleet sections
+  are instances of these four, so this alone removes most of the ambiguity. If the
+  itch survives that rename, revisit this namespace idea.
+- **Urgency**: low | **Complexity**: medium
+
 ## Processor Ecosystem
 
 ### Flake8 (Python linter)
