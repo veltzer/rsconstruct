@@ -32,7 +32,7 @@ mlua = { version = "0.11", features = ["lua54", "send", "vendored", "serialize"]
 regex = "1"
 glob = "0.3.3"
 serde_yaml_ng = "0.10"
-zstd = "0.13"
+zstd = "0.14"
 lopdf = "0.45"
 grass = { version = "0.13.4", default-features = false }
 pulldown-cmark = { version = "0.13.3", default-features = false, features = ["html"] }
