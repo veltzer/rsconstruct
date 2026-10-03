@@ -68,6 +68,7 @@
     - [Mypy](processors/mypy.md)
     - [NPM](processors/npm.md)
     - [Objdump](processors/objdump.md)
+    - [Oxlint](processors/oxlint.md)
     - [Pandoc](processors/pandoc.md)
     - [Pdflatex](processors/pdflatex.md)
     - [Pdfunite](processors/pdfunite.md)

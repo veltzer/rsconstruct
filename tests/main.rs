@@ -87,6 +87,7 @@ mod processors {
     pub mod mermaid;
     pub mod mypy;
     pub mod npm;
+    pub mod oxlint;
     pub mod pandoc;
     pub mod pdflatex;
     pub mod pdfunite;

@@ -886,6 +886,18 @@ enum DebSource {
 
 fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
     match pkg {
+        // Pinned like actionlint: oxlint lives in the oxc monorepo, whose
+        // "latest" release is whichever crate was tagged most recently, so
+        // there is no `releases/latest/download/...` URL that reliably names
+        // an oxlint asset. Bump this deliberately. The tarball holds one
+        // file named after the target triple, not `oxlint`.
+        "oxlint" => Some(BinaryRecipe {
+            url: "https://github.com/oxc-project/oxc/releases/download/oxlint_v1.86.0/oxlint-x86_64-unknown-linux-gnu.tar.gz",
+            archive: ArchiveKind::TarGz {
+                inner: "oxlint-x86_64-unknown-linux-gnu",
+            },
+            dest: "oxlint",
+        }),
         "rumdl" => Some(BinaryRecipe {
             url: "https://github.com/rvben/rumdl/releases/download/v0.2.66/rumdl-v0.2.66-x86_64-unknown-linux-gnu.tar.gz",
             archive: ArchiveKind::TarGz { inner: "rumdl" },
@@ -921,6 +933,15 @@ fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
             url: "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64",
             archive: ArchiveKind::Raw,
             dest: "hadolint",
+        }),
+        // Tracks latest like hadolint: every release in the biome repo is a
+        // CLI release, so `releases/latest` always carries the raw
+        // `biome-linux-x64` asset. The glibc build, not the musl one, to match
+        // the rest of the registry.
+        "biome" => Some(BinaryRecipe {
+            url: "https://github.com/biomejs/biome/releases/latest/download/biome-linux-x64",
+            archive: ArchiveKind::Raw,
+            dest: "biome",
         }),
         // checkpatch.pl ships only inside the kernel tree — there is no release
         // artifact and no distro package. Fetching the single script from
@@ -1252,6 +1273,24 @@ pub static TOOLS: &[ToolInfo] = &[
             method: "binary",
             package: "zola",
         }],
+    },
+    // Binary first: biome's GitHub release ships a static Linux binary, so a
+    // repo needs no node runtime to lint CSS or JS. The npm package is the
+    // fallback. No cargo method: upstream does not publish the CLI to
+    // crates.io (the `biome_*` crates there are its internal libraries).
+    ToolInfo {
+        name: "biome",
+        runtime: "rust",
+        install_methods: &[
+            InstallMethod {
+                method: "binary",
+                package: "biome",
+            },
+            InstallMethod {
+                method: "npm",
+                package: "@biomejs/biome",
+            },
+        ],
     },
     ToolInfo {
         name: "taplo",
@@ -2095,7 +2134,7 @@ mod tests {
     /// chmod, mv) with no shell metacharacters anywhere.
     #[test]
     fn binary_describe_has_no_shell_metachars() {
-        for pkg in &["taplo", "rumdl", "zola"] {
+        for pkg in &["taplo", "rumdl", "zola", "oxlint"] {
             let steps = describe("binary", &[pkg]);
             assert!(steps.len() >= 3, "binary {pkg} should have >=3 steps");
             for step in &steps {

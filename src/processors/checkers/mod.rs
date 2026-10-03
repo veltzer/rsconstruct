@@ -16,6 +16,7 @@ mod jslint;
 mod jsonlint;
 mod luacheck;
 mod mypy;
+mod oxlint;
 mod perlcritic;
 mod php_lint;
 mod prettier;

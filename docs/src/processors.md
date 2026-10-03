@@ -42,6 +42,7 @@ Use `rsconstruct processors files` to see which files each processor discovers.
 - [Shellcheck](processors/shellcheck.md) — lints shell scripts using shellcheck
 - [Zspell](processors/zspell.md) — checks documentation files for spelling errors
 - [Rumdl](processors/rumdl.md) — lints Markdown files with rumdl
+- [Oxlint](processors/oxlint.md) — lints JavaScript/TypeScript files with oxlint
 - [Make](processors/make.md) — runs make in directories containing Makefiles
 - [Cargo](processors/cargo.md) — builds Rust projects using Cargo
 - [Yamllint](processors/yamllint.md) — lints YAML files with yamllint

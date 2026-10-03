@@ -4,6 +4,9 @@
 
 Lints JavaScript and TypeScript files using [ESLint](https://eslint.org/).
 
+A Rust alternative is [oxlint](oxlint.md): a single static binary that reads
+an ESLint-style config and needs no node runtime.
+
 ## How It Works
 
 Discovers `.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, and `.cjs` files in the project

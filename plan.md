@@ -127,7 +127,7 @@ New processor file + `ToolInfo` entry each. Ordered by repos affected.
 |---|---|---|---|---|---|
 | Lua lint (luacheck) | 109 | selene | `selene` | todo | Largest single win after actionlint. selene needs a `selene.toml` + standard library file per repo; that becomes a fleet-shared file. Compare findings on the 109 repos before switching |
 | Python types (mypy) | 127 | ty | `ty` | todo | Alternative to pyrefly if Stage 1 finds gaps. Both are pre-1.0; pick one per the comparison, not both |
-| JS/TS lint (eslint, jshint, jslint, standard) | 21 | oxlint | `oxlint` | todo | oxlint reads eslint-style config; the fleet's `.eslint.config.js` needs a one-time translation. biome is the alternative if oxlint's rule coverage falls short |
+| JS/TS lint (eslint, jshint, jslint, standard) | 21 | oxlint | `oxlint` | done | oxlint reads eslint-style config; the fleet's `.eslint.config.js` needs a one-time translation (`.oxlintrc.json`, first done in demos-lang-js). oxlint lacks only `no-dupe-args` and `no-octal`, which its parser rejects as syntax errors |
 | CSS/SCSS lint (stylelint) | 16 | biome | `biome` (css) | todo | biome lints CSS but not SCSS; the fleet's SCSS repos need Stage 3 `icss` or stay on stylelint. Decide after counting SCSS vs CSS users |
 | Formatting check (prettier) | 0 | biome or dprint | `biome` (format) | todo | No fleet usage; do together with the JS lint row |
 | Python deps (pip) | 0 | uv | `uv` creator | todo | uv is already in the tool registry (used by `tools install-deps`); a creator that runs `uv sync` replaces pip. No fleet usage of the pip creator today |
