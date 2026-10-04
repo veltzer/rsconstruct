@@ -89,7 +89,7 @@ fn status_reports_rust() {
         .expect("status --json should list processors");
     let tera = processors
         .iter()
-        .find(|p| p["name"] == "tera")
+        .find(|p| p["name"] == "processor.generator.tera")
         .expect("tera processor missing from status --json");
     assert_eq!(tera["native"], true);
     assert_eq!(tera["rust"], true);

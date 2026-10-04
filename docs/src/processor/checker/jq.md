@@ -22,7 +22,7 @@ jq invocation.
 ## Configuration
 
 ```toml
-[processor.jq]
+[processor.checker.jq]
 command = "jq"                               # The jq command to run
 args = []                                    # Additional arguments to pass to jq (after "empty")
 dep_inputs = []                            # Additional files that trigger rebuilds when changed

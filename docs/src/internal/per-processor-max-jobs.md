@@ -12,7 +12,7 @@ due to resource exhaustion.
 Allow each processor to declare a `max_jobs` limit in `rsconstruct.toml`:
 
 ```toml
-[processor.marp]
+[processor.generator.marp]
 formats = ["pdf"]
 max_jobs = 4
 ```
@@ -73,7 +73,7 @@ In the execution loop:
 
 ### 5. Config display
 
-Ensure `rsconstruct processor config marp` and `rsconstruct config show` display
+Ensure `rsconstruct processor config processor.generator.marp` and `rsconstruct config show` display
 the `max_jobs` field.
 
 ## Files to Modify

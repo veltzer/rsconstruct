@@ -21,7 +21,7 @@ single shellcheck invocation for better performance.
 ## Configuration
 
 ```toml
-[processor.shellcheck]
+[processor.checker.shellcheck]
 command = "shellcheck"                       # The shellcheck command to run
 args = []                                    # Additional arguments to pass to shellcheck
 dep_inputs = []                            # Additional files that trigger rebuilds when changed

@@ -6,7 +6,7 @@ Once outputs are known up front, per-file caching, precise incremental rebuilds,
 
 ## Status
 
-**Implemented** as the `mass_generator` processor (`src/processor/mass_generator/mass_generator.rs`); the user-facing contract is in [Mass Generator](../processor/mass_generator/mass_generator.md). This document is the design spec it was built from. Where the implementation departs from the text below, the departure is called out in a **Status note**; the main ones are: no synthetic phase product (a once-per-build guard inside the processor does that job), `loose_manifest` is a config field rather than a CLI flag, verification compares a before/after snapshot of `output_dirs` instead of walking the whole directory, and the manifest is not yet cached between graph builds.
+**Implemented** as the `mass_generator` processor (`src/processor/mass_generator/mass_generator.rs`); the user-facing contract is in [Mass Generator](../processor/mass_generator/generic.md). This document is the design spec it was built from. Where the implementation departs from the text below, the departure is called out in a **Status note**; the main ones are: no synthetic phase product (a once-per-build guard inside the processor does that job), `loose_manifest` is a config field rather than a CLI flag, verification compares a before/after snapshot of `output_dirs` instead of walking the whole directory, and the manifest is not yet cached between graph builds.
 
 Related designs:
 
@@ -18,7 +18,7 @@ Related designs:
 Today we treat tools like mkdocs as a black box:
 
 ```toml
-[processor.creator.mkdocs]
+[processor.creator.generic.mkdocs]
 command     = "mkdocs build --site-dir _site"
 output_dirs = ["_site"]   # opaque — we only know the directory
 ```
@@ -26,7 +26,7 @@ output_dirs = ["_site"]   # opaque — we only know the directory
 The new approach asks the tool to emit a manifest before running:
 
 ```toml
-[processor.mass_generator.mkdocs]
+[processor.mass_generator.generic.mkdocs]
 command         = "mkdocs build --site-dir _site"
 predict_command = "mkdocs-plan"                  # prints a JSON manifest on stdout
 output_dirs     = ["_site"]
@@ -269,13 +269,13 @@ The order it was built in, and where each step stands:
 4. Execution phase: one invocation per instance, per build. **Done**, via the once-per-build guard described in the status note above.
 5. Strict verification after build. **Done**, as a before/after snapshot (status note above).
 6. Manifest caching (skip re-plan when source tree unchanged). **Not done.** `predict_command` runs at every graph build, including `status`, `graph` and `clean outputs`. The `src_dirs`/`src_extensions` fields that were to bound the re-plan are therefore rejected by the processor rather than silently ignored; they come back when the cache does.
-7. Documentation in `docs/src/processor/mass_generator/mass_generator.md`. **Done.**
+7. Documentation in `docs/src/processor/mass_generator/generic.md`. **Done.**
 
 Open question 1 (single-pass `--print-manifest` mode) is not implemented. Open question 3 (a page the tool stops predicting) is resolved by documentation: the orphan has no product and is neither rebuilt nor cleaned; the user deletes it.
 
 ## See also
 
-- [Mass Generator](../processor/mass_generator/mass_generator.md) — the processor's user-facing documentation
+- [Mass Generator](../processor/mass_generator/generic.md) — the processor's user-facing documentation
 - [Shared Output Directory](shared-output-directory.md) — how we handle opaque Creators today
 - [Processor Ordering](processor-ordering.md) — the sibling discussion about explicit ordering
 - [Cross-Processor Dependencies](cross-processor-dependencies.md) — why per-file outputs enable proper dependency graphs

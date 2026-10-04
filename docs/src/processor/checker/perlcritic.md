@@ -23,7 +23,7 @@ that configuration changes trigger rebuilds.
 ## Configuration
 
 ```toml
-[processor.perlcritic]
+[processor.checker.perlcritic]
 args = []
 dep_inputs = []
 ```

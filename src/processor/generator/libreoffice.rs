@@ -73,7 +73,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     fields: &[],
     omit_standard_fields: &[],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".odp"], src_exclude_dirs: &[] }),
-    defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/libreoffice", formats: &["pdf"], command: "libreoffice", ..crate::config::ProcessorDefaults::EMPTY }),
+    defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.libreoffice", formats: &["pdf"], command: "libreoffice", ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["document", "converter", "pdf", "docx", "odt", "generator"],
     description: "Convert documents using LibreOffice",

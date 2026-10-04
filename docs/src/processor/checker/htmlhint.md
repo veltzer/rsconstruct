@@ -23,7 +23,7 @@ that configuration changes trigger rebuilds.
 ## Configuration
 
 ```toml
-[processor.htmlhint]
+[processor.checker.htmlhint]
 command = "htmlhint"
 args = []
 dep_inputs = []

@@ -534,8 +534,9 @@ fn run() -> (Result<()>, bool) {
             }
             Commands::Terms { action } => {
                 let config = Config::load()?;
-                let terms_config: processor::terms::TermsConfig =
-                    config.processor.instance_config_or_default("terms")?;
+                let terms_config: processor::terms::TermsConfig = config
+                    .processor
+                    .instance_config_or_default(processor::names::TERMS)?;
                 match action {
                     cli::TermsAction::Fix { remove_non_terms } => {
                         processor::terms::fix_all(
@@ -556,11 +557,11 @@ fn run() -> (Result<()>, bool) {
                 let config = Config::load()?;
                 let db_path = config
                     .processor
-                    .instance_field_str("tags", "output")
-                    .unwrap_or_else(|| "out/tags/tags.db".into());
+                    .instance_field_str(processor::names::TAGS, "output")
+                    .unwrap_or_else(|| "out/processor.generator.tags/tags.db".into());
                 let tags_dir = config
                     .processor
-                    .instance_field_str("tags", "tags_dir")
+                    .instance_field_str(processor::names::TAGS, "tags_dir")
                     .unwrap_or_else(|| "tags".into());
                 match action {
                     cli::TagsAction::Files { tags, or } => {
@@ -589,13 +590,15 @@ fn run() -> (Result<()>, bool) {
                     cli::TagsAction::Coverage => processor::tags_cmd::coverage_tags(&db_path)?,
                     cli::TagsAction::Orphans => processor::tags_cmd::orphan_files(&db_path)?,
                     cli::TagsAction::Check => {
-                        let tags_config: processor::tags_cmd::TagsConfig =
-                            config.processor.instance_config_or_default("tags")?;
+                        let tags_config: processor::tags_cmd::TagsConfig = config
+                            .processor
+                            .instance_config_or_default(processor::names::TAGS)?;
                         processor::tags_cmd::check_tags(&tags_config, config.build.warn_symlinks)?;
                     }
                     cli::TagsAction::Suggest { path } => {
-                        let tags_config: processor::tags_cmd::TagsConfig =
-                            config.processor.instance_config_or_default("tags")?;
+                        let tags_config: processor::tags_cmd::TagsConfig = config
+                            .processor
+                            .instance_config_or_default(processor::names::TAGS)?;
                         processor::tags_cmd::suggest_tags(&db_path, &path, &tags_config)?;
                     }
                     cli::TagsAction::Merge { path } => {
@@ -889,7 +892,7 @@ fn init_project() -> Result<()> {
 
     // Create rsconstruct.toml with commented defaults
     let config_content = r#"# RSConstruct Build Tool Configuration
-# Uncomment [processor.NAME] sections to enable processors.
+# Uncomment [processor.TYPE.NAME] sections to enable processors.
 # Each section declares a processor instance; removing it disables the processor.
 # For multiple instances: [processor.pylint.core] and [processor.pylint.tests]
 
@@ -904,34 +907,34 @@ fn init_project() -> Result<()> {
 
 # Uncomment processors you want to use:
 
-# [processor.tera]
+# [processor.generator.tera]
 # strict = true
 # src_dirs = ["tera.templates"]
 # src_extensions = [".tera"]
 
-# [processor.ruff]
+# [processor.checker.ruff]
 # command = "ruff"
 # args = []
 
-# [processor.pylint]
+# [processor.checker.pylint]
 # args = []
 
-# [processor.cc_single_file]
+# [processor.generator.cc_single_file]
 # cc = "gcc"
 # cxx = "g++"
 # src_dirs = ["src"]
 # src_extensions = [".c", ".cc"]
 
-# [processor.cppcheck]
+# [processor.checker.cppcheck]
 # args = ["--error-exitcode=1", "--enable=warning,style,performance,portability"]
 
-# [processor.shellcheck]
+# [processor.checker.shellcheck]
 # args = []
 
-# [processor.make]
+# [processor.checker.make]
 # make = "make"
 
-# [processor.cargo]
+# [processor.creator.cargo]
 # cargo = "cargo"
 
 [graph]

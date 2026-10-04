@@ -21,7 +21,7 @@ separately to avoid cross-file analysis issues with unrelated files.
 ## Configuration
 
 ```toml
-[processor.clang_tidy]
+[processor.checker.clang_tidy]
 args = ["-checks=*"]                        # Arguments passed to clang-tidy
 compiler_args = ["-std=c++17"]              # Arguments passed after -- to the compiler
 dep_inputs = [".clang-tidy"]              # Additional files that trigger rebuilds when changed
@@ -43,7 +43,7 @@ Clang-tidy requires knowing compiler flags to properly parse the source files.
 Use `compiler_args` to specify include paths, defines, and language standards:
 
 ```toml
-[processor.clang_tidy]
+[processor.checker.clang_tidy]
 compiler_args = ["-std=c++17", "-I/usr/include/mylib", "-DDEBUG"]
 ```
 
@@ -53,7 +53,7 @@ Clang-tidy automatically reads configuration from a `.clang-tidy` file in the
 project root. Add it to `dep_inputs` so changes trigger rebuilds:
 
 ```toml
-[processor.clang_tidy]
+[processor.checker.clang_tidy]
 dep_inputs = [".clang-tidy"]
 ```
 

@@ -10,15 +10,15 @@ See [Processor Types](processor-types.md) for full descriptions, examples, and a
 
 ## Configuration
 
-Declare processors by adding `[processor.NAME]` sections to `rsconstruct.toml`:
+Declare processors by adding `[processor.TYPE.NAME]` sections to `rsconstruct.toml`:
 
 ```toml
-[processor.ruff]
+[processor.checker.ruff]
 
-[processor.pylint]
+[processor.checker.pylint]
 args = ["--disable=C0114"]
 
-[processor.cc_single_file]
+[processor.generator.cc_single_file]
 ```
 
 Only declared processors run — no processors are enabled by default. Use `rsconstruct smart auto` to auto-detect and add relevant processors.
@@ -56,7 +56,7 @@ Use `rsconstruct processor files` to see which files each processor discovers.
 - [Yaml2json](processor/generator/yaml2json.md) — converts YAML files to JSON (native)
 - [Markdown2html](processor/generator/markdown2html.md) — converts Markdown to HTML using markdown CLI
 - [Imarkdown2html](processor/generator/imarkdown2html.md) — converts Markdown to HTML (native)
-- [Mass Generator](processor/mass_generator/mass_generator.md) — runs a tool that enumerates its outputs in advance, one cached product per predicted file
+- [Mass Generator](processor/mass_generator/generic.md) — runs a tool that enumerates its outputs in advance, one cached product per predicted file
 
 ## Output Directory Caching
 
@@ -67,7 +67,7 @@ After a successful build, RSConstruct walks the output directories, stores every
 For user-defined creators, output directories are declared via `output_dirs`:
 
 ```toml
-[processor.creator.venv]
+[processor.creator.generic.venv]
 command = "pip"
 args = ["install", "-r", "requirements.txt"]
 src_extensions = ["requirements.txt"]
@@ -77,7 +77,7 @@ output_dirs = [".venv"]
 For built-in creators, this is controlled by the `cache_output_dir` config option (default `true`):
 
 ```toml
-[processor.cargo]
+[processor.creator.cargo]
 cache_output_dir = false   # Disable for large target/ directories
 ```
 
@@ -107,14 +107,14 @@ Consider this project:
 ```toml
 # rsconstruct.toml
 
-[processor.ruff]                     # Checker — no outputs
+[processor.checker.ruff]                     # Checker — no outputs
 src_dirs = ["src"]
 
-[processor.tera]                     # Generator — declared file outputs
+[processor.generator.tera]                     # Generator — declared file outputs
 src_dirs = ["templates"]
 src_extensions = [".tera"]
 
-[processor.mdbook]                   # Creator — declared output_dir
+[processor.creator.mdbook]                   # Creator — declared output_dir
 src_dirs = ["docs"]
 ```
 
@@ -124,7 +124,7 @@ Layout:
 project/
 ├── rsconstruct.toml
 ├── src/main.py                      # ruff lints this
-├── templates/index.html.tera        # tera renders to → out/tera/index.html
+├── templates/index.html.tera        # tera renders to → out/processor.generator.tera/index.html
 ├── docs/
 │   ├── book.toml
 │   └── src/SUMMARY.md
@@ -134,20 +134,20 @@ project/
     └── ... (many files)
 ```
 
-After `rsconstruct build`, both `out/tera/index.html` and the entire `book/` tree exist.
+After `rsconstruct build`, both `out/processor.generator.tera/index.html` and the entire `book/` tree exist.
 
 Now run `rsconstruct clean outputs`:
 
 1. **ruff** — Checker. `clean()` is a no-op. Nothing removed.
-2. **tera** — Generator. `clean()` calls `fs::remove_file("out/tera/index.html")`. The file goes; `out/tera/` and `out/` are not yet touched.
+2. **tera** — Generator. `clean()` calls `fs::remove_file("out/processor.generator.tera/index.html")`. The file goes; `out/processor.generator.tera/` and `out/` are not yet touched.
 3. **mdbook** — Creator. `clean()` calls `fs::remove_dir_all("book/")`. The whole `book/` tree (including `book/css/main.css` and everything else) is removed. `book/`'s parent (the project root) is not touched.
-4. **Empty-directory sweep.** The orchestrator collects parents of every removed path: `out/tera`, `out` (parents of the tera output) and `.` (parent of `book/`, which is the project root and gets ignored). Sorted deepest-first: `out/tera`, `out`. `fs::remove_dir("out/tera")` → succeeds (empty). `fs::remove_dir("out")` → succeeds (now empty). Project root is skipped.
+4. **Empty-directory sweep.** The orchestrator collects parents of every removed path: `out/processor.generator.tera`, `out` (parents of the tera output) and `.` (parent of `book/`, which is the project root and gets ignored). Sorted deepest-first: `out/processor.generator.tera`, `out`. `fs::remove_dir("out/processor.generator.tera")` → succeeds (empty). `fs::remove_dir("out")` → succeeds (now empty). Project root is skipped.
 
 Final state: `src/main.py`, `templates/index.html.tera`, `docs/...`, and `rsconstruct.toml` remain untouched. The cache (`.rsconstruct/`) is untouched. `out/` and `book/` are gone.
 
-If you instead ran `rsconstruct clean outputs --no-empty-dirs`, the only difference is step 4 is skipped — `out/tera/` and `out/` would remain as empty directories.
+If you instead ran `rsconstruct clean outputs --no-empty-dirs`, the only difference is step 4 is skipped — `out/processor.generator.tera/` and `out/` would remain as empty directories.
 
-If you ran `rsconstruct clean outputs -p tera`, only step 2 + the sweep of its parents runs. `book/` is left intact because mdbook is filtered out.
+If you ran `rsconstruct clean outputs -p processor.generator.tera`, only step 2 + the sweep of its parents runs. `book/` is left intact because mdbook is filtered out.
 
 ## Custom Processors
 

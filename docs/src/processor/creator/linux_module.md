@@ -108,7 +108,7 @@ This file is removed after building (whether the build succeeds or fails).
 ## Configuration
 
 ```toml
-[processor.linux_module]
+[processor.creator.linux_module]
 enabled = true           # Enable/disable (default: true)
 dep_inputs = []        # Extra files that trigger rebuilds
 ```

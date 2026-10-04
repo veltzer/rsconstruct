@@ -12,15 +12,15 @@ producing an HTML output file.
 ## Source Files
 
 - Input: `**/*.md`
-- Output: `out/markdown2html/{relative_path}.html`
+- Output: `out/processor.generator.markdown2html/{relative_path}.html`
 
 ## Configuration
 
 ```toml
-[processor.markdown2html]
+[processor.generator.markdown2html]
 command = "markdown"                   # The markdown command to run
 args = []                              # Additional arguments to pass to markdown
-output_dir = "out/markdown2html"       # Output directory
+output_dir = "out/processor.generator.markdown2html"       # Output directory
 dep_inputs = []                      # Additional files that trigger rebuilds when changed
 ```
 
@@ -28,7 +28,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 |-----|------|---------|-------------|
 | `command` | string | `"markdown"` | The markdown executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to markdown |
-| `output_dir` | string | `"out/markdown2html"` | Output directory for HTML files |
+| `output_dir` | string | `"out/processor.generator.markdown2html"` | Output directory for HTML files |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
 ## Batch support

@@ -134,7 +134,7 @@ assert!(!stdout.contains("error"));
 **File existence:**
 
 ```rust
-assert!(path.join("out/cc_single_file/main.elf").exists());
+assert!(path.join("out/processor.generator.cc_single_file/main.elf").exists());
 ```
 
 **Incremental builds:**

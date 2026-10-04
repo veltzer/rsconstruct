@@ -213,7 +213,7 @@ inventory::submit! {
         ],
         omit_standard_fields: &["formats"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".tex"], src_exclude_dirs: &[] }),
-        defaults: Some(crate::config::ProcessorDefaults { command: "pdflatex", output_dir: "out/pdflatex", ..crate::config::ProcessorDefaults::EMPTY }),
+        defaults: Some(crate::config::ProcessorDefaults { command: "pdflatex", output_dir: "out/processor.generator.pdflatex", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<PdflatexConfig>,
         keywords: &["latex", "tex", "pdf", "generator", "typesetting"],
         description: "Compile LaTeX documents using pdflatex",

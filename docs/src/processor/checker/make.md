@@ -76,7 +76,7 @@ which file changed.
 ## Configuration
 
 ```toml
-[processor.make]
+[processor.checker.make]
 command = "make"     # Make binary to use
 args = []            # Extra arguments passed to make
 target = ""          # Make target (empty = default target)

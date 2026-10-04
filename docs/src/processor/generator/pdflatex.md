@@ -13,17 +13,17 @@ table of contents. Optionally uses `qpdf` to linearize the output PDF.
 ## Source Files
 
 - Input: `**/*.tex`
-- Output: `out/pdflatex/{relative_path}.pdf`
+- Output: `out/processor.generator.pdflatex/{relative_path}.pdf`
 
 ## Configuration
 
 ```toml
-[processor.pdflatex]
+[processor.generator.pdflatex]
 command = "pdflatex"                   # The pdflatex command to run
 runs = 2                               # Number of compilation passes
 qpdf = true                           # Use qpdf to linearize output PDF
 args = []                              # Additional arguments to pass to pdflatex
-output_dir = "out/pdflatex"            # Output directory
+output_dir = "out/processor.generator.pdflatex"            # Output directory
 dep_inputs = []                      # Additional files that trigger rebuilds when changed
 ```
 
@@ -33,7 +33,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 | `runs` | integer | `2` | Number of compilation passes (for cross-references) |
 | `qpdf` | bool | `true` | Use qpdf to linearize the output PDF |
 | `args` | string[] | `[]` | Extra arguments passed to pdflatex |
-| `output_dir` | string | `"out/pdflatex"` | Output directory for PDF files |
+| `output_dir` | string | `"out/processor.generator.pdflatex"` | Output directory for PDF files |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
 ## Batch support

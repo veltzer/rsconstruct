@@ -1,7 +1,6 @@
-// `mass_generator::mass_generator` mirrors the layout of the sibling
-// `checker/`, `generator/` and `creator/` directories, where each processor
-// lives in a file named after itself. There is exactly one mass generator
-// processor today; user tools plug into it by config rather than by adding a
-// file here.
-#[allow(clippy::module_inception)]
-mod mass_generator;
+// `generic` is the config-driven mass generator (`processor.mass_generator.generic`):
+// any tool that honors the manifest contract plugs into it by config rather
+// than by adding a file here. The directory keeps the one-file-per-processor
+// layout of its sibling categories so a built-in mass generator has a place
+// to go.
+mod generic;

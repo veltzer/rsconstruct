@@ -24,7 +24,7 @@ extra input so that configuration changes trigger rebuilds.
 ## Configuration
 
 ```toml
-[processor.mypy]
+[processor.checker.mypy]
 command = "mypy"                             # The mypy command to run
 args = []                                    # Additional arguments to pass to mypy
 dep_inputs = []                            # Additional files that trigger rebuilds (e.g. ["pyproject.toml"])

@@ -441,7 +441,7 @@ pub enum ProductAction {
 pub enum ProcessorAction {
     /// Add a processor to rsconstruct.toml with must-fill fields pre-populated and comments
     Add {
-        /// Processor name (pname) — the type name (e.g., ruff, pip, tera)
+        /// Processor name (pname) — the full name, processor.<type>.<name> (e.g., processor.checker.ruff, processor.creator.pip)
         #[arg(value_parser = crate::registries::processor_name_parser())]
         pname: String,
         /// Print the generated TOML snippet to stdout instead of writing to rsconstruct.toml
@@ -460,7 +460,7 @@ pub enum ProcessorAction {
     },
     /// Show default configuration for a processor type by pname (no config needed)
     Defconfig {
-        /// Processor name (pname) — the type name (e.g., ruff, pip, tera)
+        /// Processor name (pname) — the full name, processor.<type>.<name> (e.g., processor.checker.ruff, processor.creator.pip)
         #[arg(value_parser = crate::registries::processor_name_parser())]
         pname: String,
     },
@@ -987,19 +987,23 @@ fn inject_bash_processor_completions(script: &str) -> Result<String> {
     // never drift from `can_fix` (it used to be a hand-maintained copy that
     // had to be updated whenever a plugin's flag changed). Sorted for
     // deterministic output; may be empty when no plugin declares can_fix.
-    let mut fixer_types: Vec<&str> = crate::registries::all_plugins()
+    let mut fixer_types: Vec<String> = crate::registries::all_plugins()
         .filter(|p| p.can_fix)
-        .map(|p| p.name)
+        .map(crate::registries::ProcessorPlugin::pname)
         .collect();
     fixer_types.sort_unstable();
 
-    // Bash helpers: extract instance names from rsconstruct.toml.
+    // Bash helpers: extract instance names from rsconstruct.toml. An instance
+    // name is the whole section header: [processor.checker.ruff] or
+    // [processor.checker.ruff.core]. Sub-tables that are config fields
+    // ([processor.generator.tags.field_types]) come out too; the build
+    // rejects them with a clear message, which beats a completion that
+    // guesses at the schema.
     let helper = r#"
 _rsconstruct_inames() {
     local toml="rsconstruct.toml"
     [[ -f "$toml" ]] || return
-    # Match [processor.NAME] -> NAME; [processor.NAME.SUB] -> NAME.SUB
-    grep -E '^\[processor\.' "$toml" | sed -E 's/^\[processor\.([^]]+)\].*/\1/'
+    grep -E '^\[processor\.' "$toml" | sed -E 's/^\[([^]]+)\].*/\1/'
 }
 _rsconstruct_analyzer_inames() {
     local toml="rsconstruct.toml"
@@ -1016,19 +1020,24 @@ _rsconstruct_fixer_inames() {
     [[ -f "$toml" ]] || return
     local fixers="__RSCONSTRUCT_FIXER_TYPES__"
     for iname in $(_rsconstruct_inames); do
-        local pname="${iname%%.*}"
+        # processor.<type>.<name>: the first three segments name the processor
+        local pname
+        pname=$(echo "$iname" | cut -d. -f1-3)
         if [ -n "$fixers" ] && echo "$pname" | grep -qE "^($fixers)$"; then
             echo "$iname"
-        elif [ "$pname" = "script" ]; then
+        elif [ "$pname" = "processor.checker.script" ]; then
             # Check if fix_command is set in this script section
-            if sed -n "/^\[processor\.$iname\]/,/^\[/p" "$toml" | grep -q 'fix_command'; then
+            if sed -n "/^\[$iname\]/,/^\[/p" "$toml" | grep -q 'fix_command'; then
                 echo "$iname"
             fi
         fi
     done
 }
 "#
-    .replace("__RSCONSTRUCT_FIXER_TYPES__", &fixer_types.join("|"));
+    .replace(
+        "__RSCONSTRUCT_FIXER_TYPES__",
+        &fixer_types.join("|").replace('.', "\\."),
+    );
 
     // Replace instance-name targets to call _rsconstruct_inames at tab time.
     // For each target section, replace the early-return COMPREPLY with a call to our helper.

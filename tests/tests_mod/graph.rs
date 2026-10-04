@@ -176,7 +176,7 @@ fn graph_unreferenced_finds_untracked_files() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         concat!(
-            "[processor.script]\n",
+            "[processor.checker.script]\n",
             "command = \"true\"\n",
             "src_extensions = [\".txt\"]\n",
             "src_dirs = [\"src\"]\n",
@@ -232,7 +232,7 @@ fn graph_unreferenced_dep_inputs_not_reported() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         concat!(
-            "[processor.script]\n",
+            "[processor.checker.script]\n",
             "command = \"true\"\n",
             "src_extensions = [\".txt\"]\n",
             "src_dirs = [\"src\"]\n",
@@ -276,7 +276,7 @@ fn graph_unreferenced_rm_deletes_files() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         concat!(
-            "[processor.script]\n",
+            "[processor.checker.script]\n",
             "command = \"true\"\n",
             "src_extensions = [\".txt\"]\n",
             "src_dirs = [\"src\"]\n",

@@ -13,12 +13,12 @@ files are tracked as inputs.
 ## Source Files
 
 - Input: `**/Gemfile` (plus sibling `.rb`, `.gemspec` files)
-- Output: `out/gem/{flat_name}.stamp`
+- Output: `out/processor.creator.gem/{flat_name}.stamp`
 
 ## Configuration
 
 ```toml
-[processor.gem]
+[processor.creator.gem]
 command = "bundle"                     # The bundler command to run
 args = []                              # Additional arguments to pass to bundler install
 dep_inputs = []                      # Additional files that trigger rebuilds when changed

@@ -15,9 +15,9 @@ are relative to the `cc.yaml` file's location and are automatically resolved
 to project-root-relative paths before compilation. All commands run from the
 project root.
 
-Output goes under `out/cc/<path-to-cc.yaml-dir>/`, so a manifest at
-`src/exercises/foo/cc.yaml` produces output in `out/cc/src/exercises/foo/`.
-A manifest at the project root produces output in `out/cc/`.
+Output goes under `out/processor.creator.cc/<path-to-cc.yaml-dir>/`, so a manifest at
+`src/exercises/foo/cc.yaml` produces output in `out/processor.creator.cc/src/exercises/foo/`.
+A manifest at the project root produces output in `out/processor.creator.cc/`.
 
 Source files are compiled to object files, then linked into the final targets:
 
@@ -27,11 +27,11 @@ src/exercises/foo/cc.yaml defines:
   program "main" from main.c, links mymath
 
 Build produces:
-  out/cc/src/exercises/foo/obj/mymath/math.o
-  out/cc/src/exercises/foo/obj/mymath/utils.o
-  out/cc/src/exercises/foo/lib/libmymath.a
-  out/cc/src/exercises/foo/obj/main/main.o
-  out/cc/src/exercises/foo/bin/main
+  out/processor.creator.cc/src/exercises/foo/obj/mymath/math.o
+  out/processor.creator.cc/src/exercises/foo/obj/mymath/utils.o
+  out/processor.creator.cc/src/exercises/foo/lib/libmymath.a
+  out/processor.creator.cc/src/exercises/foo/obj/main/main.o
+  out/processor.creator.cc/src/exercises/foo/bin/main
 ```
 
 ## cc.yaml Format
@@ -40,7 +40,7 @@ All paths in the manifest are relative to the `cc.yaml` file's location.
 
 ```yaml
 # Global settings (all optional). A field left unset inherits its value
-# from [processor.cc] in rsconstruct.toml; a field set explicitly — even
+# from [processor.creator.cc] in rsconstruct.toml; a field set explicitly — even
 # to an empty list — overrides the config default for this manifest.
 cc: gcc               # C compiler (unset: inherit config, default gcc)
 cxx: g++              # C++ compiler (unset: inherit config, default g++)
@@ -96,10 +96,10 @@ Global `cflags` are used for C files and `cxxflags` for C++ files.
 
 ## Output Layout
 
-Output is placed under `out/cc/<cc.yaml-relative-dir>/`:
+Output is placed under `out/processor.creator.cc/<cc.yaml-relative-dir>/`:
 
 ```
-out/cc/<cc.yaml-dir>/
+out/processor.creator.cc/<cc.yaml-dir>/
   obj/<target_name>/    # Object files per target
     file.o
   lib/                  # Libraries
@@ -125,7 +125,7 @@ compile+link since `ar` requires object files.
 ## Configuration
 
 ```toml
-[processor.cc]
+[processor.creator.cc]
 enabled = true            # Enable/disable (default: true)
 cc = "gcc"                # Default C compiler (default: "gcc")
 cxx = "g++"               # Default C++ compiler (default: "g++")
@@ -200,10 +200,10 @@ programs:
 Running `rsconstruct build` produces:
 
 ```
-out/cc/exercises/math/obj/math/math.o
-out/cc/exercises/math/lib/libmath.a
-out/cc/exercises/math/obj/main/main.o
-out/cc/exercises/math/bin/main
+out/processor.creator.cc/exercises/math/obj/math/math.o
+out/processor.creator.cc/exercises/math/lib/libmath.a
+out/processor.creator.cc/exercises/math/obj/main/main.o
+out/processor.creator.cc/exercises/math/bin/main
 ```
 
 ## Clean behavior

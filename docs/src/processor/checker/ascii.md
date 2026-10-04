@@ -21,7 +21,7 @@ single invocation.
 ## Configuration
 
 ```toml
-[processor.ascii]
+[processor.checker.ascii]
 args = []                              # Additional arguments (unused, for consistency)
 dep_inputs = []                      # Additional files that trigger rebuilds when changed
 ```

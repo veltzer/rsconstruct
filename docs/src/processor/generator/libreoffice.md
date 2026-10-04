@@ -13,16 +13,16 @@ invocations since LibreOffice only supports a single running instance.
 ## Source Files
 
 - Input: `**/*.odp`
-- Output: `out/libreoffice/{format}/{relative_path}.{format}`
+- Output: `out/processor.generator.libreoffice/{format}/{relative_path}.{format}`
 
 ## Configuration
 
 ```toml
-[processor.libreoffice]
+[processor.generator.libreoffice]
 command = "libreoffice"                # The libreoffice command to run
 formats = ["pdf"]                      # Output formats (pdf, pptx)
 args = []                              # Additional arguments to pass to libreoffice
-output_dir = "out/libreoffice"         # Output directory
+output_dir = "out/processor.generator.libreoffice"         # Output directory
 dep_inputs = []                      # Additional files that trigger rebuilds when changed
 ```
 
@@ -31,7 +31,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 | `command` | string | `"libreoffice"` | The libreoffice executable to run |
 | `formats` | string[] | `["pdf"]` | Output formats to generate (`pdf`, `pptx`) |
 | `args` | string[] | `[]` | Extra arguments passed to libreoffice |
-| `output_dir` | string | `"out/libreoffice"` | Base output directory |
+| `output_dir` | string | `"out/processor.generator.libreoffice"` | Base output directory |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
 ## Batch support

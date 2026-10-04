@@ -50,7 +50,7 @@ Grades:
 ### Execution strategies per processor
 - Map each processor to an execution strategy: local, remote, sandboxed, or dynamic.
 - Different processors may benefit from different execution models.
-- Config: `[processor.ruff] execution = "remote"`, `[processor.cc_single_file] execution = "sandboxed"`.
+- Config: `[processor.checker.ruff] execution = "remote"`, `[processor.generator.cc_single_file] execution = "sandboxed"`.
 - **Urgency**: low | **Complexity**: medium
 
 ### Build profiles
@@ -164,7 +164,7 @@ Grades:
 
 ### `rsconstruct lint` — Run only checkers
 - Convenience command to run only checker processors.
-- Equivalent to `rsconstruct build -p ruff,pylint,...` but shorter.
+- Equivalent to `rsconstruct build -p processor.checker.ruff,processor.checker.pylint,...` but shorter.
 - **Urgency**: low | **Complexity**: low
 
 ### Watch mode keyboard commands
@@ -199,7 +199,7 @@ Grades:
 - CLI semantics map cleanly onto existing `-p`/`-x` machinery:
   - `rsconstruct build` → excludes `build_by_default = false` processors (new behaviour).
   - `rsconstruct build -p python_package` → includes only `python_package`; the `-p` explicit inclusion overrides the default-off flag.
-  - `rsconstruct build -p ruff,python_package` → includes both, including the opt-in one.
+  - `rsconstruct build -p processor.checker.ruff,python_package` → includes both, including the opt-in one.
   - `rsconstruct build --all` (new flag) → includes everything including on-demand processors. Useful for CI that wants to verify the opt-in path doesn't bitrot.
 - Example config:
   ```toml
@@ -375,7 +375,7 @@ Grades:
 - **Urgency**: medium | **Complexity**: low
 
 ### Namespace processor sections by type
-- Today a section is `[processor.NAME]` or `[processor.NAME.INSTANCE]`, and nothing in
+- Today a section is `[processor.TYPE.NAME]` or `[processor.TYPE.NAME.INSTANCE]`, and nothing in
   the section header says whether `NAME` is a checker, a generator, a creator, or an
   explicit processor. Reading someone else's `rsconstruct.toml` you have to already
   know that `make` checks, `cargo` creates, and `tags` generates.
@@ -385,8 +385,8 @@ Grades:
   ```toml
   [processor.checker.ruff]
   [processor.checker.pylint.core]
-  [processor.generator.marp.slides]
-  [processor.creator.cargo]
+  [processor.generator.generic.marp.slides]
+  [processor.creator.generic.cargo]
   ```
 - Benefits:
   - Self-documenting config: the role of every section is visible in its header.
@@ -400,12 +400,12 @@ Grades:
   - Redundant information: the type of `ruff` is fixed by its plugin entry, so the
     user is repeating what the tool already knows. The only thing the loader can
     do with it is reject a mismatch.
-  - Instance names leak everywhere: `-p pylint.core`, `out/pylint.core`, cache keys,
+  - Instance names leak everywhere: `-p processor.checker.pylint.core`, `out/pylint.core`, cache keys,
     build stats. Either the iname becomes `checker.pylint.core` (longer `-p`, longer
     output dirs, every cache key changes) or the section path and the iname stop
     matching (new thing to learn). Decide this first; it drives everything else.
   - `explicit` is both a processor type and a processor name, so the naive form is
-    `[processor.explicit.explicit.foo]`. Either rename the explicit processor or
+    `[processor.explicit.generic.explicit.foo]`. Either rename the explicit processor or
     treat `explicit` as a type with a single implicit processor.
   - Four-level TOML headers for named instances.
   - Migration touches every `[processor.*]` section in every fleet repo (about 155

@@ -54,7 +54,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     fields: &[],
     omit_standard_fields: &[],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".drawio"], src_exclude_dirs: &[] }),
-    defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/drawio", formats: &["png"], command: "drawio", ..crate::config::ProcessorDefaults::EMPTY }),
+    defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.drawio", formats: &["png"], command: "drawio", ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["diagram", "drawio", "converter", "svg", "png", "generator"],
     description: "Export draw.io diagrams to images",

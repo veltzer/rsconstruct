@@ -326,7 +326,7 @@ fn parallel_keep_going_continues_after_failure() {
     fs::write(project_path.join("tera.templates/good3.txt.tera"), "hello3").unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[build]\nparallel = 2\n",
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[build]\nparallel = 2\n",
     )
     .unwrap();
 
@@ -359,7 +359,7 @@ fn parallel_builds_all_independent_products() {
     }
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[build]\nparallel = 4\n",
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[build]\nparallel = 4\n",
     )
     .unwrap();
 
@@ -402,7 +402,7 @@ fn parallel_timings_flag() {
     }
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[build]\nparallel = 2\n",
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[build]\nparallel = 2\n",
     )
     .unwrap();
 
@@ -428,7 +428,7 @@ fn parallel_timings_flag() {
     // Should have timing entries
     let timing_lines = stdout
         .lines()
-        .filter(|l| l.contains("[tera]") && l.contains("(0."))
+        .filter(|l| l.contains("[processor.generator.tera]") && l.contains("(0."))
         .count();
     assert!(
         timing_lines >= 1,
@@ -522,7 +522,7 @@ fn classify_propagates_through_dependencies() {
     // Phase 2: add a second template with dep_inputs pointing to the first tera output
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\ndep_inputs = [\"step1.txt\"]\n",
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\ndep_inputs = [\"step1.txt\"]\n",
     )
     .unwrap();
     fs::write(project_path.join("tera.templates/step2.txt.tera"), "step2").unwrap();
@@ -588,10 +588,10 @@ fn checker_and_generator_both_rebuild_on_shared_input_change() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         concat!(
-            "[processor.tera]\n",
+            "[processor.generator.tera]\n",
             "src_dirs = [\"tera.templates\"]\n",
             "\n",
-            "[processor.script]\n",
+            "[processor.checker.script]\n",
             "src_dirs = [\"tera.templates\"]\n",
             "src_extensions = [\".tera\"]\n",
             "command = \"true\"\n",
@@ -682,10 +682,10 @@ fn cross_processor_discovery() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         r#"
-[processor.tera]
+[processor.generator.tera]
 src_dirs = ["tera.templates"]
 
-[processor.ascii]
+[processor.checker.ascii]
 src_dirs = ["."]
 src_extensions = [".txt"]
 "#,
@@ -725,7 +725,7 @@ src_extensions = [".txt"]
     // Find the ascii processor's entries
     let ascii_products: Vec<&serde_json::Value> = parsed
         .iter()
-        .filter(|p| p["processor"].as_str() == Some("ascii"))
+        .filter(|p| p["processor"].as_str() == Some("processor.checker.ascii"))
         .collect();
 
     assert!(
@@ -768,7 +768,7 @@ fn explicit_processor_discovery() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         r#"
-[processor.explicit.report]
+[processor.explicit.generic.report]
 command = "scripts/build_report.py"
 inputs = ["config.txt"]
 input_globs = ["data/*.csv"]
@@ -868,10 +868,10 @@ fn cross_processor_nonexistent_output_dir() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         r#"
-[processor.tera]
+[processor.generator.tera]
 src_dirs = ["tera.templates"]
 
-[processor.ascii]
+[processor.checker.ascii]
 src_dirs = ["out/generated"]
 src_extensions = [".txt"]
 "#,
@@ -903,7 +903,7 @@ src_extensions = [".txt"]
     // Tera should have 1 product
     let tera_products: Vec<&serde_json::Value> = parsed
         .iter()
-        .filter(|p| p["processor"].as_str() == Some("tera"))
+        .filter(|p| p["processor"].as_str() == Some("processor.generator.tera"))
         .collect();
     assert_eq!(
         tera_products.len(),
@@ -916,7 +916,7 @@ src_extensions = [".txt"]
     // The fixed-point discovery loop injects tera's declared output as a virtual file.
     let ascii_products: Vec<&serde_json::Value> = parsed
         .iter()
-        .filter(|p| p["processor"].as_str() == Some("ascii"))
+        .filter(|p| p["processor"].as_str() == Some("processor.checker.ascii"))
         .collect();
     assert_eq!(
         ascii_products.len(),
@@ -990,7 +990,7 @@ sleep 0.3
 
     // Create rsconstruct.toml with script processor, max_jobs=2, batch disabled
     let config = format!(
-        r#"[processor.script]
+        r#"[processor.checker.script]
 command = "bash"
 args = ["{script}"]
 src_extensions = [".txt"]
@@ -1095,7 +1095,7 @@ sleep 0.3
 
     // No max_jobs, batch disabled — should use full parallelism
     let config = format!(
-        r#"[processor.script]
+        r#"[processor.checker.script]
 command = "bash"
 args = ["{script}"]
 src_extensions = [".txt"]
@@ -1184,7 +1184,7 @@ cp "$input" "$output"
     fs::write(
         project_path.join("rsconstruct.toml"),
         format!(
-            r#"[processor.generator]
+            r#"[processor.generator.generic]
 command = "{script}"
 src_extensions = [".txt"]
 src_dirs = ["src"]
@@ -1230,7 +1230,7 @@ fn setup_two_processor_project() -> tempfile::TempDir {
     let p = temp_dir.path();
     fs::create_dir_all(p.join("tera.templates")).unwrap();
     fs::create_dir_all(p.join("src")).unwrap();
-    fs::write(p.join("rsconstruct.toml"), "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[processor.ruff]\nsrc_dirs = [\"src\"]\n").unwrap();
+    fs::write(p.join("rsconstruct.toml"), "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[processor.checker.ruff]\nsrc_dirs = [\"src\"]\n").unwrap();
     fs::write(p.join("src/hello.py"), "print('hi')\n").unwrap();
     temp_dir
 }
@@ -1244,8 +1244,11 @@ fn exclude_processor_runs_everything_else() {
     // Build with ruff excluded via -x. The tera processor should still be
     // active — we verify by checking the classify line reports at least one
     // product (tera) and zero ruff-attributable activity.
-    let output =
-        run_rsconstruct_with_env(project_path, &["build", "-x", "ruff"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["build", "-x", "processor.checker.ruff"],
+        &[("NO_COLOR", "1")],
+    );
     // Build should succeed (tera has no templates so it's a no-op but valid).
     assert!(
         output.status.success(),
@@ -1260,7 +1263,7 @@ fn exclude_processor_runs_everything_else() {
     );
     // Stdout/stderr must not mention processing the ruff product for hello.py.
     assert!(
-        !combined.contains("[ruff]"),
+        !combined.contains("[processor.checker.ruff]"),
         "ruff must not run when -x ruff is passed: {}",
         combined
     );
@@ -1296,7 +1299,13 @@ fn include_and_exclude_same_processor_is_error() {
 
     let output = run_rsconstruct_with_env(
         project_path,
-        &["build", "-p", "tera", "-x", "tera"],
+        &[
+            "build",
+            "-p",
+            "processor.generator.tera",
+            "-x",
+            "processor.generator.tera",
+        ],
         &[("NO_COLOR", "1")],
     );
     assert!(!output.status.success(), "-p tera -x tera must fail");
@@ -1345,11 +1354,11 @@ fn svg_change_rebuilds_marp_and_ipdfunite() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         concat!(
-            "[processor.marp]\n",
+            "[processor.generator.marp]\n",
             "src_dirs = [\"marp\"]\n",
             "timeout_secs = 120\n",
             "max_attempts = 3\n",
-            "[processor.ipdfunite]\n",
+            "[processor.generator.ipdfunite]\n",
             "src_dirs = [\"marp\"]\n",
             "[analyzer.markdown]\n",
         ),
@@ -1364,11 +1373,15 @@ fn svg_change_rebuilds_marp_and_ipdfunite() {
         result1.errors, result1.products
     );
     assert!(
-        project_path.join("out/marp/courses/deck/a.pdf").exists(),
+        project_path
+            .join("out/processor.generator.marp/courses/deck/a.pdf")
+            .exists(),
         "marp output PDF should exist on disk"
     );
     assert!(
-        project_path.join("out/ipdfunite/deck.pdf").exists(),
+        project_path
+            .join("out/processor.generator.ipdfunite/deck.pdf")
+            .exists(),
         "ipdfunite merged PDF should exist on disk"
     );
 
@@ -1417,7 +1430,7 @@ fn svg_change_rebuilds_marp_and_ipdfunite() {
     let marp_ran = result3
         .products
         .iter()
-        .any(|p| p.processor == "marp" && p.status == "success");
+        .any(|p| p.processor == "processor.generator.marp" && p.status == "success");
     assert!(
         marp_ran,
         "marp must rebuild when its referenced SVG changes: {:?}",
@@ -1426,7 +1439,7 @@ fn svg_change_rebuilds_marp_and_ipdfunite() {
     let ipdfunite_ran = result3
         .products
         .iter()
-        .any(|p| p.processor == "ipdfunite" && p.status == "success");
+        .any(|p| p.processor == "processor.generator.ipdfunite" && p.status == "success");
     assert!(
         ipdfunite_ran,
         "ipdfunite must rebuild when its upstream marp PDF changes: {:?}",
@@ -1500,10 +1513,10 @@ fn src_dirs_never_defaults_to_scanning_the_tree() {
 
     // (config, expect_any_products) — ruff defaults to src_dirs = [].
     let cases: [(&str, bool); 4] = [
-        ("[processor.ruff]\n", false),
-        ("[processor.ruff]\nsrc_dirs = []\n", false),
-        ("[processor.ruff]\nsrc_dirs = [\"sub\"]\n", true),
-        ("[processor.ruff]\nsrc_dirs = [\"\"]\n", true),
+        ("[processor.checker.ruff]\n", false),
+        ("[processor.checker.ruff]\nsrc_dirs = []\n", false),
+        ("[processor.checker.ruff]\nsrc_dirs = [\"sub\"]\n", true),
+        ("[processor.checker.ruff]\nsrc_dirs = [\"\"]\n", true),
     ];
 
     for (config, expect_products) in cases {
@@ -1541,7 +1554,7 @@ fn state_dir_is_never_indexed() {
     // .gitignore, so nothing but the file index itself excludes .rsconstruct.
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.ijsonlint]\nsrc_dirs = [\"\"]\n",
+        "[processor.checker.ijsonlint]\nsrc_dirs = [\"\"]\n",
     )
     .unwrap();
     fs::write(project_path.join("good.json"), "{\"ok\": true}\n").unwrap();
@@ -1586,8 +1599,9 @@ fn warn_symlinks_knob_controls_the_symlink_warning() {
     fs::write(project_path.join("good.json"), "{\"ok\": true}\n").unwrap();
     std::os::unix::fs::symlink("good.json", project_path.join("linked.json")).unwrap();
 
-    let quiet_config = "[processor.ijsonlint]\nsrc_dirs = [\"\"]\n";
-    let loud_config = "[build]\nwarn_symlinks = true\n\n[processor.ijsonlint]\nsrc_dirs = [\"\"]\n";
+    let quiet_config = "[processor.checker.ijsonlint]\nsrc_dirs = [\"\"]\n";
+    let loud_config =
+        "[build]\nwarn_symlinks = true\n\n[processor.checker.ijsonlint]\nsrc_dirs = [\"\"]\n";
 
     for (config, expect_warning) in [(quiet_config, false), (loud_config, true)] {
         fs::write(project_path.join("rsconstruct.toml"), config).unwrap();
@@ -1621,8 +1635,8 @@ fn output_roots_are_not_indexed() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[build]\noutput_dir = \"artifacts\"\n\n\
-         [processor.tera]\nsrc_dirs = [\"tera.templates\"]\noutput_dir = \"generated\"\n\n\
-         [processor.ijsonlint]\nsrc_dirs = [\"\"]\n",
+         [processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\noutput_dir = \"generated\"\n\n\
+         [processor.checker.ijsonlint]\nsrc_dirs = [\"\"]\n",
     )
     .unwrap();
     fs::write(project_path.join("good.json"), "{\"ok\": true}\n").unwrap();
@@ -1653,7 +1667,7 @@ fn src_dirs_under_output_root_are_scanned() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.ijsonlint]\nsrc_dirs = [\"out/checkme\"]\n",
+        "[processor.checker.ijsonlint]\nsrc_dirs = [\"out/checkme\"]\n",
     )
     .unwrap();
     fs::create_dir_all(project_path.join("out/checkme")).unwrap();
@@ -1728,8 +1742,8 @@ fn no_mtime_cache_chain_converges() {
     // mid-build.
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n\n\
-         [processor.imarkdown2html]\nsrc_dirs = [\"\"]\n",
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n\n\
+         [processor.generator.imarkdown2html]\nsrc_dirs = [\"\"]\n",
     )
     .unwrap();
     fs::write(project_path.join("tera.templates/doc.md.tera"), "# one\n").unwrap();
@@ -1783,7 +1797,7 @@ fn user_listed_dep_auto_must_exist() {
     fs::write(project_path.join("config/present.py"), "x = 1\n").unwrap();
     fs::write(project_path.join("tera.templates/t.txt.tera"), "hello\n").unwrap();
 
-    let strict = "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n\
+    let strict = "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n\
                   dep_auto = [\"config/present.py\", \"config/missing.py\"]\n";
     fs::write(project_path.join("rsconstruct.toml"), strict).unwrap();
     let out = run_rsconstruct(project_path, &["build"]);
@@ -1793,7 +1807,7 @@ fn user_listed_dep_auto_must_exist() {
         "a listed dep_auto file that does not exist must fail the build: {stderr}"
     );
     for needle in [
-        "processor.tera",
+        "processor.generator.tera",
         "config/missing.py",
         "rsconstruct.toml:3",
         "allow_missing_dep_auto",
@@ -1835,7 +1849,8 @@ fn src_dirs_entry_must_exist() {
     let project_path = temp_dir.path();
     fs::write(project_path.join("tera.templates/t.txt.tera"), "hello\n").unwrap();
 
-    let strict = "[processor.tera]\nsrc_dirs = [\"tera.templates\", \"templates_moved\"]\n";
+    let strict =
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\", \"templates_moved\"]\n";
     fs::write(project_path.join("rsconstruct.toml"), strict).unwrap();
     let out = run_rsconstruct(project_path, &["build"]);
     let stderr = String::from_utf8_lossy(&out.stderr);
@@ -1849,7 +1864,7 @@ fn src_dirs_entry_must_exist() {
         "a missing src_dirs entry is a config error (exit 2): {stderr}"
     );
     for needle in [
-        "processor.tera",
+        "processor.generator.tera",
         "templates_moved",
         "allow_missing_src_dirs",
     ] {
@@ -1902,7 +1917,7 @@ fn src_dirs_entry_backed_by_upstream_output_is_not_missing() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         format!(
-            r#"[processor.generator]
+            r#"[processor.generator.generic]
 command = "{script}"
 src_extensions = [".txt"]
 src_dirs = ["src"]
@@ -1910,7 +1925,7 @@ output_dir = "out/gen"
 output_extension = "md"
 batch = false
 
-[processor.markdownlint]
+[processor.checker.markdownlint]
 src_dirs = ["out/gen"]
 "#,
             script = script_path.display(),
@@ -1942,7 +1957,7 @@ fn src_files_entry_must_exist() {
     let project_path = temp_dir.path();
     fs::write(project_path.join("tera.templates/t.txt.tera"), "hello\n").unwrap();
 
-    let strict = "[processor.tera]\nsrc_files = [\"tera.templates/t.txt.tera\", \"tera.templates/gone.tera\"]\n";
+    let strict = "[processor.generator.tera]\nsrc_files = [\"tera.templates/t.txt.tera\", \"tera.templates/gone.tera\"]\n";
     fs::write(project_path.join("rsconstruct.toml"), strict).unwrap();
     let out = run_rsconstruct(project_path, &["build"]);
     let stderr = String::from_utf8_lossy(&out.stderr);
@@ -1952,7 +1967,7 @@ fn src_files_entry_must_exist() {
         "a missing src_files entry must fail as a config error: {stderr}"
     );
     assert!(
-        stderr.contains("processor.tera") && stderr.contains("tera.templates/gone.tera"),
+        stderr.contains("processor.generator.tera") && stderr.contains("tera.templates/gone.tera"),
         "error must name the processor and the entry: {stderr}"
     );
     assert!(
@@ -1991,7 +2006,7 @@ fn src_files_entry_backed_by_upstream_output_is_not_missing() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         format!(
-            r#"[processor.generator]
+            r#"[processor.generator.generic]
 command = "{script}"
 src_extensions = [".txt"]
 src_dirs = ["src"]
@@ -1999,7 +2014,7 @@ output_dir = "out/gen"
 output_extension = "md"
 batch = false
 
-[processor.markdownlint]
+[processor.checker.markdownlint]
 src_files = ["out/gen/a.md"]
 "#,
             script = script_path.display(),
@@ -2028,7 +2043,7 @@ fn src_files_alone_matches_only_the_named_files() {
     fs::write(project_path.join("sub/b.md"), "# b\n").unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.markdownlint]\nsrc_files = [\"a.md\"]\n",
+        "[processor.checker.markdownlint]\nsrc_files = [\"a.md\"]\n",
     )
     .unwrap();
     let output = run_rsconstruct_with_env(
@@ -2046,7 +2061,7 @@ fn src_files_alone_matches_only_the_named_files() {
         .unwrap_or_else(|e| panic!("JSON parse failed: {e}\nOutput: {stdout}"));
     let inputs: Vec<String> = parsed
         .iter()
-        .filter(|p| p["processor"].as_str() == Some("markdownlint"))
+        .filter(|p| p["processor"].as_str() == Some("processor.checker.markdownlint"))
         .flat_map(|p| p["inputs"].as_array().unwrap().iter())
         .map(|i| i.as_str().unwrap().to_string())
         .collect();
@@ -2065,7 +2080,7 @@ fn reject_dot_src_dirs_is_opt_in() {
     let project_path = temp_dir.path();
     fs::write(project_path.join("tera.templates/t.txt.tera"), "hello\n").unwrap();
 
-    let dot = "[processor.tera]\nsrc_dirs = [\".\"]\n";
+    let dot = "[processor.generator.tera]\nsrc_dirs = [\".\"]\n";
     fs::write(project_path.join("rsconstruct.toml"), dot).unwrap();
     let out = run_rsconstruct(project_path, &["build"]);
     assert!(
@@ -2085,7 +2100,7 @@ fn reject_dot_src_dirs_is_opt_in() {
         "with the switch on, \".\" must be a config error: {stderr}"
     );
     for needle in [
-        "processor.tera",
+        "processor.generator.tera",
         "reject_dot_src_dirs",
         "rsconstruct.toml:5",
     ] {
@@ -2095,7 +2110,8 @@ fn reject_dot_src_dirs_is_opt_in() {
         );
     }
 
-    let root = "[build]\nreject_dot_src_dirs = true\n\n[processor.tera]\nsrc_dirs = [\"\"]\n";
+    let root =
+        "[build]\nreject_dot_src_dirs = true\n\n[processor.generator.tera]\nsrc_dirs = [\"\"]\n";
     fs::write(project_path.join("rsconstruct.toml"), root).unwrap();
     let out = run_rsconstruct(project_path, &["build"]);
     assert!(
@@ -2104,7 +2120,7 @@ fn reject_dot_src_dirs_is_opt_in() {
         String::from_utf8_lossy(&out.stderr)
     );
 
-    let disabled = "[build]\nreject_dot_src_dirs = true\n\n[processor.tera]\nsrc_dirs = [\".\"]\nenabled = false\n";
+    let disabled = "[build]\nreject_dot_src_dirs = true\n\n[processor.generator.tera]\nsrc_dirs = [\".\"]\nenabled = false\n";
     fs::write(project_path.join("rsconstruct.toml"), disabled).unwrap();
     let out = run_rsconstruct(project_path, &["build"]);
     assert!(
@@ -2127,7 +2143,7 @@ fn default_dep_auto_stays_optional() {
     fs::write(project_path.join("ok.yaml"), "key: value\n").unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.yamllint]\nsrc_dirs = [\"\"]\n",
+        "[processor.checker.yamllint]\nsrc_dirs = [\"\"]\n",
     )
     .unwrap();
     assert!(!project_path.join(".yamllint").exists());

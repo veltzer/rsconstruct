@@ -80,20 +80,35 @@ fn span_map_of(doc: &Document<&str>, source: &str) -> SpanMap {
     if let Some(item) = root.get("processor")
         && let Some(table) = item.as_table()
     {
-        walk_instance_section(table, Section::Processor, source, &mut map);
+        // Processors nest one level deeper than analyzers: `[processor]` →
+        // type → name → fields, and the instance name carries the whole
+        // path (`processor.checker.ruff`).
+        for (type_name, type_item) in table {
+            let Some(type_table) = type_item.as_table() else {
+                continue;
+            };
+            let prefix = format!("processor.{type_name}.");
+            walk_instance_section(type_table, Section::Processor, &prefix, source, &mut map);
+        }
     }
     if let Some(item) = root.get("analyzer")
         && let Some(table) = item.as_table()
     {
-        walk_instance_section(table, Section::Analyzer, source, &mut map);
+        walk_instance_section(table, Section::Analyzer, "", source, &mut map);
     }
     map
 }
 
-/// Walk `[processor]` or `[analyzer]` — each child is either a single instance
+/// Walk a table of instances — each child is either a single instance
 /// (direct config fields) or a multi-instance container (each grand-child is an
-/// instance).
-fn walk_instance_section(table: &Table, section: Section, source: &str, map: &mut SpanMap) {
+/// instance). `prefix` is prepended to every instance name recorded.
+fn walk_instance_section(
+    table: &Table,
+    section: Section,
+    prefix: &str,
+    source: &str,
+    map: &mut SpanMap,
+) {
     for (type_name, item) in table {
         let Some(sub) = item.as_table() else { continue };
         // Heuristic matches ProcessorConfig::is_multi_instance's shape: if
@@ -102,16 +117,17 @@ fn walk_instance_section(table: &Table, section: Section, source: &str, map: &mu
         let all_children_are_tables = !sub.is_empty() && sub.iter().all(|(_, v)| v.is_table());
 
         if all_children_are_tables {
-            // Multi-instance: [processor.pylint.core], [processor.pylint.tests]
+            // Multi-instance: [processor.checker.pylint.core], [processor.checker.pylint.tests]
             for (inst_suffix, inst_item) in sub {
                 if let Some(inst_table) = inst_item.as_table() {
-                    let instance_name = format!("{type_name}.{inst_suffix}");
+                    let instance_name = format!("{prefix}{type_name}.{inst_suffix}");
                     record_field_lines(inst_table, section, &instance_name, source, map);
                 }
             }
         } else {
             // Single instance
-            record_field_lines(sub, section, type_name, source, map);
+            let instance_name = format!("{prefix}{type_name}");
+            record_field_lines(sub, section, &instance_name, source, map);
         }
     }
 }
@@ -187,20 +203,31 @@ mod tests {
 output_dir = "build"
 parallel = 4
 
-[processor.ruff]
+[processor.checker.ruff]
 src_dirs = ["src"]
 args = ["--fix"]
 
-[processor.pylint.core]
+[processor.checker.pylint.core]
 src_dirs = ["src/core"]
+
+[analyzer.tera]
+strict = true
 "#;
         let (spans, _) = build_span_maps(src);
-        let key = (Section::Processor, "ruff".to_string(), "args".to_string());
-        let line = spans.get(&key).copied().unwrap_or(0);
-        assert!(
-            line > 0,
-            "expected a real line for ruff.args, got {line} (span map: {spans:?})"
+        let key = (
+            Section::Processor,
+            "processor.checker.ruff".to_string(),
+            "args".to_string(),
         );
+        assert_eq!(spans.get(&key), Some(&7), "span map: {spans:?}");
+        let key = (
+            Section::Processor,
+            "processor.checker.pylint.core".to_string(),
+            "src_dirs".to_string(),
+        );
+        assert_eq!(spans.get(&key), Some(&10), "span map: {spans:?}");
+        let key = (Section::Analyzer, "tera".to_string(), "strict".to_string());
+        assert_eq!(spans.get(&key), Some(&13), "span map: {spans:?}");
     }
 
     #[test]

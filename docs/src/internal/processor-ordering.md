@@ -138,13 +138,13 @@ Another way to close the gap without adding ordering knobs: make opaque Creators
 Instead of the Creator declaring `output_dirs = ["_site"]` (opaque — "something goes in here"), it would declare (or generate) the exact file list it will produce:
 
 ```toml
-[processor.creator.mkdocs]
+[processor.creator.generic.mkdocs]
 command         = "mkdocs build --site-dir _site"
 predict_command = "./list-mkdocs-outputs.sh"   # prints one output path per line
 output_dirs     = ["_site"]
 ```
 
-The [mass generator](../processor/mass_generator/mass_generator.md) does exactly this: rsconstruct runs `predict_command` at graph-build time, turns each printed path into a declared `outputs` entry, and the opaque Creator becomes a set of per-file products. After that, the entire "how do we order two processors that both write into `_site/`?" question dissolves — every file has exactly one declared owner, and the normal Generator/data-flow rules apply.
+The [mass generator](../processor/mass_generator/generic.md) does exactly this: rsconstruct runs `predict_command` at graph-build time, turns each printed path into a declared `outputs` entry, and the opaque Creator becomes a set of per-file products. After that, the entire "how do we order two processors that both write into `_site/`?" question dissolves — every file has exactly one declared owner, and the normal Generator/data-flow rules apply.
 
 **Why this is an alternative to ordering knobs:**
 

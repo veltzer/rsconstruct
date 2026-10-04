@@ -21,7 +21,7 @@ single taplo invocation for better performance.
 ## Configuration
 
 ```toml
-[processor.taplo]
+[processor.checker.taplo]
 command = "taplo"                             # The taplo command to run
 args = []                                    # Additional arguments to pass to taplo
 dep_inputs = []                            # Additional files that trigger rebuilds when changed

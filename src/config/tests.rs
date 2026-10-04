@@ -186,7 +186,7 @@ fn line_preservation_invariant_holds() {
         "multiline = \"one\\ntwo\\nthree\"\n",
         "tbl = { x = 1, y = 2 }\n",
         "\n",
-        "[processor.ruff]\n",
+        "[processor.checker.ruff]\n",
         "src_dirs = \"${dirs}\"\n",
         "note = \"${multiline}\"\n",
         "opts = \"${tbl}\"\n",
@@ -221,7 +221,8 @@ fn line_preservation_invariant_holds() {
 /// must blank the `[vars]` lines rather than delete them.
 #[test]
 fn remove_vars_section_preserves_line_count() {
-    let content = "[vars]\na = \"1\"\nb = \"2\"\n\n[processor.ruff]\nsrc_dirs = [\"src\"]\n";
+    let content =
+        "[vars]\na = \"1\"\nb = \"2\"\n\n[processor.checker.ruff]\nsrc_dirs = [\"src\"]\n";
     let before = content.lines().count();
     let result = remove_vars_section(content);
     assert_eq!(
@@ -235,7 +236,10 @@ fn remove_vars_section_preserves_line_count() {
     );
     // The surviving section must still be at its original line index.
     let lines: Vec<&str> = result.lines().collect();
-    assert_eq!(lines[4], "[processor.ruff]", "line 5 moved: {lines:?}");
+    assert_eq!(
+        lines[4], "[processor.checker.ruff]",
+        "line 5 moved: {lines:?}"
+    );
 }
 
 /// `value_to_toml_inline` is the function that would break the invariant
@@ -295,8 +299,7 @@ fn extract_var_names_ignores_equals_inside_array_items() {
 /// though an array item happens to start with `a=`.
 #[test]
 fn equals_in_array_item_does_not_define_a_variable() {
-    let content =
-        "[vars]\npatterns = [\n  \"a=b\",\n]\n\n[processor.tera]\nsrc_dirs = [\"${a}\"]\n";
+    let content = "[vars]\npatterns = [\n  \"a=b\",\n]\n\n[processor.generator.tera]\nsrc_dirs = [\"${a}\"]\n";
     let err = substitute_variables(content).unwrap_err().to_string();
     assert!(
         err.contains("Undefined variable"),
@@ -483,7 +486,7 @@ typo_field = true
 
 #[test]
 fn analyzer_validator_is_noop_without_analyzer_section() {
-    let raw = toml_of("[processor.ruff]\nsrc_dirs = [\".\"]\n");
+    let raw = toml_of("[processor.checker.ruff]\nsrc_dirs = [\".\"]\n");
     let errors = validate_analyzer_fields_raw(&raw);
     assert!(errors.is_empty(), "{errors:?}");
 }
@@ -494,10 +497,16 @@ use crate::config::merge_toml_values;
 
 #[test]
 fn merge_tables_recursively() {
-    let mut base = toml_of("[processor.mypy]\nsrc_dirs = [\"src\"]\nbatch = true\n");
-    let overlay = toml_of("[processor.mypy]\nbatch = false\n");
+    let mut base = toml_of("[processor.checker.mypy]\nsrc_dirs = [\"src\"]\nbatch = true\n");
+    let overlay = toml_of("[processor.checker.mypy]\nbatch = false\n");
     merge_toml_values(&mut base, overlay);
-    let mypy = base.get("processor").unwrap().get("mypy").unwrap();
+    let mypy = base
+        .get("processor")
+        .unwrap()
+        .get("checker")
+        .unwrap()
+        .get("mypy")
+        .unwrap();
     // Untouched key survives; overlaid key is replaced.
     assert_eq!(mypy.get("src_dirs").unwrap().as_array().unwrap().len(), 1);
     assert_eq!(mypy.get("batch").unwrap().as_bool(), Some(false));
@@ -505,11 +514,13 @@ fn merge_tables_recursively() {
 
 #[test]
 fn merge_arrays_replace_wholesale() {
-    let mut base = toml_of("[processor.ruff]\nsrc_dirs = [\"src\", \"config\"]\n");
-    let overlay = toml_of("[processor.ruff]\nsrc_dirs = [\"scripts\"]\n");
+    let mut base = toml_of("[processor.checker.ruff]\nsrc_dirs = [\"src\", \"config\"]\n");
+    let overlay = toml_of("[processor.checker.ruff]\nsrc_dirs = [\"scripts\"]\n");
     merge_toml_values(&mut base, overlay);
     let dirs = base
         .get("processor")
+        .unwrap()
+        .get("checker")
         .unwrap()
         .get("ruff")
         .unwrap()
@@ -523,13 +534,15 @@ fn merge_arrays_replace_wholesale() {
 
 #[test]
 fn merge_adds_overlay_only_sections() {
-    let mut base = toml_of("[processor.tera]\n");
-    let overlay =
-        toml_of("[dependencies]\npip = [\"requests\"]\n\n[processor.ruff]\nsrc_dirs = [\"src\"]\n");
+    let mut base = toml_of("[processor.generator.tera]\n");
+    let overlay = toml_of(
+        "[dependencies]\npip = [\"requests\"]\n\n[processor.checker.ruff]\nsrc_dirs = [\"src\"]\n",
+    );
     merge_toml_values(&mut base, overlay);
     assert!(base.get("dependencies").is_some());
-    assert!(base.get("processor").unwrap().get("tera").is_some());
-    assert!(base.get("processor").unwrap().get("ruff").is_some());
+    let processor = base.get("processor").unwrap();
+    assert!(processor.get("generator").unwrap().get("tera").is_some());
+    assert!(processor.get("checker").unwrap().get("ruff").is_some());
 }
 
 #[test]
@@ -554,7 +567,7 @@ fn processor_and_analyzer_validators_are_independent() {
     // somebody changed `Config::load` to `?` on the first validator.
     let raw = toml_of(
         r#"
-[processor.ruff]
+[processor.checker.ruff]
 unknown_proc_field = "x"
 
 [analyzer.python]
@@ -578,7 +591,8 @@ enabeld = false
 /// not a silent literal pass-through.
 #[test]
 fn substitute_variables_rejects_partial_references() {
-    let content = "[vars]\nbase = \"proj\"\n\n[processor.tera]\nsrc_dirs = [\"${base}/src\"]\n";
+    let content =
+        "[vars]\nbase = \"proj\"\n\n[processor.generator.tera]\nsrc_dirs = [\"${base}/src\"]\n";
     let err = substitute_variables(content).unwrap_err();
     assert!(
         err.to_string().contains("entire quoted value"),
@@ -590,7 +604,7 @@ fn substitute_variables_rejects_partial_references() {
 /// the residual scan it flowed through silently.
 #[test]
 fn substitute_variables_rejects_partial_undefined_references() {
-    let content = "[processor.tera]\nsrc_dirs = [\"${nope}/src\"]\n";
+    let content = "[processor.generator.tera]\nsrc_dirs = [\"${nope}/src\"]\n";
     let err = substitute_variables(content).unwrap_err();
     assert!(
         err.to_string().contains("Unresolved variable reference"),
@@ -679,57 +693,55 @@ fn docs_dir_for(processor_type: crate::processor::ProcessorType) -> &'static str
 #[test]
 fn every_plugin_has_docs_and_tests() {
     const DOCS_ALLOWLIST: &[&str] = &[
-        "creator",
-        "duplicate_files",
-        "encoding",
-        "ijq",
-        "ijsonlint",
-        "ipdfunite",
-        "isass",
-        "itaplo",
-        "iyamllint",
-        "license_header",
-        "marp_images",
-        "prettier",
-        "svglint",
-        "svgo",
+        "processor.checker.duplicate_files",
+        "processor.checker.encoding",
+        "processor.checker.ijq",
+        "processor.checker.ijsonlint",
+        "processor.generator.ipdfunite",
+        "processor.generator.isass",
+        "processor.checker.itaplo",
+        "processor.checker.iyamllint",
+        "processor.checker.license_header",
+        "processor.checker.marp_images",
+        "processor.checker.prettier",
+        "processor.checker.svglint",
+        "processor.checker.svgo",
     ];
     const TESTS_ALLOWLIST: &[&str] = &[
-        "checkpatch",
-        "chromium",
-        "cpplint",
-        "encoding",
-        "explicit",
-        "ijq",
-        "ijsonlint",
-        "imarkdown2html",
-        "ipdfunite",
-        "isass",
-        "itaplo",
-        "iyamllint",
-        "license_header",
-        "linux_module",
-        "markdown2html",
-        "marp_images",
-        "objdump",
-        "prettier",
-        "yaml2json",
+        "processor.checker.checkpatch",
+        "processor.generator.chromium",
+        "processor.checker.cpplint",
+        "processor.checker.encoding",
+        "processor.explicit.generic",
+        "processor.checker.ijq",
+        "processor.checker.ijsonlint",
+        "processor.generator.imarkdown2html",
+        "processor.generator.ipdfunite",
+        "processor.generator.isass",
+        "processor.checker.itaplo",
+        "processor.checker.iyamllint",
+        "processor.checker.license_header",
+        "processor.generator.markdown2html",
+        "processor.checker.marp_images",
+        "processor.generator.objdump",
+        "processor.checker.prettier",
+        "processor.generator.yaml2json",
     ];
 
     let mut missing: Vec<String> = Vec::new();
     for plugin in all_plugins() {
-        let name = plugin.name;
-        let docs_page = format!(
-            "docs/src/processor/{}/{name}.md",
-            docs_dir_for(plugin.processor_type)
-        );
-        if !DOCS_ALLOWLIST.contains(&name) && !std::path::Path::new(&docs_page).exists() {
-            missing.push(format!("{name}: no {docs_page}"));
+        let pname = plugin.pname();
+        // Docs and tests mirror the source tree: one directory per type, one
+        // file per processor, so `generic` can exist once per type.
+        let dir = docs_dir_for(plugin.processor_type);
+        let docs_page = format!("docs/src/processor/{dir}/{}.md", plugin.name);
+        if !DOCS_ALLOWLIST.contains(&pname.as_str()) && !std::path::Path::new(&docs_page).exists() {
+            missing.push(format!("{pname}: no {docs_page}"));
         }
-        if !TESTS_ALLOWLIST.contains(&name)
-            && !std::path::Path::new(&format!("tests/processor/{name}.rs")).exists()
+        let test_file = format!("tests/processor/{dir}/{}.rs", plugin.name);
+        if !TESTS_ALLOWLIST.contains(&pname.as_str()) && !std::path::Path::new(&test_file).exists()
         {
-            missing.push(format!("{name}: no tests/processor/{name}.rs"));
+            missing.push(format!("{pname}: no {test_file}"));
         }
     }
     missing.sort();
@@ -785,17 +797,19 @@ fn classify(toml_src: &str) -> SectionShape {
     let table = value
         .get("processor")
         .unwrap()
+        .get("checker")
+        .unwrap()
         .get("pylint")
         .unwrap()
         .as_table()
         .unwrap();
-    ProcessorConfig::classify_section("pylint", table)
+    ProcessorConfig::classify_section("processor.checker.pylint", table)
 }
 
 #[test]
 fn section_with_config_fields_is_single_instance() {
     assert_eq!(
-        classify("[processor.pylint]\nargs = [\"--x\"]\n"),
+        classify("[processor.checker.pylint]\nargs = [\"--x\"]\n"),
         SectionShape::SingleInstance,
     );
 }
@@ -804,7 +818,7 @@ fn section_with_config_fields_is_single_instance() {
 fn section_with_only_subtables_is_multi_instance() {
     assert_eq!(
         classify(
-            "[processor.pylint.core]\nargs = [\"--x\"]\n\n[processor.pylint.tests]\nargs = [\"--y\"]\n"
+            "[processor.checker.pylint.core]\nargs = [\"--x\"]\n\n[processor.checker.pylint.tests]\nargs = [\"--y\"]\n"
         ),
         SectionShape::MultiInstance,
     );
@@ -813,7 +827,7 @@ fn section_with_only_subtables_is_multi_instance() {
 #[test]
 fn empty_section_is_single_instance() {
     assert_eq!(
-        classify("[processor.pylint]\n"),
+        classify("[processor.checker.pylint]\n"),
         SectionShape::SingleInstance
     );
 }
@@ -825,7 +839,7 @@ fn empty_section_is_single_instance() {
 #[test]
 fn instance_named_after_a_config_field_is_ambiguous() {
     let shape = classify(
-        "[processor.pylint.args]\nargs = [\"--x\"]\n\n[processor.pylint.other]\nargs = [\"--y\"]\n",
+        "[processor.checker.pylint.args]\nargs = [\"--x\"]\n\n[processor.checker.pylint.other]\nargs = [\"--y\"]\n",
     );
     match shape {
         SectionShape::Ambiguous { colliding } => {
@@ -841,7 +855,7 @@ fn instance_named_after_a_config_field_is_ambiguous() {
 #[test]
 fn instance_named_after_a_scan_field_is_ambiguous() {
     let shape = classify(
-        "[processor.pylint.src_dirs]\nargs = [\"--x\"]\n\n[processor.pylint.other]\nargs = [\"--y\"]\n",
+        "[processor.checker.pylint.src_dirs]\nargs = [\"--x\"]\n\n[processor.checker.pylint.other]\nargs = [\"--y\"]\n",
     );
     assert!(
         matches!(shape, SectionShape::Ambiguous { .. }),
@@ -857,7 +871,7 @@ fn instance_named_after_a_scan_field_is_ambiguous() {
 fn mixed_scalar_and_table_values_are_single_instance() {
     assert_eq!(
         classify(
-            "[processor.pylint]\nargs = [\"--x\"]\n\n[processor.pylint.core]\nargs = [\"--y\"]\n"
+            "[processor.checker.pylint]\nargs = [\"--x\"]\n\n[processor.checker.pylint.core]\nargs = [\"--y\"]\n"
         ),
         SectionShape::SingleInstance,
     );

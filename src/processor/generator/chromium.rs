@@ -55,7 +55,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     fields: &[],
     omit_standard_fields: &[],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".html"], src_exclude_dirs: &[] }),
-    defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/chromium", command: "google-chrome", ..crate::config::ProcessorDefaults::EMPTY }),
+    defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.chromium", command: "google-chrome", ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["html", "pdf", "converter", "browser", "web"],
     description: "Convert files to PDF using Chromium",

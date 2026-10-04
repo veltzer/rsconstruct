@@ -16,16 +16,16 @@ typical processors — see [Concurrency limiting](#concurrency-limiting) below.
 ## Source Files
 
 - Input: `**/*.md`
-- Output: `out/marp/{format}/{relative_path}.{format}`
+- Output: `out/processor.generator.marp/{format}/{relative_path}.{format}`
 
 ## Configuration
 
 ```toml
-[processor.marp]
+[processor.generator.marp]
 command = "marp"                       # The marp command to run
 formats = ["pdf"]                      # Output formats (pdf, pptx, html)
 args = ["--html", "--allow-local-files"]  # Additional arguments to pass to marp
-output_dir = "out/marp"                # Output directory
+output_dir = "out/processor.generator.marp"                # Output directory
 dep_inputs = []                      # Additional files that trigger rebuilds when changed
 max_jobs = 2                           # Limit concurrent marp instances (each spawns Chromium)
 ```
@@ -35,7 +35,7 @@ max_jobs = 2                           # Limit concurrent marp instances (each s
 | `command` | string | `"marp"` | The marp executable to run |
 | `formats` | string[] | `["pdf"]` | Output formats to generate (`pdf`, `pptx`, `html`) |
 | `args` | string[] | `["--html", "--allow-local-files"]` | Extra arguments passed to marp |
-| `output_dir` | string | `"out/marp"` | Base output directory |
+| `output_dir` | string | `"out/processor.generator.marp"` | Base output directory |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `max_jobs` | integer | none | Max concurrent marp processes. See [Concurrency limiting](#concurrency-limiting). |
 
@@ -56,7 +56,7 @@ the global `-j` setting. For example, with `-j 20` and `max_jobs = 2`, at most
 full 20 threads:
 
 ```toml
-[processor.marp]
+[processor.generator.marp]
 formats = ["pdf"]
 max_jobs = 2
 ```

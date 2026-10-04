@@ -15,17 +15,17 @@ parallel = 1          # Number of parallel jobs (1 = sequential, 0 = auto-detect
 batch_size = 0        # Max files per batch for batch-capable processors (0 = no limit)
 output_dir = "out"    # Global output directory prefix for generator processors
 
-# Declare processors by adding [processor.NAME] sections.
+# Declare processors by adding [processor.TYPE.NAME] sections.
 # Only declared processors run — no processors are enabled by default.
 # Use `rsconstruct smart auto` to auto-detect and add relevant processors.
 
-[processor.ruff]
+[processor.checker.ruff]
 # args = []
 
-[processor.pylint]
+[processor.checker.pylint]
 # args = ["--disable=C0114"]
 
-[processor.cc_single_file]
+[processor.generator.cc_single_file]
 # cc = "gcc"
 # cflags = ["-Wall", "-O2"]
 
@@ -70,16 +70,16 @@ Lua plugin configuration is documented under [Lua Plugins](plugins.md).
 
 ## Processor instances
 
-Processors are declared by adding a `[processor.NAME]` section to `rsconstruct.toml`. An empty section enables the processor with default settings:
+Processors are declared by adding a `[processor.TYPE.NAME]` section to `rsconstruct.toml`. An empty section enables the processor with default settings:
 
 ```toml
-[processor.pylint]
+[processor.checker.pylint]
 ```
 
 Customize with config fields:
 
 ```toml
-[processor.pylint]
+[processor.checker.pylint]
 args = ["--disable=C0114,C0116"]
 src_dirs = ["src"]
 ```
@@ -91,37 +91,60 @@ Remove the section to disable the processor.
 Run the same processor multiple times with different configurations by adding named sub-sections:
 
 ```toml
-[processor.pylint.core]
+[processor.checker.pylint.core]
 src_dirs = ["src/core"]
 args = ["--disable=C0114"]
 
-[processor.pylint.tests]
+[processor.checker.pylint.tests]
 src_dirs = ["tests"]
 args = ["--disable=C0114,C0116"]
 ```
 
 Each instance runs independently with its own config and cache.
 
-You cannot mix single-instance and multi-instance formats for the same processor type — use either `[processor.pylint]` or `[processor.pylint.NAME]`, not both.
+You cannot mix single-instance and multi-instance formats for the same processor — use either `[processor.checker.pylint]` or `[processor.checker.pylint.NAME]`, not both.
+
+#### Processor names
+
+A processor is named by its full path, `processor.<type>.<name>`, the same path its source file has (`src/processor/checker/ruff.rs` is `processor.checker.ruff`). The type is one of `checker`, `generator`, `creator`, `explicit`, `mass_generator` and `lua`; the name is unique only within its type, which is why the config-driven processors share one name: `processor.creator.generic`, `processor.generator.generic`, `processor.explicit.generic`, `processor.mass_generator.generic`. The section header is the name: `[processor.checker.ruff]`.
+
+`rsconstruct processor list` prints every processor's full name; `rsconstruct processor list --type creator` narrows it to one type.
 
 #### Instance naming
 
-A single instance declared as `[processor.pylint]` has the instance name `pylint`. Named instances declared as `[processor.pylint.core]` and `[processor.pylint.tests]` have instance names `pylint.core` and `pylint.tests`.
+A single instance declared as `[processor.checker.pylint]` has the instance name `processor.checker.pylint`. Named instances declared as `[processor.checker.pylint.core]` and `[processor.checker.pylint.tests]` have instance names `processor.checker.pylint.core` and `processor.checker.pylint.tests`.
 
 The instance name is used everywhere a processor is identified:
 
-- **Build output and progress**: `[pylint.core] src/core/main.py`
-- **Error messages**: `Error: [pylint.tests] tests/test_foo.py: ...`
+- **Build output and progress**: `[processor.checker.pylint.core] src/core/main.py`
+- **Error messages**: `Error: [processor.checker.pylint.tests] tests/test_foo.py: ...`
 - **Build statistics**: each instance reports its own file counts and durations
 - **Cache keys**: instances have separate caches, so changing one config does not invalidate the other
-- **Output directories**: generator processors default to `out/{instance_name}` (e.g., `out/marp.slides` and `out/marp.docs` for two marp instances), ensuring outputs do not collide
-- **The `--processors` filter**: use the full instance name, e.g., `rsconstruct build -p pylint.core`
+- **Output directories**: generator processors default to `out/{instance_name}` — `out/processor.generator.tera` for a single tera instance, `out/processor.generator.marp.slides` and `out/processor.generator.marp.docs` for two marp instances — so outputs never collide
+- **The `--processors` filter**: use the full instance name, e.g., `rsconstruct build -p processor.checker.pylint.core`
+- **`processor config`, `processor files`, `--iset`**: `rsconstruct processor config processor.checker.pylint.core`, `--iset processor.checker.pylint.core.max_jobs=2`
 
-For single instances, the instance name equals the processor type name (e.g., `pylint`), so there is no visible difference from previous behavior.
+#### Migrating from short names
+
+Until rsconstruct 0.9.x a processor was named by its bare name (`[processor.ruff]`, `-p ruff`, `out/tera`). The full-name scheme is a one-shot, mechanical rewrite of every `rsconstruct.toml`:
+
+| Before | After |
+|---|---|
+| `[processor.ruff]` | `[processor.checker.ruff]` |
+| `[processor.pylint.core]` | `[processor.checker.pylint.core]` |
+| `[processor.creator.venv]` | `[processor.creator.generic.venv]` |
+| `[processor.explicit]` | `[processor.explicit.generic]` |
+| `[processor.myplugin]` (Lua) | `[processor.lua.myplugin]` |
+| `src_dirs = ["out/tera"]` | `src_dirs = ["out/processor.generator.tera"]` |
+| `rsconstruct build -p ruff` | `rsconstruct build -p processor.checker.ruff` |
+
+`scripts/migrate_processor_names.py` in the rsconstruct repository performs the rewrite for one or more repositories (`python3 scripts/migrate_processor_names.py ~/git/*/rsconstruct.toml`): it renames every section header, rewrites `out/<name>` references to processors whose default output directory moved, and reports any other file in the repository that still mentions an old `out/<name>` path, so Makefiles and CI that point into `out/` can be fixed by hand. It asks the installed `rsconstruct processor list --json` which type each name has, so it needs a rsconstruct that already speaks full names. An old-style header is a config error with a hint (`[processor.ruff]: unknown processor type 'ruff' … did you mean [processor.checker.ruff]?`), so a missed file fails loudly rather than silently building nothing.
+
+Every cache entry is keyed by the processor name, so the first build after migrating rebuilds everything once.
 
 ### Auto-detection
 
-Run `rsconstruct smart auto` to scan the project and automatically add `[processor.NAME]` sections for all processors whose files are detected and whose tools are installed. It does not remove existing sections.
+Run `rsconstruct smart auto` to scan the project and automatically add `[processor.TYPE.NAME]` sections for all processors whose files are detected and whose tools are installed. It does not remove existing sections.
 
 ## Variable substitution
 
@@ -131,10 +154,10 @@ Define variables in a `[vars]` section and reference them using `${var_name}` sy
 [vars]
 kernel_excludes = ["/kernel/", "/kernel_standalone/", "/examples_standalone/"]
 
-[processor.cppcheck]
+[processor.checker.cppcheck]
 src_exclude_dirs = "${kernel_excludes}"
 
-[processor.cc_single_file]
+[processor.generator.cc_single_file]
 src_exclude_dirs = "${kernel_excludes}"
 ```
 
@@ -150,7 +173,7 @@ generators, exclude lists, one-off workarounds — in the local file.
 
 Merge semantics:
 
-- **Tables merge recursively.** A local `[processor.mypy]` with only
+- **Tables merge recursively.** A local `[processor.checker.mypy]` with only
   `batch = false` adds that one key to the main file's mypy section; the rest
   of the section is untouched.
 - **Arrays and scalars replace wholesale.** If the local file sets
@@ -225,7 +248,7 @@ Rules:
 |---|---|---|---|
 | `parallel` | integer | `1` | Number of parallel jobs. `1` = sequential, `0` = auto-detect CPU cores. Can also be set via the `RSCONSTRUCT_THREADS` environment variable (CLI `-j` takes precedence). |
 | `batch_size` | integer | `0` | Maximum files per batch for batch-capable processors. `0` = no limit (all files in one batch). To disable batching, pass `--batch-size -1` on the CLI or set `batch = false` on individual processors. |
-| `output_dir` | string | `"out"` | Global output directory prefix. Processor `output_dir` defaults that start with `out/` are remapped to use this prefix (e.g., setting `"build"` changes `out/marp` to `build/marp`). Individual processors can still override their `output_dir` explicitly. |
+| `output_dir` | string | `"out"` | Global output directory prefix. Processor `output_dir` defaults that start with `out/` are remapped to use this prefix (e.g., setting `"build"` changes `out/processor.generator.marp` to `build/marp`). Individual processors can still override their `output_dir` explicitly. |
 | `max_discovery_passes` | integer | `10` | Maximum fixed-point discovery passes. Discovery repeats while processors keep adding products from each other's declared outputs; a config still adding products at the cap fails the build (naming the processors involved) instead of silently truncating the graph. |
 | `hash_tool_versions` | boolean | `true` | Mix the identity of each processor's external tools into its products' cache keys, so upgrading a tool invalidates what that tool produced. Tools are identified by a content hash of the resolved binary (no `--version` subprocess; the mtime cache makes repeat builds a stat), or by the pinned `version_output` when [`rsconstruct tools lock`](commands.md#rsconstruct-tools) has written a `.tools.versions` file. Set to `false` to leave tool identity out of cache keys entirely. |
 | `warn_symlinks` | boolean | `false` | Warn about every symlink skipped during the file-index walk. The walker never follows symlinks, so a symlinked source (or a symlinked directory of sources) is absent from the index — never checked, never built. Set to `true` to make that gap visible. Off by default because projects that deliberately keep symlinks around (vendored trees, dotfile farms) would drown in warnings. |
@@ -236,9 +259,9 @@ Rules:
 
 The `output_dir` prefix is purely a layout choice — `rsconstruct clean outputs` does not special-case it. Cleanup is driven by per-product `outputs` and `output_dirs` declarations, then a generic empty-directory sweep walks parents bottom-up. See [Clean behavior](processors.md#clean-behavior) and [`rsconstruct clean`](commands.md#rsconstruct-clean) for details.
 
-### `[processor.NAME]`
+### `[processor.TYPE.NAME]`
 
-Each `[processor.NAME]` section declares a processor instance. The section name must match a builtin processor type (e.g., `ruff`, `pylint`, `cc_single_file`) or a [Lua plugin](plugins.md) name.
+Each `[processor.TYPE.NAME]` section declares a processor instance. The header is the processor's full name: `TYPE` is its type (`checker`, `generator`, `creator`, `explicit`, `mass_generator`, or `lua` for a [Lua plugin](plugins.md)) and `NAME` the processor within that type (`[processor.checker.ruff]`, `[processor.generator.cc_single_file]`, `[processor.lua.myplugin]`). A fourth segment names an instance (`[processor.checker.pylint.core]`).
 
 Common fields available to all processors:
 
@@ -308,9 +331,9 @@ entry:
 
 ```
 Invalid config:
-  [processor.pylint] src_dirs entry 'scripts' does not exist or is not a directory
-  [processor.luacheck] src_dirs entry 'config' does not exist or is not a directory
-  [processor.taplo] src_files entry 'pyproject.toml' does not exist or is not a file
+  [processor.checker.pylint] src_dirs entry 'scripts' does not exist or is not a directory
+  [processor.checker.luacheck] src_dirs entry 'config' does not exist or is not a directory
+  [processor.checker.taplo] src_files entry 'pyproject.toml' does not exist or is not a file
 Every src_dirs entry must name a directory that exists and every src_files
 entry a file that exists (or a path an upstream processor declares as its
 output) — fix the path or remove the entry; [build] allow_missing_src_dirs =

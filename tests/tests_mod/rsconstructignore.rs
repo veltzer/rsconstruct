@@ -176,13 +176,13 @@ fn rsconstructignore_cc_processor() {
 
     assert!(
         project_path
-            .join("out/cc_single_file/src/included.elf")
+            .join("out/processor.generator.cc_single_file/src/included.elf")
             .exists(),
         "included.c should be compiled"
     );
     assert!(
         !project_path
-            .join("out/cc_single_file/src/excluded/skip.elf")
+            .join("out/processor.generator.cc_single_file/src/excluded/skip.elf")
             .exists(),
         "excluded/skip.c should not be compiled"
     );
@@ -225,13 +225,13 @@ fn rsconstructignore_leading_slash() {
 
     assert!(
         project_path
-            .join("out/cc_single_file/src/keep.elf")
+            .join("out/processor.generator.cc_single_file/src/keep.elf")
             .exists(),
         "keep.c should be compiled"
     );
     assert!(
         !project_path
-            .join("out/cc_single_file/src/skip_dir/skip.elf")
+            .join("out/processor.generator.cc_single_file/src/skip_dir/skip.elf")
             .exists(),
         "skip_dir/skip.c should be excluded by /src/skip_dir/** pattern"
     );
@@ -270,13 +270,13 @@ fn rsconstructignore_trailing_slash() {
 
     assert!(
         project_path
-            .join("out/cc_single_file/src/keep.elf")
+            .join("out/processor.generator.cc_single_file/src/keep.elf")
             .exists(),
         "keep.c should be compiled"
     );
     assert!(
         !project_path
-            .join("out/cc_single_file/src/skipme/deep.elf")
+            .join("out/processor.generator.cc_single_file/src/skipme/deep.elf")
             .exists(),
         "skipme/deep.c should be excluded by /src/skipme/ pattern"
     );

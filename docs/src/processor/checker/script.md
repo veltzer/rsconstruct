@@ -26,7 +26,7 @@ single invocation for better performance.
 ## Configuration
 
 ```toml
-[processor.script]
+[processor.checker.script]
 enabled = true
 command = "python"
 args = ["scripts/md_lint.py", "-q"]

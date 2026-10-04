@@ -18,7 +18,7 @@ directory, and creates a stamp file on success. Sibling `.json`, `.js`, and
 ## Configuration
 
 ```toml
-[processor.npm]
+[processor.creator.npm]
 command = "npm"                        # The npm command to run
 args = []                              # Additional arguments to pass to npm install
 dep_inputs = []                      # Additional files that trigger rebuilds when changed

@@ -63,7 +63,7 @@ frontmatter fields. Empty lists (`[]`) and empty strings are treated as missing.
 Files with no frontmatter block at all also fail:
 
 ```toml
-[processor.tags]
+[processor.generator.tags]
 required_fields = ["tags", "level", "category", "duration_hours", "audiences"]
 ```
 
@@ -80,7 +80,7 @@ one** group (all fields in that group present). This handles cases where files
 may have alternative sets of fields:
 
 ```toml
-[processor.tags]
+[processor.generator.tags]
 required_field_groups = [
     ["duration_hours"],
     ["duration_hours_long", "duration_hours_short"],
@@ -103,7 +103,7 @@ exists in the corresponding `tags/<field>.txt` file. This catches typos in
 scalar values:
 
 ```toml
-[processor.tags]
+[processor.generator.tags]
 required_values = ["level", "category"]
 ```
 
@@ -118,7 +118,7 @@ When `field_types` is configured, frontmatter fields must have the expected
 type. Supported types: `"list"`, `"scalar"`, `"number"`.
 
 ```toml
-[processor.tags.field_types]
+[processor.generator.tags.field_types]
 tags = "list"
 level = "scalar"
 duration_hours = "number"
@@ -135,7 +135,7 @@ When `unique_fields` is configured, no two files may share the same value for
 that field:
 
 ```toml
-[processor.tags]
+[processor.generator.tags]
 unique_fields = ["title"]
 ```
 
@@ -152,7 +152,7 @@ When `sorted_tags = true`, list-type frontmatter fields must have their items
 in lexicographic sorted order. This reduces diff noise in version control:
 
 ```toml
-[processor.tags]
+[processor.generator.tags]
 sorted_tags = true
 ```
 
@@ -206,13 +206,13 @@ Unused tags in tags (not used by any file):
 ## Source Files
 
 - Input: `**/*.md` (configurable via `src_dirs` / `src_extensions`)
-- Output: `out/tags/tags.db`
+- Output: `out/processor.generator.tags/tags.db`
 
 ## Configuration
 
 ```toml
-[processor.tags]
-output = "out/tags/tags.db"                                       # Output database path
+[processor.generator.tags]
+output = "out/processor.generator.tags/tags.db"                                       # Output database path
 tags_dir = "tags"                                            # Directory containing tag list files
 required_fields = ["tags", "level", "category"]                   # Fields every .md file must have
 required_field_groups = [                                         # At least one group must be fully present
@@ -224,7 +224,7 @@ unique_fields = ["title"]                                         # Fields that 
 sorted_tags = true                                                # Require list items in sorted order
 dep_inputs = []                                                 # Additional files that trigger rebuilds
 
-[processor.tags.field_types]
+[processor.generator.tags.field_types]
 tags = "list"                                                     # Must be a YAML list
 level = "scalar"                                                  # Must be a string
 duration_hours = "number"                                         # Must be numeric
@@ -232,7 +232,7 @@ duration_hours = "number"                                         # Must be nume
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `output` | string | `"out/tags/tags.db"` | Path to the tags database file |
+| `output` | string | `"out/processor.generator.tags/tags.db"` | Path to the tags database file |
 | `tags_dir` | string | `"tags"` | Directory containing `.txt` tag list files |
 | `required_fields` | string[] | `[]` | Frontmatter fields that every `.md` file must have |
 | `required_field_groups` | string[][] | `[]` | Alternative field groups; at least one group must be fully present |

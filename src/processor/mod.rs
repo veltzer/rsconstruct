@@ -28,13 +28,15 @@ use crate::graph::{BuildGraph, Product};
 /// `src/registries/processor.rs`, populated at link time via
 /// `inventory::submit!` from each processor file.
 pub mod names {
-    pub const TERA: &str = "tera";
-    pub const CC_SINGLE_FILE: &str = "cc_single_file";
-    pub const CARGO: &str = "cargo";
-    pub const CLIPPY: &str = "clippy";
-    pub const SCRIPT: &str = "script";
-    pub const GENERATOR: &str = "generator";
-    pub const EXPLICIT: &str = "explicit";
+    pub const TERA: &str = "processor.generator.tera";
+    pub const TAGS: &str = "processor.generator.tags";
+    pub const CC_SINGLE_FILE: &str = "processor.generator.cc_single_file";
+    pub const CARGO: &str = "processor.creator.cargo";
+    pub const CLIPPY: &str = "processor.checker.clippy";
+    pub const SCRIPT: &str = "processor.checker.script";
+    pub const TERMS: &str = "processor.checker.terms";
+    pub const GENERATOR: &str = "processor.generator.generic";
+    pub const EXPLICIT: &str = "processor.explicit.generic";
 }
 
 /// Resolve a relative path against an anchor directory.
@@ -932,6 +934,13 @@ pub enum ProcessorType {
 }
 
 impl ProcessorType {
+    /// The type named by a segment of a processor name (`checker` in
+    /// `processor.checker.ruff`); `None` for anything that is not a type.
+    pub fn parse(s: &str) -> Option<Self> {
+        use strum::IntoEnumIterator;
+        Self::iter().find(|t| t.as_str() == s)
+    }
+
     /// Returns the string representation
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -1479,19 +1488,19 @@ mod tests {
         // SimpleGenerator does not know its own name at runtime — which is
         // the root cause of the duplication in the first place.
         let simple_generators: &[(&str, bool)] = &[
-            ("yaml2json", true),
-            ("imarkdown2html", true),
-            ("isass", true),
-            ("markdown2html", false),
-            ("sass", false),
-            ("a2x", false),
-            ("chromium", false),
-            ("protobuf", false),
-            ("objdump", false),
-            ("mermaid", false),
-            ("libreoffice", false),
-            ("drawio", false),
-            ("pandoc", false),
+            ("processor.generator.yaml2json", true),
+            ("processor.generator.imarkdown2html", true),
+            ("processor.generator.isass", true),
+            ("processor.generator.markdown2html", false),
+            ("processor.generator.sass", false),
+            ("processor.generator.a2x", false),
+            ("processor.generator.chromium", false),
+            ("processor.generator.protobuf", false),
+            ("processor.generator.objdump", false),
+            ("processor.generator.mermaid", false),
+            ("processor.generator.libreoffice", false),
+            ("processor.generator.drawio", false),
+            ("processor.generator.pandoc", false),
         ];
 
         // Completeness: the list above is a hand-maintained copy, and it

@@ -11,7 +11,7 @@ fn markdown_valid_file() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.markdown2html]\nsrc_dirs = [\".\"]\n",
+        "[processor.generator.markdown2html]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
 
@@ -46,7 +46,7 @@ fn markdown_incremental_skip() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.markdown2html]\nsrc_dirs = [\".\"]\n",
+        "[processor.generator.markdown2html]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
 
@@ -62,7 +62,7 @@ fn markdown_incremental_skip() {
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
-        stdout2.contains("[markdown2html] Skipping (unchanged):"),
+        stdout2.contains("[processor.generator.markdown2html] Skipping (unchanged):"),
         "Second build should skip: {}",
         stdout2
     );
@@ -77,7 +77,7 @@ fn markdown_nonexistent_src_dir_is_config_error() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.markdown2html]\nsrc_dirs = [\"markdown_docs\"]\n",
+        "[processor.generator.markdown2html]\nsrc_dirs = [\"markdown_docs\"]\n",
     )
     .unwrap();
 
@@ -89,7 +89,7 @@ fn markdown_nonexistent_src_dir_is_config_error() {
         "a missing src_dirs entry must fail as a config error: {stderr}"
     );
     assert!(
-        stderr.contains("processor.markdown2html") && stderr.contains("markdown_docs"),
+        stderr.contains("processor.generator.markdown2html") && stderr.contains("markdown_docs"),
         "error must name the processor and the entry: {stderr}"
     );
 }

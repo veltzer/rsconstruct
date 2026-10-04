@@ -46,8 +46,8 @@ rsconstruct build --stop-after resolve         # Stop after graph resolution
 rsconstruct build --stop-after classify        # Stop after classifying products
 rsconstruct build --show-output                # Show compiler/linter output even on success
 rsconstruct build --auto-add-words             # Add misspelled words to .zspell-words instead of failing
-rsconstruct build --auto-add-words -p zspell   # Run only zspell and auto-add words
-rsconstruct build -p ruff,pylint               # Run only specific processors
+rsconstruct build --auto-add-words -p processor.checker.zspell   # Run only zspell and auto-add words
+rsconstruct build -p processor.checker.ruff,processor.checker.pylint               # Run only specific processors
 rsconstruct build --explain                    # Show why each product is skipped/restored/rebuilt
 rsconstruct build --retry 3                    # Retry failed products up to 3 times
 rsconstruct build --no-mtime                   # Disable mtime pre-check, always compute checksums
@@ -116,7 +116,7 @@ Clean build artifacts. When run without a subcommand, removes build output files
 ```bash
 rsconstruct clean                # Remove build output files (preserves cache) [default]
 rsconstruct clean outputs        # Remove build output files (preserves cache)
-rsconstruct clean outputs -p tera,tags    # Only clean outputs from named processors
+rsconstruct clean outputs -p processor.generator.tera,processor.generator.tags    # Only clean outputs from named processors
 rsconstruct clean outputs --no-empty-dirs # Skip the empty-directory sweep
 rsconstruct clean all            # Remove out/ and .rsconstruct/ directories
 rsconstruct clean git            # Hard clean using git clean -qffxd (requires git repository)
@@ -151,7 +151,7 @@ Pass `--no-empty-dirs` to skip the sweep entirely. Files still get cleaned; empt
 
 #### Filtering by processor
 
-`-p` / `--processors` accepts a comma-separated list of processor type names (e.g. `tera`, `cargo`). Only products whose processor type matches are cleaned. Multi-instance configs share a type name, so `-p tera` cleans every `[processor.tera.*]` instance together.
+`-p` / `--processors` accepts a comma-separated list of processor type names (e.g. `tera`, `cargo`). Only products whose processor type matches are cleaned. Multi-instance configs share a type name, so `-p processor.generator.tera` cleans every `[processor.tera.*]` instance together.
 
 #### Other clean variants
 
@@ -214,7 +214,7 @@ Watch source files and auto-rebuild on changes.
 rsconstruct watch                              # Watch and rebuild on changes
 rsconstruct watch --auto-add-words             # Watch with zspell auto-add words
 rsconstruct watch -j4                          # Watch with 4 parallel jobs
-rsconstruct watch -p ruff                      # Watch and only run the ruff processor
+rsconstruct watch -p processor.checker.ruff                      # Watch and only run the ruff processor
 ```
 
 The watch command accepts the same build flags as `rsconstruct build` (e.g., `--jobs`, `--keep-going`, `--timings`, `--processors`, `--batch-size`, `--explain`, `--retry`, `--no-mtime`, `--no-summary`).
@@ -358,8 +358,8 @@ Smart config manipulation commands for managing processor sections in `rsconstru
 | `remove-no-file-processors` | Yes |
 
 ```bash
-rsconstruct smart enable pylint          # Add [processor.pylint] section
-rsconstruct smart disable pylint         # Remove [processor.pylint] section
+rsconstruct smart enable pylint          # Add [processor.checker.pylint] section
+rsconstruct smart disable pylint         # Remove [processor.checker.pylint] section
 rsconstruct smart enable-all             # Add sections for all builtin processors
 rsconstruct smart disable-all            # Remove all processor sections
 rsconstruct smart enable-detected        # Add sections for auto-detected processors
@@ -389,13 +389,13 @@ rsconstruct processor list -a           # Show all built-in processors
 rsconstruct processor list -v           # ...with descriptions
 rsconstruct --json processor list       # Same list as JSON
 rsconstruct processor files             # Show source and target files for each declared processor
-rsconstruct processor files ruff        # Show files for a specific processor
+rsconstruct processor files processor.checker.ruff        # Show files for a specific processor
 rsconstruct processor files              # Show files for enabled processors
-rsconstruct processor config ruff       # Show resolved configuration for a processor
+rsconstruct processor config processor.checker.ruff       # Show resolved configuration for a processor
 rsconstruct processor config --diff     # Show only fields that differ from defaults
-rsconstruct processor defconfig ruff    # Show default configuration for a processor
-rsconstruct processor add ruff          # Append [processor.ruff] to rsconstruct.toml (fields pre-populated + comments)
-rsconstruct processor add ruff --dry-run  # Preview the snippet without writing
+rsconstruct processor defconfig processor.checker.ruff    # Show default configuration for a processor
+rsconstruct processor add processor.checker.ruff          # Append [processor.checker.ruff] to rsconstruct.toml (fields pre-populated + comments)
+rsconstruct processor add processor.checker.ruff --dry-run  # Preview the snippet without writing
 rsconstruct processor allowlist         # Show the current processor allowlist
 rsconstruct processor graph             # Show inter-processor dependencies
 rsconstruct processor graph --format dot    # Graphviz DOT format

@@ -40,10 +40,10 @@ pub fn setup_test_project() -> TempDir {
 
     // Only enable the tera processor so config/*.py files aren't picked up by linters.
     // src_dirs is explicit because no processor defaults to scanning anywhere —
-    // a bare [processor.tera] matches no files at all.
+    // a bare [processor.generator.tera] matches no files at all.
     fs::write(
         temp_dir.path().join("rsconstruct.toml"),
-        "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n",
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n",
     )
     .expect("Failed to write rsconstruct.toml");
 
@@ -114,7 +114,7 @@ pub fn setup_cc_project(project_path: &Path) {
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.cc_single_file]\nsrc_dirs = [\"src\"]\n[analyzer.icpp]\n",
+        "[processor.generator.cc_single_file]\nsrc_dirs = [\"src\"]\n[analyzer.icpp]\n",
     )
     .unwrap();
 }
@@ -295,7 +295,7 @@ macro_rules! test_checker {
 
                 std::fs::write(
                     project_path.join("rsconstruct.toml"),
-                    format!("[processor.{}]\nsrc_dirs = [\".\"]\n", $proc),
+                    format!("[{}]\nsrc_dirs = [\".\"]\n", $proc),
                 ).unwrap();
 
                 $( std::fs::write(project_path.join($fname), $content).unwrap(); )+
@@ -319,7 +319,7 @@ macro_rules! test_checker {
 
                 std::fs::write(
                     project_path.join("rsconstruct.toml"),
-                    format!("[processor.{}]\nsrc_dirs = [\".\"]\n", $proc),
+                    format!("[{}]\nsrc_dirs = [\".\"]\n", $proc),
                 ).unwrap();
 
                 $( std::fs::write(project_path.join($fname), $content).unwrap(); )+
@@ -352,7 +352,7 @@ macro_rules! test_checker {
 
                 std::fs::write(
                     project_path.join("rsconstruct.toml"),
-                    format!("[processor.{}]\nsrc_dirs = [\".\"]\n", $proc),
+                    format!("[{}]\nsrc_dirs = [\".\"]\n", $proc),
                 ).unwrap();
 
                 let output = crate::common::run_rsconstruct_with_env(

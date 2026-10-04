@@ -18,7 +18,7 @@ A non-zero exit code fails the product.
 ## Configuration
 
 ```toml
-[processor.sphinx]
+[processor.creator.sphinx]
 command = "sphinx-build"               # The sphinx-build command to run
 output_dir = "_build"                  # Output directory for generated docs
 args = []                              # Additional arguments to pass to sphinx-build

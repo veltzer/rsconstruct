@@ -41,7 +41,7 @@ rejected for stray HTML may parse cleanly under oxlint.
 ## Configuration
 
 ```toml
-[processor.oxlint]
+[processor.checker.oxlint]
 command = "oxlint"
 args = ["-c", ".oxlintrc.json"]
 dep_inputs = []

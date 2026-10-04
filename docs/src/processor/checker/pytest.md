@@ -17,7 +17,7 @@ Each test file is checked individually — a failing test causes the build to fa
 ## Configuration
 
 ```toml
-[processor.pytest]
+[processor.checker.pytest]
 src_extensions = [".py"]                      # File extensions to process (default: [".py"])
 src_dirs = ["tests"]                     # Directories to scan (required; no default)
 dep_inputs = []                         # Additional files that trigger rebuilds

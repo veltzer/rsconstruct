@@ -19,7 +19,7 @@ fn default_pdfunite_source_ext() -> String {
 }
 
 fn default_pdfunite_source_output_dir() -> String {
-    "out/marp".into()
+    "out/processor.generator.marp".into()
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -39,7 +39,7 @@ impl Default for PdfuniteConfig {
         Self {
             source_dir: "marp/courses".into(),
             source_ext: ".md".into(),
-            source_output_dir: "out/marp".into(),
+            source_output_dir: "out/processor.generator.marp".into(),
             standard: StandardConfig::default(),
         }
     }
@@ -217,7 +217,7 @@ inventory::submit! {
         ],
         omit_standard_fields: &["formats"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["course.yaml"], src_exclude_dirs: &[] }),
-        defaults: Some(crate::config::ProcessorDefaults { command: "pdfunite", output_dir: "out/pdfunite", ..crate::config::ProcessorDefaults::EMPTY }),
+        defaults: Some(crate::config::ProcessorDefaults { command: "pdfunite", output_dir: "out/processor.generator.pdfunite", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<PdfuniteConfig>,
         keywords: &["pdf", "merger", "generator"],
         description: "Merge PDFs from subdirectories into course bundles",

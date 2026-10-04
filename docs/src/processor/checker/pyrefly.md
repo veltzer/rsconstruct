@@ -21,7 +21,7 @@ single pyrefly invocation for better performance.
 ## Configuration
 
 ```toml
-[processor.pyrefly]
+[processor.checker.pyrefly]
 command = "pyrefly"                          # The pyrefly command to run
 args = []                                    # Additional arguments to pass to pyrefly
 dep_inputs = []                            # Additional files that trigger rebuilds when changed

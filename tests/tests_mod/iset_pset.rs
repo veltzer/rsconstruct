@@ -11,7 +11,7 @@ fn create_tera_templates(temp_path: &std::path::Path) {
 /// `--iset` errors when iname doesn't match any declared instance.
 #[test]
 fn iset_unknown_iname_errors() {
-    let temp = setup_project_with_config("[processor.tera]\n");
+    let temp = setup_project_with_config("[processor.generator.tera]\n");
     let out = run_rsconstruct(temp.path(), &["build", "--iset", "nope.max_jobs=2"]);
     assert!(!out.status.success(), "expected failure for unknown iname");
     let stderr = String::from_utf8_lossy(&out.stderr);
@@ -24,8 +24,11 @@ fn iset_unknown_iname_errors() {
 /// `--pset` errors when pname has no matching instances.
 #[test]
 fn pset_unknown_pname_errors() {
-    let temp = setup_project_with_config("[processor.tera]\n");
-    let out = run_rsconstruct(temp.path(), &["build", "--pset", "ruff.max_jobs=2"]);
+    let temp = setup_project_with_config("[processor.generator.tera]\n");
+    let out = run_rsconstruct(
+        temp.path(),
+        &["build", "--pset", "processor.checker.ruff.max_jobs=2"],
+    );
     assert!(!out.status.success(), "expected failure for unknown pname");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
@@ -37,8 +40,11 @@ fn pset_unknown_pname_errors() {
 /// Override targeting an unknown field on a real instance must error.
 #[test]
 fn iset_unknown_field_errors() {
-    let temp = setup_project_with_config("[processor.tera]\n");
-    let out = run_rsconstruct(temp.path(), &["build", "--iset", "tera.bogus_field=1"]);
+    let temp = setup_project_with_config("[processor.generator.tera]\n");
+    let out = run_rsconstruct(
+        temp.path(),
+        &["build", "--iset", "processor.generator.tera.bogus_field=1"],
+    );
     assert!(!out.status.success(), "expected failure for unknown field");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
@@ -50,8 +56,11 @@ fn iset_unknown_field_errors() {
 /// Type mismatch (string for an integer field) must error.
 #[test]
 fn iset_type_mismatch_errors() {
-    let temp = setup_project_with_config("[processor.tera]\n");
-    let out = run_rsconstruct(temp.path(), &["build", "--iset", "tera.max_jobs=hello"]);
+    let temp = setup_project_with_config("[processor.generator.tera]\n");
+    let out = run_rsconstruct(
+        temp.path(),
+        &["build", "--iset", "processor.generator.tera.max_jobs=hello"],
+    );
     assert!(!out.status.success(), "expected failure for type mismatch");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
@@ -63,7 +72,7 @@ fn iset_type_mismatch_errors() {
 /// Malformed entries (no '.', no '=') must error.
 #[test]
 fn iset_malformed_entries_error() {
-    let temp = setup_project_with_config("[processor.tera]\n");
+    let temp = setup_project_with_config("[processor.generator.tera]\n");
 
     let out = run_rsconstruct(temp.path(), &["build", "--iset", "no_equals"]);
     assert!(!out.status.success());
@@ -79,9 +88,12 @@ fn iset_malformed_entries_error() {
 /// override should not block startup).
 #[test]
 fn iset_valid_max_jobs_accepted() {
-    let temp = setup_project_with_config("[processor.tera]\n");
+    let temp = setup_project_with_config("[processor.generator.tera]\n");
     create_tera_templates(temp.path());
-    let out = run_rsconstruct(temp.path(), &["build", "--iset", "tera.max_jobs=2"]);
+    let out = run_rsconstruct(
+        temp.path(),
+        &["build", "--iset", "processor.generator.tera.max_jobs=2"],
+    );
     assert!(
         out.status.success(),
         "expected success; stderr: {}",
@@ -95,11 +107,14 @@ fn iset_valid_max_jobs_accepted() {
 #[test]
 fn iset_multi_instance_dotted_iname() {
     let temp = setup_project_with_config(
-        "[processor.ascii.one]\nsrc_dirs = [\"docs_a\"]\n\n[processor.ascii.two]\nsrc_dirs = [\"docs_b\"]\n",
+        "[processor.checker.ascii.one]\nsrc_dirs = [\"docs_a\"]\n\n[processor.checker.ascii.two]\nsrc_dirs = [\"docs_b\"]\n",
     );
     fs::create_dir_all(temp.path().join("docs_a")).unwrap();
     fs::create_dir_all(temp.path().join("docs_b")).unwrap();
-    let out = run_rsconstruct(temp.path(), &["build", "--iset", "ascii.one.max_jobs=2"]);
+    let out = run_rsconstruct(
+        temp.path(),
+        &["build", "--iset", "processor.checker.ascii.one.max_jobs=2"],
+    );
     assert!(
         out.status.success(),
         "dotted iname override must resolve; stderr: {}",
@@ -110,9 +125,12 @@ fn iset_multi_instance_dotted_iname() {
 /// A valid `--pset` targeting all instances of a type must succeed.
 #[test]
 fn pset_valid_max_jobs_accepted() {
-    let temp = setup_project_with_config("[processor.tera]\n");
+    let temp = setup_project_with_config("[processor.generator.tera]\n");
     create_tera_templates(temp.path());
-    let out = run_rsconstruct(temp.path(), &["build", "--pset", "tera.max_jobs=3"]);
+    let out = run_rsconstruct(
+        temp.path(),
+        &["build", "--pset", "processor.generator.tera.max_jobs=3"],
+    );
     assert!(
         out.status.success(),
         "expected success; stderr: {}",
@@ -125,9 +143,12 @@ fn pset_valid_max_jobs_accepted() {
 /// so it must be rejected, not applied.
 #[test]
 fn iset_max_jobs_zero_rejected() {
-    let temp = setup_project_with_config("[processor.tera]\n");
+    let temp = setup_project_with_config("[processor.generator.tera]\n");
     create_tera_templates(temp.path());
-    let out = run_rsconstruct(temp.path(), &["build", "--iset", "tera.max_jobs=0"]);
+    let out = run_rsconstruct(
+        temp.path(),
+        &["build", "--iset", "processor.generator.tera.max_jobs=0"],
+    );
     assert!(
         !out.status.success(),
         "expected failure for max_jobs=0 override"

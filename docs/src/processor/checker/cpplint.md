@@ -20,7 +20,7 @@ This processor supports batch mode.
 ## Configuration
 
 ```toml
-[processor.cpplint]
+[processor.checker.cpplint]
 args = []
 dep_inputs = []
 ```

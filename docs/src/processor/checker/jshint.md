@@ -23,7 +23,7 @@ that configuration changes trigger rebuilds.
 ## Configuration
 
 ```toml
-[processor.jshint]
+[processor.checker.jshint]
 command = "jshint"
 args = []
 dep_inputs = []

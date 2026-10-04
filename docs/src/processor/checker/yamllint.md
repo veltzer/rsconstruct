@@ -21,7 +21,7 @@ single yamllint invocation for better performance.
 ## Configuration
 
 ```toml
-[processor.yamllint]
+[processor.checker.yamllint]
 command = "yamllint"                          # The yamllint command to run
 args = []                                    # Additional arguments to pass to yamllint
 dep_inputs = []                            # Additional files that trigger rebuilds when changed

@@ -131,7 +131,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     ],
     omit_standard_fields: &[],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
-    defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/pandoc", formats: &["pdf", "html", "docx"], command: "pandoc", ..crate::config::ProcessorDefaults::EMPTY }),
+    defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.pandoc", formats: &["pdf", "html", "docx"], command: "pandoc", ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<PandocConfig>,
     keywords: &["markdown", "converter", "pdf", "html", "docx", "generator"],
     description: "Convert documents using pandoc",

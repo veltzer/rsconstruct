@@ -19,7 +19,7 @@ mkdir myproject && cd myproject
 
 ```toml
 # rsconstruct.toml
-[processor.ruff]
+[processor.checker.ruff]
 ```
 
 Create a Python source file:
@@ -63,15 +63,15 @@ Install [pylint](https://pylint.readthedocs.io/) and add a section for it:
 
 ```toml
 # rsconstruct.toml
-[processor.ruff]
+[processor.checker.ruff]
 
-[processor.pylint]
+[processor.checker.pylint]
 ```
 
 Pass extra arguments via processor config:
 
 ```toml
-[processor.pylint]
+[processor.checker.pylint]
 args = ["--disable=C0114,C0115,C0116"]
 ```
 
@@ -80,11 +80,11 @@ args = ["--disable=C0114,C0115,C0116"]
 If your project has markdown documentation, add a section for the zspell processor:
 
 ```toml
-[processor.ruff]
+[processor.checker.ruff]
 
-[processor.pylint]
+[processor.checker.pylint]
 
-[processor.zspell]
+[processor.checker.zspell]
 ```
 
 Create a `.zspell-words` file in the project root with any custom words (one per line) that the zspeller should accept.
@@ -106,7 +106,7 @@ mkdir myproject && cd myproject
 
 ```toml
 # rsconstruct.toml
-[processor.cc_single_file]
+[processor.generator.cc_single_file]
 ```
 
 Create a source file under `src/`:
@@ -138,7 +138,7 @@ Processing cc_single_file (1 product)
   hello.elf
 ```
 
-The compiled executable is at `out/cc_single_file/hello.elf`.
+The compiled executable is at `out/processor.generator.cc_single_file/hello.elf`.
 
 Run again — the source hasn't changed, so rsconstruct restores from cache:
 
@@ -152,7 +152,7 @@ Processing cc_single_file (1 product)
 Pass flags via processor config:
 
 ```toml
-[processor.cc_single_file]
+[processor.generator.cc_single_file]
 cflags = ["-Wall", "-Wextra", "-O2"]
 cxxflags = ["-Wall", "-Wextra", "-O2"]
 include_paths = ["include"]
@@ -165,9 +165,9 @@ See the [CC Single File](processor/generator/cc_single_file.md) processor docs f
 Install [cppcheck](http://cppcheck.net/) and add a section for it:
 
 ```toml
-[processor.cc_single_file]
+[processor.generator.cc_single_file]
 
-[processor.cppcheck]
+[processor.checker.cppcheck]
 ```
 
 Both processors run on the same source files — rsconstruct handles them independently.

@@ -28,7 +28,7 @@ variables are passed to the template context.
 ## Configuration
 
 ```toml
-[processor.jinja2]
+[processor.generator.jinja2]
 src_extensions = [".j2"]                      # File extensions to process (default: [".j2"])
 dep_inputs = ["config/settings.py"]     # Additional files that trigger rebuilds when changed
 ```

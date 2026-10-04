@@ -18,7 +18,7 @@ fails the product.
 ## Configuration
 
 ```toml
-[processor.mdbook]
+[processor.creator.mdbook]
 command = "mdbook"                     # The mdbook command to run
 output_dir = "book"                    # Output directory for generated docs
 args = []                              # Additional arguments to pass to mdbook

@@ -20,7 +20,7 @@ This processor supports batch mode.
 ## Configuration
 
 ```toml
-[processor.cmake]
+[processor.checker.cmake]
 args = []
 dep_inputs = []
 ```

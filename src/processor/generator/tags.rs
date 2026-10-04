@@ -14,7 +14,7 @@ use crate::processor::Processor;
 use crate::tables;
 
 fn default_tags_output() -> String {
-    "out/tags/tags.db".into()
+    "out/processor.generator.tags/tags.db".into()
 }
 
 fn default_tags_dir() -> String {
@@ -77,7 +77,7 @@ pub struct TagsConfig {
 impl Default for TagsConfig {
     fn default() -> Self {
         Self {
-            output: "out/tags/tags.db".into(),
+            output: "out/processor.generator.tags/tags.db".into(),
             tags_dir: "tags".into(),
             required_fields: Vec::new(),
             required_values: Vec::new(),

@@ -20,7 +20,7 @@ This processor supports batch mode.
 ## Configuration
 
 ```toml
-[processor.htmllint]
+[processor.checker.htmllint]
 args = []
 dep_inputs = []
 ```

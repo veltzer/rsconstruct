@@ -11,7 +11,7 @@ fn analyzer_disabled_via_enabled_false() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        r#"[processor.markdown2html]
+        r#"[processor.generator.markdown2html]
 src_dirs = ["."]
 
 [analyzer.markdown]
@@ -42,7 +42,7 @@ fn analyzer_enabled_true_is_active() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        r#"[processor.markdown2html]
+        r#"[processor.generator.markdown2html]
 src_dirs = ["."]
 
 [analyzer.markdown]
@@ -73,7 +73,7 @@ fn analyzer_unknown_type_is_config_error() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        r#"[processor.markdown2html]
+        r#"[processor.generator.markdown2html]
 src_dirs = ["."]
 
 [analyzer.not_a_real_analyzer]
@@ -107,7 +107,7 @@ fn analyzer_unknown_field_is_config_error() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        r#"[processor.markdown2html]
+        r#"[processor.generator.markdown2html]
 src_dirs = ["."]
 
 [analyzer.markdown]
@@ -147,7 +147,7 @@ fn analyzer_enabled_defaults_to_true() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        r#"[processor.markdown2html]
+        r#"[processor.generator.markdown2html]
 src_dirs = ["."]
 
 [analyzer.markdown]
@@ -180,7 +180,7 @@ fn analyzer_deps_cache_reports_hits_on_unchanged_files() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        r#"[processor.markdown2html]
+        r#"[processor.generator.markdown2html]
 src_dirs = ["."]
 
 [analyzer.markdown]
@@ -240,7 +240,7 @@ fn analyzer_deps_cache_rescans_changed_file() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        r#"[processor.markdown2html]
+        r#"[processor.generator.markdown2html]
 src_dirs = ["."]
 
 [analyzer.markdown]
@@ -299,13 +299,13 @@ fn analyzer_dedupes_shared_source_across_processors() {
     // analyzer would naively be invoked 3 times — once per product.
     fs::write(
         project_path.join("rsconstruct.toml"),
-        r#"[processor.markdown2html]
+        r#"[processor.generator.markdown2html]
 src_dirs = ["."]
 
-[processor.zspell]
+[processor.checker.zspell]
 src_dirs = ["."]
 
-[processor.markdownlint]
+[processor.checker.markdownlint]
 src_dirs = ["."]
 
 [analyzer.markdown]

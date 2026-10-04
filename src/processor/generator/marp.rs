@@ -209,7 +209,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     ],
     omit_standard_fields: &[],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
-    defaults: Some(crate::config::ProcessorDefaults { command: "marp", output_dir: "out/marp", formats: &["pdf"],
+    defaults: Some(crate::config::ProcessorDefaults { command: "marp", output_dir: "out/processor.generator.marp", formats: &["pdf"],
         args: &["--html", "--allow-local-files"], ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<MarpConfig>,
     keywords: &["markdown", "presentation", "slides", "pdf", "html"],
@@ -234,7 +234,7 @@ fn marp_ci_cap(config: &mut crate::config::Config) -> anyhow::Result<()> {
         .processor
         .instances
         .iter_mut()
-        .filter(|i| i.type_name == "marp")
+        .filter(|i| i.pname == "processor.generator.marp")
     {
         let Some(table) = inst.config_toml.as_table_mut() else {
             continue;

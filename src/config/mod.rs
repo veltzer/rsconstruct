@@ -380,8 +380,7 @@ pub const SHARED_FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
 /// ("pylint.core") and strips the suffix, so discover sites can pass their
 /// `instance_name` directly. Empty for unregistered types (Lua).
 pub fn checksum_fields_of(name: &str) -> Vec<&'static str> {
-    let type_name = name.split('.').next().unwrap_or(name);
-    ProcessorConfig::checksum_fields_for(type_name).unwrap_or_default()
+    ProcessorConfig::checksum_fields_for(&registry::pname_of(name)).unwrap_or_default()
 }
 
 pub fn output_config_hash(value: &impl Serialize, checksum_fields: &[&str]) -> String {
@@ -1191,14 +1190,16 @@ pub const fn default_true() -> bool {
 }
 
 /// A single processor instance parsed from the TOML config.
-/// `[processor.pylint]` produces one instance with `type_name="pylint`", `instance_name="pylint`".
-/// `[processor.pylint.core]` produces one with `type_name="pylint`", `instance_name="pylint.core`".
+/// `[processor.checker.pylint]` produces one instance with
+/// `pname="processor.checker.pylint"`, `instance_name="processor.checker.pylint"`.
+/// `[processor.checker.pylint.core]` produces one with the same `pname` and
+/// `instance_name="processor.checker.pylint.core"`.
 #[derive(Debug, Clone)]
 pub struct ProcessorInstance {
-    /// Instance name: "pylint" for single, "pylint.core" for named
+    /// Instance name: the pname for a single instance, `pname.<name>` for a named one.
     pub instance_name: String,
-    /// Processor type name: always "pylint"
-    pub type_name: String,
+    /// The processor's full name, `processor.<type>.<name>`.
+    pub pname: String,
     /// The raw TOML config for this instance (deserialized lazily per processor type)
     pub config_toml: toml::Value,
     /// Source of every field in `config_toml` (user TOML, processor default, scan default, …).
@@ -1207,8 +1208,10 @@ pub struct ProcessorInstance {
 
 use crate::registries::{self as registry, ProcessorPlugin};
 
-pub fn find_registry_entry(type_name: &str) -> Option<&'static ProcessorPlugin> {
-    registry::all_plugins().find(|e| e.name == type_name)
+/// The plugin for a processor name (`processor.checker.ruff`); an instance
+/// name finds the same plugin.
+pub fn find_registry_entry(pname: &str) -> Option<&'static ProcessorPlugin> {
+    registry::find_plugin(pname)
 }
 
 /// Return all registered processor plugins.
@@ -1216,12 +1219,7 @@ pub fn registry_entries() -> impl Iterator<Item = &'static ProcessorPlugin> {
     registry::all_plugins()
 }
 
-/// Return all known builtin processor type names.
-pub fn all_type_names() -> Vec<&'static str> {
-    registry::all_plugins().map(|e| e.name).collect()
-}
-
-/// Check if a name is a known builtin processor type.
+/// Check if a name is a registered processor (`processor.<type>.<name>`).
 pub fn is_builtin_type(name: &str) -> bool {
     find_registry_entry(name).is_some()
 }
@@ -1553,36 +1551,44 @@ impl Serialize for ProcessorConfig {
         &self,
         serializer: S,
     ) -> std::result::Result<S::Ok, S::Error> {
-        use serde::ser::SerializeMap;
-        let mut map = serializer.serialize_map(None)?;
+        // Rebuild the `[processor]` tree the instances were read from:
+        // processor → type → name → (fields | instance → fields).
+        let mut root = toml::map::Map::new();
         for inst in &self.instances {
-            // For named instances (type.name), we need to nest
-            if inst.instance_name.contains('.') {
-                // Handled as part of the parent type table
-            } else {
-                map.serialize_entry(&inst.instance_name, &inst.config_toml)?;
+            let Some(parsed) = registry::parse_name(&inst.instance_name) else {
+                continue;
+            };
+            let type_table = root
+                .entry(parsed.processor_type.as_str().to_string())
+                .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
+            let Some(type_table) = type_table.as_table_mut() else {
+                continue;
+            };
+            match parsed.instance {
+                None => {
+                    type_table.insert(parsed.short.to_string(), inst.config_toml.clone());
+                }
+                Some(instance) => {
+                    let name_table = type_table
+                        .entry(parsed.short.to_string())
+                        .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
+                    if let Some(name_table) = name_table.as_table_mut() {
+                        name_table.insert(instance.to_string(), inst.config_toml.clone());
+                    }
+                }
             }
         }
-        // Group named instances by type
-        let mut types: HashMap<&str, Vec<&ProcessorInstance>> = HashMap::new();
-        for inst in &self.instances {
-            if let Some(dot) = inst.instance_name.find('.') {
-                let type_name = &inst.instance_name[..dot];
-                types.entry(type_name).or_default().push(inst);
+        if !self.extra.is_empty() {
+            let lua = root
+                .entry(crate::processor::ProcessorType::Lua.as_str().to_string())
+                .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
+            if let Some(lua) = lua.as_table_mut() {
+                for (name, value) in &self.extra {
+                    lua.insert(name.clone(), value.clone());
+                }
             }
         }
-        for (type_name, insts) in &types {
-            let mut table = toml::map::Map::new();
-            for inst in insts {
-                let name = &inst.instance_name[type_name.len() + 1..];
-                table.insert(name.to_string(), inst.config_toml.clone());
-            }
-            map.serialize_entry(type_name, &toml::Value::Table(table))?;
-        }
-        for (name, value) in &self.extra {
-            map.serialize_entry(name, value)?;
-        }
-        map.end()
+        toml::Value::Table(root).serialize(serializer)
     }
 }
 
@@ -1595,15 +1601,15 @@ impl<'de> Deserialize<'de> for ProcessorConfig {
     }
 }
 
-/// What a `[processor.NAME]` section turned out to be.
+/// What a `[processor.TYPE.NAME]` section turned out to be.
 ///
 /// The shape is inferred from the section's contents, so it can be
 /// genuinely undecidable — which is why this is an enum rather than a bool.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SectionShape {
-    /// Direct config fields: `[processor.pylint]` with `args = [...]`.
+    /// Direct config fields: `[processor.checker.pylint]` with `args = [...]`.
     SingleInstance,
-    /// Named sub-instances: `[processor.pylint.core]`, `[processor.pylint.tests]`.
+    /// Named sub-instances: `[processor.checker.pylint.core]`, `[processor.checker.pylint.tests]`.
     MultiInstance,
     /// Reads as both. Carries the keys that are simultaneously known config
     /// field names and plausible instance names.
@@ -1620,43 +1626,55 @@ impl ProcessorConfig {
         let mut instances = Vec::new();
         let mut extra = HashMap::new();
 
-        for (key, val) in table {
-            // skip non-table entries
-            let Some(sub_table) = val.as_table() else {
+        // The tree is processor → type → name → (fields | instances). Anything
+        // that does not fit is skipped here and reported by
+        // `validate_processor_fields_raw`, which runs on the same raw value.
+        for (type_key, type_val) in table {
+            let Some(type_table) = type_val.as_table() else {
                 continue;
             };
-
-            if is_builtin_type(key) {
-                // Check if this is single-instance or multi-instance
-                if Self::is_multi_instance(key, sub_table) {
-                    // Multi-instance: [processor.pylint.core], [processor.pylint.tests]
+            let Some(processor_type) = crate::processor::ProcessorType::parse(type_key) else {
+                continue;
+            };
+            for (short, val) in type_table {
+                let Some(sub_table) = val.as_table() else {
+                    continue;
+                };
+                if processor_type == crate::processor::ProcessorType::Lua {
+                    // Lua plugins are keyed by the plugin file's stem.
+                    extra.insert(short.clone(), val.clone());
+                    continue;
+                }
+                let pname = format!("{}{type_key}.{short}", registry::NAME_PREFIX);
+                if !is_builtin_type(&pname) {
+                    continue;
+                }
+                if Self::is_multi_instance(&pname, sub_table) {
+                    // Multi-instance: [processor.checker.pylint.core], [processor.checker.pylint.tests]
                     for (name, inst_val) in sub_table {
-                        let instance_name = format!("{key}.{name}");
+                        let instance_name = format!("{pname}.{name}");
                         let mut config = inst_val.clone();
                         let mut provenance = seed_user_provenance(&config);
-                        resolve_instance_defaults(key, &mut config, &mut provenance);
+                        resolve_instance_defaults(&pname, &mut config, &mut provenance);
                         instances.push(ProcessorInstance {
                             instance_name,
-                            type_name: key.clone(),
+                            pname: pname.clone(),
                             config_toml: config,
                             provenance,
                         });
                     }
                 } else {
-                    // Single instance: [processor.pylint]
+                    // Single instance: [processor.checker.pylint]
                     let mut config = val.clone();
                     let mut provenance = seed_user_provenance(&config);
-                    resolve_instance_defaults(key, &mut config, &mut provenance);
+                    resolve_instance_defaults(&pname, &mut config, &mut provenance);
                     instances.push(ProcessorInstance {
-                        instance_name: key.clone(),
-                        type_name: key.clone(),
+                        instance_name: pname.clone(),
+                        pname,
                         config_toml: config,
                         provenance,
                     });
                 }
-            } else {
-                // Unknown type — Lua plugin
-                extra.insert(key.clone(), val.clone());
             }
         }
 
@@ -1677,7 +1695,7 @@ impl ProcessorConfig {
         )
     }
 
-    /// The shape of a `[processor.NAME]` section, and whether it is even
+    /// The shape of a `[processor.TYPE.NAME]` section, and whether it is even
     /// decidable.
     ///
     /// Separated from `is_multi_instance` so the ambiguous case can be
@@ -1739,7 +1757,7 @@ impl ProcessorConfig {
     /// Resolve scan defaults for all instances.
     pub(crate) fn resolve_scan_defaults(&mut self) {
         for inst in &mut self.instances {
-            resolve_instance_defaults(&inst.type_name, &mut inst.config_toml, &mut inst.provenance);
+            resolve_instance_defaults(&inst.pname, &mut inst.config_toml, &mut inst.provenance);
         }
     }
 
@@ -1754,7 +1772,7 @@ impl ProcessorConfig {
     /// the value differs from the processor's own default.
     pub(crate) fn apply_output_dir_defaults(&mut self, global_output_dir: &str) {
         for inst in &mut self.instances {
-            let type_default_prefix = format!("out/{}", inst.type_name);
+            let type_default_prefix = format!("out/{}", inst.pname);
             let instance_prefix = format!("{}/{}", global_output_dir, inst.instance_name);
 
             for field in &["output_dir", "output"] {
@@ -1784,7 +1802,7 @@ impl ProcessorConfig {
                 let type_rest = val
                     .strip_prefix(&type_default_prefix)
                     .filter(|r| r.is_empty() || r.starts_with('/'));
-                let new_val = if inst.instance_name != inst.type_name
+                let new_val = if inst.instance_name != inst.pname
                     && let Some(rest) = type_rest
                 {
                     // Named instance: remap out/{type} → {global}/{instance}
@@ -1809,7 +1827,7 @@ impl ProcessorConfig {
     /// Get the first instance of a given type (for single-instance access).
     /// Returns None if no instance of that type is declared.
     pub(crate) fn first_instance_of_type(&self, type_name: &str) -> Option<&ProcessorInstance> {
-        self.instances.iter().find(|i| i.type_name == type_name)
+        self.instances.iter().find(|i| i.pname == type_name)
     }
 
     /// Deserialize the config for `type_name`, whether or not the user
@@ -1830,7 +1848,7 @@ impl ProcessorConfig {
                 .config_toml
                 .clone()
                 .try_into()
-                .with_context(|| format!("Failed to parse [processor.{type_name}] config"));
+                .with_context(|| format!("Failed to parse [{type_name}] config"));
         }
         let mut value = toml::Value::Table(toml::map::Map::new());
         let mut provenance = ProvenanceMap::new();
@@ -2259,7 +2277,7 @@ fn validate_dep_auto_exist(instances: &[ProcessorInstance], build: &BuildConfig)
         for entry in entries.iter().filter_map(toml::Value::as_str) {
             if !Path::new(entry).exists() {
                 errors.push(format!(
-                    "  [processor.{}] dep_auto file not found: {entry} ({source})",
+                    "  [{}] dep_auto file not found: {entry} ({source})",
                     inst.instance_name
                 ));
             }
@@ -2312,7 +2330,7 @@ fn validate_no_dot_src_dirs(instances: &[ProcessorInstance], build: &BuildConfig
                 .get("src_dirs")
                 .map_or_else(String::new, |s| format!(" ({s})"));
             errors.push(format!(
-                "  [processor.{}] src_dirs contains \".\"{source}",
+                "  [{}] src_dirs contains \".\"{source}",
                 inst.instance_name
             ));
         }
@@ -2334,73 +2352,120 @@ fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
     };
 
     let mut errors = Vec::new();
+    let type_names = {
+        use strum::IntoEnumIterator;
+        crate::processor::ProcessorType::iter()
+            .map(crate::processor::ProcessorType::as_str)
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
 
-    for (name, value) in processor_table {
-        // A scalar under [processor] (e.g. `ruff = true`) is a config mistake
-        // that would otherwise be silently dropped.
-        let Some(table) = value.as_table() else {
+    for (type_key, type_value) in processor_table {
+        // A scalar under [processor] (e.g. `checker = true`) is a config
+        // mistake that would otherwise be silently dropped.
+        let Some(type_table) = type_value.as_table() else {
             errors.push(format!(
-                "[processor]: '{name}' must be a section (e.g. [processor.{name}]), got {}",
-                FieldType::describe_value(value),
+                "[processor]: '{type_key}' must be a table of processors (e.g. [processor.{type_key}.NAME]), got {}",
+                FieldType::describe_value(type_value),
+            ));
+            continue;
+        };
+        let Some(processor_type) = crate::processor::ProcessorType::parse(type_key) else {
+            // The most likely cause is a pre-rename config: `[processor.ruff]`
+            // where `[processor.checker.ruff]` is meant. Say so when the
+            // key names a processor of some type.
+            let hint = registry::all_plugins()
+                .find(|p| p.name == type_key)
+                .map(|p| format!(" — did you mean [{}]?", p.pname()))
+                .unwrap_or_default();
+            errors.push(format!(
+                "[processor.{type_key}]: unknown processor type '{type_key}' (processors are named \
+                 processor.<type>.<name>; types: {type_names}){hint}",
             ));
             continue;
         };
 
-        if !is_builtin_type(name) {
-            // Check if there's a matching Lua plugin file
-            let plugins_dir = raw
-                .get("plugins")
-                .and_then(|p| p.get("dir"))
-                .and_then(|d| d.as_str())
-                .unwrap_or(DEFAULT_PLUGINS_DIR);
-            let plugin_path = std::path::Path::new(plugins_dir).join(format!("{name}.lua"));
-            if !plugin_path.exists() {
+        for (short, value) in type_table {
+            let Some(table) = value.as_table() else {
                 errors.push(format!(
-                    "[processor.{}]: unknown processor type '{}' (not a builtin processor or Lua plugin at {})",
-                    name, name, plugin_path.display(),
+                    "[processor.{type_key}]: '{short}' must be a section (e.g. [processor.{type_key}.{short}]), got {}",
+                    FieldType::describe_value(value),
                 ));
-            }
-            continue;
-        }
+                continue;
+            };
+            let pname = format!("{}{type_key}.{short}", registry::NAME_PREFIX);
 
-        // Check if multi-instance
-        match ProcessorConfig::classify_section(name, table) {
-            SectionShape::MultiInstance => {
-                for (inst_name, inst_value) in table {
-                    if let Some(inst_table) = inst_value.as_table() {
-                        let section = format!("processor.{name}.{inst_name}");
-                        validate_single_processor(name, &section, inst_table, &mut errors);
+            if processor_type == crate::processor::ProcessorType::Lua {
+                // A Lua plugin is a file in the plugins directory.
+                let plugins_dir = raw
+                    .get("plugins")
+                    .and_then(|p| p.get("dir"))
+                    .and_then(|d| d.as_str())
+                    .unwrap_or(DEFAULT_PLUGINS_DIR);
+                let plugin_path = std::path::Path::new(plugins_dir).join(format!("{short}.lua"));
+                if !plugin_path.exists() {
+                    errors.push(format!(
+                        "[{pname}]: no Lua plugin at {}",
+                        plugin_path.display(),
+                    ));
+                }
+                continue;
+            }
+
+            if !is_builtin_type(&pname) {
+                let elsewhere: Vec<String> = registry::all_plugins()
+                    .filter(|p| p.name == short)
+                    .map(ProcessorPlugin::pname)
+                    .collect();
+                let hint = if elsewhere.is_empty() {
+                    format!(" (run `rsconstruct processor list --type {type_key}`)")
+                } else {
+                    format!(" — did you mean [{}]?", elsewhere.join("] or ["))
+                };
+                errors.push(format!(
+                    "[{pname}]: there is no {type_key} processor named '{short}'{hint}",
+                ));
+                continue;
+            }
+
+            // Check if multi-instance
+            match ProcessorConfig::classify_section(&pname, table) {
+                SectionShape::MultiInstance => {
+                    for (inst_name, inst_value) in table {
+                        if let Some(inst_table) = inst_value.as_table() {
+                            let section = format!("{pname}.{inst_name}");
+                            validate_single_processor(&pname, &section, inst_table, &mut errors);
+                        }
                     }
                 }
-            }
-            SectionShape::SingleInstance => {
-                let section = format!("processor.{name}");
-                validate_single_processor(name, &section, table, &mut errors);
-            }
-            // The section reads as both a config-field table and a set of
-            // named instances. Guessing here is what let a config silently
-            // change meaning when a future release added a field whose name
-            // matched an existing user's instance — so it is rejected
-            // instead, naming the exact keys to rename.
-            SectionShape::Ambiguous { colliding } => {
-                errors.push(format!(
-                    "[processor.{name}]: ambiguous section — {} also {} a config field of \
-                     '{name}', so this could be read either as config or as named \
+                SectionShape::SingleInstance => {
+                    validate_single_processor(&pname, &pname, table, &mut errors);
+                }
+                // The section reads as both a config-field table and a set of
+                // named instances. Guessing here is what let a config silently
+                // change meaning when a future release added a field whose name
+                // matched an existing user's instance — so it is rejected
+                // instead, naming the exact keys to rename.
+                SectionShape::Ambiguous { colliding } => {
+                    errors.push(format!(
+                        "[{pname}]: ambiguous section — {} also {} a config field of \
+                     '{pname}', so this could be read either as config or as named \
                      instance{}. Rename the instance{}, or move the config fields to \
-                     [processor.{name}] and keep only instances as sub-tables.",
-                    colliding
-                        .iter()
-                        .map(|c| format!("'{c}'"))
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                    if colliding.len() == 1 {
-                        "names"
-                    } else {
-                        "name"
-                    },
-                    if colliding.len() == 1 { "" } else { "s" },
-                    if colliding.len() == 1 { "" } else { "s" },
-                ));
+                     [{pname}] and keep only instances as sub-tables.",
+                        colliding
+                            .iter()
+                            .map(|c| format!("'{c}'"))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        if colliding.len() == 1 {
+                            "names"
+                        } else {
+                            "name"
+                        },
+                        if colliding.len() == 1 { "" } else { "s" },
+                        if colliding.len() == 1 { "" } else { "s" },
+                    ));
+                }
             }
         }
     }
@@ -2730,7 +2795,7 @@ impl Config {
                 &mut self.processor.instances,
                 field,
                 &value,
-                |inst| inst.type_name == pname,
+                |inst| inst.pname == pname,
                 "pname",
                 pname,
             )?;
@@ -2745,7 +2810,7 @@ impl Config {
         for inst in &self.processor.instances {
             if let Some(table) = inst.config_toml.as_table() {
                 let section_label = format!("processor.{}", inst.instance_name);
-                validate_single_processor(&inst.type_name, &section_label, table, &mut errors);
+                validate_single_processor(&inst.pname, &section_label, table, &mut errors);
             }
         }
         if !errors.is_empty() {
@@ -2909,7 +2974,7 @@ fn apply_override_to_instances(
     }
     for i in matching_indices {
         let inst = &mut instances[i];
-        let type_name = inst.type_name.clone();
+        let type_name = inst.pname.clone();
         validate_override_field(&type_name, field, value, &inst.instance_name)?;
         if let Some(table) = inst.config_toml.as_table_mut() {
             table.insert(field.to_string(), value.clone());

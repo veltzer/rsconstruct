@@ -18,7 +18,7 @@ Fails if any file is missing `$schema`, fails schema validation, or has keys in 
 ## Configuration
 
 ```toml
-[processor.iyamlschema]
+[processor.checker.iyamlschema]
 src_dirs = ["yaml"]
 check_ordering = true    # Check propertyOrdering (default: true)
 ```

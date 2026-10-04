@@ -35,7 +35,7 @@ to it invalidate all zspell products. To disable words file detection, set
 ## Configuration
 
 ```toml
-[processor.zspell]
+[processor.checker.zspell]
 src_extensions = [".md"]                  # File extensions to check (default: [".md"])
 language = "en_US"                    # Hunspell dictionary language (default: "en_US")
 words_file = ".zspell-words"          # Path to custom words file (default: ".zspell-words")

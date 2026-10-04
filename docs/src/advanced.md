@@ -67,9 +67,9 @@ Control the detail level of build output with `-v N`:
 | Level | Output |
 |---|---|
 | **0** (default) | Target basename only: `main.elf` |
-| **1** | Target path: `out/cc_single_file/main.elf`; cc_single_file processor also prints compiler commands |
-| **2** | Adds source path: `out/cc_single_file/main.elf <- src/main.c` |
-| **3** | Adds all inputs: `out/cc_single_file/main.elf <- src/main.c, src/utils.h` |
+| **1** | Target path: `out/processor.generator.cc_single_file/main.elf`; cc_single_file processor also prints compiler commands |
+| **2** | Adds source path: `out/processor.generator.cc_single_file/main.elf <- src/main.c` |
+| **3** | Adds all inputs: `out/processor.generator.cc_single_file/main.elf <- src/main.c, src/utils.h` |
 
 ## Dry run
 
@@ -119,22 +119,22 @@ By default, each processor only tracks its primary source files as inputs. If a 
 When any file listed in `dep_inputs` changes, all products from that processor are rebuilt.
 
 ```toml
-[processor.template]
+[processor.generator.tera]
 dep_inputs = ["config/settings.py", "config/database.py"]
 
-[processor.ruff]
+[processor.checker.ruff]
 dep_inputs = ["pyproject.toml"]
 
-[processor.pylint]
+[processor.checker.pylint]
 dep_inputs = ["pyproject.toml"]
 
-[processor.cppcheck]
+[processor.checker.cppcheck]
 dep_inputs = [".cppcheck-suppressions"]
 
-[processor.cc_single_file]
+[processor.generator.cc_single_file]
 dep_inputs = ["Makefile.inc"]
 
-[processor.zspell]
+[processor.checker.zspell]
 dep_inputs = ["custom-dictionary.txt"]
 ```
 

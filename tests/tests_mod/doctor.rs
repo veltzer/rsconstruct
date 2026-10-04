@@ -8,7 +8,7 @@ use std::fs;
 #[test]
 fn doctor_checks_cargo_dependencies_against_cargo_install_list() {
     let temp_dir = setup_project_with_config(
-        "[dependencies]\ncargo = [\"rsconstruct-fake-missing-crate\"]\n\n[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n",
+        "[dependencies]\ncargo = [\"rsconstruct-fake-missing-crate\"]\n\n[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n",
     );
     let project_path = temp_dir.path();
     fs::create_dir_all(project_path.join("tera.templates")).unwrap();
@@ -41,7 +41,8 @@ fn doctor_checks_cargo_dependencies_against_cargo_install_list() {
 /// PATH, and the fix it names is install-deps (which runs `npm ci`).
 #[test]
 fn doctor_checks_package_json_dependencies_in_node_modules() {
-    let temp_dir = setup_project_with_config("[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n");
+    let temp_dir =
+        setup_project_with_config("[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n");
     let project_path = temp_dir.path();
     fs::create_dir_all(project_path.join("tera.templates")).unwrap();
     fs::write(
@@ -81,7 +82,8 @@ fn doctor_checks_package_json_dependencies_in_node_modules() {
 /// declares packages without one is an error, not a floating install.
 #[test]
 fn doctor_rejects_package_json_without_lock() {
-    let temp_dir = setup_project_with_config("[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n");
+    let temp_dir =
+        setup_project_with_config("[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n");
     let project_path = temp_dir.path();
     fs::create_dir_all(project_path.join("tera.templates")).unwrap();
     fs::write(
@@ -118,7 +120,7 @@ fn doctor_rejects_package_json_without_lock() {
 #[test]
 fn doctor_system_dependency_is_probed_as_package_not_tool() {
     let temp_dir = setup_project_with_config(
-        "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[dependencies]\nsystem = [\"rsconstruct-fake-system-package\"]\n",
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[dependencies]\nsystem = [\"rsconstruct-fake-system-package\"]\n",
     );
     let project_path = temp_dir.path();
     fs::create_dir_all(project_path.join("tera.templates")).unwrap();

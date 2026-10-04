@@ -27,7 +27,7 @@ rebuilds.
 ## Configuration
 
 ```toml
-[processor.stylelint]
+[processor.checker.stylelint]
 command = "stylelint"
 args = []
 dep_inputs = []

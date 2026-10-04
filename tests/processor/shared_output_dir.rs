@@ -61,13 +61,13 @@ fn setup_shared_site_project() -> TempDir {
     fs::write(
         project_path.join("rsconstruct.toml"),
         concat!(
-            "[processor.creator.mkdocs]\n",
+            "[processor.creator.generic.mkdocs]\n",
             "command = \"./mkdocs.sh\"\n",
             "src_extensions = [\"site.manifest\"]\n",
             "src_dirs = [\".\"]\n",
             "output_dirs = [\"_site\"]\n",
             "\n",
-            "[processor.explicit.pandoc]\n",
+            "[processor.explicit.generic.pandoc]\n",
             "command = \"./pandoc.sh\"\n",
             "inputs = [\"about.manifest\"]\n",
             "output_files = [\"_site/about.html\"]\n",
@@ -215,7 +215,12 @@ fn creator_tree_does_not_include_foreign_outputs() {
     //   2. check that _site/about.html was NOT restored (because it belongs to pandoc)
     let restore_mkdocs_only = run_rsconstruct_with_env(
         project_path,
-        &["build", "-p", "creator.mkdocs", "--verbose"],
+        &[
+            "build",
+            "-p",
+            "processor.creator.generic.mkdocs",
+            "--verbose",
+        ],
         &[("NO_COLOR", "1")],
     );
     assert!(
@@ -267,14 +272,14 @@ fn two_processors_declaring_same_output_file_errors() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         concat!(
-            "[processor.explicit.a]\n",
+            "[processor.explicit.generic.a]\n",
             "command = \"./touch.sh\"\n",
             "args = [\"_site/index.html\"]\n",
             "inputs = [\"a.manifest\"]\n",
             "output_files = [\"_site/index.html\"]\n",
             "src_dirs = [\".\"]\n",
             "\n",
-            "[processor.explicit.b]\n",
+            "[processor.explicit.generic.b]\n",
             "command = \"./touch.sh\"\n",
             "args = [\"_site/index.html\"]\n",
             "inputs = [\"b.manifest\"]\n",

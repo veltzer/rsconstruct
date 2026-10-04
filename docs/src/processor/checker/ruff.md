@@ -21,7 +21,7 @@ single ruff invocation for better performance.
 ## Configuration
 
 ```toml
-[processor.ruff]
+[processor.checker.ruff]
 command = "ruff"                            # The ruff command to run
 args = []                                  # Additional arguments to pass to ruff
 dep_inputs = []                          # Additional files that trigger rebuilds (e.g. ["pyproject.toml"])

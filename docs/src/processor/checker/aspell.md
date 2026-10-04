@@ -17,7 +17,7 @@ configured aspell configuration file. A non-zero exit code fails the product.
 ## Configuration
 
 ```toml
-[processor.aspell]
+[processor.checker.aspell]
 command = "aspell"                     # The aspell command to run
 conf = ".aspell.conf"                  # Aspell configuration file
 args = []                              # Additional arguments to pass to aspell

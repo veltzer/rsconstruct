@@ -69,7 +69,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     fields: &[],
     omit_standard_fields: &[],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".txt"], src_exclude_dirs: &[] }),
-    defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/a2x", command: "a2x", ..crate::config::ProcessorDefaults::EMPTY }),
+    defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.a2x", command: "a2x", ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["asciidoc", "converter", "generator", "documentation", "html", "pdf"],
     description: "Convert AsciiDoc files to PDF",

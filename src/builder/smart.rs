@@ -2,7 +2,7 @@ use anyhow::{Context, Result, bail};
 use std::collections::HashSet;
 use std::fs;
 
-use crate::config::all_type_names;
+use crate::registries::{all_pnames, find_plugin, parse_name};
 
 const CONFIG_FILE: &str = "rsconstruct.toml";
 
@@ -29,45 +29,148 @@ fn processor_table(doc: &mut toml_edit::DocumentMut) -> Result<&mut toml_edit::T
         .context("[processor] must be a table")
 }
 
-/// Validate that a processor name is a known builtin type.
+/// Validate that a name is a registered processor (`processor.<type>.<name>`),
+/// not an instance of one.
 fn validate_name(name: &str) -> Result<()> {
-    let all = all_type_names();
-    if !all.contains(&name) {
-        bail!(
-            "Unknown processor '{name}'. Run 'rsconstruct processor list --all' to see available processors."
-        );
+    match parse_name(name) {
+        Some(parsed) if parsed.instance.is_none() && find_plugin(name).is_some() => Ok(()),
+        _ => bail!(
+            "Unknown processor '{name}'. Processors are named processor.<type>.<name>; run \
+             'rsconstruct processor list' to see them."
+        ),
     }
-    Ok(())
+}
+
+/// The key path of a processor or analyzer name below its section table.
+///
+/// A processor name `processor.checker.ruff` lives at `[processor]` →
+/// `checker` → `ruff`; the instance `processor.checker.ruff.core` one level
+/// further down. Analyzer names have no type segment: `tera` or `tera.sub`.
+fn key_path(section: &str, name: &str) -> Vec<String> {
+    let prefix = format!("{section}.");
+    let rest = name.strip_prefix(&prefix).unwrap_or(name);
+    rest.split('.').map(str::to_string).collect()
+}
+
+/// The table at `path` below `table`, created empty where missing.
+fn ensure_table<'a>(
+    table: &'a mut toml_edit::Table,
+    path: &[String],
+) -> Result<&'a mut toml_edit::Table> {
+    let mut current = table;
+    for key in path {
+        current = current
+            .entry(key)
+            .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()))
+            .as_table_mut()
+            .with_context(|| format!("'{key}' must be a table"))?;
+    }
+    Ok(current)
+}
+
+/// The table at `path` below `table`, if every segment exists and is a table.
+fn get_table<'a>(
+    table: &'a mut toml_edit::Table,
+    path: &[String],
+) -> Option<&'a mut toml_edit::Table> {
+    let mut current = table;
+    for key in path {
+        current = current.get_mut(key)?.as_table_mut()?;
+    }
+    Some(current)
+}
+
+/// Whether a section for `name` exists below `table`.
+fn has_section(table: &mut toml_edit::Table, section: &str, name: &str) -> bool {
+    get_table(table, &key_path(section, name)).is_some()
+}
+
+/// Add an empty section for `name` below `table`. Returns false if it existed.
+fn add_section(table: &mut toml_edit::Table, section: &str, name: &str) -> Result<bool> {
+    if has_section(table, section, name) {
+        return Ok(false);
+    }
+    let path = key_path(section, name);
+    let (parents, last) = path.split_at(path.len() - 1);
+    let parent = ensure_table(table, parents)?;
+    parent.insert(&last[0], toml_edit::Item::Table(toml_edit::Table::new()));
+    Ok(true)
+}
+
+/// Remove the section for `name` below `table`, then every parent table it
+/// left empty, so a removed `processor.checker.ruff` does not leave a bare
+/// `[processor.checker]` behind. Returns whether anything was removed.
+fn remove_section(table: &mut toml_edit::Table, section: &str, name: &str) -> bool {
+    let path = key_path(section, name);
+    fn remove_at(table: &mut toml_edit::Table, path: &[String]) -> bool {
+        let Some((first, rest)) = path.split_first() else {
+            return false;
+        };
+        if rest.is_empty() {
+            return table.remove(first).is_some();
+        }
+        let Some(child) = table.get_mut(first).and_then(|t| t.as_table_mut()) else {
+            return false;
+        };
+        let removed = remove_at(child, rest);
+        if removed && child.is_empty() {
+            table.remove(first);
+        }
+        removed
+    }
+    remove_at(table, &path)
 }
 
 /// Disable all processors by removing all [processor.*] sections.
 pub fn disable_all() -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
-    let keys: Vec<String> = table.iter().map(|(k, _)| k.to_string()).collect();
-    let mut count = 0;
-
-    for key in &keys {
-        if table.remove(key).is_some() {
-            count += 1;
-        }
-    }
+    let count = remove_all_sections(table);
 
     save_doc(&doc)?;
     println!("Removed {count} processor sections from {CONFIG_FILE}.");
     Ok(())
 }
 
-/// Enable all processors by adding [processor.NAME] sections for all builtin types.
+/// Remove every processor section, counting leaf sections (one per
+/// processor or instance), and return the count.
+fn remove_all_sections(table: &mut toml_edit::Table) -> usize {
+    // processor → type → name → (fields | instances): a name table whose
+    // values are all tables holds instances, one section each; any other
+    // name table is one section itself.
+    fn count_sections(name_table: &toml_edit::Table) -> usize {
+        let instances = name_table
+            .iter()
+            .filter(|(_, item)| item.is_table())
+            .count();
+        if instances > 0 && instances == name_table.len() {
+            instances
+        } else {
+            1
+        }
+    }
+    let count: usize = table
+        .iter()
+        .filter_map(|(_, type_item)| type_item.as_table())
+        .flat_map(|type_table| type_table.iter())
+        .filter_map(|(_, name_item)| name_item.as_table())
+        .map(count_sections)
+        .sum();
+    let keys: Vec<String> = table.iter().map(|(k, _)| k.to_string()).collect();
+    for key in &keys {
+        table.remove(key);
+    }
+    count
+}
+
+/// Enable all processors by adding a section for every registered processor.
 pub fn enable_all() -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
-    let all_names = all_type_names();
     let mut count = 0;
 
-    for name in &all_names {
-        if table.get(name).is_none() {
-            table.insert(name, toml_edit::Item::Table(toml_edit::Table::new()));
+    for name in all_pnames() {
+        if add_section(table, "processor", &name)? {
             count += 1;
         }
     }
@@ -77,13 +180,13 @@ pub fn enable_all() -> Result<()> {
     Ok(())
 }
 
-/// Disable a single processor by removing its [processor.NAME] section.
+/// Disable a single processor by removing its section.
 pub fn disable(name: &str) -> Result<()> {
     validate_name(name)?;
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
 
-    if table.remove(name).is_some() {
+    if remove_section(table, "processor", name) {
         save_doc(&doc)?;
         println!("Removed processor '{name}'.");
     } else {
@@ -92,18 +195,17 @@ pub fn disable(name: &str) -> Result<()> {
     Ok(())
 }
 
-/// Enable a single processor by adding an empty [processor.NAME] section.
+/// Enable a single processor by adding an empty section for it.
 pub fn enable(name: &str) -> Result<()> {
     validate_name(name)?;
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
 
-    if table.get(name).is_some() {
-        println!("Processor '{name}' is already declared.");
-    } else {
-        table.insert(name, toml_edit::Item::Table(toml_edit::Table::new()));
+    if add_section(table, "processor", name)? {
         save_doc(&doc)?;
         println!("Added processor '{name}'.");
+    } else {
+        println!("Processor '{name}' is already declared.");
     }
     Ok(())
 }
@@ -115,11 +217,7 @@ pub fn enable_detected(detected: &HashSet<String>) -> Result<()> {
     let mut count = 0;
 
     for name in detected {
-        if table.get(name.as_str()).is_none() {
-            table.insert(
-                name.as_str(),
-                toml_edit::Item::Table(toml_edit::Table::new()),
-            );
+        if add_section(table, "processor", name)? {
             count += 1;
         }
     }
@@ -142,19 +240,9 @@ pub fn only(names: &[String]) -> Result<()> {
 
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
-
-    // Remove all existing processor sections
-    let keys: Vec<String> = table.iter().map(|(k, _)| k.to_string()).collect();
-    for key in &keys {
-        table.remove(key);
-    }
-
-    // Add only the requested ones
+    remove_all_sections(table);
     for name in names {
-        table.insert(
-            name.as_str(),
-            toml_edit::Item::Table(toml_edit::Table::new()),
-        );
+        add_section(table, "processor", name)?;
     }
 
     save_doc(&doc)?;
@@ -166,19 +254,9 @@ pub fn only(names: &[String]) -> Result<()> {
 pub fn minimal(detected: &HashSet<String>) -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
-
-    // Remove all
-    let keys: Vec<String> = table.iter().map(|(k, _)| k.to_string()).collect();
-    for key in &keys {
-        table.remove(key);
-    }
-
-    // Add detected
+    remove_all_sections(table);
     for name in detected {
-        table.insert(
-            name.as_str(),
-            toml_edit::Item::Table(toml_edit::Table::new()),
-        );
+        add_section(table, "processor", name)?;
     }
 
     save_doc(&doc)?;
@@ -213,11 +291,7 @@ pub fn auto(available: &HashSet<String>) -> Result<()> {
     let mut added = Vec::new();
 
     for name in available {
-        if table.get(name.as_str()).is_none() {
-            table.insert(
-                name.as_str(),
-                toml_edit::Item::Table(toml_edit::Table::new()),
-            );
+        if add_section(table, "processor", name)? {
             added.push(name.as_str());
         }
     }
@@ -241,30 +315,7 @@ fn analyzer_table(doc: &mut toml_edit::DocumentMut) -> Result<&mut toml_edit::Ta
         .context("[analyzer] must be a table")
 }
 
-/// Delete a single entry (processor or analyzer) by iname from the given section table.
-/// Supports both simple inames ("ruff") and dotted named instances ("pylint.core").
-fn delete_iname(section_table: &mut toml_edit::Table, iname: &str) -> bool {
-    if let Some(dot) = iname.find('.') {
-        let type_name = &iname[..dot];
-        let sub_name = &iname[dot + 1..];
-        if let Some(type_table) = section_table
-            .get_mut(type_name)
-            .and_then(|t| t.as_table_mut())
-            && type_table.remove(sub_name).is_some()
-        {
-            if type_table.is_empty() {
-                section_table.remove(type_name);
-            }
-            return true;
-        }
-        false
-    } else {
-        section_table.remove(iname).is_some()
-    }
-}
-
-/// Set `enabled = VALUE` on a single entry by iname from the given section table.
-/// Supports both simple inames ("ruff") and dotted named instances ("pylint.core").
+/// Set `enabled = VALUE` on the entry for `iname` below `section_table`.
 /// Returns an error if the iname is not found.
 fn set_enabled_iname(
     section_table: &mut toml_edit::Table,
@@ -272,19 +323,7 @@ fn set_enabled_iname(
     value: bool,
     section: &str,
 ) -> Result<()> {
-    let entry = if let Some(dot) = iname.find('.') {
-        let type_name = &iname[..dot];
-        let sub_name = &iname[dot + 1..];
-        section_table
-            .get_mut(type_name)
-            .and_then(|t| t.as_table_mut())
-            .and_then(|t| t.get_mut(sub_name))
-            .and_then(|v| v.as_table_mut())
-    } else {
-        section_table.get_mut(iname).and_then(|v| v.as_table_mut())
-    };
-
-    match entry {
+    match get_table(section_table, &key_path(section, iname)) {
         Some(t) => {
             t.insert("enabled", toml_edit::value(value));
             Ok(())
@@ -297,7 +336,7 @@ fn set_enabled_iname(
 pub fn delete_processor(iname: &str) -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
-    if delete_iname(table, iname) {
+    if remove_section(table, "processor", iname) {
         save_doc(&doc)?;
         println!("Deleted processor '{iname}'.");
     } else {
@@ -310,7 +349,7 @@ pub fn delete_processor(iname: &str) -> Result<()> {
 pub fn disable_processor(iname: &str) -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
-    set_enabled_iname(table, iname, false, "Processor")?;
+    set_enabled_iname(table, iname, false, "processor")?;
     save_doc(&doc)?;
     println!("Disabled processor '{iname}'.");
     Ok(())
@@ -320,7 +359,7 @@ pub fn disable_processor(iname: &str) -> Result<()> {
 pub fn enable_processor(iname: &str) -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
-    set_enabled_iname(table, iname, true, "Processor")?;
+    set_enabled_iname(table, iname, true, "processor")?;
     save_doc(&doc)?;
     println!("Enabled processor '{iname}'.");
     Ok(())
@@ -330,7 +369,7 @@ pub fn enable_processor(iname: &str) -> Result<()> {
 pub fn delete_analyzer(iname: &str) -> Result<()> {
     let mut doc = load_doc()?;
     let table = analyzer_table(&mut doc)?;
-    if delete_iname(table, iname) {
+    if remove_section(table, "analyzer", iname) {
         save_doc(&doc)?;
         println!("Deleted analyzer '{iname}'.");
     } else {
@@ -343,7 +382,7 @@ pub fn delete_analyzer(iname: &str) -> Result<()> {
 pub fn disable_analyzer(iname: &str) -> Result<()> {
     let mut doc = load_doc()?;
     let table = analyzer_table(&mut doc)?;
-    set_enabled_iname(table, iname, false, "Analyzer")?;
+    set_enabled_iname(table, iname, false, "analyzer")?;
     save_doc(&doc)?;
     println!("Disabled analyzer '{iname}'.");
     Ok(())
@@ -353,7 +392,7 @@ pub fn disable_analyzer(iname: &str) -> Result<()> {
 pub fn enable_analyzer(iname: &str) -> Result<()> {
     let mut doc = load_doc()?;
     let table = analyzer_table(&mut doc)?;
-    set_enabled_iname(table, iname, true, "Analyzer")?;
+    set_enabled_iname(table, iname, true, "analyzer")?;
     save_doc(&doc)?;
     println!("Enabled analyzer '{iname}'.");
     Ok(())
@@ -371,21 +410,7 @@ pub fn remove_no_file_processors(empty_processors: &[String]) -> Result<()> {
     let mut removed = Vec::new();
 
     for name in empty_processors {
-        // Handle both single-instance (pylint) and the type part of named instances (pylint.core)
-        let type_name = name.split('.').next().unwrap_or(name);
-        if name.contains('.') {
-            // Named instance: remove the sub-key from [processor.TYPE]
-            if let Some(type_table) = table.get_mut(type_name).and_then(|t| t.as_table_mut()) {
-                let sub_name = &name[type_name.len() + 1..];
-                if type_table.remove(sub_name).is_some() {
-                    removed.push(name.as_str());
-                    // If the type table is now empty, remove it entirely
-                    if type_table.is_empty() {
-                        table.remove(type_name);
-                    }
-                }
-            }
-        } else if table.remove(name.as_str()).is_some() {
+        if remove_section(table, "processor", name) {
             removed.push(name.as_str());
         }
     }
@@ -401,4 +426,70 @@ pub fn remove_no_file_processors(empty_processors: &[String]) -> Result<()> {
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn doc(src: &str) -> toml_edit::DocumentMut {
+        src.parse().unwrap()
+    }
+
+    /// Sections nest by name segment, and removing the last processor of a
+    /// type takes the empty type table with it.
+    #[test]
+    fn sections_nest_by_name_segment() {
+        let mut d = doc("");
+        let table = processor_table(&mut d).unwrap();
+        assert!(add_section(table, "processor", "processor.checker.ruff").unwrap());
+        assert!(!add_section(table, "processor", "processor.checker.ruff").unwrap());
+        assert!(add_section(table, "processor", "processor.checker.pylint.core").unwrap());
+        let text = d.to_string();
+        assert!(text.contains("[processor.checker.ruff]"), "{text}");
+        assert!(text.contains("[processor.checker.pylint.core]"), "{text}");
+
+        let table = processor_table(&mut d).unwrap();
+        assert!(remove_section(table, "processor", "processor.checker.ruff"));
+        assert!(remove_section(
+            table,
+            "processor",
+            "processor.checker.pylint.core"
+        ));
+        assert!(!remove_section(
+            table,
+            "processor",
+            "processor.checker.pylint.core"
+        ));
+        assert!(
+            table.get("checker").is_none(),
+            "empty type table must go: {d}"
+        );
+    }
+
+    #[test]
+    fn enabled_flag_lands_on_the_named_section() {
+        let mut d = doc("[processor.checker.pylint.core]\nargs = []\n[analyzer.tera]\n");
+        let table = processor_table(&mut d).unwrap();
+        set_enabled_iname(table, "processor.checker.pylint.core", false, "processor").unwrap();
+        assert!(set_enabled_iname(table, "processor.checker.ruff", false, "processor").is_err());
+        let table = analyzer_table(&mut d).unwrap();
+        set_enabled_iname(table, "tera", false, "analyzer").unwrap();
+        let text = d.to_string();
+        assert!(
+            text.contains("[processor.checker.pylint.core]\nargs = []\nenabled = false"),
+            "{text}"
+        );
+        assert!(text.contains("[analyzer.tera]\nenabled = false"), "{text}");
+    }
+
+    #[test]
+    fn remove_all_counts_processors_and_instances() {
+        let mut d = doc(
+            "[processor.checker.ruff]\n[processor.checker.pylint.core]\n[processor.checker.pylint.tests]\n[processor.generator.tera]\n",
+        );
+        let table = processor_table(&mut d).unwrap();
+        assert_eq!(remove_all_sections(table), 4);
+        assert!(table.is_empty());
+    }
 }

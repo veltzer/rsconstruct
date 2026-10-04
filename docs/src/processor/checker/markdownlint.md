@@ -19,7 +19,7 @@ Depends on the npm processor — uses the `markdownlint` binary installed by npm
 ## Configuration
 
 ```toml
-[processor.markdownlint]
+[processor.checker.markdownlint]
 command = "markdownlint"               # Path to the markdownlint binary
 args = []                              # Additional arguments to pass to markdownlint
 npm_stamp = "out/npm/root.stamp"       # Stamp file from npm processor (dependency)

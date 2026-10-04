@@ -12,11 +12,11 @@ A common case:
 Both contribute to the same directory. A website IS a single folder by design.
 
 ```toml
-[processor.creator.mkdocs]
+[processor.creator.generic.mkdocs]
 command   = "mkdocs build --site-dir _site"
 output_dirs = ["_site"]
 
-[processor.explicit.pandoc]
+[processor.explicit.generic.pandoc]
 command      = "./pandoc-page.sh"
 inputs       = ["about.md"]
 output_files = ["_site/about.html"]
@@ -150,7 +150,7 @@ Final state on disk: `index.html`, `assets/style.css`, `about.html`. All three f
 
 Final state is the same as after the first build, without either tool having actually run.
 
-### Building only the Creator (`-p creator.mkdocs`)
+### Building only the Creator (`-p processor.creator.generic.mkdocs`)
 
 1. pandoc is not in the run set; `_site/about.html` stays wherever it was (absent if cleaned, present otherwise).
 2. mkdocs runs or restores its tree.

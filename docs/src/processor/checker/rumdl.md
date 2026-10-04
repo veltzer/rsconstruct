@@ -21,7 +21,7 @@ single rumdl invocation for better performance.
 ## Configuration
 
 ```toml
-[processor.rumdl]
+[processor.checker.rumdl]
 command = "rumdl"                             # The rumdl command to run
 args = []                                    # Additional arguments to pass to rumdl
 dep_inputs = []                            # Additional files that trigger rebuilds when changed

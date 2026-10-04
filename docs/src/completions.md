@@ -59,7 +59,7 @@ These commands complete with instance names declared in the current project's `r
 - `rsconstruct processor config <TAB>`
 - `rsconstruct processor files <TAB>`
 
-Instance names are extracted from `[processor.NAME]` and `[processor.NAME.SUBNAME]` headings in `rsconstruct.toml` at tab-completion time. Requires a project config in the current directory. Bash only.
+Instance names are extracted from `[processor.TYPE.NAME]` and `[processor.TYPE.NAME.INSTANCE]` headings in `rsconstruct.toml` at tab-completion time. Requires a project config in the current directory. Bash only.
 
 ### Analyzer names
 

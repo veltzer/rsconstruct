@@ -31,7 +31,7 @@ This processor supports batch mode.
 ## Configuration
 
 ```toml
-[processor.actionlint]
+[processor.checker.actionlint]
 src_dirs = [".github/workflows"]
 args = []
 dep_inputs = []

@@ -263,7 +263,8 @@ impl Builder {
         // CLI override for zspell and aspell auto_add_words
         if opts.auto_add_words {
             for inst in &mut self.config.processor.instances {
-                if (inst.type_name == "zspell" || inst.type_name == "aspell")
+                if (inst.pname == "processor.checker.zspell"
+                    || inst.pname == "processor.checker.aspell")
                     && let Some(table) = inst.config_toml.as_table_mut()
                 {
                     table.insert("auto_add_words".to_string(), toml::Value::Boolean(true));
@@ -932,12 +933,12 @@ mod tests {
     #[test]
     fn exclude_only_synthesizes_an_include_list() {
         let procs = create_all_default_processors().expect("default processors");
-        let exclude = vec!["ruff".to_string()];
+        let exclude = vec!["processor.checker.ruff".to_string()];
         let filter = resolve_processor_filter(None, Some(&exclude), &procs)
             .expect("exclude-only is valid")
             .expect("exclude-only must synthesize a list");
         assert!(
-            !filter.contains(&"ruff".to_string()),
+            !filter.contains(&"processor.checker.ruff".to_string()),
             "excluded processor must not survive"
         );
         assert!(
@@ -956,15 +957,24 @@ mod tests {
     #[test]
     fn include_is_narrowed_by_exclude() {
         let procs = create_all_default_processors().expect("default processors");
-        let include = vec!["ruff".to_string(), "mypy".to_string()];
-        let exclude = vec!["black".to_string()];
+        let include = vec![
+            "processor.checker.ruff".to_string(),
+            "processor.checker.mypy".to_string(),
+        ];
+        let exclude = vec!["processor.checker.black".to_string()];
         let filter = resolve_processor_filter(Some(&include), Some(&exclude), &procs)
             .expect("disjoint include/exclude is valid")
             .expect("include must produce a list");
         // expand_aliases sorts and dedups, so compare as a set.
         let mut got = filter;
         got.sort();
-        assert_eq!(got, vec!["mypy".to_string(), "ruff".to_string()]);
+        assert_eq!(
+            got,
+            vec![
+                "processor.checker.mypy".to_string(),
+                "processor.checker.ruff".to_string()
+            ]
+        );
     }
 
     /// A name in both -p and -x is contradictory intent and must fail rather
@@ -972,7 +982,7 @@ mod tests {
     #[test]
     fn conflicting_include_and_exclude_errors() {
         let procs = create_all_default_processors().expect("default processors");
-        let both = vec!["ruff".to_string()];
+        let both = vec!["processor.checker.ruff".to_string()];
         let err = resolve_processor_filter(Some(&both), Some(&both), &procs)
             .expect_err("same name in -p and -x must be rejected");
         let msg = format!("{err}");

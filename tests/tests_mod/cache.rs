@@ -433,7 +433,7 @@ fn tool_upgrade_invalidates_cached_results() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.script]\ncommand = \"faketool\"\nsrc_dirs = [\"src\"]\nsrc_extensions = [\".txt\"]\n",
+        "[processor.checker.script]\ncommand = \"faketool\"\nsrc_dirs = [\"src\"]\nsrc_extensions = [\".txt\"]\n",
     ).unwrap();
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(project_path.join("src/a.txt"), "content\n").unwrap();
@@ -512,7 +512,7 @@ fn hash_tool_versions_false_ignores_tool_upgrade() {
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[build]\nhash_tool_versions = false\n\n\
-         [processor.script]\ncommand = \"faketool2\"\nsrc_dirs = [\"src\"]\nsrc_extensions = [\".txt\"]\n",
+         [processor.checker.script]\ncommand = \"faketool2\"\nsrc_dirs = [\"src\"]\nsrc_extensions = [\".txt\"]\n",
     ).unwrap();
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(project_path.join("src/a.txt"), "content\n").unwrap();
@@ -597,7 +597,7 @@ fn distinct_processors_do_not_share_cache_entries() {
         project_path.join("rsconstruct.toml"),
         concat!(
             "[build]\nhash_tool_versions = false\n\n",
-            "[processor.generator.gen_a]\n",
+            "[processor.generator.generic.gen_a]\n",
             "command = \"stamp\"\n",
             "output_dir = \"out/a\"\n",
             "output_extension = \"txt\"\n",
@@ -605,7 +605,7 @@ fn distinct_processors_do_not_share_cache_entries() {
             "src_extensions = [\".src\"]\n",
             "src_dirs = [\"src\"]\n",
             "\n",
-            "[processor.generator.gen_b]\n",
+            "[processor.generator.generic.gen_b]\n",
             "command = \"stamp\"\n",
             "output_dir = \"out/b\"\n",
             "output_extension = \"txt\"\n",

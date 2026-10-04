@@ -20,7 +20,7 @@ This processor does not support batch mode — each file is checked individually
 ## Configuration
 
 ```toml
-[processor.jsonlint]
+[processor.checker.jsonlint]
 command = "jsonlint"                          # The jsonlint command to run
 args = []                                    # Additional arguments to pass to jsonlint
 dep_inputs = []                            # Additional files that trigger rebuilds when changed

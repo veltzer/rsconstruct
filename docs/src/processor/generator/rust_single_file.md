@@ -11,26 +11,26 @@ Rust source files in the `src/` directory are compiled directly to executables u
 This is useful for exercise, example, or utility repositories where each `.rs` file is a
 standalone program.
 
-Output is written to `out/rust_single_file/` preserving the directory structure:
+Output is written to `out/processor.generator.rust_single_file/` preserving the directory structure:
 
 ```
-src/hello.rs  →  out/rust_single_file/hello.elf
-src/exercises/ex1.rs  →  out/rust_single_file/exercises/ex1.elf
+src/hello.rs  →  out/processor.generator.rust_single_file/hello.elf
+src/exercises/ex1.rs  →  out/processor.generator.rust_single_file/exercises/ex1.elf
 ```
 
 ## Source Files
 
 - Input: `src/**/*.rs`
-- Output: `out/rust_single_file/` with configured suffix (default: `.elf`)
+- Output: `out/processor.generator.rust_single_file/` with configured suffix (default: `.elf`)
 
 ## Configuration
 
 ```toml
-[processor.rust_single_file]
+[processor.generator.rust_single_file]
 command = "rustc"                         # Rust compiler (default: "rustc")
 flags = []                                # Additional compiler flags
 output_suffix = ".elf"                    # Output file suffix (default: ".elf")
-output_dir = "out/rust_single_file"       # Output directory
+output_dir = "out/processor.generator.rust_single_file"       # Output directory
 dep_inputs = []                         # Additional files that trigger rebuilds
 ```
 
@@ -39,7 +39,7 @@ dep_inputs = []                         # Additional files that trigger rebuilds
 | `command` | string | `"rustc"` | Path to Rust compiler |
 | `flags` | string[] | `[]` | Additional compiler flags |
 | `output_suffix` | string | `".elf"` | Suffix for output executables |
-| `output_dir` | string | `"out/rust_single_file"` | Output directory |
+| `output_dir` | string | `"out/processor.generator.rust_single_file"` | Output directory |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
 ## Batch support

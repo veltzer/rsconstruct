@@ -9,19 +9,19 @@ This is the native equivalent of [markdown2html](markdown2html.md), which uses t
 ## Source Files
 
 - Input: `**/*.md`
-- Output: `out/imarkdown2html/{relative_path}.html`
+- Output: `out/processor.generator.imarkdown2html/{relative_path}.html`
 
 ## Configuration
 
 ```toml
-[processor.imarkdown2html]
+[processor.generator.imarkdown2html]
 src_dirs = ["docs"]
-output_dir = "out/imarkdown2html"    # Output directory (default)
+output_dir = "out/processor.generator.imarkdown2html"    # Output directory (default)
 ```
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `output_dir` | string | `"out/imarkdown2html"` | Output directory for HTML files |
+| `output_dir` | string | `"out/processor.generator.imarkdown2html"` | Output directory for HTML files |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
 ## Batch Support

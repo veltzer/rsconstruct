@@ -26,7 +26,7 @@ never linked together. Cppcheck has no flag to disable this cross-file analysis
 ## Configuration
 
 ```toml
-[processor.cppcheck]
+[processor.checker.cppcheck]
 args = ["--error-exitcode=1", "--enable=warning,style,performance,portability"]
 dep_inputs = [".cppcheck-suppressions"]   # Additional files that trigger rebuilds when changed
 ```

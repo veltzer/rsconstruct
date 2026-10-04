@@ -144,7 +144,7 @@ inventory::submit! {
         ],
         omit_standard_fields: &["formats", "args"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".rs"], src_exclude_dirs: &[] }),
-        defaults: Some(crate::config::ProcessorDefaults { command: "rustc", output_dir: "out/rust_single_file", ..crate::config::ProcessorDefaults::EMPTY }),
+        defaults: Some(crate::config::ProcessorDefaults { command: "rustc", output_dir: "out/processor.generator.rust_single_file", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<RustSingleFileConfig>,
         keywords: &["rust", "compiler", "rs", "cargo", "binary", "executable"],
         description: "Compile single-file Rust programs into executables",

@@ -7,10 +7,10 @@ Compiles Protocol Buffer (`.proto`) files to generated source code using `protoc
 ## How It Works
 
 Files matching configured extensions in the `proto/` directory are compiled using the
-Protocol Buffer compiler. Output is written to `out/protobuf/`:
+Protocol Buffer compiler. Output is written to `out/processor.generator.protobuf/`:
 
 ```
-proto/hello.proto  →  out/protobuf/hello.pb.cc
+proto/hello.proto  →  out/processor.generator.protobuf/hello.pb.cc
 ```
 
 The `--proto_path` is automatically set to the parent directory of each input file.
@@ -18,15 +18,15 @@ The `--proto_path` is automatically set to the parent directory of each input fi
 ## Source Files
 
 - Input: `proto/**/*.proto`
-- Output: `out/protobuf/` with `.pb.cc` extension
+- Output: `out/processor.generator.protobuf/` with `.pb.cc` extension
 
 ## Configuration
 
 ```toml
-[processor.protobuf]
+[processor.generator.protobuf]
 command = "protoc"                        # Protoc binary (default: "protoc")
 src_extensions = [".proto"]                   # File extensions to process
-output_dir = "out/protobuf"              # Output directory (default: "out/protobuf")
+output_dir = "out/processor.generator.protobuf"              # Output directory (default: "out/processor.generator.protobuf")
 dep_inputs = []                         # Additional files that trigger rebuilds
 ```
 
@@ -34,7 +34,7 @@ dep_inputs = []                         # Additional files that trigger rebuilds
 |-----|------|---------|-------------|
 | `command` | string | `"protoc"` | Path to protoc compiler |
 | `src_extensions` | string[] | `[".proto"]` | File extensions to discover |
-| `output_dir` | string | `"out/protobuf"` | Output directory |
+| `output_dir` | string | `"out/processor.generator.protobuf"` | Output directory |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
 ## Batch support

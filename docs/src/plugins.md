@@ -1,6 +1,6 @@
 # Lua Plugins
 
-RSConstruct supports custom processors written in Lua. Drop a `.lua` file in the `plugins/` directory and add a `[processor.NAME]` section in `rsconstruct.toml`. The plugin participates in discovery, execution, caching, cleaning, tool listing, and auto-detection just like a built-in processor.
+RSConstruct supports custom processors written in Lua. Drop a `.lua` file in the `plugins/` directory and add a `[processor.lua.NAME]` section in `rsconstruct.toml`. The plugin participates in discovery, execution, caching, cleaning, tool listing, and auto-detection just like a built-in processor.
 
 ## Quick Start
 
@@ -40,7 +40,7 @@ end
 **2. Enable it in `rsconstruct.toml`:**
 
 ```toml
-[processor.eslint]
+[processor.checker.eslint]
 src_dirs = ["src"]
 src_extensions = [".js", ".ts"]
 ```
@@ -74,7 +74,7 @@ end
 Called during product discovery. Receives:
 
 - `project_root` (string) — absolute path to the project root
-- `config` (table) — the `[processor.NAME]` TOML section as a Lua table
+- `config` (table) — the `[processor.lua.NAME]` TOML section as a Lua table
 - `files` (table) — list of absolute file paths matching the scan configuration
 
 Must return a table of products. Each product is a table with `inputs` and `outputs` keys, both containing tables of absolute file paths.
@@ -177,7 +177,7 @@ Lua plugins have access to an `rsconstruct` global table with helper functions.
 
 ## Configuration
 
-Plugins use the standard scan configuration fields. Any `[processor.NAME]` section in `rsconstruct.toml` is passed to the plugin's `discover()` function as the `config` table.
+Plugins use the standard scan configuration fields. Any `[processor.lua.NAME]` section in `rsconstruct.toml` is passed to the plugin's `discover()` function as the `config` table.
 
 ### Scan Configuration
 
@@ -193,10 +193,10 @@ These fields control which files are passed to `discover()`:
 
 ### Custom Configuration
 
-Any additional keys in the `[processor.NAME]` section are passed through to the Lua `config` table:
+Any additional keys in the `[processor.lua.NAME]` section are passed through to the Lua `config` table:
 
 ```toml
-[processor.eslint]
+[processor.checker.eslint]
 src_dirs = ["src"]
 src_extensions = [".js", ".ts"]
 max_warnings = 0          # custom key, accessible as config.max_warnings in Lua
@@ -228,8 +228,8 @@ dir = "plugins"  # default
 
 The plugin name is derived from the `.lua` filename (without extension). This name is used for:
 
-- The `[processor.NAME]` config section
-- The `[processor.NAME]` config section in `rsconstruct.toml`
+- The `[processor.lua.NAME]` config section
+- The `[processor.lua.NAME]` config section in `rsconstruct.toml`
 - The `out/NAME/` stub directory
 - Display in `rsconstruct processor list` and build output
 
@@ -241,7 +241,7 @@ Lua plugins participate in RSConstruct's incremental build system automatically:
 
 - Products are identified by their inputs, outputs, and a config hash
 - If none of the declared inputs have changed since the last build, the product is skipped
-- If the `[processor.NAME]` config section changes, all products are rebuilt
+- If the `[processor.lua.NAME]` config section changes, all products are rebuilt
 - Outputs are cached and can be restored from cache
 
 For correct incrementality, make sure `discover()` declares all files that affect the output. If your tool reads additional configuration files, include them in the `inputs` list.
@@ -287,7 +287,7 @@ end
 ```
 
 ```toml
-[processor.yamllint]
+[processor.checker.yamllint]
 src_extensions = [".yml", ".yaml"]
 ```
 
@@ -326,7 +326,7 @@ end
 ```
 
 ```toml
-[processor.yamllint]
+[processor.checker.yamllint]
 src_extensions = [".yml", ".yaml"]
 ```
 
@@ -350,7 +350,7 @@ end
 function discover(project_root, config, files)
     local products = {}
     for _, file in ipairs(files) do
-        local out = file:gsub("%.scss$", ".css"):gsub("^" .. project_root .. "/src/", project_root .. "/out/sass/")
+        local out = file:gsub("%.scss$", ".css"):gsub("^" .. project_root .. "/src/", project_root .. "/out/processor.generator.sass/")
         table.insert(products, {
             inputs = {file},
             outputs = {out},
@@ -365,7 +365,7 @@ end
 ```
 
 ```toml
-[processor.sass]
+[processor.generator.sass]
 src_dirs = ["src"]
 src_extensions = [".scss"]
 ```

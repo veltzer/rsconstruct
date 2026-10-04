@@ -167,7 +167,7 @@ pub fn create_processor_for_instance(
     if let Some(entry) = find_registry_entry(type_name) {
         let mut resolved = config_toml.clone();
         let mut prov = crate::config::ProvenanceMap::new();
-        crate::registries::apply_all_defaults(entry.name, &mut resolved, &mut prov);
+        crate::registries::apply_all_defaults(&entry.pname(), &mut resolved, &mut prov);
         return (entry.create)(&resolved).map(Some);
     }
     Ok(None)
@@ -177,16 +177,13 @@ pub fn create_processor_for_instance(
 pub fn create_all_default_processors() -> Result<ProcessorMap> {
     let mut processors: ProcessorMap = HashMap::new();
     for entry in registry_entries() {
+        let pname = entry.pname();
         let mut empty_toml = toml::Value::Table(toml::map::Map::new());
         let mut provenance = crate::config::ProvenanceMap::new();
-        crate::registries::apply_all_defaults(entry.name, &mut empty_toml, &mut provenance);
-        let processor = (entry.create)(&empty_toml).with_context(|| {
-            format!(
-                "Failed to create processor '{}' with default config",
-                entry.name
-            )
-        })?;
-        processors.insert(entry.name.to_string(), processor);
+        crate::registries::apply_all_defaults(&pname, &mut empty_toml, &mut provenance);
+        let processor = (entry.create)(&empty_toml)
+            .with_context(|| format!("Failed to create processor '{pname}' with default config"))?;
+        processors.insert(pname, processor);
     }
     Ok(processors)
 }
@@ -274,12 +271,12 @@ impl Builder {
         let mut processors: ProcessorMap = HashMap::new();
 
         for inst in &cfg.instances {
-            match create_processor_for_instance(&inst.type_name, &inst.config_toml) {
+            match create_processor_for_instance(&inst.pname, &inst.config_toml) {
                 Ok(Some(proc)) => {
                     processors.insert(inst.instance_name.clone(), proc);
                 }
                 Ok(None) => {
-                    anyhow::bail!("Unknown processor type: '{}'", inst.type_name);
+                    anyhow::bail!("Unknown processor type: '{}'", inst.pname);
                 }
                 Err(e) => {
                     return Err(e.context(format!(
@@ -290,13 +287,19 @@ impl Builder {
             }
         }
 
-        // Lua plugin processors
+        // Lua plugin processors, named like every other processor:
+        // `processor.lua.<plugin file stem>`.
         let lua_plugins = LuaProcessor::discover_plugins(&self.config.plugins.dir, &cfg.extra)?;
         for (name, proc) in lua_plugins {
-            if processors.contains_key(&name) {
-                anyhow::bail!("Lua plugin '{name}' conflicts with processor instance");
+            let iname = format!(
+                "{}{}.{name}",
+                crate::registries::NAME_PREFIX,
+                crate::processor::ProcessorType::Lua.as_str()
+            );
+            if processors.contains_key(&iname) {
+                anyhow::bail!("Lua plugin '{iname}' conflicts with processor instance");
             }
-            processors.insert(name, Box::new(proc));
+            processors.insert(iname, Box::new(proc));
         }
 
         Ok(processors)
@@ -752,7 +755,7 @@ impl Builder {
                 let covered_by_virtual = file_index.files().iter().any(|f| f.starts_with(&prefix));
                 if !covered_by_virtual {
                     missing_dirs.push(format!(
-                        "  [processor.{name}] src_dirs entry '{dir}' does not exist or is not a directory"
+                        "  [{name}] src_dirs entry '{dir}' does not exist or is not a directory"
                     ));
                 }
             }
@@ -764,7 +767,7 @@ impl Builder {
                 let covered_by_virtual = file_index.files().contains(&path);
                 if !covered_by_virtual {
                     missing_files.push(format!(
-                        "  [processor.{name}] src_files entry '{file}' does not exist or is not a file"
+                        "  [{name}] src_files entry '{file}' does not exist or is not a file"
                     ));
                 }
             }

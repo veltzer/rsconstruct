@@ -23,7 +23,7 @@ fn product_show_resolves_by_output_and_prints_all_sections() {
     fs::write(p.join("data/b.md"), "b").unwrap();
     fs::write(
         p.join("rsconstruct.toml"),
-        "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n[analyzer.tera]\n",
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n[analyzer.tera]\n",
     )
     .unwrap();
     fs::write(
@@ -111,7 +111,7 @@ fn product_show_falls_back_to_primary_input() {
     fs::create_dir_all(p.join("tera.templates")).unwrap();
     fs::write(
         p.join("rsconstruct.toml"),
-        "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n[analyzer.tera]\n",
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n[analyzer.tera]\n",
     )
     .unwrap();
     fs::write(p.join("tera.templates/report.txt.tera"), "Hello\n").unwrap();
@@ -147,7 +147,7 @@ fn product_show_unknown_path_errors() {
 
     fs::write(
         p.join("rsconstruct.toml"),
-        "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n",
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n",
     )
     .unwrap();
     fs::create_dir_all(p.join("tera.templates")).unwrap();
@@ -184,7 +184,7 @@ fn product_show_json_shape() {
     fs::write(p.join("data/a.md"), "a").unwrap();
     fs::write(
         p.join("rsconstruct.toml"),
-        "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n[analyzer.tera]\n",
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n[analyzer.tera]\n",
     )
     .unwrap();
     fs::write(
@@ -210,7 +210,7 @@ fn product_show_json_shape() {
     let parsed: serde_json::Value = serde_json::from_str(&stdout)
         .unwrap_or_else(|e| panic!("invalid JSON: {}\n---\n{}", e, stdout));
 
-    assert_eq!(parsed["processor"], "tera");
+    assert_eq!(parsed["processor"], "processor.generator.tera");
     assert_eq!(parsed["outputs"][0], "report.txt");
     assert_eq!(
         parsed["inputs"]["primary"],

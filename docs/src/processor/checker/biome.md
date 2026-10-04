@@ -32,7 +32,7 @@ JavaScript with oxlint turns biome's JavaScript linter off in `biome.jsonc`
 and narrows this processor to stylesheets:
 
 ```toml
-[processor.biome]
+[processor.checker.biome]
 src_dirs = ["src"]
 src_extensions = [".css"]
 ```
@@ -60,7 +60,7 @@ explicitly. `biome explain <rule>` shows any rule's group and options.
 ## Configuration
 
 ```toml
-[processor.biome]
+[processor.checker.biome]
 command = "biome"
 args = []
 dep_inputs = []

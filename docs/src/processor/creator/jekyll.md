@@ -18,7 +18,7 @@ directories). For each one, runs `jekyll build` in that directory.
 ## Configuration
 
 ```toml
-[processor.jekyll]
+[processor.creator.jekyll]
 args = []
 dep_inputs = []
 ```

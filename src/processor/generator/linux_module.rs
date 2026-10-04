@@ -82,9 +82,9 @@ impl LinuxModuleProcessor {
     fn output_dir_for(yaml_path: &Path) -> PathBuf {
         let anchor_dir = crate::processor::parent_dir_or_empty(yaml_path);
         if anchor_dir.as_os_str().is_empty() {
-            PathBuf::from("out/linux-module")
+            PathBuf::from("out/processor.creator.linux_module")
         } else {
-            Path::new("out/linux-module").join(anchor_dir)
+            Path::new("out/processor.creator.linux_module").join(anchor_dir)
         }
     }
 

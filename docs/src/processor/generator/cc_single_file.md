@@ -7,12 +7,12 @@ Compiles C (`.c`) and C++ (`.cc`) source files into executables, one source file
 ## How It Works
 
 Source files under the configured source directory are compiled into executables
-under `out/cc_single_file/`, mirroring the directory structure:
+under `out/processor.generator.cc_single_file/`, mirroring the directory structure:
 
 ```
-src/main.c       →  out/cc_single_file/main.elf
-src/a/b.c        →  out/cc_single_file/a/b.elf
-src/app.cc       →  out/cc_single_file/app.elf
+src/main.c       →  out/processor.generator.cc_single_file/main.elf
+src/a/b.c        →  out/processor.generator.cc_single_file/a/b.elf
+src/app.cc       →  out/processor.generator.cc_single_file/app.elf
 ```
 
 Header dependencies are automatically tracked via compiler-generated `.d` files
@@ -21,7 +21,7 @@ Header dependencies are automatically tracked via compiler-generated `.d` files
 ## Source Files
 
 - Input: `{source_dir}/**/*.c`, `{source_dir}/**/*.cc`
-- Output: `out/cc_single_file/{relative_path}{output_suffix}`
+- Output: `out/processor.generator.cc_single_file/{relative_path}{output_suffix}`
 
 ## Per-File Flags
 
@@ -84,14 +84,14 @@ In this example:
 - `-femit-struct-debug-baseonly` is only applied when compiling with the "gcc" profile
 - `-gline-tables-only` is only applied when compiling with the "clang" profile
 
-The profile name matches the `name` field in your `[[processor.cc_single_file.compilers]]` configuration:
+The profile name matches the `name` field in your `[[processor.generator.cc_single_file.compilers]]` configuration:
 
 ```toml
-[[processor.cc_single_file.compilers]]
+[[processor.generator.cc_single_file.compilers]]
 name = "gcc"      # Matches [gcc] suffix
 cc = "gcc"
 
-[[processor.cc_single_file.compilers]]
+[[processor.generator.cc_single_file.compilers]]
 name = "clang"    # Matches [clang] suffix
 cc = "clang"
 ```
@@ -180,10 +180,10 @@ Link flags come **after** the source file so the linker can resolve symbols corr
 | Position | Source |
 |---|---|
 | `compile_before` | `EXTRA_COMPILE_FLAGS_BEFORE` + `EXTRA_COMPILE_CMD` + `EXTRA_COMPILE_SHELL` |
-| `cflags/cxxflags` | `[processor.cc_single_file]` config `cflags` or `cxxflags` |
+| `cflags/cxxflags` | `[processor.generator.cc_single_file]` config `cflags` or `cxxflags` |
 | `compile_after` | `EXTRA_COMPILE_FLAGS_AFTER` |
 | `link_before` | `EXTRA_LINK_FLAGS_BEFORE` + `EXTRA_LINK_CMD` + `EXTRA_LINK_SHELL` |
-| `ldflags` | `[processor.cc_single_file]` config `ldflags` |
+| `ldflags` | `[processor.generator.cc_single_file]` config `ldflags` |
 | `link_after` | `EXTRA_LINK_FLAGS_AFTER` |
 
 ## Verbosity Levels (`--processor-verbose N`)
@@ -191,16 +191,16 @@ Link flags come **after** the source file so the linker can resolve symbols corr
 | Level | Output |
 |-------|--------|
 | 0 (default) | Target basename: `main.elf` |
-| 1 | Target path + compiler commands: `out/cc_single_file/main.elf` |
-| 2 | Adds source path: `out/cc_single_file/main.elf <- src/main.c` |
-| 3 | Adds all inputs: `out/cc_single_file/main.elf <- src/main.c, src/utils.h` |
+| 1 | Target path + compiler commands: `out/processor.generator.cc_single_file/main.elf` |
+| 2 | Adds source path: `out/processor.generator.cc_single_file/main.elf <- src/main.c` |
+| 3 | Adds all inputs: `out/processor.generator.cc_single_file/main.elf <- src/main.c, src/utils.h` |
 
 ## Configuration
 
 ### Single Compiler (Legacy)
 
 ```toml
-[processor.cc_single_file]
+[processor.generator.cc_single_file]
 cc = "gcc"                # C compiler (default: "gcc")
 cxx = "g++"               # C++ compiler (default: "g++")
 cflags = []               # C compiler flags
@@ -218,11 +218,11 @@ include_scanner = "native" # Method for scanning header dependencies (default: "
 To compile with multiple compilers (e.g., both GCC and Clang), use the `compilers` array:
 
 ```toml
-[processor.cc_single_file]
+[processor.generator.cc_single_file]
 src_dirs = ["src"]
 include_paths = ["include"]  # Shared across all compilers
 
-[[processor.cc_single_file.compilers]]
+[[processor.generator.cc_single_file.compilers]]
 name = "gcc"
 cc = "gcc"
 cxx = "g++"
@@ -231,7 +231,7 @@ cxxflags = ["-Wall", "-Wextra"]
 ldflags = []
 output_suffix = ".elf"
 
-[[processor.cc_single_file.compilers]]
+[[processor.generator.cc_single_file.compilers]]
 name = "clang"
 cc = "clang"
 cxx = "clang++"
@@ -244,8 +244,8 @@ output_suffix = ".elf"
 When using multiple compilers, outputs are organized by compiler name:
 
 ```
-src/main.c  →  out/cc_single_file/gcc/main.elf
-            →  out/cc_single_file/clang/main.elf
+src/main.c  →  out/processor.generator.cc_single_file/gcc/main.elf
+            →  out/processor.generator.cc_single_file/clang/main.elf
 ```
 
 Each source file is compiled once per compiler profile, allowing you to:

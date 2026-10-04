@@ -15,8 +15,9 @@ use tempfile::TempDir;
 /// another repo's config, and either way a processor that checks nothing.
 #[test]
 fn missing_src_dirs_is_a_config_error() {
-    let temp_dir =
-        setup_project_with_config("[processor.tera]\nsrc_dirs = [\"missing.templates\"]\n");
+    let temp_dir = setup_project_with_config(
+        "[processor.generator.tera]\nsrc_dirs = [\"missing.templates\"]\n",
+    );
     let output = run_rsconstruct(temp_dir.path(), &["build"]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(
@@ -25,7 +26,7 @@ fn missing_src_dirs_is_a_config_error() {
         "a missing src_dirs entry must fail as a config error: {stderr}"
     );
     assert!(
-        stderr.contains("processor.tera") && stderr.contains("missing.templates"),
+        stderr.contains("processor.generator.tera") && stderr.contains("missing.templates"),
         "error must name the processor and the entry: {stderr}"
     );
 }
@@ -38,10 +39,10 @@ fn allow_missing_src_dirs_does_not_disturb_sibling_instances() {
         "[build]\n",
         "allow_missing_src_dirs = true\n",
         "\n",
-        "[processor.tera.real]\n",
+        "[processor.generator.tera.real]\n",
         "src_dirs = [\"tera.templates\"]\n",
         "\n",
-        "[processor.tera.ghost]\n",
+        "[processor.generator.tera.ghost]\n",
         "src_dirs = [\"missing.templates\"]\n",
     ));
     let project = temp_dir.path();
@@ -63,10 +64,10 @@ fn tool_check_is_deferred_to_processors_with_products() {
     // when it has no products in this repo: its directory exists but holds
     // no file it matches.
     let temp_dir = setup_project_with_config(concat!(
-        "[processor.tera]\n",
+        "[processor.generator.tera]\n",
         "src_dirs = [\"tera.templates\"]\n",
         "\n",
-        "[processor.script.ghost_check]\n",
+        "[processor.checker.script.ghost_check]\n",
         "command = \"scripts/does_not_exist.py\"\n",
         "src_dirs = [\"ghost_src\"]\n",
         "src_extensions = [\".md\"]\n",
@@ -89,7 +90,7 @@ fn tool_check_is_deferred_to_processors_with_products() {
 #[test]
 fn missing_tool_fails_when_processor_has_products() {
     let temp_dir = setup_project_with_config(concat!(
-        "[processor.script.real_check]\n",
+        "[processor.checker.script.real_check]\n",
         "command = \"scripts/does_not_exist.py\"\n",
         "src_dirs = [\"checked\"]\n",
         "src_extensions = [\".md\"]\n",
@@ -118,7 +119,7 @@ fn missing_tool_fails_when_processor_has_products() {
 #[test]
 fn tools_install_skips_repo_local_script_commands() {
     let temp_dir = setup_project_with_config(concat!(
-        "[processor.script.check_md]\n",
+        "[processor.checker.script.check_md]\n",
         "command = \"scripts/check_md.py\"\n",
         "src_dirs = [\"checked\"]\n",
         "src_extensions = [\".md\"]\n",
@@ -141,12 +142,13 @@ fn tools_install_skips_repo_local_script_commands() {
 
 #[test]
 fn local_overlay_disables_processor() {
-    let temp_dir = setup_project_with_config("[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n");
+    let temp_dir =
+        setup_project_with_config("[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n");
     let project = temp_dir.path();
     write_file(project, "tera.templates/gen.txt.tera", "generated");
     fs::write(
         project.join("rsconstruct.local.toml"),
-        "[processor.tera]\nenabled = false\n",
+        "[processor.generator.tera]\nenabled = false\n",
     )
     .unwrap();
 
@@ -162,7 +164,8 @@ fn local_overlay_disables_processor() {
 
 #[test]
 fn local_overlay_adds_sections() {
-    let temp_dir = setup_project_with_config("[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n");
+    let temp_dir =
+        setup_project_with_config("[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n");
     let project = temp_dir.path();
     write_file(project, "tera.templates/gen.txt.tera", "generated");
     // The overlay adds a global [build] setting and a whole new processor
@@ -173,7 +176,7 @@ fn local_overlay_adds_sections() {
             "[build]\n",
             "max_discovery_passes = 7\n",
             "\n",
-            "[processor.zspell]\n",
+            "[processor.checker.zspell]\n",
             "src_dirs = [\"empty_docs\"]\n",
         ),
     )
@@ -190,25 +193,32 @@ fn local_overlay_adds_sections() {
 
     // Both overlay sections merged: the [build] value is visible in the
     // merged config, and the added processor section is a known instance.
-    let cfg = run_rsconstruct(project, &["processor", "config", "zspell"]);
+    let cfg = run_rsconstruct(
+        project,
+        &["processor", "config", "processor.checker.zspell"],
+    );
     assert!(
         cfg.status.success(),
-        "overlay-added [processor.zspell] should exist in the merged config: {}",
+        "overlay-added [processor.checker.zspell] should exist in the merged config: {}",
         String::from_utf8_lossy(&cfg.stderr)
     );
 }
 
 #[test]
 fn local_overlay_field_wins_over_main() {
-    let temp_dir = setup_project_with_config("[processor.tera]\ndep_inputs = [\"config/a.py\"]\n");
+    let temp_dir =
+        setup_project_with_config("[processor.generator.tera]\ndep_inputs = [\"config/a.py\"]\n");
     let project = temp_dir.path();
     fs::write(
         project.join("rsconstruct.local.toml"),
-        "[processor.tera]\ndep_inputs = [\"config/b.py\"]\n",
+        "[processor.generator.tera]\ndep_inputs = [\"config/b.py\"]\n",
     )
     .unwrap();
 
-    let output = run_rsconstruct(project, &["processor", "config", "tera"]);
+    let output = run_rsconstruct(
+        project,
+        &["processor", "config", "processor.generator.tera"],
+    );
     assert!(
         output.status.success(),
         "processor config failed: {}",
@@ -230,7 +240,7 @@ fn local_overlay_without_main_config_fails() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     fs::write(
         temp_dir.path().join("rsconstruct.local.toml"),
-        "[processor.tera]\n",
+        "[processor.generator.tera]\n",
     )
     .unwrap();
 
@@ -251,7 +261,7 @@ fn local_overlay_without_main_config_fails() {
 /// nothing, and the repo's own `[build]` wins key by key.
 #[test]
 fn user_config_sets_build_defaults_under_the_repo() {
-    let temp_dir = setup_project_with_config("[processor.tera]\nsrc_dirs = [\".\"]\n");
+    let temp_dir = setup_project_with_config("[processor.generator.tera]\nsrc_dirs = [\".\"]\n");
     let project = temp_dir.path();
     write_file(project, "tera.templates/hello.txt.tera", "hello");
     let xdg = TempDir::new().unwrap();
@@ -279,7 +289,7 @@ fn user_config_sets_build_defaults_under_the_repo() {
     // The repo overrides the user default key by key.
     fs::write(
         project.join("rsconstruct.toml"),
-        "[build]\nreject_dot_src_dirs = false\n\n[processor.tera]\nsrc_dirs = [\".\"]\n",
+        "[build]\nreject_dot_src_dirs = false\n\n[processor.generator.tera]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
     let output = run_rsconstruct_with_env(project, &["build"], &[("XDG_CONFIG_HOME", xdg_path)]);
@@ -294,7 +304,7 @@ fn user_config_sets_build_defaults_under_the_repo() {
     let empty = TempDir::new().unwrap();
     fs::write(
         project.join("rsconstruct.toml"),
-        "[processor.tera]\nsrc_dirs = [\".\"]\n",
+        "[processor.generator.tera]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
     let output = run_rsconstruct_with_env(
@@ -313,14 +323,15 @@ fn user_config_sets_build_defaults_under_the_repo() {
 /// a repo builds must live in the repo, where CI sees it.
 #[test]
 fn user_config_rejects_sections_other_than_build() {
-    let temp_dir = setup_project_with_config("[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n");
+    let temp_dir =
+        setup_project_with_config("[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n");
     let project = temp_dir.path();
     write_file(project, "tera.templates/hello.txt.tera", "hello");
     let xdg = TempDir::new().unwrap();
     fs::create_dir_all(xdg.path().join("rsconstruct")).unwrap();
     fs::write(
         xdg.path().join("rsconstruct/config.toml"),
-        "[build]\nreject_dot_src_dirs = true\n\n[processor.ruff]\nsrc_dirs = [\"src\"]\n",
+        "[build]\nreject_dot_src_dirs = true\n\n[processor.checker.ruff]\nsrc_dirs = [\"src\"]\n",
     )
     .unwrap();
     let output = run_rsconstruct_with_env(

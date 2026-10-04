@@ -11,10 +11,11 @@ use std::fmt::Write;
 /// Uses static plugin metadata only — no processor instantiation.
 pub fn search_processors(query: &str) -> Result<()> {
     let query_lower = query.to_lowercase();
-    let mut matches: Vec<(&str, &[&str])> = Vec::new();
+    let mut matches: Vec<(String, &[&str])> = Vec::new();
 
     for plugin in crate::registries::processor::all_plugins() {
-        let name_match = plugin.name.to_lowercase().contains(&query_lower);
+        let pname = plugin.pname();
+        let name_match = pname.to_lowercase().contains(&query_lower);
         let keyword_match = plugin
             .keywords
             .iter()
@@ -22,11 +23,11 @@ pub fn search_processors(query: &str) -> Result<()> {
         let desc_match = plugin.description.to_lowercase().contains(&query_lower);
 
         if name_match || keyword_match || desc_match {
-            matches.push((plugin.name, plugin.keywords));
+            matches.push((pname, plugin.keywords));
         }
     }
 
-    matches.sort_by_key(|(name, _)| *name);
+    matches.sort_by(|(a, _), (b, _)| a.cmp(b));
 
     if matches.is_empty() {
         println!("No processors matching '{query}'.");
@@ -53,7 +54,7 @@ pub fn search_processors(query: &str) -> Result<()> {
         .iter()
         .map(|(name, keywords)| {
             vec![
-                name.to_string(),
+                name.clone(),
                 crate::registries::processor::processor_type_of(name)
                     .as_str()
                     .to_string(),
@@ -108,7 +109,7 @@ pub fn list_processor_types(verbose: bool) -> Result<()> {
 pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Result<()> {
     let mut plugins: Vec<&crate::registries::ProcessorPlugin> =
         crate::registries::processor::all_plugins().collect();
-    plugins.sort_by_key(|p| p.name);
+    plugins.sort_by_key(|p| p.pname());
 
     if let Some(filter) = type_filter {
         plugins.retain(|p| p.processor_type.as_str() == filter);
@@ -123,7 +124,7 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
         let entries: Vec<crate::json_output::ProcessorListEntry> = plugins
             .iter()
             .map(|p| crate::json_output::ProcessorListEntry {
-                name: p.name.to_string(),
+                name: p.pname(),
                 processor_type: p.processor_type.as_str().to_string(),
                 enabled: false,
                 detected: false,
@@ -146,7 +147,7 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
                 let rust_tag = tables::yes_no(p.is_rust);
                 let fix_tag = tables::yes_no(p.can_fix);
                 vec![
-                    p.name.to_string(),
+                    p.pname(),
                     p.processor_type.as_str().to_string(),
                     native_tag.to_string(),
                     rust_tag.to_string(),
@@ -167,7 +168,7 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
                 let rust_tag = tables::yes_no(p.is_rust);
                 let fix_tag = tables::yes_no(p.can_fix);
                 vec![
-                    p.name.to_string(),
+                    p.pname(),
                     p.processor_type.as_str().to_string(),
                     native_tag.to_string(),
                     rust_tag.to_string(),
@@ -187,55 +188,199 @@ pub fn list_recommendations() {
     let recommendations: &[(&str, &str, &str)] = &[
         (
             ".py",
-            "ruff",
+            "processor.checker.ruff",
             "fastest Python linter, replaces flake8/pylint",
         ),
-        (".c", "cppcheck", "best static analysis for C"),
-        (".cc", "cppcheck", "best static analysis for C++"),
-        (".h", "cppcheck", "best static analysis for C/C++ headers"),
-        (".hh", "cppcheck", "best static analysis for C++ headers"),
-        (".rs", "clippy", "official Rust linter"),
-        (".js", "eslint", "industry standard JS/TS linter"),
-        (".jsx", "eslint", "industry standard JS/TS linter"),
-        (".ts", "eslint", "industry standard JS/TS linter"),
-        (".tsx", "eslint", "industry standard JS/TS linter"),
-        (".html", "tidy", "most thorough HTML validator"),
-        (".htm", "tidy", "most thorough HTML validator"),
-        (".css", "stylelint", "industry standard CSS linter"),
-        (".scss", "stylelint", "industry standard CSS/SCSS linter"),
-        (".sass", "stylelint", "industry standard CSS/Sass linter"),
-        (".md", "markdownlint", "comprehensive markdown linting"),
-        (".yml", "yamllint", "best YAML syntax and style checker"),
-        (".yaml", "yamllint", "best YAML syntax and style checker"),
-        (".json", "jsonlint", "JSON syntax validator"),
-        (".toml", "taplo", "TOML formatter and validator"),
-        (".xml", "xmllint", "XML/DTD validator"),
+        (
+            ".c",
+            "processor.checker.cppcheck",
+            "best static analysis for C",
+        ),
+        (
+            ".cc",
+            "processor.checker.cppcheck",
+            "best static analysis for C++",
+        ),
+        (
+            ".h",
+            "processor.checker.cppcheck",
+            "best static analysis for C/C++ headers",
+        ),
+        (
+            ".hh",
+            "processor.checker.cppcheck",
+            "best static analysis for C++ headers",
+        ),
+        (".rs", "processor.checker.clippy", "official Rust linter"),
+        (
+            ".js",
+            "processor.checker.eslint",
+            "industry standard JS/TS linter",
+        ),
+        (
+            ".jsx",
+            "processor.checker.eslint",
+            "industry standard JS/TS linter",
+        ),
+        (
+            ".ts",
+            "processor.checker.eslint",
+            "industry standard JS/TS linter",
+        ),
+        (
+            ".tsx",
+            "processor.checker.eslint",
+            "industry standard JS/TS linter",
+        ),
+        (
+            ".html",
+            "processor.checker.tidy",
+            "most thorough HTML validator",
+        ),
+        (
+            ".htm",
+            "processor.checker.tidy",
+            "most thorough HTML validator",
+        ),
+        (
+            ".css",
+            "processor.checker.stylelint",
+            "industry standard CSS linter",
+        ),
+        (
+            ".scss",
+            "processor.checker.stylelint",
+            "industry standard CSS/SCSS linter",
+        ),
+        (
+            ".sass",
+            "processor.checker.stylelint",
+            "industry standard CSS/Sass linter",
+        ),
+        (
+            ".md",
+            "processor.checker.markdownlint",
+            "comprehensive markdown linting",
+        ),
+        (
+            ".yml",
+            "processor.checker.yamllint",
+            "best YAML syntax and style checker",
+        ),
+        (
+            ".yaml",
+            "processor.checker.yamllint",
+            "best YAML syntax and style checker",
+        ),
+        (
+            ".json",
+            "processor.checker.jsonlint",
+            "JSON syntax validator",
+        ),
+        (
+            ".toml",
+            "processor.checker.taplo",
+            "TOML formatter and validator",
+        ),
+        (".xml", "processor.checker.xmllint", "XML/DTD validator"),
         (
             ".svg",
-            "xmllint",
+            "processor.checker.xmllint",
             "SVG is XML — xmllint validates structure",
         ),
-        (".java", "checkstyle", "Java style and static analysis"),
-        (".sh", "shellcheck", "best shell script analyzer"),
-        (".bash", "shellcheck", "best shell script analyzer"),
-        (".lua", "luacheck", "Lua static analyzer"),
-        (".pl", "perlcritic", "Perl best-practice checker"),
-        (".pm", "perlcritic", "Perl module best-practice checker"),
-        (".php", "php_lint", "PHP syntax checker"),
-        (".tex", "pdflatex", "compile and validate LaTeX"),
-        (".proto", "protobuf", "Protocol Buffer compiler"),
-        (".mmd", "mermaid", "render Mermaid diagrams"),
-        (".drawio", "drawio", "export draw.io diagrams"),
-        (".tera", "tera", "Tera template renderer"),
-        (".j2", "jinja2", "Jinja2 template renderer"),
-        (".mako", "mako", "Mako template renderer"),
-        ("Dockerfile", "hadolint", "best Dockerfile linter"),
-        ("Makefile", "make", "run make to validate"),
-        ("Cargo.toml", "cargo", "build and validate Rust project"),
-        ("book.toml", "mdbook", "build mdBook documentation"),
-        ("package.json", "npm", "run npm to validate Node project"),
-        ("Gemfile", "gem", "run bundler to validate Ruby project"),
-        ("conf.py", "sphinx", "build Sphinx documentation"),
+        (
+            ".java",
+            "processor.checker.checkstyle",
+            "Java style and static analysis",
+        ),
+        (
+            ".sh",
+            "processor.checker.shellcheck",
+            "best shell script analyzer",
+        ),
+        (
+            ".bash",
+            "processor.checker.shellcheck",
+            "best shell script analyzer",
+        ),
+        (".lua", "processor.checker.luacheck", "Lua static analyzer"),
+        (
+            ".pl",
+            "processor.checker.perlcritic",
+            "Perl best-practice checker",
+        ),
+        (
+            ".pm",
+            "processor.checker.perlcritic",
+            "Perl module best-practice checker",
+        ),
+        (".php", "processor.checker.php_lint", "PHP syntax checker"),
+        (
+            ".tex",
+            "processor.generator.pdflatex",
+            "compile and validate LaTeX",
+        ),
+        (
+            ".proto",
+            "processor.generator.protobuf",
+            "Protocol Buffer compiler",
+        ),
+        (
+            ".mmd",
+            "processor.generator.mermaid",
+            "render Mermaid diagrams",
+        ),
+        (
+            ".drawio",
+            "processor.generator.drawio",
+            "export draw.io diagrams",
+        ),
+        (
+            ".tera",
+            "processor.generator.tera",
+            "Tera template renderer",
+        ),
+        (
+            ".j2",
+            "processor.generator.jinja2",
+            "Jinja2 template renderer",
+        ),
+        (
+            ".mako",
+            "processor.generator.mako",
+            "Mako template renderer",
+        ),
+        (
+            "Dockerfile",
+            "processor.checker.hadolint",
+            "best Dockerfile linter",
+        ),
+        ("Makefile", "processor.checker.make", "run make to validate"),
+        (
+            "Cargo.toml",
+            "processor.creator.cargo",
+            "build and validate Rust project",
+        ),
+        (
+            "book.toml",
+            "processor.creator.mdbook",
+            "build mdBook documentation",
+        ),
+        (
+            "package.json",
+            "processor.creator.npm",
+            "run npm to validate Node project",
+        ),
+        (
+            "Gemfile",
+            "processor.creator.gem",
+            "run bundler to validate Ruby project",
+        ),
+        (
+            "conf.py",
+            "processor.creator.sphinx",
+            "build Sphinx documentation",
+        ),
     ];
 
     if crate::json_output::is_json_mode() {

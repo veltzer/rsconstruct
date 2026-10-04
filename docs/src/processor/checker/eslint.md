@@ -27,7 +27,7 @@ automatically added as an extra input so that configuration changes trigger rebu
 ## Configuration
 
 ```toml
-[processor.eslint]
+[processor.checker.eslint]
 command = "eslint"
 args = []
 dep_inputs = []

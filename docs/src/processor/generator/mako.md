@@ -27,7 +27,7 @@ templates can include or inherit from other templates using relative paths.
 ## Configuration
 
 ```toml
-[processor.mako]
+[processor.generator.mako]
 src_extensions = [".mako"]                    # File extensions to process (default: [".mako"])
 dep_inputs = ["config/settings.py"]     # Additional files that trigger rebuilds when changed
 ```

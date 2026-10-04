@@ -2,12 +2,7 @@ mod a2x;
 mod cc_single_file;
 mod chromium;
 mod drawio;
-// The generic, config-driven generator is named after its category, so the
-// module path reads `generator::generator`. The file is named after the
-// processor like every sibling; the category directory is singular like
-// every other category. Neither name is the one to change.
-#[allow(clippy::module_inception)]
-mod generator;
+mod generic;
 mod imarkdown2html;
 mod ipdfunite;
 mod isass;

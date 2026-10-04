@@ -49,7 +49,7 @@ version = "{{ config.version }}"
 ## Configuration
 
 ```toml
-[processor.tera]
+[processor.generator.tera]
 src_extensions = [".tera"]                     # File extensions to process (default: [".tera"])
 dep_inputs = ["config/settings.py"]      # Additional files that trigger rebuilds when changed
 ```

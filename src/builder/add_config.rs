@@ -3,16 +3,15 @@ use std::collections::HashMap;
 use std::fmt::Write;
 use std::fs;
 
-use crate::registries::{all_analyzer_plugins, all_plugins};
+use crate::registries::{all_analyzer_plugins, find_plugin};
 
 const CONFIG_FILE: &str = "rsconstruct.toml";
 
-/// Add a `[processor.NAME]` section to rsconstruct.toml, pre-populated with
+/// Add a `[processor.TYPE.NAME]` section to rsconstruct.toml, pre-populated with
 /// must-fill fields and one-line `#` comments for every known field.
 pub fn add_processor(pname: &str, dry_run: bool) -> Result<()> {
-    let plugin = all_plugins()
-        .find(|p| p.name == pname)
-        .ok_or_else(|| anyhow::anyhow!("Unknown processor '{pname}'"))?;
+    let plugin =
+        find_plugin(pname).ok_or_else(|| anyhow::anyhow!("Unknown processor '{pname}'"))?;
 
     let known: Vec<&str> =
         crate::config::ProcessorConfig::known_fields_for(pname).unwrap_or_default();
@@ -38,8 +37,9 @@ pub fn add_processor(pname: &str, dry_run: bool) -> Result<()> {
 
     let description = processor_description(pname);
 
+    // A processor name already carries its `processor.` prefix; the header
+    // is the name itself.
     let snippet = render_section(
-        "processor",
         pname,
         description.as_deref(),
         &known,
@@ -49,7 +49,7 @@ pub fn add_processor(pname: &str, dry_run: bool) -> Result<()> {
         &descs,
     );
 
-    apply_snippet("processor", pname, &snippet, dry_run)
+    apply_snippet(pname, &snippet, dry_run)
 }
 
 /// Add a `[analyzer.NAME]` section to rsconstruct.toml.
@@ -68,9 +68,9 @@ pub fn add_analyzer(name: &str, dry_run: bool) -> Result<()> {
         _ => Vec::new(),
     };
 
+    let header = format!("analyzer.{name}");
     let snippet = render_section(
-        "analyzer",
-        name,
+        &header,
         Some(plugin.description),
         &keys,
         &[],
@@ -79,7 +79,7 @@ pub fn add_analyzer(name: &str, dry_run: bool) -> Result<()> {
         &HashMap::new(),
     );
 
-    apply_snippet("analyzer", name, &snippet, dry_run)
+    apply_snippet(&header, &snippet, dry_run)
 }
 
 /// Look up a processor's description from static plugin metadata.
@@ -87,11 +87,12 @@ fn processor_description(name: &str) -> Option<String> {
     crate::registries::processor::find_plugin(name).map(|p| p.description.to_string())
 }
 
-/// Render a single `[section.name]` block as a TOML snippet string with comments.
+/// Render a single `[header]` block as a TOML snippet string with comments.
+/// `header` is the full dotted table name (`processor.checker.ruff`,
+/// `analyzer.tera`).
 #[allow(clippy::too_many_arguments)]
 fn render_section(
-    section: &str,
-    name: &str,
+    header: &str,
     description: Option<&str>,
     fields: &[&str],
     must: &[&str],
@@ -103,7 +104,7 @@ fn render_section(
     if let Some(d) = description {
         let _ = writeln!(out, "# {d}");
     }
-    let _ = writeln!(out, "[{section}.{name}]");
+    let _ = writeln!(out, "[{header}]");
 
     let def_obj = defaults.as_object();
     let must_set: std::collections::HashSet<&str> = must.iter().copied().collect();
@@ -188,7 +189,7 @@ fn toml_value_string(v: &serde_json::Value) -> String {
     }
 }
 
-fn apply_snippet(section: &str, name: &str, snippet: &str, dry_run: bool) -> Result<()> {
+fn apply_snippet(header: &str, snippet: &str, dry_run: bool) -> Result<()> {
     if dry_run {
         print!("{snippet}");
         return Ok(());
@@ -204,10 +205,10 @@ fn apply_snippet(section: &str, name: &str, snippet: &str, dry_run: bool) -> Res
     let content =
         fs::read_to_string(path).with_context(|| format!("Failed to read {CONFIG_FILE}"))?;
 
-    let header = format!("[{section}.{name}]");
-    if content.lines().any(|l| l.trim_start() == header) {
+    let header_line = format!("[{header}]");
+    if content.lines().any(|l| l.trim_start() == header_line) {
         bail!(
-            "Section [{section}.{name}] already exists in {CONFIG_FILE}. Edit it manually or remove it first."
+            "Section [{header}] already exists in {CONFIG_FILE}. Edit it manually or remove it first."
         );
     }
 
@@ -222,6 +223,6 @@ fn apply_snippet(section: &str, name: &str, snippet: &str, dry_run: bool) -> Res
 
     fs::write(path, &new_content).with_context(|| format!("Failed to write {CONFIG_FILE}"))?;
 
-    println!("Added [{section}.{name}] to {CONFIG_FILE}.");
+    println!("Added [{header}] to {CONFIG_FILE}.");
     Ok(())
 }

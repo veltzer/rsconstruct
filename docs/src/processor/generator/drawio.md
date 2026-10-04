@@ -12,16 +12,16 @@ each file, generating output in the configured formats.
 ## Source Files
 
 - Input: `**/*.drawio`
-- Output: `out/drawio/{format}/{relative_path}.{format}`
+- Output: `out/processor.generator.drawio/{format}/{relative_path}.{format}`
 
 ## Configuration
 
 ```toml
-[processor.drawio]
+[processor.generator.drawio]
 command = "drawio"                     # The drawio command to run
 formats = ["png"]                      # Output formats (png, svg, pdf)
 args = []                              # Additional arguments to pass to drawio
-output_dir = "out/drawio"              # Output directory
+output_dir = "out/processor.generator.drawio"              # Output directory
 dep_inputs = []                      # Additional files that trigger rebuilds when changed
 ```
 
@@ -30,7 +30,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 | `command` | string | `"drawio"` | The drawio executable to run |
 | `formats` | string[] | `["png"]` | Output formats to generate (`png`, `svg`, `pdf`) |
 | `args` | string[] | `[]` | Extra arguments passed to drawio |
-| `output_dir` | string | `"out/drawio"` | Base output directory |
+| `output_dir` | string | `"out/processor.generator.drawio"` | Base output directory |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
 ## Batch support

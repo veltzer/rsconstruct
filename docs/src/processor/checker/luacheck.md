@@ -21,7 +21,7 @@ single luacheck invocation for better performance.
 ## Configuration
 
 ```toml
-[processor.luacheck]
+[processor.checker.luacheck]
 command = "luacheck"                         # The luacheck command to run
 args = []                                    # Additional arguments to pass to luacheck
 dep_inputs = []                            # Additional files that trigger rebuilds when changed

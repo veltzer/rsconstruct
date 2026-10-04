@@ -42,10 +42,10 @@ Similarly, files in `templates.mako/` with `.mako` extensions are rendered via t
 
 ### C/C++ sources
 
-Files in the source directory (default `src/`) are compiled to executables under `out/cc_single_file/`, preserving the directory structure:
+Files in the source directory (default `src/`) are compiled to executables under `out/processor.generator.cc_single_file/`, preserving the directory structure:
 
-- `src/main.c` produces `out/cc_single_file/main.elf`
-- `src/utils/helper.cc` produces `out/cc_single_file/utils/helper.elf`
+- `src/main.c` produces `out/processor.generator.cc_single_file/main.elf`
+- `src/utils/helper.cc` produces `out/processor.generator.cc_single_file/utils/helper.elf`
 
 ### Python files
 

@@ -378,9 +378,9 @@ impl CcProcessor {
     fn output_dir_for(yaml_path: &Path) -> PathBuf {
         let anchor_dir = crate::processor::parent_dir_or_empty(yaml_path);
         if anchor_dir.as_os_str().is_empty() {
-            PathBuf::from("out/cc")
+            PathBuf::from("out/processor.creator.cc")
         } else {
-            Path::new("out/cc").join(anchor_dir)
+            Path::new("out/processor.creator.cc").join(anchor_dir)
         }
     }
 

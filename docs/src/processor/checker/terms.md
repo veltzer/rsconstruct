@@ -58,7 +58,7 @@ Auto-detected when `dir_terms_unambiguous` exists and `.md` files are present.
 ## Configuration
 
 ```toml
-[processor.terms]
+[processor.checker.terms]
 dir_terms_unambiguous = "terms/unambiguous"   # Directory of unambiguous term lists
 dir_terms_ambiguous = "terms/ambiguous"       # Optional: directory of ambiguous terms
 forbid_backticked_ambiguous = true            # Backticking an ambiguous term is an error

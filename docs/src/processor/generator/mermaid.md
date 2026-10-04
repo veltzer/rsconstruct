@@ -12,16 +12,16 @@ output in the configured formats. Each format produces a separate output file.
 ## Source Files
 
 - Input: `**/*.mmd`
-- Output: `out/mermaid/{format}/{relative_path}.{format}`
+- Output: `out/processor.generator.mermaid/{format}/{relative_path}.{format}`
 
 ## Configuration
 
 ```toml
-[processor.mermaid]
+[processor.generator.mermaid]
 command = "mmdc"                       # The mmdc command to run
 formats = ["png"]                      # Output formats (png, svg, pdf)
 args = []                              # Additional arguments to pass to mmdc
-output_dir = "out/mermaid"             # Output directory
+output_dir = "out/processor.generator.mermaid"             # Output directory
 dep_inputs = []                      # Additional files that trigger rebuilds when changed
 ```
 
@@ -30,7 +30,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 | `command` | string | `"mmdc"` | The mermaid-cli executable to run |
 | `formats` | string[] | `["png"]` | Output formats to generate (`png`, `svg`, `pdf`) |
 | `args` | string[] | `[]` | Extra arguments passed to mmdc |
-| `output_dir` | string | `"out/mermaid"` | Base output directory |
+| `output_dir` | string | `"out/processor.generator.mermaid"` | Base output directory |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
 ## Batch support

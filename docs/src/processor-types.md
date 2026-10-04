@@ -25,7 +25,7 @@ A marker entry — no files, no blobs. The marker's presence means "this check p
 **Lint Python files with ruff:**
 
 ```toml
-[processor.ruff]
+[processor.checker.ruff]
 ```
 
 Scans for `.py` files, runs `ruff check` on each. No output files produced.
@@ -38,7 +38,7 @@ src/utils.py → (checker)
 **Lint shell scripts:**
 
 ```toml
-[processor.shellcheck]
+[processor.checker.shellcheck]
 ```
 
 Scans for `.sh` and `.bash` files, runs `shellcheck` on each.
@@ -46,7 +46,7 @@ Scans for `.sh` and `.bash` files, runs `shellcheck` on each.
 **Validate YAML files:**
 
 ```toml
-[processor.yamllint]
+[processor.checker.yamllint]
 ```
 
 Scans for `.yml` and `.yaml` files, runs `yamllint` on each.
@@ -54,7 +54,7 @@ Scans for `.yml` and `.yaml` files, runs `yamllint` on each.
 **Validate JSON files with jq:**
 
 ```toml
-[processor.jq]
+[processor.checker.jq]
 ```
 
 Scans for `.json` files, validates each with `jq`.
@@ -62,7 +62,7 @@ Scans for `.json` files, validates each with `jq`.
 **Spell check Markdown files:**
 
 ```toml
-[processor.zspell]
+[processor.checker.zspell]
 ```
 
 Scans for `.md` files, checks spelling with the built-in zspell engine.
@@ -92,7 +92,7 @@ One blob per output file. The blob is the raw file content, stored by its SHA-25
 **Render Tera templates:**
 
 ```toml
-[processor.tera]
+[processor.generator.tera]
 ```
 
 Scans `tera.templates/` for `.tera` files, renders each template. The output path is the template path with the `.tera` extension stripped:
@@ -105,65 +105,65 @@ tera.templates/README.md.tera → README.md
 **Convert Marp slides to PDF:**
 
 ```toml
-[processor.marp]
+[processor.generator.marp]
 ```
 
 Scans `marp/` for `.md` files, converts each to PDF (and optionally other formats):
 
 ```
-marp/slides.md → out/marp/slides.pdf
-marp/intro.md → out/marp/intro.pdf
+marp/slides.md → out/processor.generator.marp/slides.pdf
+marp/intro.md → out/processor.generator.marp/intro.pdf
 ```
 
 **Convert documents with pandoc (multi-format):**
 
 ```toml
-[processor.pandoc]
+[processor.generator.pandoc]
 ```
 
 Scans `pandoc/` for `.md` files, converts each to PDF, HTML, and DOCX. Each format is a separate product with its own cache entry:
 
 ```
-pandoc/syllabus.md → out/pandoc/syllabus.pdf
-pandoc/syllabus.md → out/pandoc/syllabus.html
-pandoc/syllabus.md → out/pandoc/syllabus.docx
+pandoc/syllabus.md → out/processor.generator.pandoc/syllabus.pdf
+pandoc/syllabus.md → out/processor.generator.pandoc/syllabus.html
+pandoc/syllabus.md → out/processor.generator.pandoc/syllabus.docx
 ```
 
 **Compile single-file C programs:**
 
 ```toml
-[processor.cc_single_file]
+[processor.generator.cc_single_file]
 ```
 
 Scans `src/` for `.c` and `.cc` files, compiles each into an executable:
 
 ```
-src/main.c → out/cc_single_file/src/main.elf
-src/test.c → out/cc_single_file/src/test.elf
+src/main.c → out/processor.generator.cc_single_file/src/main.elf
+src/test.c → out/processor.generator.cc_single_file/src/test.elf
 ```
 
 **Convert Mermaid diagrams:**
 
 ```toml
-[processor.mermaid]
+[processor.generator.mermaid]
 ```
 
 Scans for `.mmd` files, converts each to PNG (configurable formats):
 
 ```
-diagrams/flow.mmd → out/mermaid/diagrams/flow.png
+diagrams/flow.mmd → out/processor.generator.mermaid/diagrams/flow.png
 ```
 
 **Compile SCSS to CSS:**
 
 ```toml
-[processor.sass]
+[processor.generator.sass]
 ```
 
 Scans `sass/` for `.scss` and `.sass` files, compiles each to CSS:
 
 ```
-sass/styles.scss → out/sass/styles.css
+sass/styles.scss → out/processor.generator.sass/styles.css
 ```
 
 ### Built-in generators
@@ -194,7 +194,7 @@ A tree entry listing all output files. On restore, the directory tree is recreat
 **Install Python dependencies with pip:**
 
 ```toml
-[processor.creator.venv]
+[processor.creator.generic.venv]
 command = "pip"
 args = ["install", "-r", "requirements.txt"]
 src_extensions = ["requirements.txt"]
@@ -206,7 +206,7 @@ Scans for `requirements.txt` files. For each one, runs `pip install` and caches 
 **Build a Node.js project:**
 
 ```toml
-[processor.creator.npm_build]
+[processor.creator.generic.npm_build]
 command = "npm"
 args = ["run", "build"]
 src_extensions = ["package.json"]
@@ -218,7 +218,7 @@ Scans for `package.json` files, runs `npm run build`, caches the `dist/` directo
 **Build documentation with Sphinx:**
 
 ```toml
-[processor.sphinx]
+[processor.creator.sphinx]
 ```
 
 Scans for `conf.py` files, runs `sphinx-build`, caches the output directory.
@@ -230,7 +230,7 @@ docs/conf.py → (creator)
 **Build a Rust project with Cargo:**
 
 ```toml
-[processor.cargo]
+[processor.creator.cargo]
 ```
 
 Scans for `Cargo.toml` files, runs `cargo build`, optionally caches the `target/` directory.
@@ -242,7 +242,7 @@ Cargo.toml → (creator)
 **Run a custom build script:**
 
 ```toml
-[processor.creator.assets]
+[processor.creator.generic.assets]
 command = "./build_assets.sh"
 src_extensions = [".manifest"]
 src_dirs = ["."]
@@ -278,10 +278,10 @@ One blob per output file (like generator).
 **Build a static site from generated HTML:**
 
 ```toml
-[processor.explicit.site]
+[processor.explicit.generic.site]
 command = "python3"
 args = ["build_site.py"]
-input_globs = ["out/pandoc/*.html", "templates/*.html"]
+input_globs = ["out/processor.generator.pandoc/*.html", "templates/*.html"]
 inputs = ["site.yaml"]
 outputs = ["out/site/index.html", "out/site/style.css"]
 ```
@@ -289,15 +289,15 @@ outputs = ["out/site/index.html", "out/site/style.css"]
 Waits for pandoc to produce HTML files, then combines them with templates into a site. All inputs are aggregated into one product:
 
 ```
-out/pandoc/page1.html, out/pandoc/page2.html, templates/base.html, site.yaml → out/site/index.html, out/site/style.css
+out/processor.generator.pandoc/page1.html, out/processor.generator.pandoc/page2.html, templates/base.html, site.yaml → out/site/index.html, out/site/style.css
 ```
 
 **Merge PDFs into a course bundle:**
 
 ```toml
-[processor.explicit.course]
+[processor.explicit.generic.course]
 command = "pdfunite"
-input_globs = ["out/pdflatex/*.pdf"]
+input_globs = ["out/processor.generator.pdflatex/*.pdf"]
 outputs = ["out/course/full-course.pdf"]
 ```
 
@@ -329,7 +329,7 @@ One blob per predicted file (like generator). When every product is clean the to
 **A static site generator with a plan mode:**
 
 ```toml
-[processor.mass_generator.site]
+[processor.mass_generator.generic.site]
 command         = "rssite"
 args            = ["build"]
 predict_command = "rssite"
@@ -348,7 +348,7 @@ docs/about.md, templates/default.html → _site/about/index.html
 
 mass_generator
 
-Any tool that honors the manifest contract uses the `mass_generator` processor type directly via `[processor.mass_generator.NAME]`; see [Mass Generator](processor/mass_generator/mass_generator.md).
+Any tool that honors the manifest contract uses the `mass_generator` processor type directly via `[processor.mass_generator.NAME]`; see [Mass Generator](processor/mass_generator/generic.md).
 
 ## Comparison
 

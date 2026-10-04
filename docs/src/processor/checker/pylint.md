@@ -24,7 +24,7 @@ extra input so that configuration changes trigger rebuilds.
 ## Configuration
 
 ```toml
-[processor.pylint]
+[processor.checker.pylint]
 args = []                                  # Additional arguments to pass to pylint
 dep_inputs = []                          # Additional files that trigger rebuilds (e.g. ["pyproject.toml"])
 ```

@@ -17,7 +17,7 @@ Python files (`.py`) are checked for embedded doctests. Each file is run through
 ## Configuration
 
 ```toml
-[processor.doctest]
+[processor.checker.doctest]
 src_extensions = [".py"]                      # File extensions to process (default: [".py"])
 dep_inputs = []                         # Additional files that trigger rebuilds
 ```

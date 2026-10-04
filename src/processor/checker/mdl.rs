@@ -14,7 +14,7 @@ fn default_gem_home() -> String {
 }
 
 fn default_gem_stamp() -> String {
-    "out/gem/root.stamp".into()
+    "out/processor.creator.gem/root.stamp".into()
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -34,7 +34,7 @@ impl Default for MdlConfig {
         Self {
             local_repo: false,
             gem_home: "gems".into(),
-            gem_stamp: "out/gem/root.stamp".into(),
+            gem_stamp: "out/processor.creator.gem/root.stamp".into(),
             standard: StandardConfig::default(),
         }
     }

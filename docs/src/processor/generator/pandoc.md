@@ -12,16 +12,16 @@ Discovers `.md` files in the project (default `pandoc/` subdirectory) and runs
 ## Source Files
 
 - Input: `pandoc/**/*.md` (configurable via `src_dirs` / `src_extensions`)
-- Output: `out/pandoc/{relative_path}.{format}` for each `format`
+- Output: `out/processor.generator.pandoc/{relative_path}.{format}` for each `format`
 
 ## Configuration
 
 ```toml
-[processor.pandoc]
+[processor.generator.pandoc]
 command = "pandoc"             # Path to the pandoc executable
 formats = ["pdf", "html", "docx"]
 args = []                      # Extra arguments passed to pandoc
-output_dir = "out/pandoc"
+output_dir = "out/processor.generator.pandoc"
 dep_inputs = []                # Additional files that trigger rebuilds when changed
 pdf_engine = ""                # PDF engine; empty = pandoc default (pdflatex)
 ```
@@ -31,7 +31,7 @@ pdf_engine = ""                # PDF engine; empty = pandoc default (pdflatex)
 | `command` | string | `"pandoc"` | Path to the pandoc executable |
 | `formats` | string[] | `["pdf", "html", "docx"]` | Output formats to generate |
 | `args` | string[] | `[]` | Extra arguments passed to pandoc |
-| `output_dir` | string | `"out/pandoc"` | Base output directory |
+| `output_dir` | string | `"out/processor.generator.pandoc"` | Base output directory |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `pdf_engine` | string | `""` | Forwarded to `--pdf-engine=` when generating PDFs. See below. |
 
@@ -45,7 +45,7 @@ fail to compile under pdflatex without manual `\usepackage{...}` setup.
 Set `pdf_engine` to use a Unicode-aware engine instead:
 
 ```toml
-[processor.pandoc]
+[processor.generator.pandoc]
 formats = ["pdf"]
 pdf_engine = "xelatex"   # or "lualatex"
 ```

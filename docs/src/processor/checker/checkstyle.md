@@ -23,7 +23,7 @@ that configuration changes trigger rebuilds.
 ## Configuration
 
 ```toml
-[processor.checkstyle]
+[processor.checker.checkstyle]
 args = []
 dep_inputs = []
 ```

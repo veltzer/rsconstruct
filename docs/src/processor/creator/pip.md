@@ -18,7 +18,7 @@ state so dependencies are only reinstalled when `requirements.txt` changes.
 ## Configuration
 
 ```toml
-[processor.pip]
+[processor.creator.pip]
 command = "pip"                        # The pip command to run
 args = []                              # Additional arguments to pass to pip
 dep_inputs = []                      # Additional files that trigger rebuilds when changed

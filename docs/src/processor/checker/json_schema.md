@@ -26,7 +26,7 @@ This is a pure-Rust checker — no external tool is required.
 ## Configuration
 
 ```toml
-[processor.json_schema]
+[processor.checker.json_schema]
 args = []                                    # Reserved for future use
 dep_inputs = []                            # Additional files that trigger rebuilds when changed
 ```

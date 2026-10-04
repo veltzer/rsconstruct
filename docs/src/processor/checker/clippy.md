@@ -30,7 +30,7 @@ When any tracked file changes, rsconstruct will re-run clippy.
 ## Configuration
 
 ```toml
-[processor.clippy]
+[processor.checker.clippy]
 cargo = "cargo"          # Cargo binary to use
 command = "clippy"       # Cargo command (usually "clippy")
 args = []                # Extra arguments passed to cargo clippy
@@ -59,22 +59,22 @@ The tool processes one file at a time. Each file is checked in a separate invoca
 ### Basic Usage
 
 ```toml
-[processor.clippy]
+[processor.checker.clippy]
 ```
 
 ### Deny All Warnings
 
 ```toml
-[processor.clippy]
+[processor.checker.clippy]
 args = ["--", "-D", "warnings"]
 ```
 
 ### Use Both Cargo Build and Clippy
 
 ```toml
-[processor.cargo]
+[processor.creator.cargo]
 
-[processor.clippy]
+[processor.checker.clippy]
 ```
 
 ## Notes

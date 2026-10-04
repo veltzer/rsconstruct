@@ -36,7 +36,7 @@ member directories, or configure `src_dirs` to limit discovery.
 ## Configuration
 
 ```toml
-[processor.cargo]
+[processor.creator.cargo]
 cargo = "cargo"          # Cargo binary to use
 command = "build"        # Cargo command (build, check, test, clippy, etc.)
 args = []                # Extra arguments passed to cargo
@@ -69,34 +69,34 @@ Runs as a single whole-project operation (e.g., `cargo build`, `npm install`).
 ### Basic Usage
 
 ```toml
-[processor.cargo]
+[processor.creator.cargo]
 ```
 
 ### Release Only
 
 ```toml
-[processor.cargo]
+[processor.creator.cargo]
 profiles = ["release"]
 ```
 
 ### Dev Only
 
 ```toml
-[processor.cargo]
+[processor.creator.cargo]
 profiles = ["dev"]
 ```
 
 ### Use cargo check Instead of build
 
 ```toml
-[processor.cargo]
+[processor.creator.cargo]
 command = "check"
 ```
 
 ### Run clippy
 
 ```toml
-[processor.cargo]
+[processor.creator.cargo]
 command = "clippy"
 args = ["--", "-D", "warnings"]
 ```
@@ -104,7 +104,7 @@ args = ["--", "-D", "warnings"]
 ### Workspace Root Only
 
 ```toml
-[processor.cargo]
+[processor.creator.cargo]
 src_exclude_paths = ["crates/"]
 ```
 

@@ -20,7 +20,7 @@ This processor supports batch mode.
 ## Configuration
 
 ```toml
-[processor.slidev]
+[processor.checker.slidev]
 args = []
 dep_inputs = []
 ```

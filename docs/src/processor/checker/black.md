@@ -15,7 +15,7 @@ Python files matching configured extensions are checked via `black --check`. The
 ## Configuration
 
 ```toml
-[processor.black]
+[processor.checker.black]
 src_extensions = [".py"]                      # File extensions to check (default: [".py"])
 dep_inputs = []                         # Additional files that trigger rechecks when changed
 args = []                                 # Extra arguments passed to black

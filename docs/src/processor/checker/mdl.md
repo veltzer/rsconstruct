@@ -19,11 +19,11 @@ Depends on the gem processor — uses the `mdl` binary installed by Bundler.
 ## Configuration
 
 ```toml
-[processor.mdl]
+[processor.checker.mdl]
 gem_home = "gems"                      # GEM_HOME directory
 command = "mdl"                        # Path to the mdl binary
 args = []                              # Additional arguments to pass to mdl
-gem_stamp = "out/gem/root.stamp"       # Stamp file from gem processor (dependency)
+gem_stamp = "out/processor.creator.gem/root.stamp"       # Stamp file from gem processor (dependency)
 dep_inputs = []                      # Additional files that trigger rebuilds when changed
 ```
 
@@ -32,7 +32,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 | `gem_home` | string | `"gems"` | GEM_HOME directory for Ruby gems |
 | `command` | string | `"mdl"` | Path to the mdl executable |
 | `args` | string[] | `[]` | Extra arguments passed to mdl |
-| `gem_stamp` | string | `"out/gem/root.stamp"` | Stamp file from gem processor (ensures gems are installed first) |
+| `gem_stamp` | string | `"out/processor.creator.gem/root.stamp"` | Stamp file from gem processor (ensures gems are installed first) |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
 ## Batch support

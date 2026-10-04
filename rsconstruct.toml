@@ -28,7 +28,7 @@ cargo = ["cargo-deny", "cargo-nextest", "cargo-release", "mdbook"]
 
 # Convention: tera configs are Lua (config/*.lua). Every dep_auto entry
 # listed here must exist: rsconstruct rejects a missing one at config load.
-[processor.tera]
+[processor.generator.tera]
 dep_auto = ["config/project.lua"]
 src_dirs = ["tera.templates"]
 
@@ -39,7 +39,7 @@ src_dirs = ["tera.templates"]
 # target/ is not cached: it is many gigabytes and cargo already keeps its
 # own incremental state there, so copying it into the rsconstruct store
 # would cost far more than it could ever save.
-[processor.cargo]
+[processor.creator.cargo]
 src_files = ["Cargo.toml"]
 profiles = ["dev"]
 cache_output_dir = false
@@ -50,24 +50,24 @@ cache_output_dir = false
 # a different command. Arguments are CI's, verbatim.
 
 # cargo fmt --all --check
-[processor.clippy.fmt]
+[processor.checker.clippy.fmt]
 src_files = ["Cargo.toml"]
 command = "fmt"
 args = ["--all", "--check"]
 
 # cargo clippy --all-targets -- -D warnings
-[processor.clippy.lint]
+[processor.checker.clippy.lint]
 src_files = ["Cargo.toml"]
 args = ["--all-targets", "--", "-D", "warnings"]
 
 # cargo deny check: Cargo.lock against the RustSec advisory database
-[processor.clippy.deny]
+[processor.checker.clippy.deny]
 src_files = ["Cargo.toml"]
 command = "deny"
 args = ["check"]
 
 # cargo nextest run: the test suite, with .config/nextest.toml's profile
-[processor.clippy.nextest]
+[processor.checker.clippy.nextest]
 src_files = ["Cargo.toml"]
 command = "nextest"
 args = ["run"]

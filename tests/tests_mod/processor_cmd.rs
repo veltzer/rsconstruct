@@ -48,7 +48,7 @@ fn processors_files_shows_products() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("[tera]"),
+        stdout.contains("[processor.generator.tera]"),
         "Expected [tera] header in output"
     );
     assert!(
@@ -162,7 +162,7 @@ fn processors_files_json_output() {
         entry.get("outputs").is_some(),
         "Entry should have 'outputs' field"
     );
-    assert_eq!(entry["processor"], "tera");
+    assert_eq!(entry["processor"], "processor.generator.tera");
     assert_eq!(entry["processor_type"], "generator");
 }
 
@@ -242,12 +242,12 @@ fn processors_list_reports_rust() {
             .find(|e| e["name"] == name)
             .unwrap_or_else(|| panic!("no '{name}' entry in processor list --json"))
     };
-    assert_eq!(by_name("tera")["native"], true);
-    assert_eq!(by_name("tera")["rust"], true);
-    assert_eq!(by_name("ruff")["native"], false);
-    assert_eq!(by_name("ruff")["rust"], true);
-    assert_eq!(by_name("pylint")["native"], false);
-    assert_eq!(by_name("pylint")["rust"], false);
+    assert_eq!(by_name("processor.generator.tera")["native"], true);
+    assert_eq!(by_name("processor.generator.tera")["rust"], true);
+    assert_eq!(by_name("processor.checker.ruff")["native"], false);
+    assert_eq!(by_name("processor.checker.ruff")["rust"], true);
+    assert_eq!(by_name("processor.checker.pylint")["native"], false);
+    assert_eq!(by_name("processor.checker.pylint")["rust"], false);
 
     for entry in &entries {
         assert!(
@@ -308,7 +308,7 @@ fn per_processor_enabled_true_is_default() {
     // Enable tera in the enabled list without setting per-processor enabled
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n",
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n",
     )
     .unwrap();
 
@@ -335,7 +335,7 @@ fn disabled_processor_skips_tool_preflight() {
     // nothing would never reach it.
     let config = |enabled: &str| {
         format!(
-            "[processor.script]\ncommand = \"definitely-not-a-real-tool-xyz\"\nsrc_dirs = [\"src\"]\nsrc_extensions = [\".txt\"]\nenabled = {enabled}\n"
+            "[processor.checker.script]\ncommand = \"definitely-not-a-real-tool-xyz\"\nsrc_dirs = [\"src\"]\nsrc_extensions = [\".txt\"]\nenabled = {enabled}\n"
         )
     };
 
@@ -412,7 +412,7 @@ fn processors_list_json() {
     // list always shows all processors regardless of config
     let tera = entries
         .iter()
-        .find(|e| e["name"] == "tera")
+        .find(|e| e["name"] == "processor.generator.tera")
         .expect("Expected tera in list");
     assert!(tera.get("name").is_some());
 }
@@ -459,7 +459,7 @@ fn processors_list_all_json_without_config() {
 
     let tera = entries
         .iter()
-        .find(|e| e["name"] == "tera")
+        .find(|e| e["name"] == "processor.generator.tera")
         .expect("Expected tera in list");
     assert!(tera.get("name").is_some());
 }
@@ -476,7 +476,7 @@ fn removing_processor_section_disables_it() {
     // First build with tera declared — should produce 1 product
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n",
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n",
     )
     .unwrap();
 
@@ -504,7 +504,7 @@ fn remove_no_file_processors_keeps_disabled_stanza() {
     // skips it — that is the documented purpose of the flag, not dead config.
     // It must survive `smart remove-no-file-processors`.
     let temp_dir = setup_project_with_config(
-        "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[processor.shellcheck]\nsrc_dirs = [\"src\"]\nenabled = false\n",
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[processor.checker.shellcheck]\nsrc_dirs = [\"src\"]\nenabled = false\n",
     );
     let project_path = temp_dir.path();
     fs::create_dir_all(project_path.join("tera.templates")).unwrap();
@@ -529,7 +529,7 @@ fn remove_no_file_processors_keeps_disabled_stanza() {
 
     let toml = fs::read_to_string(project_path.join("rsconstruct.toml")).unwrap();
     assert!(
-        toml.contains("[processor.shellcheck]"),
+        toml.contains("[processor.checker.shellcheck]"),
         "Disabled stanza must be preserved, got: {toml}"
     );
     assert!(
@@ -542,7 +542,7 @@ fn remove_no_file_processors_keeps_disabled_stanza() {
 fn remove_no_file_processors_removes_enabled_stanza_with_no_files() {
     // An *enabled* processor matching nothing is still dead config and must go.
     let temp_dir = setup_project_with_config(
-        "[processor.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[processor.shellcheck]\nsrc_dirs = [\"src\"]\n",
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[processor.checker.shellcheck]\nsrc_dirs = [\"src\"]\n",
     );
     let project_path = temp_dir.path();
     fs::create_dir_all(project_path.join("tera.templates")).unwrap();
@@ -561,11 +561,11 @@ fn remove_no_file_processors_removes_enabled_stanza_with_no_files() {
 
     let toml = fs::read_to_string(project_path.join("rsconstruct.toml")).unwrap();
     assert!(
-        !toml.contains("[processor.shellcheck]"),
+        !toml.contains("[processor.checker.shellcheck]"),
         "Enabled stanza with no files must be removed, got: {toml}"
     );
     assert!(
-        toml.contains("[processor.tera]"),
+        toml.contains("[processor.generator.tera]"),
         "Processor with files must be kept, got: {toml}"
     );
 }

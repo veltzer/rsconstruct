@@ -20,7 +20,7 @@ This processor supports batch mode.
 ## Configuration
 
 ```toml
-[processor.php_lint]
+[processor.checker.php_lint]
 args = []
 dep_inputs = []
 ```

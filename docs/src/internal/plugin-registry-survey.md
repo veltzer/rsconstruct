@@ -13,7 +13,7 @@ The plugin system combines four responsibilities:
    entry. No central list to maintain. Adding a processor = adding one file.
 2. **Per-plugin TOML config** — each plugin declares known fields, required
    fields, defaults, and a `create(toml::Value) -> Box<dyn Processor>`
-   factory. The framework deserializes the matching `[processor.NAME]`
+   factory. The framework deserializes the matching `[processor.TYPE.NAME]`
    section and passes it to the factory.
 3. **Defaults and validation** — processor defaults, scan defaults, and
    output-dir defaults are applied in layers before deserialization. Unknown
