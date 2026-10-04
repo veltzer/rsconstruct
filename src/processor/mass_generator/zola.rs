@@ -106,7 +106,7 @@ impl ZolaProcessor {
             .into_iter()
             .map(|(rel, sources)| PlannedOutput {
                 path: output_dir.join(rel),
-                sources: sources.into_iter().collect(),
+                sources,
             })
             .collect();
         let plan = Arc::new(Plan {
@@ -687,6 +687,18 @@ struct Page {
     in_a_section: bool,
 }
 
+/// The sources of one planned file: the shared set every rendered file
+/// depends on, and/or files of its own. Rendered files share one list —
+/// copying ~900 paths into a per-file set for ~1,400 files was most of the
+/// planner's run time.
+#[derive(Default)]
+struct PlanSources {
+    rendered: bool,
+    files: BTreeSet<PathBuf>,
+}
+
+type PlanMap = BTreeMap<String, PlanSources>;
+
 struct Site {
     root: PathBuf,
     config_file: PathBuf,
@@ -1024,12 +1036,12 @@ impl Site {
 
     /// Every file `zola build` writes, relative to the output directory,
     /// with its sources.
-    fn plan(&self) -> Result<BTreeMap<String, BTreeSet<PathBuf>>> {
+    fn plan(&self) -> Result<BTreeMap<String, Vec<PathBuf>>> {
         self.refuse_image_processing()?;
-        let rendered_sources = self.rendered_sources()?;
-        let mut plan: BTreeMap<String, BTreeSet<PathBuf>> = BTreeMap::new();
-        let rendered = |plan: &mut BTreeMap<String, BTreeSet<PathBuf>>, path: String| {
-            plan.entry(path).or_default().extend(rendered_sources.iter().cloned());
+        let rendered_sources: Vec<PathBuf> = self.rendered_sources()?.into_iter().collect();
+        let mut plan: PlanMap = BTreeMap::new();
+        let rendered = |plan: &mut PlanMap, path: String| {
+            plan.entry(path).or_default().rendered = true;
         };
 
         rendered(&mut plan, "404.html".to_string());
@@ -1072,6 +1084,7 @@ impl Site {
                 for asset in &section.assets {
                     plan.entry(join_path(&base, &relative_slash_path(dir, asset)))
                         .or_default()
+                        .files
                         .insert(asset.clone());
                 }
             }
@@ -1098,11 +1111,12 @@ impl Site {
             for asset in &page.assets {
                 plan.entry(format!("{}{}", page.out_dir, relative_slash_path(&page.asset_root, asset)))
                     .or_default()
+                    .files
                     .insert(asset.clone());
             }
         }
 
-        self.plan_taxonomies(&languages, &mut plan, &rendered_sources)?;
+        self.plan_taxonomies(&languages, &mut plan)?;
 
         for (lang, options) in &languages {
             if options.generate_feeds {
@@ -1116,7 +1130,7 @@ impl Site {
             }
         }
 
-        self.plan_search_index(&languages, &mut plan, &rendered_sources)?;
+        self.plan_search_index(&languages, &mut plan)?;
         self.plan_highlight_css(&mut plan);
         self.plan_sass(&mut plan)?;
         self.plan_static(&mut plan)?;
@@ -1128,14 +1142,24 @@ impl Site {
                  splits the sitemap, which the zola processor does not model"
             );
         }
-        Ok(plan)
+        Ok(plan
+            .into_iter()
+            .map(|(path, sources)| {
+                let mut files: Vec<PathBuf> = if sources.rendered {
+                    rendered_sources.clone()
+                } else {
+                    Vec::new()
+                };
+                files.extend(sources.files);
+                (path, files)
+            })
+            .collect())
     }
 
     fn plan_taxonomies(
         &self,
         languages: &BTreeMap<String, LanguageOptions>,
-        plan: &mut BTreeMap<String, BTreeSet<PathBuf>>,
-        rendered_sources: &BTreeSet<PathBuf>,
+        plan: &mut PlanMap,
     ) -> Result<()> {
         for (lang, options) in languages {
             for taxonomy in &options.taxonomies {
@@ -1167,7 +1191,7 @@ impl Site {
                 base_parts.push(taxonomy_slug);
                 let base = base_parts.join("/");
                 let mut add = |path: String| {
-                    plan.entry(path).or_default().extend(rendered_sources.iter().cloned());
+                    plan.entry(path).or_default().rendered = true;
                 };
                 add(join_path(&base, "index.html"));
                 for (term_slug, count) in &terms {
@@ -1208,8 +1232,7 @@ impl Site {
     fn plan_search_index(
         &self,
         languages: &BTreeMap<String, LanguageOptions>,
-        plan: &mut BTreeMap<String, BTreeSet<PathBuf>>,
-        rendered_sources: &BTreeSet<PathBuf>,
+        plan: &mut PlanMap,
     ) -> Result<()> {
         let indexed: Vec<&String> = languages
             .iter()
@@ -1229,18 +1252,19 @@ impl Site {
         for lang in indexed {
             plan.entry(format!("search_index.{lang}.{extension}"))
                 .or_default()
-                .extend(rendered_sources.iter().cloned());
+                .rendered = true;
         }
         if elasticlunr {
             plan.entry("elasticlunr.min.js".to_string())
                 .or_default()
+                .files
                 .insert(self.config_file.clone());
         }
         Ok(())
     }
 
     /// Syntax-highlighting stylesheets zola writes for the `class` style.
-    fn plan_highlight_css(&self, plan: &mut BTreeMap<String, BTreeSet<PathBuf>>) {
+    fn plan_highlight_css(&self, plan: &mut PlanMap) {
         let Some(highlighting) = &self.config.markdown.highlighting else {
             return;
         };
@@ -1257,6 +1281,7 @@ impl Site {
         for file in files {
             plan.entry((*file).to_string())
                 .or_default()
+                .files
                 .insert(self.config_file.clone());
         }
     }
@@ -1264,7 +1289,7 @@ impl Site {
     /// Every `.sass`/`.scss` under `sass/` that is not a partial (a file or
     /// directory starting with `_` is skipped) compiles to a `.css` at the
     /// same relative path. Any file of the tree can be imported by any other.
-    fn plan_sass(&self, plan: &mut BTreeMap<String, BTreeSet<PathBuf>>) -> Result<()> {
+    fn plan_sass(&self, plan: &mut PlanMap) -> Result<()> {
         if !self.config.compile_sass {
             return Ok(());
         }
@@ -1280,6 +1305,7 @@ impl Site {
             let css = Path::new(&rel).with_extension("css");
             plan.entry(css.to_string_lossy().into_owned())
                 .or_default()
+                .files
                 .extend(all.iter().cloned());
         }
         Ok(())
@@ -1287,7 +1313,7 @@ impl Site {
 
     /// The static tree is copied verbatim. `processed_images/` is zola's own
     /// resize cache, which it prunes and which this planner does not model.
-    fn plan_static(&self, plan: &mut BTreeMap<String, BTreeSet<PathBuf>>) -> Result<()> {
+    fn plan_static(&self, plan: &mut PlanMap) -> Result<()> {
         let static_dir = self.root.join("static");
         let processed = static_dir.join("processed_images");
         for file in files_under(&static_dir)? {
@@ -1296,6 +1322,7 @@ impl Site {
             }
             plan.entry(relative_slash_path(&static_dir, &file))
                 .or_default()
+                .files
                 .insert(file);
         }
         Ok(())
