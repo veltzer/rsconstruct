@@ -48,7 +48,7 @@ impl FileIndex {
     ///   gitignore/rsconstructignore AND `exclude_roots`. A user who lists a
     ///   directory in a processor's `src_dirs` has explicitly opted in to
     ///   scanning it, even if it is gitignored or sits under an output root.
-    ///   Common case: `src_dirs = ["out/generator"]` — the user wants those
+    ///   Common case: `src_dirs = ["out/processor.generator.generic"]` — the user wants those
     ///   generated files scanned (e.g. for terms checking).
     ///
     /// - `warn_symlinks`: report every skipped symlink (`[build]

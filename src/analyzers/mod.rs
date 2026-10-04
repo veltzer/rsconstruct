@@ -296,7 +296,7 @@ where
 
         // A source that does not exist yet is a product of an earlier
         // processor that has not run in this build (e.g. a generator writing
-        // out/generator/*.md that a markdown checker also scans). It has no
+        // out/processor.generator.generic/*.md that a markdown checker also scans). It has no
         // dependencies to contribute now, and it gets scanned on the build
         // after it exists. Stat'ing it here would abort the whole build with
         // "Failed to stat file" on any clean checkout — which is precisely

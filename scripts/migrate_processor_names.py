@@ -13,23 +13,28 @@ the files it is given, which is every ``rsconstruct.toml`` of a fleet:
 For each file it
 
 * rewrites every ``[processor.X...]`` and ``[[processor.X...]]`` header;
-* rewrites ``out/<name>`` references to processors whose default output
-  directory moved from ``out/<name>`` to ``out/processor.<type>.<name>``
-  (the generators, plus cc, linux_module, gem and tags), wherever they occur
-  in the file -- a downstream ``src_dirs = ["out/tera"]`` follows the output
-  it points at;
+* rewrites references to a *default* output directory that moved. A
+  processor whose default ``output_dir`` is now ``out/processor.<type>.<name>``
+  used to default to ``out/<name>`` (``out/generator`` for the generic
+  generator), and a named instance to ``out/<name>.<instance>``; a few
+  processors carry such a path in code (``out/cc``, ``out/linux-module``,
+  ``out/gem``, ``out/tags``). Only those paths are rewritten, wherever they
+  occur in the file -- a downstream ``src_dirs = ["out/marp"]`` follows the
+  output it points at. A path under ``out/`` that a config chose for itself
+  (``out/tera/books`` when tera writes in place) is left alone;
 * lists, without changing them, the other tracked files of that repository
-  that still mention such an ``out/<name>`` path, because a Makefile or a CI
-  step pointing into ``out/`` has to be fixed by hand.
+  that still mention a moved path, because a Makefile or a CI step pointing
+  into ``out/`` has to be fixed by hand.
 
-Which type each name has is asked of the installed rsconstruct
-(``rsconstruct processor list --json``), so the binary on PATH must already
-speak full names. A name the binary does not know is left as it is and
-reported; the build then fails on it with a hint, which is the honest
-outcome for a plugin or a typo.
+Names, types and default output directories are all asked of the installed
+rsconstruct (``processor list --json`` and ``processor defconfig --json``),
+so the binary on PATH must already speak full names. A name the binary does
+not know is left as it is and reported; the build then fails on it with a
+hint, which is the honest outcome for a plugin or a typo.
 
 The script is idempotent: a header that already carries a type segment is
-left alone, so running it twice changes nothing.
+left alone and a moved path is never matched twice, so running it again
+changes nothing.
 """
 
 import json
@@ -39,25 +44,34 @@ import sys
 from pathlib import Path
 
 GENERIC_TYPES = {"creator", "generator", "explicit", "mass_generator"}
-# Processors whose default output_dir moved from out/<name> to
-# out/processor.<type>.<name>. Every generator has such a default; these
-# creators carry one in code.
-OUT_DIR_CREATORS = {"cc", "linux_module", "gem", "tags"}
+# Output paths built in code rather than declared as an output_dir default,
+# old path -> new path. `processor defconfig` cannot report these.
+CODE_DEFAULTS = {
+    "out/cc": "out/processor.creator.cc",
+    "out/linux-module": "out/processor.creator.linux_module",
+    "out/gem": "out/processor.creator.gem",
+    "out/tags": "out/processor.generator.tags",
+}
 
 
-def load_name_map():
-    """{short name: type} for every built-in processor, from the binary."""
+def rsconstruct_json(*args):
     try:
         out = subprocess.run(
-            ["rsconstruct", "--json", "processor", "list"],
+            ["rsconstruct", "--json", *args],
             check=True,
             capture_output=True,
             text=True,
         ).stdout
     except (OSError, subprocess.CalledProcessError) as exc:
-        sys.exit(f"cannot run `rsconstruct --json processor list`: {exc}")
+        sys.exit(f"cannot run `rsconstruct --json {' '.join(args)}`: {exc}")
+    return json.loads(out)
+
+
+def load_registry():
+    """({short name: type}, {old out path: new out path}) from the binary."""
     types = {}
-    for entry in json.loads(out):
+    moved = dict(CODE_DEFAULTS)
+    for entry in rsconstruct_json("processor", "list"):
         full = entry["name"]
         if not full.startswith("processor."):
             sys.exit(
@@ -67,16 +81,29 @@ def load_name_map():
         _, ptype, short = full.split(".", 2)
         if short != "generic":
             types[short] = ptype
-    return types
+        default_dir = rsconstruct_json("processor", "defconfig", full).get("output_dir") or ""
+        if default_dir == f"out/{full}":
+            # The old default was out/<old name>, and the old name of a
+            # generic processor was its type.
+            old_name = ptype if short == "generic" else short
+            moved[f"out/{old_name}"] = default_dir
+    return types, moved
 
 
 class Migrator:
-    def __init__(self, types):
+    def __init__(self, types, moved):
         self.types = types
-        self.out_moved = {
-            name for name, t in types.items() if t == "generator"
-        } | {name for name in OUT_DIR_CREATORS if name in types}
+        self.moved = moved
         self.unknown = set()
+        # out/<old>, optionally followed by .<instance> (the old named-
+        # instance default), ending at a path boundary. A new-style path
+        # starts with out/processor. and can never match an old name.
+        alternatives = "|".join(
+            re.escape(old[len("out/"):]) for old in sorted(moved, key=len, reverse=True)
+        )
+        self.out_pattern = re.compile(
+            r"out/(" + alternatives + r")((?:\.[A-Za-z_]\w*)?)(?![\w.-])"
+        )
 
     def full_name(self, dotted):
         """Old header path after ``processor.`` -> new one, or None if unknown."""
@@ -113,12 +140,9 @@ class Migrator:
 
     def rewrite_out_dirs(self, text):
         def sub(match):
-            name = match.group(1)
-            if name in self.out_moved:
-                return f"out/processor.{self.types[name]}.{name}"
-            return match.group(0)
+            return self.moved["out/" + match.group(1)] + match.group(2)
 
-        return re.sub(r"out/([A-Za-z_][\w]*)(?![\w.])", sub, text)
+        return self.out_pattern.sub(sub, text)
 
     def migrate_file(self, path):
         old = path.read_text(encoding="utf-8")
@@ -129,7 +153,7 @@ class Migrator:
         return False
 
     def stray_out_dirs(self, repo):
-        """Other tracked files in ``repo`` that mention a moved out/<name>."""
+        """Other tracked files in ``repo`` that mention a moved out/ path."""
         try:
             files = subprocess.run(
                 ["git", "-C", str(repo), "ls-files"],
@@ -139,9 +163,6 @@ class Migrator:
             ).stdout.split()
         except (OSError, subprocess.CalledProcessError):
             return []
-        pattern = re.compile(
-            r"out/(" + "|".join(map(re.escape, sorted(self.out_moved))) + r")(?![\w.])"
-        )
         hits = []
         for rel in files:
             if rel == "rsconstruct.toml":
@@ -152,7 +173,7 @@ class Migrator:
             except (OSError, UnicodeDecodeError):
                 continue
             for lineno, line in enumerate(text.splitlines(), 1):
-                if pattern.search(line):
+                if self.out_pattern.search(line):
                     hits.append(f"{p}:{lineno}: {line.strip()}")
         return hits
 
@@ -160,7 +181,7 @@ class Migrator:
 def main(argv):
     if len(argv) < 2:
         sys.exit(__doc__)
-    migrator = Migrator(load_name_map())
+    migrator = Migrator(*load_registry())
     changed = 0
     for arg in argv[1:]:
         path = Path(arg)

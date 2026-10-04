@@ -186,7 +186,7 @@ impl KnownFields for CheckerConfig {
 /// Alias for `CheckerConfig` (used by `SimpleChecker`).
 pub type CheckerConfigWithCommand = CheckerConfig;
 
-// CreatorConfig lives in src/processor/creator/creator.rs.
+// CreatorConfig lives in src/processor/creator/generic.rs.
 
 // TeraConfig lives in src/processor/generator/tera.rs.
 
@@ -218,9 +218,9 @@ pub type JsonSchemaConfig = CheckerConfig;
 
 // ScriptConfig lives in src/processor/checker/script.rs.
 
-// GeneratorConfig lives in src/processor/generator/generator.rs.
+// GeneratorConfig lives in src/processor/generator/generic.rs.
 
-// ExplicitConfig lives in src/processor/explicit/explicit.rs.
+// ExplicitConfig lives in src/processor/explicit/generic.rs.
 
 // PipConfig lives in src/processor/creator/pip.rs.
 

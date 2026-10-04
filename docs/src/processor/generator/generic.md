@@ -39,7 +39,7 @@ dep_inputs = []
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `command` | string | `"true"` | Script or command to run |
-| `output_dir` | string | `"out/generator"` | Directory for output files |
+| `output_dir` | string | `"out/processor.generator.generic"` (`out/processor.generator.generic.NAME` for a named instance) | Directory for output files |
 | `output_extension` | string | `"out"` | Extension for output files |
 | `batch` | bool | `true` | Pass all pairs in one invocation |
 | `args` | string[] | `[]` | Extra arguments prepended before file pairs |

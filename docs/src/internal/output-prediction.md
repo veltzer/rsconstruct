@@ -6,7 +6,7 @@ Once outputs are known up front, per-file caching, precise incremental rebuilds,
 
 ## Status
 
-**Implemented** as the `mass_generator` processor (`src/processor/mass_generator/mass_generator.rs`); the user-facing contract is in [Mass Generator](../processor/mass_generator/generic.md). This document is the design spec it was built from. Where the implementation departs from the text below, the departure is called out in a **Status note**; the main ones are: no synthetic phase product (a once-per-build guard inside the processor does that job), `loose_manifest` is a config field rather than a CLI flag, verification compares a before/after snapshot of `output_dirs` instead of walking the whole directory, and the manifest is not yet cached between graph builds.
+**Implemented** as the `processor.mass_generator.generic` processor (`src/processor/mass_generator/generic.rs`); the user-facing contract is in [Mass Generator](../processor/mass_generator/generic.md). This document is the design spec it was built from. Where the implementation departs from the text below, the departure is called out in a **Status note**; the main ones are: no synthetic phase product (a once-per-build guard inside the processor does that job), `loose_manifest` is a config field rather than a CLI flag, verification compares a before/after snapshot of `output_dirs` instead of walking the whole directory, and the manifest is not yet cached between graph builds.
 
 Related designs:
 

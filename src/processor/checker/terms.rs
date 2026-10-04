@@ -817,7 +817,7 @@ pub fn fix_all(config: &TermsConfig, remove_non_terms: bool, warn_symlinks: bool
     let sorted = sorted_terms(&terms.single);
 
     // Force-walk every src_dir the user listed: they may include generated
-    // directories like `out/generator` that are gitignored. The build path
+    // directories like `out/processor.generator.generic` that are gitignored. The build path
     // sees those via `add_virtual_files` after the discover loop runs;
     // `terms fix` runs standalone so it must walk them itself.
     let force_dirs: Vec<&str> = config

@@ -683,6 +683,33 @@ fn docs_dir_for(processor_type: crate::processor::ProcessorType) -> &'static str
     }
 }
 
+/// `processor defconfig` must produce every plugin's real defaults. After
+/// names became `processor.<type>.<name>`, `defconfig_json` kept passing the
+/// plugin's short name into the defaults machinery, which is keyed by full
+/// names: every default came back empty, and in debug builds the
+/// undeclared-field guard panicked for marp. Pin one visible default per
+/// processor type alongside the "resolves at all" check.
+#[test]
+fn defconfig_applies_defaults_for_every_plugin() {
+    for plugin in all_plugins() {
+        let pname = plugin.pname();
+        let json = ProcessorConfig::defconfig_json(&pname)
+            .unwrap_or_else(|| panic!("{pname}: defconfig_json returned None"));
+        serde_json::from_str::<serde_json::Value>(&json)
+            .unwrap_or_else(|e| panic!("{pname}: defconfig is not JSON: {e}"));
+    }
+    let field = |pname: &str, key: &str| -> serde_json::Value {
+        let json = ProcessorConfig::defconfig_json(pname).unwrap();
+        serde_json::from_str::<serde_json::Value>(&json).unwrap()[key].clone()
+    };
+    assert_eq!(field("processor.checker.ruff", "command"), "ruff");
+    assert_eq!(
+        field("processor.generator.marp", "output_dir"),
+        "out/processor.generator.marp"
+    );
+    assert_eq!(field("processor.creator.sphinx", "command"), "sphinx-build");
+}
+
 /// A processor is one file — but three touch-points necessarily live
 /// outside it, and nothing but this test enforces them: the docs page, the
 /// integration test file, and (checked separately below) the `mod`

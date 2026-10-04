@@ -144,7 +144,7 @@ Two kinds of directory are never walked, regardless of ignore files:
 - `.rsconstruct/` — the tool's own state directory (cache descriptors, objects, databases).
 - **Configured output roots** — the global `[build] output_dir` plus every instance's `output_dir`/`output`/`output_dirs` values (`Config::file_index_walk_dirs`). Generated files must not be discovered as project source: otherwise build 1 generates a file and build 2 lints it, and fresh vs. incremental builds discover different graphs. Downstream processors still see upstream outputs — as *virtual files* injected by declaration during the fixed-point discovery loop, which works identically whether or not the files exist on disk.
 
-The opt-in: naming a directory under an output root in a processor's `src_dirs` (e.g. `src_dirs = ["out/generator"]`) force-walks it unconditionally — ignoring gitignore and the output-root exclusion. That is the deliberate way to scan generated files. `output_dir = ""` (in-place output at the project root) cannot be excluded; in-place outputs remain indexed.
+The opt-in: naming a directory under an output root in a processor's `src_dirs` (e.g. `src_dirs = ["out/processor.generator.generic"]`) force-walks it unconditionally — ignoring gitignore and the output-root exclusion. That is the deliberate way to scan generated files. `output_dir = ""` (in-place output at the project root) cannot be excluded; in-place outputs remain indexed.
 
 Processors never walk the filesystem themselves. Instead, `auto_detect` and `discover` receive a `&FileIndex` and query it with their scan configuration (src_extensions, exclude directories, exclude files). This replaces the previous design where each processor performed its own recursive walk.
 
