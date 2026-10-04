@@ -4,7 +4,6 @@ Findings from a code scan on 2026-10-04.
 
 ## High
 
-- `README.md:31` - the install instructions cannot work: there is no release tag named `latest` (releases are `v0.9.96`, ...), so `gh release download latest` fails and the curl URLs on lines 44/47 (`/releases/download/latest/...`) 404; and the asset names `rsconstruct-x86_64-unknown-linux-gnu` / `rsconstruct-aarch64-unknown-linux-gnu` do not exist (the release ships `rsconstruct-linux-x86_64`, `rsconstruct-linux-aarch64`, `rsconstruct-macos-*`, as `docs/src/binary-releases.md:9` correctly lists). The same broken commands are in `docs/src/installation.md:11`-`27`. Use `gh release download --repo veltzer/rsconstruct --pattern rsconstruct-linux-x86_64` (no tag = latest) and `https://github.com/veltzer/rsconstruct/releases/latest/download/rsconstruct-linux-x86_64`.
 - `docs/src/commands.md:282` - documents a `rsconstruct deps` command (list/build/show/...) that no longer exists: the binary answers `error: unrecognized subcommand 'deps'`; the functionality is now `rsconstruct analyzers` (list, build, show, clean, stats, used, ...). Stale `rsconstruct deps` examples (23 lines) are also in `docs/src/analyzers.md:62`-`64` and `docs/src/internal/dependency-caching.md:71`-`75`. Rewrite them against `rsconstruct analyzers`.
 
 ## Medium

@@ -28,10 +28,10 @@ Pre-built binaries are available for x86_64 and aarch64 (arm64).
 
 ```bash
 # x86_64
-gh release download latest --repo veltzer/rsconstruct --pattern 'rsconstruct-x86_64-unknown-linux-gnu' --output rsconstruct --clobber
+gh release download --repo veltzer/rsconstruct --pattern 'rsconstruct-linux-x86_64' --output rsconstruct --clobber
 
 # aarch64 / arm64
-gh release download latest --repo veltzer/rsconstruct --pattern 'rsconstruct-aarch64-unknown-linux-gnu' --output rsconstruct --clobber
+gh release download --repo veltzer/rsconstruct --pattern 'rsconstruct-linux-aarch64' --output rsconstruct --clobber
 
 chmod +x rsconstruct
 sudo mv rsconstruct /usr/local/bin/
@@ -41,10 +41,10 @@ Or without the GitHub CLI:
 
 ```bash
 # x86_64
-curl -Lo rsconstruct https://github.com/veltzer/rsconstruct/releases/download/latest/rsconstruct-x86_64-unknown-linux-gnu
+curl -Lo rsconstruct https://github.com/veltzer/rsconstruct/releases/latest/download/rsconstruct-linux-x86_64
 
 # aarch64 / arm64
-curl -Lo rsconstruct https://github.com/veltzer/rsconstruct/releases/download/latest/rsconstruct-aarch64-unknown-linux-gnu
+curl -Lo rsconstruct https://github.com/veltzer/rsconstruct/releases/latest/download/rsconstruct-linux-aarch64
 
 chmod +x rsconstruct
 sudo mv rsconstruct /usr/local/bin/
