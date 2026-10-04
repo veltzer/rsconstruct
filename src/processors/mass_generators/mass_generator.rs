@@ -419,10 +419,7 @@ impl Processor for MassGeneratorProcessor {
         instance_name: &str,
     ) -> Result<()> {
         let entries = self.manifest(instance_name)?;
-        let hash = Some(output_config_hash(
-            &self.config,
-            &checksum_fields_of(instance_name),
-        ));
+        let config_hash = output_config_hash(&self.config, &checksum_fields_of(instance_name));
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
         for entry in entries.iter() {
             let mut inputs = entry.sources.clone();
@@ -431,12 +428,18 @@ impl Processor for MassGeneratorProcessor {
                     inputs.push(input.clone());
                 }
             }
-            graph.add_product(
-                inputs,
-                vec![entry.path.clone()],
-                instance_name,
-                hash.clone(),
-            )?;
+            // A product's cache key is processor + config hash + input
+            // checksum; the output path is not part of it, because for every
+            // other processor the output path follows from the input. Here
+            // many outputs can share one input set — a tag's index page, its
+            // `page/1/` redirect and its feed all depend on exactly the same
+            // posts — and without the path in the key the second would be
+            // "restored" from the first's blob, with the first's content.
+            let hash = crate::checksum::hash_parts(&[
+                config_hash.as_str(),
+                &entry.path.display().to_string(),
+            ]);
+            graph.add_product(inputs, vec![entry.path.clone()], instance_name, Some(hash))?;
         }
         Ok(())
     }

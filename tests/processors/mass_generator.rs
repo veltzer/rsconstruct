@@ -434,3 +434,58 @@ fn mass_generator_outputs_feed_downstream_processors() {
         "<h1>a</h1>\npage a, revised\ntitle = \"Demo\"\n"
     );
 }
+
+/// Several predicted files can depend on exactly the same sources (a tag's
+/// index page, its `page/1/` redirect and its feed, say). The cache key must
+/// still tell them apart: the first run of this scenario "restored" the
+/// second file from the first file's blob and wrote the wrong content.
+#[test]
+fn mass_generator_identical_sources_keep_distinct_outputs() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let root = temp_dir.path();
+    write_file(
+        root,
+        "twin.sh",
+        concat!(
+            "#!/bin/bash\nset -e\ncase \"$1\" in\n",
+            "  plan) echo '{\"version\":1,\"outputs\":[",
+            "{\"path\":\"out/index.html\",\"sources\":[\"src.md\"]},",
+            "{\"path\":\"out/feed.xml\",\"sources\":[\"src.md\"]}]}' ;;\n",
+            "  build) mkdir -p out; echo '<html>' > out/index.html; echo '<feed/>' > out/feed.xml ;;\n",
+            "esac\n",
+        ),
+    );
+    make_executable(&root.join("twin.sh"));
+    write_file(root, "src.md", "source\n");
+    write_file(
+        root,
+        "rsconstruct.toml",
+        "[processor.mass_generator.twin]\ncommand = \"./twin.sh\"\nargs = [\"build\"]\n\
+         predict_command = \"./twin.sh\"\npredict_args = [\"plan\"]\noutput_dirs = [\"out\"]\n",
+    );
+
+    let result = build_ok(root);
+    assert_eq!(result.count_status("success"), 2, "{:?}", result.products);
+    assert_eq!(
+        fs::read_to_string(root.join("out/feed.xml")).unwrap(),
+        "<feed/>\n"
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("out/index.html")).unwrap(),
+        "<html>\n"
+    );
+
+    // And each restores its own bytes.
+    let clean = run_rsconstruct_with_env(root, &["clean", "outputs"], &[("NO_COLOR", "1")]);
+    assert!(clean.status.success(), "{}", combined_output(&clean));
+    let result = build_ok(root);
+    assert_eq!(result.restored, 2, "{:?}", result.products);
+    assert_eq!(
+        fs::read_to_string(root.join("out/feed.xml")).unwrap(),
+        "<feed/>\n"
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("out/index.html")).unwrap(),
+        "<html>\n"
+    );
+}

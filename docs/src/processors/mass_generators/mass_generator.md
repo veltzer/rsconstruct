@@ -87,6 +87,8 @@ The scan fields (`src_dirs`, `src_extensions`, `src_files`) are rejected: the ma
 
 Unknown keys are rejected. rsconstruct sorts entries by path, so the tool's output order does not matter.
 
+Several outputs may list exactly the same sources — a tag's index page, its `page/1/` redirect and its feed all depend on the same posts. Each is still cached under its own path: the predicted path is part of the product's cache key, where for other processor types the output path follows from the input and needs no such entry.
+
 ## How it works
 
 ### Plan phase (at graph-build time)
