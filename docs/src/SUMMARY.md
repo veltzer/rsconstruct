@@ -106,6 +106,7 @@
         - [Explicit](processor/explicit/generic.md)
     - [Mass Generators](processor/mass_generator/README.md)
         - [Mass Generator](processor/mass_generator/generic.md)
+        - [Zola](processor/mass_generator/zola.md)
 - [GitHub Actions](github-actions.md)
 - [Lua Plugins](plugins.md)
 - [Advanced Usage](advanced.md)

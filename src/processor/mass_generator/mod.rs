@@ -92,9 +92,13 @@ pub fn add_planned_products(
         // `page/1/` redirect and its feed all depend on exactly the same
         // posts — and without the path in the key the second would be
         // "restored" from the first's blob, with the first's content.
-        let hash =
-            crate::checksum::hash_parts(&[config_hash, &planned.path.display().to_string()]);
-        graph.add_product(inputs, vec![planned.path.clone()], instance_name, Some(hash))?;
+        let hash = crate::checksum::hash_parts(&[config_hash, &planned.path.display().to_string()]);
+        graph.add_product(
+            inputs,
+            vec![planned.path.clone()],
+            instance_name,
+            Some(hash),
+        )?;
     }
     Ok(())
 }

@@ -57,6 +57,7 @@ Use `rsconstruct processor files` to see which files each processor discovers.
 - [Markdown2html](processor/generator/markdown2html.md) — converts Markdown to HTML using markdown CLI
 - [Imarkdown2html](processor/generator/imarkdown2html.md) — converts Markdown to HTML (native)
 - [Mass Generator](processor/mass_generator/generic.md) — runs a tool that enumerates its outputs in advance, one cached product per predicted file
+- [Zola](processor/mass_generator/zola.md) — builds a zola site, one cached product per file zola writes, planned natively
 
 ## Output Directory Caching
 

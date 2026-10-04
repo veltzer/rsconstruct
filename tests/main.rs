@@ -130,6 +130,7 @@ mod processor {
     }
     pub mod mass_generator {
         pub mod generic;
+        pub mod zola;
     }
     pub mod markdown;
     pub mod shared_output_dir;

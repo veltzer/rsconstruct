@@ -9,6 +9,10 @@
 //! not model it refuses by name instead of guessing, and the plan-vs-build
 //! check fails the build if the plan and zola's output ever disagree.
 
+// Every suffix test here (`.md`, `.html`, `.scss`) is case-sensitive on
+// purpose: zola compares exactly, and the planner exists to match zola.
+#![allow(clippy::case_sensitive_file_extension_comparisons)]
+
 use anyhow::{Context, Result};
 use parking_lot::Mutex;
 use regex::Regex;
@@ -126,12 +130,15 @@ impl ZolaProcessor {
     /// deletes its output directory before writing, which would take every
     /// other processor's files in `_site/` with it — files rsconstruct then
     /// believes are up to date.
-    fn run_tool(&self, ctx: &crate::build_context::BuildContext, instance_name: &str) -> Result<()> {
-        let plan = self
-            .plan
-            .lock()
-            .clone()
-            .with_context(|| format!("[{instance_name}] executed before its plan was loaded"))?;
+    fn run_tool(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        instance_name: &str,
+    ) -> Result<()> {
+        let plan =
+            self.plan.lock().clone().with_context(|| {
+                format!("[{instance_name}] executed before its plan was loaded")
+            })?;
         let staging = Path::new(STAGING_DIR).join(format!("{instance_name}.staging"));
         remove_dir_if_present(&staging)?;
         if let Some(parent) = staging.parent() {
@@ -143,10 +150,16 @@ impl ZolaProcessor {
         if !self.config.root.is_empty() {
             cmd.arg("--root").arg(&self.config.root);
         }
-        cmd.arg("build").arg("--output-dir").arg(&staging).arg("--force");
+        cmd.arg("build")
+            .arg("--output-dir")
+            .arg(&staging)
+            .arg("--force");
         cmd.args(&self.config.standard.args);
         let output = run_command(ctx, &cmd)?;
-        check_command_output(&output, format_args!("[{instance_name}] {}", format_command(&cmd)))?;
+        check_command_output(
+            &output,
+            format_args!("[{instance_name}] {}", format_command(&cmd)),
+        )?;
 
         let written: BTreeSet<String> = files_under(&staging)?
             .into_iter()
@@ -225,7 +238,9 @@ fn remove_dir_if_present(dir: &Path) -> Result<()> {
     match std::fs::remove_dir_all(dir) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(anyhow::Error::from(e).context(format!("Failed to remove {}", dir.display()))),
+        Err(e) => {
+            Err(anyhow::Error::from(e).context(format!("Failed to remove {}", dir.display())))
+        }
     }
 }
 
@@ -665,7 +680,11 @@ impl Section {
     /// `section.path` without its leading `/` (zola's section feed base).
     fn path_without_slash(&self, config: &SiteConfig) -> String {
         let base = self.base(config);
-        if base.is_empty() { String::new() } else { format!("{base}/") }
+        if base.is_empty() {
+            String::new()
+        } else {
+            format!("{base}/")
+        }
     }
 }
 
@@ -837,7 +856,11 @@ impl Site {
                 continue;
             }
             for file in files {
-                let name = file.file_name().unwrap_or_default().to_string_lossy().into_owned();
+                let name = file
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned();
                 if name.starts_with("_index.") || name.starts_with('.') || !name.ends_with(".md") {
                     continue;
                 }
@@ -883,7 +906,11 @@ impl Site {
             return Ok(None);
         }
         let content = self.content_dir();
-        let stem = file.file_stem().unwrap_or_default().to_string_lossy().into_owned();
+        let stem = file
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
         let mut components = content_components(&content, file.parent().unwrap_or(&content));
         let mut parent = file.parent().unwrap_or(&content).to_path_buf();
         // `index.md` (or `index.<lang>.md`) in a directory is a colocated
@@ -923,10 +950,18 @@ impl Site {
 
         let mut path = if let Some(ref p) = meta.path {
             let p = p.trim();
-            if p.starts_with('/') { p.to_string() } else { format!("/{p}") }
+            if p.starts_with('/') {
+                p.to_string()
+            } else {
+                format!("/{p}")
+            }
         } else {
             let mut path = if components.is_empty() {
-                if name == "index" && !colocated { String::new() } else { slug }
+                if name == "index" && !colocated {
+                    String::new()
+                } else {
+                    slug
+                }
             } else {
                 format!("{}/{slug}", components.join("/"))
             };
@@ -1076,7 +1111,10 @@ impl Site {
             rendered_pages.extend(section.hidden_pages.iter().copied());
             if section.meta.generate_feeds {
                 for feed in &languages[&section.lang].feed_filenames {
-                    rendered(&mut plan, format!("{}{feed}", section.path_without_slash(&self.config)));
+                    rendered(
+                        &mut plan,
+                        format!("{}{feed}", section.path_without_slash(&self.config)),
+                    );
                 }
             }
             let base = section.base(&self.config);
@@ -1093,7 +1131,12 @@ impl Site {
             }
             match section.meta.paginate_by {
                 Some(per_page) if per_page > 0 => {
-                    for path in pager_paths(&base, &section.meta.paginate_path, section.pages.len(), per_page) {
+                    for path in pager_paths(
+                        &base,
+                        &section.meta.paginate_path,
+                        section.pages.len(),
+                        per_page,
+                    ) {
                         rendered(&mut plan, path);
                     }
                 }
@@ -1109,10 +1152,14 @@ impl Site {
             let page = &self.pages[index];
             rendered(&mut plan, format!("{}index.html", page.out_dir));
             for asset in &page.assets {
-                plan.entry(format!("{}{}", page.out_dir, relative_slash_path(&page.asset_root, asset)))
-                    .or_default()
-                    .files
-                    .insert(asset.clone());
+                plan.entry(format!(
+                    "{}{}",
+                    page.out_dir,
+                    relative_slash_path(&page.asset_root, asset)
+                ))
+                .or_default()
+                .files
+                .insert(asset.clone());
             }
         }
 
@@ -1171,7 +1218,13 @@ impl Site {
                     if page.lang != *lang || !page.meta.render || page.hidden {
                         continue;
                     }
-                    for term in page.meta.taxonomies.get(&taxonomy.name).into_iter().flatten() {
+                    for term in page
+                        .meta
+                        .taxonomies
+                        .get(&taxonomy.name)
+                        .into_iter()
+                        .flatten()
+                    {
                         let term_slug = slugify_paths(term, self.config.slugify.taxonomies);
                         if term_slug.is_empty() {
                             anyhow::bail!(
@@ -1186,7 +1239,8 @@ impl Site {
                 if !taxonomy.render || terms.is_empty() {
                     continue;
                 }
-                let mut base_parts: Vec<String> = self.config.lang_prefix(lang).into_iter().collect();
+                let mut base_parts: Vec<String> =
+                    self.config.lang_prefix(lang).into_iter().collect();
                 base_parts.extend(self.config.taxonomy_root.clone());
                 base_parts.push(taxonomy_slug);
                 let base = base_parts.join("/");
@@ -1339,12 +1393,13 @@ impl Site {
         let templates = files_under(&self.root.join("templates"))?;
         let content = files_under(&self.content_dir())?;
         for file in templates.iter().chain(content.iter()) {
-            if file.extension().is_some_and(|e| e == "md" || e == "html" || e == "xml" || e == "txt") {
+            if file
+                .extension()
+                .is_some_and(|e| e == "md" || e == "html" || e == "xml" || e == "txt")
+            {
                 let text = std::fs::read_to_string(file).unwrap_or_default();
                 for caps in LOAD_DATA.captures_iter(&text) {
-                    if let Some(found) = self.resolve_load_data(&caps[1]) {
-                        sources.insert(found);
-                    }
+                    sources.insert(self.resolve_load_data(&caps[1]));
                 }
             }
         }
@@ -1353,19 +1408,23 @@ impl Site {
         Ok(sources)
     }
 
-    /// zola's `search_for_file`: the site root, then `static/`, then `content/`.
-    fn resolve_load_data(&self, path: &str) -> Option<PathBuf> {
+    /// zola's `search_for_file`: the site root, then `static/`, then
+    /// `content/`. A file found in none of them is taken at the site root,
+    /// zola's first choice: it may be the output of another processor that
+    /// has not run yet, and listing it is what orders that processor before
+    /// zola (a missing input that nothing produces is simply missing).
+    fn resolve_load_data(&self, path: &str) -> PathBuf {
         let actual = path.strip_prefix("@/").map_or_else(
             || path.trim_start_matches('/').to_string(),
             |rest| format!("content/{rest}"),
         );
-        [
+        let candidates = [
             self.root.join(&actual),
             self.root.join("static").join(&actual),
             self.root.join("content").join(&actual),
-        ]
-        .into_iter()
-        .find(|p| p.is_file())
+        ];
+        let found = candidates.iter().find(|p| p.is_file()).cloned();
+        found.unwrap_or_else(|| candidates[0].clone())
     }
 
     /// Resized images are only known by rendering: refuse sites that resize.
@@ -1477,8 +1536,9 @@ impl Processor for ZolaProcessor {
 
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let instance_name = &product.processor;
-        self.tool_run
-            .run(&self.config.standard.command, || self.run_tool(ctx, instance_name))?;
+        self.tool_run.run(&self.config.standard.command, || {
+            self.run_tool(ctx, instance_name)
+        })?;
         require_planned_output(product, &self.config.standard.command)
     }
 
@@ -1522,5 +1582,98 @@ inventory::submit! {
         can_fix: false,
         supports_batch: false,
         max_jobs_cap: Some(1),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pager_paths_follow_zola() {
+        assert_eq!(
+            pager_paths("blog", "page", 5, 2),
+            vec![
+                "blog/index.html",
+                "blog/page/1/index.html",
+                "blog/page/2/index.html",
+                "blog/page/3/index.html",
+            ]
+        );
+        // Empty listings still get the first pager and its redirect.
+        assert_eq!(
+            pager_paths("", "page", 0, 10),
+            vec!["index.html", "page/1/index.html"]
+        );
+        // An empty paginate_path puts pagers straight below the base.
+        assert_eq!(
+            pager_paths("tags/rust", "", 3, 2),
+            vec![
+                "tags/rust/index.html",
+                "tags/rust/1/index.html",
+                "tags/rust/2/index.html",
+            ]
+        );
+    }
+
+    #[test]
+    fn slugify_strategies_match_zola() {
+        assert_eq!(
+            slugify_paths("Hello World", SlugifyStrategy::On),
+            "hello-world"
+        );
+        assert_eq!(slugify_paths("日本", SlugifyStrategy::On), "ri-ben");
+        assert_eq!(
+            slugify_paths("C++ / Rust?.", SlugifyStrategy::Safe),
+            "C++  Rust"
+        );
+        assert_eq!(slugify_paths("dot. ", SlugifyStrategy::Safe), "dot");
+        assert_eq!(slugify_paths("as is ", SlugifyStrategy::Off), "as is ");
+    }
+
+    #[test]
+    fn language_suffixes_follow_zola() {
+        let mut config = SiteConfig::default();
+        let path = Path::new("content/x.md");
+        assert_eq!(
+            split_language("post.fr", &config, path).unwrap(),
+            ("post.fr".to_string(), "en".to_string()),
+            "without other languages a dot is part of the name"
+        );
+        config
+            .languages
+            .insert("fr".to_string(), LanguageOptions::default());
+        assert_eq!(
+            split_language("post.fr", &config, path).unwrap(),
+            ("post".to_string(), "fr".to_string())
+        );
+        assert_eq!(
+            split_language("post.en", &config, path).unwrap(),
+            ("post.en".to_string(), "en".to_string()),
+            "the default language's own code is not stripped"
+        );
+        assert!(split_language("post.de", &config, path).is_err());
+    }
+
+    #[test]
+    fn dates_parse_like_zola() {
+        assert!(is_parseable_date(&toml::Value::String("2024-01-02".into())));
+        assert!(is_parseable_date(&toml::Value::String(
+            "2024-01-02T03:04:05".into()
+        )));
+        assert!(is_parseable_date(&toml::Value::String(
+            "2024-01-02T03:04:05+02:00".into()
+        )));
+        assert!(!is_parseable_date(&toml::Value::String("yesterday".into())));
+        assert!(DATED_NAME.is_match("2024-01-02-post"));
+        assert_eq!(
+            DATED_NAME
+                .captures("2024-01-02_post")
+                .unwrap()
+                .name("slug")
+                .unwrap()
+                .as_str(),
+            "post"
+        );
     }
 }

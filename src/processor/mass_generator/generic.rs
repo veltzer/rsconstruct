@@ -7,10 +7,10 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use super::{OnceTool, PlannedOutput, add_planned_products, require_planned_output};
 use crate::config::{StandardConfig, checksum_fields_of, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use super::{OnceTool, PlannedOutput, add_planned_products, require_planned_output};
 use crate::processor::{
     Processor, ProcessorBase, check_command_output, format_command, log_command, run_command,
 };

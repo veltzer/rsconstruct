@@ -346,7 +346,7 @@ docs/about.md, templates/default.html → _site/about/index.html
 
 ### Built-in mass generators
 
-generic
+generic, zola
 
 Any tool that honors the manifest contract plugs into the config-driven `generic` mass generator via `[processor.mass_generator.generic.NAME]`; see [Mass Generator](processor/mass_generator/generic.md).
 

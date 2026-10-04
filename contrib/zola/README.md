@@ -1,5 +1,10 @@
 # `zola plan` patch
 
+**Not needed to build zola sites with rsconstruct:** the
+[`processor.mass_generator.zola`](../../docs/src/processor/mass_generator/zola.md)
+processor computes the plan itself and runs the official zola. This patch is
+the alternative of putting the plan into zola upstream; it is kept for that.
+
 `zola-plan-v0.23.3.patch` adds a `plan` subcommand to [zola](https://github.com/getzola/zola)
 v0.23.3. `zola plan` loads the site exactly as `zola check` does and prints the
 JSON manifest that rsconstruct's
