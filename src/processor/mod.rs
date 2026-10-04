@@ -1149,8 +1149,8 @@ pub trait Processor: Sync + Send {
 //
 // Most single-file processors don't need their own Processor struct — they
 // configure one of these generic runtimes instead and submit a plugin entry.
-// Moved here from checkers/simple.rs and generators/simple.rs so the
-// checkers/ and generators/ directories contain ONLY per-processor files.
+// Moved here from checker/simple.rs and generator/simple.rs so the
+// checker/ and generator/ directories contain ONLY per-processor files.
 // ----------------------------------------------------------------------------
 
 /// A simple checker processor driven entirely by data.

@@ -14,7 +14,7 @@ Draft — awaiting review. Two questions to answer plus a concrete proposal.
 
 ## Question 1 — what is cargo's variant?
 
-The cargo processor (`src/processors/creators/cargo.rs`) accepts a
+The cargo processor (`src/processor/creator/cargo.rs`) accepts a
 `profiles: Vec<String>` config field, defaulting to `["dev", "release"]`.
 For each `Cargo.toml` source, it creates **one product per profile** in
 the build graph and runs `cargo build --profile <name>` once per

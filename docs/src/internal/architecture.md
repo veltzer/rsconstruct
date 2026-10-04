@@ -296,25 +296,30 @@ All processor code lives under `src/processor/`. The folder structure mirrors pr
 src/processor/
 ├── mod.rs          # Processor trait, shared helpers (run_command, run_checker,
 │                   # SimpleChecker, SimpleGenerator, ProcessorBase, …)
-├── checkers/       # One file per checker (ruff.rs, pylint.rs, cppcheck.rs, …)
-│   └── mod.rs      # Re-exports
-├── generators/     # One file per generator (generator.rs, marp.rs, sass.rs, tags.rs, …)
+├── checker/        # One file per checker (ruff.rs, pylint.rs, cppcheck.rs, …)
+│   └── mod.rs      # mod declarations
+├── generator/      # One file per generator (generator.rs, marp.rs, sass.rs, tags.rs, …)
 │   └── mod.rs      # Shared helpers: find_templates, output_path, discover_single_format, …
-├── creators/       # One file per creator (cargo.rs, cc.rs, gem.rs, jekyll.rs,
+├── creator/        # One file per creator (cargo.rs, cc.rs, gem.rs, jekyll.rs,
 │   │               # mdbook.rs, npm.rs, pip.rs, sphinx.rs)
-│   ├── mod.rs      # Re-exports
+│   ├── mod.rs      # mod declarations
 │   └── creator.rs  # Generic creator processor
 ├── explicit/       # Explicit processor (user-defined command with declared outputs)
 │   ├── mod.rs
 │   └── explicit.rs
+├── mass_generator/ # Mass generator (tool that enumerates its outputs via predict_command)
+│   ├── mod.rs
+│   └── mass_generator.rs
 └── lua/            # Lua plugin host
     ├── mod.rs
     └── lua_processor.rs
 ```
 
+Category directories are singular (`checker/`, not `checkers/`), like every other module in the crate; a category that holds a processor named after itself (`generator::generator`, `creator::creator`, `explicit::explicit`, `mass_generator::mass_generator`) carries a `#[allow(clippy::module_inception)]` on that one `mod` line.
+
 ### Conventions
 
-- **Every file in `src/processor/` is a real single processor** — no utility-only files anywhere in the tree. Shared helpers live in `mod.rs` or `generators/mod.rs`; processor-specific data tables (e.g. the requirements generator's stdlib list) live in the processor's own file. The tool registry (`src/tools.rs`) and build statistics (`src/stats.rs`) live at the crate root for this reason.
+- **Every file in `src/processor/` is a real single processor** — no utility-only files anywhere in the tree. Shared helpers live in `mod.rs` or `generator/mod.rs`; processor-specific data tables (e.g. the requirements generator's stdlib list) live in the processor's own file. The tool registry (`src/tools.rs`) and build statistics (`src/stats.rs`) live at the crate root for this reason.
 - **Checkers** use `SimpleChecker` (data-driven, no boilerplate) or implement `Processor` directly for checkers with custom discovery logic (e.g., `clippy`, `script`).
 - **Generators** use `SimpleGenerator` (data-driven with a custom `execute_fn`) or `GeneratorProcessor` for the generic pass-through generator.
 - **Creators** use `CreatorProcessor` for the generic case, or their own struct for creators with special discovery (cargo profiles, npm siblings, etc.).

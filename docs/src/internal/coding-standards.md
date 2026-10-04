@@ -37,8 +37,8 @@ consistently:
 
 | Artifact | Convention | Example (`clang_tidy`) |
 |---|---|---|
-| Name constant | `pub const UPPER: &str = "name";` in `processors::names` | `CLANG_TIDY: &str = "clang_tidy"` |
-| Source file | `src/processor/checker/{name}.rs` or `generators/{name}.rs` | `checkers/clang_tidy.rs` |
+| Name constant | `pub const UPPER: &str = "name";` in `processor::names` | `CLANG_TIDY: &str = "clang_tidy"` |
+| Source file | `src/processor/checker/{name}.rs` or `generator/{name}.rs` | `checker/clang_tidy.rs` |
 | Processor struct | `{PascalCase}Processor` | `ClangTidyProcessor` |
 | Config struct | `{PascalCase}Config` | `ClangTidyConfig` |
 | Field on `ProcessorConfig` | `pub {name}: {PascalCase}Config` | `pub clang_tidy: ClangTidyConfig` |

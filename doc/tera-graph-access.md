@@ -15,7 +15,7 @@ Draft — awaiting review.
 
 ## What's there today
 
-The Tera processor (`src/processors/generators/tera.rs`) renders
+The Tera processor (`src/processor/generator/tera.rs`) renders
 templates with **an empty `TeraContext`**. Templates have access to
 only the four custom Tera functions registered by rsconstruct:
 
@@ -193,7 +193,7 @@ Implementation outline:
 
 1. Add a new `pub struct ProjectSnapshot { ... }` and
    `pub struct ProcessorSnapshot { ... }` in
-   `src/processors/mod.rs` (or a new `src/snapshot.rs`). Both are
+   `src/processor/mod.rs` (or a new `src/snapshot.rs`). Both are
    serde-serializable.
 2. Add a `snapshot: Mutex<Option<Arc<ProjectSnapshot>>>` field to
    `BuildContext`. The executor populates it once per build.

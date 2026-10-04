@@ -133,7 +133,7 @@ fn scan_template_recursive(
 
     // version_str() / version_str(path="...") — reads a `tup` from the file at
     // `path`, defaulting to config/version.py when called without arguments.
-    // The default must mirror VersionStrFunction in processors/generators/tera.rs
+    // The default must mirror VersionStrFunction in processor/generator/tera.rs
     // or the analyzer would track a different file than the renderer reads.
     static VERSION_STR_RE: OnceLock<Regex> = OnceLock::new();
     let version_str_re = VERSION_STR_RE.get_or_init(|| {
@@ -311,7 +311,7 @@ fn scan_template_recursive(
     // inputs (renaming a workflow's name must invalidate the product) and
     // the resolved path set is a hash piece (adding/removing a workflow file
     // must too). The pattern mirrors WorkflowNamesFunction in
-    // processors/generators/tera.rs; this used to be untracked — a renamed
+    // processor/generator/tera.rs; this used to be untracked — a renamed
     // workflow left stale rendered output cached indefinitely.
     static WORKFLOW_NAMES_RE: OnceLock<Regex> = OnceLock::new();
     let workflow_names_re = WORKFLOW_NAMES_RE

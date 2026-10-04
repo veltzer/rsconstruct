@@ -40,7 +40,7 @@ shells = ["bash"]
 
 ### Commands and subcommands
 
-All top-level commands (`build`, `processors`, `analyzers`, `config`, etc.) and their subcommands complete automatically via clap.
+All top-level commands (`build`, `processor`, `analyzers`, `config`, etc.) and their subcommands complete automatically via clap.
 
 ### Processor type names (pnames)
 

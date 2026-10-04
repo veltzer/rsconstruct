@@ -134,7 +134,7 @@ passes or allowed pending careful review.
 
 ### Step 3: hand-fix one orphan
 
-`src/processors/generators/libreoffice.rs` had a 14-line doc comment
+`src/processor/generator/libreoffice.rs` had a 14-line doc comment
 block, originally written for a `cleanup_marp_temp_dirs` function that
 no longer exists in this file. The orphaned block sat above
 `fn create_libreoffice` and was tripping

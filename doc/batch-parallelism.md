@@ -26,7 +26,7 @@ run in parallel today:
 
    - Items are grouped into chunks of `batch_size`.
    - Each chunk calls `processor.execute_batch(ctx, products)`.
-   - The default `execute_batch` (`src/processors/mod.rs:899`) is just
+   - The default `execute_batch` (`src/processor/mod.rs:899`) is just
      `products.iter().map(|p| self.execute(ctx, p)).collect()` — a serial
      loop, one subprocess per product.
    - The checker/generator wrappers (`execute_checker_batch`,
@@ -80,7 +80,7 @@ fn execute_batch(&self, ctx: &crate::build_context::BuildContext, products: &[&P
 }
 ```
 
-This is a one-line change in `src/processors/mod.rs:899` plus a `rayon`
+This is a one-line change in `src/processor/mod.rs:899` plus a `rayon`
 dependency. Every processor that uses the default implementation
 automatically becomes parallel within a batch chunk. Rayon's global thread
 pool means we don't need our own thread management.

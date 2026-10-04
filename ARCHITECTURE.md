@@ -82,11 +82,11 @@ is a match, not data, so it can't be enumerated directly."*
 
 ### Why this is also the dependency knot
 
-The crate's central cycle — `config → registries → processors → config` —
+The crate's central cycle — `config → registries → processor → config` —
 exists *because of* this duplication. Measured by reference sites:
-processors→config 679, processors→registries 638; `config/mod.rs:483`
+processor→config 679, processor→registries 638; `config/mod.rs:483`
 imports the registry while `registries/processor.rs` imports both
-`processors` (for the `create` fn pointer and `ProcessorType`) and `config`
+`processor` (for the `create` fn pointer and `ProcessorType`) and `config`
 (for `KnownFields`). The 163 hardcoded processor-name arms in `config` are
 per-processor knowledge that could not be expressed on the plugin entry, so
 they landed in `config`, which therefore must know the registry, which must

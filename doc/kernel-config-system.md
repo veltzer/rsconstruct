@@ -110,7 +110,7 @@ say "ruff requires Python being configured".
 
 Real value if there are >50 config knobs and users get lost. With
 ~20 processors at one section each, our "knob count" is small enough
-that menuconfig is overkill. `processors config <name>` already shows
+that menuconfig is overkill. `processor config <name>` already shows
 each processor's effective config.
 
 ### Reading 3 — `oldconfig`-style reconciliation

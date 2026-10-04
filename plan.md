@@ -93,7 +93,7 @@ Everything with fewer than ten repos is in the per-stage tables below.
 
 | Item | Status | Notes |
 |---|---|---|
-| `is_rust` flag on every plugin, shown by `processors list` and `status` | done | 2026-09-21 |
+| `is_rust` flag on every plugin, shown by `processor list` and `status` | done | 2026-09-21 |
 | Fleet usage + coverage script (below) checked in as `scripts/rust_coverage.py` | todo | Prints the two baseline tables; run before and after every stage |
 | Coverage number in the log at the bottom, updated per stage | todo | |
 
@@ -215,7 +215,7 @@ easy to find and easy to choose.
 ## Measuring
 
 Until the script is checked in, this is what produced the baseline. It reads
-`rsconstruct --json processors list` and every `rsconstruct.toml` under
+`rsconstruct --json processor list` and every `rsconstruct.toml` under
 `~/git`.
 
 ```python
