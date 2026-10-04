@@ -220,7 +220,7 @@ analyzers whose scanner returns a [`ScanResult`] (deps + config-hash piece)
 rather than just deps. The existing C/C++/Python/markdown analyzers
 continue to use the simpler `analyze_with_scanner`.
 
-**Runtime evaluation (the rendered-output path)** — `src/processors/generators/tera.rs`
+**Runtime evaluation (the rendered-output path)** — `src/processor/generator/tera.rs`
 registers two functions on the Tera engine:
 
 - `glob(pattern="...")` — runs the same expansion the analyzer did and
@@ -249,9 +249,9 @@ content. A richer cache could be added later if profiling demands it.
 - `src/analyzers/mod.rs` — added `ScanResult` and `analyze_with_full_scanner`.
 - `src/analyzers/tera.rs` — replaced `scan_includes` with `scan_template`,
   which handles all five constructs; added `expand_glob` helper.
-- `src/processors/generators/tera.rs` — added `GlobFunction`; tightened
+- `src/processor/generator/tera.rs` — added `GlobFunction`; tightened
   `ShellOutputFunction` to require `depends_on`.
-- `tests/processors/tera.rs` — 8 new tests covering count, add/remove/rename
+- `tests/processor/tera.rs` — 8 new tests covering count, add/remove/rename
   invalidation, missing `depends_on` rejection, content-change invalidation,
   command-edit invalidation, and empty-glob handling.
 

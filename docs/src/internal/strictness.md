@@ -89,7 +89,7 @@ pub struct ProcessorPlugin {
     pub name: &'static str,
     /// Processor type. Declared by every plugin but not yet queried by any
     /// runtime code path — kept as plugin metadata so future features
-    /// (e.g. `processors list --type=checker`) can filter without touching
+    /// (e.g. `processor list --type=checker`) can filter without touching
     /// every registration.
     #[allow(dead_code)]
     pub processor_type: ProcessorType,
@@ -97,7 +97,7 @@ pub struct ProcessorPlugin {
 }
 ```
 
-**Why kept**: Every `inventory::submit!` for a processor declares a type (`Checker`, `Generator`, `Creator`, `Explicit`). The runtime currently reads `processor_type()` from the `Processor` trait, never from the plugin. But the static plugin metadata is the right place for filtering features like `rsconstruct processors list --type=checker`. Removing the field now would mean adding 93 `processor_type: ...` lines back later when we want the filter.
+**Why kept**: Every `inventory::submit!` for a processor declares a type (`Checker`, `Generator`, `Creator`, `Explicit`). The runtime currently reads `processor_type()` from the `Processor` trait, never from the plugin. But the static plugin metadata is the right place for filtering features like `rsconstruct processor list --type=checker`. Removing the field now would mean adding 93 `processor_type: ...` lines back later when we want the filter.
 
 **When to remove**: never, once the first feature queries it. Until then, the allow is the cheap price of preserving optionality.
 

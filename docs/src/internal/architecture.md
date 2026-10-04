@@ -6,14 +6,14 @@ This page describes RSConstruct's internal design for contributors and those int
 
 ### Processors
 
-Processors implement the `Processor` trait (`src/processors/mod.rs`). Each processor:
+Processors implement the `Processor` trait (`src/processor/mod.rs`). Each processor:
 
 1. **Auto-detects** whether it is relevant for the current project
 2. Scans the project for source files matching its conventions
 3. Creates **products** describing what to build
 4. Executes the build for each product
 
-Run `rsconstruct processors list` to see all available processors and their auto-detection results.
+Run `rsconstruct processor list` to see all available processors and their auto-detection results.
 
 ### Auto-detection
 
@@ -39,7 +39,7 @@ Both `auto_detect` and `discover` receive a `&FileIndex` — a pre-built index o
 Detection heuristics are per-processor filesystem checks (e.g. `ruff`
 detects when the project contains `.py` files, `cargo` when it contains
 `Cargo.toml`). The authoritative, always-current list is
-`rsconstruct processors list`, which shows every processor together with its
+`rsconstruct processor list`, which shows every processor together with its
 auto-detection result for the current project.
 
 ### Products
@@ -95,7 +95,7 @@ don't have valid cache entries:
 ## Interrupt handling
 
 External subprocess execution goes through the runner family in
-`src/processors/mod.rs` — `run_command()`, `run_command_capture()`,
+`src/processor/mod.rs` — `run_command()`, `run_command_capture()`,
 `run_command_with_timeout()`, `run_command_with_stdin()` — which share one
 inner implementation. It spawns children via `tokio::process::Command`
 with `kill_on_drop(true)` and then awaits a biased `tokio::select!` racing
@@ -290,10 +290,10 @@ For each product:
 
 ## Processor source layout
 
-All processor code lives under `src/processors/`. The folder structure mirrors processor type:
+All processor code lives under `src/processor/`. The folder structure mirrors processor type:
 
 ```
-src/processors/
+src/processor/
 ├── mod.rs          # Processor trait, shared helpers (run_command, run_checker,
 │                   # SimpleChecker, SimpleGenerator, ProcessorBase, …)
 ├── checkers/       # One file per checker (ruff.rs, pylint.rs, cppcheck.rs, …)
@@ -314,7 +314,7 @@ src/processors/
 
 ### Conventions
 
-- **Every file in `src/processors/` is a real single processor** — no utility-only files anywhere in the tree. Shared helpers live in `mod.rs` or `generators/mod.rs`; processor-specific data tables (e.g. the requirements generator's stdlib list) live in the processor's own file. The tool registry (`src/tools.rs`) and build statistics (`src/stats.rs`) live at the crate root for this reason.
+- **Every file in `src/processor/` is a real single processor** — no utility-only files anywhere in the tree. Shared helpers live in `mod.rs` or `generators/mod.rs`; processor-specific data tables (e.g. the requirements generator's stdlib list) live in the processor's own file. The tool registry (`src/tools.rs`) and build statistics (`src/stats.rs`) live at the crate root for this reason.
 - **Checkers** use `SimpleChecker` (data-driven, no boilerplate) or implement `Processor` directly for checkers with custom discovery logic (e.g., `clippy`, `script`).
 - **Generators** use `SimpleGenerator` (data-driven with a custom `execute_fn`) or `GeneratorProcessor` for the generic pass-through generator.
 - **Creators** use `CreatorProcessor` for the generic case, or their own struct for creators with special discovery (cargo profiles, npm siblings, etc.).

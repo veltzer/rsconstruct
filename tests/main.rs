@@ -42,7 +42,7 @@ mod tools;
 #[path = "tests_mod/watch.rs"]
 mod watch;
 
-mod processors {
+mod processor {
     pub mod a2x;
     pub mod actionlint;
     pub mod ascii;
@@ -134,7 +134,7 @@ fn every_test_file_is_registered() {
     let mut missing: Vec<String> = Vec::new();
     for (dir, prefix) in [
         ("tests/tests_mod", "tests_mod"),
-        ("tests/processors", "processors"),
+        ("tests/processor", "processor"),
     ] {
         for entry in std::fs::read_dir(dir).unwrap() {
             let path = entry.unwrap().path();

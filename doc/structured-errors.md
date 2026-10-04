@@ -19,7 +19,7 @@ Draft — awaiting review. This is a multi-week feature, not a single-PR change.
 
 ## What's there today
 
-- Errors are flat strings. `check_command_output` (`src/processors/mod.rs:261`)
+- Errors are flat strings. `check_command_output` (`src/processor/mod.rs:261`)
   builds a multi-line string from `stderr` + `stdout` + a context label
   and bubbles it up via `anyhow::bail!`.
 - The executor collects them into a `Vec<String>` (`shared.failed_messages`,

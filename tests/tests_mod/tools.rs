@@ -7,7 +7,7 @@ fn tools_list_shows_all_registry_tools() {
     let project_path = temp_dir.path();
 
     // `tools list` shows the central registry regardless of config, like
-    // `processors list`. It lists tools no processor in this project needs.
+    // `processor list`. It lists tools no processor in this project needs.
     let output = run_rsconstruct_with_env(project_path, &["tools", "list"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),

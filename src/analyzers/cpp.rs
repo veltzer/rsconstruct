@@ -13,7 +13,7 @@ use crate::config::CppAnalyzerConfig;
 use crate::deps_cache::DepsCache;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{check_command_output, format_command, run_command_capture};
+use crate::processor::{check_command_output, format_command, run_command_capture};
 
 use super::DepAnalyzer;
 

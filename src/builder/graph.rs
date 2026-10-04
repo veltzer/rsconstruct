@@ -2,7 +2,7 @@ use super::Builder;
 use crate::cli::{GraphAction, GraphFormat, GraphViewer};
 use crate::color;
 use crate::json_output;
-use crate::processors::log_command;
+use crate::processor::log_command;
 use anyhow::{Context, Result};
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
@@ -77,7 +77,7 @@ impl Builder {
                 // Check if dot is available
                 let mut dot_check_cmd = Command::new("dot");
                 dot_check_cmd.arg("-V");
-                let dot_check = crate::processors::run_command_capture(ctx, &dot_check_cmd);
+                let dot_check = crate::processor::run_command_capture(ctx, &dot_check_cmd);
                 if dot_check.map_or(true, |o| !o.status.success()) {
                     anyhow::bail!(
                         "Graphviz 'dot' command not found. Install Graphviz or use --view=mermaid"
@@ -95,7 +95,7 @@ impl Builder {
                 // Convert to SVG
                 let mut dot_cmd = Command::new("dot");
                 dot_cmd.arg("-Tsvg").arg(&dot_path).arg("-o").arg(&svg_path);
-                let output = crate::processors::run_command_capture(ctx, &dot_cmd)
+                let output = crate::processor::run_command_capture(ctx, &dot_cmd)
                     .context("Failed to run dot command")?;
 
                 if !output.status.success() {

@@ -3,7 +3,7 @@
 Goal: everything rsconstruct can do can be done with a Rust-based processor,
 either native inside rsconstruct or an external executable written in Rust.
 The measure is the `rust` flag on each processor (`is_rust` on the plugin,
-shown by `rsconstruct processors list` and `rsconstruct status`, added
+shown by `rsconstruct processor list` and `rsconstruct status`, added
 2026-09-21): the plan is done when every capability has at least one
 processor reporting `rust: true`, and every capability without one is in
 the "inherently not Rust" list below with a reason.
@@ -74,9 +74,9 @@ Everything with fewer than ten repos is in the per-stage tables below.
   and nothing else changes for anyone using it. Whether a repo switches is
   that repo's decision.
 - **A processor is one file** (CLAUDE.md). Each new processor is: the file
-  under `src/processors/<category>/`, its `inventory::submit!` entry with
-  `is_rust: true`, a docs page under `docs/src/processors/<type>/`, a test file
-  under `tests/processors/`, and, for a wrapper, a `ToolInfo` entry so
+  under `src/processor/<category>/`, its `inventory::submit!` entry with
+  `is_rust: true`, a docs page under `docs/src/processor/<type>/`, a test file
+  under `tests/processor/`, and, for a wrapper, a `ToolInfo` entry so
   `tools install` knows how to get the binary. The completeness tests enforce
   the touch-points.
 - **Say what the Rust option covers.** Before a row is `done`, run the
@@ -186,8 +186,8 @@ easy to find and easy to choose.
 | Item | Status | Notes |
 |---|---|---|
 | Docs page of every non-Rust processor names its Rust alternative(s) | todo | One line per page, added as each Stage 1-3 row lands; the page otherwise stays as it is |
-| `rsconstruct processors list` shows the Rust alternative | todo | A `Rust alternative` column or a `--rust` filter; whichever reads better in the table. The JSON gains a `rust_alternatives` array |
-| `rsconstruct processors recommend` prefers the Rust option where one exists | todo | The recommendation table already maps extensions to processors; where both exist, list the Rust one first and the other as "also" |
+| `rsconstruct processor list` shows the Rust alternative | todo | A `Rust alternative` column or a `--rust` filter; whichever reads better in the table. The JSON gains a `rust_alternatives` array |
+| `rsconstruct processor recommend` prefers the Rust option where one exists | todo | The recommendation table already maps extensions to processors; where both exist, list the Rust one first and the other as "also" |
 | Per-repo switching stays a per-repo decision | won't do | No rsmultigit sweep, no deprecation. A repo owner who wants the Rust path edits its `rsconstruct.toml`; the coverage script's usage column shows the uptake, nothing enforces it |
 
 ## How to work an item
@@ -199,10 +199,10 @@ easy to find and easy to choose.
    install methods), then the processor file, `is_rust: true`.
    For a native: the processor file over the crate, `is_native: true`,
    `is_rust: true`; the `native_processors_are_rust` test enforces the pair.
-3. Docs page under `docs/src/processors/<type>/`, test file under
-   `tests/processors/`; `cargo nextest run` must be green with the tool
+3. Docs page under `docs/src/processor/<type>/`, test file under
+   `tests/processor/`; `cargo nextest run` must be green with the tool
    installed (tests never skip).
-4. `rsconstruct processors defconfig <name>` shows every config field; if
+4. `rsconstruct processor defconfig <name>` shows every config field; if
    the new processor needs a config file of its own (selene's `selene.toml`,
    say), a fleet-shared default goes into rsmultigit's shared set so a repo
    that opts in gets a working one.

@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::errors;
-use crate::processors::{check_command_output, run_command_capture};
+use crate::processor::{check_command_output, run_command_capture};
 
 /// Remote cache backend trait
 pub trait RemoteCache: Send + Sync {

@@ -195,7 +195,7 @@ fn scan_template_recursive(
     let quoted_str_re = QUOTED_STR_RE
         .get_or_init(|| Regex::new(r#"["']([^"']+)["']"#).expect(errors::INVALID_REGEX));
 
-    let source_dir = crate::processors::parent_dir(source);
+    let source_dir = crate::processor::parent_dir(source);
 
     // 1) include/import/extends and load_*. For include/import/extends, also
     // recurse into the included template so its glob/shell_output/git_count
@@ -395,7 +395,7 @@ fn scan_template_recursive(
 fn git_ls_files(ctx: &crate::build_context::BuildContext, pattern: &str) -> Vec<String> {
     let mut cmd = std::process::Command::new("git");
     cmd.args(["ls-files", "--", pattern]);
-    let output = match crate::processors::run_command_capture(ctx, &cmd) {
+    let output = match crate::processor::run_command_capture(ctx, &cmd) {
         Ok(o) if o.status.success() => o,
         _ => return Vec::new(),
     };

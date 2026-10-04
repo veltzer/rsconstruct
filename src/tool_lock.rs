@@ -7,7 +7,7 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::build_context::BuildContext;
-use crate::processors::ProcessorMap;
+use crate::processor::ProcessorMap;
 
 pub const LOCK_FILE: &str = ".tools.versions";
 const LOCK_VERSION: u32 = 1;
@@ -48,7 +48,7 @@ pub fn query_tool_version(
         cmd.arg(arg);
     }
 
-    let output = crate::processors::run_command_capture(ctx, &cmd).with_context(|| {
+    let output = crate::processor::run_command_capture(ctx, &cmd).with_context(|| {
         format!(
             "Failed to run: {} {}",
             path.display(),

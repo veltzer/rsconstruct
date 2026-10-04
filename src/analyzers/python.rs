@@ -102,7 +102,7 @@ impl PythonDepAnalyzer {
         let module_path = module.replace('.', "/");
 
         // Get the directory containing the source file
-        let source_dir = crate::processors::parent_dir(source);
+        let source_dir = crate::processor::parent_dir(source);
 
         // Try various resolution strategies:
         // 1. Relative to source file: source_dir/module.py

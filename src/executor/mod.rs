@@ -16,7 +16,7 @@ use crate::display::DisplayOptions;
 use crate::errors;
 use crate::graph::BuildGraph;
 use crate::object_store::{ExplainAction, ObjectStore};
-use crate::processors::ProcessorMap;
+use crate::processor::ProcessorMap;
 use crate::stats::ProcessStats;
 
 /// Result of the per-item skip/restore pre-check.

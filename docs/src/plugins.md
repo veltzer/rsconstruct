@@ -49,8 +49,8 @@ src_extensions = [".js", ".ts"]
 
 ```sh
 rsconstruct build            # builds including the plugin
-rsconstruct processors list   # shows the plugin
-rsconstruct processors files  # shows files discovered by the plugin
+rsconstruct processor list   # shows the plugin
+rsconstruct processor files  # shows files discovered by the plugin
 ```
 
 ## Lua API Contract
@@ -231,7 +231,7 @@ The plugin name is derived from the `.lua` filename (without extension). This na
 - The `[processor.NAME]` config section
 - The `[processor.NAME]` config section in `rsconstruct.toml`
 - The `out/NAME/` stub directory
-- Display in `rsconstruct processors list` and build output
+- Display in `rsconstruct processor list` and build output
 
 A plugin name must not conflict with a built-in processor name (`tera`, `ruff`, `pylint`, `cc_single_file`, `cppcheck`, `shellcheck`, `zspell`, `make`). RSConstruct will error if a conflict is detected.
 

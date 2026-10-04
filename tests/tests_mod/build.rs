@@ -709,12 +709,12 @@ src_extensions = [".txt"]
     // as a virtual file.
     let output = run_rsconstruct_with_env(
         project_path,
-        &["--json", "processors", "files"],
+        &["--json", "processor", "files"],
         &[("NO_COLOR", "1")],
     );
     assert!(
         output.status.success(),
-        "processors files failed: {}",
+        "processor files failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
@@ -780,12 +780,12 @@ src_dirs = ["."]
 
     let output = run_rsconstruct_with_env(
         project_path,
-        &["--json", "processors", "files"],
+        &["--json", "processor", "files"],
         &[("NO_COLOR", "1")],
     );
     assert!(
         output.status.success(),
-        "processors files failed: {}",
+        "processor files failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
@@ -884,15 +884,15 @@ src_extensions = [".txt"]
         "out/generated/ should not exist before discovery"
     );
 
-    // Run discovery via processors files (JSON)
+    // Run discovery via processor files (JSON)
     let output = run_rsconstruct_with_env(
         project_path,
-        &["--json", "processors", "files"],
+        &["--json", "processor", "files"],
         &[("NO_COLOR", "1")],
     );
     assert!(
         output.status.success(),
-        "processors files failed: {}",
+        "processor files failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
@@ -1922,7 +1922,7 @@ src_dirs = ["out/gen"]
     // Discovery only: the check runs after the fixed-point loop, so this is
     // exactly where a false "missing" would surface.
     let output =
-        run_rsconstruct_with_env(project_path, &["processors", "files"], &[("NO_COLOR", "1")]);
+        run_rsconstruct_with_env(project_path, &["processor", "files"], &[("NO_COLOR", "1")]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         output.status.success(),
@@ -2008,7 +2008,7 @@ src_files = ["out/gen/a.md"]
     .unwrap();
     assert!(!project_path.join("out/gen/a.md").exists());
     let output =
-        run_rsconstruct_with_env(project_path, &["processors", "files"], &[("NO_COLOR", "1")]);
+        run_rsconstruct_with_env(project_path, &["processor", "files"], &[("NO_COLOR", "1")]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         output.status.success(),
@@ -2033,12 +2033,12 @@ fn src_files_alone_matches_only_the_named_files() {
     .unwrap();
     let output = run_rsconstruct_with_env(
         project_path,
-        &["--json", "processors", "files"],
+        &["--json", "processor", "files"],
         &[("NO_COLOR", "1")],
     );
     assert!(
         output.status.success(),
-        "processors files failed: {}",
+        "processor files failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);

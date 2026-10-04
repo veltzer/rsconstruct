@@ -129,7 +129,7 @@ impl IcppDepAnalyzer {
             Regex::new(r#"^\s*#\s*include\s*(["<])([^>"]+)[>"]"#).expect(errors::INVALID_REGEX)
         });
 
-        let parent = crate::processors::parent_dir_or_empty(source);
+        let parent = crate::processor::parent_dir_or_empty(source);
         let mut deps = Vec::new();
         for line in content.lines() {
             if let Some(caps) = re.captures(line) {

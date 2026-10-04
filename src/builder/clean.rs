@@ -143,7 +143,7 @@ impl Builder {
         let mut cmd = Command::new("git");
         cmd.args(["clean", "-qffxd"]);
         let output =
-            crate::processors::run_command_capture(ctx, &cmd).context("Failed to run git clean")?;
+            crate::processor::run_command_capture(ctx, &cmd).context("Failed to run git clean")?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -189,7 +189,7 @@ impl Builder {
         // Get git-tracked files
         let mut cmd = Command::new("git");
         cmd.args(["ls-files", "--cached"]);
-        let output = crate::processors::run_command_capture(ctx, &cmd)
+        let output = crate::processor::run_command_capture(ctx, &cmd)
             .context("Failed to run git ls-files")?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);

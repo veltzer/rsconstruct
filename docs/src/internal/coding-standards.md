@@ -38,7 +38,7 @@ consistently:
 | Artifact | Convention | Example (`clang_tidy`) |
 |---|---|---|
 | Name constant | `pub const UPPER: &str = "name";` in `processors::names` | `CLANG_TIDY: &str = "clang_tidy"` |
-| Source file | `src/processors/checkers/{name}.rs` or `generators/{name}.rs` | `checkers/clang_tidy.rs` |
+| Source file | `src/processor/checker/{name}.rs` or `generators/{name}.rs` | `checkers/clang_tidy.rs` |
 | Processor struct | `{PascalCase}Processor` | `ClangTidyProcessor` |
 | Config struct | `{PascalCase}Config` | `ClangTidyConfig` |
 | Field on `ProcessorConfig` | `pub {name}: {PascalCase}Config` | `pub clang_tidy: ClangTidyConfig` |
@@ -49,7 +49,7 @@ consistently:
 | Entry in `src_dirs()` | `&self.{name}.scan` | `&self.clang_tidy.scan` |
 | Entry in `resolve_scan_defaults()` | `self.{name}.scan.resolve(...)` | `self.clang_tidy.scan.resolve(...)` |
 | Registration in `create_builtin_processors()` | `Builder::register(..., proc_names::UPPER, {PascalCase}Processor::new(cfg.{name}.clone()))` | `Builder::register(..., proc_names::CLANG_TIDY, ClangTidyProcessor::new(cfg.clang_tidy.clone()))` |
-| Re-export in `processors/mod.rs` | `pub use checkers::{PascalCase}Processor` | `pub use checkers::ClangTidyProcessor` |
+| Re-export in `processor/mod.rs` | `pub use checker::{PascalCase}Processor` | `pub use checker::ClangTidyProcessor` |
 | Install command in `tool_install_command()` | `"{tool}" => Some("...")` | `"clang-tidy" => Some("apt install clang-tidy")` |
 
 When adding a new processor, use the identity string everywhere. Do not
@@ -68,11 +68,11 @@ construction can fail, defer the failure to `execute()` or `discover()`.
 
 ## Processor directory layout
 
-Each processor category directory (`src/processors/checkers/`,
-`src/processors/generators/`, `src/processors/creators/`) must contain
+Each processor category directory (`src/processor/checker/`,
+`src/processor/generator/`, `src/processor/creator/`) must contain
 only processor implementation files — one processor per `.rs` file (plus
 `mod.rs`). Shared utilities, helpers, or supporting code used by multiple
-processors must live in `src/processors/` directly, not inside a category
+processors must live in `src/processor/` directly, not inside a category
 subdirectory. This keeps each category directory a flat, scannable list of
 processors.
 
@@ -246,9 +246,9 @@ should be able to tell which audience the document is for:
   `docs/src/configuration.md`, `docs/src/commands.md`.
 - **Maintainer chapters live under `docs/src/internal/`** — e.g.
   `docs/src/internal/architecture.md`, `docs/src/internal/cache.md`.
-- **Per-processor reference docs live under `docs/src/processors/<type>/`**
-  — one subdirectory per processor type (`checkers`, `generators`,
-  `creators`, `explicit`, `mass_generators`), each with a `README.md`
+- **Per-processor reference docs live under `docs/src/processor/<type>/`**
+  — one subdirectory per processor type (`checker`, `generator`,
+  `creator`, `explicit`, `mass_generator`), each with a `README.md`
   introducing the type.
   These are user-facing (they document how to configure each processor).
 
@@ -261,7 +261,7 @@ When cross-referencing:
 
 - Inside `internal/` → link to sibling files directly (``[X](other.md)``).
 - From a top-level doc to an internal doc → ``[X](internal/other.md)``.
-- From `processors/` to an internal doc → ``[X](../internal/other.md)``.
+- From `processor/` to an internal doc → ``[X](../internal/other.md)``.
 - From `internal/` to a user-facing doc → ``[X](../other.md)``.
 
 This rule is enforced by convention, not by tooling. Reviewers should

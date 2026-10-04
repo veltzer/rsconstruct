@@ -23,40 +23,40 @@ args = ["--disable=C0114"]
 
 Only declared processors run — no processors are enabled by default. Use `rsconstruct smart auto` to auto-detect and add relevant processors.
 
-Use `rsconstruct processors list` to see declared processors and descriptions.
-Use `rsconstruct processors list --all` to show all built-in processors, not just those enabled in the project.
-Use `rsconstruct processors files` to see which files each processor discovers.
+Use `rsconstruct processor list` to see declared processors and descriptions.
+Use `rsconstruct processor list --all` to show all built-in processors, not just those enabled in the project.
+Use `rsconstruct processor files` to see which files each processor discovers.
 
 ## Available Processors
 
-- [Tera](processors/generators/tera.md) — renders Tera templates into output files
-- [Ruff](processors/checkers/ruff.md) — lints Python files with ruff
-- [Pylint](processors/checkers/pylint.md) — lints Python files with pylint
-- [Mypy](processors/checkers/mypy.md) — type-checks Python files with mypy
-- [Pyrefly](processors/checkers/pyrefly.md) — type-checks Python files with pyrefly
-- [CC](processors/creators/cc.md) — builds full C/C++ projects from cc.yaml manifests
-- [CC Single File](processors/generators/cc_single_file.md) — compiles C/C++ source files into executables (single-file)
-- [Linux Module](processors/creators/linux_module.md) — builds Linux kernel modules from linux-module.yaml manifests
-- [Cppcheck](processors/checkers/cppcheck.md) — runs static analysis on C/C++ source files
-- [Clang-Tidy](processors/checkers/clang_tidy.md) — runs clang-tidy static analysis on C/C++ source files
-- [Shellcheck](processors/checkers/shellcheck.md) — lints shell scripts using shellcheck
-- [Zspell](processors/checkers/zspell.md) — checks documentation files for spelling errors
-- [Rumdl](processors/checkers/rumdl.md) — lints Markdown files with rumdl
-- [Oxlint](processors/checkers/oxlint.md) — lints JavaScript/TypeScript files with oxlint
-- [Biome](processors/checkers/biome.md) — lints CSS/JavaScript/TypeScript/JSON files with biome
-- [Make](processors/checkers/make.md) — runs make in directories containing Makefiles
-- [Cargo](processors/creators/cargo.md) — builds Rust projects using Cargo
-- [Yamllint](processors/checkers/yamllint.md) — lints YAML files with yamllint
-- [Jq](processors/checkers/jq.md) — validates JSON files with jq
-- [Jsonlint](processors/checkers/jsonlint.md) — lints JSON files with jsonlint
-- [Taplo](processors/checkers/taplo.md) — checks TOML files with taplo
-- [Terms](processors/checkers/terms.md) — checks that technical terms are backtick-quoted in Markdown files
-- [Json Schema](processors/checkers/json_schema.md) — validates JSON schema propertyOrdering
-- [Iyamlschema](processors/checkers/iyamlschema.md) — validates YAML files against JSON schemas (native)
-- [Yaml2json](processors/generators/yaml2json.md) — converts YAML files to JSON (native)
-- [Markdown2html](processors/generators/markdown2html.md) — converts Markdown to HTML using markdown CLI
-- [Imarkdown2html](processors/generators/imarkdown2html.md) — converts Markdown to HTML (native)
-- [Mass Generator](processors/mass_generators/mass_generator.md) — runs a tool that enumerates its outputs in advance, one cached product per predicted file
+- [Tera](processor/generator/tera.md) — renders Tera templates into output files
+- [Ruff](processor/checker/ruff.md) — lints Python files with ruff
+- [Pylint](processor/checker/pylint.md) — lints Python files with pylint
+- [Mypy](processor/checker/mypy.md) — type-checks Python files with mypy
+- [Pyrefly](processor/checker/pyrefly.md) — type-checks Python files with pyrefly
+- [CC](processor/creator/cc.md) — builds full C/C++ projects from cc.yaml manifests
+- [CC Single File](processor/generator/cc_single_file.md) — compiles C/C++ source files into executables (single-file)
+- [Linux Module](processor/creator/linux_module.md) — builds Linux kernel modules from linux-module.yaml manifests
+- [Cppcheck](processor/checker/cppcheck.md) — runs static analysis on C/C++ source files
+- [Clang-Tidy](processor/checker/clang_tidy.md) — runs clang-tidy static analysis on C/C++ source files
+- [Shellcheck](processor/checker/shellcheck.md) — lints shell scripts using shellcheck
+- [Zspell](processor/checker/zspell.md) — checks documentation files for spelling errors
+- [Rumdl](processor/checker/rumdl.md) — lints Markdown files with rumdl
+- [Oxlint](processor/checker/oxlint.md) — lints JavaScript/TypeScript files with oxlint
+- [Biome](processor/checker/biome.md) — lints CSS/JavaScript/TypeScript/JSON files with biome
+- [Make](processor/checker/make.md) — runs make in directories containing Makefiles
+- [Cargo](processor/creator/cargo.md) — builds Rust projects using Cargo
+- [Yamllint](processor/checker/yamllint.md) — lints YAML files with yamllint
+- [Jq](processor/checker/jq.md) — validates JSON files with jq
+- [Jsonlint](processor/checker/jsonlint.md) — lints JSON files with jsonlint
+- [Taplo](processor/checker/taplo.md) — checks TOML files with taplo
+- [Terms](processor/checker/terms.md) — checks that technical terms are backtick-quoted in Markdown files
+- [Json Schema](processor/checker/json_schema.md) — validates JSON schema propertyOrdering
+- [Iyamlschema](processor/checker/iyamlschema.md) — validates YAML files against JSON schemas (native)
+- [Yaml2json](processor/generator/yaml2json.md) — converts YAML files to JSON (native)
+- [Markdown2html](processor/generator/markdown2html.md) — converts Markdown to HTML using markdown CLI
+- [Imarkdown2html](processor/generator/imarkdown2html.md) — converts Markdown to HTML (native)
+- [Mass Generator](processor/mass_generator/mass_generator.md) — runs a tool that enumerates its outputs in advance, one cached product per predicted file
 
 ## Output Directory Caching
 

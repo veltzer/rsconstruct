@@ -1,9 +1,0 @@
-mod cargo;
-mod cc;
-mod creator;
-mod gem;
-mod jekyll;
-mod mdbook;
-mod npm;
-mod pip;
-mod sphinx;

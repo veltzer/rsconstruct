@@ -186,63 +186,63 @@ impl KnownFields for CheckerConfig {
 /// Alias for `CheckerConfig` (used by `SimpleChecker`).
 pub type CheckerConfigWithCommand = CheckerConfig;
 
-// CreatorConfig lives in src/processors/creators/creator.rs.
+// CreatorConfig lives in src/processor/creator/creator.rs.
 
-// TeraConfig lives in src/processors/generators/tera.rs.
+// TeraConfig lives in src/processor/generator/tera.rs.
 
-// MakoConfig lives in src/processors/generators/mako.rs.
+// MakoConfig lives in src/processor/generator/mako.rs.
 
-// Jinja2Config lives in src/processors/generators/jinja2.rs.
+// Jinja2Config lives in src/processor/generator/jinja2.rs.
 
-// PandocConfig (and PANDOC_PDF_ENGINES) live in src/processors/generators/pandoc.rs.
+// PandocConfig (and PANDOC_PDF_ENGINES) live in src/processor/generator/pandoc.rs.
 
 pub type MarpImagesConfig = CheckerConfig;
 
 // CcSingleFileConfig (and IncludeScanner/CompilerProfile) live in
-// src/processors/generators/cc_single_file.rs.
+// src/processor/generator/cc_single_file.rs.
 
-// CcConfig (and the cc.yaml manifest types) live in src/processors/creators/cc.rs.
+// CcConfig (and the cc.yaml manifest types) live in src/processor/creator/cc.rs.
 
 // LinuxModuleConfig (and the linux-module.yaml manifest types) live in
-// src/processors/generators/linux_module.rs.
+// src/processor/generator/linux_module.rs.
 
-// ZspellConfig lives in src/processors/checkers/zspell.rs.
+// ZspellConfig lives in src/processor/checker/zspell.rs.
 
-// CargoConfig lives in src/processors/creators/cargo.rs.
+// CargoConfig lives in src/processor/creator/cargo.rs.
 
-// MakeConfig lives in src/processors/checkers/make.rs.
+// MakeConfig lives in src/processor/checker/make.rs.
 
 pub type JsonSchemaConfig = CheckerConfig;
 
-// TagsConfig lives in src/processors/generators/tags.rs.
+// TagsConfig lives in src/processor/generator/tags.rs.
 
-// ScriptConfig lives in src/processors/checkers/script.rs.
+// ScriptConfig lives in src/processor/checker/script.rs.
 
-// GeneratorConfig lives in src/processors/generators/generator.rs.
+// GeneratorConfig lives in src/processor/generator/generator.rs.
 
-// ExplicitConfig lives in src/processors/explicit/explicit.rs.
+// ExplicitConfig lives in src/processor/explicit/explicit.rs.
 
-// PipConfig lives in src/processors/creators/pip.rs.
+// PipConfig lives in src/processor/creator/pip.rs.
 
-// RequirementsConfig lives in src/processors/generators/requirements.rs.
+// RequirementsConfig lives in src/processor/generator/requirements.rs.
 
-// SphinxConfig lives in src/processors/creators/sphinx.rs.
+// SphinxConfig lives in src/processor/creator/sphinx.rs.
 
-// MdbookConfig lives in src/processors/creators/mdbook.rs.
+// MdbookConfig lives in src/processor/creator/mdbook.rs.
 
-// NpmConfig lives in src/processors/creators/npm.rs.
+// NpmConfig lives in src/processor/creator/npm.rs.
 
-// MdlConfig lives in src/processors/checkers/mdl.rs.
+// MdlConfig lives in src/processor/checker/mdl.rs.
 
-// MarkdownlintConfig lives in src/processors/checkers/markdownlint.rs.
+// MarkdownlintConfig lives in src/processor/checker/markdownlint.rs.
 
 pub type AsciiConfig = CheckerConfig;
 
-// TermsConfig lives in src/processors/checkers/terms.rs.
+// TermsConfig lives in src/processor/checker/terms.rs.
 
-// PdflatexConfig lives in src/processors/generators/pdflatex.rs.
+// PdflatexConfig lives in src/processor/generator/pdflatex.rs.
 
-// GemConfig lives in src/processors/creators/gem.rs.
+// GemConfig lives in src/processor/creator/gem.rs.
 
 pub type IjqConfig = CheckerConfig;
 
@@ -252,11 +252,11 @@ pub type IyamllintConfig = CheckerConfig;
 
 pub type ItaploConfig = CheckerConfig;
 
-// RustSingleFileConfig lives in src/processors/generators/rust_single_file.rs.
+// RustSingleFileConfig lives in src/processor/generator/rust_single_file.rs.
 
-// PdfuniteConfig lives in src/processors/generators/pdfunite.rs.
+// PdfuniteConfig lives in src/processor/generator/pdfunite.rs.
 
-// IpdfuniteConfig lives in src/processors/generators/ipdfunite.rs.
+// IpdfuniteConfig lives in src/processor/generator/ipdfunite.rs.
 
 // --- tidy (HTML validator) ---
 
@@ -300,4 +300,4 @@ pub type DuplicateFilesConfig = CheckerConfig;
 // --- marp_images (validate image references in Marp presentations) ---
 
 // --- license_header (verify license headers in source files) ---
-// LicenseHeaderConfig lives in src/processors/checkers/license_header.rs.
+// LicenseHeaderConfig lives in src/processor/checker/license_header.rs.

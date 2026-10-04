@@ -39,7 +39,7 @@ Compute a SHA of the rsconstruct binary itself at program start. Mix that hash i
 
 `build.rs` hashes each processor's `.rs` file at compile time. The hash is embedded as a `&'static str` into that processor's plugin entry. Cache key includes this hash.
 
-**How it works:** Modify `src/processors/checkers/ruff.rs`, next build picks up a new hash, ruff's caches invalidate. Other processors are unaffected.
+**How it works:** Modify `src/processor/checker/ruff.rs`, next build picks up a new hash, ruff's caches invalidate. Other processors are unaffected.
 
 **Pros:**
 - Zero developer action — hashes are automatic.
@@ -48,13 +48,13 @@ Compute a SHA of the rsconstruct binary itself at program start. Mix that hash i
 
 **Cons:**
 - **Too sensitive.** Whitespace changes, comment fixes, rustfmt reformats, renames of private helpers — all invalidate the cache even though behavior is identical.
-- **Doesn't catch indirect changes.** If a processor calls shared helpers in `processors/mod.rs` and those change, the processor's file hash hasn't changed but its behavior has. We need to hash transitive dependencies, and Rust doesn't give us an easy way.
+- **Doesn't catch indirect changes.** If a processor calls shared helpers in `processor/mod.rs` and those change, the processor's file hash hasn't changed but its behavior has. We need to hash transitive dependencies, and Rust doesn't give us an easy way.
 - **Non-deterministic sources of churn:** different rustfmt versions produce different hashes for the same intent, CI vs. local editor differences cause spurious invalidation.
 - **Signal dilution:** users stop paying attention to "this rebuilt" because it happens even for cosmetic changes. The signal loses meaning.
 
-### Option C: Whole `src/processors/` subtree hash
+### Option C: Whole `src/processor/` subtree hash
 
-Hash the entire processors directory at compile time. Any change to anything under `src/processors/` invalidates every processor's cache.
+Hash the entire processors directory at compile time. Any change to anything under `src/processor/` invalidates every processor's cache.
 
 **How it works:** Middle ground between A and B.
 

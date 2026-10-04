@@ -375,14 +375,14 @@ fn package_installed(
 ) -> bool {
     let mut cmd = Command::new(program);
     cmd.args(args);
-    crate::processors::run_command_capture(ctx, &cmd).is_ok_and(|o| o.status.success())
+    crate::processor::run_command_capture(ctx, &cmd).is_ok_and(|o| o.status.success())
 }
 
 /// Try to get the version string of a tool by running `tool --version`.
 fn tool_version(ctx: &crate::build_context::BuildContext, tool: &str) -> Option<String> {
     let mut cmd = Command::new(tool);
     cmd.arg("--version");
-    let output = crate::processors::run_command_capture(ctx, &cmd).ok()?;
+    let output = crate::processor::run_command_capture(ctx, &cmd).ok()?;
     if !output.status.success() {
         return None;
     }

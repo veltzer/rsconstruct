@@ -25,7 +25,7 @@ use super::{
 /// Compute the effective `max_jobs` for a processor instance. The config
 /// field is capped by the plugin's static `max_jobs_cap`; `None` on either
 /// side means no limit on that side.
-fn effective_max_jobs(name: &str, proc: &dyn crate::processors::Processor) -> Option<usize> {
+fn effective_max_jobs(name: &str, proc: &dyn crate::processor::Processor) -> Option<usize> {
     let plugin = crate::registries::processor::find_plugin(name);
     let user_set = proc.scan_config().max_jobs;
     let static_cap = plugin.and_then(|p| p.max_jobs_cap);
@@ -40,7 +40,7 @@ fn effective_max_jobs(name: &str, proc: &dyn crate::processors::Processor) -> Op
 /// Compute the effective `supports_batch` for a processor instance: the
 /// plugin's static capability flag must be true, AND the user config must
 /// request batching.
-fn effective_supports_batch(name: &str, proc: &dyn crate::processors::Processor) -> bool {
+fn effective_supports_batch(name: &str, proc: &dyn crate::processor::Processor) -> bool {
     let plugin_ok =
         crate::registries::processor::find_plugin(name).is_some_and(|p| p.supports_batch);
     plugin_ok && proc.scan_config().batch
@@ -567,7 +567,7 @@ impl Executor<'_> {
             let mut final_results: Vec<Option<anyhow::Result<()>>> =
                 (0..chunk.len()).map(|_| None).collect();
             let mut pending: Vec<usize> = (0..chunk.len()).collect();
-            crate::processors::set_declared_tools(Some(processor.required_tools()));
+            crate::processor::set_declared_tools(Some(processor.required_tools()));
             for attempt in 1..=max_attempts {
                 let refs: Vec<&crate::graph::Product> =
                     pending.iter().map(|&i| product_refs[i]).collect();
@@ -616,7 +616,7 @@ impl Executor<'_> {
                     break;
                 }
             }
-            crate::processors::set_declared_tools(None);
+            crate::processor::set_declared_tools(None);
             let batch_duration = batch_start.elapsed();
             if let Some(sem) = semaphore {
                 sem.release();
@@ -761,7 +761,7 @@ impl Executor<'_> {
                 let product_start = Instant::now();
                 let mut last_error = None;
                 let max_attempts = 1 + self.retry;
-                crate::processors::set_declared_tools(Some(processor.required_tools()));
+                crate::processor::set_declared_tools(Some(processor.required_tools()));
                 for attempt in 1..=max_attempts {
                     match processor.execute(self.build_ctx, product) {
                         Ok(()) => {
@@ -836,7 +836,7 @@ impl Executor<'_> {
                     let duration = product_start.elapsed();
                     self.handle_error(&ctx, e, Some(duration));
                 }
-                crate::processors::set_declared_tools(None);
+                crate::processor::set_declared_tools(None);
                 Self::inc_progress(lctx.pb, lctx.shared);
             }
 

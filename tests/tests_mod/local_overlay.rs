@@ -190,7 +190,7 @@ fn local_overlay_adds_sections() {
 
     // Both overlay sections merged: the [build] value is visible in the
     // merged config, and the added processor section is a known instance.
-    let cfg = run_rsconstruct(project, &["processors", "config", "zspell"]);
+    let cfg = run_rsconstruct(project, &["processor", "config", "zspell"]);
     assert!(
         cfg.status.success(),
         "overlay-added [processor.zspell] should exist in the merged config: {}",
@@ -208,10 +208,10 @@ fn local_overlay_field_wins_over_main() {
     )
     .unwrap();
 
-    let output = run_rsconstruct(project, &["processors", "config", "tera"]);
+    let output = run_rsconstruct(project, &["processor", "config", "tera"]);
     assert!(
         output.status.success(),
-        "processors config failed: {}",
+        "processor config failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);

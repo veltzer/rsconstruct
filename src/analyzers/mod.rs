@@ -12,7 +12,7 @@ mod tera;
 use crate::deps_cache::DepsCache;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::{format_command, run_command_capture};
+use crate::processor::{format_command, run_command_capture};
 use anyhow::Result;
 use indicatif::ProgressBar;
 use std::collections::HashSet;

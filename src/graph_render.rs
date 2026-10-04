@@ -13,7 +13,7 @@ use anyhow::Result;
 
 use crate::errors;
 use crate::graph::{BuildGraph, Product};
-use crate::processors::names as proc_names;
+use crate::processor::names as proc_names;
 
 impl BuildGraph {
     /// Generate a safe node ID from a path
@@ -295,7 +295,7 @@ impl BuildGraph {
 
     /// Generate SVG by piping DOT through the `dot` command.
     pub fn to_svg(&self, ctx: &crate::build_context::BuildContext) -> Result<String> {
-        crate::processors::dot_to_svg(ctx, &self.to_dot())
+        crate::processor::dot_to_svg(ctx, &self.to_dot())
     }
 
     /// Generate a self-contained HTML file with Mermaid diagram

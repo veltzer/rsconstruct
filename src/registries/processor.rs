@@ -8,7 +8,7 @@ use anyhow::Result;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use crate::processors::{Processor, ProcessorType};
+use crate::processor::{Processor, ProcessorType};
 
 /// A processor plugin. One struct for all processor types.
 /// Each processor file submits one of these via `inventory::submit!`.
@@ -56,7 +56,7 @@ pub struct ProcessorPlugin {
     /// Return the default config as pretty JSON. Receives the processor name
     /// so it can apply the correct defaults.
     pub defconfig_json: fn(&str) -> Option<String>,
-    /// Search keywords for `processors search`.
+    /// Search keywords for `processor search`.
     pub keywords: &'static [&'static str],
     /// Human-readable description (static, no instantiation needed).
     pub description: &'static str,
@@ -67,7 +67,7 @@ pub struct ProcessorPlugin {
     /// when the tool it runs is (ruff, taplo, rumdl, clippy, cargo, mdbook,
     /// pyrefly, rustc). Processors that run a user-supplied command (script,
     /// explicit, generator, creator) are `false`: the language is unknown.
-    /// Shown by `processors list` and `status` so the language of the toolchain
+    /// Shown by `processor list` and `status` so the language of the toolchain
     /// can be read off the table.
     pub is_rust: bool,
     /// Whether this processor has fix capability (`rsconstruct fix`).
@@ -103,8 +103,8 @@ pub fn description_of(name: &str) -> &'static str {
 }
 
 /// Return the processor type for a processor by instance name, or `Checker` if unknown.
-pub fn processor_type_of(name: &str) -> crate::processors::ProcessorType {
-    find_plugin(name).map_or(crate::processors::ProcessorType::Checker, |p| {
+pub fn processor_type_of(name: &str) -> crate::processor::ProcessorType {
+    find_plugin(name).map_or(crate::processor::ProcessorType::Checker, |p| {
         p.processor_type
     })
 }

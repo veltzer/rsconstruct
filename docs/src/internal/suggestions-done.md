@@ -30,23 +30,23 @@ Items from `suggestions.md` that have been implemented.
 ## Completed New Processors
 
 - **mypy** — Python type checking using `mypy`. Batch-capable. Config: `checker`, `args`, `dep_inputs`, `scan`.
-- **yamllint** — Lint YAML files using `yamllint`. `src/processors/checkers/yamllint.rs`.
-- **jsonlint** — Validate JSON files for syntax errors. `src/processors/checkers/jsonlint.rs`.
-- **taplo (toml-lint)** — Validate TOML files using `taplo`. `src/processors/checkers/taplo.rs`.
+- **yamllint** — Lint YAML files using `yamllint`. `src/processor/checker/yamllint.rs`.
+- **jsonlint** — Validate JSON files for syntax errors. `src/processor/checker/jsonlint.rs`.
+- **taplo (toml-lint)** — Validate TOML files using `taplo`. `src/processor/checker/taplo.rs`.
 - **markdownlint** — Lint Markdown files for structural issues. Uses `mdl` or `markdownlint-cli`.
 - **pandoc** — Convert Markdown to other formats (PDF, HTML, EPUB). Generator processor.
-- **jinja2** — Render Jinja2 templates (`.j2`) via Python jinja2 library. `src/processors/generators/jinja2.rs`.
-- **black** — Python formatting verification using `black --check`. `src/processors/checkers/black.rs`.
-- **rust_single_file** — Compile single-file Rust programs to executables. `src/processors/generators/rust_single_file.rs`.
-- **sass** — Compile SCSS/SASS files to CSS. `src/processors/generators/sass.rs`.
-- **protobuf** — Compile `.proto` files to generated code using `protoc`. `src/processors/generators/protobuf.rs`.
-- **pytest** — Run Python test files with pytest. `src/processors/checkers/pytest.rs`.
-- **doctest** — Run Python doctests via `python3 -m doctest`. `src/processors/checkers/doctest.rs`.
+- **jinja2** — Render Jinja2 templates (`.j2`) via Python jinja2 library. `src/processor/generator/jinja2.rs`.
+- **black** — Python formatting verification using `black --check`. `src/processor/checker/black.rs`.
+- **rust_single_file** — Compile single-file Rust programs to executables. `src/processor/generator/rust_single_file.rs`.
+- **sass** — Compile SCSS/SASS files to CSS. `src/processor/generator/sass.rs`.
+- **protobuf** — Compile `.proto` files to generated code using `protoc`. `src/processor/generator/protobuf.rs`.
+- **pytest** — Run Python test files with pytest. `src/processor/checker/pytest.rs`.
+- **doctest** — Run Python doctests via `python3 -m doctest`. `src/processor/checker/doctest.rs`.
 
 ## Completed Test Coverage
 
-- **Ruff/pylint processor tests** — `tests/processors/ruff.rs` and `tests/processors/pylint.rs` with integration tests.
-- **Make processor tests** — `tests/processors/make.rs` with Makefile discovery and execution tests.
+- **Ruff/pylint processor tests** — `tests/processor/ruff.rs` and `tests/processor/pylint.rs` with integration tests.
+- **Make processor tests** — `tests/processor/make.rs` with Makefile discovery and execution tests.
 - **All generator processor tests** — Integration tests for all 14 previously untested generators: a2x, drawio, gem, libreoffice, markdown, marp, mermaid, npm, pandoc, pdflatex, pdfunite, pip, sphinx.
 - **All checker processor tests** — Integration tests for all 5 previously untested checkers: ascii, aspell, markdownlint, mdbook, mdl.
 
@@ -80,7 +80,7 @@ Items from `suggestions.md` that have been implemented.
 - **Global `output_dir` in `[build]`** — Global output directory prefix (default: `"out"`). Processor defaults like `out/marp` are remapped when the global is changed (e.g., `output_dir = "build"` makes marp output to `build/marp`). Individual processors can still override their `output_dir` explicitly.
 - **Named processor instance output directories** — When multiple instances of the same processor are declared (e.g., `[processor.marp.slides]` and `[processor.marp.docs]`), each instance defaults to `out/{instance_name}` (e.g., `out/marp.slides`, `out/marp.docs`) instead of sharing the same output directory.
 - **Named processor instance names in error reporting** — When multiple instances of the same processor exist, error messages, build progress, and statistics use the full instance name (e.g., `[pylint.core]`, `[pylint.tests]`). Single instances continue to use just the processor type name.
-- **`processors config` without config file** — `rsconstruct processors config <name>` now works without an `rsconstruct.toml`, showing the default configuration (same as `defconfig`).
+- **`processor config` without config file** — `rsconstruct processor config <name>` now works without an `rsconstruct.toml`, showing the default configuration (same as `defconfig`).
 - **`tags collect` command** — `rsconstruct tags collect` scans the tags database for tags that are not in the tag collection (`tags_dir`) and adds them to the appropriate `.txt` files. Key:value tags go to `{key}.txt`, bare tags go to `tags.txt`.
 - **`rsconstruct status` shows 0-file processors** — Processors declared in the config that match no files are now shown in `status` output and the `--breakdown` summary, making it easy to spot misconfigured or unnecessary processors.
 - **`smart remove-no-file-processors`** — New command `rsconstruct smart remove-no-file-processors` removes `[processor.*]` sections from `rsconstruct.toml` for processors that don't match any files. Handles both single and named instances.
@@ -99,11 +99,11 @@ Items from `suggestions.md` that have been implemented.
 
 - **`rsconstruct status --json`** — JSON output with per-processor counts (`up_to_date`, `restorable`, `stale`, `new`, `total`, `native`) and totals. Activated by `--json` flag.
 - **Selective processor cleaning** — `rsconstruct clean outputs -p ruff,pylint` cleans only those processors' outputs. Without `-p`, cleans everything.
-- **Prettier processor** — Checker using `prettier --check`. Batch-capable. Scans `.js/.jsx/.ts/.tsx/.mjs/.cjs/.css/.scss/.less/.html/.json/.md/.yaml/.yml`. `src/processors/checkers/prettier.rs`.
+- **Prettier processor** — Checker using `prettier --check`. Batch-capable. Scans `.js/.jsx/.ts/.tsx/.mjs/.cjs/.css/.scss/.less/.html/.json/.md/.yaml/.yml`. `src/processor/checker/prettier.rs`.
 - **Bare `clean` requires subcommand** — `rsconstruct clean` now errors with usage hint instead of silently defaulting to `clean outputs`.
 - **Nondeterministic test race fix** — Fixed TOCTOU race in `store_descriptor` where parallel writers could get `Permission denied`. Now retries after forcing writable on first failure.
 - **Suppress status line for non-build commands** — The `Exited with SUCCESS/ERROR` footer only shows for `build`, `watch`, and `clean`.
 - **Configurable graph validation** — Four checks run after `resolve_dependencies()`: (1) reject empty inputs (default on), (2) validate dep references (default on), (3) detect duplicate inputs within same processor (default off), (4) early cycle detection (default off). Config: `[graph]` section fields `validate_empty_inputs`, `validate_dep_references`, `validate_duplicate_inputs`, `validate_early_cycles`.
 - **Checksum globals moved to BuildContext** — `CACHE`, `MTIME_DB`, `MTIME_ENABLED` moved from `src/checksum.rs` statics into `BuildContext`. `combined_input_checksum`, `checksum_fast`, `file_checksum` all take `&BuildContext`. Completes the isolated-build-context story.
-- **`rsconstruct fix` command** — Runs fixers (auto-format, auto-fix) on source files. Checkers declare fix capability via `fix_subcommand`/`fix_prepend_args` on `SimpleCheckerParams`. `processors list` shows a `Fix` column. Supports `-p` filtering, batch execution, and `--json`. Fix-capable processors: ruff, black, prettier, eslint, stylelint, standard, taplo, rumdl, markdownlint.
-- **`processors search`** — `rsconstruct processors search <query>` searches by name, description, and keywords. All 91 processors have keywords covering language, tool category, file extensions, and ecosystem terms. Supports `--json` output.
+- **`rsconstruct fix` command** — Runs fixers (auto-format, auto-fix) on source files. Checkers declare fix capability via `fix_subcommand`/`fix_prepend_args` on `SimpleCheckerParams`. `processor list` shows a `Fix` column. Supports `-p` filtering, batch execution, and `--json`. Fix-capable processors: ruff, black, prettier, eslint, stylelint, standard, taplo, rumdl, markdownlint.
+- **`processor search`** — `rsconstruct processor search <query>` searches by name, description, and keywords. All 91 processors have keywords covering language, tool category, file extensions, and ecosystem terms. Supports `--json` output.

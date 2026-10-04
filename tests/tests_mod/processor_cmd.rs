@@ -11,10 +11,10 @@ fn processors_list_shows_declared() {
     let project_path = temp_dir.path();
 
     let output =
-        run_rsconstruct_with_env(project_path, &["processors", "list"], &[("NO_COLOR", "1")]);
+        run_rsconstruct_with_env(project_path, &["processor", "list"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
-        "processors list failed: {}",
+        "processor list failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
@@ -37,12 +37,12 @@ fn processors_files_shows_products() {
 
     let output = run_rsconstruct_with_env(
         project_path,
-        &["processors", "files", "--headers"],
+        &["processor", "files", "--headers"],
         &[("NO_COLOR", "1")],
     );
     assert!(
         output.status.success(),
-        "processors files failed: {}",
+        "processor files failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
@@ -64,7 +64,7 @@ fn processors_files_no_files_message() {
 
     // No template files written, so no products
     let output =
-        run_rsconstruct_with_env(project_path, &["processors", "files"], &[("NO_COLOR", "1")]);
+        run_rsconstruct_with_env(project_path, &["processor", "files"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -82,7 +82,7 @@ fn processors_files_unknown_processor_fails() {
 
     let output = run_rsconstruct_with_env(
         project_path,
-        &["processors", "files", "nonexistent"],
+        &["processor", "files", "nonexistent"],
         &[("NO_COLOR", "1")],
     );
     assert!(
@@ -104,15 +104,15 @@ fn processors_list_shows_descriptions() {
     let project_path = temp_dir.path();
 
     let output =
-        run_rsconstruct_with_env(project_path, &["processors", "list"], &[("NO_COLOR", "1")]);
+        run_rsconstruct_with_env(project_path, &["processor", "list"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
-        "processors list failed: {}",
+        "processor list failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // processors list shows processors in a table
+    // processor list shows processors in a table
     assert!(stdout.contains("tera"), "Expected tera processor");
 }
 
@@ -131,12 +131,12 @@ fn processors_files_json_output() {
 
     let output = run_rsconstruct_with_env(
         project_path,
-        &["--json", "processors", "files"],
+        &["--json", "processor", "files"],
         &[("NO_COLOR", "1")],
     );
     assert!(
         output.status.success(),
-        "processors files --json failed: {}",
+        "processor files --json failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
@@ -174,7 +174,7 @@ fn processors_files_json_empty() {
     // No template files written, so no products
     let output = run_rsconstruct_with_env(
         project_path,
-        &["--json", "processors", "files"],
+        &["--json", "processor", "files"],
         &[("NO_COLOR", "1")],
     );
     assert!(output.status.success());
@@ -196,12 +196,12 @@ fn processors_list_works_without_config() {
 
     let output = run_rsconstruct_with_env(
         temp_dir.path(),
-        &["processors", "list"],
+        &["processor", "list"],
         &[("NO_COLOR", "1")],
     );
     assert!(
         output.status.success(),
-        "processors list should work without rsconstruct.toml: {}",
+        "processor list should work without rsconstruct.toml: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
@@ -214,7 +214,7 @@ fn processors_list_works_without_config() {
     );
 }
 
-/// `processors list` reports whether each processor's implementation is
+/// `processor list` reports whether each processor's implementation is
 /// written in Rust: every native one is, and an external one is only when
 /// its tool is (ruff yes, pylint no). Checked through the JSON form, which
 /// is what scripts read, and the table header, which is what people read.
@@ -224,12 +224,12 @@ fn processors_list_reports_rust() {
 
     let output = run_rsconstruct_with_env(
         temp_dir.path(),
-        &["--json", "processors", "list"],
+        &["--json", "processor", "list"],
         &[("NO_COLOR", "1")],
     );
     assert!(
         output.status.success(),
-        "processors list --json failed: {}",
+        "processor list --json failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -240,7 +240,7 @@ fn processors_list_reports_rust() {
         entries
             .iter()
             .find(|e| e["name"] == name)
-            .unwrap_or_else(|| panic!("no '{name}' entry in processors list --json"))
+            .unwrap_or_else(|| panic!("no '{name}' entry in processor list --json"))
     };
     assert_eq!(by_name("tera")["native"], true);
     assert_eq!(by_name("tera")["rust"], true);
@@ -265,13 +265,13 @@ fn processors_list_reports_rust() {
 
     let table = run_rsconstruct_with_env(
         temp_dir.path(),
-        &["processors", "list"],
+        &["processor", "list"],
         &[("NO_COLOR", "1")],
     );
     let table_out = String::from_utf8_lossy(&table.stdout);
     assert!(
         table_out.contains("Rust"),
-        "processors list table should have a Rust column: {table_out}"
+        "processor list table should have a Rust column: {table_out}"
     );
 }
 
@@ -367,12 +367,12 @@ fn processors_list_json() {
 
     let output = run_rsconstruct_with_env(
         project_path,
-        &["--json", "processors", "list"],
+        &["--json", "processor", "list"],
         &[("NO_COLOR", "1")],
     );
     assert!(
         output.status.success(),
-        "processors list --json failed: {}",
+        "processor list --json failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
@@ -423,12 +423,12 @@ fn processors_list_all_json_without_config() {
 
     let output = run_rsconstruct_with_env(
         temp_dir.path(),
-        &["--json", "processors", "list"],
+        &["--json", "processor", "list"],
         &[("NO_COLOR", "1")],
     );
     assert!(
         output.status.success(),
-        "processors list --json failed: {}",
+        "processor list --json failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 

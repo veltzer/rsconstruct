@@ -72,10 +72,10 @@ With `--keep-going`, batch-capable processors group all their products into a si
 The `-p` flag supports `@`-prefixed shortcuts that expand to groups of processors:
 
 **By type:**
-- `@checkers` — all checker processors (ruff, pylint, shellcheck, etc.)
-- `@generators` — all generator processors (tera, cc_single_file, etc.)
-- `@creators` — all creator processors (pip, npm, cargo, etc.)
-- `@mass_generators` — all mass generator processors
+- `@checker` — all checker processors (ruff, pylint, shellcheck, etc.)
+- `@generator` — all generator processors (tera, cc_single_file, etc.)
+- `@creator` — all creator processors (pip, npm, cargo, etc.)
+- `@mass_generator` — all mass generator processors
 - `@lua` — all Lua plugin processors
 
 **By tool:**
@@ -89,10 +89,10 @@ The `-p` flag supports `@`-prefixed shortcuts that expand to groups of processor
 Examples:
 
 ```bash
-rsconstruct build -p @checkers              # Run only checker processors
-rsconstruct build -p @generators            # Run only generator processors
+rsconstruct build -p @checker              # Run only checker processors
+rsconstruct build -p @generator            # Run only generator processors
 rsconstruct build -p @python3               # Run all Python-based processors
-rsconstruct build -p @checkers,tera         # Mix shortcuts with processor names
+rsconstruct build -p @checker,tera         # Mix shortcuts with processor names
 ```
 
 The `--stop-after` flag allows stopping the build at a specific phase:
@@ -370,7 +370,7 @@ rsconstruct smart reset                  # Remove all processor sections
 rsconstruct smart remove-no-file-processors  # Remove processors that don't match any files (skips enabled = false)
 ```
 
-## `rsconstruct processors`
+## `rsconstruct processor`
 
 | Subcommand | Config required? |
 |------------|-----------------|
@@ -384,23 +384,23 @@ rsconstruct smart remove-no-file-processors  # Remove processors that don't matc
 | `graph` | Yes |
 
 ```bash
-rsconstruct processors list              # List declared processors and descriptions
-rsconstruct processors list -a           # Show all built-in processors
-rsconstruct processors list -v           # ...with descriptions
-rsconstruct --json processors list       # Same list as JSON
-rsconstruct processors files             # Show source and target files for each declared processor
-rsconstruct processors files ruff        # Show files for a specific processor
-rsconstruct processors files              # Show files for enabled processors
-rsconstruct processors config ruff       # Show resolved configuration for a processor
-rsconstruct processors config --diff     # Show only fields that differ from defaults
-rsconstruct processors defconfig ruff    # Show default configuration for a processor
-rsconstruct processors add ruff          # Append [processor.ruff] to rsconstruct.toml (fields pre-populated + comments)
-rsconstruct processors add ruff --dry-run  # Preview the snippet without writing
-rsconstruct processors allowlist         # Show the current processor allowlist
-rsconstruct processors graph             # Show inter-processor dependencies
-rsconstruct processors graph --format dot    # Graphviz DOT format
-rsconstruct processors graph --format mermaid # Mermaid format
-rsconstruct processors files --headers   # Show files with processor headers
+rsconstruct processor list              # List declared processors and descriptions
+rsconstruct processor list -a           # Show all built-in processors
+rsconstruct processor list -v           # ...with descriptions
+rsconstruct --json processor list       # Same list as JSON
+rsconstruct processor files             # Show source and target files for each declared processor
+rsconstruct processor files ruff        # Show files for a specific processor
+rsconstruct processor files              # Show files for enabled processors
+rsconstruct processor config ruff       # Show resolved configuration for a processor
+rsconstruct processor config --diff     # Show only fields that differ from defaults
+rsconstruct processor defconfig ruff    # Show default configuration for a processor
+rsconstruct processor add ruff          # Append [processor.ruff] to rsconstruct.toml (fields pre-populated + comments)
+rsconstruct processor add ruff --dry-run  # Preview the snippet without writing
+rsconstruct processor allowlist         # Show the current processor allowlist
+rsconstruct processor graph             # Show inter-processor dependencies
+rsconstruct processor graph --format dot    # Graphviz DOT format
+rsconstruct processor graph --format mermaid # Mermaid format
+rsconstruct processor files --headers   # Show files with processor headers
 ```
 
 `list` prints one row per processor with its type and three flags: `Native`

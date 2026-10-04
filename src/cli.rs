@@ -212,7 +212,7 @@ pub enum Commands {
         action: PagesAction,
     },
     /// Manage processors
-    Processors {
+    Processor {
         #[command(subcommand)]
         action: ProcessorAction,
     },
@@ -793,7 +793,7 @@ pub struct SharedBuildArgs {
     pub processors: Option<Vec<String>>,
 
     /// Exclude specific processors by instance name (comma-separated list).
-    /// Mirrors `-p` and accepts the same shortcuts (e.g. `@checkers`, `@python3`).
+    /// Mirrors `-p` and accepts the same shortcuts (e.g. `@checker`, `@python3`).
     /// When combined with `-p`, excludes are subtracted from the included set;
     /// a processor appearing in both is an error.
     #[arg(short = 'x', long = "exclude-processors", value_delimiter = ',')]
@@ -942,7 +942,7 @@ pub fn parse_cli() -> Cli {
 
 /// Generate shell completions and print to stdout.
 /// Post-processes the generated script to inject processor name completions
-/// for `processors config`, `processors defconfig`, and `processors files`.
+/// for `processor config`, `processor defconfig`, and `processor files`.
 pub fn print_completions(shell: Shell) -> Result<()> {
     let script = generate_completion_script(shell)?;
     print!("{script}");
@@ -966,15 +966,15 @@ fn generate_completion_script(shell: Shell) -> Result<String> {
 
 /// Inject processor/analyzer completion into a bash completion script.
 ///
-/// - `processors config`, `processors files`, `processors delete`, `processors disable`,
-///   `processors enable` complete with **processor instance names** (inames) from
+/// - `processor config`, `processor files`, `processor delete`, `processor disable`,
+///   `processor enable` complete with **processor instance names** (inames) from
 ///   `rsconstruct.toml`.
 /// - `analyzers delete`, `analyzers disable`, `analyzers enable` complete with **analyzer
 ///   instance names** (inames) from `rsconstruct.toml`.
 /// - `--processors` / `-p` flags in `build`/`watch` complete with **instance
 ///   names** (inames) from `rsconstruct.toml` — you can only build a processor
 ///   that is declared in the project.
-/// - `processors defconfig` is handled automatically by clap via `#[arg(value_parser = ...)]`.
+/// - `processor defconfig` is handled automatically by clap via `#[arg(value_parser = ...)]`.
 ///
 /// Errors if any injection point is not found in the script — clap-complete
 /// controls the script format, so a miss means its output changed and the
@@ -1033,11 +1033,11 @@ _rsconstruct_fixer_inames() {
     // Replace instance-name targets to call _rsconstruct_inames at tab time.
     // For each target section, replace the early-return COMPREPLY with a call to our helper.
     let iname_targets = [
-        ("rsconstruct__subcmd__processors__subcmd__files)", 3),
-        ("rsconstruct__subcmd__processors__subcmd__config)", 3),
-        ("rsconstruct__subcmd__processors__subcmd__delete)", 3),
-        ("rsconstruct__subcmd__processors__subcmd__disable)", 3),
-        ("rsconstruct__subcmd__processors__subcmd__enable)", 3),
+        ("rsconstruct__subcmd__processor__subcmd__files)", 3),
+        ("rsconstruct__subcmd__processor__subcmd__config)", 3),
+        ("rsconstruct__subcmd__processor__subcmd__delete)", 3),
+        ("rsconstruct__subcmd__processor__subcmd__disable)", 3),
+        ("rsconstruct__subcmd__processor__subcmd__enable)", 3),
     ];
 
     // Failed injections must be reported: silently shipping completions
@@ -1101,7 +1101,7 @@ _rsconstruct_fixer_inames() {
         }
     }
 
-    // Inject completion for --processors/-p in build/watch: inames only,
+    // Inject completion for --processor/-p in build/watch: inames only,
     // read from rsconstruct.toml at tab time via _rsconstruct_inames. You can
     // only build a processor that is declared in the project.
     let old_processors =
@@ -1174,8 +1174,8 @@ mod tests {
     /// The bash iname injection locates its patch points in `clap_complete`'s
     /// generated script by exact string matching. clap-complete owns that
     /// format and has changed it before (case labels went from
-    /// `rsconstruct__processors__files` to
-    /// `rsconstruct__subcmd__processors__subcmd__files`). Round-trip the real
+    /// `rsconstruct__processor__files` to
+    /// `rsconstruct__subcmd__processor__subcmd__files`). Round-trip the real
     /// generated script through the injection so any future format change
     /// fails here instead of surfacing when a user sources their completions.
     #[test]

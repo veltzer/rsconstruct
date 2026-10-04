@@ -1,7 +1,7 @@
 //! External tool registry and installation engine.
 //!
 //! Lives at the crate root because nothing here depends on the `Processor`
-//! trait, and every file under `src/processors/` must be a real processor.
+//! trait, and every file under `src/processor/` must be a real processor.
 //! This is the data and the mechanics of "what tools exist and how do we
 //! install them", which `builder/tools.rs` orchestrates on top of.
 
@@ -303,7 +303,7 @@ pub fn installed_cargo_crates(
     use anyhow::Context as _;
     let mut cmd = std::process::Command::new("cargo");
     cmd.args(["install", "--list"]);
-    let out = crate::processors::run_command_capture(ctx, &cmd)
+    let out = crate::processor::run_command_capture(ctx, &cmd)
         .context("failed to run `cargo install --list` — is cargo installed?")?;
     if !out.status.success() {
         anyhow::bail!(

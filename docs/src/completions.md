@@ -46,7 +46,7 @@ All top-level commands (`build`, `processors`, `analyzers`, `config`, etc.) and 
 
 These commands complete with processor type names from the plugin registry (e.g., `ruff`, `pylint`, `cc_single_file`):
 
-- `rsconstruct processors defconfig <TAB>`
+- `rsconstruct processor defconfig <TAB>`
 - `rsconstruct build --processors <TAB>` / `rsconstruct build -p <TAB>`
 - `rsconstruct watch --processors <TAB>` / `rsconstruct watch -p <TAB>`
 
@@ -56,8 +56,8 @@ The list is drawn from the plugin registry at compile time.
 
 These commands complete with instance names declared in the current project's `rsconstruct.toml` (e.g., `pylint`, `pylint.tests`, `cc_single_file`):
 
-- `rsconstruct processors config <TAB>`
-- `rsconstruct processors files <TAB>`
+- `rsconstruct processor config <TAB>`
+- `rsconstruct processor files <TAB>`
 
 Instance names are extracted from `[processor.NAME]` and `[processor.NAME.SUBNAME]` headings in `rsconstruct.toml` at tab-completion time. Requires a project config in the current directory. Bash only.
 
@@ -97,9 +97,9 @@ This only works for bash. Other shells get the base clap completions without pro
 
 The targets for injection are identified by their case labels in the generated bash script:
 
-- `rsconstruct__processors__config)`
-- `rsconstruct__processors__defconfig)`
-- `rsconstruct__processors__files)`
+- `rsconstruct__processor__config)`
+- `rsconstruct__processor__defconfig)`
+- `rsconstruct__processor__files)`
 
 The function also patches `--processors` / `-p` flag completions in `build` and `watch` commands to suggest processor names instead of file paths.
 

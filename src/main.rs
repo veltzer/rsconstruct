@@ -85,7 +85,7 @@ mod object_store;
 mod output;
 mod phases;
 mod platform;
-mod processors;
+mod processor;
 mod progress;
 mod registries;
 mod remote_cache;
@@ -413,29 +413,29 @@ fn run() -> (Result<()>, bool) {
             Commands::Hooks => {
                 list_hooks(cli.verbose)?;
             }
-            Commands::Processors { action } => {
+            Commands::Processor { action } => {
                 let has_config = std::path::Path::new("rsconstruct.toml").exists();
                 match action {
                     cli::ProcessorAction::List { ref processor_type } => {
-                        builder::processors::list_processors_no_config(
+                        builder::processor::list_processors_no_config(
                             cli.verbose,
                             processor_type.as_deref(),
                         )?;
                     }
                     cli::ProcessorAction::Types => {
-                        builder::processors::list_processor_types(cli.verbose)?;
+                        builder::processor::list_processor_types(cli.verbose)?;
                     }
                     cli::ProcessorAction::Recommend => {
-                        builder::processors::list_recommendations();
+                        builder::processor::list_recommendations();
                     }
                     cli::ProcessorAction::Defconfig { ref pname } => {
-                        builder::processors::processor_defconfig(pname, cli.verbose)?;
+                        builder::processor::processor_defconfig(pname, cli.verbose)?;
                     }
                     cli::ProcessorAction::Add { ref pname, dry_run } => {
                         builder::add_processor(pname, dry_run)?;
                     }
                     cli::ProcessorAction::Search { ref query } => {
-                        builder::processors::search_processors(query)?;
+                        builder::processor::search_processors(query)?;
                     }
                     cli::ProcessorAction::Delete { ref iname } => {
                         builder::smart::delete_processor(iname)?;
@@ -448,7 +448,7 @@ fn run() -> (Result<()>, bool) {
                     }
                     cli::ProcessorAction::Config { .. } if !has_config => {
                         bail!(
-                            "No rsconstruct.toml found. Use 'processors defconfig <name>' to see default config without a project."
+                            "No rsconstruct.toml found. Use 'processor defconfig <name>' to see default config without a project."
                         );
                     }
                     action => {
@@ -534,21 +534,21 @@ fn run() -> (Result<()>, bool) {
             }
             Commands::Terms { action } => {
                 let config = Config::load()?;
-                let terms_config: processors::terms::TermsConfig =
+                let terms_config: processor::terms::TermsConfig =
                     config.processor.instance_config_or_default("terms")?;
                 match action {
                     cli::TermsAction::Fix { remove_non_terms } => {
-                        processors::terms::fix_all(
+                        processor::terms::fix_all(
                             &terms_config,
                             remove_non_terms,
                             config.build.warn_symlinks,
                         )?;
                     }
                     cli::TermsAction::Merge { path } => {
-                        processors::terms::merge_terms(&terms_config, &path)?;
+                        processor::terms::merge_terms(&terms_config, &path)?;
                     }
                     cli::TermsAction::Stats => {
-                        processors::terms::stats(&terms_config)?;
+                        processor::terms::stats(&terms_config)?;
                     }
                 }
             }
@@ -564,45 +564,45 @@ fn run() -> (Result<()>, bool) {
                     .unwrap_or_else(|| "tags".into());
                 match action {
                     cli::TagsAction::Files { tags, or } => {
-                        processors::tags_cmd::files_for_tags(&db_path, &tags, or)?;
+                        processor::tags_cmd::files_for_tags(&db_path, &tags, or)?;
                     }
                     cli::TagsAction::Grep { text, ignore_case } => {
-                        processors::tags_cmd::grep_tags(&db_path, &text, ignore_case)?;
+                        processor::tags_cmd::grep_tags(&db_path, &text, ignore_case)?;
                     }
-                    cli::TagsAction::List => processors::tags_cmd::list_tags(&db_path)?,
-                    cli::TagsAction::Count => processors::tags_cmd::count_tags(&db_path)?,
-                    cli::TagsAction::Tree => processors::tags_cmd::tree_tags(&db_path)?,
-                    cli::TagsAction::Stats => processors::tags_cmd::stats_tags(&db_path)?,
+                    cli::TagsAction::List => processor::tags_cmd::list_tags(&db_path)?,
+                    cli::TagsAction::Count => processor::tags_cmd::count_tags(&db_path)?,
+                    cli::TagsAction::Tree => processor::tags_cmd::tree_tags(&db_path)?,
+                    cli::TagsAction::Stats => processor::tags_cmd::stats_tags(&db_path)?,
                     cli::TagsAction::ForFile { path } => {
-                        processors::tags_cmd::tags_for_file(&db_path, &path)?;
+                        processor::tags_cmd::tags_for_file(&db_path, &path)?;
                     }
                     cli::TagsAction::Frontmatter { path } => {
-                        processors::tags_cmd::frontmatter_for_file(&db_path, &path)?;
+                        processor::tags_cmd::frontmatter_for_file(&db_path, &path)?;
                     }
                     cli::TagsAction::Unused { strict } => {
-                        processors::tags_cmd::unused_tags(&db_path, &tags_dir, strict)?;
+                        processor::tags_cmd::unused_tags(&db_path, &tags_dir, strict)?;
                     }
                     cli::TagsAction::Validate => {
-                        processors::tags_cmd::validate_tags(&db_path, &tags_dir)?;
+                        processor::tags_cmd::validate_tags(&db_path, &tags_dir)?;
                     }
-                    cli::TagsAction::Matrix => processors::tags_cmd::matrix_tags(&db_path)?,
-                    cli::TagsAction::Coverage => processors::tags_cmd::coverage_tags(&db_path)?,
-                    cli::TagsAction::Orphans => processors::tags_cmd::orphan_files(&db_path)?,
+                    cli::TagsAction::Matrix => processor::tags_cmd::matrix_tags(&db_path)?,
+                    cli::TagsAction::Coverage => processor::tags_cmd::coverage_tags(&db_path)?,
+                    cli::TagsAction::Orphans => processor::tags_cmd::orphan_files(&db_path)?,
                     cli::TagsAction::Check => {
-                        let tags_config: processors::tags_cmd::TagsConfig =
+                        let tags_config: processor::tags_cmd::TagsConfig =
                             config.processor.instance_config_or_default("tags")?;
-                        processors::tags_cmd::check_tags(&tags_config, config.build.warn_symlinks)?;
+                        processor::tags_cmd::check_tags(&tags_config, config.build.warn_symlinks)?;
                     }
                     cli::TagsAction::Suggest { path } => {
-                        let tags_config: processors::tags_cmd::TagsConfig =
+                        let tags_config: processor::tags_cmd::TagsConfig =
                             config.processor.instance_config_or_default("tags")?;
-                        processors::tags_cmd::suggest_tags(&db_path, &path, &tags_config)?;
+                        processor::tags_cmd::suggest_tags(&db_path, &path, &tags_config)?;
                     }
                     cli::TagsAction::Merge { path } => {
-                        processors::tags_cmd::merge_tags(&tags_dir, &path)?;
+                        processor::tags_cmd::merge_tags(&tags_dir, &path)?;
                     }
                     cli::TagsAction::Collect => {
-                        processors::tags_cmd::collect_tags(&db_path, &tags_dir)?;
+                        processor::tags_cmd::collect_tags(&db_path, &tags_dir)?;
                     }
                 }
             }
@@ -631,7 +631,7 @@ fn run() -> (Result<()>, bool) {
             }
             Commands::Functions { action } => {
                 use cli::FunctionsAction;
-                use processors::generators::tera::TERA_FUNCTIONS;
+                use processor::generator::tera::TERA_FUNCTIONS;
                 match action {
                     FunctionsAction::List => {
                         if json_output::is_json_mode() {

@@ -78,7 +78,7 @@ natural.
 ## Ecosystem
 
 ### Richer plugin SDK
-Lua plugins exist (`src/processors/lua/`). A documented, versioned plugin API
+Lua plugins exist (`src/processor/lua/`). A documented, versioned plugin API
 plus a plugin registry/marketplace would let the community add processors
 without forking.
 

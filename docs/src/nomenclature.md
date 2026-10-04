@@ -6,13 +6,13 @@ This page defines the terminology used throughout RSConstruct's code, configurat
 
 | Term | Definition |
 |---|---|
-| **pname** | Processor name. The type name of a processor as registered by its plugin (e.g., `ruff`, `pip`, `tera`, `creator`). Unique across all plugins. Used in `[processor.PNAME]` config sections and in `processors defconfig PNAME`. |
-| **iname** | Instance name. The name of a specific processor instance as declared in `rsconstruct.toml`. For single-instance processors, the iname equals the pname (e.g., `[processor.ruff]` → iname is `ruff`). For multi-instance processors, the iname is the sub-key (e.g., `[processor.creator.venv]` → iname is `creator.venv`). Used in `processors config INAME`. |
+| **pname** | Processor name. The type name of a processor as registered by its plugin (e.g., `ruff`, `pip`, `tera`, `creator`). Unique across all plugins. Used in `[processor.PNAME]` config sections and in `processor defconfig PNAME`. |
+| **iname** | Instance name. The name of a specific processor instance as declared in `rsconstruct.toml`. For single-instance processors, the iname equals the pname (e.g., `[processor.ruff]` → iname is `ruff`). For multi-instance processors, the iname is the sub-key (e.g., `[processor.creator.venv]` → iname is `creator.venv`). Used in `processor config INAME`. |
 | **processor** | A configured instance that discovers products and executes builds. Created from a plugin + TOML config. Immutable after creation. |
 | **plugin** | A factory registered at compile time via `inventory::submit!`. Knows how to create processors from TOML config. Has a pname, a processor type, and config metadata. |
 | **native processor** | A processor implemented in pure Rust inside rsconstruct; it needs no external tool. Examples: `tera`, `ijsonlint`, `encoding`. Declared with `is_native: true` on the plugin. |
 | **external processor** | A processor that runs another program to do its work. Examples: `ruff`, `pylint`, `tidy`. |
-| **rust** (processor flag) | Whether the code that does the work is written in Rust: true for every native processor, and for an external one only when its tool is written in Rust (`ruff`, `taplo`, `rumdl`, `clippy`, `cargo`, `mdbook`, `pyrefly`, `rustc`). Declared with `is_rust` on the plugin; shown by `processors list` and `status`. Processors that run a user-supplied command report false. |
+| **rust** (processor flag) | Whether the code that does the work is written in Rust: true for every native processor, and for an external one only when its tool is written in Rust (`ruff`, `taplo`, `rumdl`, `clippy`, `cargo`, `mdbook`, `pyrefly`, `rustc`). Declared with `is_rust` on the plugin; shown by `processor list` and `status`. Processors that run a user-supplied command report false. |
 | **product** | A single build unit with inputs, outputs, and a processor. The atomic unit of incremental building. |
 | **processor type** | One of four categories: `checker`, `generator`, `creator`, `explicit`. Determines how inputs are discovered, how outputs are declared, and how results are cached. See [Processor Types](processor-types.md). |
 | **analyzer** | A dependency scanner that runs after product discovery to add extra input edges to existing products (e.g., the `cpp` analyzer adds every `#include`d header as an extra input of a C/C++ product). Analyzers never create products of their own. Declared with `[analyzer.NAME]` sections in `rsconstruct.toml`. Unlike processors, only analyzers explicitly declared in config run — there is no "auto-enable" default. See [Dependency Analyzers](analyzers.md). |
@@ -55,8 +55,8 @@ This page defines the terminology used throughout RSConstruct's code, configurat
 
 | Command | Name parameter | Meaning |
 |---|---|---|
-| `processors defconfig PNAME` | pname | Processor type name — shows factory defaults |
-| `processors config [INAME]` | iname | Instance name from config — shows resolved config |
-| `processors files [INAME]` | iname | Instance name from config — shows discovered files |
+| `processor defconfig PNAME` | pname | Processor type name — shows factory defaults |
+| `processor config [INAME]` | iname | Instance name from config — shows resolved config |
+| `processor files [INAME]` | iname | Instance name from config — shows discovered files |
 | `analyzers defconfig [NAME]` | analyzer name | Analyzer name from the analyzer registry — shows factory defaults |
 | `analyzers config [NAME]` | analyzer name | Analyzer name as declared in `[analyzer.NAME]` — shows resolved config |

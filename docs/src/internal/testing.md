@@ -47,18 +47,18 @@ tests/
 ├── status.rs                   # Status command tests
 ├── tools.rs                    # Tools list/check tests
 ├── watch.rs                    # File watcher tests
-├── processors.rs               # Module root for processor tests
-└── processors/
+├── main.rs                     # The one test binary; declares every module
+└── processor/
     ├── cc_single_file.rs       # C/C++ compilation tests
     ├── zspell.rs           # Zspell processor tests
     └── template.rs             # Template processor tests
 ```
 
-Each top-level `.rs` file in `tests/` is compiled as a separate test binary by Cargo. The `processors.rs` file acts as a module root that declares the `processors/` subdirectory modules:
+`tests/main.rs` is the single test binary. It declares the `tests_mod/` files by path and the `processor/` subdirectory modules in a `mod processor` block:
 
 ```rust
 mod common;
-mod processors {
+mod processor {
     pub mod cc_single_file;
     pub mod zspell;
     pub mod template;
@@ -104,7 +104,7 @@ These tests verify exit codes, stdout messages, and side effects (files created 
 
 ### Processor tests
 
-Tests under `processors/` verify individual processor behavior: file discovery, compilation, linting, incremental skip logic, and error handling. Each processor test module follows the same pattern:
+Tests under `processor/` verify individual processor behavior: file discovery, compilation, linting, incremental skip logic, and error handling. Each processor test module follows the same pattern:
 
 1. Set up a temp project with appropriate source files
 2. Run `rsconstruct build`
@@ -169,10 +169,10 @@ assert!(stdout.contains("Processing:"));
 4. Run `rsconstruct` with `run_rsconstruct()` or `run_rsconstruct_with_env()`
 5. Assert on exit code, stdout/stderr content, and output file existence
 
-If adding a new processor test module, declare it in `tests/processors.rs`:
+If adding a new processor test module, declare it in the `mod processor` block of `tests/main.rs` (a test `every_test_file_is_registered` fails the build for any file left out):
 
 ```rust
-mod processors {
+mod processor {
     pub mod cc_single_file;
     pub mod zspell;
     pub mod template;
@@ -196,6 +196,6 @@ mod processors {
 | Tools | `tools.rs` | List tools, list all, check availability |
 | Watch | `watch.rs` | Initial build, rebuild on change |
 | Ignore | `rsconstructignore.rs` | Exact match, globs, leading slash, trailing slash, comments, cross-processor |
-| Template | `processors/template.rs` | Rendering, incremental, dep_inputs |
-| CC | `processors/cc_single_file.rs` | Compilation, headers, per-file flags, mixed C/C++, config change detection |
-| Zspell | `processors/zspell.rs` | Correct/misspelled words, code block filtering, custom words, incremental |
+| Template | `processor/template.rs` | Rendering, incremental, dep_inputs |
+| CC | `processor/cc_single_file.rs` | Compilation, headers, per-file flags, mixed C/C++, config change detection |
+| Zspell | `processor/zspell.rs` | Correct/misspelled words, code block filtering, custom words, incremental |

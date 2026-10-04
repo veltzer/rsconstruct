@@ -92,7 +92,7 @@ pub enum BuildEvent {
     },
 }
 
-/// Processor file entry for `rsconstruct processors files --json`.
+/// Processor file entry for `rsconstruct processor files --json`.
 #[derive(Debug, Serialize)]
 pub struct ProcessorFileEntry {
     pub processor: String,
@@ -101,7 +101,7 @@ pub struct ProcessorFileEntry {
     pub outputs: Vec<String>,
 }
 
-/// Entry for `rsconstruct processors list --json`.
+/// Entry for `rsconstruct processor list --json`.
 #[derive(Debug, Serialize)]
 pub struct ProcessorListEntry {
     pub name: String,

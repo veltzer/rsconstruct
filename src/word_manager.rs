@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use crate::graph::Product;
-use crate::processors::flush_words;
+use crate::processor::flush_words;
 
 /// Shared word-file management for spell-checking processors (aspell, zspell).
 ///

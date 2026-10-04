@@ -6,7 +6,7 @@ use crate::cli::{BuildOptions, BuildPhase, DisplayOptions};
 use crate::color;
 use crate::errors;
 use crate::executor::{Executor, ExecutorOptions};
-use crate::processors::{ProcessorMap, ProcessorType};
+use crate::processor::{ProcessorMap, ProcessorType};
 use crate::stats::BuildStats;
 use crate::tables;
 use anyhow::{Context, Result};
@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 /// Expand `@`-prefixed shortcuts in the processor filter.
 ///
 /// Three categories of shortcuts:
-/// - **By type**: `@checkers`, `@generators`, `@creators`, `@mass_generators`, `@lua`
+/// - **By type**: `@checker`, `@generator`, `@creator`, `@mass_generator`, `@lua`
 /// - **By tool**: `@python3`, `@node`, etc. — matches processors whose `required_tools()` contains the name
 /// - **By processor name**: `@ruff` → `"ruff"` — strips the `@` prefix
 fn expand_aliases(filter: &[String], processors: &ProcessorMap) -> Vec<String> {
@@ -25,7 +25,7 @@ fn expand_aliases(filter: &[String], processors: &ProcessorMap) -> Vec<String> {
     for name in filter {
         if let Some(alias) = name.strip_prefix('@') {
             match alias {
-                "checkers" => {
+                "checker" => {
                     expanded.extend(
                         processors
                             .iter()
@@ -36,7 +36,7 @@ fn expand_aliases(filter: &[String], processors: &ProcessorMap) -> Vec<String> {
                             .map(|(n, _)| n.clone()),
                     );
                 }
-                "generators" => {
+                "generator" => {
                     expanded.extend(
                         processors
                             .iter()
@@ -47,7 +47,7 @@ fn expand_aliases(filter: &[String], processors: &ProcessorMap) -> Vec<String> {
                             .map(|(n, _)| n.clone()),
                     );
                 }
-                "creators" => {
+                "creator" => {
                     expanded.extend(
                         processors
                             .iter()
@@ -58,7 +58,7 @@ fn expand_aliases(filter: &[String], processors: &ProcessorMap) -> Vec<String> {
                             .map(|(n, _)| n.clone()),
                     );
                 }
-                "mass_generators" => {
+                "mass_generator" => {
                     expanded.extend(
                         processors
                             .iter()

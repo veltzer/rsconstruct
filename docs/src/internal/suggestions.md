@@ -208,7 +208,7 @@ Grades:
   src_dirs = ["."]
   ```
 - Design considerations:
-  - **`@all` meta-shortcut:** the existing `@checkers` / `@generators` aliases should continue to mean "all of that type, subject to the default-off filter." Users who want "all checkers including on-demand ones" would say `rsconstruct build --all -p @checkers` — rare enough that the composition is fine.
+  - **`@all` meta-shortcut:** the existing `@checker` / `@generator` aliases should continue to mean "all of that type, subject to the default-off filter." Users who want "all checkers including on-demand ones" would say `rsconstruct build --all -p @checker` — rare enough that the composition is fine.
   - **Error on contradiction:** `-p X -x X` already errors; `-p X` where X has `build_by_default = false` should just work (explicit opt-in wins over declarative opt-out).
   - **Watch mode:** `rsconstruct watch` should honour the same default — don't rebuild the package processor on every file save. Users who want watch-mode packaging can add `-p python_package` to the watch invocation.
   - **Discovery cost:** on-demand processors still run discovery every build, because we need to know what their products would be (for output-conflict detection, graph completeness, and `--all` support). This is negligible — discovery is O(files matched), not O(cost of running).
@@ -393,7 +393,7 @@ Grades:
   - Fixed-depth section paths. Today the second segment is a type or an instance
     depending on how many segments there are; with the type prefix the depth alone
     says single vs. named instance.
-  - Reads like the existing `@checkers` / `@generators` group shortcuts for `-p`.
+  - Reads like the existing `@checker` / `@generator` group shortcuts for `-p`.
   - A wrong type is a config error the loader can report, which doubles as a
     check that the user knows what they declared.
 - Costs and open questions:
@@ -439,7 +439,7 @@ localized; none block features. See `architecture-observations.md` for
 larger structural items.
 
 ### Consolidate processor discovery helpers
-- `src/processors/mod.rs` exposes `discover_checker_products`, `discover_directory_products`, `checker_discover`, `checker_auto_detect`, `checker_auto_detect_with_scan_root`, `scan_or_skip` — all similar, with subtle differences (some auto-apply `dep_auto`, some don't; some validate scan roots, some don't).
+- `src/processor/mod.rs` exposes `discover_checker_products`, `discover_directory_products`, `checker_discover`, `checker_auto_detect`, `checker_auto_detect_with_scan_root`, `scan_or_skip` — all similar, with subtle differences (some auto-apply `dep_auto`, some don't; some validate scan roots, some don't).
 - Choosing the wrong helper is a silent correctness issue: a processor that picks `discover_checker_products` when it needed `checker_discover` loses `dep_auto` merging and never finds out.
 - Collapse to one or two helpers with explicit flags for the variations. Document the contract each helper commits to.
 - **Urgency**: medium | **Complexity**: low
@@ -450,19 +450,19 @@ larger structural items.
 - **Urgency**: low | **Complexity**: medium (complete) / low (delete)
 
 ### Drop or use `processor_type` on `ProcessorPlugin`
-- `src/registries/processor.rs` has `processor_type` marked `#[allow(dead_code)]` with a comment about a future `processors list --type=checker` filter.
+- `src/registries/processor.rs` has `processor_type` marked `#[allow(dead_code)]` with a comment about a future `processor list --type=checker` filter.
 - Either ship the filter or drop the field until it's needed. Dead fields with comments accumulate.
 - **Urgency**: low | **Complexity**: low
 
 ### `TOOLS` registry is monolithic and unsorted
-- `src/processors/mod.rs` has ~170 entries in a static array mixing Python, Node, Ruby, Rust, Perl, System categories with no alphabetic ordering within groups.
+- `src/processor/mod.rs` has ~170 entries in a static array mixing Python, Node, Ruby, Rust, Perl, System categories with no alphabetic ordering within groups.
 - Hard to find a tool when adding one; hard to audit for gaps (a tool with no install command makes `doctor` silently unhelpful).
 - Split per-runtime into separate files or sort alphabetically within a section. Add a unit test that every processor's `required_tools()` entries have a matching `TOOLS` row (this test exists — keep it; make the table easier to satisfy).
 - **Urgency**: low | **Complexity**: low
 
 ### Centralize alias expansion
-- `expand_aliases` in `src/builder/build.rs` handles `@checkers` / `@generators` / `@toolname` / bare-name syntaxes. It's called once for `-p` and once for `-x`. Any new alias shortcut has to be added there.
-- No duplication today, but the function is in `build.rs` despite being useful elsewhere (completion, `processors list`, `analyzers used`). Move to a dedicated module and make it the canonical expander.
+- `expand_aliases` in `src/builder/build.rs` handles `@checker` / `@generator` / `@toolname` / bare-name syntaxes. It's called once for `-p` and once for `-x`. Any new alias shortcut has to be added there.
+- No duplication today, but the function is in `build.rs` despite being useful elsewhere (completion, `processor list`, `analyzers used`). Move to a dedicated module and make it the canonical expander.
 - **Urgency**: low | **Complexity**: low
 
 ### Inconsistent error-handling idioms in processors
@@ -477,10 +477,10 @@ larger structural items.
 
 ### `products list` CLI
 - Users can run `rsconstruct graph show` (full graph) or `rsconstruct status` (per-processor summary), but there's no flat list of "here are every product that would execute, with its primary input and output."
-- Add `rsconstruct products list` (parallel to `processors list` and `analyzers used`). Respects `-p`/`-x`/`--target` filters.
+- Add `rsconstruct products list` (parallel to `processor list` and `analyzers used`). Respects `-p`/`-x`/`--target` filters.
 - **Urgency**: low | **Complexity**: low
 
 ### `ProductTiming.start_offset` not populated for batch execution
-- `src/processors/mod.rs` defines `start_offset` on `ProductTiming`; it's populated for non-batch execution but may be None for batch paths.
+- `src/processor/mod.rs` defines `start_offset` on `ProductTiming`; it's populated for non-batch execution but may be None for batch paths.
 - Trace visualizations (`--trace`) look jagged or incomplete when batches are involved.
 - **Urgency**: low | **Complexity**: low

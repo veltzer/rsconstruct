@@ -611,7 +611,7 @@ use crate::config::SCAN_CONFIG_FIELDS;
 use crate::registries::processor::all_plugins;
 
 /// `FieldSpec` entries must be well-formed: non-empty name, non-empty doc
-/// (a blank doc is a blank cell in `processors defconfig`), no duplicate
+/// (a blank doc is a blank cell in `processor defconfig`), no duplicate
 /// names within a plugin, and no collision with scan fields (scan fields
 /// are validated generically; a spec shadowing one would create two
 /// authorities for its type).
@@ -654,17 +654,17 @@ fn every_field_spec_is_well_formed() {
     assert!(bad.is_empty(), "malformed FieldSpec entries: {bad:#?}");
 }
 
-/// The `docs/src/processors/` subdirectory holding the pages of one
+/// The `docs/src/processor/` subdirectory holding the pages of one
 /// processor type. Pages are grouped by type, so a page filed under the
 /// wrong type counts as missing.
-fn docs_dir_for(processor_type: crate::processors::ProcessorType) -> &'static str {
-    use crate::processors::ProcessorType;
+fn docs_dir_for(processor_type: crate::processor::ProcessorType) -> &'static str {
+    use crate::processor::ProcessorType;
     match processor_type {
-        ProcessorType::Checker => "checkers",
-        ProcessorType::Generator => "generators",
-        ProcessorType::Creator => "creators",
+        ProcessorType::Checker => "checker",
+        ProcessorType::Generator => "generator",
+        ProcessorType::Creator => "creator",
         ProcessorType::Explicit => "explicit",
-        ProcessorType::MassGenerator => "mass_generators",
+        ProcessorType::MassGenerator => "mass_generator",
         ProcessorType::Lua => panic!("Lua processors are not built-in and have no docs page"),
     }
 }
@@ -720,16 +720,16 @@ fn every_plugin_has_docs_and_tests() {
     for plugin in all_plugins() {
         let name = plugin.name;
         let docs_page = format!(
-            "docs/src/processors/{}/{name}.md",
+            "docs/src/processor/{}/{name}.md",
             docs_dir_for(plugin.processor_type)
         );
         if !DOCS_ALLOWLIST.contains(&name) && !std::path::Path::new(&docs_page).exists() {
             missing.push(format!("{name}: no {docs_page}"));
         }
         if !TESTS_ALLOWLIST.contains(&name)
-            && !std::path::Path::new(&format!("tests/processors/{name}.rs")).exists()
+            && !std::path::Path::new(&format!("tests/processor/{name}.rs")).exists()
         {
-            missing.push(format!("{name}: no tests/processors/{name}.rs"));
+            missing.push(format!("{name}: no tests/processor/{name}.rs"));
         }
     }
     missing.sort();
@@ -740,7 +740,7 @@ fn every_plugin_has_docs_and_tests() {
     );
 }
 
-/// Every `.rs` file under `src/processors/<category>/` must be declared in
+/// Every `.rs` file under `src/processor/<category>/` must be declared in
 /// that category's `mod.rs`. A forgotten `mod` line is the one-file
 /// design's silent kill switch: the file compiles as dead code, submits
 /// nothing to inventory, and the processor simply does not exist.
@@ -748,12 +748,12 @@ fn every_plugin_has_docs_and_tests() {
 fn every_processor_file_is_declared() {
     let mut missing: Vec<String> = Vec::new();
     for dir in [
-        "src/processors/checkers",
-        "src/processors/generators",
-        "src/processors/creators",
-        "src/processors/explicit",
-        "src/processors/lua",
-        "src/processors/mass_generators",
+        "src/processor/checker",
+        "src/processor/generator",
+        "src/processor/creator",
+        "src/processor/explicit",
+        "src/processor/lua",
+        "src/processor/mass_generator",
     ] {
         let mod_src = std::fs::read_to_string(format!("{dir}/mod.rs")).unwrap();
         for entry in std::fs::read_dir(dir).unwrap() {

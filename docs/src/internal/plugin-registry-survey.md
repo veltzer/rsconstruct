@@ -19,7 +19,7 @@ The plugin system combines four responsibilities:
    output-dir defaults are applied in layers before deserialization. Unknown
    fields are rejected. Required fields are enforced.
 4. **Name-to-factory mapping** — the registry maps processor names to their
-   plugin entries for creation, introspection (`processors list`), and
+   plugin entries for creation, introspection (`processor list`), and
    config display.
 
 ## Crates evaluated

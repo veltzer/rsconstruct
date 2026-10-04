@@ -38,7 +38,7 @@ Add to `Default` impl (`max_jobs: None`) and `KnownFields` list.
 
 ### 2. Expose `max_jobs()` on the `ProductDiscovery` trait
 
-**File:** `src/processors/mod.rs`
+**File:** `src/processor/mod.rs`
 
 ```rust
 fn max_jobs(&self) -> Option<usize> { None }
@@ -73,14 +73,14 @@ In the execution loop:
 
 ### 5. Config display
 
-Ensure `rsconstruct processors config marp` and `rsconstruct config show` display
+Ensure `rsconstruct processor config marp` and `rsconstruct config show` display
 the `max_jobs` field.
 
 ## Files to Modify
 
 1. `src/config/processor_configs.rs` - add `max_jobs` field to macros and manual configs
-2. `src/processors/mod.rs` - add `max_jobs()` to `ProductDiscovery` trait
-3. `src/processors/*.rs` - implement `max_jobs()` for each processor
+2. `src/processor/mod.rs` - add `max_jobs()` to `ProductDiscovery` trait
+3. `src/processor/*.rs` - implement `max_jobs()` for each processor
 4. `src/executor/mod.rs` - add semaphore map to `ExecutorOptions`
 5. `src/executor/execution.rs` - semaphore-based dispatch in the level loop
 6. `src/builder/build.rs` - build the processor limits map and pass to executor

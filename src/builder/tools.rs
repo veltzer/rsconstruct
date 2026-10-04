@@ -31,7 +31,7 @@ pub(super) fn is_system_package_installed(
     let probe = |program: &str, args: &[&str]| -> bool {
         let mut cmd = Command::new(program);
         cmd.args(args);
-        crate::processors::run_command_capture(ctx, &cmd).is_ok_and(|o| o.status.success())
+        crate::processor::run_command_capture(ctx, &cmd).is_ok_and(|o| o.status.success())
     };
 
     if which::which("dpkg-query").is_ok() {
@@ -47,7 +47,7 @@ pub(super) fn is_system_package_installed(
         // the ones this hides, because the which() fallback cannot catch them.
         let mut cmd = Command::new("dpkg-query");
         cmd.args(["-W", "-f", "${Status}", pkg]);
-        return crate::processors::run_command_capture(ctx, &cmd).is_ok_and(|o| {
+        return crate::processor::run_command_capture(ctx, &cmd).is_ok_and(|o| {
             o.status.success() && dpkg_status_means_installed(&String::from_utf8_lossy(&o.stdout))
         });
     }
@@ -99,7 +99,7 @@ fn package_probe_succeeds(
 ) -> bool {
     let mut cmd = Command::new(program);
     cmd.args(args);
-    crate::processors::run_command_capture(ctx, &cmd).is_ok_and(|o| o.status.success())
+    crate::processor::run_command_capture(ctx, &cmd).is_ok_and(|o| o.status.success())
 }
 
 /// The project's pinned Python closure as `uv export` renders it from
@@ -116,7 +116,7 @@ fn uv_export_reqs(ctx: &crate::build_context::BuildContext) -> Result<Vec<String
         "--no-header",
         "--no-emit-project",
     ]);
-    let out = crate::processors::run_command_capture(ctx, &cmd).context(
+    let out = crate::processor::run_command_capture(ctx, &cmd).context(
         "failed to run `uv export` — is uv installed? (`rsconstruct tools install uv`, \
                   or set `python_installer = \"pip\"` under [dependencies] to install with pip)",
     )?;
@@ -180,7 +180,7 @@ impl Builder {
 /// `builder` is `Some` when running with a project config (needed for `open_file`, `Check`, `Lock`).
 fn run_tools_command(
     ctx: &crate::build_context::BuildContext,
-    processors: &crate::processors::ProcessorMap,
+    processors: &crate::processor::ProcessorMap,
     is_enabled: &dyn Fn(&str) -> bool,
     action: ToolsAction,
     verbose: bool,
@@ -237,7 +237,7 @@ fn run_tools_command(
         ToolsAction::List { .. } => {
             // Registry-wide list: every tool rsconstruct knows how to install,
             // independent of which processors are configured. Mirrors
-            // `processors list`, which shows all built-in processors.
+            // `processor list`, which shows all built-in processors.
             if crate::json_output::is_json_mode() {
                 let entries: Vec<json_output::ToolListEntry> = crate::tools::all_tools()
                     .map(|info| json_output::ToolListEntry {
@@ -1285,7 +1285,7 @@ fn tools_graph_svg(
     ctx: &crate::build_context::BuildContext,
     tool_map: &BTreeMap<String, Vec<String>>,
 ) -> Result<String> {
-    crate::processors::dot_to_svg(ctx, &tools_graph_dot(tool_map))
+    crate::processor::dot_to_svg(ctx, &tools_graph_dot(tool_map))
 }
 
 #[cfg(test)]

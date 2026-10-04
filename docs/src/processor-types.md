@@ -2,7 +2,7 @@
 
 Every processor in RSConstruct has a type that determines how it discovers inputs, produces outputs, and interacts with the cache. There are five types.
 
-Run `rsconstruct processors types` to list them.
+Run `rsconstruct processor types` to list them.
 
 ## Checker
 
@@ -348,7 +348,7 @@ docs/about.md, templates/default.html → _site/about/index.html
 
 mass_generator
 
-Any tool that honors the manifest contract uses the `mass_generator` processor type directly via `[processor.mass_generator.NAME]`; see [Mass Generator](processors/mass_generators/mass_generator.md).
+Any tool that honors the manifest contract uses the `mass_generator` processor type directly via `[processor.mass_generator.NAME]`; see [Mass Generator](processor/mass_generator/mass_generator.md).
 
 ## Comparison
 

@@ -34,7 +34,7 @@ fn validate_name(name: &str) -> Result<()> {
     let all = all_type_names();
     if !all.contains(&name) {
         bail!(
-            "Unknown processor '{name}'. Run 'rsconstruct processors list --all' to see available processors."
+            "Unknown processor '{name}'. Run 'rsconstruct processor list --all' to see available processors."
         );
     }
     Ok(())
