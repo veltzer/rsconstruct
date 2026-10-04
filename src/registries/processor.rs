@@ -21,7 +21,7 @@ use crate::processors::{Processor, ProcessorType};
 /// immutable processor.
 pub struct ProcessorPlugin {
     pub name: &'static str,
-    /// Processor type (checker, generator, creator, explicit).
+    /// Processor type (checker, generator, creator, explicit, mass generator).
     pub processor_type: ProcessorType,
     /// Implementation version. **Bump this when changes would make the processor
     /// produce different output for the same inputs**, or change which inputs are

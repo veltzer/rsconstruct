@@ -158,7 +158,7 @@ cxxflags = ["-Wall", "-Wextra", "-O2"]
 include_paths = ["include"]
 ```
 
-See the [CC Single File](processors/cc_single_file.md) processor docs for the full configuration reference.
+See the [CC Single File](processors/generators/cc_single_file.md) processor docs for the full configuration reference.
 
 ### Adding static analysis
 

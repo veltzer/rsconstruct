@@ -6,7 +6,7 @@ Once outputs are known up front, per-file caching, precise incremental rebuilds,
 
 ## Status
 
-**Designed, not yet implemented.** This document is the design spec that guides the implementation.
+**Implemented** as the `mass_generator` processor (`src/processors/mass_generators/mass_generator.rs`); the user-facing contract is in [Mass Generator](../processors/mass_generators/mass_generator.md). This document is the design spec it was built from. Where the implementation departs from the text below, the departure is called out in a **Status note**; the main ones are: no synthetic phase product (a once-per-build guard inside the processor does that job), `loose_manifest` is a config field rather than a CLI flag, verification compares a before/after snapshot of `output_dirs` instead of walking the whole directory, and the manifest is not yet cached between graph builds.
 
 Related designs:
 
@@ -92,7 +92,9 @@ When one or more MassGenerator products are dirty:
 3. The tool produces all its output files in that one invocation.
 4. Each product caches its own output file as a blob descriptor, independently.
 5. In **strict mode** (default): after the tool exits, rsconstruct verifies that every predicted file in the batch was produced and no unexpected files appeared in `output_dirs`. A mismatch fails the build.
-6. In **loose mode** (`--loose-manifest` CLI flag): divergence is a warning only.
+6. In **loose mode** (`loose_manifest = true` in the instance's config — a per-instance knob, not a CLI flag, since drift is a property of one tool): divergence is a warning only.
+
+**Status note.** "No unexpected files appeared in `output_dirs`" is implemented as a before/after snapshot: a file counts as unexpected when it is new or has a changed mtime since the snapshot taken just before the tool ran, is not in the plan, and is not another product's declared output (the executor hands the set of declared outputs to the `BuildContext` for exactly this query). Files the tool left untouched — a neighbor's output, a committed `CNAME`, an orphan from an older plan — are not reported. That is narrower than "every file in `output_dirs` is in the manifest or owned by someone", and deliberately so: the check is for predictor drift, and only writes the tool just made can be drift.
 
 The "one invocation, many products" idiom is this type's defining execution shape — distinct from both Generator (one invocation per product) and Creator (one invocation, one product).
 
@@ -140,31 +142,38 @@ The dependency system then naturally orders: phase product runs once (if any fil
 
 This shape keeps the executor simple and reuses all existing caching, skipping, and restore logic without modification.
 
+**Status note.** The implementation reaches the same end without the phase product. Every file product is an ordinary product (inputs = its sources, outputs = its path), and the processor keeps a per-instance `tool_run` state behind a mutex. `execute(product)` asks that state: not run yet → run the tool, verify, record the outcome; already succeeded → do nothing; already failed → fail this product with the recorded message. So the tool runs at most once per build, clean products never trigger it, and a failure is reported once per product without re-running a build that just failed. The plugin caps the instance at `max_jobs = 1`, so products of one instance execute one at a time instead of parking threads on the mutex. The reasons the phase product lost: a product with no outputs cannot be depended upon through the graph (edges come from inputs matching outputs), so it would have needed a stamp output, and a restored stamp would have marked every file product `dep_changed` → build on a fresh checkout with a warm remote cache, where the right answer is restore.
+
+Before the tool runs, the processor unlinks every predicted path, clean ones included: a clean file may be a read-only hardlink from an earlier restore, which the tool could not overwrite. The executor's own pre-run unlink only covers the products it is about to build.
+
 ## Config reference
 
 ```toml
 [processor.mass_generator.<INSTANCE>]
 
-# The tool's build command. Runs once per batch of dirty file products.
-command = "mkdocs build --site-dir _site"
+# The tool's build command and its arguments. Runs at most once per build,
+# when any predicted file is dirty. (No shell: command and args are separate.)
+command = "mkdocs"
+args = ["build", "--site-dir", "_site"]
 
 # The tool's plan command. Must print the JSON manifest to stdout.
-# May be the same binary with a different flag or a separate script.
+# May be the same binary with different arguments or a separate script.
 predict_command = "mkdocs-plan"
+predict_args = []
 
 # Where the tool will produce its outputs. Every manifest entry's path
 # must fall inside one of these directories. Used for verification.
 output_dirs = ["_site"]
 
-# Standard scan fields still apply — they bound which source changes
-# trigger a replan.
-src_dirs = ["docs", "templates"]
-src_extensions = [".md", ".html", ".yaml"]
+# Optional: extra files added to the inputs of every predicted product.
+dep_inputs = ["mkdocs.yml"]
 
-# Optional: skip strict output verification for this instance.
+# Optional: report plan/build mismatches as warnings instead of errors.
 # Useful during development of the tool itself. Default: false.
 loose_manifest = false
 ```
+
+**Status note.** The design had the standard scan fields (`src_dirs`, `src_extensions`) "bound which source changes trigger a replan". Without the manifest cache they would bound nothing, so the processor rejects them with a message instead of accepting a field that does nothing.
 
 ## Interaction with the shared-output-directory design
 
@@ -252,19 +261,21 @@ These should be resolved during implementation:
 
 Build this once rssite (or any other cooperating tool) is far enough along to drive concrete requirements. Implementing it against a hypothetical tool wastes work — we'd guess at features. Implementing against rssite (where we control both sides) grounds the design in reality.
 
-When implemented, do it in this order:
+The order it was built in, and where each step stands:
 
-1. New processor type `mass_generator` registered in the plugin registry.
-2. Config schema (`predict_command`, `loose_manifest`).
-3. Plan phase: invoke `predict_command`, parse JSON, create products.
-4. Execution phase: batching logic — one invocation per instance, per build.
-5. Strict verification after build.
-6. Manifest caching (skip re-plan when source tree unchanged).
-7. Documentation in `docs/src/processors/mass_generator.md` once it's real.
+1. New processor type `mass_generator` registered in the plugin registry. **Done.**
+2. Config schema (`predict_command`, `predict_args`, `output_dirs`, `loose_manifest`). **Done.** Commands and arguments are separate fields, per the [No-Shell Policy](no-shell-policy.md); the `command = "mkdocs build --site-dir _site"` spelling in the examples above is design shorthand.
+3. Plan phase: invoke `predict_command`, parse JSON, create products. **Done.** The plan is memoized for the process, so the fixed-point discovery loop runs it once per build, not once per pass.
+4. Execution phase: one invocation per instance, per build. **Done**, via the once-per-build guard described in the status note above.
+5. Strict verification after build. **Done**, as a before/after snapshot (status note above).
+6. Manifest caching (skip re-plan when source tree unchanged). **Not done.** `predict_command` runs at every graph build, including `status`, `graph` and `clean outputs`. The `src_dirs`/`src_extensions` fields that were to bound the re-plan are therefore rejected by the processor rather than silently ignored; they come back when the cache does.
+7. Documentation in `docs/src/processors/mass_generators/mass_generator.md`. **Done.**
+
+Open question 1 (single-pass `--print-manifest` mode) is not implemented. Open question 3 (a page the tool stops predicting) is resolved by documentation: the orphan has no product and is neither rebuilt nor cleaned; the user deletes it.
 
 ## See also
 
-- [MassGenerator processor type](../processors/mass_generator.md) — processor-type documentation (forthcoming)
+- [Mass Generator](../processors/mass_generators/mass_generator.md) — the processor's user-facing documentation
 - [Shared Output Directory](shared-output-directory.md) — how we handle opaque Creators today
 - [Processor Ordering](processor-ordering.md) — the sibling discussion about explicit ordering
 - [Cross-Processor Dependencies](cross-processor-dependencies.md) — why per-file outputs enable proper dependency graphs

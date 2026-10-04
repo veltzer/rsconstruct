@@ -1,6 +1,6 @@
 # Processor Types
 
-Every processor in RSConstruct has a type that determines how it discovers inputs, produces outputs, and interacts with the cache. There are four types.
+Every processor in RSConstruct has a type that determines how it discovers inputs, produces outputs, and interacts with the cache. There are five types.
 
 Run `rsconstruct processors types` to list them.
 
@@ -69,7 +69,7 @@ Scans for `.md` files, checks spelling with the built-in zspell engine.
 
 ### Built-in checkers
 
-ruff, pylint, mypy, pyrefly, black, pytest, doctest, shellcheck, luacheck, yamllint, jq, jsonlint, taplo, cppcheck, clang_tidy, cpplint, checkpatch, mdl, markdownlint, rumdl, aspell, zspell, ascii, encoding, duplicate_files, terms, eslint, jshint, standard, htmlhint, htmllint, tidy, stylelint, jslint, svglint, svgo, perlcritic, xmllint, checkstyle, php_lint, yq, hadolint, slidev, json_schema, iyamlschema, ijq, ijsonlint, iyamllint, itaplo, marp_images, license_header
+actionlint, ascii, aspell, biome, black, checkpatch, checkstyle, clang_tidy, clippy, cmake, cppcheck, cpplint, doctest, duplicate_files, encoding, eslint, hadolint, htmlhint, htmllint, ijq, ijsonlint, itaplo, iyamllint, iyamlschema, jq, jshint, jslint, json_schema, jsonlint, license_header, luacheck, make, markdownlint, marp_images, mdl, mypy, oxlint, perlcritic, php_lint, prettier, pylint, pyrefly, pytest, ruff, rumdl, script, shellcheck, slidev, standard, stylelint, svglint, svgo, taplo, terms, tidy, xmllint, yamllint, yq, zspell
 
 ## Generator
 
@@ -168,7 +168,7 @@ sass/styles.scss → out/sass/styles.css
 
 ### Built-in generators
 
-tera, mako, jinja2, cc_single_file, pandoc, marp, mermaid, drawio, chromium, libreoffice, protobuf, sass, markdown2html, pdflatex, a2x, objdump, rust_single_file, tags, pdfunite, ipdfunite, imarkdown2html, isass, yaml2json, generator, script
+a2x, cc_single_file, chromium, drawio, generator, imarkdown2html, ipdfunite, isass, jinja2, libreoffice, mako, markdown2html, marp, mermaid, objdump, pandoc, pdflatex, pdfunite, protobuf, requirements, rust_single_file, sass, tags, tera, yaml2json
 
 ## Creator
 
@@ -254,7 +254,7 @@ Scans for `.manifest` files, runs the build script, caches two output directorie
 
 ### Built-in creators
 
-cargo, pip, npm, gem, sphinx, mdbook, jekyll, cc (full C/C++ projects)
+cargo, cc, creator, gem, jekyll, linux_module, mdbook, npm, pip, sphinx
 
 User-defined creators use the `creator` processor type directly via `[processor.creator.NAME]`.
 
@@ -305,16 +305,59 @@ Aggregates all PDF outputs from pdflatex into a single merged PDF.
 
 ### Built-in explicit processors
 
-explicit, pdfunite, ipdfunite
+explicit
+
+## Mass Generator
+
+A mass generator runs a tool that produces many files in one invocation and can enumerate them in advance. It is the transparent creator: where a creator declares an opaque `output_dirs`, a mass generator asks the tool for a manifest first and turns every predicted file into a product of its own.
+
+### How it works
+
+1. At graph-build time, runs `predict_command` and parses the JSON manifest it prints
+2. Creates one product per manifest entry: `inputs` = the entry's `sources`, `outputs` = its `path`
+3. Classifies each product individually (skip, restore, or build)
+4. The first product that needs building runs `command`; the rest find the tool already run
+5. Compares the files the tool wrote against the plan — a missing predicted file or an off-plan write fails the build
+6. Stores each predicted file as a content-addressed blob
+
+### What gets cached
+
+One blob per predicted file (like generator). When every product is clean the tool does not run at all; when some are, the tool runs once and every dirty product caches its own file.
+
+### Examples
+
+**A static site generator with a plan mode:**
+
+```toml
+[processor.mass_generator.site]
+command         = "rssite"
+args            = ["build"]
+predict_command = "rssite"
+predict_args    = ["plan"]
+output_dirs     = ["_site"]
+```
+
+`rssite plan` prints which `_site/*.html` files `rssite build` will write and which sources each depends on. Changing `docs/about.md` dirties only `_site/about/index.html`; a linter scanning `_site/` depends on each page individually.
+
+```
+docs/index.md, templates/default.html → _site/index.html
+docs/about.md, templates/default.html → _site/about/index.html
+```
+
+### Built-in mass generators
+
+mass_generator
+
+Any tool that honors the manifest contract uses the `mass_generator` processor type directly via `[processor.mass_generator.NAME]`; see [Mass Generator](processors/mass_generators/mass_generator.md).
 
 ## Comparison
 
-| | Checker | Generator | Creator | Explicit |
-|---|---|---|---|---|
-| **Purpose** | Validate | Transform | Build/install | Aggregate |
-| **Inputs** | Scanned | Scanned | Scanned (anchor files) | Declared in config |
-| **Products** | One per input | One per input (x format) | One per anchor | One total |
-| **Outputs** | None | Derived from input path | Declared dirs + files | Declared files |
-| **Cache type** | Marker | Blob | Tree | Blob |
-| **Runs in** | Project root | Project root | Anchor file's directory | Project root |
-| **Command args** | Input files | Input + output | User-defined args | `--inputs` + `--outputs` |
+| | Checker | Generator | Creator | Explicit | Mass Generator |
+|---|---|---|---|---|---|
+| **Purpose** | Validate | Transform | Build/install | Aggregate | Transform, many at once |
+| **Inputs** | Scanned | Scanned | Scanned (anchor files) | Declared in config | Declared by the tool's plan |
+| **Products** | One per input | One per input (x format) | One per anchor | One total | One per predicted file |
+| **Outputs** | None | Derived from input path | Declared dirs + files | Declared files | Predicted files |
+| **Cache type** | Marker | Blob | Tree | Blob | Blob |
+| **Runs in** | Project root | Project root | Anchor file's directory | Project root | Project root |
+| **Command args** | Input files | Input + output | User-defined args | `--inputs` + `--outputs` | User-defined args |

@@ -654,6 +654,21 @@ fn every_field_spec_is_well_formed() {
     assert!(bad.is_empty(), "malformed FieldSpec entries: {bad:#?}");
 }
 
+/// The `docs/src/processors/` subdirectory holding the pages of one
+/// processor type. Pages are grouped by type, so a page filed under the
+/// wrong type counts as missing.
+fn docs_dir_for(processor_type: crate::processors::ProcessorType) -> &'static str {
+    use crate::processors::ProcessorType;
+    match processor_type {
+        ProcessorType::Checker => "checkers",
+        ProcessorType::Generator => "generators",
+        ProcessorType::Creator => "creators",
+        ProcessorType::Explicit => "explicit",
+        ProcessorType::MassGenerator => "mass_generators",
+        ProcessorType::Lua => panic!("Lua processors are not built-in and have no docs page"),
+    }
+}
+
 /// A processor is one file — but three touch-points necessarily live
 /// outside it, and nothing but this test enforces them: the docs page, the
 /// integration test file, and (checked separately below) the `mod`
@@ -704,10 +719,12 @@ fn every_plugin_has_docs_and_tests() {
     let mut missing: Vec<String> = Vec::new();
     for plugin in all_plugins() {
         let name = plugin.name;
-        if !DOCS_ALLOWLIST.contains(&name)
-            && !std::path::Path::new(&format!("docs/src/processors/{name}.md")).exists()
-        {
-            missing.push(format!("{name}: no docs/src/processors/{name}.md"));
+        let docs_page = format!(
+            "docs/src/processors/{}/{name}.md",
+            docs_dir_for(plugin.processor_type)
+        );
+        if !DOCS_ALLOWLIST.contains(&name) && !std::path::Path::new(&docs_page).exists() {
+            missing.push(format!("{name}: no {docs_page}"));
         }
         if !TESTS_ALLOWLIST.contains(&name)
             && !std::path::Path::new(&format!("tests/processors/{name}.rs")).exists()
@@ -736,6 +753,7 @@ fn every_processor_file_is_declared() {
         "src/processors/creators",
         "src/processors/explicit",
         "src/processors/lua",
+        "src/processors/mass_generators",
     ] {
         let mod_src = std::fs::read_to_string(format!("{dir}/mod.rs")).unwrap();
         for entry in std::fs::read_dir(dir).unwrap() {

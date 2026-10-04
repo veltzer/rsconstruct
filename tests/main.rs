@@ -83,6 +83,7 @@ mod processors {
     pub mod markdown;
     pub mod markdownlint;
     pub mod marp;
+    pub mod mass_generator;
     pub mod mdbook;
     pub mod mdl;
     pub mod mermaid;

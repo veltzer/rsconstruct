@@ -3,6 +3,7 @@ mod creators;
 mod explicit;
 pub mod generators;
 pub mod lua;
+mod mass_generators;
 
 use anyhow::{Context, Result};
 use serde::Serialize;
@@ -919,6 +920,11 @@ pub enum ProcessorType {
     /// Many inputs aggregated into (possibly) many output files and/or directories.
     /// Unlike Generator (one product per input file), creates a single product.
     Explicit,
+    /// Runs a tool that enumerates its outputs in advance (`predict_command`
+    /// prints a manifest). Every predicted file is its own product with its
+    /// own inputs and blob cache entry; the tool itself runs at most once per
+    /// build, when any of those products is dirty. The transparent Creator.
+    MassGenerator,
     /// A user-defined processor implemented in Lua via the plugin runtime.
     /// (A `processor_type()` Lua hook was once documented as overriding this;
     /// no Rust code ever read it — all Lua plugins are categorized as Lua.)
@@ -933,6 +939,7 @@ impl ProcessorType {
             Self::Checker => "checker",
             Self::Creator => "creator",
             Self::Explicit => "explicit",
+            Self::MassGenerator => "mass_generator",
             Self::Lua => "lua",
         }
     }
@@ -947,6 +954,9 @@ impl ProcessorType {
             Self::Creator => "Runs a command and caches declared output files and directories",
             Self::Explicit => {
                 "Many inputs aggregated into (possibly) many output files and/or directories"
+            }
+            Self::MassGenerator => {
+                "Runs a tool that enumerates its outputs in advance; one cached product per predicted file"
             }
             Self::Lua => "User-defined processor implemented in Lua via the plugin runtime",
         }

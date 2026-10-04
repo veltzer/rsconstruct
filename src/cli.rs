@@ -495,7 +495,7 @@ pub enum ProcessorAction {
     },
     /// List all built-in processors with type and description (no config needed)
     List {
-        /// Filter by processor type (checker, generator, creator, explicit)
+        /// Filter by processor type (checker, generator, creator, explicit, `mass_generator`)
         #[arg(long = "type", value_name = "TYPE")]
         processor_type: Option<String>,
     },

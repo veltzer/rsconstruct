@@ -75,7 +75,7 @@ Everything with fewer than ten repos is in the per-stage tables below.
   that repo's decision.
 - **A processor is one file** (CLAUDE.md). Each new processor is: the file
   under `src/processors/<category>/`, its `inventory::submit!` entry with
-  `is_rust: true`, a docs page under `docs/src/processors/`, a test file
+  `is_rust: true`, a docs page under `docs/src/processors/<type>/`, a test file
   under `tests/processors/`, and, for a wrapper, a `ToolInfo` entry so
   `tools install` knows how to get the binary. The completeness tests enforce
   the touch-points.
@@ -199,7 +199,7 @@ easy to find and easy to choose.
    install methods), then the processor file, `is_rust: true`.
    For a native: the processor file over the crate, `is_native: true`,
    `is_rust: true`; the `native_processors_are_rust` test enforces the pair.
-3. Docs page under `docs/src/processors/`, test file under
+3. Docs page under `docs/src/processors/<type>/`, test file under
    `tests/processors/`; `cargo nextest run` must be green with the tool
    installed (tests never skip).
 4. `rsconstruct processors defconfig <name>` shows every config field; if

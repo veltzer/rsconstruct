@@ -216,6 +216,17 @@ impl Executor<'_> {
         let build_start = Instant::now();
         let order = graph.topological_sort()?;
 
+        // Processors that verify a shared output directory after their tool
+        // ran (mass generators) ask the context who owns a path; `execute`
+        // never sees the graph itself.
+        self.build_ctx.set_declared_outputs(
+            graph
+                .products()
+                .iter()
+                .flat_map(|p| p.outputs.iter().cloned())
+                .collect(),
+        );
+
         // Emit JSON build start event
         json_output::emit_build_start(order.len());
 

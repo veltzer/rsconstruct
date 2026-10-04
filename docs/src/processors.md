@@ -4,7 +4,7 @@ RSConstruct uses **processors** to discover and build products. Each processor s
 
 ## Processor Types
 
-There are four processor types: checker, generator, creator, and explicit. They differ in how inputs are discovered, how outputs are declared, and how results are cached.
+There are five processor types: checker, generator, creator, explicit, and mass generator. They differ in how inputs are discovered, how outputs are declared, and how results are cached.
 
 See [Processor Types](processor-types.md) for full descriptions, examples, and a comparison table.
 
@@ -29,33 +29,34 @@ Use `rsconstruct processors files` to see which files each processor discovers.
 
 ## Available Processors
 
-- [Tera](processors/tera.md) — renders Tera templates into output files
-- [Ruff](processors/ruff.md) — lints Python files with ruff
-- [Pylint](processors/pylint.md) — lints Python files with pylint
-- [Mypy](processors/mypy.md) — type-checks Python files with mypy
-- [Pyrefly](processors/pyrefly.md) — type-checks Python files with pyrefly
-- [CC](processors/cc.md) — builds full C/C++ projects from cc.yaml manifests
-- [CC Single File](processors/cc_single_file.md) — compiles C/C++ source files into executables (single-file)
-- [Linux Module](processors/linux_module.md) — builds Linux kernel modules from linux-module.yaml manifests
-- [Cppcheck](processors/cppcheck.md) — runs static analysis on C/C++ source files
-- [Clang-Tidy](processors/clang_tidy.md) — runs clang-tidy static analysis on C/C++ source files
-- [Shellcheck](processors/shellcheck.md) — lints shell scripts using shellcheck
-- [Zspell](processors/zspell.md) — checks documentation files for spelling errors
-- [Rumdl](processors/rumdl.md) — lints Markdown files with rumdl
-- [Oxlint](processors/oxlint.md) — lints JavaScript/TypeScript files with oxlint
-- [Biome](processors/biome.md) — lints CSS/JavaScript/TypeScript/JSON files with biome
-- [Make](processors/make.md) — runs make in directories containing Makefiles
-- [Cargo](processors/cargo.md) — builds Rust projects using Cargo
-- [Yamllint](processors/yamllint.md) — lints YAML files with yamllint
-- [Jq](processors/jq.md) — validates JSON files with jq
-- [Jsonlint](processors/jsonlint.md) — lints JSON files with jsonlint
-- [Taplo](processors/taplo.md) — checks TOML files with taplo
-- [Terms](processors/terms.md) — checks that technical terms are backtick-quoted in Markdown files
-- [Json Schema](processors/json_schema.md) — validates JSON schema propertyOrdering
-- [Iyamlschema](processors/iyamlschema.md) — validates YAML files against JSON schemas (native)
-- [Yaml2json](processors/yaml2json.md) — converts YAML files to JSON (native)
-- [Markdown2html](processors/markdown2html.md) — converts Markdown to HTML using markdown CLI
-- [Imarkdown2html](processors/imarkdown2html.md) — converts Markdown to HTML (native)
+- [Tera](processors/generators/tera.md) — renders Tera templates into output files
+- [Ruff](processors/checkers/ruff.md) — lints Python files with ruff
+- [Pylint](processors/checkers/pylint.md) — lints Python files with pylint
+- [Mypy](processors/checkers/mypy.md) — type-checks Python files with mypy
+- [Pyrefly](processors/checkers/pyrefly.md) — type-checks Python files with pyrefly
+- [CC](processors/creators/cc.md) — builds full C/C++ projects from cc.yaml manifests
+- [CC Single File](processors/generators/cc_single_file.md) — compiles C/C++ source files into executables (single-file)
+- [Linux Module](processors/creators/linux_module.md) — builds Linux kernel modules from linux-module.yaml manifests
+- [Cppcheck](processors/checkers/cppcheck.md) — runs static analysis on C/C++ source files
+- [Clang-Tidy](processors/checkers/clang_tidy.md) — runs clang-tidy static analysis on C/C++ source files
+- [Shellcheck](processors/checkers/shellcheck.md) — lints shell scripts using shellcheck
+- [Zspell](processors/checkers/zspell.md) — checks documentation files for spelling errors
+- [Rumdl](processors/checkers/rumdl.md) — lints Markdown files with rumdl
+- [Oxlint](processors/checkers/oxlint.md) — lints JavaScript/TypeScript files with oxlint
+- [Biome](processors/checkers/biome.md) — lints CSS/JavaScript/TypeScript/JSON files with biome
+- [Make](processors/checkers/make.md) — runs make in directories containing Makefiles
+- [Cargo](processors/creators/cargo.md) — builds Rust projects using Cargo
+- [Yamllint](processors/checkers/yamllint.md) — lints YAML files with yamllint
+- [Jq](processors/checkers/jq.md) — validates JSON files with jq
+- [Jsonlint](processors/checkers/jsonlint.md) — lints JSON files with jsonlint
+- [Taplo](processors/checkers/taplo.md) — checks TOML files with taplo
+- [Terms](processors/checkers/terms.md) — checks that technical terms are backtick-quoted in Markdown files
+- [Json Schema](processors/checkers/json_schema.md) — validates JSON schema propertyOrdering
+- [Iyamlschema](processors/checkers/iyamlschema.md) — validates YAML files against JSON schemas (native)
+- [Yaml2json](processors/generators/yaml2json.md) — converts YAML files to JSON (native)
+- [Markdown2html](processors/generators/markdown2html.md) — converts Markdown to HTML using markdown CLI
+- [Imarkdown2html](processors/generators/imarkdown2html.md) — converts Markdown to HTML (native)
+- [Mass Generator](processors/mass_generators/mass_generator.md) — runs a tool that enumerates its outputs in advance, one cached product per predicted file
 
 ## Output Directory Caching
 
@@ -90,9 +91,10 @@ cache_output_dir = false   # Disable for large target/ directories
 | Generator | Each declared output file (`product.outputs`) | No |
 | Creator | Each declared output directory (`product.output_dirs`) | **Yes** |
 | Explicit | Declared `output_files` + declared `output_dirs` | Yes (for `output_dirs` only) |
+| Mass generator | Each predicted output file (`product.outputs`) | No |
 | Lua plugin | Custom `clean()` if defined; otherwise file-only | No (unless plugin code does it) |
 
-Recursive directory removal is reserved for Creators (whose external build tool produces an unknown set of files inside a known directory) and the user-declared `output_dirs` of Explicit. All other processor types remove individually-declared files and nothing else.
+Recursive directory removal is reserved for Creators (whose external build tool produces an unknown set of files inside a known directory) and the user-declared `output_dirs` of Explicit. All other processor types remove individually-declared files and nothing else. A mass generator's `output_dirs` only bound where its predicted files may live; the directory itself is never removed.
 
 After every product's `clean()` completes, the orchestrator runs an empty-directory sweep: every parent of every removed output (and every parent of every removed `output_dir`) is tried with `fs::remove_dir` (non-recursive — succeeds only on already-empty directories), walking upward until a non-empty directory or the project root. The sweep does not special-case `out/` — any ancestor of a cleaned output is eligible.
 

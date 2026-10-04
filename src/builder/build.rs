@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 /// Expand `@`-prefixed shortcuts in the processor filter.
 ///
 /// Three categories of shortcuts:
-/// - **By type**: `@checkers`, `@generators`, `@creators`, `@lua`
+/// - **By type**: `@checkers`, `@generators`, `@creators`, `@mass_generators`, `@lua`
 /// - **By tool**: `@python3`, `@node`, etc. — matches processors whose `required_tools()` contains the name
 /// - **By processor name**: `@ruff` → `"ruff"` — strips the `@` prefix
 fn expand_aliases(filter: &[String], processors: &ProcessorMap) -> Vec<String> {
@@ -54,6 +54,17 @@ fn expand_aliases(filter: &[String], processors: &ProcessorMap) -> Vec<String> {
                             .filter(|(name, _)| {
                                 crate::registries::processor::processor_type_of(name.as_str())
                                     == ProcessorType::Creator
+                            })
+                            .map(|(n, _)| n.clone()),
+                    );
+                }
+                "mass_generators" => {
+                    expanded.extend(
+                        processors
+                            .iter()
+                            .filter(|(name, _)| {
+                                crate::registries::processor::processor_type_of(name.as_str())
+                                    == ProcessorType::MassGenerator
                             })
                             .map(|(n, _)| n.clone()),
                     );

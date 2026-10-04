@@ -246,8 +246,11 @@ should be able to tell which audience the document is for:
   `docs/src/configuration.md`, `docs/src/commands.md`.
 - **Maintainer chapters live under `docs/src/internal/`** — e.g.
   `docs/src/internal/architecture.md`, `docs/src/internal/cache.md`.
-- **Per-processor reference docs live under `docs/src/processors/`** —
-  these are user-facing (they document how to configure each processor).
+- **Per-processor reference docs live under `docs/src/processors/<type>/`**
+  — one subdirectory per processor type (`checkers`, `generators`,
+  `creators`, `explicit`, `mass_generators`), each with a `README.md`
+  introducing the type.
+  These are user-facing (they document how to configure each processor).
 
 When adding a new doc, decide first whether it's user-facing or internal,
 then place it accordingly. Moving a doc across the boundary requires

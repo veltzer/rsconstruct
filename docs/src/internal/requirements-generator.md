@@ -142,7 +142,7 @@ cross-processor channel, we share a pure function.
 - `src/config/processor_configs.rs` — add `RequirementsConfig`.
 - `src/processors/mod.rs` — add `pub const REQUIREMENTS = "requirements"`
   to `names` module.
-- `docs/src/processors/requirements.md` — user-facing processor doc.
+- `docs/src/processors/generators/requirements.md` — user-facing processor doc.
 
 ### Processor structure
 

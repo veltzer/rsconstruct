@@ -1,5 +1,5 @@
 use redb::Database;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -35,6 +35,13 @@ pub struct BuildContext {
     pub(crate) webcache_ttl_secs: std::sync::atomic::AtomicU64,
     /// `[build] command_timeout_secs`; 0 means no limit (the default).
     pub(crate) command_timeout_secs: std::sync::atomic::AtomicU64,
+    /// Every path some product of the current graph declares as an output.
+    /// Filled by the executor before the first product runs. A processor
+    /// that inspects a shared output directory after its tool ran (the
+    /// mass generator's plan-vs-build check) needs it to tell a neighbor's
+    /// declared file from a file its tool wrote off-plan — `execute` has no
+    /// other route to the graph.
+    pub(crate) declared_outputs: Mutex<HashSet<PathBuf>>,
 }
 
 impl BuildContext {
@@ -52,7 +59,20 @@ impl BuildContext {
             max_arg_len: std::sync::atomic::AtomicUsize::new(1_000_000),
             webcache_ttl_secs: std::sync::atomic::AtomicU64::new(7 * 24 * 60 * 60),
             command_timeout_secs: std::sync::atomic::AtomicU64::new(0),
+            declared_outputs: Mutex::new(HashSet::new()),
         }
+    }
+
+    /// Record the declared outputs of every product in the graph about to
+    /// be executed. Replaces any earlier set: a context outlives one graph
+    /// in watch mode.
+    pub(crate) fn set_declared_outputs(&self, paths: HashSet<PathBuf>) {
+        *self.declared_outputs.lock().unwrap() = paths;
+    }
+
+    /// Whether some product of the current graph declares `path` as an output.
+    pub fn is_declared_output(&self, path: &std::path::Path) -> bool {
+        self.declared_outputs.lock().unwrap().contains(path)
     }
 
     pub(crate) fn set_command_timeout_secs(&self, n: u64) {

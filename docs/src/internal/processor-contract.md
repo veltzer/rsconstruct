@@ -67,6 +67,9 @@ what *that* product produced. Concretely:
   declared `output_dirs`.
 - **Explicit** processors run both — files for `output_files`, recursive
   removal for any user-declared `output_dirs`.
+- **Mass generators** remove every predicted file in `product.outputs`,
+  like Generators. Their `output_dirs` only bound where predicted files may
+  live and are never removed: the directory is shared by design.
 - **Lua plugins** may override `clean(product)`; the default falls back to
   file-only removal.
 

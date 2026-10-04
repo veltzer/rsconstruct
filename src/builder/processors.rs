@@ -114,7 +114,7 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
         plugins.retain(|p| p.processor_type.as_str() == filter);
         if plugins.is_empty() {
             anyhow::bail!(
-                "No processors of type '{filter}'. Valid types: checker, generator, creator, explicit."
+                "No processors of type '{filter}'. Valid types: checker, generator, creator, explicit, mass_generator."
             );
         }
     }

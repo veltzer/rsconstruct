@@ -144,7 +144,7 @@ predict_command = "./list-mkdocs-outputs.sh"   # prints one output path per line
 output_dirs     = ["_site"]
 ```
 
-rsconstruct would run `predict_command` at graph-build time, turn each printed path into a declared `outputs` entry, and promote the Creator to a per-file Mass Generator. After that, the entire "how do we order two processors that both write into `_site/`?" question dissolves — every file has exactly one declared owner, and the normal Generator/data-flow rules apply.
+The [mass generator](../processors/mass_generators/mass_generator.md) does exactly this: rsconstruct runs `predict_command` at graph-build time, turns each printed path into a declared `outputs` entry, and the opaque Creator becomes a set of per-file products. After that, the entire "how do we order two processors that both write into `_site/`?" question dissolves — every file has exactly one declared owner, and the normal Generator/data-flow rules apply.
 
 **Why this is an alternative to ordering knobs:**
 
