@@ -49,7 +49,7 @@ Files in the source directory (default `src/`) are compiled to executables under
 
 ### Python files
 
-Python files are linted and stub outputs are written to `out/ruff/` (ruff processor) or `out/pylint/` (pylint processor).
+Python files are linted by `processor.checker.ruff` or `processor.checker.pylint`. Checkers write no files: a passing check is recorded in the cache, so an unchanged file is not checked again.
 
 ### Build artifacts
 

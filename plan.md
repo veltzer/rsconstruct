@@ -15,11 +15,12 @@ processors are additions, sitting beside the existing ones, so that a repo
 *can* be built entirely with Rust processors if it chooses to.
 
 This file is the working plan. Each stage has a table with a **Status**
-column; update the status and the log at the bottom as items move. Do not
-delete rows: a decision not to do something is recorded, not erased.
+column; update the status and the log at the bottom as items move. A row
+that is done is deleted (the log records the coverage it bought); a decision
+not to do something stays, so it is recorded rather than forgotten.
 
-Status values: `todo`, `in progress`, `done`, `won't do` (with a reason in
-Notes), `blocked` (with what on).
+Status values: `todo`, `in progress`, `won't do` (with a reason in Notes),
+`blocked` (with what on).
 
 ## Baseline (2026-09-21)
 
@@ -52,7 +53,7 @@ concentrated in a handful of processors, which is what orders the stages:
 | yamllint | 27 | Stage 1: iyamllint (exists) |
 | cppcheck | 23 | Inherent for now (no Rust C++ analyser) |
 | eslint | 21 | Stage 2: oxlint |
-| stylelint | 16 | Stage 2: biome, or Stage 3: native `icss` |
+| stylelint | 16 | Stage 2: biome |
 | checkstyle | 15 | Inherent: Java |
 | hadolint | 15 | Stage 3: native `idockerfile` |
 | tidy | 14 | Stage 3: native `ihtml` |
@@ -93,7 +94,6 @@ Everything with fewer than ten repos is in the per-stage tables below.
 
 | Item | Status | Notes |
 |---|---|---|
-| `is_rust` flag on every plugin, shown by `processor list` and `status` | done | 2026-09-21 |
 | Fleet usage + coverage script (below) checked in as `scripts/rust_coverage.py` | todo | Prints the two baseline tables; run before and after every stage |
 | Coverage number in the log at the bottom, updated per stage | todo | |
 
@@ -111,13 +111,6 @@ the existing processor's docs page. Ordered by repos using the non-Rust one.
 | Spelling (aspell) | 1 | zspell | in progress | zspell reads Hunspell dictionaries; the one aspell user (veltzer.github.io) checks Hebrew with a compiled aspell dictionary, so the Hebrew Hunspell dictionary must be tried against its allowlist |
 | Python formatting check (black) | 0 | ruff | todo | ruff's processor runs `check`; it needs a `format --check` mode (a config field or a `ruff_format` instance) before this row is covered |
 | Python lint (pylint) | 0 | ruff | in progress | ruff's `PL` rule set; confirm the pylint rules the fleet's `.pylintrc` enables all have ruff equivalents |
-| JSON lint (jsonlint, jq) | 0 | ijsonlint, ijq | done | Native, and the fleet already uses ijsonlint in 33 repos |
-| Markdown lint (markdownlint, mdl) | 0 | rumdl | done | Fleet already uses rumdl in 194 repos |
-| Templating (jinja2, mako) | 0 | tera | done | tera is native. Jinja2 *syntax* specifically is Stage 3 `ijinja2` |
-| Sass compile (sass) | 0 | isass | done | Native |
-| PDF merge (pdfunite) | 0 | ipdfunite | done | Native |
-| Markdown to HTML (markdown2html) | 0 | imarkdown2html | done | Native |
-| TOML lint (taplo) | 192 | itaplo | done | Both are Rust; itaplo is the native one and needs no install |
 
 ## Stage 2: wrap existing Rust tools as new external processors
 
@@ -127,8 +120,6 @@ New processor file + `ToolInfo` entry each. Ordered by repos affected.
 |---|---|---|---|---|---|
 | Lua lint (luacheck) | 109 | selene | `selene` | todo | Largest single win after actionlint. selene needs a `selene.toml` + standard library file per repo; that becomes a fleet-shared file. Compare findings on the 109 repos before switching |
 | Python types (mypy) | 127 | ty | `ty` | todo | Alternative to pyrefly if Stage 1 finds gaps. Both are pre-1.0; pick one per the comparison, not both |
-| JS/TS lint (eslint, jshint, jslint, standard) | 21 | oxlint | `oxlint` | done | oxlint reads eslint-style config; the fleet's `.eslint.config.js` needs a one-time translation (`.oxlintrc.json`, first done in demos-lang-js). oxlint lacks only `no-dupe-args` and `no-octal`, which its parser rejects as syntax errors |
-| CSS/SCSS lint (stylelint) | 16 | biome | `biome` (css) | done | biome lints CSS but not SCSS. Counted 2026-10-03: of the 16 stylelint repos only veltzer.github.io has SCSS, and only one authored file (`sass/style.scss`), so biome covers the fleet and that one file stays on stylelint; no `icss` needed. First migrated: demos-lang-js (`biome.jsonc`) |
 | Formatting check (prettier) | 0 | biome or dprint | `biome` (format) | todo | No fleet usage; do together with the JS lint row |
 | Python deps (pip) | 0 | uv | `uv` creator | todo | uv is already in the tool registry (used by `tools install-deps`); a creator that runs `uv sync` replaces pip. No fleet usage of the pip creator today |
 | LaTeX (pdflatex) | 0 | tectonic | `tectonic` | todo | Drop-in for pdflatex on most documents; tectonic bundles its own TeX distribution |
@@ -146,7 +137,7 @@ Each is a `SimpleChecker`/`SimpleGenerator` over a crate, `is_native: true`,
 | HTML lint (htmlhint, tidy, htmllint) | 43 | html5ever, scraper | `ihtml` | todo | Parse errors from html5ever plus a rule set covering what the fleet's `.htmlhintrc` enables (doctype, unique ids, attr quoting, closed tags). tidy's "clean" pass is out of scope; validation only |
 | XML well-formedness (xmllint) | 28 | roxmltree or quick-xml | `ixmllint` | todo | Well-formedness only. No Rust XSD validator exists; repos that pass `--schema` today stay on xmllint, and the row stays open for them |
 | Dockerfile lint (hadolint) | 15 | dockerfile-parser | `idockerfile` | todo | Implement the DL30xx/DL40xx rules the fleet actually triggers (measured first); hadolint's full set is not the target |
-| CSS/SCSS lint (stylelint) | 16 | lightningcss, grass (for SCSS) | `icss` | todo | lightningcss reports parse errors and can flag unknown properties; SCSS goes through grass first. Complements the biome row in Stage 2 |
+| CSS/SCSS lint (stylelint) | 16 | lightningcss, grass (for SCSS) | `icss` | won't do | biome (Stage 2) covers the fleet's CSS: counted 2026-10-03, of the 16 stylelint repos only veltzer.github.io has SCSS, and only one authored file (`sass/style.scss`), which stays on stylelint. Revisit only if SCSS spreads |
 | SVG lint (svglint) | 2 | usvg | `isvglint` | todo | usvg parse = valid SVG; cheap |
 | YAML query (yq) | 0 | serde_yaml + the `ijq` engine | `iyq` | todo | YAML to JSON, then reuse ijq's filter evaluation |
 | Jinja2 templates (jinja2) | 0 | minijinja | `ijinja2` | todo | minijinja is Jinja2-compatible; covers the rare template that cannot be ported to tera |
@@ -221,11 +212,12 @@ Until the script is checked in, this is what produced the baseline. It reads
 ```python
 import glob, json, os, re, subprocess
 
-entries = json.loads(subprocess.check_output(["rsconstruct", "--json", "processors", "list"]))
+entries = json.loads(subprocess.check_output(["rsconstruct", "--json", "processor", "list"]))
 usage = {}
 for path in glob.glob(os.path.expanduser("~/git/*/rsconstruct.toml")):
-    for m in re.finditer(r"^\[processor\.([a-z0-9_]+)", open(path).read(), re.M):
-        usage.setdefault(m.group(1), set()).add(path.split("/")[-2])
+    # Headers are processor.<type>.<name>[.<instance>]; the pname is the first three segments.
+    for m in re.finditer(r"^\[processor\.([a-z_]+\.[a-z0-9_]+)", open(path).read(), re.M):
+        usage.setdefault("processor." + m.group(1), set()).add(path.split("/")[-2])
 rust = {e["name"] for e in entries if e["rust"]}
 total = sum(len(v) for v in usage.values())
 served = sum(len(v) for k, v in usage.items() if k in rust)
@@ -240,3 +232,4 @@ for e in sorted(entries, key=lambda e: -len(usage.get(e["name"], ()))):
 | Date | Change | Rust processors | Declarations served by Rust |
 |---|---|---|---|
 | 2026-09-21 | `is_rust` flag added; baseline measured; plan written | 28 / 93 | 708 / 1610 (44 %) |
+| 2026-10-04 | Done rows removed (is_rust flag; JSON, Markdown, TOML lint; templating; Sass; PDF merge; Markdown to HTML; oxlint; biome); `icss` set to won't do; script updated for `processor.<type>.<name>` names | 30 / 96 | 741 / 1587 (46 %) |

@@ -21,7 +21,7 @@ never linked together. Cppcheck has no flag to disable this cross-file analysis
 ## Source Files
 
 - Input: `{source_dir}/**/*.c`, `{source_dir}/**/*.cc`
-- Output: `out/cppcheck/{flat_name}.cppcheck`
+- Output: none (checker — a passing check is recorded in the cache, no file is written)
 
 ## Configuration
 

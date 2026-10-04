@@ -84,7 +84,7 @@ fn status_reports_rust() {
     );
     let stdout = String::from_utf8_lossy(&json.stdout);
     let value: serde_json::Value = serde_json::from_str(&stdout).expect("Expected valid JSON");
-    let processors = value["processors"]
+    let processors = value["processor"]
         .as_array()
         .expect("status --json should list processors");
     let tera = processors

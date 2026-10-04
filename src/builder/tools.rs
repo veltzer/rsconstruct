@@ -244,7 +244,7 @@ fn run_tools_command(
                         tool: info.name.to_string(),
                         installed: which::which(info.name).is_ok(),
                         runtime: info.runtime.to_string(),
-                        processors: Vec::new(),
+                        processor: Vec::new(),
                         install_methods: info
                             .install_methods
                             .iter()
@@ -329,7 +329,7 @@ fn run_tools_command(
                             tool: tool.clone(),
                             installed: which::which(tool).is_ok(),
                             runtime: info.map_or("unknown", |i| i.runtime).to_string(),
-                            processors: procs.clone(),
+                            processor: procs.clone(),
                             install_methods,
                         }
                     })
@@ -487,7 +487,7 @@ fn run_tools_command(
                     name: tool.clone(),
                     installed,
                     runtime,
-                    processors: procs.clone(),
+                    processor: procs.clone(),
                     install_command,
                 });
             }
@@ -536,7 +536,7 @@ fn run_tools_command(
                         } else {
                             color::red("\u{2717}")
                         };
-                        let procs = stat.processors.join(", ");
+                        let procs = stat.processor.join(", ");
                         let install = stat.install_command.as_deref().unwrap_or("").to_string();
                         vec![stat.name.clone(), status.to_string(), procs, install]
                     })
@@ -1233,7 +1233,7 @@ fn tools_graph_json(tool_map: &BTreeMap<String, Vec<String>>) -> Result<String> 
                 tool: tool.clone(),
                 installed: which::which(tool).is_ok(),
                 runtime: info.map_or("unknown", |i| i.runtime).to_string(),
-                processors: procs.clone(),
+                processor: procs.clone(),
                 install_methods,
             }
         })

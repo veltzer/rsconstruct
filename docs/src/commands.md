@@ -151,7 +151,7 @@ Pass `--no-empty-dirs` to skip the sweep entirely. Files still get cleaned; empt
 
 #### Filtering by processor
 
-`-p` / `--processors` accepts a comma-separated list of processor type names (e.g. `tera`, `cargo`). Only products whose processor type matches are cleaned. Multi-instance configs share a type name, so `-p processor.generator.tera` cleans every `[processor.tera.*]` instance together.
+`-p` / `--processor` accepts a comma-separated list of processor instance names (inames), e.g. `-p processor.generator.tera,processor.creator.cargo`. Only products of exactly those instances are cleaned: a named instance is its own iname, so cleaning both `[processor.generator.marp.slides]` and `[processor.generator.marp.docs]` takes `-p processor.generator.marp.slides,processor.generator.marp.docs`.
 
 #### Other clean variants
 
@@ -172,7 +172,7 @@ rsconstruct status --breakdown         # Show source file counts by processor an
 rsconstruct --json status              # Same summary as JSON
 ```
 
-The per-processor table (and each entry of `--json`'s `processors` array) carries
+The per-processor table (and each entry of `--json`'s `processor` array) carries
 two flags after the counts: `native`, whether the processor is pure Rust inside
 rsconstruct, and `rust`, whether the code that does the work is written in Rust at
 all — always so for a native processor, and for an external one only when the tool
@@ -217,7 +217,7 @@ rsconstruct watch -j4                          # Watch with 4 parallel jobs
 rsconstruct watch -p processor.checker.ruff                      # Watch and only run the ruff processor
 ```
 
-The watch command accepts the same build flags as `rsconstruct build` (e.g., `--jobs`, `--keep-going`, `--timings`, `--processors`, `--batch-size`, `--explain`, `--retry`, `--no-mtime`, `--no-summary`).
+The watch command accepts the same build flags as `rsconstruct build` (e.g., `--jobs`, `--keep-going`, `--timings`, `--processor`, `--batch-size`, `--explain`, `--retry`, `--no-mtime`, `--no-summary`).
 
 ## `rsconstruct graph`
 

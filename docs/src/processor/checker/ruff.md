@@ -16,7 +16,7 @@ single ruff invocation for better performance.
 ## Source Files
 
 - Input: `**/*.py`
-- Output: `out/ruff/{flat_name}.ruff`
+- Output: none (checker — a passing check is recorded in the cache, no file is written)
 
 ## Configuration
 

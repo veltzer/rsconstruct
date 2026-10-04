@@ -795,7 +795,7 @@ impl Builder {
                 })
                 .collect();
             let json = serde_json::json!({
-                "processors": processors_json,
+                "processor": processors_json,
                 "totals": {
                     "up_to_date": counts[0],
                     "restorable": counts[1],

@@ -14,32 +14,32 @@
 
 | File | Action | Responsibility |
 |------|--------|---------------|
-| `src/processors/base.rs` | Create | `ProcessorBase` struct + methods for all boilerplate |
-| `src/processors/mod.rs` | Modify | Add `mod base`, `pub use base::ProcessorBase`, add `delegate_base!` macro |
-| `src/processors/generators/mod.rs` | Modify | Replace `impl_generator!` macro with `delegate_base!` |
-| `src/processors/generators/marp.rs` | Modify | First migration: use `ProcessorBase` |
-| `src/processors/generators/mako.rs` | Modify | Migration |
-| `src/processors/generators/jinja2.rs` | Modify | Migration |
-| `src/processors/generators/tera.rs` | Modify | Migration |
-| `src/processors/generators/pdflatex.rs` | Modify | Migration |
-| `src/processors/generators/pdfunite.rs` | Modify | Migration |
-| `src/processors/generators/rust_single_file.rs` | Modify | Migration |
-| `src/processors/generators/generator.rs` | Modify | Migration |
-| `src/processors/generators/tags.rs` | Modify | Migration |
-| `src/processors/generators/cc_single_file/mod.rs` | Modify | Migration |
-| `src/processors/generators/linux_module.rs` | Modify | Migration |
-| `src/processors/generators/explicit.rs` | Modify | Migration (partial - no standard config) |
-| `src/processors/generators/pandoc.rs` | Modify | Migration from `impl_generator!` |
-| `src/processors/generators/sass.rs` | Modify | Migration from `impl_generator!` |
-| `src/processors/generators/chromium.rs` | Modify | Migration from `impl_generator!` |
+| `src/processor/base.rs` | Create | `ProcessorBase` struct + methods for all boilerplate |
+| `src/processor/mod.rs` | Modify | Add `mod base`, `pub use base::ProcessorBase`, add `delegate_base!` macro |
+| `src/processor/generator/mod.rs` | Modify | Replace `impl_generator!` macro with `delegate_base!` |
+| `src/processor/generator/marp.rs` | Modify | First migration: use `ProcessorBase` |
+| `src/processor/generator/mako.rs` | Modify | Migration |
+| `src/processor/generator/jinja2.rs` | Modify | Migration |
+| `src/processor/generator/tera.rs` | Modify | Migration |
+| `src/processor/generator/pdflatex.rs` | Modify | Migration |
+| `src/processor/generator/pdfunite.rs` | Modify | Migration |
+| `src/processor/generator/rust_single_file.rs` | Modify | Migration |
+| `src/processor/generator/generator.rs` | Modify | Migration |
+| `src/processor/generator/tags.rs` | Modify | Migration |
+| `src/processor/generator/cc_single_file/mod.rs` | Modify | Migration |
+| `src/processor/generator/linux_module.rs` | Modify | Migration |
+| `src/processor/generator/explicit.rs` | Modify | Migration (partial - no standard config) |
+| `src/processor/generator/pandoc.rs` | Modify | Migration from `impl_generator!` |
+| `src/processor/generator/sass.rs` | Modify | Migration from `impl_generator!` |
+| `src/processor/generator/chromium.rs` | Modify | Migration from `impl_generator!` |
 | (remaining impl_generator! users) | Modify | Migration from `impl_generator!` |
-| `src/processors/checkers/mod.rs` | Modify | Update `impl_checker!` to use `ProcessorBase` |
-| `src/processors/checkers/zspell.rs` | Modify | Migration of manual checker |
-| `src/processors/checkers/clippy.rs` | Modify | Migration of manual checker |
-| `src/processors/checkers/make.rs` | Modify | Migration of manual checker |
-| `src/processors/checkers/aspell.rs` | Modify | Migration of manual checker |
-| `src/processors/checkers/mdl.rs` | Modify | Migration of manual checker |
-| `src/processors/checkers/markdownlint.rs` | Modify | Migration of manual checker |
+| `src/processor/checker/mod.rs` | Modify | Update `impl_checker!` to use `ProcessorBase` |
+| `src/processor/checker/zspell.rs` | Modify | Migration of manual checker |
+| `src/processor/checker/clippy.rs` | Modify | Migration of manual checker |
+| `src/processor/checker/make.rs` | Modify | Migration of manual checker |
+| `src/processor/checker/aspell.rs` | Modify | Migration of manual checker |
+| `src/processor/checker/mdl.rs` | Modify | Migration of manual checker |
+| `src/processor/checker/markdownlint.rs` | Modify | Migration of manual checker |
 | `tests/tests_mod/build.rs` | Verify | Run existing tests to confirm no regressions |
 
 ---
@@ -47,10 +47,10 @@
 ### Task 1: Create ProcessorBase struct
 
 **Files:**
-- Create: `src/processors/base.rs`
-- Modify: `src/processors/mod.rs`
+- Create: `src/processor/base.rs`
+- Modify: `src/processor/mod.rs`
 
-- [ ] **Step 1: Create `src/processors/base.rs` with the base struct**
+- [ ] **Step 1: Create `src/processor/base.rs` with the base struct**
 
 ```rust
 use serde::Serialize;
@@ -100,16 +100,16 @@ impl ProcessorBase {
 }
 ```
 
-- [ ] **Step 2: Add `mod base` and `pub use` to `src/processors/mod.rs`**
+- [ ] **Step 2: Add `mod base` and `pub use` to `src/processor/mod.rs`**
 
-Add near the top of `src/processors/mod.rs`, after the other `mod` declarations:
+Add near the top of `src/processor/mod.rs`, after the other `mod` declarations:
 
 ```rust
 mod base;
 pub use base::ProcessorBase;
 ```
 
-- [ ] **Step 3: Add `delegate_base!` macro to `src/processors/mod.rs`**
+- [ ] **Step 3: Add `delegate_base!` macro to `src/processor/mod.rs`**
 
 Add after the `pub use base::ProcessorBase;` line:
 
@@ -184,7 +184,7 @@ Expected: Compiles with no errors (macro and struct are defined but not yet used
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/processors/base.rs src/processors/mod.rs
+git add src/processor/base.rs src/processor/mod.rs
 git commit -m "feat: add ProcessorBase struct and delegate_base! macro"
 ```
 
@@ -193,7 +193,7 @@ git commit -m "feat: add ProcessorBase struct and delegate_base! macro"
 ### Task 2: Migrate MarpProcessor (first manual generator)
 
 **Files:**
-- Modify: `src/processors/generators/marp.rs`
+- Modify: `src/processor/generator/marp.rs`
 
 - [ ] **Step 1: Run existing tests to establish baseline**
 
@@ -202,7 +202,7 @@ Expected: All 340 tests pass
 
 - [ ] **Step 2: Rewrite MarpProcessor to use ProcessorBase**
 
-Replace the full contents of `src/processors/generators/marp.rs` with:
+Replace the full contents of `src/processor/generator/marp.rs` with:
 
 ```rust
 use anyhow::{Context, Result};
@@ -298,7 +298,7 @@ Expected: All 340 tests pass
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/processors/generators/marp.rs
+git add src/processor/generator/marp.rs
 git commit -m "refactor: migrate MarpProcessor to ProcessorBase"
 ```
 
@@ -307,15 +307,15 @@ git commit -m "refactor: migrate MarpProcessor to ProcessorBase"
 ### Task 3: Migrate template processors (mako, jinja2, tera)
 
 **Files:**
-- Modify: `src/processors/generators/mako.rs`
-- Modify: `src/processors/generators/jinja2.rs`
-- Modify: `src/processors/generators/tera.rs`
+- Modify: `src/processor/generator/mako.rs`
+- Modify: `src/processor/generator/jinja2.rs`
+- Modify: `src/processor/generator/tera.rs`
 
 These three share an identical `discover()` pattern using `find_templates()`. Each should use `delegate_base!(generator)` but override `auto_detect()` since they use `find_templates` instead of `scan_root_valid`.
 
 - [ ] **Step 1: Rewrite MakoProcessor**
 
-Replace `src/processors/generators/mako.rs`:
+Replace `src/processor/generator/mako.rs`:
 
 ```rust
 use anyhow::Result;
@@ -413,11 +413,11 @@ impl ProductDiscovery for MakoProcessor {
 
 - [ ] **Step 2: Rewrite Jinja2Processor (same pattern as Mako)**
 
-Apply the same pattern to `src/processors/generators/jinja2.rs`. Read the file first, keep its `render_jinja2()` function and `execute()` logic, but replace the `impl ProductDiscovery` block with `delegate_base!(generator)` + overrides for `auto_detect`, `required_tools`, `discover`, `execute`.
+Apply the same pattern to `src/processor/generator/jinja2.rs`. Read the file first, keep its `render_jinja2()` function and `execute()` logic, but replace the `impl ProductDiscovery` block with `delegate_base!(generator)` + overrides for `auto_detect`, `required_tools`, `discover`, `execute`.
 
 - [ ] **Step 3: Rewrite TeraProcessor (same pattern, different execute)**
 
-Apply the same pattern to `src/processors/generators/tera.rs`. Read the file first. Tera has more complex `execute()` and `discover()` logic — keep those, but use `delegate_base!(generator)` for the boilerplate and override `auto_detect`.
+Apply the same pattern to `src/processor/generator/tera.rs`. Read the file first. Tera has more complex `execute()` and `discover()` logic — keep those, but use `delegate_base!(generator)` for the boilerplate and override `auto_detect`.
 
 - [ ] **Step 4: Build and run tests**
 
@@ -427,7 +427,7 @@ Expected: All 340 tests pass
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/processors/generators/mako.rs src/processors/generators/jinja2.rs src/processors/generators/tera.rs
+git add src/processor/generator/mako.rs src/processor/generator/jinja2.rs src/processor/generator/tera.rs
 git commit -m "refactor: migrate template processors to ProcessorBase"
 ```
 
@@ -436,14 +436,14 @@ git commit -m "refactor: migrate template processors to ProcessorBase"
 ### Task 4: Migrate remaining manual generators
 
 **Files:**
-- Modify: `src/processors/generators/pdflatex.rs`
-- Modify: `src/processors/generators/pdfunite.rs`
-- Modify: `src/processors/generators/rust_single_file.rs`
-- Modify: `src/processors/generators/generator.rs`
-- Modify: `src/processors/generators/tags.rs`
-- Modify: `src/processors/generators/cc_single_file/mod.rs`
-- Modify: `src/processors/generators/linux_module.rs`
-- Modify: `src/processors/generators/explicit.rs`
+- Modify: `src/processor/generator/pdflatex.rs`
+- Modify: `src/processor/generator/pdfunite.rs`
+- Modify: `src/processor/generator/rust_single_file.rs`
+- Modify: `src/processor/generator/generator.rs`
+- Modify: `src/processor/generator/tags.rs`
+- Modify: `src/processor/generator/cc_single_file/mod.rs`
+- Modify: `src/processor/generator/linux_module.rs`
+- Modify: `src/processor/generator/explicit.rs`
 
 For each processor:
 1. Add `base: ProcessorBase` field to the struct
@@ -465,7 +465,7 @@ Expected: All 340 tests pass
 - [ ] **Step 3: Commit**
 
 ```bash
-git add src/processors/generators/
+git add src/processor/generator/
 git commit -m "refactor: migrate remaining manual generators to ProcessorBase"
 ```
 
@@ -474,16 +474,16 @@ git commit -m "refactor: migrate remaining manual generators to ProcessorBase"
 ### Task 5: Migrate impl_generator! macro users
 
 **Files:**
-- Modify: `src/processors/generators/pandoc.rs`
-- Modify: `src/processors/generators/sass.rs`
-- Modify: `src/processors/generators/chromium.rs`
-- Modify: `src/processors/generators/a2x.rs` (if using macro)
-- Modify: `src/processors/generators/drawio.rs`
-- Modify: `src/processors/generators/libreoffice.rs`
-- Modify: `src/processors/generators/markdown.rs`
-- Modify: `src/processors/generators/mermaid.rs`
-- Modify: `src/processors/generators/objdump.rs`
-- Modify: `src/processors/generators/protobuf.rs`
+- Modify: `src/processor/generator/pandoc.rs`
+- Modify: `src/processor/generator/sass.rs`
+- Modify: `src/processor/generator/chromium.rs`
+- Modify: `src/processor/generator/a2x.rs` (if using macro)
+- Modify: `src/processor/generator/drawio.rs`
+- Modify: `src/processor/generator/libreoffice.rs`
+- Modify: `src/processor/generator/markdown.rs`
+- Modify: `src/processor/generator/mermaid.rs`
+- Modify: `src/processor/generator/objdump.rs`
+- Modify: `src/processor/generator/protobuf.rs`
 
 For each: replace `impl_generator!(...)` invocation with explicit struct + `delegate_base!(generator)` + the discover call (multi_format or single_format). These processors already have an `execute_product()` method — rename to `execute()` inside the trait impl.
 
@@ -553,7 +553,7 @@ impl ProductDiscovery for PandocProcessor {
 Run: `cargo test 2>&1 | tail -5`
 Expected: All 340 tests pass
 
-- [ ] **Step 3: Remove the `impl_generator!` macro from `src/processors/generators/mod.rs`**
+- [ ] **Step 3: Remove the `impl_generator!` macro from `src/processor/generator/mod.rs`**
 
 Delete the entire `macro_rules! impl_generator { ... }` block (lines 16-151).
 
@@ -565,7 +565,7 @@ Expected: All 340 tests pass
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/processors/generators/
+git add src/processor/generator/
 git commit -m "refactor: migrate impl_generator! users to ProcessorBase, remove macro"
 ```
 
@@ -574,7 +574,7 @@ git commit -m "refactor: migrate impl_generator! users to ProcessorBase, remove 
 ### Task 6: Migrate impl_checker! macro to use ProcessorBase
 
 **Files:**
-- Modify: `src/processors/checkers/mod.rs`
+- Modify: `src/processor/checker/mod.rs`
 
 - [ ] **Step 1: Update the `@build` variant of `impl_checker!`**
 
@@ -598,7 +598,7 @@ Expected: All 340 tests pass
 - [ ] **Step 3: Commit**
 
 ```bash
-git add src/processors/checkers/mod.rs
+git add src/processor/checker/mod.rs
 git commit -m "refactor: update impl_checker! to use ProcessorBase"
 ```
 
@@ -607,12 +607,12 @@ git commit -m "refactor: update impl_checker! to use ProcessorBase"
 ### Task 7: Migrate manual checkers to ProcessorBase
 
 **Files:**
-- Modify: `src/processors/checkers/zspell.rs`
-- Modify: `src/processors/checkers/clippy.rs`
-- Modify: `src/processors/checkers/make.rs`
-- Modify: `src/processors/checkers/aspell.rs`
-- Modify: `src/processors/checkers/mdl.rs`
-- Modify: `src/processors/checkers/markdownlint.rs`
+- Modify: `src/processor/checker/zspell.rs`
+- Modify: `src/processor/checker/clippy.rs`
+- Modify: `src/processor/checker/make.rs`
+- Modify: `src/processor/checker/aspell.rs`
+- Modify: `src/processor/checker/mdl.rs`
+- Modify: `src/processor/checker/markdownlint.rs`
 
 For each: add `base: ProcessorBase` field, use `delegate_base!(checker)`, keep processor-specific methods.
 
@@ -630,7 +630,7 @@ Expected: All 340 tests pass
 - [ ] **Step 3: Commit**
 
 ```bash
-git add src/processors/checkers/
+git add src/processor/checker/
 git commit -m "refactor: migrate manual checkers to ProcessorBase"
 ```
 
@@ -639,14 +639,14 @@ git commit -m "refactor: migrate manual checkers to ProcessorBase"
 ### Task 8: Migrate mass generators
 
 **Files:**
-- Modify: `src/processors/mass_generators/cargo.rs`
-- Modify: `src/processors/mass_generators/cc.rs`
-- Modify: `src/processors/mass_generators/gem.rs`
-- Modify: `src/processors/mass_generators/jekyll.rs`
-- Modify: `src/processors/mass_generators/mdbook.rs`
-- Modify: `src/processors/mass_generators/npm.rs`
-- Modify: `src/processors/mass_generators/pip.rs`
-- Modify: `src/processors/mass_generators/sphinx.rs`
+- Modify: `src/processor/mass_generator/cargo.rs`
+- Modify: `src/processor/mass_generator/cc.rs`
+- Modify: `src/processor/mass_generator/gem.rs`
+- Modify: `src/processor/mass_generator/jekyll.rs`
+- Modify: `src/processor/mass_generator/mdbook.rs`
+- Modify: `src/processor/mass_generator/npm.rs`
+- Modify: `src/processor/mass_generator/pip.rs`
+- Modify: `src/processor/mass_generator/sphinx.rs`
 
 Same pattern: add `base: ProcessorBase`, use `delegate_base!(generator)`, keep custom logic.
 
@@ -662,7 +662,7 @@ Expected: All 340 tests pass
 - [ ] **Step 3: Commit**
 
 ```bash
-git add src/processors/mass_generators/
+git add src/processor/mass_generator/
 git commit -m "refactor: migrate mass generators to ProcessorBase"
 ```
 
@@ -671,7 +671,7 @@ git commit -m "refactor: migrate mass generators to ProcessorBase"
 ### Task 9: Migrate LuaProcessor
 
 **Files:**
-- Modify: `src/processors/lua_processor.rs`
+- Modify: `src/processor/lua_processor.rs`
 
 LuaProcessor is special — it uses dynamic `toml::Value` config, not a typed struct. It may need a custom approach or skip `delegate_base!`.
 
@@ -687,7 +687,7 @@ Expected: All 340 tests pass
 - [ ] **Step 3: Commit**
 
 ```bash
-git add src/processors/lua_processor.rs
+git add src/processor/lua_processor.rs
 git commit -m "refactor: migrate LuaProcessor to ProcessorBase where applicable"
 ```
 
@@ -697,8 +697,8 @@ git commit -m "refactor: migrate LuaProcessor to ProcessorBase where applicable"
 
 **Files:**
 - Verify: all test files
-- Modify: `src/processors/generators/mod.rs` (remove dead macro if not done)
-- Modify: `src/processors/mod.rs` (clean up any unused imports)
+- Modify: `src/processor/generator/mod.rs` (remove dead macro if not done)
+- Modify: `src/processor/mod.rs` (clean up any unused imports)
 
 - [ ] **Step 1: Run full test suite**
 

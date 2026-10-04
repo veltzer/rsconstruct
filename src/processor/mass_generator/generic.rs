@@ -10,6 +10,7 @@ use std::time::SystemTime;
 use crate::config::{StandardConfig, checksum_fields_of, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
+use super::{OnceTool, PlannedOutput, add_planned_products, require_planned_output};
 use crate::processor::{
     Processor, ProcessorBase, check_command_output, format_command, log_command, run_command,
 };
@@ -20,8 +21,9 @@ const MANIFEST_VERSION: u32 = 1;
 
 /// Mass generator config.
 /// Custom fields: `predict_command`, `predict_args`, `output_dirs`, `loose_manifest`.
-/// Unused `StandardConfig` fields: formats, `dep_auto`, `output_dir`, batch, and
-/// every scan field — discovery is driven by the tool's manifest, not by a scan.
+/// Unused `StandardConfig` fields: formats, `dep_auto`, `output_dir`, batch. The
+/// scan fields discover no products — the manifest does that — but declare
+/// the files the plan is computed from, which keys the plan cache.
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct MassGeneratorConfig {
     /// The tool's plan command: prints the JSON manifest to stdout and
@@ -48,25 +50,7 @@ pub struct MassGeneratorConfig {
 #[serde(deny_unknown_fields)]
 struct Manifest {
     version: u32,
-    outputs: Vec<ManifestEntry>,
-}
-
-/// One predicted output file and the inputs whose content determines it.
-#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-struct ManifestEntry {
-    path: PathBuf,
-    sources: Vec<PathBuf>,
-}
-
-/// Whether this build has already run the tool, and how it went. Every
-/// product of the instance asks before executing, so the tool runs at most
-/// once per build and a failure is reported once per product instead of
-/// re-running a build that just failed.
-enum ToolRun {
-    NotRun,
-    Succeeded,
-    Failed(String),
+    outputs: Vec<PlannedOutput>,
 }
 
 /// A data-driven processor for tools that enumerate their outputs before
@@ -94,8 +78,8 @@ pub struct MassGeneratorProcessor {
     /// loop that calls `discover` several times per build; the source tree
     /// does not change between passes, so neither does the plan. Watch mode
     /// builds a fresh processor per rebuild, which clears this.
-    manifest: Mutex<Option<Arc<Vec<ManifestEntry>>>>,
-    tool_run: Mutex<ToolRun>,
+    manifest: Mutex<Option<Arc<Vec<PlannedOutput>>>>,
+    tool_run: OnceTool,
 }
 
 impl MassGeneratorProcessor {
@@ -105,27 +89,24 @@ impl MassGeneratorProcessor {
                 anyhow::bail!("output_dirs entry '{dir}' {why}");
             }
         }
-        // The manifest decides the inputs; a scan field here would be read
-        // by nobody, and silently accepting it would hide a config error
-        // from someone migrating a creator (`src_extensions = [...]`).
+        // `src_dirs` with no `src_extensions` matches no file (the same
+        // rule as every processor). Elsewhere that only discovers nothing;
+        // here it would key the plan cache on an empty set, so a new or
+        // edited page would be served the stale cached plan.
         let std = &config.standard;
-        let scan_set = [
-            ("src_dirs", &std.src_dirs),
-            ("src_extensions", &std.src_extensions),
-            ("src_files", &std.src_files),
-        ]
-        .into_iter()
-        .find(|(_, v)| v.as_deref().is_some_and(|v| !v.is_empty()));
-        if let Some((field, _)) = scan_set {
+        let dirs = std.src_dirs.as_deref().is_some_and(|d| !d.is_empty());
+        let exts = std.src_extensions.as_deref().is_some_and(|e| !e.is_empty());
+        if dirs && !exts {
             anyhow::bail!(
-                "'{field}' is not used by mass_generator: the inputs of every product come from \
-                 the manifest's `sources`, so remove the field"
+                "src_dirs names the plan's input directories but src_extensions is empty, so no \
+                 file under them would key the plan cache; list the extensions the plan reads \
+                 (e.g. src_extensions = [\".md\", \".html\"])"
             );
         }
         Ok(Self {
             config,
             manifest: Mutex::new(None),
-            tool_run: Mutex::new(ToolRun::NotRun),
+            tool_run: OnceTool::new(),
         })
     }
 
@@ -139,11 +120,28 @@ impl MassGeneratorProcessor {
         cmd
     }
 
-    /// The plan, running `predict_command` on first use. `discover` has no
-    /// `BuildContext`, so this is a plain spawn: the plan command is by
-    /// contract cheap and side-effect free, and nothing else runs alongside
-    /// it at discovery time.
-    fn manifest(&self, instance_name: &str) -> Result<Arc<Vec<ManifestEntry>>> {
+    /// Whether the config declares the files the plan is computed from. The
+    /// scan fields do that job here: no product is discovered from them —
+    /// the manifest decides the products — but their files key the plan
+    /// cache. Without them the plan cannot be cached safely and runs every
+    /// time.
+    fn declares_plan_inputs(&self) -> bool {
+        let std = &self.config.standard;
+        [&std.src_dirs, &std.src_files]
+            .into_iter()
+            .any(|v| v.as_deref().is_some_and(|v| !v.is_empty()))
+    }
+
+    /// The plan, obtained once per process: from the plan cache when the
+    /// declared plan inputs are unchanged, otherwise by running
+    /// `predict_command`. `discover` has no `BuildContext`, so this is a plain
+    /// spawn: the plan command is by contract cheap and side-effect free, and
+    /// nothing else runs alongside it at discovery time.
+    fn manifest(
+        &self,
+        instance_name: &str,
+        file_index: &FileIndex,
+    ) -> Result<Arc<Vec<PlannedOutput>>> {
         let mut guard = self.manifest.lock();
         if let Some(entries) = guard.as_ref() {
             return Ok(Arc::clone(entries));
@@ -151,51 +149,62 @@ impl MassGeneratorProcessor {
         if self.config.predict_command.is_empty() {
             anyhow::bail!("'predict_command' is not set for processor '{instance_name}'");
         }
+        let cache = if self.declares_plan_inputs() {
+            let inputs = file_index.scan(&self.config.standard, true);
+            Some((
+                plan_cache_path(instance_name),
+                self.plan_key(instance_name, &inputs)?,
+            ))
+        } else {
+            None
+        };
         let mut cmd = self.predict_command();
-        log_command(&cmd);
-        let output = cmd.output().with_context(|| {
-            format!("Failed to spawn predict_command: {}", format_command(&cmd))
-        })?;
-        check_command_output(
-            &output,
-            format_args!("[{instance_name}] predict_command {}", format_command(&cmd)),
-        )?;
-        let entries = parse_manifest(&output.stdout, &self.output_dirs()).with_context(|| {
-            format!(
-                "[{instance_name}] predict_command {} printed an invalid manifest",
-                format_command(&cmd)
-            )
-        })?;
+        let raw = match &cache {
+            Some((path, key)) => {
+                if let Some(raw) = read_plan_cache(path, key)? {
+                    raw
+                } else {
+                    let raw = run_predict(&mut cmd, instance_name)?;
+                    // Validate before caching: an invalid plan must fail
+                    // now and again next time, never be replayed as cached.
+                    parse_manifest(raw.as_bytes(), &self.output_dirs())
+                        .with_context(|| invalid_manifest_context(instance_name, &cmd))?;
+                    write_plan_cache(path, key, &raw)?;
+                    raw
+                }
+            }
+            None => run_predict(&mut cmd, instance_name)?,
+        };
+        let entries = parse_manifest(raw.as_bytes(), &self.output_dirs())
+            .with_context(|| invalid_manifest_context(instance_name, &cmd))?;
         let entries = Arc::new(entries);
         *guard = Some(Arc::clone(&entries));
         Ok(entries)
     }
 
-    /// Run `command` if this build has not yet; replay the earlier outcome
-    /// if it has. Serialized on `tool_run`, so concurrent products of one
-    /// instance cannot start the tool twice.
-    fn run_tool_once(
-        &self,
-        ctx: &crate::build_context::BuildContext,
-        instance_name: &str,
-    ) -> Result<()> {
-        let mut state = self.tool_run.lock();
-        match &*state {
-            ToolRun::Succeeded => return Ok(()),
-            ToolRun::Failed(msg) => {
-                anyhow::bail!(
-                    "{} already failed earlier in this build: {msg}",
-                    self.config.standard.command
-                )
-            }
-            ToolRun::NotRun => {}
+    /// The key a cached plan is valid for: the rsconstruct version (the
+    /// cache format and the manifest rules), the instance's whole config
+    /// (`predict_command` and its arguments included), and the path and
+    /// content of every declared plan input — so a new, removed or edited
+    /// source file all mean a fresh plan.
+    fn plan_key(&self, instance_name: &str, inputs: &[PathBuf]) -> Result<String> {
+        let config = serde_json::to_string(&self.config)
+            .context("Failed to serialize mass_generator config for the plan key")?;
+        let mut parts: Vec<String> = vec![
+            env!("CARGO_PKG_VERSION").to_string(),
+            instance_name.to_string(),
+            config,
+        ];
+        let mut sorted: Vec<&PathBuf> = inputs.iter().collect();
+        sorted.sort();
+        for path in sorted {
+            let data = std::fs::read(path)
+                .with_context(|| format!("Failed to read plan input {}", path.display()))?;
+            parts.push(path.display().to_string());
+            parts.push(crate::checksum::bytes_checksum(&data));
         }
-        let result = self.run_tool(ctx, instance_name);
-        *state = match &result {
-            Ok(()) => ToolRun::Succeeded,
-            Err(e) => ToolRun::Failed(format!("{e:#}")),
-        };
-        result
+        let refs: Vec<&str> = parts.iter().map(String::as_str).collect();
+        Ok(crate::checksum::hash_parts(&refs))
     }
 
     /// One invocation of `command`, bracketed by the plan-vs-build check.
@@ -204,7 +213,11 @@ impl MassGeneratorProcessor {
         ctx: &crate::build_context::BuildContext,
         instance_name: &str,
     ) -> Result<()> {
-        let entries = self.manifest(instance_name)?;
+        // Discovery obtained the plan before any product could execute.
+        let entries =
+            self.manifest.lock().clone().with_context(|| {
+                format!("[{instance_name}] executed before its plan was loaded")
+            })?;
         let predicted: BTreeSet<&Path> = entries.iter().map(|e| e.path.as_path()).collect();
 
         // The tool rewrites every predicted file, including the ones whose
@@ -255,6 +268,82 @@ impl MassGeneratorProcessor {
     }
 }
 
+/// Where cached plans live, one file per instance.
+const PLAN_CACHE_DIR: &str = ".rsconstruct/mass_generator";
+
+fn plan_cache_path(instance_name: &str) -> PathBuf {
+    Path::new(PLAN_CACHE_DIR).join(format!("{instance_name}.json"))
+}
+
+/// A cached plan: the manifest exactly as `predict_command` printed it, and
+/// the key it is valid for.
+#[derive(Serialize, Deserialize)]
+struct PlanCache {
+    key: String,
+    manifest: String,
+}
+
+/// The cached manifest if the cache file exists and was written for `key`;
+/// `None` for a missing file or another key (both mean "plan again"). A file
+/// that exists but does not parse is an error: it is rsconstruct's own state,
+/// so garbage there is a bug or tampering, not a reason to quietly re-plan.
+fn read_plan_cache(path: &Path, key: &str) -> Result<Option<String>> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => {
+            return Err(anyhow::Error::from(e)
+                .context(format!("Failed to read plan cache {}", path.display())));
+        }
+    };
+    let cache: PlanCache = serde_json::from_str(&text).with_context(|| {
+        format!(
+            "Plan cache {} is corrupt; delete it and rerun",
+            path.display()
+        )
+    })?;
+    Ok((cache.key == key).then_some(cache.manifest))
+}
+
+fn write_plan_cache(path: &Path, key: &str, manifest: &str) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create {}", parent.display()))?;
+    }
+    let cache = PlanCache {
+        key: key.to_string(),
+        manifest: manifest.to_string(),
+    };
+    let text = serde_json::to_string(&cache).context("Failed to serialize the plan cache")?;
+    std::fs::write(path, text)
+        .with_context(|| format!("Failed to write plan cache {}", path.display()))
+}
+
+/// Run `predict_command` and return what it printed.
+fn run_predict(cmd: &mut Command, instance_name: &str) -> Result<String> {
+    log_command(cmd);
+    let output = cmd
+        .output()
+        .with_context(|| format!("Failed to spawn predict_command: {}", format_command(cmd)))?;
+    check_command_output(
+        &output,
+        format_args!("[{instance_name}] predict_command {}", format_command(cmd)),
+    )?;
+    String::from_utf8(output.stdout).with_context(|| {
+        format!(
+            "[{instance_name}] predict_command {} printed non-UTF-8 output",
+            format_command(cmd)
+        )
+    })
+}
+
+fn invalid_manifest_context(instance_name: &str, cmd: &Command) -> String {
+    format!(
+        "[{instance_name}] predict_command {} printed an invalid manifest",
+        format_command(cmd)
+    )
+}
+
 /// Why `path` is not a plain relative path, or `None` if it is one. Plain
 /// means every component is a name: no root, no `.`, no `..`. Graph paths
 /// are compared literally against other processors' declared outputs, so
@@ -284,7 +373,7 @@ fn plain_relative_path_error(path: &Path) -> Option<&'static str> {
 /// Parse and validate the manifest `predict_command` printed. Entries come
 /// back sorted by path, so product ids do not depend on the tool's output
 /// order.
-fn parse_manifest(json: &[u8], output_dirs: &[PathBuf]) -> Result<Vec<ManifestEntry>> {
+fn parse_manifest(json: &[u8], output_dirs: &[PathBuf]) -> Result<Vec<PlannedOutput>> {
     let manifest: Manifest = serde_json::from_slice(json).context("manifest is not valid JSON")?;
     if manifest.version != MANIFEST_VERSION {
         anyhow::bail!(
@@ -415,48 +504,22 @@ impl Processor for MassGeneratorProcessor {
     fn discover(
         &self,
         graph: &mut BuildGraph,
-        _file_index: &FileIndex,
+        file_index: &FileIndex,
         instance_name: &str,
     ) -> Result<()> {
-        let entries = self.manifest(instance_name)?;
+        let entries = self.manifest(instance_name, file_index)?;
         let config_hash = output_config_hash(&self.config, &checksum_fields_of(instance_name));
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
-        for entry in entries.iter() {
-            let mut inputs = entry.sources.clone();
-            for input in &extra {
-                if !inputs.contains(input) {
-                    inputs.push(input.clone());
-                }
-            }
-            // A product's cache key is processor + config hash + input
-            // checksum; the output path is not part of it, because for every
-            // other processor the output path follows from the input. Here
-            // many outputs can share one input set — a tag's index page, its
-            // `page/1/` redirect and its feed all depend on exactly the same
-            // posts — and without the path in the key the second would be
-            // "restored" from the first's blob, with the first's content.
-            let hash = crate::checksum::hash_parts(&[
-                config_hash.as_str(),
-                &entry.path.display().to_string(),
-            ]);
-            graph.add_product(inputs, vec![entry.path.clone()], instance_name, Some(hash))?;
-        }
+        add_planned_products(graph, &entries, instance_name, &config_hash, &extra)?;
         Ok(())
     }
 
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
-        self.run_tool_once(ctx, &product.processor)?;
-        // The plan check already reported this in strict mode; in loose mode
-        // it was a warning, and this product still has nothing to cache.
-        let output = product.primary_output();
-        if !output.is_file() {
-            anyhow::bail!(
-                "{} did not produce the predicted output {}",
-                self.config.standard.command,
-                output.display()
-            );
-        }
-        Ok(())
+        let instance_name = &product.processor;
+        self.tool_run.run(&self.config.standard.command, || {
+            self.run_tool(ctx, instance_name)
+        })?;
+        require_planned_output(product, &self.config.standard.command)
     }
 
     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
@@ -661,14 +724,7 @@ mod tests {
     }
 
     #[test]
-    fn constructor_rejects_scan_fields_and_bad_output_dirs() {
-        let mut cfg = MassGeneratorConfig::default();
-        cfg.standard.src_dirs = Some(vec!["docs".to_string()]);
-        let err = MassGeneratorProcessor::new(cfg)
-            .err()
-            .expect("src_dirs must be rejected");
-        assert!(format!("{err:#}").contains("'src_dirs' is not used by mass_generator"));
-
+    fn constructor_rejects_bad_output_dirs() {
         let cfg = MassGeneratorConfig {
             output_dirs: vec!["../out".to_string()],
             ..Default::default()
@@ -679,13 +735,48 @@ mod tests {
         assert!(
             format!("{err:#}").contains("output_dirs entry '../out' contains a `..` component")
         );
+    }
 
-        let mut cfg = MassGeneratorConfig::default();
-        cfg.standard.src_dirs = Some(Vec::new());
-        cfg.standard.src_extensions = Some(Vec::new());
+    /// Scan fields declare the plan inputs; only `src_dirs` or `src_files`
+    /// actually name files, so only they turn the plan cache on.
+    #[test]
+    fn plan_inputs_are_declared_by_src_dirs_or_src_files() {
+        let proc = |dirs: Option<Vec<&str>>, files: Option<Vec<&str>>| {
+            let mut cfg = MassGeneratorConfig::default();
+            cfg.standard.src_dirs = dirs.map(|v| v.into_iter().map(String::from).collect());
+            cfg.standard.src_files = files.map(|v| v.into_iter().map(String::from).collect());
+            MassGeneratorProcessor::new(cfg).unwrap()
+        };
+        assert!(!proc(None, None).declares_plan_inputs());
+        assert!(!proc(Some(vec![]), Some(vec![])).declares_plan_inputs());
+        assert!(proc(Some(vec![]), Some(vec!["site.toml"])).declares_plan_inputs());
+        assert!(proc(None, Some(vec!["site.toml"])).declares_plan_inputs());
+    }
+
+    #[test]
+    fn plan_cache_round_trips_and_rejects_other_keys_and_garbage() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("sub/site.json");
+        assert_eq!(
+            read_plan_cache(&path, "k1").unwrap(),
+            None,
+            "missing file is a miss"
+        );
+        write_plan_cache(&path, "k1", "{\"version\":1,\"outputs\":[]}").unwrap();
+        assert_eq!(
+            read_plan_cache(&path, "k1").unwrap().as_deref(),
+            Some("{\"version\":1,\"outputs\":[]}")
+        );
+        assert_eq!(
+            read_plan_cache(&path, "k2").unwrap(),
+            None,
+            "other key is a miss"
+        );
+        std::fs::write(&path, "not json").unwrap();
+        let err = read_plan_cache(&path, "k1").unwrap_err();
         assert!(
-            MassGeneratorProcessor::new(cfg).is_ok(),
-            "resolved-empty scan fields are fine"
+            format!("{err:#}").contains("is corrupt; delete it"),
+            "{err:#}"
         );
     }
 

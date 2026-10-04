@@ -366,9 +366,9 @@ pub enum FixAction {
     List,
     /// Run a fixer on source files (requires config)
     Run {
-        /// Processor name (comma-separated for multiple)
+        /// Processor instance name (iname); comma-separated for several
         #[arg(value_delimiter = ',')]
-        processors: Vec<String>,
+        processor: Vec<String>,
     },
 }
 
@@ -380,9 +380,9 @@ pub enum CleanAction {
     Git,
     /// Remove build output files, preserves cache (requires config) [default]
     Outputs {
-        /// Only clean outputs from these processors (comma-separated)
+        /// Only clean outputs from this processor instance (iname); comma-separated for several
         #[arg(short, long, value_delimiter = ',')]
-        processors: Vec<String>,
+        processor: Vec<String>,
         /// Skip the post-clean sweep that removes directories left empty
         #[arg(long)]
         no_empty_dirs: bool,
@@ -788,16 +788,16 @@ pub struct SharedBuildArgs {
     #[arg(long, allow_negative_numbers = true)]
     pub batch_size: Option<i32>,
 
-    /// Only run specific processors, by instance name (iname) as declared in rsconstruct.toml (comma-separated list)
+    /// Only run this processor instance (iname, as declared in rsconstruct.toml); comma-separated for several
     #[arg(short, long, value_delimiter = ',')]
-    pub processors: Option<Vec<String>>,
+    pub processor: Option<Vec<String>>,
 
     /// Exclude specific processors by instance name (comma-separated list).
     /// Mirrors `-p` and accepts the same shortcuts (e.g. `@checker`, `@python3`).
     /// When combined with `-p`, excludes are subtracted from the included set;
     /// a processor appearing in both is an error.
-    #[arg(short = 'x', long = "exclude-processors", value_delimiter = ',')]
-    pub exclude_processors: Option<Vec<String>>,
+    #[arg(short = 'x', long = "exclude-processor", value_delimiter = ',')]
+    pub exclude_processor: Option<Vec<String>>,
 
     /// Automatically add misspelled words to words files instead of failing (zspell + aspell)
     #[arg(long)]
@@ -870,8 +870,8 @@ impl SharedBuildArgs {
                 .batch_size
                 .map(|n| if n < 0 { None } else { Some(n as usize) }),
             stop_after,
-            processor_filter: self.processors.clone(),
-            exclude_filter: self.exclude_processors.clone(),
+            processor_filter: self.processor.clone(),
+            exclude_filter: self.exclude_processor.clone(),
             auto_add_words: self.auto_add_words,
             explain: self.explain,
             no_mtime: self.no_mtime,
@@ -971,7 +971,7 @@ fn generate_completion_script(shell: Shell) -> Result<String> {
 ///   `rsconstruct.toml`.
 /// - `analyzers delete`, `analyzers disable`, `analyzers enable` complete with **analyzer
 ///   instance names** (inames) from `rsconstruct.toml`.
-/// - `--processors` / `-p` flags in `build`/`watch` complete with **instance
+/// - `--processor` / `-p` flags in `build`/`watch` complete with **instance
 ///   names** (inames) from `rsconstruct.toml` — you can only build a processor
 ///   that is declared in the project.
 /// - `processor defconfig` is handled automatically by clap via `#[arg(value_parser = ...)]`.
@@ -1113,20 +1113,20 @@ _rsconstruct_fixer_inames() {
     // Inject completion for --processor/-p in build/watch: inames only,
     // read from rsconstruct.toml at tab time via _rsconstruct_inames. You can
     // only build a processor that is declared in the project.
-    let old_processors =
-        "                --processors)\n                    COMPREPLY=($(compgen -f \"${cur}\"))";
-    let new_processors = "                --processors)\n                    COMPREPLY=($(compgen -W \"$(_rsconstruct_inames)\" -- \"${cur}\"))".to_string();
+    let old_processor =
+        "                --processor)\n                    COMPREPLY=($(compgen -f \"${cur}\"))";
+    let new_processor = "                --processor)\n                    COMPREPLY=($(compgen -W \"$(_rsconstruct_inames)\" -- \"${cur}\"))".to_string();
     let old_p = "                -p)\n                    COMPREPLY=($(compgen -f \"${cur}\"))";
     let new_p = "                -p)\n                    COMPREPLY=($(compgen -W \"$(_rsconstruct_inames)\" -- \"${cur}\"))".to_string();
-    let old_exclude = "                --exclude-processors)\n                    COMPREPLY=($(compgen -f \"${cur}\"))";
-    let new_exclude = "                --exclude-processors)\n                    COMPREPLY=($(compgen -W \"$(_rsconstruct_inames)\" -- \"${cur}\"))".to_string();
+    let old_exclude = "                --exclude-processor)\n                    COMPREPLY=($(compgen -f \"${cur}\"))";
+    let new_exclude = "                --exclude-processor)\n                    COMPREPLY=($(compgen -W \"$(_rsconstruct_inames)\" -- \"${cur}\"))".to_string();
     let old_x = "                -x)\n                    COMPREPLY=($(compgen -f \"${cur}\"))";
     let new_x = "                -x)\n                    COMPREPLY=($(compgen -W \"$(_rsconstruct_inames)\" -- \"${cur}\"))".to_string();
 
     for (label, old) in [
-        ("--processors", old_processors),
+        ("--processor", old_processor),
         ("-p", old_p),
-        ("--exclude-processors", old_exclude),
+        ("--exclude-processor", old_exclude),
         ("-x", old_x),
     ] {
         if !result.contains(old) {
@@ -1134,7 +1134,7 @@ _rsconstruct_fixer_inames() {
         }
     }
     let mut result = result
-        .replace(old_processors, &new_processors)
+        .replace(old_processor, &new_processor)
         .replace(old_p, &new_p)
         .replace(old_exclude, &new_exclude)
         .replace(old_x, &new_x);

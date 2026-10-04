@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -8,11 +8,34 @@ use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use crate::processor::{
-    Processor, SiblingFilter, anchor_display_dir, check_command_output, run_in_anchor_dir,
+    Processor, SiblingFilter, anchor_display_dir, check_command_output, ensure_output_dir,
+    run_in_anchor_dir,
 };
 
 fn default_gem_home() -> String {
     "gems".into()
+}
+
+/// Where the install stamps live: one file per `Gemfile`, written after a
+/// successful `bundle install`. The stamp is the product's declared output,
+/// so a processor that needs the gems installed first (mdl with
+/// `local_repo`) lists it as an input and the graph orders the two. A bare
+/// `gem_home` directory cannot carry that edge: dependencies connect
+/// declared output *files* to inputs.
+const STAMP_DIR: &str = "out/processor.creator.gem";
+
+/// The stamp of a `Gemfile` at the project root — the default `gem_stamp`
+/// of the mdl processor.
+pub const ROOT_STAMP: &str = "out/processor.creator.gem/root.stamp";
+
+/// The install stamp for the `Gemfile` in `anchor_dir`: `root.stamp` for the
+/// project root, the directory path with `/` turned into `_` otherwise.
+fn stamp_path(anchor_dir: &Path) -> PathBuf {
+    if anchor_dir.as_os_str().is_empty() {
+        return PathBuf::from(ROOT_STAMP);
+    }
+    let flat = anchor_dir.to_string_lossy().replace('/', "_");
+    Path::new(STAMP_DIR).join(format!("{flat}.stamp"))
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -74,7 +97,13 @@ impl Processor for GemProcessor {
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
-        crate::processor::ProcessorBase::clean_output_dir(product, &product.processor, verbose)
+        let stamps = crate::processor::ProcessorBase::clean(product, &product.processor, verbose)?;
+        let dirs = crate::processor::ProcessorBase::clean_output_dir(
+            product,
+            &product.processor,
+            verbose,
+        )?;
+        Ok(stamps + dirs)
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -118,6 +147,7 @@ impl Processor for GemProcessor {
             );
 
             let inputs = crate::processor::build_anchor_inputs(&anchor, &sibling_files, &extra);
+            let outputs = vec![stamp_path(&anchor_dir)];
 
             if self.config.cache_output_dir {
                 let output_dir = if anchor_dir.as_os_str().is_empty() {
@@ -127,13 +157,13 @@ impl Processor for GemProcessor {
                 };
                 graph.add_product_with_output_dir(
                     inputs,
-                    vec![],
+                    outputs,
                     instance_name,
                     hash.clone(),
                     output_dir,
                 )?;
             } else {
-                graph.add_product(inputs, vec![], instance_name, hash.clone())?;
+                graph.add_product(inputs, outputs, instance_name, hash.clone())?;
             }
         }
 
@@ -141,7 +171,13 @@ impl Processor for GemProcessor {
     }
 
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
-        self.execute_gem(ctx, product.primary_input())
+        self.execute_gem(ctx, product.primary_input())?;
+        let stamp = product.primary_output();
+        ensure_output_dir(stamp)?;
+        // Fixed content: the stamp marks "installed", and a byte-identical
+        // stamp keeps the cache entry stable across rebuilds.
+        std::fs::write(stamp, "installed\n")
+            .with_context(|| format!("Failed to write gem install stamp {}", stamp.display()))
     }
 }
 
@@ -150,7 +186,7 @@ fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
 }
 inventory::submit! {
     crate::registries::ProcessorPlugin {
-        version: 1,
+        version: 2,
         name: "gem",
         processor_type: crate::processor::ProcessorType::Creator,
         create: plugin_create,
@@ -173,5 +209,19 @@ inventory::submit! {
         can_fix: false,
         supports_batch: false,
         max_jobs_cap: Some(1),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stamp_paths_are_one_per_gemfile_directory() {
+        assert_eq!(stamp_path(Path::new("")), PathBuf::from(ROOT_STAMP));
+        assert_eq!(
+            stamp_path(Path::new("tools/lint")),
+            PathBuf::from("out/processor.creator.gem/tools_lint.stamp")
+        );
     }
 }

@@ -130,7 +130,7 @@ pub struct ToolListEntry {
     pub tool: String,
     pub installed: bool,
     pub runtime: String,
-    pub processors: Vec<String>,
+    pub processor: Vec<String>,
     pub install_methods: Vec<ToolInstallMethodEntry>,
 }
 
@@ -148,7 +148,7 @@ pub struct ToolStat {
     pub name: String,
     pub installed: bool,
     pub runtime: String,
-    pub processors: Vec<String>,
+    pub processor: Vec<String>,
     pub install_command: Option<String>,
 }
 

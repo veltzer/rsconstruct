@@ -47,8 +47,8 @@ All top-level commands (`build`, `processor`, `analyzers`, `config`, etc.) and t
 These commands complete with processor type names from the plugin registry (e.g., `ruff`, `pylint`, `cc_single_file`):
 
 - `rsconstruct processor defconfig <TAB>`
-- `rsconstruct build --processors <TAB>` / `rsconstruct build -p <TAB>`
-- `rsconstruct watch --processors <TAB>` / `rsconstruct watch -p <TAB>`
+- `rsconstruct build --processor <TAB>` / `rsconstruct build -p <TAB>`
+- `rsconstruct watch --processor <TAB>` / `rsconstruct watch -p <TAB>`
 
 The list is drawn from the plugin registry at compile time.
 
@@ -101,7 +101,7 @@ The targets for injection are identified by their case labels in the generated b
 - `rsconstruct__processor__defconfig)`
 - `rsconstruct__processor__files)`
 
-The function also patches `--processors` / `-p` flag completions in `build` and `watch` commands to suggest processor names instead of file paths.
+The function also patches `--processor` / `-p` flag completions in `build` and `watch` commands to suggest processor names instead of file paths.
 
 ## Adding Completions for New Arguments
 

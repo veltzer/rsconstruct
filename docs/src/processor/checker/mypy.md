@@ -19,7 +19,7 @@ extra input so that configuration changes trigger rebuilds.
 ## Source Files
 
 - Input: `**/*.py`
-- Output: `out/mypy/{flat_name}.mypy`
+- Output: none (checker — a passing check is recorded in the cache, no file is written)
 
 ## Configuration
 

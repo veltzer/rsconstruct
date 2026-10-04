@@ -144,7 +144,7 @@ impl Builder {
                 })
                 .collect();
             let json = serde_json::json!({
-                "processors": stats,
+                "processor": stats,
                 "total_products": products.len(),
                 "total_edges": total_edges,
             });

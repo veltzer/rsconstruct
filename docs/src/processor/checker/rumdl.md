@@ -16,7 +16,7 @@ single rumdl invocation for better performance.
 ## Source Files
 
 - Input: `**/*.md`
-- Output: `out/rumdl/{flat_name}.rumdl`
+- Output: none (checker — a passing check is recorded in the cache, no file is written)
 
 ## Configuration
 

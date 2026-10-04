@@ -120,12 +120,12 @@ fn tools_list_json() {
             "Entry should have 'tool' field"
         );
         assert!(
-            entry.get("processors").is_some(),
-            "Entry should have 'processors' field"
+            entry.get("processor").is_some(),
+            "Entry should have 'processor' field"
         );
         assert!(
-            entry["processors"].is_array(),
-            "'processors' should be an array"
+            entry["processor"].is_array(),
+            "'processor' should be an array"
         );
     }
 }
@@ -218,7 +218,7 @@ fn tools_stats_json() {
             "Tool entry should have 'runtime'"
         );
         assert!(
-            tool.get("processors").is_some(),
+            tool.get("processor").is_some(),
             "Tool entry should have 'processors'"
         );
     }

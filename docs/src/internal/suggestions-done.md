@@ -9,7 +9,7 @@ Items from `suggestions.md` that have been implemented.
 - **Tool version locking** — `rsconstruct tools lock` locks and verifies external tool versions. Tool versions are included in cache keys.
 - **JSON output mode** — `--json` flag for machine-readable JSON Lines output (build_start, product_start, product_complete, build_summary events).
 - **Native C/C++ include scanner** — Default `include_scanner = "native"` uses regex-based scanning. Falls back to `include_scanner = "compiler"` (gcc -MM).
-- **`--processors` flag** — `rsconstruct build -p processor.generator.tera,processor.checker.ruff` and `rsconstruct watch -p processor.generator.tera` filter which processors run.
+- **`--processor` flag** — `rsconstruct build -p processor.generator.tera,processor.checker.ruff` and `rsconstruct watch -p processor.generator.tera` filter which processors run.
 - **Colored diff on config changes** — When processor config changes trigger rebuilds, rsconstruct shows what changed with colored diff output.
 - **Batch processing** — ruff, pylint, shellcheck, zspell, mypy, and rumdl all support batch execution via `execute_batch()`.
 - **Progress bar** — Uses `indicatif` crate. Progress bar sized to actual work (excludes instant skips), hidden in verbose/JSON mode.
@@ -70,7 +70,7 @@ Items from `suggestions.md` that have been implemented.
 
 - **Batch processing for more processors** — All checker processors that support multiple file arguments now use batching.
 - **Progress bar for long builds** — Implemented with `indicatif`, shows `[elapsed] [bar] pos/len message`.
-- **`--processors` flag for build and watch** — Filter processors with `-p` flag.
+- **`--processor` flag for build and watch** — Filter processors with `-p` flag.
 - **Emit `ProductStart` JSON events** — Wired up and emitted before execution.
 - **Colored diff on config changes** — Shows colored JSON diff when processor config changes.
 

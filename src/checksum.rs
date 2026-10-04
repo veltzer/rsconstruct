@@ -78,6 +78,45 @@ pub fn forget_in_session(ctx: &BuildContext, paths: &[std::path::PathBuf]) {
             cache.remove(path);
         }
     }
+    drop(guard);
+    ctx.combined_memo.lock().unwrap().forget(paths);
+}
+
+/// Input lists at least this long have their combined checksum memoized for
+/// the session. Below it, recomputing is as cheap as the memo bookkeeping.
+const MEMO_MIN_INPUTS: usize = 32;
+
+/// In-session memo of combined checksums for large input lists.
+///
+/// Many products can share one long input list: every page a zola site
+/// renders depends on the whole content tree, ~900 files for 1,400 products.
+/// Without the memo each product re-checks every file (a `stat` and an mtime
+/// lookup apiece), twice per build — over a million of each for a build
+/// that changes nothing. The memo is valid while none of the files it covers
+/// is rewritten; `forget_in_session` (called on every write and restore)
+/// drops it the moment one is.
+#[derive(Default)]
+pub struct CombinedMemo {
+    by_inputs: HashMap<Vec<PathBuf>, String>,
+    covered: std::collections::HashSet<PathBuf>,
+}
+
+impl CombinedMemo {
+    fn get(&self, inputs: &[PathBuf]) -> Option<String> {
+        self.by_inputs.get(inputs).cloned()
+    }
+
+    fn insert(&mut self, inputs: &[PathBuf], combined: String) {
+        self.covered.extend(inputs.iter().cloned());
+        self.by_inputs.insert(inputs.to_vec(), combined);
+    }
+
+    fn forget(&mut self, paths: &[PathBuf]) {
+        if paths.iter().any(|p| self.covered.contains(p)) {
+            self.by_inputs.clear();
+            self.covered.clear();
+        }
+    }
 }
 
 /// Stream a file through SHA-256 with a fixed-size buffer. The buffer is
@@ -345,6 +384,21 @@ pub fn checksum_output(ctx: &BuildContext, path: &Path) -> Result<(String, Check
 /// Get the combined input checksum for a list of input files, using mtime
 /// pre-check to avoid re-reading unchanged files across builds.
 pub fn combined_input_checksum(ctx: &BuildContext, inputs: &[PathBuf]) -> Result<String> {
+    let memoize = inputs.len() >= MEMO_MIN_INPUTS;
+    if memoize && let Some(combined) = ctx.combined_memo.lock().unwrap().get(inputs) {
+        return Ok(combined);
+    }
+    let combined = compute_combined_input_checksum(ctx, inputs)?;
+    if memoize {
+        ctx.combined_memo
+            .lock()
+            .unwrap()
+            .insert(inputs, combined.clone());
+    }
+    Ok(combined)
+}
+
+fn compute_combined_input_checksum(ctx: &BuildContext, inputs: &[PathBuf]) -> Result<String> {
     let mtime_enabled = ctx.mtime_enabled.load(std::sync::atomic::Ordering::Relaxed);
 
     let mut checksums = Vec::with_capacity(inputs.len());

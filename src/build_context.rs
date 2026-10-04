@@ -42,6 +42,9 @@ pub struct BuildContext {
     /// declared file from a file its tool wrote off-plan — `execute` has no
     /// other route to the graph.
     pub(crate) declared_outputs: Mutex<HashSet<PathBuf>>,
+    /// In-session memo of combined input checksums for large input lists.
+    /// See `checksum::combined_input_checksum`.
+    pub(crate) combined_memo: Mutex<crate::checksum::CombinedMemo>,
 }
 
 impl BuildContext {
@@ -60,6 +63,7 @@ impl BuildContext {
             webcache_ttl_secs: std::sync::atomic::AtomicU64::new(7 * 24 * 60 * 60),
             command_timeout_secs: std::sync::atomic::AtomicU64::new(0),
             declared_outputs: Mutex::new(HashSet::new()),
+            combined_memo: Mutex::new(crate::checksum::CombinedMemo::default()),
         }
     }
 

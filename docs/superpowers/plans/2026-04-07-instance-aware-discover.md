@@ -13,7 +13,7 @@
 ### Task 1: Write the failing test
 
 **Files:**
-- Modify: `tests/processors/script.rs`
+- Modify: `tests/processor/script.rs`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -70,7 +70,7 @@ Expected: FAIL — `script.lint_b` will not appear in stdout because its product
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/processors/script.rs
+git add tests/processor/script.rs
 git commit -m "test: add failing test for multi-instance script discovery bug"
 ```
 
@@ -79,11 +79,11 @@ git commit -m "test: add failing test for multi-instance script discovery bug"
 ### Task 2: Add `instance_name` parameter to `ProductDiscovery::discover()`
 
 **Files:**
-- Modify: `src/processors/mod.rs` (trait definition, doc examples, `discover_checker_products`, `discover_for_clean` default)
+- Modify: `src/processor/mod.rs` (trait definition, doc examples, `discover_checker_products`, `discover_for_clean` default)
 
 - [ ] **Step 1: Change the trait signature**
 
-In `src/processors/mod.rs`, change:
+In `src/processor/mod.rs`, change:
 
 ```rust
 fn discover(&self, graph: &mut BuildGraph, file_index: &FileIndex) -> Result<()>;
@@ -119,7 +119,7 @@ Expected: Compilation errors in every file that implements `ProductDiscovery::di
 ### Task 3: Update `impl_checker!` macro to pass `instance_name` through
 
 **Files:**
-- Modify: `src/processors/checkers/mod.rs`
+- Modify: `src/processor/checker/mod.rs`
 
 - [ ] **Step 1: Update the generated `discover` and `discover_for_clean` methods**
 
@@ -160,7 +160,7 @@ Expected: Errors only in non-macro processor implementations (the manual `discov
 ### Task 4: Update `delegate_base!` macro for generators
 
 **Files:**
-- Modify: `src/processors/mod.rs` (the `delegate_base!` macro)
+- Modify: `src/processor/mod.rs` (the `delegate_base!` macro)
 
 - [ ] **Step 1: Check which `delegate_base!` variants generate `discover` or `discover_for_clean`**
 
@@ -177,13 +177,13 @@ Run: `cargo build 2>&1 | grep "delegate_base"` — should produce no errors.
 ### Task 5: Update all manual `discover()` implementations in checkers
 
 **Files:**
-- Modify: `src/processors/checkers/terms.rs`
-- Modify: `src/processors/checkers/aspell.rs`
-- Modify: `src/processors/checkers/zspell.rs`
-- Modify: `src/processors/checkers/mdl.rs`
-- Modify: `src/processors/checkers/markdownlint.rs`
-- Modify: `src/processors/checkers/clippy.rs`
-- Modify: `src/processors/checkers/make.rs`
+- Modify: `src/processor/checker/terms.rs`
+- Modify: `src/processor/checker/aspell.rs`
+- Modify: `src/processor/checker/zspell.rs`
+- Modify: `src/processor/checker/mdl.rs`
+- Modify: `src/processor/checker/markdownlint.rs`
+- Modify: `src/processor/checker/clippy.rs`
+- Modify: `src/processor/checker/make.rs`
 
 For each file that manually implements `discover()` (not through `impl_checker!`):
 
@@ -213,28 +213,28 @@ Run: `cargo build 2>&1 | head -40`
 ### Task 6: Update all generator `discover()` implementations
 
 **Files:**
-- Modify: `src/processors/generators/generator.rs`
-- Modify: `src/processors/generators/explicit.rs`
-- Modify: `src/processors/generators/pdfunite.rs`
-- Modify: `src/processors/generators/rust_single_file.rs`
-- Modify: `src/processors/generators/jinja2.rs`
-- Modify: `src/processors/generators/tera.rs`
-- Modify: `src/processors/generators/mako.rs`
-- Modify: `src/processors/generators/tags.rs`
-- Modify: `src/processors/generators/linux_module.rs`
-- Modify: `src/processors/generators/cc_single_file/mod.rs`
-- Modify: `src/processors/generators/protobuf.rs`
-- Modify: `src/processors/generators/pdflatex.rs`
-- Modify: `src/processors/generators/pandoc.rs`
-- Modify: `src/processors/generators/sass.rs`
-- Modify: `src/processors/generators/mermaid.rs`
-- Modify: `src/processors/generators/a2x.rs`
-- Modify: `src/processors/generators/chromium.rs`
-- Modify: `src/processors/generators/objdump.rs`
-- Modify: `src/processors/generators/drawio.rs`
-- Modify: `src/processors/generators/markdown.rs`
-- Modify: `src/processors/generators/libreoffice.rs`
-- Modify: `src/processors/generators/marp.rs`
+- Modify: `src/processor/generator/generator.rs`
+- Modify: `src/processor/generator/explicit.rs`
+- Modify: `src/processor/generator/pdfunite.rs`
+- Modify: `src/processor/generator/rust_single_file.rs`
+- Modify: `src/processor/generator/jinja2.rs`
+- Modify: `src/processor/generator/tera.rs`
+- Modify: `src/processor/generator/mako.rs`
+- Modify: `src/processor/generator/tags.rs`
+- Modify: `src/processor/generator/linux_module.rs`
+- Modify: `src/processor/generator/cc_single_file/mod.rs`
+- Modify: `src/processor/generator/protobuf.rs`
+- Modify: `src/processor/generator/pdflatex.rs`
+- Modify: `src/processor/generator/pandoc.rs`
+- Modify: `src/processor/generator/sass.rs`
+- Modify: `src/processor/generator/mermaid.rs`
+- Modify: `src/processor/generator/a2x.rs`
+- Modify: `src/processor/generator/chromium.rs`
+- Modify: `src/processor/generator/objdump.rs`
+- Modify: `src/processor/generator/drawio.rs`
+- Modify: `src/processor/generator/markdown.rs`
+- Modify: `src/processor/generator/libreoffice.rs`
+- Modify: `src/processor/generator/marp.rs`
 
 For each file:
 
@@ -251,14 +251,14 @@ Run: `cargo build 2>&1 | head -40`
 ### Task 7: Update mass generator `discover()` implementations
 
 **Files:**
-- Modify: `src/processors/mass_generators/sphinx.rs`
-- Modify: `src/processors/mass_generators/pip.rs`
-- Modify: `src/processors/mass_generators/npm.rs`
-- Modify: `src/processors/mass_generators/mdbook.rs`
-- Modify: `src/processors/mass_generators/jekyll.rs`
-- Modify: `src/processors/mass_generators/gem.rs`
-- Modify: `src/processors/mass_generators/cc.rs`
-- Modify: `src/processors/mass_generators/cargo.rs`
+- Modify: `src/processor/mass_generator/sphinx.rs`
+- Modify: `src/processor/mass_generator/pip.rs`
+- Modify: `src/processor/mass_generator/npm.rs`
+- Modify: `src/processor/mass_generator/mdbook.rs`
+- Modify: `src/processor/mass_generator/jekyll.rs`
+- Modify: `src/processor/mass_generator/gem.rs`
+- Modify: `src/processor/mass_generator/cc.rs`
+- Modify: `src/processor/mass_generator/cargo.rs`
 
 Same pattern as Task 6: add `instance_name: &str` parameter, pass it through to `graph.add_product*()` and `DirectoryProductOpts`.
 
@@ -277,7 +277,7 @@ Run: `cargo build 2>&1 | head -40`
 ### Task 8: Update `LuaProcessor::discover()`
 
 **Files:**
-- Modify: `src/processors/lua_processor.rs`
+- Modify: `src/processor/lua_processor.rs`
 
 - [ ] **Step 1: Add `instance_name: &str` to discover signature**
 

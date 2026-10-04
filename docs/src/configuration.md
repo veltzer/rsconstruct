@@ -121,7 +121,7 @@ The instance name is used everywhere a processor is identified:
 - **Build statistics**: each instance reports its own file counts and durations
 - **Cache keys**: instances have separate caches, so changing one config does not invalidate the other
 - **Output directories**: generator processors default to `out/{instance_name}` — `out/processor.generator.tera` for a single tera instance, `out/processor.generator.marp.slides` and `out/processor.generator.marp.docs` for two marp instances — so outputs never collide
-- **The `--processors` filter**: use the full instance name, e.g., `rsconstruct build -p processor.checker.pylint.core`
+- **The `--processor` filter**: use the full instance name, e.g., `rsconstruct build -p processor.checker.pylint.core`
 - **`processor config`, `processor files`, `--iset`**: `rsconstruct processor config processor.checker.pylint.core`, `--iset processor.checker.pylint.core.max_jobs=2`
 
 #### Migrating from short names

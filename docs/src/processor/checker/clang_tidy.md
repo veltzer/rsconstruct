@@ -16,7 +16,7 @@ separately to avoid cross-file analysis issues with unrelated files.
 ## Source Files
 
 - Input: `{source_dir}/**/*.c`, `{source_dir}/**/*.cc`
-- Output: `out/clang_tidy/{flat_name}.clang_tidy`
+- Output: none (checker — a passing check is recorded in the cache, no file is written)
 
 ## Configuration
 

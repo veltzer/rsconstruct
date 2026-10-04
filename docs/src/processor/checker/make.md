@@ -26,7 +26,7 @@ reliable way to know which ones without running make itself.
 ## Source Files
 
 - Input: `**/Makefile` plus all files in the Makefile's directory tree
-- Output: `out/make/{relative_path}.done`
+- Output: none (checker — a passing `make` run is recorded in the cache, no file is written)
 
 ## Dependency Tracking Approaches
 

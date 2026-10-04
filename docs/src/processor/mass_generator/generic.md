@@ -42,6 +42,10 @@ args            = ["build"]
 predict_command = "rssite"
 predict_args    = ["plan"]
 output_dirs     = ["_site"]
+# Files the plan is computed from; while none changes, the plan is reused.
+src_dirs        = ["docs", "templates"]
+src_extensions  = [".md", ".html"]
+src_files       = ["mysite.toml"]
 # loose_manifest = true     # report plan/build mismatches as warnings; default false
 # dep_inputs = ["mysite.toml"]
 ```
@@ -59,9 +63,16 @@ Commands are executed directly, never through a shell (see [No-Shell Policy](../
 | `output_dirs`     | array of strings | yes      | Directories the tool writes into. Every manifest path must fall inside one. |
 | `loose_manifest`  | bool             | no       | Default false. If true, plan/build mismatches are warnings, not errors.     |
 | `dep_inputs`      | array of strings | no       | Extra files added to the inputs of every product.                           |
+| `src_dirs`, `src_extensions`, `src_files`, `src_exclude_*` | arrays | no | The files the plan is computed from; they key the [plan cache](#plan-cache). |
 | `required_tools`  | array of strings | no       | Tools the commands shell out to, for `tools install` and version locking.   |
 
-The scan fields (`src_dirs`, `src_extensions`, `src_files`) are rejected: the manifest's `sources` decide every product's inputs, so a scan field would be read by nobody. Someone migrating a creator config must drop its anchor-file scan.
+The scan fields discover no products — the manifest's `sources` decide every product's inputs — but they declare which files the plan is computed from; see [Plan cache](#plan-cache). `src_dirs` without `src_extensions` is rejected, because it would match no file and silently key the cache on nothing.
+
+### Plan cache
+
+`predict_command` runs at every graph build — `build`, `status`, `graph`, `clean outputs`. When the config declares the plan's inputs through `src_dirs` (with `src_extensions`) and/or `src_files`, rsconstruct caches the manifest in `.rsconstruct/mass_generator/<instance>.json`, keyed by the rsconstruct version, the instance's whole config, and the path and content of every declared input file. A later build whose key matches reuses the cached manifest and does not run `predict_command`; a new, removed or edited input file — or any config change — runs it again. Without declared inputs, nothing is cached and the plan runs every time.
+
+The declaration is a promise: the plan must be a function of those files alone. A file the plan reads that is not declared (a template directory, a config file) can change the plan without invalidating the cache, so declare everything the tool's plan mode reads. A cache file that does not parse is an error naming the file; delete it to re-plan.
 
 ## Manifest format
 
@@ -153,7 +164,7 @@ The sitemap runs after the site is built and rebuilds when either page changes. 
 For a tool to work as a mass generator, its plan command must uphold these invariants:
 
 1. **Pure function of config + source tree.** Same inputs → same manifest, bit for bit. No network, no timestamps, no environment peeking (unless the file read is declared as a source).
-2. **Cheap.** rsconstruct runs it at every graph build — `build`, `status`, `clean outputs`, `graph`. There is no manifest cache yet.
+2. **Cheap, or cacheable.** rsconstruct runs it at every graph build — `build`, `status`, `clean outputs`, `graph` — unless the config declares its inputs, in which case it runs only when one of them changed (see [Plan cache](#plan-cache)).
 3. **Exact match with the build.** Predicted paths equal the paths `command` writes, no more and no fewer. Violations are errors.
 4. **Deterministic build.** Same inputs → same bytes, or clean products will mismatch their cache after every rebuild of a neighbor.
 5. **Deterministic variable outputs.** Content-derived pages (tag indexes, archives, feeds) must be enumerable from the same parsing pass that plan does.
@@ -195,7 +206,7 @@ predict_args    = ["plan"]
 output_dirs     = ["_site"]
 ```
 
-The anchor-file scan goes away: the manifest names the inputs. Downstream processors start getting per-file dependencies without changes on their side.
+The anchor-file scan goes away: the manifest names the product inputs (declare the plan's own inputs with the scan fields if you want the [plan cache](#plan-cache)). Downstream processors start getting per-file dependencies without changes on their side.
 
 ## See also
 
@@ -203,3 +214,4 @@ The anchor-file scan goes away: the manifest names the inputs. Downstream proces
 - [Shared Output Directory](../../internal/shared-output-directory.md) — the ownership rules for opaque creators, which mass generators inherit
 - [Processor Ordering](../../internal/processor-ordering.md) — sibling discussion about explicit ordering knobs
 - [rssite](https://github.com/veltzer/rssite) — a static site generator built to the manifest contract
+- [`zola plan` patch](https://github.com/veltzer/rsconstruct/tree/master/contrib/zola) — adds a plan mode to zola v0.23.3 so a Zola site can run as a mass generator; verified on an 800-page site

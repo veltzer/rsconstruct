@@ -277,14 +277,14 @@ fn run() -> (Result<()>, bool) {
                 })?;
                 match action {
                     CleanAction::Outputs {
-                        processors,
+                        processor,
                         no_empty_dirs,
                     } => {
                         let builder = Builder::new(&ctx)?;
-                        let filter = if processors.is_empty() {
+                        let filter = if processor.is_empty() {
                             None
                         } else {
-                            Some(processors)
+                            Some(processor)
                         };
                         builder.clean(&ctx, cli.verbose, filter.as_deref(), !no_empty_dirs)?;
                     }
@@ -363,13 +363,13 @@ fn run() -> (Result<()>, bool) {
             Commands::Fix { action } => {
                 let builder = Builder::new(&ctx)?;
                 match action {
-                    cli::FixAction::Run { processors } => {
-                        if processors.is_empty() {
+                    cli::FixAction::Run { processor } => {
+                        if processor.is_empty() {
                             bail!(
                                 "No processors specified. Usage: rsconstruct fix run <processor1,processor2,...>"
                             );
                         }
-                        builder.fix(&ctx, Some(&processors))?;
+                        builder.fix(&ctx, Some(&processor))?;
                     }
                     cli::FixAction::List => {
                         builder.fix_list()?;

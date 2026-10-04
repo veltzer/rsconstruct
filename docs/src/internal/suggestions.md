@@ -400,7 +400,7 @@ Grades:
   - Redundant information: the type of `ruff` is fixed by its plugin entry, so the
     user is repeating what the tool already knows. The only thing the loader can
     do with it is reject a mismatch.
-  - Instance names leak everywhere: `-p processor.checker.pylint.core`, `out/pylint.core`, cache keys,
+  - Instance names leak everywhere: `-p processor.checker.pylint.core`, `out/processor.checker.pylint.core`, cache keys,
     build stats. Either the iname becomes `checker.pylint.core` (longer `-p`, longer
     output dirs, every cache key changes) or the section path and the iname stop
     matching (new thing to learn). Decide this first; it drives everything else.

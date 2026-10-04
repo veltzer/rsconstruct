@@ -15,6 +15,8 @@ const SITE_SCRIPT: &str = r#"#!/bin/bash
 set -e
 case "$1" in
   plan)
+    # Counted so the plan-cache tests can tell a cached plan from a fresh one.
+    echo plan >> plans.log
     echo '{"version":1,"outputs":['
     first=1
     for f in docs/*.md; do
@@ -347,17 +349,101 @@ fn mass_generator_reports_failed_plan_command() {
     assert!(text.contains("plan exploded"), "{text}");
 }
 
+fn plan_runs(root: &Path) -> usize {
+    fs::read_to_string(root.join("plans.log")).map_or(0, |s| s.lines().count())
+}
+
+/// The scan fields declare what the plan is computed from (`docs/` and
+/// `site.toml` here). While none of those files changes, later builds reuse
+/// the cached plan instead of running `predict_command`.
+const CACHED_CONFIG_EXTRA: &str =
+    "src_dirs = [\"docs\"]\nsrc_extensions = [\".md\"]\nsrc_files = [\"site.toml\"]\n";
+
 #[test]
-fn mass_generator_rejects_scan_fields() {
-    let config = format!("{CONFIG}src_dirs = [\"docs\"]\n");
-    let temp_dir = setup_site_project(&config);
+fn mass_generator_reuses_cached_plan_while_inputs_are_unchanged() {
+    let temp_dir = setup_site_project(&format!("{CONFIG}{CACHED_CONFIG_EXTRA}"));
     let root = temp_dir.path();
+
+    build_ok(root);
+    assert_eq!(plan_runs(root), 1);
+    let result = build_ok(root);
+    assert_eq!(result.skipped, 2, "{:?}", result.products);
+    assert_eq!(
+        plan_runs(root),
+        1,
+        "unchanged plan inputs: the plan must come from cache"
+    );
+    assert!(
+        root.join(".rsconstruct/mass_generator/processor.mass_generator.generic.site.json")
+            .is_file()
+    );
+}
+
+#[test]
+fn mass_generator_replans_when_a_plan_input_changes() {
+    let temp_dir = setup_site_project(&format!("{CONFIG}{CACHED_CONFIG_EXTRA}"));
+    let root = temp_dir.path();
+    build_ok(root);
+
+    // A new page is a new file under a declared plan input.
+    write_file(root, "docs/c.md", "page c\n");
+    let result = build_ok(root);
+    assert_eq!(
+        plan_runs(root),
+        2,
+        "a new source file must trigger a fresh plan"
+    );
+    assert_eq!(result.total_products, 3, "{:?}", result.products);
+    assert!(result.has_product("docs/c.md", "success"));
+
+    // An edit to a declared plan input re-plans too.
+    write_file(root, "site.toml", "title = \"Renamed\"\n");
+    build_ok(root);
+    assert_eq!(plan_runs(root), 3);
+}
+
+#[test]
+fn mass_generator_without_plan_inputs_plans_every_time() {
+    let temp_dir = setup_site_project(CONFIG);
+    let root = temp_dir.path();
+    build_ok(root);
+    build_ok(root);
+    assert_eq!(
+        plan_runs(root),
+        2,
+        "nothing declares the plan inputs, so nothing may be cached"
+    );
+    assert!(!root.join(".rsconstruct/mass_generator").exists());
+}
+
+#[test]
+fn mass_generator_rejects_plan_input_dirs_without_extensions() {
+    let temp_dir = setup_site_project(&format!("{CONFIG}src_dirs = [\"docs\"]\n"));
+    let output = run_rsconstruct_with_env(temp_dir.path(), &["build"], &[("NO_COLOR", "1")]);
+    assert!(!output.status.success(), "{}", combined_output(&output));
+    assert!(
+        combined_output(&output).contains("src_extensions is empty"),
+        "{}",
+        combined_output(&output)
+    );
+}
+
+#[test]
+fn mass_generator_rejects_corrupt_plan_cache() {
+    let temp_dir = setup_site_project(&format!("{CONFIG}{CACHED_CONFIG_EXTRA}"));
+    let root = temp_dir.path();
+    build_ok(root);
+    write_file(
+        root,
+        ".rsconstruct/mass_generator/processor.mass_generator.generic.site.json",
+        "garbage",
+    );
 
     let output = run_rsconstruct_with_env(root, &["build"], &[("NO_COLOR", "1")]);
 
     assert!(!output.status.success(), "{}", combined_output(&output));
     assert!(
-        combined_output(&output).contains("'src_dirs' is not used by mass_generator"),
+        combined_output(&output).contains("is corrupt; delete it and rerun"),
         "{}",
         combined_output(&output)
     );

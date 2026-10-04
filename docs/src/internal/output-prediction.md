@@ -6,7 +6,7 @@ Once outputs are known up front, per-file caching, precise incremental rebuilds,
 
 ## Status
 
-**Implemented** as the `processor.mass_generator.generic` processor (`src/processor/mass_generator/generic.rs`); the user-facing contract is in [Mass Generator](../processor/mass_generator/generic.md). This document is the design spec it was built from. Where the implementation departs from the text below, the departure is called out in a **Status note**; the main ones are: no synthetic phase product (a once-per-build guard inside the processor does that job), `loose_manifest` is a config field rather than a CLI flag, verification compares a before/after snapshot of `output_dirs` instead of walking the whole directory, and the manifest is not yet cached between graph builds.
+**Implemented** as the `processor.mass_generator.generic` processor (`src/processor/mass_generator/generic.rs`); the user-facing contract is in [Mass Generator](../processor/mass_generator/generic.md). This document is the design spec it was built from. Where the implementation departs from the text below, the departure is called out in a **Status note**; the main ones are: no synthetic phase product (a once-per-build guard inside the processor does that job), `loose_manifest` is a config field rather than a CLI flag, verification compares a before/after snapshot of `output_dirs` instead of walking the whole directory, and the manifest cache is opt-in, keyed on the plan inputs the config declares.
 
 Related designs:
 
@@ -173,7 +173,7 @@ dep_inputs = ["mkdocs.yml"]
 loose_manifest = false
 ```
 
-**Status note.** The design had the standard scan fields (`src_dirs`, `src_extensions`) "bound which source changes trigger a replan". Without the manifest cache they would bound nothing, so the processor rejects them with a message instead of accepting a field that does nothing.
+**Status note.** As designed, the standard scan fields bound which source changes trigger a replan: their files key the manifest cache (step 6 below). They discover no products.
 
 ## Interaction with the shared-output-directory design
 
@@ -268,7 +268,7 @@ The order it was built in, and where each step stands:
 3. Plan phase: invoke `predict_command`, parse JSON, create products. **Done.** The plan is memoized for the process, so the fixed-point discovery loop runs it once per build, not once per pass.
 4. Execution phase: one invocation per instance, per build. **Done**, via the once-per-build guard described in the status note above.
 5. Strict verification after build. **Done**, as a before/after snapshot (status note above).
-6. Manifest caching (skip re-plan when source tree unchanged). **Not done.** `predict_command` runs at every graph build, including `status`, `graph` and `clean outputs`. The `src_dirs`/`src_extensions` fields that were to bound the re-plan are therefore rejected by the processor rather than silently ignored; they come back when the cache does.
+6. Manifest caching (skip re-plan when source tree unchanged). **Done.** The cache is opt-in: when the config declares the plan's inputs (`src_dirs` with `src_extensions`, and/or `src_files`), the raw manifest is stored in `.rsconstruct/mass_generator/<instance>.json` under a key of the rsconstruct version, the instance config, and the path and content of every declared input; a matching key skips `predict_command`. Undeclared inputs mean no cache, because nothing else can tell rsconstruct what the plan depends on. `src_dirs` without `src_extensions` is rejected (it would key the cache on nothing).
 7. Documentation in `docs/src/processor/mass_generator/generic.md`. **Done.**
 
 Open question 1 (single-pass `--print-manifest` mode) is not implemented. Open question 3 (a page the tool stops predicting) is resolved by documentation: the orphan has no product and is neither rebuilt nor cleaned; the user deletes it.

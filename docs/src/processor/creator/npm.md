@@ -6,14 +6,18 @@ Installs Node.js dependencies from `package.json` files using npm.
 
 ## How It Works
 
-Discovers `package.json` files in the project, runs `npm install` in each
-directory, and creates a stamp file on success. Sibling `.json`, `.js`, and
-`.ts` files are tracked as inputs so changes trigger reinstallation.
+Discovers `package.json` files in the project and runs `npm install` in each
+directory. Sibling `.json`, `.js`, and `.ts` files are tracked as inputs so
+changes trigger reinstallation. With `cache_output_dir = true` (the default)
+the resulting `node_modules/` next to each `package.json` is cached as a
+tree, so `rsconstruct clean && rsconstruct build` restores it instead of
+reinstalling; with it off, a successful install is only recorded in the
+cache and nothing is restored.
 
 ## Source Files
 
 - Input: `**/package.json` (plus sibling `.json`, `.js`, `.ts` files)
-- Output: `out/npm/{flat_name}.stamp`
+- Output: the `node_modules/` directory next to each `package.json` (when `cache_output_dir = true`)
 
 ## Configuration
 

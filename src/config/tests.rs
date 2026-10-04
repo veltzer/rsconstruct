@@ -815,6 +815,45 @@ fn every_processor_file_is_declared() {
     );
 }
 
+/// A processor's source file sits in the directory of its type: a processor
+/// is named `processor.<type>.<name>` exactly as its module path, so a file
+/// under `generator/` that registers a Creator names itself wrongly.
+/// `linux_module` lived in `generator/` as a Creator until 2026-10-04, and
+/// nothing noticed — the docs/tests completeness checks key on the type,
+/// not on where the source is.
+#[test]
+fn every_processor_file_sits_in_its_type_directory() {
+    let mut misplaced: Vec<String> = Vec::new();
+    for (dir, variant) in [
+        ("checker", "Checker"),
+        ("generator", "Generator"),
+        ("creator", "Creator"),
+        ("explicit", "Explicit"),
+        ("mass_generator", "MassGenerator"),
+    ] {
+        let path = format!("src/processor/{dir}");
+        for entry in std::fs::read_dir(&path).unwrap() {
+            let file = entry.unwrap().path();
+            if file.extension().is_none_or(|e| e != "rs")
+                || file.file_stem().is_some_and(|s| s == "mod")
+            {
+                continue;
+            }
+            let src = std::fs::read_to_string(&file).unwrap();
+            for line in src.lines().filter(|l| l.contains("processor_type: ")) {
+                if !line.contains(&format!("ProcessorType::{variant},")) {
+                    misplaced.push(format!("{}: {}", file.display(), line.trim()));
+                }
+            }
+        }
+    }
+    misplaced.sort();
+    assert!(
+        misplaced.is_empty(),
+        "processor files registering a type other than their directory's: {misplaced:#?}"
+    );
+}
+
 // Tests for processor section shape classification (finding 11)
 
 use crate::config::{ProcessorConfig, SectionShape};

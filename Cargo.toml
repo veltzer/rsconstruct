@@ -32,6 +32,9 @@ mlua = { version = "0.11", features = ["lua54", "send", "vendored", "serialize"]
 regex = "1"
 glob = "0.3.3"
 serde_yaml_ng = "0.10"
+# Same slugifier as zola (its `slugify_paths`), so the zola mass generator
+# predicts exactly the paths zola writes.
+slug = "0.1"
 zstd = "0.13"
 lopdf = "0.45"
 grass = { version = "0.13.4", default-features = false }

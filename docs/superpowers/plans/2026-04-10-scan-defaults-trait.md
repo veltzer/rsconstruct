@@ -381,7 +381,7 @@ git commit -m "feat: implement ScanDefaults for all manual config structs"
 - Modify: `src/config/mod.rs`
 - Modify: `src/builder/mod.rs`
 - Modify: `src/main.rs`
-- Modify: `src/processors/lua_processor.rs`
+- Modify: `src/processor/lua_processor.rs`
 
 - [ ] **Step 1: Simplify the registry**
 
@@ -543,7 +543,7 @@ Inline the resolve logic:
     scan
 ```
 
-Update Lua plugin caller in `src/processors/lua_processor.rs:58`:
+Update Lua plugin caller in `src/processor/lua_processor.rs:58`:
 ```rust
         let scan_config = scan_config_from_toml(&config_value, &[], &[], &[]);
 ```
@@ -556,7 +556,7 @@ Expected: All tests pass.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/registry.rs src/config/mod.rs src/builder/mod.rs src/main.rs src/processors/lua_processor.rs
+git add src/registry.rs src/config/mod.rs src/builder/mod.rs src/main.rs src/processor/lua_processor.rs
 git commit -m "refactor: remove scan_dir from registry, use ScanDefaults trait everywhere"
 ```
 

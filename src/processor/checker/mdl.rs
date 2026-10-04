@@ -13,8 +13,10 @@ fn default_gem_home() -> String {
     "gems".into()
 }
 
+/// The install stamp the gem processor writes for a root `Gemfile`; listing
+/// it as an input is what orders mdl after `bundle install`.
 fn default_gem_stamp() -> String {
-    "out/processor.creator.gem/root.stamp".into()
+    crate::processor::creator::gem::ROOT_STAMP.into()
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -34,7 +36,7 @@ impl Default for MdlConfig {
         Self {
             local_repo: false,
             gem_home: "gems".into(),
-            gem_stamp: "out/processor.creator.gem/root.stamp".into(),
+            gem_stamp: default_gem_stamp(),
             standard: StandardConfig::default(),
         }
     }
@@ -138,7 +140,7 @@ inventory::submit! {
                 doc: "Path to the local gem repository" },
             crate::config::FieldSpec { name: "gem_stamp", ty: crate::config::FieldType::String,
                 affects_output: true, required: false,
-                doc: "Stamp file tracking the local gem installation" },
+                doc: "Install stamp the gem processor writes; an input, so mdl runs after the gems are installed" },
         ],
         omit_standard_fields: &["formats", "output_dir"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),

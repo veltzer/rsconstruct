@@ -168,7 +168,7 @@ sass/styles.scss → out/processor.generator.sass/styles.css
 
 ### Built-in generators
 
-a2x, cc_single_file, chromium, drawio, generator, imarkdown2html, ipdfunite, isass, jinja2, libreoffice, mako, markdown2html, marp, mermaid, objdump, pandoc, pdflatex, pdfunite, protobuf, requirements, rust_single_file, sass, tags, tera, yaml2json
+a2x, cc_single_file, chromium, drawio, generic, imarkdown2html, ipdfunite, isass, jinja2, libreoffice, mako, markdown2html, marp, mermaid, objdump, pandoc, pdflatex, pdfunite, protobuf, requirements, rust_single_file, sass, tags, tera, yaml2json
 
 ## Creator
 
@@ -254,9 +254,9 @@ Scans for `.manifest` files, runs the build script, caches two output directorie
 
 ### Built-in creators
 
-cargo, cc, creator, gem, jekyll, linux_module, mdbook, npm, pip, sphinx
+cargo, cc, gem, generic, jekyll, linux_module, mdbook, npm, pip, sphinx
 
-User-defined creators use the `creator` processor type directly via `[processor.creator.NAME]`.
+User-defined creators use the config-driven `generic` creator via `[processor.creator.generic.NAME]`.
 
 ## Explicit
 
@@ -305,7 +305,7 @@ Aggregates all PDF outputs from pdflatex into a single merged PDF.
 
 ### Built-in explicit processors
 
-explicit
+generic
 
 ## Mass Generator
 
@@ -346,9 +346,9 @@ docs/about.md, templates/default.html → _site/about/index.html
 
 ### Built-in mass generators
 
-mass_generator
+generic
 
-Any tool that honors the manifest contract uses the `mass_generator` processor type directly via `[processor.mass_generator.NAME]`; see [Mass Generator](processor/mass_generator/generic.md).
+Any tool that honors the manifest contract plugs into the config-driven `generic` mass generator via `[processor.mass_generator.generic.NAME]`; see [Mass Generator](processor/mass_generator/generic.md).
 
 ## Comparison
 

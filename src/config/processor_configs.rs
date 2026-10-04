@@ -204,7 +204,7 @@ pub type MarpImagesConfig = CheckerConfig;
 // CcConfig (and the cc.yaml manifest types) live in src/processor/creator/cc.rs.
 
 // LinuxModuleConfig (and the linux-module.yaml manifest types) live in
-// src/processor/generator/linux_module.rs.
+// src/processor/creator/linux_module.rs.
 
 // ZspellConfig lives in src/processor/checker/zspell.rs.
 

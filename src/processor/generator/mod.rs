@@ -8,7 +8,6 @@ mod ipdfunite;
 mod isass;
 mod jinja2;
 mod libreoffice;
-mod linux_module;
 mod mako;
 mod markdown2html;
 mod marp;

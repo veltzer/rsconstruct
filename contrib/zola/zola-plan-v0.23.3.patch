@@ -1,0 +1,707 @@
+diff --git a/components/imageproc/src/processor.rs b/components/imageproc/src/processor.rs
+index 2241473..ce1e2de 100644
+--- a/components/imageproc/src/processor.rs
++++ b/components/imageproc/src/processor.rs
+@@ -214,6 +214,12 @@ impl Processor {
+         self.img_ops.len()
+     }
+ 
++    /// Every enqueued operation as `(input image, output file)`, so a build
++    /// plan can list the processed images without performing them.
++    pub fn planned_ops(&self) -> Vec<(PathBuf, PathBuf)> {
++        self.img_ops.iter().map(|op| (op.input_path.clone(), op.output_path.clone())).collect()
++    }
++
+     #[allow(clippy::too_many_arguments)]
+     pub fn enqueue(
+         &mut self,
+diff --git a/components/site/src/lib.rs b/components/site/src/lib.rs
+index e8d9b99..4705542 100644
+--- a/components/site/src/lib.rs
++++ b/components/site/src/lib.rs
+@@ -2,6 +2,7 @@ pub mod feeds;
+ pub mod link_checking;
+ mod md_render;
+ mod minify;
++pub mod plan;
+ mod queue;
+ pub mod sass;
+ pub mod sitemap;
+@@ -49,6 +50,8 @@ pub enum BuildMode {
+ pub struct Site {
+     /// The base path of the zola site
+     pub base_path: PathBuf,
++    /// The config file the site was loaded from
++    pub config_path: PathBuf,
+     /// The parsed config for the site
+     pub config: Config,
+     pub tera: Tera,
+@@ -99,6 +102,7 @@ impl Site {
+ 
+         let site = Site {
+             base_path: path.to_path_buf(),
++            config_path: path.join(config_file),
+             config,
+             tera,
+             imageproc: Arc::new(Mutex::new(imageproc)),
+@@ -682,6 +686,12 @@ impl Site {
+         imageproc.num_img_ops()
+     }
+ 
++    /// The image operations enqueued so far as `(input, output)` pairs.
++    pub fn planned_image_ops(&self) -> Vec<(PathBuf, PathBuf)> {
++        let imageproc = self.imageproc.lock().expect("Couldn't lock imageproc (planned_image_ops)");
++        imageproc.planned_ops()
++    }
++
+     pub fn process_images(&self) -> Result<()> {
+         let mut imageproc =
+             self.imageproc.lock().expect("Couldn't lock imageproc (process_images)");
+diff --git a/components/site/src/plan.rs b/components/site/src/plan.rs
+new file mode 100644
+index 0000000..a604b32
+--- /dev/null
++++ b/components/site/src/plan.rs
+@@ -0,0 +1,241 @@
++//! `zola plan`: everything `zola build` would write, without writing it.
++//!
++//! A build tool that wraps zola can turn each planned file into a product of
++//! its own — with its own inputs and its own cache entry — instead of
++//! treating the output directory as one opaque blob. For that it needs two
++//! things from zola up front: the full list of output files, and for each
++//! one the input files whose content determines it. This module answers both
++//! from the loaded `Site`, by the same code paths the build uses to decide
++//! where things go (`Queue`, `sass`, the search index, the static copy), so
++//! the plan and the build cannot drift apart.
++
++use std::collections::{BTreeMap, BTreeSet};
++use std::path::{Path, PathBuf};
++
++use walkdir::WalkDir;
++
++use crate::Site;
++use crate::queue::Queue;
++use config::IndexFormat;
++use errors::Result;
++
++/// One file the build will produce.
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct PlannedOutput {
++    /// Relative to the output directory.
++    pub path: PathBuf,
++    /// Absolute paths of the files whose content can change this output.
++    pub sources: Vec<PathBuf>,
++}
++
++impl PlannedOutput {
++    pub fn new(path: PathBuf, sources: Vec<PathBuf>) -> Self {
++        let path = path.strip_prefix("/").map(Path::to_path_buf).unwrap_or(path);
++        Self { path, sources }
++    }
++}
++
++/// Regular files under `dir`, following symlinks as the build's walkers do.
++/// A missing directory is simply empty.
++fn files_under(dir: &Path) -> Vec<PathBuf> {
++    WalkDir::new(dir)
++        .follow_links(true)
++        .into_iter()
++        .filter_map(|e| e.ok())
++        .filter(|e| e.path().is_file())
++        .map(|e| e.into_path())
++        .collect()
++}
++
++impl Site {
++    /// Inputs every rendered output depends on: the config file and every
++    /// template of the site and its theme. Listing the whole template tree
++    /// rather than the exact `extends`/`include` chain is deliberate: it is
++    /// always correct, and zola rebuilds the whole site on any change anyway,
++    /// so precision here would change what a wrapper reports as dirty, not
++    /// how often zola runs.
++    fn common_sources(&self) -> Vec<PathBuf> {
++        let mut sources = vec![self.config_path.clone()];
++        sources.extend(files_under(&self.templates_path));
++        if let Some(ref theme) = self.config.theme {
++            sources.extend(files_under(
++                &self.base_path.join("themes").join(theme).join("templates"),
++            ));
++        }
++        sources
++    }
++
++    /// Static files as `copy_static_directories` lays them out: theme files
++    /// first, then the site's own, which overwrite them. Processed images are
++    /// skipped — they are enumerated from the image queue, not from whatever
++    /// a previous build left in `static/processed_images/`.
++    fn plan_static(&self, outputs: &mut Vec<PlannedOutput>) {
++        let processed = self.static_path.join(imageproc::RESIZED_SUBDIR);
++        let mut roots = Vec::new();
++        if let Some(ref theme) = self.config.theme {
++            roots.push((self.base_path.join("themes").join(theme).join("static"), None));
++        }
++        roots.push((self.static_path.clone(), self.config.ignored_static_globset.as_ref()));
++        for (root, ignore) in roots {
++            for file in files_under(&root) {
++                if file.starts_with(&processed) {
++                    continue;
++                }
++                let relative = file.strip_prefix(&root).unwrap().to_path_buf();
++                if let Some(gs) = ignore
++                    && gs.is_match(&relative)
++                {
++                    continue;
++                }
++                outputs.push(PlannedOutput::new(relative, vec![file]));
++            }
++        }
++    }
++
++    /// Every non-partial `.sass`/`.scss` compiles to a `.css` at the same
++    /// relative path (see `sass::compile_sass`). Partials are reachable from
++    /// any of them, so each stylesheet depends on the whole `sass/` tree.
++    fn plan_sass(&self, outputs: &mut Vec<PlannedOutput>) {
++        let mut roots = Vec::new();
++        if let Some(ref theme) = self.config.theme {
++            let theme_path = self.base_path.join("themes").join(theme);
++            if theme_path.join("sass").exists() {
++                roots.push(theme_path);
++            }
++        }
++        if self.config.compile_sass {
++            roots.push(self.base_path.clone());
++        }
++        for root in roots {
++            let sass_path = root.join("sass");
++            let all = files_under(&sass_path);
++            for file in crate::sass::get_non_partial_scss(&sass_path) {
++                let path = file.strip_prefix(&sass_path).unwrap().with_extension("css");
++                outputs.push(PlannedOutput::new(path, all.clone()));
++            }
++        }
++    }
++
++    /// Search indexes as `build_search_index` writes them.
++    fn plan_search_index(&self, outputs: &mut Vec<PlannedOutput>) {
++        if !self.config.needs_search_index() {
++            return;
++        }
++        let mut langs = Vec::new();
++        if self.config.build_search_index {
++            langs.push(self.config.default_language.clone());
++        }
++        for (code, language) in &self.config.other_languages() {
++            if *code != self.config.default_language && language.build_search_index {
++                langs.push((*code).to_string());
++            }
++        }
++        for lang in langs {
++            let sources: Vec<PathBuf> = self
++                .library
++                .pages
++                .values()
++                .filter(|p| p.lang == lang)
++                .map(|p| p.file.path.clone())
++                .collect();
++            let path = PathBuf::from(self.config.search.index_format.filename(&lang));
++            outputs.push(PlannedOutput::new(path, sources));
++        }
++        match self.config.search.index_format {
++            IndexFormat::ElasticlunrJavascript | IndexFormat::ElasticlunrJson => {
++                outputs.push(PlannedOutput::new(PathBuf::from("elasticlunr.min.js"), Vec::new()));
++            }
++            _ => {}
++        }
++    }
++
++    /// Syntax-highlighting theme stylesheets (`render_themes_css`).
++    fn plan_themes_css(&self, outputs: &mut Vec<PlannedOutput>) {
++        let themes = self
++            .config
++            .markdown
++            .highlighting
++            .as_ref()
++            .map(|x| x.generate_themes_css())
++            .unwrap_or_default();
++        for (filename, _) in themes {
++            outputs.push(PlannedOutput::new(PathBuf::from(filename), Vec::new()));
++        }
++    }
++
++    /// Images enqueued while rendering markdown, which the build writes to
++    /// `static/processed_images/` and then copies out with the static tree.
++    /// An image resized from a template is enqueued only while that template
++    /// renders, so it cannot appear here; a wrapper's plan-vs-build check
++    /// will report it, which is the honest answer until templates are
++    /// rendered at plan time.
++    fn plan_images(&self, outputs: &mut Vec<PlannedOutput>) {
++        for (input, output) in self.planned_image_ops() {
++            let relative = output.strip_prefix(&self.static_path).unwrap().to_path_buf();
++            outputs.push(PlannedOutput::new(relative, vec![input]));
++        }
++    }
++
++    /// The complete build plan, sorted by output path, each output listing
++    /// every input that can change it. The site must be loaded.
++    pub fn plan(&self) -> Result<Vec<PlannedOutput>> {
++        let common = self.common_sources();
++        let mut outputs = Vec::new();
++
++        self.plan_sass(&mut outputs);
++        self.plan_search_index(&mut outputs);
++        self.plan_themes_css(&mut outputs);
++        self.plan_images(&mut outputs);
++        self.plan_static(&mut outputs);
++
++        let queue = Queue::full_build(self);
++        let rendered_from = outputs.len();
++        outputs.extend(queue.plan());
++        // Everything the queue renders goes through the templates and reads
++        // the config; copied assets do not, but a few extra inputs on a
++        // copied file are harmless where a missing one would be a stale page.
++        for output in &mut outputs[rendered_from..] {
++            output.sources.extend(common.iter().cloned());
++        }
++        // Aliases: the queue only knows the redirect's URL; the content file
++        // that declares it is what the stub depends on.
++        let mut alias_owner: BTreeMap<PathBuf, PathBuf> = BTreeMap::new();
++        for page in self.library.pages.values() {
++            for alias in &page.meta.aliases {
++                alias_owner.insert(alias_path(alias), page.file.path.clone());
++            }
++        }
++        for section in self.library.sections.values() {
++            for alias in &section.meta.aliases {
++                alias_owner.insert(alias_path(alias), section.file.path.clone());
++            }
++        }
++        for output in &mut outputs {
++            if let Some(owner) = alias_owner.get(&output.path) {
++                output.sources.push(owner.clone());
++            }
++        }
++
++        // Two jobs can name the same file (an alias pointing at an existing
++        // page, a static file shadowing a theme's); the build writes it twice
++        // and the last write wins. The plan lists it once with the union of
++        // its inputs, which is what a change to either would do to it.
++        let mut merged: BTreeMap<PathBuf, BTreeSet<PathBuf>> = BTreeMap::new();
++        for output in outputs {
++            merged.entry(output.path).or_default().extend(output.sources);
++        }
++        Ok(merged
++            .into_iter()
++            .map(|(path, sources)| PlannedOutput { path, sources: sources.into_iter().collect() })
++            .collect())
++    }
++}
++
++/// Where `Queue::render_alias` writes the redirect stub for `from`.
++fn alias_path(from: &str) -> PathBuf {
++    let mut path = PathBuf::from(from);
++    if !from.ends_with(".html") {
++        path.push("index.html");
++    }
++    PlannedOutput::new(path, Vec::new()).path
++}
+diff --git a/components/site/src/queue.rs b/components/site/src/queue.rs
+index 51d1bf8..eac4c55 100644
+--- a/components/site/src/queue.rs
++++ b/components/site/src/queue.rs
+@@ -1,6 +1,7 @@
+ use std::borrow::Cow;
+ use std::path::{Path, PathBuf};
+ 
++use crate::plan::PlannedOutput;
+ use crate::{BuildMode, SITE_CONTENT, Site, feeds, minify, sitemap};
+ use content::{Page, Section, Taxonomy, TaxonomyTerm};
+ use errors::Result;
+@@ -65,12 +66,42 @@ struct RenderedOutput {
+     kind: OutputKind,
+ }
+ 
++/// A section's listing depends on its own file and on every page it lists.
++fn section_sources(section: &Section, pages: &[&Page]) -> Vec<PathBuf> {
++    let mut sources = vec![section.file.path.clone()];
++    sources.extend(pages.iter().map(|p| p.file.path.clone()));
++    sources
++}
++
++/// A taxonomy term's pages are the only content that can change its listing.
++/// Term paths are keys into the library, i.e. the pages' source files.
++fn term_sources(term: &TaxonomyTerm) -> Vec<PathBuf> {
++    term.pages.clone()
++}
++
++/// The co-located assets copied next to a rendered page or section, as
++/// `Site::copy_assets` lays them out: `dest` + the asset's path below the
++/// content file's directory.
++fn planned_assets(parent: &Path, assets: &[PathBuf], dest: &Path) -> Vec<PlannedOutput> {
++    assets
++        .iter()
++        .map(|asset| {
++            let relative = asset.strip_prefix(parent).expect("Couldn't get filename from page asset");
++            PlannedOutput::new(dest.join(relative), vec![asset.clone()])
++        })
++        .collect()
++}
++
+ #[derive(Debug, Clone)]
+ pub struct Queue<'a> {
+     site: &'a Site,
+     jobs: Vec<Job<'a>>,
+     /// Keeping them on the queue so we can use the index to avoid cloning them
+     paginators: Vec<Paginator<'a>>,
++    /// Parallel to `paginators`: the content files each paginator is built
++    /// from, for `zola plan`. Recorded here because a `Paginator` does not
++    /// expose its root.
++    paginator_sources: Vec<Vec<PathBuf>>,
+ }
+ 
+ impl<'a> Queue<'a> {
+@@ -91,6 +122,8 @@ impl<'a> Queue<'a> {
+             }
+         }
+ 
++        // Kept for the paginator below: the feed job takes `pages` by value.
++        let listing_sources = section_sources(section, &pages);
+         if section.meta.generate_feeds {
+             self.jobs.push(Job::Feed(Feed::Section { pages, section }));
+         }
+@@ -122,6 +155,7 @@ impl<'a> Queue<'a> {
+                 });
+             }
+             self.paginators.push(paginator);
++            self.paginator_sources.push(listing_sources);
+         } else {
+             // This will handle a normal section, which could also be a redirect
+             self.jobs.push(Job::Section { section, path: base_path });
+@@ -129,18 +163,22 @@ impl<'a> Queue<'a> {
+     }
+ 
+     pub fn single_page(site: &'a Site, page: &'a Page) -> Self {
+-        Self { jobs: vec![Job::Page(page)], site, paginators: vec![] }
++        Self { jobs: vec![Job::Page(page)], site, paginators: vec![], paginator_sources: vec![] }
+     }
+ 
+     pub fn single_section(site: &'a Site, section: &'a Section, render_pages: bool) -> Self {
+-        let mut queue = Self { jobs: vec![], site, paginators: vec![] };
++        let mut queue = Self { jobs: vec![], site, paginators: vec![], paginator_sources: vec![] };
+         queue.add_section_jobs(section, render_pages);
+         queue
+     }
+ 
+     pub fn full_build(site: &'a Site) -> Self {
+-        let mut queue =
+-            Queue { site, jobs: vec![Job::NotFound], paginators: Vec::with_capacity(100) };
++        let mut queue = Queue {
++            site,
++            jobs: vec![Job::NotFound],
++            paginators: Vec::with_capacity(100),
++            paginator_sources: Vec::with_capacity(100),
++        };
+ 
+         if site.config.generate_sitemap {
+             queue.jobs.push(Job::Sitemap);
+@@ -203,6 +241,7 @@ impl<'a> Queue<'a> {
+                         });
+                     }
+                     queue.paginators.push(paginator);
++                    queue.paginator_sources.push(term_sources(term));
+                 } else {
+                     queue.jobs.push(Job::TaxonomyTerm { taxonomy, term, path: term_path.clone() });
+                 }
+@@ -523,6 +562,139 @@ impl<'a> Queue<'a> {
+         Ok(RenderedOutput { path: PathBuf::from("robots.txt"), content, kind: OutputKind::Text })
+     }
+ 
++    /// What every job would write, without rendering anything: the output
++    /// path relative to the output directory and the content files whose
++    /// changes can alter it. Templates and the config file are not listed
++    /// here; they feed every output and the caller adds them once.
++    ///
++    /// Mirrors `execute_job` and `process` job for job, so a new kind of job
++    /// must be added in both places — the match is exhaustive to make that
++    /// a compile error rather than a silent gap in the plan.
++    pub fn plan(&self) -> Vec<PlannedOutput> {
++        let mut outputs = Vec::new();
++        for job in &self.jobs {
++            match job {
++                Job::Alias { from, .. } => {
++                    // The redirect stub depends only on the permalink of its
++                    // target, and permalinks come from the content tree as a
++                    // whole; `Site::plan` attributes aliases to their owner.
++                    let mut path = PathBuf::from(from);
++                    if !from.ends_with(".html") {
++                        path.push("index.html");
++                    }
++                    outputs.push(PlannedOutput::new(path, Vec::new()));
++                }
++                Job::Page(page) => {
++                    let path = PathBuf::from(&page.path).join("index.html");
++                    outputs.push(PlannedOutput::new(path, vec![page.file.path.clone()]));
++                    let dest = PathBuf::from(page.path.strip_prefix('/').unwrap_or(&page.path));
++                    let parent = page.file.path.parent().unwrap();
++                    outputs.extend(planned_assets(parent, &page.assets, &dest));
++                }
++                Job::Section { section, path } => {
++                    let pages: Vec<_> = section
++                        .pages
++                        .iter()
++                        .map(|k| self.site.library.pages.get(k).unwrap())
++                        .collect();
++                    outputs.push(PlannedOutput::new(
++                        path.join("index.html"),
++                        section_sources(section, &pages),
++                    ));
++                }
++                Job::SectionAssets { section, path } => {
++                    let parent = section.file.path.parent().unwrap();
++                    outputs.extend(planned_assets(parent, &section.assets, path));
++                }
++                Job::Paginated { paginator_index, pager_index, path } => {
++                    let paginator = &self.paginators[*paginator_index];
++                    let pager = &paginator.pagers[*pager_index];
++                    let sources = self.paginator_sources[*paginator_index].clone();
++                    if pager.index == 1 {
++                        outputs.push(PlannedOutput::new(path.join("index.html"), sources.clone()));
++                        let redirect_path =
++                            path.join(&paginator.paginate_path).join("1").join("index.html");
++                        outputs.push(PlannedOutput::new(redirect_path, sources));
++                    } else {
++                        let output_path = path
++                            .join(&paginator.paginate_path)
++                            .join(pager.index.to_string())
++                            .join("index.html");
++                        outputs.push(PlannedOutput::new(output_path, sources));
++                    }
++                }
++                Job::TaxonomyList { taxonomy, path } => {
++                    let sources = taxonomy.items.iter().flat_map(term_sources).collect();
++                    outputs.push(PlannedOutput::new(path.join("index.html"), sources));
++                }
++                Job::TaxonomyTerm { term, path, .. } => {
++                    outputs.push(PlannedOutput::new(path.join("index.html"), term_sources(term)));
++                }
++                Job::Feed(feed) => outputs.extend(self.plan_feed(feed)),
++                Job::Sitemap => {
++                    // One sitemap below 30k entries, split above; the split
++                    // threshold is far beyond any site that reaches this.
++                    let sources = self.all_content_files();
++                    outputs.push(PlannedOutput::new(PathBuf::from("sitemap.xml"), sources));
++                }
++                Job::NotFound => {
++                    outputs.push(PlannedOutput::new(PathBuf::from("404.html"), Vec::new()));
++                }
++                Job::Robots => {
++                    outputs.push(PlannedOutput::new(PathBuf::from("robots.txt"), Vec::new()));
++                }
++            }
++        }
++        outputs
++    }
++
++    fn plan_feed(&self, feed: &Feed) -> Vec<PlannedOutput> {
++        let mut res = Vec::new();
++        match feed {
++            Feed::Site { lang } => {
++                let sources: Vec<PathBuf> = self
++                    .site
++                    .library
++                    .pages
++                    .values()
++                    .filter(|p| p.lang == *lang)
++                    .map(|p| p.file.path.clone())
++                    .collect();
++                for feed_filename in &self.site.config.languages[*lang].feed_filenames {
++                    let path = if *lang == self.site.config.default_language {
++                        PathBuf::from(feed_filename)
++                    } else {
++                        PathBuf::from(lang).join(feed_filename)
++                    };
++                    res.push(PlannedOutput::new(path, sources.clone()));
++                }
++            }
++            Feed::Section { section, pages } => {
++                let base_path = PathBuf::from(&section.path[1..]);
++                let sources = section_sources(section, pages);
++                for feed_filename in &self.site.config.languages[&section.lang].feed_filenames {
++                    res.push(PlannedOutput::new(base_path.join(feed_filename), sources.clone()));
++                }
++            }
++            Feed::Taxonomy { taxonomy, term, path } => {
++                for feed_filename in &self.site.config.languages[&taxonomy.lang].feed_filenames {
++                    res.push(PlannedOutput::new(path.join(feed_filename), term_sources(term)));
++                }
++            }
++        }
++        res
++    }
++
++    fn all_content_files(&self) -> Vec<PathBuf> {
++        self.site
++            .library
++            .pages
++            .values()
++            .map(|p| p.file.path.clone())
++            .chain(self.site.library.sections.values().map(|s| s.file.path.clone()))
++            .collect()
++    }
++
+     fn execute_job(&self, job: &Job<'a>) -> Result<Vec<RenderedOutput>> {
+         match job {
+             Job::Alias { from, to } => Ok(vec![self.render_alias(from, to)?]),
+diff --git a/components/site/src/sass.rs b/components/site/src/sass.rs
+index aa015ab..32a6c79 100644
+--- a/components/site/src/sass.rs
++++ b/components/site/src/sass.rs
+@@ -56,7 +56,7 @@ fn is_partial_scss(entry: &DirEntry) -> bool {
+     entry.file_name().to_str().map(|s| s.starts_with('_')).unwrap_or(false)
+ }
+ 
+-fn get_non_partial_scss(sass_path: &Path) -> Vec<PathBuf> {
++pub(crate) fn get_non_partial_scss(sass_path: &Path) -> Vec<PathBuf> {
+     let glob = Glob::new("*.{sass,scss}").expect("Invalid glob for sass").compile_matcher();
+ 
+     WalkDir::new(sass_path)
+diff --git a/src/cli.rs b/src/cli.rs
+index 530e635..db92c09 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -112,6 +112,26 @@ pub enum Command {
+         debounce: u64,
+     },
+ 
++    /// Print the files `build` would write, as a JSON manifest, without writing them
++    ///
++    /// Each entry names one output file and the input files whose content can
++    /// change it, for build tools that cache and track outputs individually.
++    /// Paths are relative to the current directory, so run it from the project
++    /// root with the same --output-dir you pass to `build`.
++    Plan {
++        /// Force the base URL to be that value (defaults to the one in the config file)
++        #[clap(short = 'u', long)]
++        base_url: Option<String>,
++
++        /// The output directory the planned paths are reported under (by default 'public' dir in project root)
++        #[clap(short = 'o', long)]
++        output_dir: Option<PathBuf>,
++
++        /// Include drafts when loading the site
++        #[clap(long)]
++        drafts: bool,
++    },
++
+     /// Try to build the project without rendering it. Checks links
+     Check {
+         /// Include drafts when loading the site
+diff --git a/src/cmd/mod.rs b/src/cmd/mod.rs
+index 004b864..0d94e67 100644
+--- a/src/cmd/mod.rs
++++ b/src/cmd/mod.rs
+@@ -1,9 +1,11 @@
+ mod build;
+ mod check;
+ mod init;
++mod plan;
+ mod serve;
+ 
+ pub use self::build::build;
+ pub use self::check::check;
+ pub use self::init::create_new_project;
++pub use self::plan::plan;
+ pub use self::serve::serve;
+diff --git a/src/cmd/plan.rs b/src/cmd/plan.rs
+new file mode 100644
+index 0000000..646c7db
+--- /dev/null
++++ b/src/cmd/plan.rs
+@@ -0,0 +1,68 @@
++use std::path::{Path, PathBuf};
++
++use errors::{Context, Result, bail};
++use serde_json::json;
++use site::Site;
++
++/// Schema version of the manifest printed by `zola plan`.
++const MANIFEST_VERSION: u32 = 1;
++
++/// Express `path` relative to `cwd`. A relative path is already that (the
++/// user passed `--output-dir _site`); an absolute one is rewritten, and one
++/// outside the current directory is an error because a consumer would have
++/// no way to refer to it.
++fn relative_to(cwd: &Path, path: &Path) -> Result<PathBuf> {
++    if path.is_relative() {
++        return Ok(path.to_path_buf());
++    }
++    match path.strip_prefix(cwd) {
++        Ok(rel) => Ok(rel.to_path_buf()),
++        Err(_) => bail!(
++            "{} is outside the current directory {}; run `zola plan` from the project root",
++            path.display(),
++            cwd.display()
++        ),
++    }
++}
++
++pub fn plan(
++    root_dir: &Path,
++    config_file: &Path,
++    base_url: Option<&str>,
++    output_dir: Option<&Path>,
++    include_drafts: bool,
++) -> Result<()> {
++    let mut site = Site::new(root_dir, config_file)?;
++    if let Some(output_dir) = output_dir {
++        site.set_output_path(output_dir);
++    }
++    if let Some(b) = base_url {
++        site.set_base_url(b.to_string());
++    }
++    if include_drafts {
++        site.include_drafts();
++    }
++    site.load()?;
++
++    let cwd = std::env::current_dir()
++        .and_then(|d| d.canonicalize())
++        .context("Could not determine the current directory")?;
++    let output_root = relative_to(&cwd, &site.output_path)?;
++
++    let mut outputs = Vec::new();
++    for planned in site.plan()? {
++        let mut sources = Vec::with_capacity(planned.sources.len());
++        for source in &planned.sources {
++            sources.push(relative_to(&cwd, source)?.display().to_string());
++        }
++        outputs.push(json!({
++            "path": output_root.join(&planned.path).display().to_string(),
++            "sources": sources,
++        }));
++    }
++
++    let manifest = json!({ "version": MANIFEST_VERSION, "outputs": outputs });
++    let json = serde_json::to_string_pretty(&manifest).context("Could not serialize the plan")?;
++    println!("{json}");
++    Ok(())
++}
+diff --git a/src/main.rs b/src/main.rs
+index 6fdc390..e032304 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -190,6 +190,15 @@ fn main() {
+                 std::process::exit(1);
+             }
+         }
++        Command::Plan { base_url, output_dir, drafts } => {
++            let (root_dir, config_file) = get_config_file_path(&cli_dir, cli.config.as_deref());
++            if let Err(e) =
++                cmd::plan(&root_dir, &config_file, base_url.as_deref(), output_dir.as_deref(), drafts)
++            {
++                messages::unravel_errors("Failed to plan the site", &e);
++                std::process::exit(1);
++            }
++        }
+         Command::Check { drafts, skip_external_links } => {
+             log::info!("Checking site...");
+             let start = Instant::now();

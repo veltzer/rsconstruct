@@ -16,15 +16,15 @@
 |------|--------|----------------|
 | `Cargo.toml` | Modify | Add `ureq` dependency |
 | `src/webcache.rs` | Create | HTTP fetch + disk cache (fetch, clear, stats, list) |
-| `src/processors/checkers/iyamlschema.rs` | Create | Native YAML schema validator processor |
-| `src/processors/checkers/mod.rs` | Modify | Add `mod iyamlschema` and `pub use` |
-| `src/processors/mod.rs` | Modify | Re-export `IyamlschemaProcessor` |
+| `src/processor/checker/iyamlschema.rs` | Create | Native YAML schema validator processor |
+| `src/processor/checker/mod.rs` | Modify | Add `mod iyamlschema` and `pub use` |
+| `src/processor/mod.rs` | Modify | Re-export `IyamlschemaProcessor` |
 | `src/config/processor_configs.rs` | Modify | Add `IyamlschemaConfig` |
 | `src/registry.rs` | Modify | Add registry entry |
 | `src/cli.rs` | Modify | Add `WebCache` command + `WebCacheAction` enum |
 | `src/main.rs` | Modify | Add `mod webcache`, handle `WebCache` command |
-| `tests/processors/iyamlschema.rs` | Create | Integration tests |
-| `tests/processors/mod.rs` | Modify | Add `mod iyamlschema` |
+| `tests/processor/iyamlschema.rs` | Create | Integration tests |
+| `tests/processor/mod.rs` | Modify | Add `mod iyamlschema` |
 
 ---
 
@@ -317,15 +317,15 @@ git commit -m "feat: add IyamlschemaConfig"
 ### Task 5: Create `iyamlschema` processor
 
 **Files:**
-- Create: `src/processors/checkers/iyamlschema.rs`
-- Modify: `src/processors/checkers/mod.rs`
-- Modify: `src/processors/mod.rs`
+- Create: `src/processor/checker/iyamlschema.rs`
+- Modify: `src/processor/checker/mod.rs`
+- Modify: `src/processor/mod.rs`
 - Modify: `src/registry.rs`
 
 - [ ] **Step 1: Create the processor file**
 
 ```rust
-// src/processors/checkers/iyamlschema.rs
+// src/processor/checker/iyamlschema.rs
 use anyhow::{Context, Result, bail};
 use serde_json::Value;
 use std::path::Path;
@@ -498,11 +498,11 @@ impl_checker!(IyamlschemaProcessor,
 );
 ```
 
-- [ ] **Step 2: Add module declaration and pub use in checkers/mod.rs**
+- [ ] **Step 2: Add module declaration and pub use in checker/mod.rs**
 
 Add `mod iyamlschema;` in the module declarations section and `pub use iyamlschema::IyamlschemaProcessor;` in the pub use section.
 
-- [ ] **Step 3: Re-export from processors/mod.rs**
+- [ ] **Step 3: Re-export from processor/mod.rs**
 
 Add `IyamlschemaProcessor` to the `pub use generators::{...}` line. Note: despite being a checker, it's re-exported from the same `pub use` line that lists all processor types.
 
@@ -523,8 +523,8 @@ Run: `cargo clean -p rsconstruct && cargo build`
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/processors/checkers/iyamlschema.rs src/processors/checkers/mod.rs \
-        src/processors/mod.rs src/registry.rs
+git add src/processor/checker/iyamlschema.rs src/processor/checker/mod.rs \
+        src/processor/mod.rs src/registry.rs
 git commit -m "feat: add iyamlschema native processor"
 ```
 
@@ -533,8 +533,8 @@ git commit -m "feat: add iyamlschema native processor"
 ### Task 6: Integration tests
 
 **Files:**
-- Create: `tests/processors/iyamlschema.rs`
-- Modify: `tests/processors/mod.rs`
+- Create: `tests/processor/iyamlschema.rs`
+- Modify: `tests/processor/mod.rs`
 
 - [ ] **Step 1: Create test file**
 
@@ -543,7 +543,7 @@ The tests need a local HTTP server or pre-cached schemas. The simplest approach:
 Alternatively, since the jsonschema crate's `resolve-file` feature is enabled, we can use `file://` URLs in tests.
 
 ```rust
-// tests/processors/iyamlschema.rs
+// tests/processor/iyamlschema.rs
 use std::fs;
 use tempfile::TempDir;
 use crate::common::run_rsconstruct_with_env;
@@ -689,7 +689,7 @@ fn iyamlschema_incremental_skip() {
 
 - [ ] **Step 2: Add module declaration**
 
-In `tests/processors/mod.rs`, add:
+In `tests/processor/mod.rs`, add:
 ```rust
 mod iyamlschema;
 ```
@@ -707,7 +707,7 @@ Expected: no regressions (only pre-existing `cc_single_file_angle_bracket_includ
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tests/processors/iyamlschema.rs tests/processors/mod.rs
+git add tests/processor/iyamlschema.rs tests/processor/mod.rs
 git commit -m "test: add iyamlschema integration tests"
 ```
 
@@ -739,7 +739,7 @@ src_dirs = ["yaml"]
 
 Run from `../data`:
 ```bash
-/path/to/rsconstruct processors files --headers | grep iyamlschema
+/path/to/rsconstruct processor files --headers | grep iyamlschema
 ```
 Expected: shows 21 YAML files under `[iyamlschema]`
 

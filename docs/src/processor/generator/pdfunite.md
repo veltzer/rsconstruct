@@ -16,8 +16,8 @@ subdirectories are combined into course bundles.
 
 ## Source Files
 
-- Input: PDFs from upstream processor (e.g., `out/processor.generator.marp/pdf/{subdir}/*.pdf`)
-- Output: `out/courses/{subdir}.pdf`
+- Input: PDFs from upstream processor (e.g., `out/processor.generator.marp/{subdir}/*.pdf`)
+- Output: `out/processor.generator.pdfunite/{subdir}.pdf`
 
 ## Configuration
 
@@ -26,9 +26,9 @@ subdirectories are combined into course bundles.
 command = "pdfunite"                   # The pdfunite command to run
 source_dir = "marp/courses"           # Base directory containing course subdirectories
 source_ext = ".md"                     # Extension of source files in subdirectories
-source_output_dir = "out/processor.generator.marp/pdf"     # Where the upstream processor puts PDFs
+source_output_dir = "out/processor.generator.marp"     # Where the upstream processor puts PDFs
 args = []                              # Additional arguments to pass to pdfunite
-output_dir = "out/courses"             # Output directory for merged PDFs
+output_dir = "out/processor.generator.pdfunite"  # Output directory for merged PDFs
 dep_inputs = []                      # Additional files that trigger rebuilds when changed
 ```
 
@@ -37,9 +37,9 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 | `command` | string | `"pdfunite"` | The pdfunite executable to run |
 | `source_dir` | string | `"marp/courses"` | Directory containing course subdirectories |
 | `source_ext` | string | `".md"` | Extension of source files to look for |
-| `source_output_dir` | string | `"out/processor.generator.marp/pdf"` | Directory where the upstream processor outputs PDFs |
+| `source_output_dir` | string | `"out/processor.generator.marp"` | Directory where the upstream processor outputs PDFs |
 | `args` | string[] | `[]` | Extra arguments passed to pdfunite |
-| `output_dir` | string | `"out/courses"` | Output directory for merged PDFs |
+| `output_dir` | string | `"out/processor.generator.pdfunite"` | Output directory for merged PDFs |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
 ## Batch support
