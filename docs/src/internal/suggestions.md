@@ -410,7 +410,7 @@ Grades:
   - Four-level TOML headers for named instances.
   - Migration touches every `[processor.*]` section in every fleet repo (about 155
     distinct sections as of 2026-10-03). No back-compat shim; one pass over the
-    fleet, then `rsmultigit check-same` clean.
+    fleet, then `rsmultigit check same` clean.
 - Related, smaller fix to do first: rename the `script` checker to `checker` so the
   four generic user-command processors (`checker`, `generator`, `creator`,
   `explicit`) all carry their role in their name. About six in ten fleet sections
