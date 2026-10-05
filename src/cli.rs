@@ -1,4 +1,5 @@
 use anyhow::{Result, bail};
+use clap::builder::styling::{AnsiColor, Effects, Styles};
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use clap_complete::{Shell, generate};
 use std::str::FromStr;
@@ -9,8 +10,21 @@ use std::str::FromStr;
 // caller reads naturally.
 pub use crate::display::{DisplayOptions, InputDisplay, OutputDisplay, PathFormat};
 
+/// Colours for every help and error message clap renders (cargo's palette).
+/// clap drops them by itself when the stream is not a terminal or `NO_COLOR`
+/// is set.
+const STYLES: Styles = Styles::styled()
+    .header(AnsiColor::Green.on_default().effects(Effects::BOLD))
+    .usage(AnsiColor::Green.on_default().effects(Effects::BOLD))
+    .literal(AnsiColor::Cyan.on_default().effects(Effects::BOLD))
+    .placeholder(AnsiColor::Cyan.on_default())
+    .error(AnsiColor::Red.on_default().effects(Effects::BOLD))
+    .valid(AnsiColor::Cyan.on_default().effects(Effects::BOLD))
+    .invalid(AnsiColor::Yellow.on_default().effects(Effects::BOLD));
+
 #[derive(Parser)]
 #[command(name = "rsconstruct")]
+#[command(styles = STYLES)]
 #[command(version = concat!(env!("CARGO_PKG_VERSION")))]
 #[command(about = "Rust Build Tool - Incremental build system with templates", long_about = None)]
 pub struct Cli {
