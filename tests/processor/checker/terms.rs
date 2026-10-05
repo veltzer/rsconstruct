@@ -157,10 +157,10 @@ fn terms_fix_strips_ambiguous_backticks() {
         "[processor.checker.terms]\ndir_terms_unambiguous = \"terms.unambiguous\"\ndir_terms_ambiguous = \"terms.ambiguous\"\nsrc_dirs = [\".\"]\n",
     ).unwrap();
 
-    let output = run_rsconstruct_with_env(project_path, &["terms", "fix"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["term", "fix"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
-        "terms fix must succeed: stdout={}, stderr={}",
+        "term fix must succeed: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
     );
@@ -192,10 +192,10 @@ fn terms_fix_fails_when_no_terms_found() {
         "[processor.checker.terms]\ndir_terms_unambiguous = \"terms.unambiguous\"\ndir_terms_ambiguous = \"terms.ambiguous\"\nsrc_dirs = [\".\"]\n",
     ).unwrap();
 
-    let output = run_rsconstruct_with_env(project_path, &["terms", "fix"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["term", "fix"], &[("NO_COLOR", "1")]);
     assert!(
         !output.status.success(),
-        "terms fix must fail when no terms are loaded"
+        "term fix must fail when no terms are loaded"
     );
 
     let combined = format!(

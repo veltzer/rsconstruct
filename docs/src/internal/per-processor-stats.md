@@ -1,7 +1,7 @@
 # Per-Processor Statistics
 
 rsconstruct shows several "per-processor" or "per-analyzer" statistics tables
-(`cache stats`, `analyzers stats`, `graph stats`, `build` summaries). These all
+(`cache stats`, `analyzer stats`, `graph stats`, `build` summaries). These all
 look similar on the surface, but the **data source differs**, and that changes
 what we can cheaply show.
 
@@ -67,7 +67,7 @@ Two things are wrong with this:
 
 ## Why this matters: declared-but-empty processors
 
-In `analyzers stats`, if a user declares `[analyzer.cpp]` in `rsconstruct.toml`
+In `analyzer stats`, if a user declares `[analyzer.cpp]` in `rsconstruct.toml`
 but the analyzer never matches anything, the table shows a `cpp  0  0` row
 (implemented 2026-04-12). This is a useful signal: "you configured it, but it
 is silently doing nothing."
@@ -256,7 +256,7 @@ The cost is negligible; the payoff is across the board.
 5. **`cache stats` UX.** Once grouping is real, enumerate declared processors
    from `rsconstruct.toml` and union them with processors present in
    `descriptors/`. Show a 0-row for anything declared-but-empty (mirrors the
-   `analyzers stats` treatment already implemented in `builder/analyzers.rs`).
+   `analyzer stats` treatment already implemented in `builder/analyzers.rs`).
 
 ### Scope
 
@@ -298,7 +298,7 @@ Don't do this unless a sixth call site shows up.
 
 ## Current state (2026-04-12)
 
-- `analyzers stats`: **fixed.** Shows declared-but-empty rows. Separator
+- `analyzer stats`: **fixed.** Shows declared-but-empty rows. Separator
   between data and Total.
 - `cache stats`: **unchanged.** Still uses single-bucket `"all"` grouping.
   Documented as a known limitation here; fix is pending Option B.

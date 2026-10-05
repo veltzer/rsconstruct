@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 // Aliased: `std::io::Write` is also in scope here (for stdout flushing), and
 // both traits define `write!`/`writeln!` methods.
 use super::{Builder, sorted_keys};
-use crate::cli::{GraphFormat, ToolsAction};
+use crate::cli::{GraphFormat, ToolAction};
 use crate::color;
 use crate::json_output;
 use crate::tables;
@@ -15,7 +15,7 @@ use std::process::Command;
 /// Check if a system package is installed using the platform's package manager.
 /// Tries dpkg-query (Debian/Ubuntu), rpm (Fedora/RHEL), pacman (Arch), and brew (macOS).
 ///
-/// Probes run through the central runner so a `tools check` over a long
+/// Probes run through the central runner so a `tool check` over a long
 /// package list stays interruptible — `dpkg-query` on a large system is not
 /// instant, and one probe runs per declared package.
 ///
@@ -80,7 +80,7 @@ fn dpkg_status_means_installed(status: &str) -> bool {
 /// (`scripts/check_md.py`), not a binary on `$PATH` — see `ToolInfo::name` in
 /// `src/tools.rs` for why a name with a `/` cannot serve as a registry key.
 /// Such a command is checked into the repo and needs no installing, so
-/// `tools install` must skip it rather than fail with "No install method".
+/// `tool install` must skip it rather than fail with "No install method".
 /// The build-time preflight in `builder/build.rs` still requires it to exist,
 /// so skipping it here does not weaken strictness.
 fn is_installable_tool_name(tool: &str) -> bool {
@@ -117,7 +117,7 @@ fn uv_export_reqs(ctx: &crate::build_context::BuildContext) -> Result<Vec<String
         "--no-emit-project",
     ]);
     let out = crate::processor::run_command_capture(ctx, &cmd).context(
-        "failed to run `uv export` — is uv installed? (`rsconstruct tools install uv`, \
+        "failed to run `uv export` — is uv installed? (`rsconstruct tool install uv`, \
                   or set `python_installer = \"pip\"` under [dependencies] to install with pip)",
     )?;
     if !out.status.success() {
@@ -140,12 +140,12 @@ fn tool_runtime(tool: &str) -> &'static str {
     })
 }
 
-/// Handle `rsconstruct tools` subcommands without a project config.
+/// Handle `rsconstruct tool` subcommands without a project config.
 /// Uses default processor configs so List, Stats, Install, and Graph work
 /// even outside a project directory.
 pub fn tools_no_config(
     ctx: &crate::build_context::BuildContext,
-    action: ToolsAction,
+    action: ToolAction,
     verbose: bool,
 ) -> Result<()> {
     let processors = super::create_all_default_processors()?;
@@ -164,11 +164,11 @@ impl Builder {
         tool_lock::verify_lock_file(ctx, &tool_commands)
     }
 
-    /// Handle `rsconstruct tools` subcommands
+    /// Handle `rsconstruct tool` subcommands
     pub fn tools(
         &self,
         ctx: &crate::build_context::BuildContext,
-        action: ToolsAction,
+        action: ToolAction,
         verbose: bool,
     ) -> Result<()> {
         let processors = self.create_processors()?;
@@ -182,25 +182,25 @@ fn run_tools_command(
     ctx: &crate::build_context::BuildContext,
     processors: &crate::processor::ProcessorMap,
     is_enabled: &dyn Fn(&str) -> bool,
-    action: ToolsAction,
+    action: ToolAction,
     verbose: bool,
     builder: Option<&Builder>,
 ) -> Result<()> {
-    let show_all = matches!(&action, ToolsAction::ListConfigured { all: true, .. });
+    let show_all = matches!(&action, ToolAction::ListConfigured { all: true, .. });
     let show_methods = matches!(
         &action,
-        ToolsAction::ListConfigured { methods: true, .. } | ToolsAction::List { methods: true }
+        ToolAction::ListConfigured { methods: true, .. } | ToolAction::List { methods: true }
     );
     let install_interactive = matches!(
         &action,
-        ToolsAction::Install {
+        ToolAction::Install {
             interactive: true,
             ..
         }
     );
     let install_no_eatmydata = matches!(
         &action,
-        ToolsAction::Install {
+        ToolAction::Install {
             no_eatmydata: true,
             ..
         }
@@ -214,7 +214,7 @@ fn run_tools_command(
     // the `eatmydata_ci_default` hook to have run against. Apply the same
     // CI=true policy directly, otherwise the one caller that most wants the
     // speedup (a CI runner with no rsconstruct.toml) would never get it.
-    let install_all = matches!(&action, ToolsAction::Install { all: true, .. });
+    let install_all = matches!(&action, ToolAction::Install { all: true, .. });
     let config_enables_eatmydata = builder.is_some_and(|b| b.config.dependencies.eatmydata)
         || (install_all && crate::config::running_in_ci());
     let install_use_eatmydata =
@@ -234,7 +234,7 @@ fn run_tools_command(
     }
 
     match action {
-        ToolsAction::List { .. } => {
+        ToolAction::List { .. } => {
             // Registry-wide list: every tool rsconstruct knows how to install,
             // independent of which processors are configured. Mirrors
             // `processor list`, which shows all built-in processors.
@@ -308,7 +308,7 @@ fn run_tools_command(
                 .collect();
             tables::print_table(&headers, &rows);
         }
-        ToolsAction::ListConfigured { .. } => {
+        ToolAction::ListConfigured { .. } => {
             if crate::json_output::is_json_mode() {
                 let entries: Vec<json_output::ToolListEntry> = tool_map
                     .iter()
@@ -374,7 +374,7 @@ fn run_tools_command(
                 );
             }
         }
-        ToolsAction::Check => {
+        ToolAction::Check => {
             let tool_commands = tool_lock::collect_tool_commands(processors, is_enabled);
             tool_lock::verify_lock_file(ctx, &tool_commands)?;
             let lock = tool_lock::read_lock_file()?;
@@ -412,7 +412,7 @@ fn run_tools_command(
                 println!("{}", color::green("Tool versions match lock file."));
             }
         }
-        ToolsAction::Lock => {
+        ToolAction::Lock => {
             let tool_commands = tool_lock::collect_tool_commands(processors, is_enabled);
             let lock = tool_lock::create_lock(ctx, &tool_commands)?;
             tool_lock::write_lock_file(&lock)?;
@@ -448,7 +448,7 @@ fn run_tools_command(
                 println!("Wrote {}", color::bold(".tools.versions"));
             }
         }
-        ToolsAction::Graph { format, view } => {
+        ToolAction::Graph { format, view } => {
             if view {
                 let html_content = tools_graph_html(&tool_map);
                 let html_path = std::env::temp_dir().join("rsconstruct_tools_graph.html");
@@ -477,7 +477,7 @@ fn run_tools_command(
                 println!("{output}");
             }
         }
-        ToolsAction::Stats => {
+        ToolAction::Stats => {
             let mut tool_stats: Vec<json_output::ToolStat> = Vec::new();
             for (tool, procs) in &tool_map {
                 let installed = which::which(tool).is_ok();
@@ -579,12 +579,12 @@ fn run_tools_command(
                 }
             }
         }
-        ToolsAction::Install { name, all, .. } => {
+        ToolAction::Install { name, all, .. } => {
             // Collect missing tools with their install info
             let missing_tools: Vec<(&str, &crate::tools::InstallMethod)> = if all {
                 // Registry-wide: every tool rsconstruct knows how to install,
-                // independent of any config. Mirrors `tools list`, which is the
-                // registry-wide counterpart of `tools list-configured`.
+                // independent of any config. Mirrors `tool list`, which is the
+                // registry-wide counterpart of `tool list-configured`.
                 //
                 // Nothing is skipped. A tool with no automatable method is a
                 // hard error, not a warning to scroll past: --all claiming
@@ -815,7 +815,7 @@ fn run_tools_command(
             }
             println!("{}", color::green("All tools installed successfully."));
         }
-        ToolsAction::InstallDeps {
+        ToolAction::InstallDeps {
             interactive,
             no_eatmydata,
         } => {

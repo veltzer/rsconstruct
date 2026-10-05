@@ -98,7 +98,7 @@ fn complete_from_config() {
     );
 }
 
-/// `tags check` and `terms` must work in a project that hasn't declared
+/// `tag check` and `term` must work in a project that hasn't declared
 /// those processors. An undeclared instance previously produced a config
 /// with unresolved scan fields, and the first scan accessor panicked with
 /// "scan fields not resolved".
@@ -107,7 +107,7 @@ fn subcommands_work_without_their_processor_declared() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    for args in [vec!["tags", "check"], vec!["terms", "stats"]] {
+    for args in [vec!["tag", "check"], vec!["term", "stats"]] {
         let output = run_rsconstruct_with_env(project_path, &args, &[("NO_COLOR", "1")]);
         let combined = format!(
             "{}{}",

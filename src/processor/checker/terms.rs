@@ -25,7 +25,7 @@ pub struct TermsConfig {
     #[serde(default = "default_dir_terms_ambiguous")]
     pub dir_terms_ambiguous: String,
     /// When true (default), backticking an ambiguous term is a build error
-    /// and `terms fix` strips those backticks. When false, ambiguous terms
+    /// and `term fix` strips those backticks. When false, ambiguous terms
     /// are loaded only to validate the disjoint invariant; their use in
     /// backticks is neither flagged nor changed.
     #[serde(default = "default_true")]
@@ -93,7 +93,7 @@ impl TermsProcessor {
             Ok(())
         } else {
             bail!(
-                "{} file(s) have term issues (run `rsconstruct terms fix` to fix):\n{}",
+                "{} file(s) have term issues (run `rsconstruct term fix` to fix):\n{}",
                 bad_files.len(),
                 bad_files.join("\n"),
             )
@@ -172,7 +172,7 @@ impl crate::processor::Processor for TermsProcessor {
     }
 }
 
-// --- Shared logic used by both the processor and the `rsconstruct terms fix` command ---
+// --- Shared logic used by both the processor and the `rsconstruct term fix` command ---
 
 /// Load all technical terms from .txt files in the given directory.
 /// Each file has one term per line. Errors if any term appears more than once
@@ -810,7 +810,7 @@ pub fn fix_file(
     }
 }
 
-/// Fix all markdown files: called by `rsconstruct terms fix`.
+/// Fix all markdown files: called by `rsconstruct term fix`.
 /// Uses the same scan config as the terms processor to find files.
 pub fn fix_all(config: &TermsConfig, remove_non_terms: bool, warn_symlinks: bool) -> Result<()> {
     let terms = load_and_validate_terms(config)?;
@@ -819,7 +819,7 @@ pub fn fix_all(config: &TermsConfig, remove_non_terms: bool, warn_symlinks: bool
     // Force-walk every src_dir the user listed: they may include generated
     // directories like `out/processor.generator.generic` that are gitignored. The build path
     // sees those via `add_virtual_files` after the discover loop runs;
-    // `terms fix` runs standalone so it must walk them itself.
+    // `term fix` runs standalone so it must walk them itself.
     let force_dirs: Vec<&str> = config
         .standard
         .src_dirs()
@@ -1069,7 +1069,7 @@ inventory::submit! {
                 doc: "Optional directory of ambiguous terms; build fails if any term overlaps with dir_terms_unambiguous" },
             crate::config::FieldSpec { name: "forbid_backticked_ambiguous", ty: crate::config::FieldType::Bool,
                 affects_output: true, required: false,
-                doc: "If true (default), backticking an ambiguous term is a build error and `terms fix` strips those backticks" },
+                doc: "If true (default), backticking an ambiguous term is a build error and `term fix` strips those backticks" },
         ],
         omit_standard_fields: &["command", "formats", "args", "output_dir"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),

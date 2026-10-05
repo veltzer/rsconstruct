@@ -75,7 +75,7 @@ fn doctor_checks_package_json_dependencies_in_node_modules() {
     assert_eq!(find("rsconstruct-fake-installed")["status"], "ok");
     let missing = find("rsconstruct-fake-missing");
     assert_eq!(missing["status"], "fail");
-    assert_eq!(missing["install_hint"], "rsconstruct tools install-deps");
+    assert_eq!(missing["install_hint"], "rsconstruct tool install-deps");
 }
 
 /// The lock is what makes the install reproducible, so a manifest that
@@ -110,7 +110,7 @@ fn doctor_rejects_package_json_without_lock() {
 /// dictionary) showed as missing even when installed, and any binary that
 /// happens to share a package's name showed as installed without the package
 /// being on. The probe must go through the package manager, the same one
-/// `tools install-deps` uses.
+/// `tool install-deps` uses.
 ///
 /// The test plants a fake binary on PATH whose name is not a real package.
 /// The old which()-based doctor reported it ok; the package-manager probe
@@ -169,7 +169,7 @@ fn doctor_system_dependency_is_probed_as_package_not_tool() {
     );
     assert_eq!(check["category"], "dependency");
     assert_eq!(
-        check["install_hint"], "rsconstruct tools install-deps",
+        check["install_hint"], "rsconstruct tool install-deps",
         "the fix for a missing system dependency is install-deps, not a tool install",
     );
 }

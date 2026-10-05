@@ -58,5 +58,5 @@ This page defines the terminology used throughout RSConstruct's code, configurat
 | `processor defconfig PNAME` | pname | Processor type name — shows factory defaults |
 | `processor config [INAME]` | iname | Instance name from config — shows resolved config |
 | `processor files [INAME]` | iname | Instance name from config — shows discovered files |
-| `analyzers defconfig [NAME]` | analyzer name | Analyzer name from the analyzer registry — shows factory defaults |
-| `analyzers config [NAME]` | analyzer name | Analyzer name as declared in `[analyzer.NAME]` — shows resolved config |
+| `analyzer defconfig [NAME]` | analyzer name | Analyzer name from the analyzer registry — shows factory defaults |
+| `analyzer config [NAME]` | analyzer name | Analyzer name as declared in `[analyzer.NAME]` — shows resolved config |

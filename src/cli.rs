@@ -137,9 +137,9 @@ pub enum BuildPhase {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Manage dependency analyzers
-    Analyzers {
+    Analyzer {
         #[command(subcommand)]
-        action: AnalyzersAction,
+        action: AnalyzerAction,
     },
     /// Execute an incremental build
     Build {
@@ -181,16 +181,16 @@ pub enum Commands {
     /// Check build environment (requires config)
     Doctor,
     /// List all exit codes and their meanings (no config needed)
-    Errors,
+    Error,
     /// Run fixers on source files (auto-format, auto-fix lint issues)
     Fix {
         #[command(subcommand)]
         action: FixAction,
     },
     /// Inspect built-in template functions exposed to Tera templates (no config needed)
-    Functions {
+    Function {
         #[command(subcommand)]
-        action: FunctionsAction,
+        action: FunctionAction,
     },
     /// Display the build dependency graph
     Graph {
@@ -198,7 +198,7 @@ pub enum Commands {
         action: GraphAction,
     },
     /// List registered post-config hooks (no config needed)
-    Hooks,
+    Hook,
     /// Show project information
     Info {
         #[command(subcommand)]
@@ -207,9 +207,9 @@ pub enum Commands {
     /// Initialize a new rsconstruct project (no config needed)
     Init,
     /// Query GitHub Pages publishing settings from [pages] (requires config)
-    Pages {
+    Page {
         #[command(subcommand)]
-        action: PagesAction,
+        action: PageAction,
     },
     /// Manage processors
     Processor {
@@ -244,14 +244,14 @@ pub enum Commands {
     /// Create symlinks from source folders to target folders (requires config)
     SymlinkInstall,
     /// Search and query frontmatter tags from markdown files
-    Tags {
+    Tag {
         #[command(subcommand)]
-        action: TagsAction,
+        action: TagAction,
     },
     /// Manage term checking and fixing in markdown files
-    Terms {
+    Term {
         #[command(subcommand)]
-        action: TermsAction,
+        action: TermAction,
     },
     /// Validate rsconstruct.toml configuration (no processors created)
     #[command(name = "toml")]
@@ -260,9 +260,9 @@ pub enum Commands {
         action: TomlAction,
     },
     /// Manage external tool dependencies
-    Tools {
+    Tool {
         #[command(subcommand)]
-        action: ToolsAction,
+        action: ToolAction,
     },
     /// Print version information (no config needed)
     Version,
@@ -515,7 +515,7 @@ pub enum ProcessorAction {
 }
 
 #[derive(Subcommand)]
-pub enum PagesAction {
+pub enum PageAction {
     /// Print the directory published to GitHub Pages. Prints nothing (still
     /// exit 0) when [pages] is not configured, so CI can branch on the
     /// output being empty without parsing exit codes.
@@ -531,13 +531,13 @@ pub enum TomlAction {
 }
 
 #[derive(Subcommand)]
-pub enum FunctionsAction {
+pub enum FunctionAction {
     /// List all built-in Tera template functions with documentation
     List,
 }
 
 #[derive(Subcommand)]
-pub enum ToolsAction {
+pub enum ToolAction {
     /// Verify tool versions against .tools.versions lock file (uses config if available)
     Check,
     /// Show tool-to-processor dependency graph (uses config if available)
@@ -600,7 +600,7 @@ pub enum ToolsAction {
 }
 
 #[derive(Subcommand)]
-pub enum AnalyzersAction {
+pub enum AnalyzerAction {
     /// Add an analyzer to rsconstruct.toml with must-fill fields pre-populated and comments
     Add {
         /// Analyzer type name (pname) (e.g., cpp, icpp, python, markdown, tera)
@@ -649,7 +649,7 @@ pub enum AnalyzersAction {
     /// Show cached dependencies (requires config)
     Show {
         #[command(subcommand)]
-        filter: AnalyzersShowFilter,
+        filter: AnalyzerShowFilter,
     },
     /// Show statistics about cached dependencies by analyzer (requires config)
     Stats,
@@ -658,7 +658,7 @@ pub enum AnalyzersAction {
 }
 
 #[derive(Subcommand)]
-pub enum AnalyzersShowFilter {
+pub enum AnalyzerShowFilter {
     /// Show dependencies for all source files
     All,
     /// Show dependencies for files handled by specific analyzers
@@ -682,7 +682,7 @@ pub enum AnalyzersShowFilter {
 }
 
 #[derive(Subcommand)]
-pub enum TermsAction {
+pub enum TermAction {
     /// Auto-fix: add backticks to terms (requires config)
     Fix {
         /// Also remove backticks from non-terms
@@ -699,7 +699,7 @@ pub enum TermsAction {
 }
 
 #[derive(Subcommand)]
-pub enum TagsAction {
+pub enum TagAction {
     /// Run all tag validations without building (requires config)
     Check,
     /// Scan source files and add missing tags back to the tag collection (requires config)
@@ -969,7 +969,7 @@ fn generate_completion_script(shell: Shell) -> Result<String> {
 /// - `processor config`, `processor files`, `processor delete`, `processor disable`,
 ///   `processor enable` complete with **processor instance names** (inames) from
 ///   `rsconstruct.toml`.
-/// - `analyzers delete`, `analyzers disable`, `analyzers enable` complete with **analyzer
+/// - `analyzer delete`, `analyzer disable`, `analyzer enable` complete with **analyzer
 ///   instance names** (inames) from `rsconstruct.toml`.
 /// - `--processor` / `-p` flags in `build`/`watch` complete with **instance
 ///   names** (inames) from `rsconstruct.toml` — you can only build a processor
@@ -1085,9 +1085,9 @@ _rsconstruct_fixer_inames() {
 
     // Inject analyzer iname completion for delete/disable/enable.
     let analyzer_iname_targets = [
-        "rsconstruct__subcmd__analyzers__subcmd__delete)",
-        "rsconstruct__subcmd__analyzers__subcmd__disable)",
-        "rsconstruct__subcmd__analyzers__subcmd__enable)",
+        "rsconstruct__subcmd__analyzer__subcmd__delete)",
+        "rsconstruct__subcmd__analyzer__subcmd__disable)",
+        "rsconstruct__subcmd__analyzer__subcmd__enable)",
     ];
     for target in &analyzer_iname_targets {
         if let Some(section_start) = result.find(target) {

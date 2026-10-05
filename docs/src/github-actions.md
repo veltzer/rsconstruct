@@ -30,7 +30,7 @@ jobs:
         run: cargo install rsconstruct
 
       - name: Install tools
-        run: rsconstruct tools install
+        run: rsconstruct tool install
 
       - name: Build
         run: rsconstruct build -q -j0
@@ -74,7 +74,7 @@ set to "GitHub Actions") declares the published directory in `rsconstruct.toml`:
 dir = "out/web"
 ```
 
-The workflow then asks `rsconstruct pages dir` whether to deploy. The command
+The workflow then asks `rsconstruct page dir` whether to deploy. The command
 prints the directory when `[pages]` is configured and prints nothing (exit 0)
 when it isn't, so the exact same workflow file works in Pages and non-Pages
 repos — the upload step and the deploy job simply skip when the output is
@@ -94,7 +94,7 @@ jobs:
     # ... checkout, install rsconstruct, build ...
     - name: pages dir
       id: pages
-      run: echo "dir=$(rsconstruct pages dir)" >> "$GITHUB_OUTPUT"
+      run: echo "dir=$(rsconstruct page dir)" >> "$GITHUB_OUTPUT"
     - name: delete stale pages artifact
       # Artifacts survive re-run attempts, and both the upload and
       # deploy-pages fail hard when a "github-pages" artifact already exists

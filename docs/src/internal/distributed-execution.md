@@ -58,7 +58,7 @@ or `cppcheck` than the local machine will produce different results.
 
 This is the hardest problem. Options:
 - **Ignore it** — document that workers must have identical tool versions;
-  use tool locking (`rsconstruct tools lock`) to detect divergence.
+  use tool locking (`rsconstruct tool lock`) to detect divergence.
 - **Containers** — run each product in a container image that includes all
   required tools. Bazel and BuildBuddy do this. Heavy but correct.
 - **Nix/flakes** — pin tools via Nix derivations on all workers. Correct but
@@ -194,7 +194,7 @@ an execution-layer concern.
 ### 4. Hermeticity via tool locking
 
 Without containers, workers must have the same tool versions as the local
-machine. `rsconstruct tools lock` already records tool version hashes.
+machine. `rsconstruct tool lock` already records tool version hashes.
 Distributed execution should verify that each worker's tool hashes match the
 lock file before accepting products of that type. A worker with a mismatched
 `ruff` version refuses `ruff` products and logs a warning.

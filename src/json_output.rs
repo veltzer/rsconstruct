@@ -124,7 +124,7 @@ pub struct ToolInstallMethodEntry {
     pub command: String,
 }
 
-/// Entry for `rsconstruct tools list --json`.
+/// Entry for `rsconstruct tool list --json`.
 #[derive(Debug, Serialize)]
 pub struct ToolListEntry {
     pub tool: String,
@@ -134,7 +134,7 @@ pub struct ToolListEntry {
     pub install_methods: Vec<ToolInstallMethodEntry>,
 }
 
-/// Output for `rsconstruct tools stats --json`.
+/// Output for `rsconstruct tool stats --json`.
 #[derive(Debug, Serialize)]
 pub struct ToolStatsOutput {
     pub tools: Vec<ToolStat>,
@@ -142,7 +142,7 @@ pub struct ToolStatsOutput {
     pub summary: StatsSummary,
 }
 
-/// Per-tool availability info for `rsconstruct tools stats --json`.
+/// Per-tool availability info for `rsconstruct tool stats --json`.
 #[derive(Debug, Serialize)]
 pub struct ToolStat {
     pub name: String,
@@ -152,7 +152,7 @@ pub struct ToolStat {
     pub install_command: Option<String>,
 }
 
-/// Per-runtime summary for `rsconstruct tools stats --json`.
+/// Per-runtime summary for `rsconstruct tool stats --json`.
 #[derive(Debug, Serialize)]
 pub struct RuntimeStat {
     pub runtime: String,
@@ -161,7 +161,7 @@ pub struct RuntimeStat {
     pub missing: usize,
 }
 
-/// Overall summary for `rsconstruct tools stats --json`.
+/// Overall summary for `rsconstruct tool stats --json`.
 #[derive(Debug, Serialize)]
 pub struct StatsSummary {
     pub total_tools: usize,

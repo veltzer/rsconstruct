@@ -24,7 +24,7 @@ pub struct StandardConfig {
     /// `required_tools()` normally reports just `command`, which is right when
     /// the processor invokes the tool directly. It is wrong when `command` is a
     /// wrapper -- a script that shells out to something else -- because the real
-    /// tool is then invisible to `tools install` and to version locking, and the
+    /// tool is then invisible to `tool install` and to version locking, and the
     /// build only fails later, at the point the wrapper runs.
     #[serde(default)]
     pub required_tools: Vec<String>,

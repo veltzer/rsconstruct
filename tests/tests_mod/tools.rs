@@ -6,19 +6,19 @@ fn tools_list_shows_all_registry_tools() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    // `tools list` shows the central registry regardless of config, like
+    // `tool list` shows the central registry regardless of config, like
     // `processor list`. It lists tools no processor in this project needs.
-    let output = run_rsconstruct_with_env(project_path, &["tools", "list"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["tool", "list"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
-        "tools list failed: {}",
+        "tool list failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         !stdout.is_empty(),
-        "tools list should show at least one tool"
+        "tool list should show at least one tool"
     );
     // The registry view is not processor-scoped, so it has no "(...)" column.
     assert!(
@@ -39,12 +39,12 @@ fn tools_list_shows_configured_tools() {
 
     let output = run_rsconstruct_with_env(
         project_path,
-        &["tools", "list-configured"],
+        &["tool", "list-configured"],
         &[("NO_COLOR", "1")],
     );
     assert!(
         output.status.success(),
-        "tools list-configured failed: {}",
+        "tool list-configured failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
@@ -52,7 +52,7 @@ fn tools_list_shows_configured_tools() {
     // Template processor requires python3, so list-configured always has output.
     assert!(
         !stdout.is_empty(),
-        "tools list-configured should show at least one tool"
+        "tool list-configured should show at least one tool"
     );
     assert!(
         stdout.contains("("),
@@ -67,12 +67,12 @@ fn tools_list_configured_all_includes_disabled() {
 
     let output_default = run_rsconstruct_with_env(
         project_path,
-        &["tools", "list-configured"],
+        &["tool", "list-configured"],
         &[("NO_COLOR", "1")],
     );
     let output_all = run_rsconstruct_with_env(
         project_path,
-        &["tools", "list-configured", "-a"],
+        &["tool", "list-configured", "-a"],
         &[("NO_COLOR", "1")],
     );
 
@@ -87,7 +87,7 @@ fn tools_list_configured_all_includes_disabled() {
     let count_all = stdout_all.lines().count();
     assert!(
         count_all >= count_default,
-        "tools list-configured -a should include at least as many tools as default ({} vs {})",
+        "tool list-configured -a should include at least as many tools as default ({} vs {})",
         count_all,
         count_default
     );
@@ -100,12 +100,12 @@ fn tools_list_json() {
 
     let output = run_rsconstruct_with_env(
         project_path,
-        &["--json", "tools", "list"],
+        &["--json", "tool", "list"],
         &[("NO_COLOR", "1")],
     );
     assert!(
         output.status.success(),
-        "tools list --json failed: {}",
+        "tool list --json failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
@@ -137,18 +137,18 @@ fn tools_check_succeeds() {
 
     // First create the lock file so check has something to verify against
     let lock_output =
-        run_rsconstruct_with_env(project_path, &["tools", "lock"], &[("NO_COLOR", "1")]);
+        run_rsconstruct_with_env(project_path, &["tool", "lock"], &[("NO_COLOR", "1")]);
     assert!(
         lock_output.status.success(),
-        "tools lock failed: {}",
+        "tool lock failed: {}",
         String::from_utf8_lossy(&lock_output.stderr)
     );
 
     // Now check should succeed since versions match the just-created lock file
-    let output = run_rsconstruct_with_env(project_path, &["tools", "check"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["tool", "check"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
-        "tools check failed: {}",
+        "tool check failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 }
@@ -158,10 +158,10 @@ fn tools_stats_shows_summary() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    let output = run_rsconstruct_with_env(project_path, &["tools", "stats"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(project_path, &["tool", "stats"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
-        "tools stats failed: {}",
+        "tool stats failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
@@ -182,12 +182,12 @@ fn tools_stats_json() {
 
     let output = run_rsconstruct_with_env(
         project_path,
-        &["--json", "tools", "stats"],
+        &["--json", "tool", "stats"],
         &[("NO_COLOR", "1")],
     );
     assert!(
         output.status.success(),
-        "tools stats --json failed: {}",
+        "tool stats --json failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
@@ -291,12 +291,12 @@ fn tools_list_uses_only_implemented_install_methods() {
 
     let output = run_rsconstruct_with_env(
         project_path,
-        &["--json", "tools", "list"],
+        &["--json", "tool", "list"],
         &[("NO_COLOR", "1")],
     );
     assert!(
         output.status.success(),
-        "tools list --json failed: {}",
+        "tool list --json failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
@@ -318,10 +318,10 @@ fn tools_list_uses_only_implemented_install_methods() {
     ];
 
     let parsed: Value =
-        serde_json::from_slice(&output.stdout).expect("tools list --json should emit valid JSON");
+        serde_json::from_slice(&output.stdout).expect("tool list --json should emit valid JSON");
     let tools = parsed
         .as_array()
-        .expect("tools list --json should be an array");
+        .expect("tool list --json should be an array");
     assert!(!tools.is_empty(), "registry should not be empty");
 
     for tool in tools {
@@ -360,20 +360,20 @@ fn tools_list_names_are_bare_binaries_not_paths() {
 
     let output = run_rsconstruct_with_env(
         project_path,
-        &["--json", "tools", "list"],
+        &["--json", "tool", "list"],
         &[("NO_COLOR", "1")],
     );
     assert!(
         output.status.success(),
-        "tools list --json failed: {}",
+        "tool list --json failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
     let parsed: Value =
-        serde_json::from_slice(&output.stdout).expect("tools list --json should emit valid JSON");
+        serde_json::from_slice(&output.stdout).expect("tool list --json should emit valid JSON");
     let tools = parsed
         .as_array()
-        .expect("tools list --json should be an array");
+        .expect("tool list --json should be an array");
     assert!(!tools.is_empty(), "registry should not be empty");
 
     for tool in tools {
@@ -389,7 +389,7 @@ fn tools_list_names_are_bare_binaries_not_paths() {
     }
 }
 
-/// `tools install --all` must be able to install every registry entry.
+/// `tool install --all` must be able to install every registry entry.
 /// A manual-only entry makes `--all` a hard error, which would break CI
 /// provisioning, so the registry must not contain one.
 #[test]
@@ -399,17 +399,17 @@ fn tools_install_all_has_no_manual_only_entries() {
 
     let output = run_rsconstruct_with_env(
         project_path,
-        &["--json", "tools", "list"],
+        &["--json", "tool", "list"],
         &[("NO_COLOR", "1")],
     );
     assert!(
         output.status.success(),
-        "tools list --json failed: {}",
+        "tool list --json failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
     let parsed: Value =
-        serde_json::from_slice(&output.stdout).expect("tools list --json should emit valid JSON");
+        serde_json::from_slice(&output.stdout).expect("tool list --json should emit valid JSON");
     let manual_only: Vec<&str> = parsed
         .as_array()
         .expect("array")
@@ -424,7 +424,7 @@ fn tools_install_all_has_no_manual_only_entries() {
 
     assert!(
         manual_only.is_empty(),
-        "these tools have only a manual install method, so `tools install --all` cannot provision them: {manual_only:?}",
+        "these tools have only a manual install method, so `tool install --all` cannot provision them: {manual_only:?}",
     );
 }
 
@@ -437,12 +437,12 @@ fn tools_install_all_conflicts_with_tool_name() {
 
     let output = run_rsconstruct_with_env(
         project_path,
-        &["tools", "install", "--all", "ruff"],
+        &["tool", "install", "--all", "ruff"],
         &[("NO_COLOR", "1")],
     );
     assert!(
         !output.status.success(),
-        "`tools install --all ruff` should be rejected"
+        "`tool install --all ruff` should be rejected"
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(

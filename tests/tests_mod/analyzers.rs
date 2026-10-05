@@ -3,7 +3,7 @@ use std::fs;
 use tempfile::TempDir;
 
 /// `enabled = false` on an analyzer stanza must keep it out of the active set —
-/// `analyzers used` is the public surface for this and should omit disabled analyzers.
+/// `analyzer used` is the public surface for this and should omit disabled analyzers.
 #[test]
 fn analyzer_disabled_via_enabled_false() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -23,12 +23,12 @@ enabled = false
     fs::write(project_path.join("doc.md"), "# hi\n").unwrap();
 
     let output =
-        run_rsconstruct_with_env(project_path, &["analyzers", "used"], &[("NO_COLOR", "1")]);
+        run_rsconstruct_with_env(project_path, &["analyzer", "used"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         !stdout.contains("markdown"),
-        "Disabled analyzer should not appear in `analyzers used`: {}",
+        "Disabled analyzer should not appear in `analyzer used`: {}",
         stdout
     );
 }
@@ -54,12 +54,12 @@ enabled = true
     fs::write(project_path.join("doc.md"), "# hi\n").unwrap();
 
     let output =
-        run_rsconstruct_with_env(project_path, &["analyzers", "used"], &[("NO_COLOR", "1")]);
+        run_rsconstruct_with_env(project_path, &["analyzer", "used"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("markdown"),
-        "Enabled analyzer should appear in `analyzers used`: {}",
+        "Enabled analyzer should appear in `analyzer used`: {}",
         stdout
     );
 }
@@ -158,7 +158,7 @@ src_dirs = ["."]
     fs::write(project_path.join("doc.md"), "# hi\n").unwrap();
 
     let output =
-        run_rsconstruct_with_env(project_path, &["analyzers", "used"], &[("NO_COLOR", "1")]);
+        run_rsconstruct_with_env(project_path, &["analyzer", "used"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(

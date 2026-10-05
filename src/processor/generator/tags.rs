@@ -64,7 +64,7 @@ pub struct TagsConfig {
     /// How many most-similar files to inspect when generating tag suggestions.
     #[serde(default = "default_tags_similar_files_limit")]
     pub similar_files_limit: usize,
-    /// Maximum tag suggestions emitted by `tags suggest`.
+    /// Maximum tag suggestions emitted by `tag suggest`.
     #[serde(default = "default_tags_suggested_tags_limit")]
     pub suggested_tags_limit: usize,
     /// Maximum "most common tags" reported when a file has no tags of its own.
@@ -700,7 +700,7 @@ fn parse_simple_yaml(block: &str) -> serde_json::Value {
     serde_json::Value::Object(map)
 }
 
-/// Open the tags database for reading. Used by the `rsconstruct tags` CLI subcommand.
+/// Open the tags database for reading. Used by the `rsconstruct tag` CLI subcommand.
 pub fn open_tags_db(db_path: &str) -> Result<redb::Database> {
     let path = std::path::Path::new(db_path);
     if !path.exists() {
@@ -2297,7 +2297,7 @@ inventory::submit! {
                 doc: "How many most-similar files to inspect when generating tag suggestions" },
             crate::config::FieldSpec { name: "suggested_tags_limit", ty: crate::config::FieldType::Integer,
                 affects_output: false, required: false,
-                doc: "Maximum tag suggestions emitted by `tags suggest`" },
+                doc: "Maximum tag suggestions emitted by `tag suggest`" },
             crate::config::FieldSpec { name: "common_tags_limit", ty: crate::config::FieldType::Integer,
                 affects_output: false, required: false,
                 doc: "Maximum 'most common tags' reported when a file has no tags of its own" },

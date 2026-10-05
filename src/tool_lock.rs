@@ -291,7 +291,7 @@ pub fn processor_tool_hashes(
 /// tools lock` to create one.
 pub fn verify_lock_file(ctx: &BuildContext, tool_commands: &[(String, Vec<String>)]) -> Result<()> {
     let Some(lock) = read_lock_file()? else {
-        anyhow::bail!("No {LOCK_FILE} found. Run `rsconstruct tools lock` to create one.");
+        anyhow::bail!("No {LOCK_FILE} found. Run `rsconstruct tool lock` to create one.");
     };
 
     let mut mismatches = Vec::new();
@@ -337,7 +337,7 @@ pub fn verify_lock_file(ctx: &BuildContext, tool_commands: &[(String, Vec<String
         return Err(crate::exit_code::RsconstructError::new(
             crate::exit_code::RsconstructExitCode::ToolError,
             format!(
-                "Tool version mismatch (run 'rsconstruct tools lock' to update):\n{}",
+                "Tool version mismatch (run 'rsconstruct tool lock' to update):\n{}",
                 mismatches.join("\n")
             ),
         )

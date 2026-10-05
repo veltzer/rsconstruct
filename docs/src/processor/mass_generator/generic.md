@@ -64,7 +64,7 @@ Commands are executed directly, never through a shell (see [No-Shell Policy](../
 | `loose_manifest`  | bool             | no       | Default false. If true, plan/build mismatches are warnings, not errors.     |
 | `dep_inputs`      | array of strings | no       | Extra files added to the inputs of every product.                           |
 | `src_dirs`, `src_extensions`, `src_files`, `src_exclude_*` | arrays | no | The files the plan is computed from; they key the [plan cache](#plan-cache). |
-| `required_tools`  | array of strings | no       | Tools the commands shell out to, for `tools install` and version locking.   |
+| `required_tools`  | array of strings | no       | Tools the commands shell out to, for `tool install` and version locking.   |
 
 The scan fields discover no products — the manifest's `sources` decide every product's inputs — but they declare which files the plan is computed from; see [Plan cache](#plan-cache). `src_dirs` without `src_extensions` is rejected, because it would match no file and silently key the cache on nothing.
 

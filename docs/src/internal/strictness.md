@@ -112,7 +112,7 @@ Seven allows were removed during the most recent strictness sweep. Three of them
 Four were stale — the code they guarded was actually used, and the allow no longer made the compiler quieter:
 
 - `remote_cache::RemoteCache::download` — used by `operations.rs`; allow removed.
-- `exit_code::IoError` — used in match arms and by the `errors` CLI command; allow removed.
+- `exit_code::IoError` — used in match arms and by the `error` CLI command; allow removed.
 - `ProcessorPlugin` struct-level `#[allow(dead_code)]` — only the `processor_type` field needed it; scoped down.
 - `builder/mod.rs` — `#[allow(unused_imports)]` on `use crate::config::*;` — the compiler wasn't flagging the glob at all; allow removed.
 

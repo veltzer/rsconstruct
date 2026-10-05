@@ -40,7 +40,7 @@ shells = ["bash"]
 
 ### Commands and subcommands
 
-All top-level commands (`build`, `processor`, `analyzers`, `config`, etc.) and their subcommands complete automatically via clap.
+All top-level commands (`build`, `processor`, `analyzer`, `config`, etc.) and their subcommands complete automatically via clap.
 
 ### Processor type names (pnames)
 
@@ -65,8 +65,8 @@ Instance names are extracted from `[processor.TYPE.NAME]` and `[processor.TYPE.N
 
 These commands complete analyzer names (`cpp`, `markdown`, `python`, `tera`):
 
-- `rsconstruct analyzers config <TAB>`
-- `rsconstruct analyzers clean --analyzer <TAB>`
+- `rsconstruct analyzer config <TAB>`
+- `rsconstruct analyzer clean --analyzer <TAB>`
 
 Analyzer names are specified via clap's `value_parser` attribute, so they work in all shells without post-processing.
 

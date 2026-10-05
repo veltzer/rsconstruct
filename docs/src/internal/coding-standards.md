@@ -182,7 +182,7 @@ it in the same change. Don't ship the schema first and the behaviour "soon."
 If the field is a toggle, the runner must check it. If it's a path, something
 must open or scan that path. If it's a value, a code path must branch on it.
 
-When you add a CLI subcommand that writes a field (like `analyzers disable`
+When you add a CLI subcommand that writes a field (like `analyzer disable`
 writing `enabled = false`), verify the runtime reads it by writing an
 integration test that exercises the toggle end-to-end — config → build →
 observable effect. A passing write-the-config test is not enough; the effect

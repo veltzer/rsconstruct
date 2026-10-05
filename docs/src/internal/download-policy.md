@@ -35,7 +35,7 @@ codebase where robustness depends on which code path you happen to hit.
 
 ### 3. Preview must match execution
 
-`tools install` renders its steps for preview (`describe_binary`) and
+`tool install` renders its steps for preview (`describe_binary`) and
 separately executes them (`run_binary`). Those were two hand-written argv
 literals that had to be kept in sync by hand. Both now call `curl_argv`, so
 the preview cannot drift from what actually runs.
@@ -44,7 +44,7 @@ the preview cannot drift from what actually runs.
 
 This policy exists for **connection-level failures**: a connection reset,
 refused, or dropped during handshake. The motivating incident was a
-`tools install` run that died on:
+`tool install` run that died on:
 
 ```
 curl: (35) Recv failure: Connection reset by peer

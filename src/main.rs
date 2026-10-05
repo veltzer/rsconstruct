@@ -329,23 +329,23 @@ fn run() -> (Result<()>, bool) {
                     print_completions(shell)?;
                 }
             }
-            Commands::Analyzers { action } => match &action {
-                cli::AnalyzersAction::List => {
+            Commands::Analyzer { action } => match &action {
+                cli::AnalyzerAction::List => {
                     builder::analyzers::list_analyzers(cli.verbose);
                 }
-                cli::AnalyzersAction::Defconfig { pname } => {
+                cli::AnalyzerAction::Defconfig { pname } => {
                     builder::analyzers::analyzer_defconfig(pname.as_deref())?;
                 }
-                cli::AnalyzersAction::Add { pname, dry_run } => {
+                cli::AnalyzerAction::Add { pname, dry_run } => {
                     builder::add_analyzer(pname, *dry_run)?;
                 }
-                cli::AnalyzersAction::Delete { iname } => {
+                cli::AnalyzerAction::Delete { iname } => {
                     builder::smart::delete_analyzer(iname)?;
                 }
-                cli::AnalyzersAction::Disable { iname } => {
+                cli::AnalyzerAction::Disable { iname } => {
                     builder::smart::disable_analyzer(iname)?;
                 }
-                cli::AnalyzersAction::Enable { iname } => {
+                cli::AnalyzerAction::Enable { iname } => {
                     builder::smart::enable_analyzer(iname)?;
                 }
                 _ => {
@@ -357,7 +357,7 @@ fn run() -> (Result<()>, bool) {
                 let builder = Builder::new(&ctx)?;
                 builder.doctor(&ctx)?;
             }
-            Commands::Errors => {
+            Commands::Error => {
                 list_exit_codes(cli.verbose)?;
             }
             Commands::Fix { action } => {
@@ -389,9 +389,9 @@ fn run() -> (Result<()>, bool) {
             Commands::Init => {
                 init_project()?;
             }
-            Commands::Pages { action } => {
+            Commands::Page { action } => {
                 match action {
-                    cli::PagesAction::Dir => {
+                    cli::PageAction::Dir => {
                         config::Config::require_config()?;
                         let config = config::Config::load()?;
                         if json_output::is_json_mode() {
@@ -410,7 +410,7 @@ fn run() -> (Result<()>, bool) {
                     }
                 }
             }
-            Commands::Hooks => {
+            Commands::Hook => {
                 list_hooks(cli.verbose)?;
             }
             Commands::Processor { action } => {
@@ -532,28 +532,28 @@ fn run() -> (Result<()>, bool) {
                 let config = Config::load()?;
                 builder::symlink_install::run(&config.command.symlink_install)?;
             }
-            Commands::Terms { action } => {
+            Commands::Term { action } => {
                 let config = Config::load()?;
                 let terms_config: processor::terms::TermsConfig = config
                     .processor
                     .instance_config_or_default(processor::names::TERMS)?;
                 match action {
-                    cli::TermsAction::Fix { remove_non_terms } => {
+                    cli::TermAction::Fix { remove_non_terms } => {
                         processor::terms::fix_all(
                             &terms_config,
                             remove_non_terms,
                             config.build.warn_symlinks,
                         )?;
                     }
-                    cli::TermsAction::Merge { path } => {
+                    cli::TermAction::Merge { path } => {
                         processor::terms::merge_terms(&terms_config, &path)?;
                     }
-                    cli::TermsAction::Stats => {
+                    cli::TermAction::Stats => {
                         processor::terms::stats(&terms_config)?;
                     }
                 }
             }
-            Commands::Tags { action } => {
+            Commands::Tag { action } => {
                 let config = Config::load()?;
                 let db_path = config
                     .processor
@@ -564,47 +564,47 @@ fn run() -> (Result<()>, bool) {
                     .instance_field_str(processor::names::TAGS, "tags_dir")
                     .unwrap_or_else(|| "tags".into());
                 match action {
-                    cli::TagsAction::Files { tags, or } => {
+                    cli::TagAction::Files { tags, or } => {
                         processor::tags_cmd::files_for_tags(&db_path, &tags, or)?;
                     }
-                    cli::TagsAction::Grep { text, ignore_case } => {
+                    cli::TagAction::Grep { text, ignore_case } => {
                         processor::tags_cmd::grep_tags(&db_path, &text, ignore_case)?;
                     }
-                    cli::TagsAction::List => processor::tags_cmd::list_tags(&db_path)?,
-                    cli::TagsAction::Count => processor::tags_cmd::count_tags(&db_path)?,
-                    cli::TagsAction::Tree => processor::tags_cmd::tree_tags(&db_path)?,
-                    cli::TagsAction::Stats => processor::tags_cmd::stats_tags(&db_path)?,
-                    cli::TagsAction::ForFile { path } => {
+                    cli::TagAction::List => processor::tags_cmd::list_tags(&db_path)?,
+                    cli::TagAction::Count => processor::tags_cmd::count_tags(&db_path)?,
+                    cli::TagAction::Tree => processor::tags_cmd::tree_tags(&db_path)?,
+                    cli::TagAction::Stats => processor::tags_cmd::stats_tags(&db_path)?,
+                    cli::TagAction::ForFile { path } => {
                         processor::tags_cmd::tags_for_file(&db_path, &path)?;
                     }
-                    cli::TagsAction::Frontmatter { path } => {
+                    cli::TagAction::Frontmatter { path } => {
                         processor::tags_cmd::frontmatter_for_file(&db_path, &path)?;
                     }
-                    cli::TagsAction::Unused { strict } => {
+                    cli::TagAction::Unused { strict } => {
                         processor::tags_cmd::unused_tags(&db_path, &tags_dir, strict)?;
                     }
-                    cli::TagsAction::Validate => {
+                    cli::TagAction::Validate => {
                         processor::tags_cmd::validate_tags(&db_path, &tags_dir)?;
                     }
-                    cli::TagsAction::Matrix => processor::tags_cmd::matrix_tags(&db_path)?,
-                    cli::TagsAction::Coverage => processor::tags_cmd::coverage_tags(&db_path)?,
-                    cli::TagsAction::Orphans => processor::tags_cmd::orphan_files(&db_path)?,
-                    cli::TagsAction::Check => {
+                    cli::TagAction::Matrix => processor::tags_cmd::matrix_tags(&db_path)?,
+                    cli::TagAction::Coverage => processor::tags_cmd::coverage_tags(&db_path)?,
+                    cli::TagAction::Orphans => processor::tags_cmd::orphan_files(&db_path)?,
+                    cli::TagAction::Check => {
                         let tags_config: processor::tags_cmd::TagsConfig = config
                             .processor
                             .instance_config_or_default(processor::names::TAGS)?;
                         processor::tags_cmd::check_tags(&tags_config, config.build.warn_symlinks)?;
                     }
-                    cli::TagsAction::Suggest { path } => {
+                    cli::TagAction::Suggest { path } => {
                         let tags_config: processor::tags_cmd::TagsConfig = config
                             .processor
                             .instance_config_or_default(processor::names::TAGS)?;
                         processor::tags_cmd::suggest_tags(&db_path, &path, &tags_config)?;
                     }
-                    cli::TagsAction::Merge { path } => {
+                    cli::TagAction::Merge { path } => {
                         processor::tags_cmd::merge_tags(&tags_dir, &path)?;
                     }
-                    cli::TagsAction::Collect => {
+                    cli::TagAction::Collect => {
                         processor::tags_cmd::collect_tags(&db_path, &tags_dir)?;
                     }
                 }
@@ -632,11 +632,11 @@ fn run() -> (Result<()>, bool) {
                     }
                 }
             }
-            Commands::Functions { action } => {
-                use cli::FunctionsAction;
+            Commands::Function { action } => {
+                use cli::FunctionAction;
                 use processor::generator::tera::TERA_FUNCTIONS;
                 match action {
-                    FunctionsAction::List => {
+                    FunctionAction::List => {
                         if json_output::is_json_mode() {
                             let arr: Vec<serde_json::Value> = TERA_FUNCTIONS
                                 .iter()
@@ -668,7 +668,7 @@ fn run() -> (Result<()>, bool) {
                     }
                 }
             }
-            Commands::Tools { action } => {
+            Commands::Tool { action } => {
                 // Fall back to default config only if no config file exists.
                 // If config exists but is broken, fail — don't silently use defaults.
                 if std::path::Path::new("rsconstruct.toml").exists() {

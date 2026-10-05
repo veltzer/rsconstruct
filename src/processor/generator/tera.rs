@@ -878,7 +878,7 @@ fn load_lua_config(lua_file: &Path) -> Result<Map<String, Value>> {
 
 /// Documentation for one built-in Tera function. Shared source of truth used
 /// by both the `register_function` calls in `render_template` (indirectly,
-/// for the names) and the `rsconstruct functions list` CLI command.
+/// for the names) and the `rsconstruct function list` CLI command.
 pub struct TeraFunctionDoc {
     /// Function name as called from a template, e.g. `glob`.
     pub name: &'static str,

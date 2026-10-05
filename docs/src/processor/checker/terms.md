@@ -8,7 +8,7 @@ files, and provides commands to auto-fix and merge term lists across projects.
 ## How It Works
 
 Loads terms from `dir_terms_unambiguous/*.txt` files (one term per line, organized by category).
-For each `.md` file, simulates what `rsconstruct terms fix` would produce. If the
+For each `.md` file, simulates what `rsconstruct term fix` would produce. If the
 result differs from the current content, the product fails.
 
 The processor skips YAML frontmatter and fenced code blocks. Terms are matched
@@ -42,7 +42,7 @@ are tracked as build inputs, so editing either invalidates the cache.
 
 By default (`forbid_backticked_ambiguous = true`), backticking an ambiguous
 term is itself a build error: backticks falsely assert the technical
-reading, so prose like `` the `server` was slow `` fails. `terms fix`
+reading, so prose like `` the `server` was slow `` fails. `term fix`
 strips those backticks. Set `forbid_backticked_ambiguous = false` to
 disable this check (ambiguous terms are then loaded only to validate the
 disjoint invariant, and their use in backticks is neither flagged nor
@@ -70,7 +70,7 @@ dep_inputs = []                               # Additional files that trigger re
 |-----|------|---------|-------------|
 | `dir_terms_unambiguous` | string | `"terms/unambiguous"` | Directory containing `.txt` files of unambiguous terms. Terms here must be backticked in markdown. |
 | `dir_terms_ambiguous` | string | `"terms/ambiguous"` | Directory of ambiguous terms. Treated as empty if the directory does not exist on disk. Build fails if any term overlaps with `dir_terms_unambiguous`. Terms here are **not** required to be backticked. |
-| `forbid_backticked_ambiguous` | bool | `true` | If true, backticking an ambiguous term is a build error and `terms fix` strips those backticks. |
+| `forbid_backticked_ambiguous` | bool | `true` | If true, backticking an ambiguous term is a build error and `term fix` strips those backticks. |
 | `batch` | bool | `true` | Enable batch execution |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
@@ -112,27 +112,27 @@ Go
 
 ## Commands
 
-### `rsconstruct terms fix`
+### `rsconstruct term fix`
 
 Add backticks around unquoted unambiguous terms in all markdown files.
 When `forbid_backticked_ambiguous = true` (default), also strip backticks
 around ambiguous terms.
 
 ```bash
-rsconstruct terms fix
-rsconstruct terms fix --remove-non-terms   # also remove backticks from arbitrary non-terms
+rsconstruct term fix
+rsconstruct term fix --remove-non-terms   # also remove backticks from arbitrary non-terms
 ```
 
 The fix is idempotent: running it twice produces the same result.
 
-### `rsconstruct terms merge <path>`
+### `rsconstruct term merge <path>`
 
 Merge terms from another project's terms directory into the current one.
 For matching filenames, new terms are added (union). Missing files are
 copied in both directions.
 
 ```bash
-rsconstruct terms merge ../other-project/terms
+rsconstruct term merge ../other-project/terms
 ```
 
 ## Clean behavior

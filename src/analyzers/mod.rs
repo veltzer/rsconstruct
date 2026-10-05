@@ -89,7 +89,7 @@ pub trait DepAnalyzer: Sync + Send {
 
     /// Recompute the hash pieces this analyzer would contribute for `source`,
     /// without touching the build graph or the deps cache. Used by
-    /// `analyzers show files <path> --hash-pieces` to surface the non-content
+    /// `analyzer show files <path> --hash-pieces` to surface the non-content
     /// state (resolved glob sets, embedded shell commands, etc.) that an
     /// analyzer mixes into a product's cache key.
     ///
@@ -248,7 +248,7 @@ pub fn run_include_path_commands(
 /// rewording the command flips the key even when no individual input file's
 /// content changed.
 ///
-/// The pieces are also surfaced via `rsconstruct analyzers show files <path>
+/// The pieces are also surfaced via `rsconstruct analyzer show files <path>
 /// --hash-pieces` so users can see exactly what non-content state the analyzer
 /// is tracking for a given source.
 pub struct ScanResult {
@@ -394,7 +394,7 @@ where
         let result = scan(source)?;
 
         // Persist the dep list to the cache so commands like
-        // `analyzers show` can report what was discovered. The
+        // `analyzer show` can report what was discovered. The
         // hash_pieces are intentionally NOT cached — they depend on
         // filesystem state (glob results) that must be recomputed on
         // every run. The checksum is taken before the scan (see set()).

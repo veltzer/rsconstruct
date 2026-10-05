@@ -113,7 +113,7 @@ mod tests {
     /// (12 guards across ~445 sites).
     ///
     /// Scoped to the build path rather than the whole tree: command handlers
-    /// (`tools list`, `sloc`, …) legitimately `println!` their own JSON
+    /// (`tool list`, `sloc`, …) legitimately `println!` their own JSON
     /// document under `--json`, and that document *is* the output.
     ///
     /// If this fires, route the line through `output::info` / `detail` /

@@ -471,7 +471,7 @@ programs:
 ///
 /// Regression test: `required_tools()` used to return only the config-level
 /// compilers, so a manifest override tripped the debug-build declared-tools
-/// assertion ("executed undeclared tool") and made `tools check` verify the
+/// assertion ("executed undeclared tool") and made `tool check` verify the
 /// wrong binary. Test binaries run the debug build, so this test fails by
 /// panic if the override is not declared.
 #[test]

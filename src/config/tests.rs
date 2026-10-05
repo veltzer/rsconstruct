@@ -947,7 +947,7 @@ fn mixed_scalar_and_table_values_are_single_instance() {
 /// tool is installable and version-lockable.
 ///
 /// Without it, a `command` that shells out to something else leaves that tool
-/// invisible: `tools install` reports nothing missing and the build fails
+/// invisible: `tool install` reports nothing missing and the build fails
 /// later, inside the wrapper. veltzer.github.io hit exactly this -- its
 /// `command` is a Python script that runs zola.
 #[test]

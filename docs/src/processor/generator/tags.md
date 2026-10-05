@@ -9,7 +9,7 @@ with comprehensive validation.
 
 Scans `.md` files for YAML frontmatter blocks (delimited by `---`), parses tag
 metadata, and builds a [redb](https://github.com/cberner/redb) database. The
-database enables querying files by tags via `rsconstruct tags` subcommands.
+database enables querying files by tags via `rsconstruct tag` subcommands.
 
 ### Tag Indexing
 
@@ -256,34 +256,34 @@ All support `--json` for machine-readable output.
 
 | Command | Description |
 |---------|-------------|
-| `rsconstruct tags list` | List all unique tags (sorted) |
-| `rsconstruct tags files TAG [TAG...]` | List files matching all given tags (AND) |
-| `rsconstruct tags files --or TAG [TAG...]` | List files matching any given tag (OR) |
-| `rsconstruct tags grep TEXT` | Search for tags containing a substring |
-| `rsconstruct tags grep -i TEXT` | Case-insensitive tag search |
-| `rsconstruct tags for-file PATH` | List all tags for a specific file (supports suffix matching) |
-| `rsconstruct tags frontmatter PATH` | Show raw parsed frontmatter for a file |
-| `rsconstruct tags count` | Show each tag with its file count, sorted by frequency |
-| `rsconstruct tags tree` | Show tags grouped by key (e.g. `level=` group) vs bare tags |
-| `rsconstruct tags stats` | Show database statistics (file count, unique tags, associations) |
+| `rsconstruct tag list` | List all unique tags (sorted) |
+| `rsconstruct tag files TAG [TAG...]` | List files matching all given tags (AND) |
+| `rsconstruct tag files --or TAG [TAG...]` | List files matching any given tag (OR) |
+| `rsconstruct tag grep TEXT` | Search for tags containing a substring |
+| `rsconstruct tag grep -i TEXT` | Case-insensitive tag search |
+| `rsconstruct tag for-file PATH` | List all tags for a specific file (supports suffix matching) |
+| `rsconstruct tag frontmatter PATH` | Show raw parsed frontmatter for a file |
+| `rsconstruct tag count` | Show each tag with its file count, sorted by frequency |
+| `rsconstruct tag tree` | Show tags grouped by key (e.g. `level=` group) vs bare tags |
+| `rsconstruct tag stats` | Show database statistics (file count, unique tags, associations) |
 
 ### Reporting
 
 | Command | Description |
 |---------|-------------|
-| `rsconstruct tags matrix` | Show a coverage matrix of tag categories per file |
-| `rsconstruct tags coverage` | Show percentage of files that have each tag category |
-| `rsconstruct tags orphans` | Find files with no tags at all |
-| `rsconstruct tags suggest PATH` | Suggest tags for a file based on similarity to other tagged files |
+| `rsconstruct tag matrix` | Show a coverage matrix of tag categories per file |
+| `rsconstruct tag coverage` | Show percentage of files that have each tag category |
+| `rsconstruct tag orphans` | Find files with no tags at all |
+| `rsconstruct tag suggest PATH` | Suggest tags for a file based on similarity to other tagged files |
 
 ### Validation
 
 | Command | Description |
 |---------|-------------|
-| `rsconstruct tags check` | Run all validations without building (fast lint pass) |
-| `rsconstruct tags unused` | List tags in `tags_dir` that no file uses |
-| `rsconstruct tags unused --strict` | Same, but exit with error if any unused tags exist (for CI) |
-| `rsconstruct tags validate` | Validate indexed tags against `tags_dir` without rebuilding |
+| `rsconstruct tag check` | Run all validations without building (fast lint pass) |
+| `rsconstruct tag unused` | List tags in `tags_dir` that no file uses |
+| `rsconstruct tag unused --strict` | Same, but exit with error if any unused tags exist (for CI) |
+| `rsconstruct tag validate` | Validate indexed tags against `tags_dir` without rebuilding |
 
 ## Clean behavior
 

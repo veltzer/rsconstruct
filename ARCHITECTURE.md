@@ -304,18 +304,18 @@ There is exactly one canonical pipeline (discover → analyze → resolve →
 validate → classify → execute) and **fifteen command entry points** that
 re-implement prefixes of it by hand: three independent discovery loops
 (`build_graph_with_processors_impl`, `build_graph_filtered`, an inline copy
-in `analyzers build`), three independent "will this rebuild?"
+in `analyzer build`), three independent "will this rebuild?"
 implementations (executor policy, `print_product_status`,
 `valid_cache_keys`), two execution loops (`Executor::execute`, `fix`'s own
 batch/single dispatch), and one hand-rolled filesystem walk
 (`clean unknown`). The drift is documented in the code itself: the
-`analyzers build` copy shipped skipping resolve+validate, reported success
+`analyzer build` copy shipped skipping resolve+validate, reported success
 on configs `build` rejects, was patched — and remains a copy.
 
 The sharpest evidence that this is architectural: **interruptibility is a
 property of the executor, not of the process.** `is_interrupted()` polling
 lives in `executor/` (plus watch and the subprocess runner). `fix`,
-`clean unknown`, and `analyzers build` poll it zero times — any driver that
+`clean unknown`, and `analyzer build` poll it zero times — any driver that
 skips the executor silently loses Ctrl+C.
 
 `Builder` is the non-abstraction at the center: three fields (`config`,

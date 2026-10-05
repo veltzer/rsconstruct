@@ -479,7 +479,7 @@ pub enum NpmSource {
 }
 
 /// Declared project dependencies by package manager.
-/// Used by `rsconstruct doctor` to verify and `rsconstruct tools install-deps` to install.
+/// Used by `rsconstruct doctor` to verify and `rsconstruct tool install-deps` to install.
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 #[serde(deny_unknown_fields)]
 pub struct DependenciesConfig {
@@ -529,7 +529,7 @@ pub struct DependenciesConfig {
     /// `eatmydata_ci_default` flips this to `true` when `CI=true` is in
     /// the environment. To turn the wrap off in CI, unset `CI` (or set
     /// it to a non-`true` value); to turn it on outside CI, run with
-    /// `CI=true rsconstruct tools install-deps`. The CLI flag
+    /// `CI=true rsconstruct tool install-deps`. The CLI flag
     /// `--no-eatmydata` always wins.
     ///
     /// This is not a normal user-facing config field — it's set by the
@@ -938,7 +938,7 @@ pub struct SymlinkInstallConfig {
 }
 
 /// Configuration for publishing to GitHub Pages. Declaring this section marks
-/// the repo as a Pages site; CI asks via `rsconstruct pages dir` and only
+/// the repo as a Pages site; CI asks via `rsconstruct page dir` and only
 /// then uploads/deploys, so one workflow file serves Pages and non-Pages
 /// repos alike.
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -986,7 +986,7 @@ pub struct BuildConfig {
     /// processor invokes are mixed into its products' cache keys, so
     /// upgrading a tool invalidates everything that tool produced.
     ///
-    /// This used to be opt-in via `rsconstruct tools lock`: without a lock
+    /// This used to be opt-in via `rsconstruct tool lock`: without a lock
     /// file no version was mixed in at all, and a tool upgrade silently left
     /// every cached PASS valid. Versions are now queried live (cached per
     /// build in `.rsconstruct/toolver.redb`, keyed by the tool's path, size
@@ -1981,7 +1981,7 @@ impl AnalyzerConfig {
         for (type_name, val) in table {
             if registry::find_analyzer_plugin(type_name).is_none() {
                 anyhow::bail!(
-                    "Unknown analyzer '{type_name}'. Run 'rsconstruct analyzers list' to see available analyzers."
+                    "Unknown analyzer '{type_name}'. Run 'rsconstruct analyzer list' to see available analyzers."
                 );
             }
             let Some(sub_table) = val.as_table() else {
@@ -2496,7 +2496,7 @@ fn validate_analyzer_fields_raw(raw: &toml::Value) -> Vec<String> {
 
         let Some(plugin) = registry::find_analyzer_plugin(type_name) else {
             errors.push(format!(
-                "[analyzer.{type_name}]: unknown analyzer type '{type_name}' (run 'rsconstruct analyzers list' to see available)",
+                "[analyzer.{type_name}]: unknown analyzer type '{type_name}' (run 'rsconstruct analyzer list' to see available)",
             ));
             continue;
         };
@@ -3098,7 +3098,7 @@ pub fn standard_config_from_toml(
 }
 
 /// Post-config hook: when `CI=true` is in the environment, enable the
-/// `eatmydata` wrap for `tools install` / `tools install-deps`. The
+/// `eatmydata` wrap for `tool install` / `tool install-deps`. The
 /// trade-off (loss-on-power-cut for a 3-10× speedup) is right for
 /// transient CI hosts and wrong for developer workstations, so we tie
 /// the policy to `CI=true`. Users who want a different policy adjust
@@ -3112,7 +3112,7 @@ fn eatmydata_ci_default(config: &mut Config) -> anyhow::Result<()> {
 }
 
 /// The `CI=true` policy predicate behind [`eatmydata_ci_default`], shared with
-/// the config-independent `tools install --all` path (which has no `Config` to
+/// the config-independent `tool install --all` path (which has no `Config` to
 /// run the hook against).
 pub fn running_in_ci() -> bool {
     std::env::var("CI").is_ok_and(|v| v == "true")

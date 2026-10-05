@@ -413,7 +413,7 @@ read when the question is "how much of this project's toolchain is Rust";
 `native` is what to read when the question is "which processors need no tool
 installed".
 
-## `rsconstruct tools`
+## `rsconstruct tool`
 
 List or check external tools required by declared processors. All subcommands use config if available; without config, they operate on all built-in processors.
 
@@ -428,25 +428,25 @@ List or check external tools required by declared processors. All subcommands us
 | `graph` | Uses config if available |
 
 ```bash
-rsconstruct tools list              # List all tools known to rsconstruct (from the central registry)
-rsconstruct tools list -M           # ...with every install method for each tool
-rsconstruct tools list-configured   # List tools this project's processors require, and which needs them
-rsconstruct tools list-configured -a   # Include tools from disabled processors
-rsconstruct tools check             # Verify tool versions against .tools.versions lock file
-rsconstruct tools lock              # Lock tool versions to .tools.versions
-rsconstruct tools install           # Install missing external tools for enabled processors
-rsconstruct tools install ruff      # Install a specific tool by name
-rsconstruct tools install --all     # Install every tool in the registry, ignoring the config (no config needed)
-rsconstruct tools install -i        # Ask for confirmation first (default: install without asking)
-rsconstruct tools install --no-eatmydata        # Don't wrap apt/dnf/pacman with eatmydata
-rsconstruct tools install-deps      # Install declared [dependencies] (pip set from uv.lock, npm set from package-lock.json by default) in fixed order: system → pip → npm → gem → cargo
-rsconstruct tools install-deps -i   # Ask for confirmation first (default: install without asking)
-rsconstruct tools install-deps --no-eatmydata   # Don't wrap apt/dnf/pacman with eatmydata
-rsconstruct tools stats             # Show tool availability and language runtime breakdown
-rsconstruct tools stats --json      # Show tool stats in JSON format
-rsconstruct tools graph             # Show tool-to-processor dependency graph (DOT format)
-rsconstruct tools graph --format mermaid  # Mermaid format
-rsconstruct tools graph --view      # Open tool graph in browser
+rsconstruct tool list              # List all tools known to rsconstruct (from the central registry)
+rsconstruct tool list -M           # ...with every install method for each tool
+rsconstruct tool list-configured   # List tools this project's processors require, and which needs them
+rsconstruct tool list-configured -a   # Include tools from disabled processors
+rsconstruct tool check             # Verify tool versions against .tools.versions lock file
+rsconstruct tool lock              # Lock tool versions to .tools.versions
+rsconstruct tool install           # Install missing external tools for enabled processors
+rsconstruct tool install ruff      # Install a specific tool by name
+rsconstruct tool install --all     # Install every tool in the registry, ignoring the config (no config needed)
+rsconstruct tool install -i        # Ask for confirmation first (default: install without asking)
+rsconstruct tool install --no-eatmydata        # Don't wrap apt/dnf/pacman with eatmydata
+rsconstruct tool install-deps      # Install declared [dependencies] (pip set from uv.lock, npm set from package-lock.json by default) in fixed order: system → pip → npm → gem → cargo
+rsconstruct tool install-deps -i   # Ask for confirmation first (default: install without asking)
+rsconstruct tool install-deps --no-eatmydata   # Don't wrap apt/dnf/pacman with eatmydata
+rsconstruct tool stats             # Show tool availability and language runtime breakdown
+rsconstruct tool stats --json      # Show tool stats in JSON format
+rsconstruct tool graph             # Show tool-to-processor dependency graph (DOT format)
+rsconstruct tool graph --format mermaid  # Mermaid format
+rsconstruct tool graph --view      # Open tool graph in browser
 ```
 
 `install --all` walks the central registry instead of the project config, so it
@@ -473,10 +473,10 @@ without any workflow- or shell-level `GEM_HOME`/`PATH` setup.
 The same startup step prepends the project's `node_modules/.bin`, when it
 exists, so the packages `install-deps` put there from `package.json` (with
 `npm ci`, see `[dependencies]` in the configuration reference) resolve ahead
-of any global copy. `tools install` therefore finds a locked tool already
+of any global copy. `tool install` therefore finds a locked tool already
 installed and does not add a global one on top.
 
-## `rsconstruct tags`
+## `rsconstruct tag`
 
 Search and query frontmatter tags from markdown files.
 
@@ -501,27 +501,27 @@ Search and query frontmatter tags from markdown files.
 | `collect` | Yes |
 
 ```bash
-rsconstruct tags list                        # List all unique tags
-rsconstruct tags count                       # Show each tag with file count, sorted by frequency
-rsconstruct tags tree                        # Show tags grouped by prefix/category
-rsconstruct tags stats                       # Show statistics about the tags database
-rsconstruct tags files docker                # List files matching a tag (AND semantics)
-rsconstruct tags files docker --or k8s       # List files matching any tag (OR semantics)
-rsconstruct tags files level:advanced        # Match key:value tags
-rsconstruct tags grep deploy                 # Search for tags containing a substring
-rsconstruct tags grep deploy -i              # Case-insensitive tag search
-rsconstruct tags for-file src/main.md        # List all tags for a specific file
-rsconstruct tags frontmatter src/main.md     # Show raw frontmatter for a file
-rsconstruct tags validate                    # Validate tags against tags_dir allowlist
-rsconstruct tags unused                      # List tags in tags_dir not used by any file
-rsconstruct tags unused --strict             # Exit with error if unused tags found (CI)
-rsconstruct tags check                       # Run all tag validations without building
-rsconstruct tags suggest src/main.md         # Suggest tags for a file based on similarity
-rsconstruct tags coverage                    # Show percentage of files with each tag category
-rsconstruct tags matrix                      # Show coverage matrix of tag categories per file
-rsconstruct tags orphans                     # Find markdown files with no tags
-rsconstruct tags merge ../other/tags         # Merge tags from another project
-rsconstruct tags collect                     # Add missing tags from source files to tag collection
+rsconstruct tag list                        # List all unique tags
+rsconstruct tag count                       # Show each tag with file count, sorted by frequency
+rsconstruct tag tree                        # Show tags grouped by prefix/category
+rsconstruct tag stats                       # Show statistics about the tags database
+rsconstruct tag files docker                # List files matching a tag (AND semantics)
+rsconstruct tag files docker --or k8s       # List files matching any tag (OR semantics)
+rsconstruct tag files level:advanced        # Match key:value tags
+rsconstruct tag grep deploy                 # Search for tags containing a substring
+rsconstruct tag grep deploy -i              # Case-insensitive tag search
+rsconstruct tag for-file src/main.md        # List all tags for a specific file
+rsconstruct tag frontmatter src/main.md     # Show raw frontmatter for a file
+rsconstruct tag validate                    # Validate tags against tags_dir allowlist
+rsconstruct tag unused                      # List tags in tags_dir not used by any file
+rsconstruct tag unused --strict             # Exit with error if unused tags found (CI)
+rsconstruct tag check                       # Run all tag validations without building
+rsconstruct tag suggest src/main.md         # Suggest tags for a file based on similarity
+rsconstruct tag coverage                    # Show percentage of files with each tag category
+rsconstruct tag matrix                      # Show coverage matrix of tag categories per file
+rsconstruct tag orphans                     # Find markdown files with no tags
+rsconstruct tag merge ../other/tags         # Merge tags from another project
+rsconstruct tag collect                     # Add missing tags from source files to tag collection
 ```
 
 ## `rsconstruct complete`
@@ -534,7 +534,7 @@ rsconstruct complete zsh     # Generate zsh completions
 rsconstruct complete fish    # Generate fish completions
 ```
 
-## `rsconstruct terms`
+## `rsconstruct term`
 
 Manage term checking and fixing in markdown files.
 
@@ -544,21 +544,21 @@ Manage term checking and fixing in markdown files.
 | `merge` | Yes |
 | `stats` | Yes |
 
-### `rsconstruct terms fix`
+### `rsconstruct term fix`
 
 Add backticks around terms from the terms directory that appear unquoted in markdown files.
 
 ```bash
-rsconstruct terms fix
-rsconstruct terms fix --remove-non-terms   # also remove backticks from non-terms
+rsconstruct term fix
+rsconstruct term fix --remove-non-terms   # also remove backticks from non-terms
 ```
 
-### `rsconstruct terms merge`
+### `rsconstruct term merge`
 
 Merge terms from another project's terms directory. Unions matching files and copies missing files in both directions.
 
 ```bash
-rsconstruct terms merge ../other-project/terms
+rsconstruct term merge ../other-project/terms
 ```
 
 ## `rsconstruct doctor`
@@ -589,7 +589,7 @@ Show project information.
 rsconstruct info source          # Show source file counts by extension
 ```
 
-## `rsconstruct pages`
+## `rsconstruct page`
 
 Query GitHub Pages publishing settings from the [`[pages]`](configuration.md#pages) config section.
 
@@ -598,11 +598,11 @@ Query GitHub Pages publishing settings from the [`[pages]`](configuration.md#pag
 | `dir` | Yes |
 
 ```bash
-rsconstruct pages dir            # Print the published directory ([pages].dir)
+rsconstruct page dir            # Print the published directory ([pages].dir)
 rsconstruct --json pages dir     # {"configured": true, "dir": "out/web"}
 ```
 
-`pages dir` prints nothing and still exits 0 when `[pages]` is not configured — CI branches on the output being empty, not on exit codes. See [GitHub Actions](github-actions.md#github-pages-deployment) for the workflow pattern this enables.
+`page dir` prints nothing and still exits 0 when `[pages]` is not configured — CI branches on the output being empty, not on exit codes. See [GitHub Actions](github-actions.md#github-pages-deployment) for the workflow pattern this enables.
 
 ## `rsconstruct sloc`
 

@@ -1,4 +1,4 @@
-# Feature design: structured errors with `errors show` / `errors edit`
+# Feature design: structured errors with `error show` / `error edit`
 
 ## Status
 
@@ -12,10 +12,10 @@ Draft — awaiting review. This is a multi-week feature, not a single-PR change.
 > to parse the output of the tools it is running (if they are external)
 > and collect errors in a organized fashion: file, line number,
 > description of the error, stack etc. then we can do something like:
-> `rsconstruct errors edit` and it will launch an editor of my choice
+> `rsconstruct error edit` and it will launch an editor of my choice
 > on all the previous errors. Internal processors will surely be able
 > to collect all the errors into that predefined structure with no
-> problems. `rsconstruct errors show` will show the latest errors.
+> problems. `rsconstruct error show` will show the latest errors.
 
 ## What's there today
 
@@ -28,7 +28,7 @@ Draft — awaiting review. This is a multi-week feature, not a single-PR change.
   Option<String>, ... }` — also a flat string.
 - There is no persistence: errors live for the lifetime of one build run
   and are gone when the process exits.
-- There is no `rsconstruct errors` subcommand.
+- There is no `rsconstruct error` subcommand.
 
 So the proposal is genuinely new functionality: a structured error
 **type**, a per-processor **parser** that produces it, **persistence** of
@@ -65,10 +65,10 @@ Design choices:
 - **`Option<u32>` for line/column.** Many processors fail at file granularity
   (license_header, terms with no specific line). Forcing line/column would
   produce fake `1:1` positions everywhere.
-- **`code: Option<String>`** lets `rsconstruct errors filter --code=E0308`
+- **`code: Option<String>`** lets `rsconstruct error filter --code=E0308`
   later — keeps the door open without forcing every processor to invent codes.
 - **`processor` is required.** Always know which processor / iname produced
-  the diagnostic; useful for `errors show --processor=ruff`.
+  the diagnostic; useful for `error show --processor=ruff`.
 
 ### Layer 2 — how processors emit them
 
@@ -131,7 +131,7 @@ violations.
 
 ### Layer 4 — persistence
 
-For `rsconstruct errors show` to work after the build process has exited,
+For `rsconstruct error show` to work after the build process has exited,
 diagnostics must persist on disk.
 
 Proposal: write to `.rsconstruct/diagnostics.jsonl` at the end of each
@@ -146,21 +146,21 @@ Don't write incrementally during the build. Write once at the end. If the
 process is killed, the previous file remains — slightly stale but fine.
 
 Schema versioning: include a `version: 1` line at the top, separate from
-the diagnostics. When the schema changes, `errors show` reading an old
+the diagnostics. When the schema changes, `error show` reading an old
 file emits a friendly "file written by older rsconstruct, run a build"
 and exits 0. No automatic migration; a build always rewrites it.
 
 ### Layer 5 — the CLI
 
 ```
-rsconstruct errors show [--processor=NAME] [--severity=SEV] [--limit=N]
-rsconstruct errors edit [--processor=NAME] [--severity=SEV] [--limit=N]
-rsconstruct errors clear
-rsconstruct errors list-processors    # which processors emitted diagnostics
-rsconstruct errors stats              # count by processor, severity
+rsconstruct error show [--processor=NAME] [--severity=SEV] [--limit=N]
+rsconstruct error edit [--processor=NAME] [--severity=SEV] [--limit=N]
+rsconstruct error clear
+rsconstruct error list-processors    # which processors emitted diagnostics
+rsconstruct error stats              # count by processor, severity
 ```
 
-`errors show` prints them in a stable format:
+`error show` prints them in a stable format:
 
 ```
 src/foo.rs:42:5: error[E0308]: mismatched types
@@ -171,7 +171,7 @@ tests/bar.py:17: warning: unused import 'os'
   [from ruff]
 ```
 
-`errors edit` opens the user's `$EDITOR` with all error locations as
+`error edit` opens the user's `$EDITOR` with all error locations as
 arguments. For editors that support a quickfix-style list (vim, neovim,
 helix, emacs), encode the locations as `file:line:column` so vim's
 `+arglist` works.
@@ -195,7 +195,7 @@ Some failures don't have a "file:line" location:
 
 These are framework errors, not user code errors. Today they're already
 in `failed_messages`. Proposal: treat them as Diagnostics with `file =
-"<framework>"` and `line = None`. They appear in `errors show` but with
+"<framework>"` and `line = None`. They appear in `error show` but with
 a different leading sigil so they're visually distinct.
 
 Alternative: keep them out of the diagnostic stream entirely, since the
@@ -211,12 +211,12 @@ This is too big for one PR. Suggested phasing:
 
 **Phase 1 — type and persistence.** Land `Diagnostic`, the diagnostic
 sink, and write it to disk at end of build. No parsers yet; the sink
-stays empty. `errors show` lists nothing useful but the plumbing is
+stays empty. `error show` lists nothing useful but the plumbing is
 real.
 
 **Phase 2 — internal processors.** Wire up terms, aspell, license_header,
 and the analyzers to push to the sink. These don't need parsers. After
-this phase, `errors show` lists *internal* processor errors. Useful by
+this phase, `error show` lists *internal* processor errors. Useful by
 itself.
 
 **Phase 3 — JSON-output tools.** ruff, pylint, eslint, mypy, clippy,
@@ -226,7 +226,7 @@ Wire them up incrementally.
 **Phase 4 — text-output tools.** gcc/clang, make, the long tail. Each
 needs a regex parser and a fallback for "couldn't parse".
 
-**Phase 5 — `errors edit`.** Editor integration. Best left until at
+**Phase 5 — `error edit`.** Editor integration. Best left until at
 least phase 3 is done so there's actually content to navigate.
 
 After each phase, the feature is a real shippable improvement. The user
@@ -239,7 +239,7 @@ can stop me at any phase.
    sink — it's pragmatic and additive. But if you'd rather take the
    refactor cost now, say so.
 
-2. **What does `errors show` do when there are zero diagnostics from
+2. **What does `error show` do when there are zero diagnostics from
    the last build, but the build *succeeded*?** Print "No errors from
    last build" and exit 0? Or exit 1 to signal "nothing to show"?
    I'd do the former — exit 0 is the natural meaning of "I did the
@@ -247,7 +247,7 @@ can stop me at any phase.
 
 3. **Diagnostic stream and watch mode**: in `rsconstruct watch`, the
    diagnostic file is rewritten on every rebuild. That's correct.
-   Should `errors show --watch` exist (live-tail the file)? Out of scope
+   Should `error show --watch` exist (live-tail the file)? Out of scope
    for phase 1, but worth knowing if you want it eventually so the
    on-disk format stays compatible.
 
@@ -261,7 +261,7 @@ can stop me at any phase.
    someone asks.
 
 6. **Shipping order**: any phase you'd skip or reorder? E.g. phase 5
-   (`errors edit`) is the demo-worthy bit but useless without phases
+   (`error edit`) is the demo-worthy bit but useless without phases
    2–4 producing real content.
 
 ## Why this is hard, soberly
@@ -281,9 +281,9 @@ The phased plan above lets this ship in increments, each useful.
 ## Recommendation
 
 Start with **Phase 1 + Phase 2**: the type, the sink, the disk
-persistence, the `errors show` command, and wiring up the *internal*
+persistence, the `error show` command, and wiring up the *internal*
 processors (no external tool parsers yet). That gets you a working
-`rsconstruct errors show` for the things rsconstruct already
+`rsconstruct error show` for the things rsconstruct already
 understands — terms, aspell, license_header, analyzer diagnostics. It's
 ~500 lines of code and a useful feature on its own.
 

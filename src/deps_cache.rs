@@ -277,7 +277,7 @@ impl DepsCache {
     /// Get all raw cached entries for a given source path, across every
     /// analyzer that has scanned it. Each returned tuple is (dependencies,
     /// `analyzer_name`). Returns an empty Vec if the source has no entries.
-    /// Used by `analyzers show files <path>`, where the user gives a path and
+    /// Used by `analyzer show files <path>`, where the user gives a path and
     /// expects to see every analyzer's view of it.
     pub fn get_raw_for_path(&self, source: &Path) -> Vec<(Vec<PathBuf>, String)> {
         self.collect_entries()

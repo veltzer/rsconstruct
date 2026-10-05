@@ -65,7 +65,7 @@ Everything with fewer than ten repos is in the per-stage tables below.
 - **Native first, wrapper second.** When a Rust crate implements the
   capability (html5ever, roxmltree, minijinja, protox, usvg, lightningcss,
   grass), write a native processor: zero tools to install, one fewer thing
-  `tools install` can fail on, and it runs in-process. When the capability is
+  `tool install` can fail on, and it runs in-process. When the capability is
   a whole Rust program (oxlint, selene, tectonic, uv, oxvg, biome, dprint,
   ty), wrap it as an external processor with a tool-registry entry. Both
   count as Rust; native is preferred when the crate is mature.
@@ -78,7 +78,7 @@ Everything with fewer than ten repos is in the per-stage tables below.
   under `src/processor/<category>/`, its `inventory::submit!` entry with
   `is_rust: true`, a docs page under `docs/src/processor/<type>/`, a test file
   under `tests/processor/`, and, for a wrapper, a `ToolInfo` entry so
-  `tools install` knows how to get the binary. The completeness tests enforce
+  `tool install` knows how to get the binary. The completeness tests enforce
   the touch-points.
 - **Say what the Rust option covers.** Before a row is `done`, run the
   existing tool and the Rust one over the fleet repos that use the existing
@@ -121,7 +121,7 @@ New processor file + `ToolInfo` entry each. Ordered by repos affected.
 | Lua lint (luacheck) | 109 | selene | `selene` | todo | Largest single win after actionlint. selene needs a `selene.toml` + standard library file per repo; that becomes a fleet-shared file. Compare findings on the 109 repos before switching |
 | Python types (mypy) | 127 | ty | `ty` | todo | Alternative to pyrefly if Stage 1 finds gaps. Both are pre-1.0; pick one per the comparison, not both |
 | Formatting check (prettier) | 0 | biome or dprint | `biome` (format) | todo | No fleet usage; do together with the JS lint row |
-| Python deps (pip) | 0 | uv | `uv` creator | todo | uv is already in the tool registry (used by `tools install-deps`); a creator that runs `uv sync` replaces pip. No fleet usage of the pip creator today |
+| Python deps (pip) | 0 | uv | `uv` creator | todo | uv is already in the tool registry (used by `tool install-deps`); a creator that runs `uv sync` replaces pip. No fleet usage of the pip creator today |
 | LaTeX (pdflatex) | 0 | tectonic | `tectonic` | todo | Drop-in for pdflatex on most documents; tectonic bundles its own TeX distribution |
 | SVG optimise (svgo) | 0 | oxvg | `oxvg` | todo | Rust port of svgo; check maturity at implementation time |
 | Workflow security (part of actionlint) | 199 | zizmor | `zizmor` | todo | Covers the security half of what actionlint does (untrusted inputs, permissions); the syntax half is Stage 3 `iactionlint`. Optional add-on, not a replacement on its own |

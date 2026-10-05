@@ -225,7 +225,7 @@ fn check_zola_version(command: &str) -> Result<()> {
     if printed.trim() != expected {
         anyhow::bail!(
             "{} printed `{}`; the zola processor models {expected} exactly. Install zola \
-             {ZOLA_VERSION} (`rsconstruct tools install zola`), or verify the planner against \
+             {ZOLA_VERSION} (`rsconstruct tool install zola`), or verify the planner against \
              the new version before changing ZOLA_VERSION",
             format_command(&cmd),
             printed.trim()

@@ -303,11 +303,11 @@ Grades:
 ### Cross-project term sync
 - Automatically keep terms directories in sync across multiple repos.
 - Could run as a daemon or a periodic CI job.
-- `rsconstruct terms sync --repos=repo1,repo2` or config-driven.
+- `rsconstruct term sync --repos=repo1,repo2` or config-driven.
 - **Urgency**: low | **Complexity**: medium
 
 ### Glossary generator
-- `rsconstruct terms glossary` generates a markdown glossary from the terms directory.
+- `rsconstruct term glossary` generates a markdown glossary from the terms directory.
 - Optionally pulls definitions from context in the markdown files where terms are used.
 - **Urgency**: low | **Complexity**: medium
 
@@ -462,7 +462,7 @@ larger structural items.
 
 ### Centralize alias expansion
 - `expand_aliases` in `src/builder/build.rs` handles `@checker` / `@generator` / `@toolname` / bare-name syntaxes. It's called once for `-p` and once for `-x`. Any new alias shortcut has to be added there.
-- No duplication today, but the function is in `build.rs` despite being useful elsewhere (completion, `processor list`, `analyzers used`). Move to a dedicated module and make it the canonical expander.
+- No duplication today, but the function is in `build.rs` despite being useful elsewhere (completion, `processor list`, `analyzer used`). Move to a dedicated module and make it the canonical expander.
 - **Urgency**: low | **Complexity**: low
 
 ### Inconsistent error-handling idioms in processors
@@ -477,7 +477,7 @@ larger structural items.
 
 ### `products list` CLI
 - Users can run `rsconstruct graph show` (full graph) or `rsconstruct status` (per-processor summary), but there's no flat list of "here are every product that would execute, with its primary input and output."
-- Add `rsconstruct products list` (parallel to `processor list` and `analyzers used`). Respects `-p`/`-x`/`--target` filters.
+- Add `rsconstruct products list` (parallel to `processor list` and `analyzer used`). Respects `-p`/`-x`/`--target` filters.
 - **Urgency**: low | **Complexity**: low
 
 ### `ProductTiming.start_offset` not populated for batch execution

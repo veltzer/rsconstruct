@@ -75,7 +75,7 @@ pub fn analyzer_defconfig(name: Option<&str>) -> Result<()> {
     let names: Vec<String> = if let Some(name) = name {
         if registry::find_analyzer_plugin(name).is_none() {
             anyhow::bail!(
-                "Unknown analyzer '{name}'. Run 'rsconstruct analyzers list' to see available analyzers."
+                "Unknown analyzer '{name}'. Run 'rsconstruct analyzer list' to see available analyzers."
             );
         }
         vec![name.to_string()]
@@ -228,23 +228,23 @@ fn print_deps_stats(
 }
 
 impl Builder {
-    /// Handle `rsconstruct analyzers` subcommands
+    /// Handle `rsconstruct analyzer` subcommands
     pub fn analyzers(
         &self,
         ctx: &crate::build_context::BuildContext,
-        action: crate::cli::AnalyzersAction,
+        action: crate::cli::AnalyzerAction,
         verbose: bool,
     ) -> Result<()> {
-        use crate::cli::AnalyzersAction;
+        use crate::cli::AnalyzerAction;
 
         match action {
-            AnalyzersAction::List
-            | AnalyzersAction::Defconfig { .. }
-            | AnalyzersAction::Add { .. }
-            | AnalyzersAction::Delete { .. }
-            | AnalyzersAction::Disable { .. }
-            | AnalyzersAction::Enable { .. } => unreachable!("handled in main.rs"),
-            AnalyzersAction::Used => {
+            AnalyzerAction::List
+            | AnalyzerAction::Defconfig { .. }
+            | AnalyzerAction::Add { .. }
+            | AnalyzerAction::Delete { .. }
+            | AnalyzerAction::Disable { .. }
+            | AnalyzerAction::Enable { .. } => unreachable!("handled in main.rs"),
+            AnalyzerAction::Used => {
                 let analyzers = self.create_analyzers(false)?;
                 if crate::json_output::is_json_mode() {
                     let entries: Vec<serde_json::Value> = sorted_keys(&analyzers)
@@ -285,7 +285,7 @@ impl Builder {
                     tables::print_table(&["Name", "Detected"], &rows);
                 }
             }
-            AnalyzersAction::Build => {
+            AnalyzerAction::Build => {
                 let processors = self.create_processors()?;
                 let mut graph = crate::graph::BuildGraph::new();
 
@@ -312,7 +312,7 @@ impl Builder {
                 self.run_analyzers(ctx, &mut graph, true)?;
 
                 // Match the main pipeline: resolve edges and validate, so
-                // `analyzers build` and `build` agree on whether the project
+                // `analyzer build` and `build` agree on whether the project
                 // is well-formed. This used to skip both and report success
                 // on configs that `build` rejects with a validation error.
                 graph.resolve_dependencies();
@@ -335,7 +335,7 @@ impl Builder {
                     print_deps_stats(&stats, &declared)?;
                 }
             }
-            AnalyzersAction::Config { iname } => {
+            AnalyzerAction::Config { iname } => {
                 let instances: Vec<&crate::config::AnalyzerInstance> = if let Some(ref n) = iname {
                     let inst = self
                         .config
@@ -385,7 +385,7 @@ impl Builder {
                     }
                 }
             }
-            AnalyzersAction::Clean { analyzer } => {
+            AnalyzerAction::Clean { analyzer } => {
                 if let Some(analyzer_name) = analyzer {
                     // Clear only entries from specific analyzer
                     let deps_cache = DepsCache::open()?;
@@ -413,7 +413,7 @@ impl Builder {
                     }
                 }
             }
-            AnalyzersAction::Stats => {
+            AnalyzerAction::Stats => {
                 // Show statistics by analyzer
                 let deps_cache = DepsCache::open()?;
                 let stats = deps_cache.stats_by_analyzer();
@@ -438,13 +438,13 @@ impl Builder {
                 }
                 print_deps_stats(&stats, &declared)?;
             }
-            AnalyzersAction::Show { filter } => {
-                use crate::cli::AnalyzersShowFilter;
+            AnalyzerAction::Show { filter } => {
+                use crate::cli::AnalyzerShowFilter;
                 let deps_cache = DepsCache::open()?;
 
                 let json_mode = crate::json_output::is_json_mode();
                 match filter {
-                    AnalyzersShowFilter::All => {
+                    AnalyzerShowFilter::All => {
                         let mut entries: Vec<_> = deps_cache.list_all();
                         entries.sort_by(|a, b| a.0.cmp(&b.0));
                         if json_mode {
@@ -457,7 +457,7 @@ impl Builder {
                             }
                         }
                     }
-                    AnalyzersShowFilter::Files { files, hash_pieces } => {
+                    AnalyzerShowFilter::Files { files, hash_pieces } => {
                         // Query specific files. One path can have multiple
                         // entries — one per analyzer that scanned it.
                         let mut collected: Vec<ShowFileEntry> = Vec::new();
@@ -509,7 +509,7 @@ impl Builder {
                             print_deps_json_with_pieces(&collected, hash_pieces)?;
                         }
                     }
-                    AnalyzersShowFilter::Analyzers { analyzers } => {
+                    AnalyzerShowFilter::Analyzers { analyzers } => {
                         let mut entries: Vec<_> = deps_cache.list_by_analyzers(&analyzers);
                         entries.sort_by(|a, b| a.0.cmp(&b.0));
                         if json_mode {
@@ -585,12 +585,12 @@ impl Builder {
     }
 }
 
-/// One row for `analyzers show files`: source path, dependency list, the
+/// One row for `analyzer show files`: source path, dependency list, the
 /// analyzer that produced it, and optionally the live-recomputed hash pieces
 /// (None when --hash-pieces was not passed OR the analyzer doesn't contribute).
 type ShowFileEntry = (PathBuf, Vec<PathBuf>, String, Option<Vec<String>>);
 
-/// JSON printer for `analyzers show files` that may include hash pieces.
+/// JSON printer for `analyzer show files` that may include hash pieces.
 /// Always emits the `dependencies` field; emits `hash_pieces` only when the
 /// `--hash-pieces` flag is set, so the JSON shape isn't different by accident
 /// for callers that don't ask for it. A null `hash_pieces` value means the

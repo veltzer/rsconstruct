@@ -6,7 +6,7 @@ Items from `suggestions.md` that have been implemented.
 
 - **Remote caching** — See [Remote Caching](../remote-caching.md). Share build artifacts across machines via S3, HTTP, or filesystem.
 - **Lua plugin system** — See [Lua Plugins](../plugins.md). Define custom processors in Lua without forking rsconstruct.
-- **Tool version locking** — `rsconstruct tools lock` locks and verifies external tool versions. Tool versions are included in cache keys.
+- **Tool version locking** — `rsconstruct tool lock` locks and verifies external tool versions. Tool versions are included in cache keys.
 - **JSON output mode** — `--json` flag for machine-readable JSON Lines output (build_start, product_start, product_complete, build_summary events).
 - **Native C/C++ include scanner** — Default `include_scanner = "native"` uses regex-based scanning. Falls back to `include_scanner = "compiler"` (gcc -MM).
 - **`--processor` flag** — `rsconstruct build -p processor.generator.tera,processor.checker.ruff` and `rsconstruct watch -p processor.generator.tera` filter which processors run.
@@ -59,7 +59,7 @@ Items from `suggestions.md` that have been implemented.
 
 - **`--quiet` flag** — `-q`/`--quiet` suppresses all output except errors. Useful for CI scripts that only care about exit code.
 - **Flaky product detection / retry** — `--retry=N` retries failed products up to N times. Reports FLAKY (passed on retry) vs FAILED status in build summary.
-- **Actionable error messages** — `rsconstruct tools check` shows install hints for missing tools (e.g., "install with: pip install ruff").
+- **Actionable error messages** — `rsconstruct tool check` shows install hints for missing tools (e.g., "install with: pip install ruff").
 - **Build profiling / tracing** — `--trace=file.json` generates Chrome trace format output viewable in `chrome://tracing` or Perfetto UI.
 - **`rsconstruct build <target>`** — Build specific targets by name or pattern via `--target` glob patterns and `-d/--dir` flags.
 - **`rsconstruct why <file>` / Explain rebuilds** — `--explain` flag shows why each product is skipped, restored, or rebuilt.
@@ -81,7 +81,7 @@ Items from `suggestions.md` that have been implemented.
 - **Named processor instance output directories** — When multiple instances of the same processor are declared (e.g., `[processor.generator.marp.slides]` and `[processor.generator.marp.docs]`), each instance defaults to `out/{instance_name}` (e.g., `out/marp.slides`, `out/marp.docs`) instead of sharing the same output directory.
 - **Named processor instance names in error reporting** — When multiple instances of the same processor exist, error messages, build progress, and statistics use the full instance name (e.g., `[pylint.core]`, `[pylint.tests]`). Single instances continue to use just the processor type name.
 - **`processor config` without config file** — `rsconstruct processor config <name>` now works without an `rsconstruct.toml`, showing the default configuration (same as `defconfig`).
-- **`tags collect` command** — `rsconstruct tags collect` scans the tags database for tags that are not in the tag collection (`tags_dir`) and adds them to the appropriate `.txt` files. Key:value tags go to `{key}.txt`, bare tags go to `tags.txt`.
+- **`tag collect` command** — `rsconstruct tag collect` scans the tags database for tags that are not in the tag collection (`tags_dir`) and adds them to the appropriate `.txt` files. Key:value tags go to `{key}.txt`, bare tags go to `tags.txt`.
 - **`rsconstruct status` shows 0-file processors** — Processors declared in the config that match no files are now shown in `status` output and the `--breakdown` summary, making it easy to spot misconfigured or unnecessary processors.
 - **`smart remove-no-file-processors`** — New command `rsconstruct smart remove-no-file-processors` removes `[processor.*]` sections from `rsconstruct.toml` for processors that don't match any files. Handles both single and named instances.
 - **`cc_single_file` output_dir from config** — The `cc_single_file` processor now reads its output directory from the config `output_dir` field instead of hardcoding `out/processor.generator.cc_single_file`. This fixes named instances (e.g., `cc_single_file.gcc` and `cc_single_file.clang`) which previously collided on the same output directory.

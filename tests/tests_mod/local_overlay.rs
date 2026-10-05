@@ -111,8 +111,8 @@ fn missing_tool_fails_when_processor_has_products() {
 }
 
 /// The other half of the preflight rule: a repo-local script command is
-/// something the build requires to EXIST, but never something `tools install`
-/// can provision. Treating the path as a registry tool made `tools install`
+/// something the build requires to EXIST, but never something `tool install`
+/// can provision. Treating the path as a registry tool made `tool install`
 /// fail with "No install method for 'scripts/check_md.py'" for a script
 /// checked into the repo, which broke CI across every repo using the shared
 /// config.
@@ -128,7 +128,7 @@ fn tools_install_skips_repo_local_script_commands() {
     write_file(project, "checked/doc.md", "# doc");
     write_file(project, "scripts/check_md.py", "#!/usr/bin/env python3\n");
 
-    let output = run_rsconstruct(project, &["tools", "install"]);
+    let output = run_rsconstruct(project, &["tool", "install"]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         output.status.success(),

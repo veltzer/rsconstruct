@@ -190,6 +190,6 @@ always available.
    implement and matches what `pip show` accepts.
 
 5. **Naming of the new commands**: `rsconstruct python-deps {check,list}`
-   vs. extending the existing `analyzers` subcommand vs. extending
-   `tools install-deps`. The third would be the most integrated but blurs
+   vs. extending the existing `analyzer` subcommand vs. extending
+   `tool install-deps`. The third would be the most integrated but blurs
    the line between "what this code uses" and "what's declared".

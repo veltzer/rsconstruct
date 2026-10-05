@@ -80,8 +80,8 @@ fn tags_basic_build_and_query() {
         "tags database should be created"
     );
 
-    // `rsconstruct tags list` should show all tags sorted
-    let list_output = run_rsconstruct_with_env(p, &["tags", "list"], &[("NO_COLOR", "1")]);
+    // `rsconstruct tag list` should show all tags sorted
+    let list_output = run_rsconstruct_with_env(p, &["tag", "list"], &[("NO_COLOR", "1")]);
     assert!(list_output.status.success());
     let stdout = String::from_utf8_lossy(&list_output.stdout);
     let tags: Vec<&str> = stdout.lines().collect();
@@ -91,18 +91,18 @@ fn tags_basic_build_and_query() {
     assert!(tags.contains(&"level:beginner"));
     assert!(tags.contains(&"level:advanced"));
 
-    // `rsconstruct tags files tools:docker` should return both files
+    // `rsconstruct tag files tools:docker` should return both files
     let files_output =
-        run_rsconstruct_with_env(p, &["tags", "files", "tools:docker"], &[("NO_COLOR", "1")]);
+        run_rsconstruct_with_env(p, &["tag", "files", "tools:docker"], &[("NO_COLOR", "1")]);
     assert!(files_output.status.success());
     let files_stdout = String::from_utf8_lossy(&files_output.stdout);
     assert!(files_stdout.contains("course1.md"));
     assert!(files_stdout.contains("course2.md"));
 
-    // `rsconstruct tags files tools:docker tools:rust` (AND) should return only course2
+    // `rsconstruct tag files tools:docker tools:rust` (AND) should return only course2
     let and_output = run_rsconstruct_with_env(
         p,
-        &["tags", "files", "tools:docker", "tools:rust"],
+        &["tag", "files", "tools:docker", "tools:rust"],
         &[("NO_COLOR", "1")],
     );
     assert!(and_output.status.success());
@@ -110,10 +110,10 @@ fn tags_basic_build_and_query() {
     assert!(!and_stdout.contains("course1.md"));
     assert!(and_stdout.contains("course2.md"));
 
-    // `rsconstruct tags files --or tools:python tools:rust` (OR) should return both files
+    // `rsconstruct tag files --or tools:python tools:rust` (OR) should return both files
     let or_output = run_rsconstruct_with_env(
         p,
-        &["tags", "files", "--or", "tools:python", "tools:rust"],
+        &["tag", "files", "--or", "tools:python", "tools:rust"],
         &[("NO_COLOR", "1")],
     );
     assert!(or_output.status.success());
@@ -175,7 +175,7 @@ fn tags_for_file_path_matching() {
 
     // Querying for "sub/foo.md" should return alpha, NOT beta
     let for_file =
-        run_rsconstruct_with_env(p, &["tags", "for-file", "sub/foo.md"], &[("NO_COLOR", "1")]);
+        run_rsconstruct_with_env(p, &["tag", "for-file", "sub/foo.md"], &[("NO_COLOR", "1")]);
     assert!(for_file.status.success());
     let stdout = String::from_utf8_lossy(&for_file.stdout);
     assert!(
@@ -212,7 +212,7 @@ fn tags_count_and_tree() {
     build_project(p);
 
     // Count should show docker with count 2
-    let count = run_rsconstruct_with_env(p, &["tags", "count"], &[("NO_COLOR", "1")]);
+    let count = run_rsconstruct_with_env(p, &["tag", "count"], &[("NO_COLOR", "1")]);
     assert!(count.status.success());
     let stdout = String::from_utf8_lossy(&count.stdout);
     assert!(
@@ -222,7 +222,7 @@ fn tags_count_and_tree() {
     );
 
     // Tree should group level= tags
-    let tree = run_rsconstruct_with_env(p, &["tags", "tree"], &[("NO_COLOR", "1")]);
+    let tree = run_rsconstruct_with_env(p, &["tag", "tree"], &[("NO_COLOR", "1")]);
     assert!(tree.status.success());
     let tree_stdout = String::from_utf8_lossy(&tree.stdout);
     assert!(
@@ -260,7 +260,7 @@ fn tags_stats() {
     let p = temp_dir.path();
     build_project(p);
 
-    let stats = run_rsconstruct_with_env(p, &["tags", "stats"], &[("NO_COLOR", "1")]);
+    let stats = run_rsconstruct_with_env(p, &["tag", "stats"], &[("NO_COLOR", "1")]);
     assert!(stats.status.success());
     let stdout = String::from_utf8_lossy(&stats.stdout);
     assert!(
@@ -289,7 +289,7 @@ fn tags_grep() {
     build_project(p);
 
     // Grep for "python" should match both python tags but not docker
-    let grep = run_rsconstruct_with_env(p, &["tags", "grep", "python"], &[("NO_COLOR", "1")]);
+    let grep = run_rsconstruct_with_env(p, &["tag", "grep", "python"], &[("NO_COLOR", "1")]);
     assert!(grep.status.success());
     let stdout = String::from_utf8_lossy(&grep.stdout);
     assert!(
@@ -310,7 +310,7 @@ fn tags_grep() {
 
     // Case-insensitive grep
     let grep_i =
-        run_rsconstruct_with_env(p, &["tags", "grep", "-i", "PYTHON"], &[("NO_COLOR", "1")]);
+        run_rsconstruct_with_env(p, &["tag", "grep", "-i", "PYTHON"], &[("NO_COLOR", "1")]);
     assert!(grep_i.status.success());
     let stdout_i = String::from_utf8_lossy(&grep_i.stdout);
     assert!(
@@ -338,7 +338,7 @@ fn tags_frontmatter() {
 
     let fm = run_rsconstruct_with_env(
         p,
-        &["tags", "frontmatter", "course.md"],
+        &["tag", "frontmatter", "course.md"],
         &[("NO_COLOR", "1")],
     );
     assert!(fm.status.success());
@@ -400,7 +400,7 @@ fn tags_validate_standalone() {
     fs::write(p.join("tags/tools.txt"), "python\ndocker\n").unwrap();
 
     // validate should fail and suggest the correct tag
-    let validate = run_rsconstruct_with_env(p, &["tags", "validate"], &[("NO_COLOR", "1")]);
+    let validate = run_rsconstruct_with_env(p, &["tag", "validate"], &[("NO_COLOR", "1")]);
     assert!(
         !validate.status.success(),
         "validate should fail with unknown tags"
@@ -433,7 +433,7 @@ fn tags_inline_yaml_list() {
     let p = temp_dir.path();
     build_project(p);
 
-    let list = run_rsconstruct_with_env(p, &["tags", "list"], &[("NO_COLOR", "1")]);
+    let list = run_rsconstruct_with_env(p, &["tag", "list"], &[("NO_COLOR", "1")]);
     assert!(list.status.success());
     let stdout = String::from_utf8_lossy(&list.stdout);
     assert!(
@@ -469,7 +469,7 @@ fn tags_colon_in_yaml_value() {
     let p = temp_dir.path();
     build_project(p);
 
-    let fm = run_rsconstruct_with_env(p, &["tags", "frontmatter", "a.md"], &[("NO_COLOR", "1")]);
+    let fm = run_rsconstruct_with_env(p, &["tag", "frontmatter", "a.md"], &[("NO_COLOR", "1")]);
     assert!(fm.status.success());
     let stdout = String::from_utf8_lossy(&fm.stdout);
     assert!(
@@ -484,7 +484,7 @@ fn tags_colon_in_yaml_value() {
     );
 
     // Also check tags list for key=value indexing
-    let list = run_rsconstruct_with_env(p, &["tags", "list"], &[("NO_COLOR", "1")]);
+    let list = run_rsconstruct_with_env(p, &["tag", "list"], &[("NO_COLOR", "1")]);
     assert!(list.status.success());
     let list_stdout = String::from_utf8_lossy(&list.stdout);
     assert!(
@@ -515,7 +515,7 @@ fn tags_numeric_and_boolean_values() {
     let p = temp_dir.path();
     build_project(p);
 
-    let list = run_rsconstruct_with_env(p, &["tags", "list"], &[("NO_COLOR", "1")]);
+    let list = run_rsconstruct_with_env(p, &["tag", "list"], &[("NO_COLOR", "1")]);
     assert!(list.status.success());
     let stdout = String::from_utf8_lossy(&list.stdout);
     assert!(
@@ -540,7 +540,7 @@ fn tags_stale_entries_cleared_on_rebuild() {
     build_project(p);
 
     // Verify both tags exist
-    let list1 = run_rsconstruct_with_env(p, &["tags", "list"], &[("NO_COLOR", "1")]);
+    let list1 = run_rsconstruct_with_env(p, &["tag", "list"], &[("NO_COLOR", "1")]);
     let stdout1 = String::from_utf8_lossy(&list1.stdout);
     assert!(stdout1.contains("alpha"));
     assert!(stdout1.contains("beta"));
@@ -556,7 +556,7 @@ fn tags_stale_entries_cleared_on_rebuild() {
     );
 
     // "beta" should no longer appear
-    let list2 = run_rsconstruct_with_env(p, &["tags", "list"], &[("NO_COLOR", "1")]);
+    let list2 = run_rsconstruct_with_env(p, &["tag", "list"], &[("NO_COLOR", "1")]);
     let stdout2 = String::from_utf8_lossy(&list2.stdout);
     assert!(
         stdout2.contains("alpha"),
@@ -580,7 +580,7 @@ fn tags_empty_inline_list() {
     build_project(p);
 
     // The empty list should not produce any bare tags (no phantom empty-string tag)
-    let list = run_rsconstruct_with_env(p, &["tags", "list"], &[("NO_COLOR", "1")]);
+    let list = run_rsconstruct_with_env(p, &["tag", "list"], &[("NO_COLOR", "1")]);
     assert!(list.status.success());
     let stdout = String::from_utf8_lossy(&list.stdout);
     // Should only have level:beginner, no empty tags
@@ -1036,7 +1036,7 @@ fn tags_matrix_shows_categories() {
     build_project(temp_dir.path());
 
     let output =
-        run_rsconstruct_with_env(temp_dir.path(), &["tags", "matrix"], &[("NO_COLOR", "1")]);
+        run_rsconstruct_with_env(temp_dir.path(), &["tag", "matrix"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
@@ -1066,7 +1066,7 @@ fn tags_coverage_shows_percentages() {
     build_project(temp_dir.path());
 
     let output =
-        run_rsconstruct_with_env(temp_dir.path(), &["tags", "coverage"], &[("NO_COLOR", "1")]);
+        run_rsconstruct_with_env(temp_dir.path(), &["tag", "coverage"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
@@ -1090,7 +1090,7 @@ fn tags_orphans_no_orphans() {
     build_project(temp_dir.path());
 
     let output =
-        run_rsconstruct_with_env(temp_dir.path(), &["tags", "orphans"], &[("NO_COLOR", "1")]);
+        run_rsconstruct_with_env(temp_dir.path(), &["tag", "orphans"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
@@ -1125,7 +1125,7 @@ fn tags_suggest_shows_suggestions() {
 
     let output = run_rsconstruct_with_env(
         temp_dir.path(),
-        &["tags", "suggest", "c.md"],
+        &["tag", "suggest", "c.md"],
         &[("NO_COLOR", "1")],
     );
     assert!(output.status.success());
@@ -1150,8 +1150,7 @@ fn tags_check_passes_clean_project() {
     );
     build_project(temp_dir.path());
 
-    let output =
-        run_rsconstruct_with_env(temp_dir.path(), &["tags", "check"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(temp_dir.path(), &["tag", "check"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
         "check should pass: {}",
@@ -1168,8 +1167,7 @@ fn tags_check_reports_issues() {
         config,
     );
 
-    let output =
-        run_rsconstruct_with_env(temp_dir.path(), &["tags", "check"], &[("NO_COLOR", "1")]);
+    let output = run_rsconstruct_with_env(temp_dir.path(), &["tag", "check"], &[("NO_COLOR", "1")]);
     assert!(
         !output.status.success(),
         "check should fail with missing required field"

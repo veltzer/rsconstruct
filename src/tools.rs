@@ -35,7 +35,7 @@ pub struct InstallCtx {
 impl InstallMethod {
     /// Human-readable preview of what installing this entry's package
     /// would do — first line of the first describe step. Lossy for
-    /// multi-step installs (binary fetches), but adequate for `tools list`.
+    /// multi-step installs (binary fetches), but adequate for `tool list`.
     pub fn command(&self) -> String {
         let steps = describe(self.method, &[self.package]);
         steps.first().map_or_else(
@@ -947,7 +947,7 @@ fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
         // artifact and no distro package. Fetching the single script from
         // torvalds/linux master is the automatable equivalent of "copy it out
         // of a kernel checkout", and keeps the tool out of the manual-only
-        // bucket that `tools install --all` rejects.
+        // bucket that `tool install --all` rejects.
         "checkpatch.pl" => Some(BinaryRecipe {
             url: "https://raw.githubusercontent.com/torvalds/linux/master/scripts/checkpatch.pl",
             archive: ArchiveKind::Raw,
@@ -1308,7 +1308,7 @@ pub static TOOLS: &[ToolInfo] = &[
     },
     // rustup is the canonical route, but `apt install rustc/cargo` is a real,
     // automatable install and is what makes these reachable from
-    // `tools install --all` on a bare machine. A host that already has a
+    // `tool install --all` on a bare machine. A host that already has a
     // rustup toolchain never reaches the install path: `which` finds these
     // first.
     ToolInfo {

@@ -75,7 +75,7 @@ dep_inputs = []
 
 ## Installation
 
-`rsconstruct tools install` downloads the static Linux binary from the latest
+`rsconstruct tool install` downloads the static Linux binary from the latest
 biome GitHub release. The npm package is the fallback.
 
 ## Batch support

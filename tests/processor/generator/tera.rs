@@ -977,7 +977,7 @@ fn glob_no_matches_returns_empty_list() {
     );
 }
 
-/// `analyzers show files <path> --hash-pieces` must surface the structured
+/// `analyzer show files <path> --hash-pieces` must surface the structured
 /// non-content state the analyzer mixes into the cache key. For a tera
 /// template that calls `glob(pattern=...)`, the output should include the
 /// pattern itself and the resolved file list so the user can see exactly
@@ -990,7 +990,7 @@ fn show_files_hash_pieces_surfaces_glob_state() {
     fs::write(p.join("data/a.md"), "a").unwrap();
     fs::write(p.join("data/b.md"), "b").unwrap();
 
-    // Prime the deps cache so `analyzers show files` has an entry to read.
+    // Prime the deps cache so `analyzer show files` has an entry to read.
     let build = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
     assert!(
         build.status.success(),
@@ -1001,7 +1001,7 @@ fn show_files_hash_pieces_surfaces_glob_state() {
     let out = run_rsconstruct_with_env(
         p,
         &[
-            "analyzers",
+            "analyzer",
             "show",
             "files",
             "tera.templates/report.txt.tera",
@@ -1050,7 +1050,7 @@ fn show_files_hash_pieces_json_shape() {
         p,
         &[
             "--json",
-            "analyzers",
+            "analyzer",
             "show",
             "files",
             "tera.templates/report.txt.tera",
@@ -1108,7 +1108,7 @@ fn show_files_without_hash_pieces_omits_field() {
         p,
         &[
             "--json",
-            "analyzers",
+            "analyzer",
             "show",
             "files",
             "tera.templates/report.txt.tera",

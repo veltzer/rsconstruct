@@ -93,7 +93,7 @@ impl Processor for MakoProcessor {
         // the Mako library, which `render_mako` imports. `mako-render` is the
         // console script from that same distribution — probing it is how a
         // library dependency becomes visible to the executable-based tool
-        // registry, so `tools install` covers it like any other tool.
+        // registry, so `tool install` covers it like any other tool.
         vec![
             self.config.standard.command.clone(),
             "mako-render".to_string(),

@@ -250,7 +250,7 @@ Rules:
 | `batch_size` | integer | `0` | Maximum files per batch for batch-capable processors. `0` = no limit (all files in one batch). To disable batching, pass `--batch-size -1` on the CLI or set `batch = false` on individual processors. |
 | `output_dir` | string | `"out"` | Global output directory prefix. Processor `output_dir` defaults that start with `out/` are remapped to use this prefix (e.g., setting `"build"` changes `out/processor.generator.marp` to `build/marp`). Individual processors can still override their `output_dir` explicitly. |
 | `max_discovery_passes` | integer | `10` | Maximum fixed-point discovery passes. Discovery repeats while processors keep adding products from each other's declared outputs; a config still adding products at the cap fails the build (naming the processors involved) instead of silently truncating the graph. |
-| `hash_tool_versions` | boolean | `true` | Mix the identity of each processor's external tools into its products' cache keys, so upgrading a tool invalidates what that tool produced. Tools are identified by a content hash of the resolved binary (no `--version` subprocess; the mtime cache makes repeat builds a stat), or by the pinned `version_output` when [`rsconstruct tools lock`](commands.md#rsconstruct-tools) has written a `.tools.versions` file. Set to `false` to leave tool identity out of cache keys entirely. |
+| `hash_tool_versions` | boolean | `true` | Mix the identity of each processor's external tools into its products' cache keys, so upgrading a tool invalidates what that tool produced. Tools are identified by a content hash of the resolved binary (no `--version` subprocess; the mtime cache makes repeat builds a stat), or by the pinned `version_output` when [`rsconstruct tool lock`](commands.md#rsconstruct-tool) has written a `.tools.versions` file. Set to `false` to leave tool identity out of cache keys entirely. |
 | `warn_symlinks` | boolean | `false` | Warn about every symlink skipped during the file-index walk. The walker never follows symlinks, so a symlinked source (or a symlinked directory of sources) is absent from the index — never checked, never built. Set to `true` to make that gap visible. Off by default because projects that deliberately keep symlinks around (vendored trees, dotfile farms) would drown in warnings. |
 | `command_timeout_secs` | integer | `0` | Wall-clock limit in seconds for every external command a processor runs; a command still running at the limit is killed and its product fails with `Command timed out after Ns and was killed`. `0` means no limit. **Off by default, on purpose**: a tool that hangs is a bug in the tool, its input, or the environment, and the fix is to find that cause — not to cut the tool off. Set this only where a build must not be allowed to sit forever (an unattended runner) and a loud kill beats a silent hang. A processor with its own timeout (`marp`'s `timeout_secs`) keeps it; the explicit value wins. |
 | `allow_missing_dep_auto` | boolean | `false` | Skip a `dep_auto` entry you listed when the file does not exist, as every entry used to be skipped. By default such an entry is a config error naming the processor, the file and the config line: a listed file that is missing is a typo or a stale copy of a shared config, and either way a dependency that silently tracks nothing. Processor defaults (`.pylintrc`, `ruff.toml`, ...) are optional by nature and are never checked. |
@@ -271,7 +271,7 @@ Common fields available to all processors:
 | `args` | array of strings | `[]` | Extra command-line arguments passed to the tool. |
 | `dep_inputs` | array of strings | `[]` | Additional input files that trigger rebuild when changed. |
 | `dep_auto` | array of strings | varies | Config files added as inputs. The processor's default list (e.g. `.pylintrc`) is skip-if-absent; a list you write here replaces it, and every entry in it must exist unless `[build] allow_missing_dep_auto` is set. |
-| `required_tools` | array of strings | `[]` | Extra tools this processor needs beyond `command`. Normally `command` *is* the tool, so this is empty. Name the real tool here when `command` is a wrapper script that shells out to it — otherwise that tool is invisible to `rsconstruct tools install` and to version locking, and a missing tool surfaces only as a failure inside the wrapper. Each name must have a registry entry (`rsconstruct tools list`). |
+| `required_tools` | array of strings | `[]` | Extra tools this processor needs beyond `command`. Normally `command` *is* the tool, so this is empty. Name the real tool here when `command` is a wrapper script that shells out to it — otherwise that tool is invisible to `rsconstruct tool install` and to version locking, and a missing tool surfaces only as a failure inside the wrapper. Each name must have a registry entry (`rsconstruct tool list`). |
 | `batch` | boolean | `true` | Whether to batch multiple files into a single tool invocation. Note: in fail-fast mode (default), chunk size is 1 regardless of this setting — batch mode only groups files with `--keep-going` or `--batch-size`. For external tools, a batch failure marks all products in the chunk as failed. Internal processors (`i`-prefixed) return per-file results, so partial failure is handled correctly. |
 | `max_jobs` | integer | none | Maximum concurrent jobs for this processor. When set, limits how many instances of this processor run in parallel, regardless of the global `-j` setting. Useful for heavyweight processors (e.g., `marp` spawns Chromium). Omit to use the global parallelism. |
 | `src_dirs` | array of strings | `[]` | Directories to scan for source files. **Every processor defaults to `[]`, which scans nothing** — no processor guesses a directory, so one declared without `src_dirs` matches no files and simply builds nothing. A default like `["src"]` would be a guess that silently matches the wrong directory in a project laid out differently; naming the directory is the user's call. To scan the whole project deliberately, use `src_dirs = [""]` — an empty string means the project root and walks everything beneath it, including `node_modules/`, `.venv/` and `target/` unless excluded. `"."` means exactly the same thing, but reads as if it named only the root directory; `[build] reject_dot_src_dirs = true` forbids that spelling. `src_files` is an alternative to `src_dirs` for listing exact paths. **Every entry must name a directory that exists**; an entry that does not is a config error (exit code 2) naming the processor and the entry — see [Missing `src_dirs` entries](#missing-src_dirs-entries) below. The one exception is a directory an upstream processor declares as its output: it does not exist before that processor runs, and is accepted. Use `rsconstruct processor defconfig <name>` to see a processor's defaults. |
@@ -372,7 +372,7 @@ catch.
 
 ### `[dependencies]`
 
-Declare project dependencies by package manager. Used by `rsconstruct doctor` to verify availability and `rsconstruct tools install-deps` to install missing packages.
+Declare project dependencies by package manager. Used by `rsconstruct doctor` to verify availability and `rsconstruct tool install-deps` to install missing packages.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -464,9 +464,9 @@ declared package the same way: installed means present in the project's
 To make the installed executables resolvable, every rsconstruct invocation
 prepends the project's `node_modules/.bin`, when it exists, to its own
 `PATH` at startup (the same mechanism that appends the user gem bin dirs, see
-`rsconstruct tools` in the commands reference). Prepended, so the version the
+`rsconstruct tool` in the commands reference). Prepended, so the version the
 lock pins wins over a global install of the same tool — processors keep
-invoking `stylelint` or `mmdc` plainly, and `tools install` sees the locked
+invoking `stylelint` or `mmdc` plainly, and `tool install` sees the locked
 copy and does not install a global one. This is what `npm run` does for
 scripts.
 
@@ -501,7 +501,7 @@ belong in this list.
 
 #### Install order
 
-`rsconstruct tools install-deps` always installs in this fixed order:
+`rsconstruct tool install-deps` always installs in this fixed order:
 
 1. **`system`** — OS packages (apt, dnf, pacman, brew)
 2. **`pip`** — Python packages
@@ -515,7 +515,7 @@ The keys inside `[dependencies]` may appear in any order in `rsconstruct.toml`; 
 
 #### `eatmydata` wrapping
 
-When [`eatmydata`](https://www.flamingspork.com/projects/libeatmydata/) is installed on the system *and* `CI=true` is in the environment, both `rsconstruct tools install` and `rsconstruct tools install-deps` wrap their `apt`/`dnf`/`pacman` invocations with it. `eatmydata` no-op's `fsync()` for the wrapped process, which speeds up package installs by 3–10×.
+When [`eatmydata`](https://www.flamingspork.com/projects/libeatmydata/) is installed on the system *and* `CI=true` is in the environment, both `rsconstruct tool install` and `rsconstruct tool install-deps` wrap their `apt`/`dnf`/`pacman` invocations with it. `eatmydata` no-op's `fsync()` for the wrapped process, which speeds up package installs by 3–10×.
 
 The trade-off is loss-on-power-cut: any package files written during the install are not flushed to disk, so a power loss mid-install can leave the package database inconsistent. That's fine on transient CI hosts and wrong on developer workstations — hence the `CI=true` gate.
 
@@ -529,12 +529,12 @@ If `eatmydata` is not installed, the commands run unwrapped — no error, no war
 | ------------------------------------------- | ---------------------------------------------------- |
 | Use the wrap (the CI default)               | Set `CI=true` and have eatmydata installed           |
 | Skip the wrap in CI                         | Unset `CI` (or set it to anything other than `true`) |
-| Use the wrap outside CI                     | Run with `CI=true rsconstruct tools install-deps`    |
+| Use the wrap outside CI                     | Run with `CI=true rsconstruct tool install-deps`    |
 | Skip the wrap for a single invocation       | Pass `--no-eatmydata`                                |
 
 The CLI flag `--no-eatmydata` always wins. Otherwise the policy is driven entirely by `CI=true`. There is no `rsconstruct.toml` field for this — the env var is the knob.
 
-The mechanism is a [post-config hook](processors.md): `eatmydata_ci_default` runs after config load and flips the in-memory `dependencies.eatmydata` flag when `CI=true`. List it with `rsconstruct hooks`.
+The mechanism is a [post-config hook](processors.md): `eatmydata_ci_default` runs after config load and flips the in-memory `dependencies.eatmydata` flag when `CI=true`. List it with `rsconstruct hook`.
 
 ##### What's never wrapped
 
@@ -542,7 +542,7 @@ The mechanism is a [post-config hook](processors.md): `eatmydata_ci_default` run
 
 ### `[pages]`
 
-Declares that this repo publishes a directory to GitHub Pages. The section is optional — its *presence* is the signal. `rsconstruct pages dir` prints the directory when the section exists and prints nothing (exit 0) when it doesn't, which lets a single shared CI workflow decide whether to run the Pages upload/deploy steps. See [GitHub Actions](github-actions.md#github-pages-deployment) for the workflow pattern.
+Declares that this repo publishes a directory to GitHub Pages. The section is optional — its *presence* is the signal. `rsconstruct page dir` prints the directory when the section exists and prints nothing (exit 0) when it doesn't, which lets a single shared CI workflow decide whether to run the Pages upload/deploy steps. See [GitHub Actions](github-actions.md#github-pages-deployment) for the workflow pattern.
 
 | Key | Type | Default | Description |
 |---|---|---|---|

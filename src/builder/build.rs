@@ -154,7 +154,7 @@ fn check_required_tools(
                 install_hint
             );
         }
-        msg.push_str("\nRun `rsconstruct tools install` to install missing tools.");
+        msg.push_str("\nRun `rsconstruct tool install` to install missing tools.");
         return Err(crate::exit_code::RsconstructError::new(
             crate::exit_code::RsconstructExitCode::ToolError,
             msg.trim_end(),

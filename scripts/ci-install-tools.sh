@@ -33,9 +33,9 @@ fi
 # so this inherits GITHUB_TOKEN from the workflow step to stay under the
 # authenticated rate limit (see the comment on that step in ci.yml). Unset
 # locally, where one machine never approaches the anonymous 60/hour.
-cargo run -- tools install --all
+cargo run -- tool install --all
 
 # The cargo subcommands the workflow's later steps run (cargo deny, cargo
 # nextest) are declared under [dependencies] cargo in rsconstruct.toml, the
 # fleet's one list of them; the binary just built reads it.
-cargo run -- tools install-deps
+cargo run -- tool install-deps

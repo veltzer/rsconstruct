@@ -194,7 +194,7 @@ cached in `deps.redb` for incremental builds.
 
 ### Phase 4: Tool version hashing
 
-For each processor with a tool lock entry (`rsconstruct tools lock`), the
+For each processor with a tool lock entry (`rsconstruct tool lock`), the
 locked tool version hash is appended to the product's config hash. This
 ensures that upgrading a tool (e.g., `ruff` 0.4 → 0.5) triggers rebuilds
 even if source files haven't changed.
@@ -204,8 +204,8 @@ even if source files haven't changed.
 The `TOOLS` registry in `src/tools.rs` lists every external tool
 rsconstruct knows about. Each entry's `name` is the **detection key**: it is
 passed directly to `which::which` by `builder/tools.rs` and `tool_lock.rs`, so
-it decides whether `rsconstruct tools list` reports `installed` or `missing`,
-and which binary `rsconstruct tools lock` records a version for.
+it decides whether `rsconstruct tool list` reports `installed` or `missing`,
+and which binary `rsconstruct tool lock` records a version for.
 
 **Registry names must be bare binary names, never paths.** `which` switches
 behaviour on the presence of a path separator:
