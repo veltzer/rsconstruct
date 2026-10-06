@@ -9,6 +9,22 @@ Grades:
 
 ## Build Execution
 
+### Ready-queue scheduler
+- Dispatch each product the moment its last dependency finishes, from one
+  pool of exactly `-j` workers, instead of running the graph level by level.
+- Today (`execute_parallel`): a level is a barrier, so one slow product holds
+  up every product in the next level even when their own dependencies are
+  long done; each level's items are cut into `parallel` fixed chunks up front
+  (no load balancing, and a chunk blocked on a `max_jobs` semaphore stalls
+  the rest of it); every batch group gets a thread on top of those, so `-j`
+  is not a real cap; and a batching processor runs its chunks serially.
+- Bazel and Buck2 schedule this way; it is the largest remaining
+  performance gap with them. The mid-build re-planning added for
+  re-analysis (`GraphRefresh`, R5) becomes simpler too: new edges just
+  delay a product that is not yet ready.
+- See R6/R7 in [Architecture Observations](architecture-observations.md).
+- **Urgency**: high | **Complexity**: medium
+
 ### Distributed builds
 - Run builds across multiple machines, similar to distcc or icecream for C/C++.
 - A coordinator node distributes work to worker nodes, each running rsconstruct in worker mode.
@@ -20,11 +36,30 @@ Grades:
 - Run each processor in an isolated environment where it can only access its declared inputs.
 - Prevents accidental undeclared dependencies.
 - On Linux, namespaces can provide lightweight sandboxing.
-- **Urgency**: low | **Complexity**: high
+- **A cheaper first step — detect, don't isolate.** rsconstruct discovers
+  dependencies (scan settings, analyzers) instead of having them declared,
+  so a dependency an analyzer misses silently becomes a stale result. Bazel
+  catches the equivalent mistake because its sandbox makes an undeclared
+  read fail. An opt-in check mode could get most of that benefit without
+  full isolation: trace each tool's file reads (fanotify, or a ptrace/
+  seccomp-unotify `openat` filter) and report every file read inside the
+  project that is not among the product's inputs. Run in CI, it turns
+  "editing this header rebuilt nothing" into an error naming the product
+  and the file.
+- **Urgency**: medium (check mode) / low (full isolation) | **Complexity**: medium (check mode) / high (full isolation)
 
 ### Content-addressable outputs (unchanged output pruning)
 - Hash outputs too to skip downstream rebuilds when an input changes but produces identical output.
 - Bazel calls this "unchanged output pruning."
+- **Where it stands.** Since R1 the executor decides each product at
+  dispatch from the inputs it will actually read, so a downstream product
+  whose upstream rebuilt to identical bytes finds its cache entry. But
+  `unlink_pending_outputs` already deleted its outputs (the up-front
+  prediction marks it BUILD because a dependency changes), so it ends as a
+  *restore* — a copy or hardlink — rather than a skip, and the prediction
+  counts it as work. Real pruning means deleting a product's outputs only
+  when it is actually rebuilt, or when it is skipped because a dependency
+  failed, instead of up front.
 - **Urgency**: medium | **Complexity**: medium
 
 ### Persistent daemon mode
@@ -82,6 +117,20 @@ Grades:
 - Given changed files (from `git diff`), determine which products are affected and only build those.
 - Useful for large projects where a full build is expensive.
 - **Urgency**: medium | **Complexity**: medium
+
+### Demand-driven builds: build only what was asked for
+- `rsconstruct build -p B` should also run the processors that produce B's
+  inputs, the way `--target` already pulls in the producers of the products
+  it selects. Today `-p B` alone skips them, so on a clean checkout B finds
+  none of its generated inputs. Bazel and Buck2 build exactly the closure of
+  the requested target.
+- Discovery's routing records which processor's outputs reached which
+  processor ([Routing Generated Files](output-routing.md)); keeping that
+  processor-level graph makes the upstream closure of `-p` a lookup.
+- Further step: trim *discovery* to that closure too, instead of
+  discovering everything and filtering afterwards (observation #9, the
+  supply-driven model).
+- **Urgency**: medium | **Complexity**: low (closure for `-p`) / high (demand-driven discovery)
 
 ### Critical path analysis
 - Identify the longest sequential chain of actions in a build.
