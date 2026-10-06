@@ -56,6 +56,18 @@ pkg_config = ["gtk+-3.0", "glib-2.0"]
 
 This automatically finds headers like `<gtk/gtk.h>` and `<glib.h>` without manually specifying their include paths.
 
+### Failures are errors
+
+Both are resolved once, when the analyzer is set up, before any file is
+scanned. Any failure stops the build with an error naming the analyzer and
+the package or command: `pkg-config` missing, an unknown package, a command
+that exits non-zero, prints nothing, or prints something that is not a
+directory. (They used to be printed and skipped. The analyzer then ran
+without those include directories, headers found through them dropped out
+of the dependency lists, and editing one rebuilt nothing — with the build
+still green.) A package that resolves to no `-I` flags at all is not an
+error: its headers live in a default directory.
+
 ## See also
 
 - [icpp](icpp.md) — native (no-subprocess) C/C++ dependency analyzer

@@ -119,7 +119,13 @@ pub trait DepAnalyzer: Sync + Send {
 
 /// Query pkg-config for include paths from the given packages.
 /// Uses `pkg-config --cflags-only-I` and strips the `-I` prefix.
-/// Returns an empty list if `packages` is empty or the query fails.
+/// Returns an empty list if `packages` is empty.
+///
+/// Any failure is an error — pkg-config missing, an unknown package, a
+/// non-zero exit. These used to be printed and skipped, which left the
+/// analyzer resolving headers without the package's include directories:
+/// those headers silently dropped out of every dependency list, so editing
+/// one rebuilt nothing, and the build stayed green.
 ///
 /// - `tag`: prefix for log messages (e.g., "cpp" or "icpp")
 /// - `packages`: pkg-config package names to query
@@ -129,9 +135,9 @@ pub fn query_pkg_config_include_paths(
     tag: &str,
     packages: &[String],
     verbose: bool,
-) -> Vec<PathBuf> {
+) -> Result<Vec<PathBuf>> {
     if packages.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
 
     let mut cmd = Command::new("pkg-config");
@@ -142,20 +148,20 @@ pub fn query_pkg_config_include_paths(
         eprintln!("[{}] Querying pkg-config: {}", tag, format_command(&cmd));
     }
 
-    let output = match run_command_capture(ctx, &cmd) {
-        Ok(o) => o,
-        Err(e) => {
-            eprintln!("[{tag}] Failed to query pkg-config: {e}");
-            return Vec::new();
-        }
-    };
-
+    let output = run_command_capture(ctx, &cmd)
+        .with_context(|| format!("[{tag}] Failed to run {}", format_command(&cmd)))?;
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        eprintln!("[{}] pkg-config failed: {}", tag, stderr.trim());
-        return Vec::new();
+        anyhow::bail!(
+            "[{}] {} failed ({}): {}",
+            tag,
+            format_command(&cmd),
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
     }
 
+    // A package with no -I flags (its headers live in a default directory)
+    // is a valid answer, not a failure.
     let paths: Vec<PathBuf> = String::from_utf8_lossy(&output.stdout)
         .split_whitespace()
         .filter_map(|flag| flag.strip_prefix("-I").map(PathBuf::from))
@@ -169,11 +175,17 @@ pub fn query_pkg_config_include_paths(
         );
     }
 
-    paths
+    Ok(paths)
 }
 
-/// Run each command in `commands` via `sh -c` and collect its stdout (trimmed) as an include path.
-/// Commands that fail, produce empty output, or yield non-directory paths are skipped with a warning.
+/// Run each command in `commands` via `sh -c` and collect its stdout
+/// (trimmed) as an include path.
+///
+/// Every command must succeed and print an existing directory; anything
+/// else — an empty entry, a failure, empty output, a path that is not a
+/// directory — is an error naming the command. These used to be skipped
+/// with a warning (the last only under `-v`), with the same silent loss of
+/// dependencies as a failed pkg-config query.
 ///
 /// - `tag`: prefix for log messages (e.g., "cpp" or "icpp")
 /// - `commands`: shell command strings to run
@@ -183,15 +195,11 @@ pub fn run_include_path_commands(
     tag: &str,
     commands: &[String],
     verbose: bool,
-) -> Vec<PathBuf> {
-    if commands.is_empty() {
-        return Vec::new();
-    }
-
+) -> Result<Vec<PathBuf>> {
     let mut paths = Vec::new();
     for cmd_str in commands {
         if cmd_str.trim().is_empty() {
-            continue;
+            anyhow::bail!("[{tag}] include_path_commands has an empty entry");
         }
 
         // Run via shell to support shell syntax (command substitution, etc.)
@@ -203,38 +211,36 @@ pub fn run_include_path_commands(
             eprintln!("[{tag}] Running include path command: sh -c '{cmd_str}'");
         }
 
-        let output = match run_command_capture(ctx, &cmd) {
-            Ok(o) => o,
-            Err(e) => {
-                eprintln!("[{tag}] Failed to run '{cmd_str}': {e}");
-                continue;
-            }
-        };
-
+        let output = run_command_capture(ctx, &cmd)
+            .with_context(|| format!("[{tag}] Failed to run include path command '{cmd_str}'"))?;
         if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            eprintln!("[{}] Command '{}' failed: {}", tag, cmd_str, stderr.trim());
-            continue;
+            anyhow::bail!(
+                "[{}] Include path command '{}' failed ({}): {}",
+                tag,
+                cmd_str,
+                output.status,
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
         }
 
         let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if path_str.is_empty() {
-            continue;
+            anyhow::bail!("[{tag}] Include path command '{cmd_str}' printed nothing");
         }
-
         let path = PathBuf::from(&path_str);
-        if path.is_dir() {
-            if verbose {
-                eprintln!(
-                    "[{}] Added include path from command: {}",
-                    tag,
-                    path.display()
-                );
-            }
-            paths.push(path);
-        } else if verbose {
-            eprintln!("[{tag}] Command output is not a directory: {path_str}");
+        if !path.is_dir() {
+            anyhow::bail!(
+                "[{tag}] Include path command '{cmd_str}' printed '{path_str}', which is not a directory"
+            );
         }
+        if verbose {
+            eprintln!(
+                "[{}] Added include path from command: {}",
+                tag,
+                path.display()
+            );
+        }
+        paths.push(path);
     }
 
     if verbose && !paths.is_empty() {
@@ -245,7 +251,22 @@ pub fn run_include_path_commands(
         );
     }
 
-    paths
+    Ok(paths)
+}
+
+/// Return the include paths cached in `cell`, resolving them with
+/// `resolve` on first use. A failed resolution is returned, not cached:
+/// analysis stops at the first error anyway (`Analysis::new` resolves them
+/// through `fingerprint_parts` before any file is scanned).
+pub fn cached_include_paths(
+    cell: &std::sync::OnceLock<Vec<PathBuf>>,
+    resolve: impl FnOnce() -> Result<Vec<PathBuf>>,
+) -> Result<&[PathBuf]> {
+    if let Some(paths) = cell.get() {
+        return Ok(paths);
+    }
+    let paths = resolve()?;
+    Ok(cell.get_or_init(|| paths))
 }
 
 /// Result of scanning a single source file: a list of dependency paths and
@@ -342,9 +363,11 @@ impl Analysis {
         let mut active: Vec<ActiveAnalyzer> = analyzers
             .into_iter()
             .map(|(iname, analyzer)| {
-                let parts = analyzer.fingerprint_parts(ctx).with_context(|| {
-                    format!("Failed to fingerprint the configuration of analyzer '{iname}'")
-                })?;
+                // This is where pkg-config and the include-path commands
+                // run, so the context speaks of the analyzer's setup.
+                let parts = analyzer
+                    .fingerprint_parts(ctx)
+                    .with_context(|| format!("Failed to set up analyzer '{iname}'"))?;
                 let parts: Vec<&str> = parts.iter().map(String::as_str).collect();
                 Ok(ActiveAnalyzer {
                     fingerprint: crate::checksum::hash_parts(&parts),

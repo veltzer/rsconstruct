@@ -1,6 +1,6 @@
 # icpp
 
-Native (no-subprocess) C/C++ dependency analyzer. Scans `#include` directives by parsing source files directly in Rust, without invoking `gcc` or `pkg-config`.
+Native C/C++ dependency analyzer. Scans `#include` directives by parsing source files directly in Rust, without invoking `gcc`. It runs no subprocess unless `pkg_config` or `include_path_commands` is set; those run once, at setup, to find extra include directories.
 
 **Native**: Yes.
 
@@ -12,17 +12,28 @@ Native (no-subprocess) C/C++ dependency analyzer. Scans `#include` directives by
 - You don't need compiler-driven include path discovery.
 - You're happy to enumerate include paths explicitly in `rsconstruct.toml`.
 
-Prefer [cpp](cpp.md) if you need compiler-discovered system include paths or pkg-config integration.
+Prefer [cpp](cpp.md) if you need the compiler's own include resolution (macros, conditional includes, built-in system paths).
 
 ## Configuration
 
 ```toml
 [analyzer.icpp]
 include_paths          = ["include", "src"]
+pkg_config             = ["gtk+-3.0"]
+include_path_commands  = ["gcc -print-file-name=plugin"]
 src_exclude_dirs       = ["/kernel/", "/vendor/"]
 follow_angle_brackets  = false
 skip_not_found         = false
 ```
+
+### `pkg_config` and `include_path_commands`
+
+The same as for [cpp](cpp.md#include_path_commands): directories from
+`pkg-config --cflags-only-I` and from shell commands that each print one
+directory are searched after `include_paths`. Any failure — `pkg-config`
+missing, an unknown package, a command that fails, prints nothing, or
+prints something that is not a directory — stops the build with an error
+naming the package or command (see [cpp](cpp.md#failures-are-errors)).
 
 ### `follow_angle_brackets` (default: `false`)
 

@@ -49,8 +49,11 @@ impl IcppDepAnalyzer {
     }
 
     /// Query pkg-config for include paths (lazy, cached).
-    fn get_pkg_config_include_paths(&self, ctx: &crate::build_context::BuildContext) -> &[PathBuf] {
-        self.pkg_config_include_paths.get_or_init(|| {
+    fn get_pkg_config_include_paths(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+    ) -> Result<&[PathBuf]> {
+        super::cached_include_paths(&self.pkg_config_include_paths, || {
             super::query_pkg_config_include_paths(
                 ctx,
                 "icpp",
@@ -61,8 +64,11 @@ impl IcppDepAnalyzer {
     }
 
     /// Run configured `include_path_commands` to get additional include paths (lazy, cached).
-    fn get_command_include_paths(&self, ctx: &crate::build_context::BuildContext) -> &[PathBuf] {
-        self.command_include_paths.get_or_init(|| {
+    fn get_command_include_paths(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+    ) -> Result<&[PathBuf]> {
+        super::cached_include_paths(&self.command_include_paths, || {
             super::run_include_path_commands(
                 ctx,
                 "icpp",
@@ -84,7 +90,7 @@ impl IcppDepAnalyzer {
         include: &str,
         including_dir: &Path,
         file_index: &FileIndex,
-    ) -> (Option<PathBuf>, Vec<PathBuf>) {
+    ) -> Result<(Option<PathBuf>, Vec<PathBuf>)> {
         let candidates: Vec<PathBuf> = std::iter::once(including_dir.join(include))
             .chain(
                 self.config
@@ -93,12 +99,12 @@ impl IcppDepAnalyzer {
                     .map(|dir| Path::new(dir).join(include)),
             )
             .chain(
-                self.get_pkg_config_include_paths(ctx)
+                self.get_pkg_config_include_paths(ctx)?
                     .iter()
                     .map(|dir| dir.join(include)),
             )
             .chain(
-                self.get_command_include_paths(ctx)
+                self.get_command_include_paths(ctx)?
                     .iter()
                     .map(|dir| dir.join(include)),
             )
@@ -108,7 +114,7 @@ impl IcppDepAnalyzer {
             .find(|c| c.is_file() || file_index.contains(c))
             .cloned();
         let absent = super::probed_before(&candidates, found.as_ref());
-        (found, absent)
+        Ok((found, absent))
     }
 
     /// Scan a single file for `#include` directives. Returns resolved dep
@@ -142,7 +148,7 @@ impl IcppDepAnalyzer {
                 if !is_quoted && !self.config.follow_angle_brackets {
                     continue;
                 }
-                let (found, probed) = self.resolve_include(ctx, include, parent, file_index);
+                let (found, probed) = self.resolve_include(ctx, include, parent, file_index)?;
                 absent.extend(probed);
                 match found {
                     Some(resolved) => deps.push(resolved),
@@ -241,12 +247,14 @@ impl DepAnalyzer for IcppDepAnalyzer {
         self.scan_includes(ctx, source, file_index)
     }
 
+    /// Resolves pkg-config and the include-path commands, so a failure in
+    /// either stops the build before any file is scanned.
     fn fingerprint_parts(&self, ctx: &crate::build_context::BuildContext) -> Result<Vec<String>> {
         let mut parts = super::config_fingerprint(&self.config)?;
         parts.extend(
-            self.get_pkg_config_include_paths(ctx)
+            self.get_pkg_config_include_paths(ctx)?
                 .iter()
-                .chain(self.get_command_include_paths(ctx))
+                .chain(self.get_command_include_paths(ctx)?)
                 .map(|p| p.display().to_string()),
         );
         Ok(parts)

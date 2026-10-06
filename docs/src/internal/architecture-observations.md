@@ -459,8 +459,10 @@ skipped with stale outputs. **Fix:** entries hold a `platform::FileStamp`
 
 ### Minor (open)
 
-- pkg-config and `include_path_commands` failures print a warning and
-  continue, silently dropping dependencies — against "strict by default".
+- ~~pkg-config and `include_path_commands` failures print a warning and
+  continue, silently dropping dependencies — against "strict by
+  default".~~ **Resolved:** every failure is an error at analyzer setup,
+  naming the package or command.
 - `build_graph_filtered` is a hand-copied fourth graph-building path that
   skips tool-version hashing.
 - `-p B` does not pull in the producers of B's inputs; `--target` does.

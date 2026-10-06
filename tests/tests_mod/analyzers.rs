@@ -482,3 +482,80 @@ fn icpp_rescans_source_when_included_header_gains_include() {
         "main.c should now depend on b.h through a.h: {stdout}"
     );
 }
+
+/// A project with one `.c` source checked by `encoding` (a native checker
+/// standing in for a compiler) and an icpp analyzer with `analyzer_extra`
+/// appended to its stanza.
+fn icpp_project(analyzer_extra: &str) -> TempDir {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    write_project_file(
+        temp_dir.path(),
+        "rsconstruct.toml",
+        &format!(
+            "[processor.checker.encoding]\nsrc_dirs = [\"src\"]\nsrc_extensions = [\".c\"]\n\n\
+             [analyzer.icpp]\n{analyzer_extra}"
+        ),
+    );
+    write_project_file(temp_dir.path(), "src/main.c", "int main;\n");
+    temp_dir
+}
+
+/// Run `rsconstruct build`, which must fail; return its combined output.
+fn build_fails(project_path: &std::path::Path) -> String {
+    let out = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!out.status.success(), "build must fail: {combined}");
+    combined
+}
+
+/// An unknown pkg-config package used to be printed and skipped: the
+/// analyzer then resolved headers without that package's include
+/// directories, and those headers silently fell out of every dependency
+/// list. It must fail the build, naming the package.
+#[test]
+fn icpp_unknown_pkg_config_package_fails_the_build() {
+    let temp_dir = icpp_project("pkg_config = [\"rsconstruct-no-such-package\"]\n");
+    let output = build_fails(temp_dir.path());
+    assert!(
+        output.contains("rsconstruct-no-such-package"),
+        "the error must name the package: {output}"
+    );
+}
+
+/// A failing include-path command fails the build instead of being skipped.
+#[test]
+fn icpp_failing_include_path_command_fails_the_build() {
+    let temp_dir = icpp_project("include_path_commands = [\"echo broken >&2; exit 3\"]\n");
+    let output = build_fails(temp_dir.path());
+    assert!(
+        output.contains("echo broken >&2; exit 3") && output.contains("broken"),
+        "the error must name the command and show its stderr: {output}"
+    );
+}
+
+/// An include-path command must print an existing directory; anything else
+/// used to be dropped (reported only under -v).
+#[test]
+fn icpp_include_path_command_must_print_a_directory() {
+    let temp_dir = icpp_project("include_path_commands = [\"echo no/such/dir\"]\n");
+    let output = build_fails(temp_dir.path());
+    assert!(
+        output.contains("not a directory") && output.contains("no/such/dir"),
+        "the error must say what was printed: {output}"
+    );
+}
+
+/// The success path: the directory a command prints is searched. icpp fails
+/// on an unresolved quoted include, so a green build proves `v.h` was found
+/// through the command's directory.
+#[test]
+fn icpp_include_path_command_directory_is_searched() {
+    let temp_dir = icpp_project("include_path_commands = [\"echo vendor\"]\n");
+    write_project_file(temp_dir.path(), "src/main.c", "#include \"v.h\"\n");
+    write_project_file(temp_dir.path(), "vendor/v.h", "#define V 1\n");
+    build_ok(temp_dir.path());
+}

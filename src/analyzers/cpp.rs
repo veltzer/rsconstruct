@@ -50,15 +50,21 @@ impl CppDepAnalyzer {
     }
 
     /// Query pkg-config for include paths (lazy, cached).
-    fn get_pkg_config_include_paths(&self, ctx: &crate::build_context::BuildContext) -> &[PathBuf] {
-        self.pkg_config_include_paths.get_or_init(|| {
+    fn get_pkg_config_include_paths(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+    ) -> Result<&[PathBuf]> {
+        super::cached_include_paths(&self.pkg_config_include_paths, || {
             super::query_pkg_config_include_paths(ctx, "cpp", &self.config.pkg_config, self.verbose)
         })
     }
 
     /// Run configured `include_path_commands` to get additional include paths (lazy, cached).
-    fn get_command_include_paths(&self, ctx: &crate::build_context::BuildContext) -> &[PathBuf] {
-        self.command_include_paths.get_or_init(|| {
+    fn get_command_include_paths(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+    ) -> Result<&[PathBuf]> {
+        super::cached_include_paths(&self.command_include_paths, || {
             super::run_include_path_commands(
                 ctx,
                 "cpp",
@@ -106,12 +112,12 @@ impl CppDepAnalyzer {
         }
 
         // Add pkg-config include paths
-        for inc in self.get_pkg_config_include_paths(ctx) {
+        for inc in self.get_pkg_config_include_paths(ctx)? {
             cmd.arg(format!("-I{}", inc.display()));
         }
 
         // Add include paths from commands
-        for inc in self.get_command_include_paths(ctx) {
+        for inc in self.get_command_include_paths(ctx)? {
             cmd.arg(format!("-I{}", inc.display()));
         }
 
@@ -197,13 +203,19 @@ impl CppDepAnalyzer {
     /// The directories the compiler searches for a quoted include in
     /// `source`, in order: the source's own directory, then the `-I` paths
     /// in the order `scan_dependencies_compiler` passes them.
-    fn search_dirs(&self, ctx: &crate::build_context::BuildContext, source: &Path) -> Vec<PathBuf> {
-        std::iter::once(crate::processor::parent_dir_or_empty(source).to_path_buf())
-            .chain(self.config.include_paths.iter().map(PathBuf::from))
-            .chain(self.get_pkg_config_include_paths(ctx).iter().cloned())
-            .chain(self.get_command_include_paths(ctx).iter().cloned())
-            .map(|dir| without_cur_dir(&dir))
-            .collect()
+    fn search_dirs(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        source: &Path,
+    ) -> Result<Vec<PathBuf>> {
+        Ok(
+            std::iter::once(crate::processor::parent_dir_or_empty(source).to_path_buf())
+                .chain(self.config.include_paths.iter().map(PathBuf::from))
+                .chain(self.get_pkg_config_include_paths(ctx)?.iter().cloned())
+                .chain(self.get_command_include_paths(ctx)?.iter().cloned())
+                .map(|dir| without_cur_dir(&dir))
+                .collect(),
+        )
     }
 
     /// Scan dependencies using compiler -MM method.
@@ -262,16 +274,18 @@ impl DepAnalyzer for CppDepAnalyzer {
         let ext = source.extension().and_then(|s| s.to_str()).unwrap_or("");
         let is_cpp = ext == "cc" || ext == "cpp" || ext == "cxx";
         let deps = self.scan_dependencies(ctx, source, is_cpp)?;
-        let absent = shadow_probes(&self.search_dirs(ctx, source), &deps);
+        let absent = shadow_probes(&self.search_dirs(ctx, source)?, &deps);
         Ok(ScanResult::deps(deps, absent))
     }
 
+    /// Resolves pkg-config and the include-path commands, so a failure in
+    /// either stops the build before any file is scanned.
     fn fingerprint_parts(&self, ctx: &crate::build_context::BuildContext) -> Result<Vec<String>> {
         let mut parts = super::config_fingerprint(&self.config)?;
         parts.extend(
-            self.get_pkg_config_include_paths(ctx)
+            self.get_pkg_config_include_paths(ctx)?
                 .iter()
-                .chain(self.get_command_include_paths(ctx))
+                .chain(self.get_command_include_paths(ctx)?)
                 .map(|p| p.display().to_string()),
         );
         Ok(parts)
