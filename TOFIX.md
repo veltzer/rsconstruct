@@ -4,10 +4,6 @@ Findings from writing the missing processor docs pages on 2026-10-06. Each
 was reproduced in a scratch project; the pages document the current
 behavior, so fixing an item means updating its page too.
 
-## High
-
-- `src/analyzers/mod.rs` `analyze_with_scanner` + `src/deps_cache.rs` `get` - a cached dependency list is validated only against the source file's own checksum (and that each listed dep still exists). A header that gains a new `#include` leaves every `.c` that includes it with the old list, so changes to the newly included file never rebuild them. Reproduced with `icpp`: `main.c` includes `a.h`; change `a.h` to `#include "b.h"`, build, then edit `b.h` — the build reports `1 unchanged` and the binary keeps the old value. Exposed: `cpp` (its `gcc -MM` list is transitive) and `icpp`. `python` and `markdown` record direct references only, so they are not hit by this (though `python` does not follow imports of imports at all); `tera` and `sass` use `analyze_with_full_scanner`, which rescans every run. Fix: cache, per source, the checksums of all scanned files (source plus every transitive dep) and treat any mismatch as a miss.
-
 ## Medium
 
 - `src/processor/checker/iyamllint.rs:27` - parses with `serde_yaml_ng::from_str`, which rejects valid multi-document YAML (`---` separators) with "more than one document is not supported". Parse with a multi-document loader instead. This also matters for plan.md Stage 1, which counts iyamllint as yamllint's Rust alternative: it honours none of `.yamllint.yaml`'s rules (syntax and duplicate keys only), so that row's "confirm every option is honoured" is really "implement the rules".
@@ -17,3 +13,8 @@ behavior, so fixing an item means updating its page too.
 - `src/processor/checker/script.rs:26` - `fix_batch` shows as type `?` in `rsconstruct processor defconfig processor.checker.script`: it has no `FieldSpec` with a type. Add one.
 - `plan.md` Stage 3 `iyq` row says "reuse ijq's filter evaluation", but `ijq` evaluates no filters: it is a JSON parse check identical to `ijsonlint`. The row needs a real jq engine (e.g. the `jaq` crate).
 - Markdown in `README.md` and `docs/src` is not linted. `.markdownlint.json` was deleted as dead config; adding a `rumdl` stanza (with the fleet-shared `.rumdl.toml`) would lint locally, but CI never runs `rsconstruct build` in rs* repos, so enforcing it needs a decision about the shared `ci.yml`.
+
+## Low
+
+- `src/deps_cache.rs` - a cached dependency list is now rechecked against every listed dependency's checksum, but files that are *not* on the list are not watched. Two cases still keep a stale list until the source itself changes: a quoted `#include` skipped as unresolved (`skip_not_found = true`) whose header is created later, and a new header that shadows the resolved one earlier in the search path (e.g. `src/x.h` appearing when `include/x.h` was found). Fixing it means recording the paths probed during resolution, not only the ones found.
+- `src/analyzers/python.rs:78` - records the direct imports of a module only, not imports of imports, so a product depending on `a.py` is not rebuilt when a module `a.py` imports changes. Follow imports transitively, as `icpp` does for headers.

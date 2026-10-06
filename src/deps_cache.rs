@@ -8,9 +8,13 @@
 //! `mypy-imports` pair) never overwrite each other's entries. The NUL
 //! separator is safe: neither analyzer inames nor paths can contain NUL.
 //!
-//! Cache value: (`source_checksum`, dependencies)
+//! Cache value: (`source_checksum`, dependencies, `dependency_checksums`)
 //!
-//! The cache is invalidated when the source file's checksum changes.
+//! The cache is invalidated when the source file or any listed dependency
+//! changes. Checking the dependencies matters for analyzers whose list is
+//! transitive (`icpp`, `cpp`): when `a.h` gains `#include "b.h"`, the source
+//! that includes `a.h` is unchanged, but its dependency list is now short —
+//! only `a.h`'s new checksum reveals that it must be rescanned.
 
 use anyhow::{Context, Result};
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
@@ -33,6 +37,11 @@ struct DepsEntry {
     source_checksum: String,
     /// List of dependency paths (relative to project root)
     dependencies: Vec<String>,
+    /// Checksum of each entry of `dependencies`, in the same order, when
+    /// they were scanned. An entry written before this field existed has
+    /// none, fails the length check and is rescanned once.
+    #[serde(default)]
+    dependency_checksums: Vec<String>,
     /// Name of the analyzer that created this entry (e.g., "cpp", "python")
     #[serde(default)]
     analyzer: String,
@@ -141,15 +150,13 @@ impl DepsCache {
             return None;
         }
 
-        // Verify all dependencies still exist
-        let deps: Vec<PathBuf> = entry.dependencies.iter().map(PathBuf::from).collect();
-
-        for dep in &deps {
-            if !dep.exists() {
-                self.stats.misses += 1;
-                return None;
-            }
+        // Verify every dependency still exists with the content it was
+        // scanned with (see the module doc for why).
+        if !dependencies_unchanged(ctx, &entry) {
+            self.stats.misses += 1;
+            return None;
         }
+        let deps: Vec<PathBuf> = entry.dependencies.iter().map(PathBuf::from).collect();
 
         self.stats.hits += 1;
         match checksum_path {
@@ -184,7 +191,7 @@ impl DepsCache {
         if entry.source_checksum != current_checksum {
             return ClassifyResult::Miss;
         }
-        if !entry.dependencies.iter().all(|d| Path::new(d).exists()) {
+        if !dependencies_unchanged(ctx, &entry) {
             return ClassifyResult::Miss;
         }
         match checksum_path {
@@ -206,9 +213,15 @@ impl DepsCache {
 
     /// Store dependencies for a (analyzer, source) pair.
     /// `source_checksum` must come from [`Self::source_checksum`] taken
-    /// before the scan that produced `dependencies`.
+    /// before the scan that produced `dependencies`. The dependencies'
+    /// checksums are taken here, after the scan, since the scan is what
+    /// names them; a dependency edited between its scan and this call is
+    /// recorded with its new content, and that one change goes unnoticed
+    /// until the file changes again — the same window a build always has
+    /// for an input edited while it runs.
     pub fn set(
         &self,
+        ctx: &BuildContext,
         analyzer: &str,
         source: &Path,
         source_checksum: String,
@@ -216,12 +229,21 @@ impl DepsCache {
     ) -> Result<()> {
         let key = key_for(analyzer, source);
 
+        let dependency_checksums = dependencies
+            .iter()
+            .map(|dep| {
+                checksum_fast(ctx, dep)
+                    .map(|(checksum, _)| checksum)
+                    .with_context(|| format!("Failed to checksum dependency {}", dep.display()))
+            })
+            .collect::<Result<Vec<String>>>()?;
         let entry = DepsEntry {
             source_checksum,
             dependencies: dependencies
                 .iter()
                 .map(|p| p.display().to_string())
                 .collect(),
+            dependency_checksums,
             analyzer: analyzer.to_string(),
         };
 
@@ -376,6 +398,21 @@ impl DepsCache {
     }
 }
 
+/// Whether every dependency of `entry` still exists with the checksum it
+/// had when it was scanned. A missing or unreadable file, or a stored
+/// checksum list that does not line up with the paths, counts as changed.
+/// `checksum_fast` consults the mtime cache, so unchanged files cost a stat.
+fn dependencies_unchanged(ctx: &BuildContext, entry: &DepsEntry) -> bool {
+    entry.dependencies.len() == entry.dependency_checksums.len()
+        && entry
+            .dependencies
+            .iter()
+            .zip(&entry.dependency_checksums)
+            .all(|(dep, stored)| {
+                checksum_fast(ctx, Path::new(dep)).is_ok_and(|(current, _)| &current == stored)
+            })
+}
+
 /// Build the composite cache key for an (analyzer, source) pair. NUL is used
 /// as the separator because neither analyzer inames nor filesystem paths can
 /// contain NUL bytes, so there's no possible ambiguity.
@@ -441,6 +478,46 @@ mod tests {
         let (analyzer, path) = parse_key(&key).unwrap();
         assert_eq!(analyzer, "cpp");
         assert_eq!(path, PathBuf::from("src/a:b.c"));
+    }
+
+    /// A cached list must be dropped when a dependency changes, even though
+    /// the source itself did not: that is how a header gaining a new
+    /// `#include` gets the including source rescanned.
+    #[test]
+    fn get_misses_when_a_dependency_changes() {
+        // The mtime cache lives in the working directory's .rsconstruct/,
+        // shared with (and locked by) any rsconstruct process running there;
+        // checksum by content so the test touches only its tempdir.
+        let fresh_ctx = || {
+            let ctx = crate::build_context::BuildContext::new();
+            ctx.set_mtime_check(false);
+            ctx
+        };
+        let tmp = tempfile::TempDir::new().unwrap();
+        let ctx = fresh_ctx();
+        let mut cache = DepsCache::open_in(tmp.path()).expect("open fresh cache");
+        let source = tmp.path().join("main.c");
+        let header = tmp.path().join("a.h");
+        fs::write(&source, "#include \"a.h\"\n").unwrap();
+        fs::write(&header, "#define V 1\n").unwrap();
+
+        let checksum = DepsCache::source_checksum(&ctx, &source).unwrap();
+        cache
+            .set(
+                &ctx,
+                "icpp",
+                &source,
+                checksum,
+                std::slice::from_ref(&header),
+            )
+            .unwrap();
+        assert_eq!(cache.get(&ctx, "icpp", &source), Some(vec![header.clone()]));
+
+        // A fresh context drops the in-session checksum cache, as a new
+        // build would.
+        fs::write(&header, "#include \"b.h\"\n").unwrap();
+        let ctx = fresh_ctx();
+        assert_eq!(cache.get(&ctx, "icpp", &source), None);
     }
 
     /// Regression guard: every `get` call must increment exactly one counter.

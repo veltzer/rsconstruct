@@ -49,8 +49,9 @@ This mirrors how processors work.
 
 Analyzer results are cached in the dependency cache (`.rsconstruct/deps.redb`). On subsequent builds:
 
-- If a source file hasn't changed, its cached dependencies are used.
-- If a source file has changed, dependencies are re-scanned.
+- If neither a source file nor any of its cached dependencies has changed, the cached dependencies are used.
+- If the source or any dependency has changed, or a dependency is gone, the source is re-scanned. Checking the dependencies is what catches a header that gains a new `#include`: the sources that include it are rescanned and pick up the new header.
+- The `sass` and `tera` analyzers do not use the cached list at all: they rescan every source on every build.
 - The cache is shared across all analyzers.
 
 Use the `analyzer` command to manage analyzers and inspect the cache (full

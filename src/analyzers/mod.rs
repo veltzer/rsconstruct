@@ -315,7 +315,7 @@ where
         } else {
             let source_checksum = DepsCache::source_checksum(ctx, source)?;
             let scanned = scan_deps(source)?;
-            if let Err(e) = deps_cache.set(analyzer_name, source, source_checksum, &scanned) {
+            if let Err(e) = deps_cache.set(ctx, analyzer_name, source, source_checksum, &scanned) {
                 crate::output::warn(&format!(
                     "failed to cache dependencies for {}: {}",
                     source.display(),
@@ -399,7 +399,7 @@ where
         // hash_pieces are intentionally NOT cached — they depend on
         // filesystem state (glob results) that must be recomputed on
         // every run. The checksum is taken before the scan (see set()).
-        if let Err(e) = deps_cache.set(analyzer_name, source, source_checksum, &result.deps) {
+        if let Err(e) = deps_cache.set(ctx, analyzer_name, source, source_checksum, &result.deps) {
             crate::output::warn(&format!(
                 "failed to cache dependencies for {}: {}",
                 source.display(),

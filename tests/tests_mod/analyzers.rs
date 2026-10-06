@@ -446,3 +446,39 @@ fn sass_analyzer_rejects_unresolved_import() {
         "unexpected error: {stderr}"
     );
 }
+
+/// When a header starts including another header, the sources that include
+/// it must be rescanned so the new header becomes their input too. The
+/// cached list used to be validated against the source's own checksum only;
+/// `main.c` is unchanged, so its list stayed `[a.h]` and later edits to
+/// `b.h` never rebuilt it. `encoding` stands in for a compiler: any product
+/// whose primary input is a `.c` file gets the icpp dependencies.
+#[test]
+fn icpp_rescans_source_when_included_header_gains_include() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    write_project_file(
+        project_path,
+        "rsconstruct.toml",
+        "[processor.checker.encoding]\nsrc_dirs = [\"src\"]\nsrc_extensions = [\".c\"]\n\n[analyzer.icpp]\n",
+    );
+    write_project_file(project_path, "src/main.c", "#include \"a.h\"\n");
+    write_project_file(project_path, "src/a.h", "#define V 1\n");
+    build_ok(project_path);
+
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    write_project_file(project_path, "src/a.h", "#include \"b.h\"\n");
+    write_project_file(project_path, "src/b.h", "#define V 2\n");
+    build_ok(project_path);
+
+    let out = run_rsconstruct_with_env(
+        project_path,
+        &["analyzer", "show", "files", "src/main.c"],
+        &[("NO_COLOR", "1")],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("src/b.h"),
+        "main.c should now depend on b.h through a.h: {stdout}"
+    );
+}

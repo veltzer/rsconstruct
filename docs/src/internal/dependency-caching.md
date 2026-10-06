@@ -12,10 +12,11 @@ The cache is stored in `.rsconstruct/deps.redb` using [redb](https://github.com/
 
 Each cache entry consists of:
 
-- **Key**: Source file path (e.g., `src/main.c`)
+- **Key**: Analyzer instance name and source file path (e.g., `icpp` + `src/main.c`)
 - **Value**:
   - `source_checksum` — SHA-256 hash of the source file content
   - `dependencies` — list of dependency paths (header files)
+  - `dependency_checksums` — SHA-256 hash of each dependency when it was scanned
 
 ## Cache Lookup Algorithm
 
@@ -26,9 +27,19 @@ When looking up dependencies for a source file:
 3. If found, compute the current SHA-256 checksum of the source file
 4. Compare with the stored checksum:
    - If different → cache miss (file changed), re-scan
-   - If same → verify all cached dependencies still exist
-5. If any dependency file is missing → cache miss, re-scan
+   - If same → check every cached dependency against its stored checksum
+5. If any dependency is missing or its content changed → cache miss, re-scan
 6. Otherwise → cache hit, return cached dependencies
+
+Step 5 is what keeps transitive lists correct. When `a.h` gains
+`#include "b.h"`, `main.c` (which includes `a.h`) has not changed, but its
+cached list `[a.h]` is now incomplete. `a.h`'s checksum no longer matches,
+so `main.c` is rescanned and `b.h` joins its dependencies. Checking only
+the source's own checksum, as the cache once did, left `b.h` out for good:
+later edits to it never rebuilt `main.c`.
+
+Checksums go through the mtime cache, so an unchanged dependency costs a
+`stat`, not a read.
 
 ## Why Path as Key (Not Checksum)?
 
@@ -95,7 +106,7 @@ This is useful for debugging rebuild behavior or understanding the include struc
 The cache automatically invalidates entries when:
 
 - The source file content changes (checksum mismatch)
-- Any cached dependency file no longer exists
+- Any cached dependency file no longer exists, or its content changes
 
 You can manually clear the entire dependency cache by removing the `.rsconstruct/deps.redb` file, or by running `rsconstruct clean all` which removes the entire `.rsconstruct/` directory.
 
