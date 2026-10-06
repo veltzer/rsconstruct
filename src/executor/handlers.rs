@@ -170,7 +170,7 @@ impl Executor<'_> {
         &self,
         ctx: &HandlerContext,
         object_store: &crate::object_store::ObjectStore,
-        graph: &crate::graph::BuildGraph,
+        graph: &parking_lot::RwLock<crate::graph::BuildGraph>,
         duration: Option<std::time::Duration>,
     ) -> bool {
         // The product just (re)wrote its outputs: evict them from the
@@ -229,8 +229,10 @@ impl Executor<'_> {
             // Creator/Explicit or multi-output: always tree.
             // When walking output_dirs, skip paths declared as outputs of OTHER products —
             // they're owned by some other processor that contributes to the shared directory.
+            // The graph is read per path, briefly: the coordinator may need
+            // the write lock to re-analyze while a large tree is walked.
             let is_foreign = |path: &std::path::Path| -> bool {
-                matches!(graph.path_owner(path), Some(owner) if owner != ctx.id)
+                matches!(graph.read().path_owner(path), Some(owner) if owner != ctx.id)
             };
             object_store
                 .store_tree_descriptor(

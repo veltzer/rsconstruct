@@ -8,9 +8,9 @@ When two processors touch the same files or cooperate on a shared workspace, the
 
 - Each product (a unit of work from a processor) declares `inputs` and `outputs`.
 - If product A's `inputs` contains a path that product B's `outputs` also contains, A depends on B — B runs first.
-- Products with no such relationship are considered independent and may run in parallel (within the same topological level).
+- Products with no such relationship are considered independent and may run in parallel.
 
-That's the whole mechanism. The `BuildGraph` performs a topological sort on this implicit graph and the executor processes levels in order. See [Cross-Processor Dependencies](cross-processor-dependencies.md) for the data-flow story.
+That's the whole mechanism. The executor runs each product as soon as every product it depends on has finished, up to `-j` at a time. See [Cross-Processor Dependencies](cross-processor-dependencies.md) for the data-flow story.
 
 There is **no** `depends_on`, `mustRunAfter`, `before`, `after`, `priority`, or `stage` field anywhere in `rsconstruct.toml`. If two processors write into the same directory without any file dep between them, their order is undefined and may vary between runs.
 

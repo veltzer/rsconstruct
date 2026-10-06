@@ -1,5 +1,12 @@
 # Feature: Per-Processor `max_jobs`
 
+**Update (2026-10-06):** the semaphores in the plan below were replaced
+when the executor moved to a ready-queue scheduler. Workers take units from
+one queue, and a worker takes the first unit whose processor is below its
+`max_jobs` (`effective_max_jobs`: the config value, capped by the plugin's
+`max_jobs_cap`). A capped processor no longer parks a worker on a
+semaphore while other work waits. The configuration is unchanged.
+
 ## Problem
 
 When running `rsconstruct build -j 20`, all processors run with the same parallelism.

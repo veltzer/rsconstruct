@@ -35,6 +35,8 @@ mod processor_cmd;
 mod product;
 #[path = "tests_mod/rsconstructignore.rs"]
 mod rsconstructignore;
+#[path = "tests_mod/scheduler.rs"]
+mod scheduler;
 #[path = "tests_mod/status.rs"]
 mod status;
 #[path = "tests_mod/toml_files.rs"]

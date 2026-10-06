@@ -1,11 +1,11 @@
 use anyhow::{Context, Result};
 use indicatif::ProgressBar;
-use parking_lot::{Condvar, Mutex};
+use parking_lot::{Condvar, Mutex, RwLock};
 use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::Instant;
 
@@ -19,7 +19,7 @@ use crate::stats::{BuildStats, ProductTiming};
 
 use super::{
     Classification, Executor, GraphRefresh, HandlerContext, LevelWork, PreCheckResult,
-    ProductAction, RestoreOutcome, SharedState, WorkItem,
+    ProductAction, ReadyTracker, RestoreOutcome, SharedState, WorkItem,
 };
 
 /// Compute the effective `max_jobs` for a processor instance. The config
@@ -65,35 +65,125 @@ const fn should_batch(batching_enabled: bool, supports_batch: bool, rebuild_coun
     batching_enabled && supports_batch && rebuild_count > 1
 }
 
-/// A simple counting semaphore for limiting per-processor concurrency.
-struct Semaphore {
-    state: Mutex<usize>,
-    condvar: Condvar,
-    max_permits: usize,
+/// One piece of work for a worker: a single product, or a chunk of one
+/// batching processor's products run in one tool invocation.
+enum Unit {
+    Single(WorkItem),
+    Batch {
+        processor: String,
+        items: Vec<WorkItem>,
+    },
 }
 
-impl Semaphore {
-    const fn new(max_permits: usize) -> Self {
+impl Unit {
+    fn processor(&self) -> &str {
+        match self {
+            Self::Single(item) => &item.product.processor,
+            Self::Batch { processor, .. } => processor,
+        }
+    }
+
+    fn product_ids(&self) -> Vec<usize> {
+        match self {
+            Self::Single(item) => vec![item.product_id],
+            Self::Batch { items, .. } => items.iter().map(|i| i.product_id).collect(),
+        }
+    }
+}
+
+/// The units waiting for a worker, and how many each processor has running.
+struct QueueState {
+    units: VecDeque<Unit>,
+    running: HashMap<String, usize>,
+    closed: bool,
+}
+
+/// Work shared by the worker pool. A worker takes the first unit whose
+/// processor is below its `max_jobs` cap, so a capped processor never holds
+/// a worker idle — the semaphores this replaces made a worker that picked
+/// such a product block until a permit freed, while other work waited.
+struct WorkQueue {
+    state: Mutex<QueueState>,
+    changed: Condvar,
+}
+
+impl WorkQueue {
+    fn new() -> Self {
         Self {
-            state: Mutex::new(0),
-            condvar: Condvar::new(),
-            max_permits,
+            state: Mutex::new(QueueState {
+                units: VecDeque::new(),
+                running: HashMap::new(),
+                closed: false,
+            }),
+            changed: Condvar::new(),
         }
     }
 
-    fn acquire(&self) {
-        let mut active = self.state.lock();
-        while *active >= self.max_permits {
-            self.condvar.wait(&mut active);
+    fn push(&self, units: Vec<Unit>) {
+        if units.is_empty() {
+            return;
         }
-        *active += 1;
+        self.state.lock().units.extend(units);
+        self.changed.notify_all();
     }
 
-    fn release(&self) {
-        let mut active = self.state.lock();
-        *active -= 1;
-        drop(active);
-        self.condvar.notify_one();
+    /// Block until a unit can run under `caps`, and return it; `None` once
+    /// the queue is closed.
+    fn pop(&self, caps: &HashMap<String, usize>) -> Option<Unit> {
+        let mut state = self.state.lock();
+        loop {
+            if state.closed {
+                return None;
+            }
+            let runnable = state.units.iter().position(|unit| {
+                caps.get(unit.processor()).is_none_or(|&cap| {
+                    state.running.get(unit.processor()).copied().unwrap_or(0) < cap
+                })
+            });
+            if let Some(index) = runnable {
+                let unit = state.units.remove(index).expect("index from position");
+                *state
+                    .running
+                    .entry(unit.processor().to_string())
+                    .or_insert(0) += 1;
+                return Some(unit);
+            }
+            self.changed.wait(&mut state);
+        }
+    }
+
+    /// A unit of `processor` finished: free its slot under the cap.
+    fn done(&self, processor: &str) {
+        let mut state = self.state.lock();
+        if let Some(n) = state.running.get_mut(processor) {
+            *n -= 1;
+        }
+        drop(state);
+        self.changed.notify_all();
+    }
+
+    /// Wake every worker and make `pop` return `None`; units still queued
+    /// are dropped (the run is over or was stopped).
+    fn close(&self) {
+        self.state.lock().closed = true;
+        self.changed.notify_all();
+    }
+}
+
+/// Reports a unit's products as finished to the coordinator when dropped —
+/// including when the unit panicked, so the coordinator is never left
+/// waiting for products that will not report.
+struct FinishOnDrop<'q> {
+    ids: Vec<usize>,
+    processor: String,
+    queue: &'q WorkQueue,
+    tx: mpsc::Sender<Vec<usize>>,
+}
+
+impl Drop for FinishOnDrop<'_> {
+    fn drop(&mut self) {
+        self.queue.done(&self.processor);
+        let _ = self.tx.send(std::mem::take(&mut self.ids));
     }
 }
 
@@ -184,9 +274,13 @@ struct ProgressCounters {
     current_per_processor: Arc<Mutex<HashMap<String, usize>>>,
 }
 
-/// Common context shared by both batch and non-batch processing threads within a level.
+/// Context shared by every worker for the whole run.
 struct LevelContext<'b> {
-    graph: &'b BuildGraph,
+    /// Read briefly by workers (who owns a path, when caching a creator's
+    /// tree); written by the coordinator when re-analysis adds inputs. A
+    /// worker runs its tool from its own copy of the product, never holding
+    /// this lock.
+    graph: &'b RwLock<BuildGraph>,
     object_store: &'b ObjectStore,
     keep_going: bool,
     timings: bool,
@@ -209,8 +303,8 @@ impl Executor<'_> {
     /// to identical bytes therefore leaves the product skippable, and the
     /// checksum the outputs are cached under is the one the product read.
     ///
-    /// `refresh`, when given, runs after every level (see [`GraphRefresh`]);
-    /// the graph is mutable for its sake.
+    /// `refresh`, when given, runs as products complete (see
+    /// [`GraphRefresh`]); the graph is mutable for its sake.
     pub fn execute(
         &self,
         graph: &mut BuildGraph,
@@ -274,23 +368,30 @@ impl Executor<'_> {
         }
     }
 
-    /// Execute products in parallel where dependencies allow.
-    /// Within each level, batch-supporting processors with multiple items
-    /// are grouped and executed via `execute_batch()` in a single thread.
+    /// Execute products in parallel as their dependencies allow.
+    ///
+    /// A coordinator (this thread) tracks which products are ready —
+    /// every dependency finished — and a pool of exactly `parallel` workers
+    /// runs them. Whenever products become ready, the coordinator prepares
+    /// them together (checksum and policy decision at dispatch, failed
+    /// dependencies, batch grouping) and queues them as units: one product,
+    /// or a chunk of a batching processor's products run in one invocation.
+    /// A finished unit makes its dependents ready at once; nothing waits
+    /// for unrelated products, as a level barrier used to make it.
+    ///
+    /// `-j` is the number of workers, so it caps everything, batch units
+    /// included; a processor's `max_jobs` caps how many of its units run at
+    /// once.
     fn execute_parallel(
         &self,
         graph: &mut BuildGraph,
         order: &[usize],
         object_store: &ObjectStore,
         classification: &Classification,
-        mut refresh: Option<&mut GraphRefresh<'_>>,
+        refresh: Option<&mut GraphRefresh<'_>>,
     ) -> Result<BuildStats> {
         let build_start = Instant::now();
         let keep_going = self.keep_going;
-        // Group products into levels that can run in parallel
-        let mut levels: VecDeque<Vec<usize>> = super::compute_parallel_levels(graph, order).into();
-        // Every product dispatched so far, whatever became of it.
-        let mut dispatched: HashSet<usize> = HashSet::new();
         let predicted: HashMap<usize, ProductAction> = classification
             .products
             .iter()
@@ -333,125 +434,186 @@ impl Executor<'_> {
             global_total,
         };
 
-        // Build per-processor semaphores for max_jobs limits
-        let semaphores: HashMap<String, Arc<Semaphore>> = self
+        // max_jobs caps, enforced by the queue when it hands out units.
+        let caps: HashMap<String, usize> = self
             .processors
             .iter()
             .filter_map(|(name, proc)| {
-                effective_max_jobs(name, proc.as_ref())
-                    .map(|max| (name.clone(), Arc::new(Semaphore::new(max))))
+                effective_max_jobs(name, proc.as_ref()).map(|max| (name.clone(), max))
             })
             .collect();
 
-        while let Some(level) = levels.pop_front() {
-            // Check for Ctrl+C before starting next level
-            if self.is_interrupted() {
-                break;
-            }
-            let graph_ref: &BuildGraph = graph;
+        // The graph goes behind a lock for the run (see LevelContext::graph)
+        // and comes back afterwards.
+        let graph_lock = RwLock::new(std::mem::take(graph));
+        let queue = WorkQueue::new();
+        let (tx, rx) = mpsc::channel::<Vec<usize>>();
+        let lctx = LevelContext {
+            graph: &graph_lock,
+            object_store,
+            keep_going,
+            timings: self.timings,
+            shared: &shared,
+            pb: &pb,
+            build_start,
+            predicted: &predicted,
+        };
 
-            let LevelWork {
-                batch_groups,
-                non_batch_items,
-            } = self.prepare_level_work(graph_ref, &level, object_store, &shared);
-
-            let lctx = LevelContext {
-                graph: graph_ref,
-                object_store,
-                keep_going,
-                timings: self.timings,
-                shared: &shared,
-                pb: &pb,
-                build_start,
-                predicted: &predicted,
-            };
-
-            // Process this level in parallel using thread pool
-            thread::scope(|s| {
-                let lctx_ref = &lctx;
-                let semaphores_ref = &semaphores;
-
-                // Spawn one thread per batch group
-                for (proc_name, items) in &batch_groups {
-                    s.spawn(move || {
-                        self.process_batch_group(proc_name, items, lctx_ref, semaphores_ref);
-                    });
-                }
-
-                // Spawn threads for non-batch items (chunked across threads)
-                if !non_batch_items.is_empty() {
-                    let chunk_size = non_batch_items.len().div_ceil(self.parallel.max(1));
-
-                    for chunk in non_batch_items.chunks(chunk_size.max(1)) {
-                        let total_ref = Arc::clone(&counters.total_per_processor);
-                        let current_ref = Arc::clone(&counters.current_per_processor);
-
-                        s.spawn(move || {
-                            self.process_non_batch_chunk(
-                                chunk,
-                                lctx_ref,
-                                &total_ref,
-                                &current_ref,
-                                semaphores_ref,
-                            );
-                        });
+        let result = thread::scope(|s| -> Result<()> {
+            let tx = tx;
+            for _ in 0..self.parallel.max(1) {
+                let tx = tx.clone();
+                let (queue, caps, lctx, counters) = (&queue, &caps, &lctx, &counters);
+                s.spawn(move || {
+                    while let Some(unit) = queue.pop(caps) {
+                        let _finished = FinishOnDrop {
+                            ids: unit.product_ids(),
+                            processor: unit.processor().to_string(),
+                            queue,
+                            tx: tx.clone(),
+                        };
+                        self.run_unit(unit, lctx, counters);
                     }
+                });
+            }
+            // Only the workers hold senders now: if they all exit, the
+            // coordinator's receive fails instead of waiting forever.
+            drop(tx);
+            let outcome = self.coordinate(&graph_lock, &queue, &rx, object_store, &shared, refresh);
+            // Release the workers whatever happened, or the scope never ends.
+            queue.close();
+            outcome
+        });
+        *graph = graph_lock.into_inner();
+
+        pb.finish_and_clear();
+        if self.is_interrupted() {
+            crate::output::info(&color::yellow("Interrupted, saving progress..."));
+        }
+        result?;
+        Self::collect_build_stats(shared, keep_going, self.is_interrupted())
+    }
+
+    /// The coordinator loop: hand ready products to the workers, record
+    /// what they finish, and re-analyze as products complete. Returns when
+    /// nothing is running and nothing is ready — every product ran, or the
+    /// build stopped (an error without `--keep-going`, or Ctrl+C) and the
+    /// running products drained.
+    fn coordinate(
+        &self,
+        graph: &RwLock<BuildGraph>,
+        queue: &WorkQueue,
+        finished: &mpsc::Receiver<Vec<usize>>,
+        object_store: &ObjectStore,
+        shared: &SharedState,
+        mut refresh: Option<&mut GraphRefresh<'_>>,
+    ) -> Result<()> {
+        let mut tracker = ReadyTracker::new(&graph.read());
+        loop {
+            let stopping =
+                self.is_interrupted() || (!self.keep_going && !shared.errors.lock().is_empty());
+            if !stopping {
+                let wave = tracker.take_ready();
+                if !wave.is_empty() {
+                    let work = self.prepare_level_work(&graph.read(), &wave, object_store, shared);
+                    let units = self.units_of(work);
+                    let queued: HashSet<usize> = units.iter().flat_map(Unit::product_ids).collect();
+                    // Products prepare settled without running — a failed
+                    // dependency, an unreadable input — are finished now,
+                    // which may make more products ready.
+                    let g = graph.read();
+                    for &id in wave.iter().filter(|id| !queued.contains(id)) {
+                        tracker.finish(&g, id);
+                    }
+                    drop(g);
+                    queue.push(units);
+                    continue;
                 }
-            });
-
-            // If interrupted, stop processing further levels
-            if self.is_interrupted() {
-                crate::output::info(&color::yellow("Interrupted, saving progress..."));
-                break;
+            }
+            if tracker.in_flight == 0 {
+                return Ok(());
             }
 
-            // In non-keep-going mode, stop after level with errors
-            if !keep_going && !shared.errors.lock().is_empty() {
-                break;
+            // Wait for a unit to finish, then take every other report that
+            // is already in.
+            let mut done = finished
+                .recv()
+                .context("internal error: every worker exited with products in flight")?;
+            while let Ok(more) = finished.try_recv() {
+                done.extend(more);
             }
+            let g = graph.read();
+            for id in done {
+                tracker.finish(&g, id);
+            }
+            drop(g);
 
-            dispatched.extend(level.iter().copied());
+            // Re-analysis of what the finished products regenerated, before
+            // anything they feed is dispatched.
             let changed = std::mem::take(&mut *shared.changed.lock());
             if let Some(refresh) = refresh.as_deref_mut()
                 && !changed.is_empty()
             {
-                match Self::refresh_graph(graph, refresh, &changed, &dispatched) {
-                    Ok(Some(replanned)) => levels = replanned,
-                    Ok(None) => {}
-                    Err(e) => {
-                        pb.finish_and_clear();
-                        return Err(e);
-                    }
+                let mut g = graph.write();
+                if refresh(&mut g, &changed).context("Failed to re-analyze regenerated sources")? {
+                    // A new input may be the output of a product that has
+                    // not run, which must now run first.
+                    g.resolve_dependencies();
+                    g.topological_sort()?;
+                    tracker.recount(&g);
                 }
             }
         }
-
-        pb.finish_and_clear();
-        Self::collect_build_stats(shared, keep_going, self.is_interrupted())
     }
 
-    /// Run the refresh hook for the products that just built or restored.
-    /// When it changed the graph, re-link it and return the levels for the
-    /// products not dispatched yet — a new input may be the output of one of
-    /// them, which must now run first.
-    fn refresh_graph(
-        graph: &mut BuildGraph,
-        refresh: &mut GraphRefresh<'_>,
-        changed: &[usize],
-        dispatched: &HashSet<usize>,
-    ) -> Result<Option<VecDeque<Vec<usize>>>> {
-        if !refresh(graph, changed).context("Failed to re-analyze regenerated sources")? {
-            return Ok(None);
+    /// Turn a prepared wave into units: each batch group's products that
+    /// will run the tool become chunks of at most `batch_size` (run in
+    /// parallel with each other, not one after another), and everything
+    /// else — non-batching processors, and batching processors' products
+    /// that skip or restore — becomes one unit per product.
+    fn units_of(&self, work: LevelWork) -> Vec<Unit> {
+        let LevelWork {
+            batch_groups,
+            non_batch_items,
+        } = work;
+        let mut units: Vec<Unit> = non_batch_items.into_iter().map(Unit::Single).collect();
+        let mut groups: Vec<(String, Vec<WorkItem>)> = batch_groups.into_iter().collect();
+        groups.sort_by(|a, b| a.0.cmp(&b.0));
+        for (processor, items) in groups {
+            let (to_run, settled): (Vec<WorkItem>, Vec<WorkItem>) = items
+                .into_iter()
+                .partition(|item| item.action == ProductAction::Build);
+            units.extend(settled.into_iter().map(Unit::Single));
+            let chunk_size = batch_chunk_size(
+                self.batch_size
+                    .expect("batch groups only form when batching is enabled"),
+                to_run.len(),
+            );
+            let mut to_run = to_run.into_iter().peekable();
+            while to_run.peek().is_some() {
+                let chunk: Vec<WorkItem> = to_run.by_ref().take(chunk_size).collect();
+                units.push(Unit::Batch {
+                    processor: processor.clone(),
+                    items: chunk,
+                });
+            }
         }
-        graph.resolve_dependencies();
-        let remaining: Vec<usize> = graph
-            .topological_sort()?
-            .into_iter()
-            .filter(|id| !dispatched.contains(id))
-            .collect();
-        Ok(Some(
-            super::compute_parallel_levels(graph, &remaining).into(),
-        ))
+        units
+    }
+
+    /// Run one unit on a worker.
+    fn run_unit(&self, unit: Unit, lctx: &LevelContext, counters: &ProgressCounters) {
+        match unit {
+            Unit::Single(item) => self.process_non_batch_chunk(
+                std::slice::from_ref(&item),
+                lctx,
+                &counters.total_per_processor,
+                &counters.current_per_processor,
+            ),
+            Unit::Batch { processor, items } => {
+                self.process_batch_group(&processor, &items, lctx);
+            }
+        }
     }
 
     /// Pre-check a work item: handle explain, skip-if-unchanged, and cache restore.
@@ -465,10 +627,7 @@ impl Executor<'_> {
         lctx: &LevelContext,
         emit_fail_event: bool,
     ) -> PreCheckResult {
-        let product = lctx
-            .graph
-            .get_product(item.product_id)
-            .expect(errors::INVALID_PRODUCT_ID);
+        let product = &item.product;
 
         if self.explain {
             let action = self.policy.explain(
@@ -511,14 +670,9 @@ impl Executor<'_> {
         }
     }
 
-    /// Process a single batch group within a thread.
-    fn process_batch_group(
-        &self,
-        proc_name: &str,
-        items: &[WorkItem],
-        lctx: &LevelContext,
-        semaphores: &HashMap<String, Arc<Semaphore>>,
-    ) {
+    /// Process one batch unit: a chunk of a batching processor's products,
+    /// run in one invocation of its tool.
+    fn process_batch_group(&self, proc_name: &str, items: &[WorkItem], lctx: &LevelContext) {
         if self.is_interrupted() {
             return;
         }
@@ -558,14 +712,8 @@ impl Executor<'_> {
             }
 
             // Execute batch chunk
-            let product_refs: Vec<&crate::graph::Product> = chunk
-                .iter()
-                .map(|item| {
-                    lctx.graph
-                        .get_product(item.product_id)
-                        .expect(errors::INVALID_PRODUCT_ID)
-                })
-                .collect();
+            let product_refs: Vec<&crate::graph::Product> =
+                chunk.iter().map(|item| &item.product).collect();
 
             proc_current += chunk.len();
             if self.verbose {
@@ -599,12 +747,6 @@ impl Executor<'_> {
                 json_output::emit_product_start(&self.product_display(p), &p.processor);
             }
 
-            // Honor the per-processor max_jobs semaphore around the tool
-            // invocation, matching the non-batch path.
-            let semaphore = semaphores.get(proc_name);
-            if let Some(sem) = semaphore {
-                sem.acquire();
-            }
             let batch_start = Instant::now();
 
             // Retry: the first attempt covers the whole chunk; each retry
@@ -666,18 +808,12 @@ impl Executor<'_> {
             }
             crate::processor::set_declared_tools(None);
             let batch_duration = batch_start.elapsed();
-            if let Some(sem) = semaphore {
-                sem.release();
-            }
 
             // Process per-product results
             for (item, result) in chunk.iter().zip(final_results) {
                 let result =
                     result.expect("the retry loop records a final result for every product");
-                let product = lctx
-                    .graph
-                    .get_product(item.product_id)
-                    .expect(errors::INVALID_PRODUCT_ID);
+                let product = &item.product;
 
                 let ctx = HandlerContext {
                     product,
@@ -716,14 +852,13 @@ impl Executor<'_> {
         }
     }
 
-    /// Process a chunk of non-batch work items within a thread.
+    /// Process non-batch work items, one after another.
     fn process_non_batch_chunk(
         &self,
         chunk: &[WorkItem],
         lctx: &LevelContext,
         total_per_processor: &HashMap<String, usize>,
         current_per_processor: &Mutex<HashMap<String, usize>>,
-        semaphores: &HashMap<String, Arc<Semaphore>>,
     ) {
         for item in chunk {
             // Stop if interrupted or if there's an error (non-keep-going mode)
@@ -732,22 +867,13 @@ impl Executor<'_> {
                 break;
             }
 
-            let product = lctx
-                .graph
-                .get_product(item.product_id)
-                .expect(errors::INVALID_PRODUCT_ID);
+            let product = &item.product;
 
             if matches!(
                 self.try_skip_or_restore(item, &product.processor, lctx, true),
                 PreCheckResult::Handled
             ) {
                 continue;
-            }
-
-            // Acquire per-processor semaphore permit if max_jobs is set
-            let semaphore = semaphores.get(&product.processor);
-            if let Some(sem) = semaphore {
-                sem.acquire();
             }
 
             if let Some(processor) = self.processors.get(&product.processor) {
@@ -886,11 +1012,6 @@ impl Executor<'_> {
                 }
                 crate::processor::set_declared_tools(None);
                 Self::inc_progress(lctx.pb, lctx.shared);
-            }
-
-            // Release per-processor semaphore permit
-            if let Some(sem) = semaphore {
-                sem.release();
             }
         }
     }
@@ -1045,6 +1166,7 @@ impl Executor<'_> {
                 );
                 work_items.push(WorkItem {
                     product_id: id,
+                    product: product.clone(),
                     input_checksum,
                     action,
                 });

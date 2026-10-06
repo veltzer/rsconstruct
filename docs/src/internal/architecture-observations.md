@@ -352,8 +352,8 @@ Likely a small refactor, but requires aligning on the output shape.
 
 A read-through of the build pipeline end to end (driver, graph, discovery,
 analyzers, deps cache, executor, checksums, object store). R1–R5 were
-correctness defects and are fixed, as are R9 and R10; R8 is partly fixed;
-R6, R7 and the remaining minor items are open.
+correctness defects and are fixed, as are R6, R7, R9 and R10; R8 is partly
+fixed; the remaining minor items are open.
 
 ### R1. Two decisions per product, only one of them the policy's — RESOLVED
 
@@ -421,19 +421,28 @@ declared inputs and re-analyzed in graph-time order. The executor then
 re-links and re-plans the remaining levels. The analyzer trait shrank to
 `scan()`; iteration, caching and graph updates live in the framework.
 
-### R6. Levels are barriers (open)
+### R6. Levels were barriers — RESOLVED
 
-`execute_parallel` runs level by level; one slow product holds up the whole
-next level. A ready-queue scheduler would dispatch each product the moment
-its dependencies finish — and is where R5's re-planning would naturally
-live.
+`execute_parallel` ran level by level; one slow product held up the whole
+next level. **Fix:** a ready-queue scheduler. `ReadyTracker` counts each
+product's unfinished dependencies; the coordinator thread prepares every
+product the moment that count reaches zero and queues it for a pool of
+workers. R5's re-analysis runs between completions; when it adds edges the
+tracker recounts which products are ready. Test:
+`a_product_does_not_wait_for_unrelated_products` deadlocks (and times out)
+under the old executor.
 
-### R7. Work is split statically; `-j` is not a global cap (open)
+### R7. Work was split statically; `-j` was not a global cap — RESOLVED
 
-Non-batch items are cut into `parallel` fixed chunks up front (no load
-balancing, and a chunk blocked on a `max_jobs` semaphore stalls the rest of
-it). Each batch group adds a thread on top of those, and a batching
-processor runs its chunks serially.
+Non-batch items were cut into `parallel` fixed chunks up front (no load
+balancing, and a chunk blocked on a `max_jobs` semaphore stalled the rest
+of it). Each batch group added a thread on top of those, and a batching
+processor ran its chunks serially. **Fix:** exactly `-j` workers take units
+from one queue — a single product, or a chunk of at most `batch_size` of
+one batching processor's products, chunks running in parallel. A worker
+takes the first unit whose processor is under its `max_jobs` cap, so a
+capped processor never parks a worker; the semaphores are gone. Test:
+`jobs_cap_every_invocation_and_max_jobs_caps_a_processor`.
 
 ### R8. Discovery re-ran every processor on every pass — PARTIALLY RESOLVED
 

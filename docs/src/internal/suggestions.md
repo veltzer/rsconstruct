@@ -9,22 +9,6 @@ Grades:
 
 ## Build Execution
 
-### Ready-queue scheduler
-- Dispatch each product the moment its last dependency finishes, from one
-  pool of exactly `-j` workers, instead of running the graph level by level.
-- Today (`execute_parallel`): a level is a barrier, so one slow product holds
-  up every product in the next level even when their own dependencies are
-  long done; each level's items are cut into `parallel` fixed chunks up front
-  (no load balancing, and a chunk blocked on a `max_jobs` semaphore stalls
-  the rest of it); every batch group gets a thread on top of those, so `-j`
-  is not a real cap; and a batching processor runs its chunks serially.
-- Bazel and Buck2 schedule this way; it is the largest remaining
-  performance gap with them. The mid-build re-planning added for
-  re-analysis (`GraphRefresh`, R5) becomes simpler too: new edges just
-  delay a product that is not yet ready.
-- See R6/R7 in [Architecture Observations](architecture-observations.md).
-- **Urgency**: high | **Complexity**: medium
-
 ### Distributed builds
 - Run builds across multiple machines, similar to distcc or icecream for C/C++.
 - A coordinator node distributes work to worker nodes, each running rsconstruct in worker mode.

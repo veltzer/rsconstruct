@@ -7,7 +7,7 @@ pub use policy::{BuildPolicy, IncrementalPolicy, ProductAction};
 use anyhow::Result;
 use indicatif::ProgressBar;
 use parking_lot::Mutex;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -37,9 +37,13 @@ enum RestoreOutcome {
     NotRestorable,
 }
 
-/// A work item representing a product to be processed in a build level.
+/// A product dispatched to a worker.
 struct WorkItem {
     product_id: usize,
+    /// The product as it was when dispatched. A worker runs from this copy
+    /// and does not hold the graph while the tool runs, so re-analysis can
+    /// update products that have not been dispatched yet in the meantime.
+    product: crate::graph::Product,
     /// Taken when the product is dispatched — after every upstream product
     /// ran — and the key its outputs are cached under (see `handle_success`).
     input_checksum: String,
@@ -48,12 +52,12 @@ struct WorkItem {
     action: ProductAction,
 }
 
-/// Called by the executor after each level with the products that built or
-/// restored in it, before the next level is dispatched. It may grow the
-/// inputs of products that have not run yet — re-analysis of a source one
-/// of those products regenerated — and returns whether the graph changed,
-/// in which case the executor re-links it and re-plans the remaining
-/// levels.
+/// Called by the executor as products complete, with the products that
+/// built or restored since the last call, before any product they feed is
+/// dispatched. It may grow the inputs of products that have not run yet —
+/// re-analysis of a source one of those products regenerated — and returns
+/// whether the graph changed, in which case the executor re-links it and
+/// recounts which products are ready.
 pub type GraphRefresh<'r> = dyn FnMut(&mut BuildGraph, &[usize]) -> Result<bool> + 'r;
 
 /// Context passed to handler methods for a single product operation.
@@ -68,7 +72,8 @@ struct HandlerContext<'b> {
     pb: &'b ProgressBar,
 }
 
-/// Prepared work for a single dependency level, split into batch and non-batch items.
+/// Prepared work for one wave of products that became ready together,
+/// split into batch and non-batch items.
 struct LevelWork {
     batch_groups: HashMap<String, Vec<WorkItem>>,
     non_batch_items: Vec<WorkItem>,
@@ -343,61 +348,179 @@ pub fn has_failed_dependency(graph: &BuildGraph, id: usize, failed: &HashSet<usi
     false
 }
 
-/// Compute levels of products that can be executed in parallel
-/// Products in the same level have no dependencies on each other
+/// Where a product is in the run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProductState {
+    /// Some dependency has not finished.
+    Waiting,
+    /// Handed out by [`ReadyTracker::take_ready`]; not finished yet.
+    Dispatched,
+    /// Finished, whatever the outcome.
+    Done,
+}
+
+/// Which products may run now: each product's count of unfinished
+/// dependencies, and the products whose count reached zero.
 ///
-/// `order` is a topological order of the products to schedule. Dependencies
-/// outside it (products that already ran, when the remaining levels are
-/// re-planned mid-build) count as satisfied.
-pub fn compute_parallel_levels(graph: &BuildGraph, order: &[usize]) -> Vec<Vec<usize>> {
-    let mut levels: Vec<Vec<usize>> = Vec::new();
-    let mut product_level: HashMap<usize, usize> = HashMap::new();
+/// This replaces scheduling by levels. A product is ready the moment its
+/// last dependency finishes, not when everything in an earlier level has —
+/// a level was a barrier, and one slow product held up the whole next one.
+struct ReadyTracker {
+    unfinished_deps: Vec<usize>,
+    state: Vec<ProductState>,
+    /// Ready, not yet handed out. Ordered by product id, so a single worker
+    /// runs products in a stable order.
+    ready: BTreeSet<usize>,
+    /// Handed out and not yet finished.
+    in_flight: usize,
+}
 
-    for &id in order {
-        // This product goes in the next level after its latest scheduled
-        // dependency, or first when none of them is scheduled.
-        let my_level = graph
-            .get_dependencies(id)
-            .iter()
-            .filter_map(|dep_id| product_level.get(dep_id))
-            .max()
-            .map_or(0, |level| level + 1);
-
-        product_level.insert(id, my_level);
-
-        // Ensure we have enough levels
-        while levels.len() <= my_level {
-            levels.push(Vec::new());
-        }
-        levels[my_level].push(id);
+impl ReadyTracker {
+    fn new(graph: &BuildGraph) -> Self {
+        let count = graph.products().len();
+        let mut tracker = Self {
+            unfinished_deps: vec![0; count],
+            state: vec![ProductState::Waiting; count],
+            ready: BTreeSet::new(),
+            in_flight: 0,
+        };
+        tracker.recount(graph);
+        tracker
     }
 
-    levels
+    /// Recompute every waiting product's count from the graph — after the
+    /// graph gained edges mid-build (re-analysis), a product that looked
+    /// ready may now wait for a product that has not run.
+    fn recount(&mut self, graph: &BuildGraph) {
+        self.ready.clear();
+        for id in 0..self.state.len() {
+            if self.state[id] != ProductState::Waiting {
+                continue;
+            }
+            self.unfinished_deps[id] = graph
+                .get_dependencies(id)
+                .iter()
+                .filter(|&&dep| self.state[dep] != ProductState::Done)
+                .count();
+            if self.unfinished_deps[id] == 0 {
+                self.ready.insert(id);
+            }
+        }
+    }
+
+    /// Hand out every ready product.
+    fn take_ready(&mut self) -> Vec<usize> {
+        let ready: Vec<usize> = std::mem::take(&mut self.ready).into_iter().collect();
+        for &id in &ready {
+            self.state[id] = ProductState::Dispatched;
+        }
+        self.in_flight += ready.len();
+        ready
+    }
+
+    /// Record that a handed-out product finished; its dependents with no
+    /// unfinished dependency left become ready.
+    fn finish(&mut self, graph: &BuildGraph, id: usize) {
+        debug_assert_eq!(self.state[id], ProductState::Dispatched);
+        self.state[id] = ProductState::Done;
+        self.in_flight -= 1;
+        for &dependent in graph.get_dependents(id) {
+            if self.state[dependent] == ProductState::Waiting {
+                self.unfinished_deps[dependent] -= 1;
+                if self.unfinished_deps[dependent] == 0 {
+                    self.ready.insert(dependent);
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Re-planning mid-build schedules only the products not yet dispatched;
-    /// a dependency outside that set already ran and holds nothing back.
+    /// A product is ready the moment its own dependencies finish, whatever
+    /// else is still running: in a diamond plus a slow independent chain,
+    /// `left` and `right` become ready as soon as `top` finishes, while
+    /// `slow` is still in flight — no level barrier.
     #[test]
-    fn parallel_levels_treat_unscheduled_dependencies_as_done() {
+    fn ready_tracker_releases_dependents_without_a_barrier() {
         let mut g = BuildGraph::new();
-        let a = g
+        let top = g
             .add_product(vec!["a.src".into()], vec!["a.o".into()], "cc", None)
             .unwrap();
-        let b = g
+        let left = g
             .add_product(vec!["a.o".into()], vec!["b.o".into()], "cc", None)
             .unwrap();
-        let c = g
-            .add_product(vec!["b.o".into()], vec!["c.o".into()], "cc", None)
+        let right = g
+            .add_product(vec!["a.o".into()], vec!["c.o".into()], "cc", None)
+            .unwrap();
+        let bottom = g
+            .add_product(
+                vec!["b.o".into(), "c.o".into()],
+                vec!["d.o".into()],
+                "cc",
+                None,
+            )
+            .unwrap();
+        let slow = g
+            .add_product(vec!["x.src".into()], vec!["x.o".into()], "cc", None)
             .unwrap();
         g.resolve_dependencies();
 
-        let levels = compute_parallel_levels(&g, &[b, c]);
-        assert_eq!(levels, vec![vec![b], vec![c]], "a already ran");
-        assert_eq!(compute_parallel_levels(&g, &[a, b, c]).len(), 3);
+        let mut tracker = ReadyTracker::new(&g);
+        assert_eq!(tracker.take_ready(), vec![top, slow]);
+        tracker.finish(&g, top);
+        assert_eq!(tracker.take_ready(), vec![left, right], "slow still runs");
+        tracker.finish(&g, left);
+        assert_eq!(
+            tracker.take_ready(),
+            Vec::<usize>::new(),
+            "bottom needs right"
+        );
+        tracker.finish(&g, right);
+        assert_eq!(tracker.take_ready(), vec![bottom]);
+        tracker.finish(&g, bottom);
+        assert_eq!(tracker.in_flight, 1, "slow is still in flight");
+        tracker.finish(&g, slow);
+        assert_eq!(tracker.in_flight, 0);
+        assert_eq!(tracker.take_ready(), Vec::<usize>::new());
+    }
+
+    /// Edges added mid-build (re-analysis found a generated input) make a
+    /// ready product wait again for a producer that has not run.
+    #[test]
+    fn ready_tracker_recount_respects_new_edges() {
+        let mut g = BuildGraph::new();
+        let producer = g
+            .add_product(vec!["gen.src".into()], vec!["gen.h".into()], "gen", None)
+            .unwrap();
+        let blocker = g
+            .add_product(vec!["b.src".into()], vec!["b.o".into()], "cc", None)
+            .unwrap();
+        let consumer = g
+            .add_product(vec!["main.c".into()], vec!["main.o".into()], "cc", None)
+            .unwrap();
+        g.resolve_dependencies();
+
+        // All three are ready while nothing links them.
+        let mut tracker = ReadyTracker::new(&g);
+        assert_eq!(
+            tracker.ready.iter().copied().collect::<Vec<_>>(),
+            vec![producer, blocker, consumer]
+        );
+
+        // Re-analysis finds that the consumer reads the producer's output.
+        g.add_inputs(consumer, &["gen.h".into()]);
+        g.resolve_dependencies();
+        tracker.recount(&g);
+        assert_eq!(
+            tracker.take_ready(),
+            vec![producer, blocker],
+            "consumer waits for gen.h"
+        );
+        tracker.finish(&g, producer);
+        assert_eq!(tracker.take_ready(), vec![consumer]);
     }
 
     /// The up-front prediction is pessimistic downstream of a change: a
@@ -459,57 +582,10 @@ mod tests {
         );
     }
 
-    /// A diamond top → {left, right} → bottom must schedule as three levels
-    /// with left and right side by side; an independent node always lands in
-    /// level 0.
+    /// Every product is handed out exactly once — a dropped product would
+    /// silently never build.
     #[test]
-    fn parallel_levels_diamond() {
-        let mut graph = BuildGraph::new();
-        let top = graph
-            .add_product(vec!["a.src".into()], vec!["a.o".into()], "cc", None)
-            .unwrap();
-        let left = graph
-            .add_product(vec!["a.o".into()], vec!["b.o".into()], "cc", None)
-            .unwrap();
-        let right = graph
-            .add_product(vec!["a.o".into()], vec!["c.o".into()], "cc", None)
-            .unwrap();
-        let bottom = graph
-            .add_product(
-                vec!["b.o".into(), "c.o".into()],
-                vec!["d.o".into()],
-                "cc",
-                None,
-            )
-            .unwrap();
-        let lone = graph
-            .add_product(vec!["x.src".into()], vec!["x.o".into()], "cc", None)
-            .unwrap();
-        graph.resolve_dependencies();
-        let order = graph.topological_sort().unwrap();
-
-        let levels = compute_parallel_levels(&graph, &order);
-
-        // Level membership is order-independent; compare as sorted sets.
-        let sorted = |mut ids: Vec<usize>| {
-            ids.sort_unstable();
-            ids
-        };
-
-        assert_eq!(
-            levels.len(),
-            3,
-            "diamond plus a free node is three levels: {levels:?}"
-        );
-        assert_eq!(sorted(levels[0].clone()), sorted(vec![top, lone]));
-        assert_eq!(sorted(levels[1].clone()), sorted(vec![left, right]));
-        assert_eq!(levels[2], vec![bottom]);
-    }
-
-    /// Every product must appear in exactly one level — a dropped product
-    /// would silently never build.
-    #[test]
-    fn parallel_levels_cover_all_products() {
+    fn ready_tracker_hands_out_every_product_once() {
         let mut g = BuildGraph::new();
         g.add_product(vec!["a.src".into()], vec!["a.o".into()], "cc", None)
             .unwrap();
@@ -518,16 +594,26 @@ mod tests {
         g.add_product(vec!["free.src".into()], vec!["free.o".into()], "cc", None)
             .unwrap();
         g.resolve_dependencies();
-        let order = g.topological_sort().unwrap();
 
-        let levels = compute_parallel_levels(&g, &order);
-        let mut all: Vec<usize> = levels.into_iter().flatten().collect();
-        all.sort_unstable();
-        assert_eq!(all, vec![0, 1, 2]);
+        let mut tracker = ReadyTracker::new(&g);
+        let mut handed_out: Vec<usize> = Vec::new();
+        loop {
+            let wave = tracker.take_ready();
+            if wave.is_empty() {
+                break;
+            }
+            for &id in &wave {
+                tracker.finish(&g, id);
+            }
+            handed_out.extend(wave);
+        }
+        handed_out.sort_unstable();
+        assert_eq!(handed_out, vec![0, 1, 2]);
     }
 
     /// Only direct dependencies count as failed here — transitive failure
-    /// propagation happens level by level as each product is marked failed.
+    /// propagates as each skipped product is itself marked failed before its
+    /// dependents are dispatched.
     #[test]
     fn failed_dependency_is_direct_only() {
         let mut g = BuildGraph::new();

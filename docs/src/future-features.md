@@ -17,7 +17,8 @@ caching — share build artifacts across machines", but only the push path works
 this feature is what makes that claim true.
 
 ### Remote / distributed execution
-The graph already computes parallel levels and per-processor concurrency.
+The executor already schedules products as their dependencies finish, with
+per-processor concurrency caps.
 Extending the executor to dispatch products to remote workers (gRPC/SSH) would
 turn rsconstruct into a Bazel-lite for polyglot projects.
 

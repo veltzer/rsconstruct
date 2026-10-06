@@ -16,6 +16,7 @@ Items from `suggestions.md` that have been implemented.
 - **Emit `ProductStart` JSON events** — Emitted before each product starts executing, pairs with `ProductComplete` for per-product timing.
 - **mypy processor** — Python type checking with mypy. Batch-capable. Auto-detects `mypy.ini` as extra input.
 - **Explain commands** — `--explain` flag shows skip/restore/rebuild reasons for each product during build.
+- **Ready-queue scheduler** — Products run the moment their own dependencies finish, from a pool of exactly `-j` workers, instead of level by level. Batch chunks run in parallel and count against `-j`; `max_jobs` is enforced by the queue instead of semaphores. See R6/R7 in [Architecture Observations](architecture-observations.md).
 
 ## Completed Code Consolidation
 

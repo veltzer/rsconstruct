@@ -814,6 +814,14 @@ impl BuildGraph {
         }
     }
 
+    /// Get the products that depend on a product (inverse of
+    /// [`get_dependencies`](Self::get_dependencies)).
+    pub fn get_dependents(&self, id: usize) -> &[usize] {
+        self.dependents
+            .get(id)
+            .expect(crate::errors::INVALID_PRODUCT_ID)
+    }
+
     /// Get dependencies of a product (products that must be built before this one)
     pub fn get_dependencies(&self, id: usize) -> &[usize] {
         self.dependencies
