@@ -86,6 +86,30 @@ it does **not** cover a connection reset during handshake, which is exit
 code 35 and precisely the case this policy addresses. Without those two
 flags the retry count would have made no difference to the incident above.
 
+## Rate limits are fixed by authenticating, not by retrying
+
+A rate limit is not a connection failure: GitHub answers 429 (or 403 on the
+API) to anonymous requests per source IP, and hosted runners share egress
+IPs, so another job may have spent the budget before ours starts. Retrying
+within seconds hits the same exhausted budget. CI run 37439740429 failed
+exactly so, fetching `checkpatch.pl` from `raw.githubusercontent.com`
+after all three retries.
+
+The remedy is the account's own, much larger, limit. When `GITHUB_TOKEN`
+or `GH_TOKEN` is set (the CI workflow forwards `GITHUB_TOKEN` to the
+install step), `curl_argv` authenticates downloads from
+`raw.githubusercontent.com`:
+
+```
+--variable %GITHUB_TOKEN --expand-header 'Authorization: Bearer {{GITHUB_TOKEN}}'
+```
+
+curl reads the token from the environment itself (curl 8.3+), so argv —
+printed by `tool install -i` and visible in `ps` — names the variable and
+never holds the secret. Other hosts get no header. The releases API lookup
+(`tools::resolve_latest_deb_asset`) is authenticated the same way, from the
+same variable choice (`download::github_token_var`).
+
 ## Adding a new download
 
 1. **Downloading a URL to a file?** Use `curl_argv`. Do not write a `curl`

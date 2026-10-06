@@ -54,10 +54,64 @@ const fn retry_args() -> [&'static str; 8] {
 /// terminal so `sudo` can prompt) and separately renders them for
 /// `--dry-run` preview. Both paths must show and run the same flags.
 pub fn curl_argv(url: &str, dest: &str) -> Vec<String> {
+    curl_argv_with_token_var(url, dest, github_token_var())
+}
+
+/// [`curl_argv`] with the token variable passed in, so tests need not
+/// touch the process environment.
+///
+/// Downloads from `raw.githubusercontent.com` are authenticated when a
+/// GitHub token is set. Anonymous requests there are rate-limited per
+/// source IP, and GitHub-hosted runners share egress IPs, so a busy pool
+/// gets HTTP 429 no matter how often it retries (CI run 37439740429,
+/// fetching `checkpatch.pl`). It is the same limit, and the same remedy,
+/// as the releases API (see `tools::resolve_latest_deb_asset`).
+///
+/// The token never appears in argv: `--variable %NAME` has curl read it
+/// from the environment and `--expand-header` substitutes it, so argv —
+/// which `tool install --dry-run` prints and `ps` shows — carries only the
+/// variable's name. (Both flags need curl 8.3 or later.) Other hosts get no
+/// header; curl drops it on a redirect to another host anyway.
+fn curl_argv_with_token_var(url: &str, dest: &str, token_var: Option<&str>) -> Vec<String> {
     let mut argv = vec!["curl".to_string(), "-fsSL".to_string()];
     argv.extend(retry_args().iter().map(|s| (*s).to_string()));
+    if let Some(var) = token_var
+        && url.starts_with("https://raw.githubusercontent.com/")
+    {
+        argv.extend([
+            "--variable".to_string(),
+            format!("%{var}"),
+            "--expand-header".to_string(),
+            format!("Authorization: Bearer {{{{{var}}}}}"),
+        ]);
+    }
     argv.extend(["-o".to_string(), dest.to_string(), url.to_string()]);
     argv
+}
+
+/// The environment variable holding a GitHub token, if one is set.
+///
+/// `GITHUB_TOKEN` is the name Actions uses and `GH_TOKEN` the one the `gh`
+/// CLI uses; accepting both means the same binary is authenticated on a
+/// runner and on a developer machine that has `gh` set up, with no extra
+/// configuration in either place. An empty value is treated as unset —
+/// `env: GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}` expands to the empty
+/// string rather than disappearing when the secret is unavailable, and
+/// sending `Bearer ` with no token earns a 401 instead of the anonymous
+/// access that would otherwise still work.
+pub fn github_token_var() -> Option<&'static str> {
+    github_token_var_from(|name| std::env::var(name).ok())
+}
+
+/// The variable-selection half of [`github_token_var`], split out so it can
+/// be tested without mutating the process environment — `set_var` is
+/// global state and the test harness runs threads in parallel.
+fn github_token_var_from(lookup: impl Fn(&str) -> Option<String>) -> Option<&'static str> {
+    // The emptiness filter is inside find, not after it: an empty
+    // GITHUB_TOKEN must fall through to GH_TOKEN rather than mask it.
+    ["GITHUB_TOKEN", "GH_TOKEN"]
+        .into_iter()
+        .find(|name| lookup(name).is_some_and(|token| !token.trim().is_empty()))
 }
 
 /// Apply the shared retry and timeout flags to an already-configured curl
@@ -125,6 +179,73 @@ mod tests {
         assert_eq!(argv.last().unwrap(), "https://example.com/x.gz");
         let o = argv.iter().position(|a| a == "-o").expect("-o present");
         assert_eq!(argv[o + 1], "/tmp/x.dl");
+    }
+
+    /// A raw.githubusercontent.com download is authenticated through curl's
+    /// own variable expansion: argv names the variable, never the token.
+    #[test]
+    fn raw_github_downloads_are_authenticated_by_variable_name() {
+        let url = "https://raw.githubusercontent.com/torvalds/linux/master/scripts/checkpatch.pl";
+        let argv = curl_argv_with_token_var(url, "/tmp/c.dl", Some("GITHUB_TOKEN"));
+        let at = argv
+            .iter()
+            .position(|a| a == "--variable")
+            .expect("--variable present");
+        assert_eq!(argv[at + 1], "%GITHUB_TOKEN");
+        let at = argv
+            .iter()
+            .position(|a| a == "--expand-header")
+            .expect("--expand-header present");
+        assert_eq!(argv[at + 1], "Authorization: Bearer {{GITHUB_TOKEN}}");
+        assert_eq!(argv.last().unwrap(), url, "the URL stays last");
+
+        // No token set: anonymous, as before.
+        let anonymous = curl_argv_with_token_var(url, "/tmp/c.dl", None);
+        assert!(!anonymous.contains(&"--variable".to_string()));
+    }
+
+    /// Only raw.githubusercontent.com gets the header; a token is never
+    /// sent to an unrelated host.
+    #[test]
+    fn other_hosts_get_no_token() {
+        for url in [
+            "https://example.com/x.gz",
+            "https://github.com/biomejs/biome/releases/latest/download/biome-linux-x64",
+        ] {
+            let argv = curl_argv_with_token_var(url, "/tmp/x.dl", Some("GITHUB_TOKEN"));
+            assert!(!argv.contains(&"--expand-header".to_string()), "{url}");
+        }
+    }
+
+    /// `GITHUB_TOKEN` wins when both are set, an empty value falls through
+    /// to the next name rather than masking it (Actions expands a missing
+    /// secret to the empty string), and all-unset means anonymous access.
+    #[test]
+    fn github_token_var_prefers_github_token_and_skips_empty() {
+        let lookup = |vars: &[(&str, &str)], name: &str| {
+            vars.iter()
+                .find(|(k, _)| *k == name)
+                .map(|(_, v)| (*v).to_string())
+        };
+
+        assert_eq!(
+            github_token_var_from(|n| lookup(&[("GITHUB_TOKEN", "a"), ("GH_TOKEN", "b")], n)),
+            Some("GITHUB_TOKEN")
+        );
+        assert_eq!(
+            github_token_var_from(|n| lookup(&[("GH_TOKEN", "b")], n)),
+            Some("GH_TOKEN")
+        );
+        // The masking case: empty GITHUB_TOKEN must not hide GH_TOKEN.
+        assert_eq!(
+            github_token_var_from(|n| lookup(&[("GITHUB_TOKEN", ""), ("GH_TOKEN", "b")], n)),
+            Some("GH_TOKEN")
+        );
+        assert_eq!(
+            github_token_var_from(|n| lookup(&[("GITHUB_TOKEN", "   ")], n)),
+            None
+        );
+        assert_eq!(github_token_var_from(|n| lookup(&[], n)), None);
     }
 
     /// A transfer that is slow but progressing must never be killed: that
