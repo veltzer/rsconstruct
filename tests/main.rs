@@ -68,6 +68,7 @@ mod processor {
         pub mod jslint;
         pub mod json_schema;
         pub mod jsonlint;
+        pub mod license_header;
         pub mod luacheck;
         pub mod make;
         pub mod markdownlint;

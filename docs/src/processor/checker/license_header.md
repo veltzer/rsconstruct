@@ -6,20 +6,21 @@ Checks that source files carry a license header. Native (in-process; no external
 
 ## How It Works
 
-For each file, the processor looks for a line containing **any one** of the strings in `header_lines`. A file passes if it finds one, and fails if none of them occurs:
+Each file must **start with** the lines of `header_lines`, every one of them, in order, each matching a whole line exactly. A shebang line (`#!...`) before the header is allowed.
+
+Kernel sources open with an SPDX line, and the check supports the two ways it is used:
+
+- **The SPDX line is the header.** With `header_lines = ["// SPDX-License-Identifier: GPL-2.0"]`, every file must open with that line, which is what the Linux kernel requires of its sources.
+- **A license block follows the SPDX line.** When the header is something else (a comment block, say), a file may have an SPDX line first and the header right after it. One configuration then covers both ordinary sources (`header` at the top) and kernel sources (`SPDX line`, then `header`).
+
+The first line that differs is reported, with its line number in the file and its number in the header:
 
 ```
-src/a.sh: [processor.checker.license_header] 1 file(s) missing license headers:
-src/a.sh: missing license header (expected one of: SPDX-License-Identifier)
+src/user.c:1: license header line 1 differs: expected "// SPDX-License-Identifier: GPL-2.0", found "/*"
+src/broken.c:3: license header line 2 differs: expected " * This file is part of the demo package.", found " * Some other package."
 ```
 
-Be aware of what the check does **not** do:
-
-- It searches the **whole file**, not just its top: a matching line anywhere passes.
-- It needs **one** of the strings, not all of them: `header_lines` is a list of alternatives, not a multi-line header to match in full.
-- With `header_lines` empty (the default), **every file passes**. Always set it.
-
-Matching is plain substring matching, so a short, distinctive marker works best (`SPDX-License-Identifier`, `Copyright (c) Example Corp`).
+`header_lines` is required and must not be empty.
 
 ## Source Files
 
@@ -31,14 +32,29 @@ The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` c
 ## Configuration
 
 ```toml
-[processor.checker.license_header]
+# Kernel sources must open with the SPDX line
+[processor.checker.license_header.kernel]
+src_dirs = ["src/kernel_standalone"]
+src_extensions = [".c", ".h"]
+header_lines = ["// SPDX-License-Identifier: GPL-2.0"]
+
+# Every source must start with the project's license block
+# (kernel sources may put their SPDX line before it). Shortened here:
+# list every line of the real header, since all of them must match.
+[processor.checker.license_header.block]
 src_dirs = ["src"]
-header_lines = ["SPDX-License-Identifier"]
+src_extensions = [".c", ".cc", ".h", ".hh"]
+header_lines = [
+    "/*",
+    " * This file is part of the demos-os-linux package.",
+    " * Copyright (C) 2011-2026 Mark Veltzer <mark.veltzer@gmail.com>",
+    " */",
+]
 ```
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `header_lines` | string[] | `[]` | Strings, one of which must appear in each file. Empty means no check |
+| `header_lines` | string[] | (required) | The lines every file must start with, one entry per line |
 | `src_dirs` | string[] | `[]` | Directories to scan |
 | `src_extensions` | string[] | (list above) | File extensions to check |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

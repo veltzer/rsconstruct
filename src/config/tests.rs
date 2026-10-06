@@ -733,7 +733,6 @@ fn every_plugin_has_docs_and_tests() {
         "processor.generator.isass",
         "processor.checker.itaplo",
         "processor.checker.iyamllint",
-        "processor.checker.license_header",
         "processor.generator.markdown2html",
         "processor.checker.marp_images",
         "processor.generator.objdump",

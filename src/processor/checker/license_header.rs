@@ -28,9 +28,6 @@ impl LicenseHeaderProcessor {
     }
 
     fn check_files(&self, files: &[&Path]) -> Result<()> {
-        if self.config.header_lines.is_empty() {
-            return Ok(());
-        }
         let mut errors = Vec::new();
 
         for &file in files {
@@ -38,30 +35,8 @@ impl LicenseHeaderProcessor {
                 std::fs::read_to_string(file),
                 &format!("Failed to read {}", file.display()),
             )?;
-            let mut lines = content.lines();
-
-            // Skip shebang line if present
-            let mut first_line = lines.next().unwrap_or("");
-            if first_line.starts_with("#!") {
-                first_line = lines.next().unwrap_or("");
-            }
-
-            let file_lines: Vec<&str> = std::iter::once(first_line).chain(lines).collect();
-
-            let mut found = false;
-            for header_line in &self.config.header_lines {
-                if file_lines.iter().any(|l| l.contains(header_line.as_str())) {
-                    found = true;
-                    break;
-                }
-            }
-
-            if !found {
-                errors.push(format!(
-                    "{}: missing license header (expected one of: {})",
-                    file.display(),
-                    self.config.header_lines.join(", "),
-                ));
+            if let Some(problem) = header_problem(&content, &self.config.header_lines) {
+                errors.push(format!("{}:{}", file.display(), problem));
             }
         }
 
@@ -75,6 +50,50 @@ impl LicenseHeaderProcessor {
             )
         }
     }
+}
+
+/// Check that `content` starts with `header`, line for line, after an
+/// optional shebang line. The header may itself be the SPDX line
+/// (`header_lines = ["// SPDX-License-Identifier: GPL-2.0"]`, the line the
+/// Linux kernel requires first in every source file). When the header is a
+/// license block instead, it may follow an SPDX line, so kernel sources
+/// carry both. Returns `"<line>: <what is wrong>"` for the first mismatch
+/// at the top of the file, or None when the header is there.
+fn header_problem(content: &str, header: &[String]) -> Option<String> {
+    let lines: Vec<&str> = content.lines().collect();
+    let start = usize::from(lines.first().is_some_and(|l| l.starts_with("#!")));
+    let problem = header_problem_at(&lines, start, header)?;
+    let is_spdx = |l: &str| l.contains("SPDX-License-Identifier:");
+    // A file opening with an SPDX line, checked against a header that is not
+    // one: the header belongs after it, and that is where a mismatch is.
+    let header_is_spdx = header.first().is_some_and(|h| is_spdx(h));
+    if !header_is_spdx && lines.get(start).is_some_and(|l| is_spdx(l)) {
+        return header_problem_at(&lines, start + 1, header);
+    }
+    Some(problem)
+}
+
+/// Compare `header` with `lines` from index `start` on.
+fn header_problem_at(lines: &[&str], start: usize, header: &[String]) -> Option<String> {
+    for (i, expected) in header.iter().enumerate() {
+        let line_no = start + i + 1;
+        match lines.get(start + i) {
+            Some(found) if found == expected => {}
+            Some(found) => {
+                return Some(format!(
+                    "{line_no}: license header line {} differs: expected {expected:?}, found {found:?}",
+                    i + 1,
+                ));
+            }
+            None => {
+                return Some(format!(
+                    "{line_no}: file ends before license header line {}: expected {expected:?}",
+                    i + 1,
+                ));
+            }
+        }
+    }
+    None
 }
 
 impl crate::processor::Processor for LicenseHeaderProcessor {
@@ -140,8 +159,8 @@ inventory::submit! {
         create: plugin_create,
         fields: &[
             crate::config::FieldSpec { name: "header_lines", ty: crate::config::FieldType::StringArray,
-                affects_output: true, required: false,
-                doc: "Lines of the license header that must appear at the top of each file" },
+                affects_output: true, required: true,
+                doc: "The license header every file must start with, one entry per line (after an optional shebang and SPDX line)" },
         ],
         omit_standard_fields: &["command", "formats", "output_dir"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".bash"], src_exclude_dirs: &[] }),
