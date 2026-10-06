@@ -183,6 +183,68 @@ dep_inputs = ["out/g/*.txt"]
     assert_eq!(second.skipped, 1, "{second:?}");
 }
 
+/// An input rewritten with its mtime restored (`cp -p`, `tar x`,
+/// `rsync -a`) must still rebuild. The mtime cache used to trust a
+/// matching mtime and serve the old checksum, so the build skipped with an
+/// output made from the old content.
+#[test]
+fn input_rewritten_with_mtime_restored_rebuilds() {
+    let temp_dir = TempDir::new().unwrap();
+    let project = temp_dir.path();
+
+    write_tool(project, "copy", "cp \"$1\" \"$2\"\n");
+    fs::write(
+        project.join("rsconstruct.toml"),
+        r#"[build]
+hash_tool_versions = false
+
+[processor.generator.generic]
+command = "copy"
+output_dir = "out/g"
+output_extension = "txt"
+batch = false
+src_extensions = [".src"]
+src_dirs = ["src"]
+"#,
+    )
+    .unwrap();
+    fs::create_dir_all(project.join("src")).unwrap();
+    let input = project.join("src/a.src");
+    fs::write(&input, "aaaa\n").unwrap();
+    let old_mtime = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    let set_old_mtime = || {
+        fs::File::options()
+            .write(true)
+            .open(&input)
+            .unwrap()
+            .set_modified(old_mtime)
+            .unwrap();
+    };
+    set_old_mtime();
+    // Files changed within the last two seconds (by mtime or ctime) are
+    // never stored in the mtime cache; wait so the first build stores one.
+    std::thread::sleep(std::time::Duration::from_millis(2_500));
+
+    let first = build(project);
+    assert!(first.exit_success, "{:?}", first.errors);
+    assert_eq!(first.success, 1);
+
+    // Same length, different bytes, mtime put back.
+    fs::write(&input, "bbbb\n").unwrap();
+    set_old_mtime();
+
+    let second = build(project);
+    assert!(second.exit_success, "{:?}", second.errors);
+    assert_eq!(
+        second.success, 1,
+        "rewritten content must rebuild despite the restored mtime: {second:?}"
+    );
+    assert_eq!(
+        fs::read_to_string(project.join("out/g/a.txt")).unwrap(),
+        "bbbb\n"
+    );
+}
+
 /// Outputs are cached under the inputs the tool started on. When an input
 /// changes while the tool runs, the outputs match neither version: they are
 /// not cached, and the next build runs the product again. (Caching them

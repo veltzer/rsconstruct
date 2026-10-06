@@ -29,6 +29,7 @@
 use anyhow::{Context, Result};
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -109,6 +110,8 @@ pub struct DepsCacheStats {
 pub struct DepsCache {
     db: Database,
     stats: DepsCacheStats,
+    /// Entries `set` but not yet written (see `flush`), by key.
+    pending: HashMap<String, DepsEntry>,
 }
 
 impl DepsCache {
@@ -132,6 +135,7 @@ impl DepsCache {
         Ok(Self {
             db,
             stats: DepsCacheStats::default(),
+            pending: HashMap::new(),
         })
     }
 
@@ -190,11 +194,23 @@ impl DepsCache {
         source: &Path,
     ) -> Option<(Vec<PathBuf>, ChecksumPath)> {
         let key = key_for(analyzer.iname, source);
+        if let Some(entry) = self.pending.get(&key) {
+            return Self::validate(ctx, analyzer, source, entry);
+        }
         let read_txn = self.db.begin_read().ok()?;
         let table = read_txn.open_table(DEPS_TABLE).ok()?;
         let data = table.get(key.as_str()).ok()??;
         let entry = serde_json::from_slice::<DepsEntry>(data.value()).ok()?;
+        Self::validate(ctx, analyzer, source, &entry)
+    }
 
+    /// The checks an entry — stored or pending — must pass to be trusted.
+    fn validate(
+        ctx: &BuildContext,
+        analyzer: AnalyzerId<'_>,
+        source: &Path,
+        entry: &DepsEntry,
+    ) -> Option<(Vec<PathBuf>, ChecksumPath)> {
         // Scanned under another configuration: its resolution may differ.
         if entry.config_fingerprint != analyzer.fingerprint {
             return None;
@@ -208,7 +224,7 @@ impl DepsCache {
         // Verify every dependency still exists with the content it was
         // scanned with, and that nothing has appeared where resolution
         // relied on finding nothing (see the module doc for both).
-        if !dependencies_unchanged(ctx, &entry) || !absent_still_absent(&entry) {
+        if !dependencies_unchanged(ctx, entry) || !absent_still_absent(entry) {
             return None;
         }
         let deps = entry.dependencies.iter().map(PathBuf::from).collect();
@@ -237,8 +253,13 @@ impl DepsCache {
     ///
     /// `absent` lists the paths the scan probed and found missing on the
     /// way to its result (see the module doc).
+    ///
+    /// The entry is staged, not written: lookups see it at once, and
+    /// [`flush`](Self::flush) writes every staged entry in one transaction.
+    /// A redb commit is durable — an fsync — so committing per entry cost
+    /// one disk sync per scanned file on a cold cache.
     pub fn set(
-        &self,
+        &mut self,
         ctx: &BuildContext,
         analyzer: AnalyzerId<'_>,
         source: &Path,
@@ -267,9 +288,18 @@ impl DepsCache {
             config_fingerprint: analyzer.fingerprint.to_string(),
             analyzer: analyzer.iname.to_string(),
         };
+        self.pending.insert(key, entry);
+        Ok(())
+    }
 
-        let data = serde_json::to_vec(&entry).context("Failed to serialize dependency entry")?;
-
+    /// Write every entry staged by [`set`](Self::set) in one transaction.
+    /// Staged entries are dropped on error as well as on success: the cache
+    /// only saves rescans, so losing a batch costs one rescan per entry.
+    pub fn flush(&mut self) -> Result<()> {
+        if self.pending.is_empty() {
+            return Ok(());
+        }
+        let pending = std::mem::take(&mut self.pending);
         let write_txn = self
             .db
             .begin_write()
@@ -278,14 +308,17 @@ impl DepsCache {
             let mut table = write_txn
                 .open_table(DEPS_TABLE)
                 .context("Failed to open deps table")?;
-            table
-                .insert(key.as_str(), data.as_slice())
-                .context("Failed to write to dependency cache")?;
+            for (key, entry) in &pending {
+                let data =
+                    serde_json::to_vec(entry).context("Failed to serialize dependency entry")?;
+                table
+                    .insert(key.as_str(), data.as_slice())
+                    .context("Failed to write to dependency cache")?;
+            }
         }
         write_txn
             .commit()
             .context("Failed to commit dependency cache write")?;
-
         Ok(())
     }
 
@@ -569,6 +602,33 @@ mod tests {
         let ctx = crate::build_context::BuildContext::new();
         ctx.set_mtime_check(false);
         ctx
+    }
+
+    /// `set` stages; lookups see the staged entry at once, and only `flush`
+    /// writes it — one transaction for the whole batch.
+    #[test]
+    fn set_is_visible_at_once_and_persisted_by_flush() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let ctx = content_only_ctx();
+        let a = tmp.path().join("a.c");
+        let b = tmp.path().join("b.c");
+        fs::write(&a, "a").unwrap();
+        fs::write(&b, "b").unwrap();
+
+        {
+            let mut cache = DepsCache::open_in(tmp.path()).expect("open fresh cache");
+            let checksum = DepsCache::source_checksum(&ctx, &a).unwrap();
+            cache.set(&ctx, ICPP, &a, checksum, &[], &[]).unwrap();
+            assert_eq!(cache.get(&ctx, ICPP, &a), Some(Vec::new()), "staged entry");
+            cache.flush().unwrap();
+            // Staged after the flush and never flushed: lost with the handle.
+            let checksum = DepsCache::source_checksum(&ctx, &b).unwrap();
+            cache.set(&ctx, ICPP, &b, checksum, &[], &[]).unwrap();
+        }
+
+        let mut reopened = DepsCache::open_in(tmp.path()).expect("reopen cache");
+        assert_eq!(reopened.get(&ctx, ICPP, &a), Some(Vec::new()), "flushed");
+        assert_eq!(reopened.get(&ctx, ICPP, &b), None, "never flushed");
     }
 
     /// An entry scanned under one analyzer configuration says nothing about

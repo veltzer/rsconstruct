@@ -16,14 +16,18 @@ The in-memory cache lives for the duration of the process and is not persisted.
 
 ### Layer 2: Mtime database (across builds)
 
-A persistent redb database at `.rsconstruct/mtime.redb` maps file paths to `(mtime, checksum)` pairs. Before reading a file to compute its checksum, the system checks:
+A persistent redb database at `.rsconstruct/mtime.redb` maps file paths to `(stamp, checksum)` pairs, where the stamp is the file's mtime, ctime, size and inode (`platform::FileStamp`). Before reading a file to compute its checksum, the system checks:
 
 1. Has this file been checksummed in a previous build?
-2. Has the file's modification time changed since then?
+2. Has any part of its stamp changed since then?
 
-If the mtime matches, the cached checksum is returned without reading the file. This avoids I/O for files that haven't been modified between builds — the common case in incremental builds where most files are unchanged.
+If the stamp matches, the cached checksum is returned without reading the file. This avoids I/O for files that haven't been modified between builds — the common case in incremental builds where most files are unchanged.
 
-When the mtime differs (file was modified), the file is read, the new checksum is computed, and both the in-memory cache and the mtime database are updated.
+When the stamp differs (file was modified), the file is read, the new checksum is computed, and both the in-memory cache and the mtime database are updated.
+
+mtime alone is not enough: `cp -p`, `tar x` and `rsync -a` write new content and then set mtime back, which used to leave the old checksum valid and the build skipping with stale outputs. ctime cannot be set from user space and moves on every write and every mtime change, so the stamp catches those; size and inode catch most rewrites and replacements cheaply. This is the same set git's index compares.
+
+No entry is stored for a file whose mtime *or* ctime is less than two seconds old: on a filesystem with coarse timestamps, a second write in the same tick after hashing would otherwise leave a valid-looking entry for stale content. Using ctime as well matters for `cp -p`, whose freshly written file carries an old mtime.
 
 Dirty mtime entries are flushed to the database in a single batch transaction at the end of each checksum computation pass, minimizing database writes.
 

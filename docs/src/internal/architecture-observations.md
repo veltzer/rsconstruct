@@ -352,7 +352,8 @@ Likely a small refactor, but requires aligning on the output shape.
 
 A read-through of the build pipeline end to end (driver, graph, discovery,
 analyzers, deps cache, executor, checksums, object store). R1–R5 were
-correctness defects and are fixed; R6–R10 and the minor items are open.
+correctness defects and are fixed, as are R9 and R10; R6–R8 and the minor
+items are open.
 
 ### R1. Two decisions per product, only one of them the policy's — RESOLVED
 
@@ -440,16 +441,20 @@ The fixed-point loop rediscovers all processors each pass, not just those
 whose extensions match the newly added virtual files. Proposed fix:
 [Explicit Processor Inputs](inputs-from.md), which removes the loop.
 
-### R9. The deps cache commits once per scanned file (open)
+### R9. The deps cache committed once per scanned file — RESOLVED
 
-Each `DepsCache::set` is its own durable redb transaction — one fsync per
-file on a cold scan. Batch them, as `flush_mtime_entries` already does.
+Each `DepsCache::set` was its own durable redb transaction — one fsync per
+file on a cold scan. **Fix:** `set` stages and `DepsCache::flush` writes the
+batch in one transaction at the end of each analysis pass. A cold scan of
+2,000 sources: 2,031 fsyncs before, 32 after.
 
-### R10. The mtime cache trusts mtime alone (open)
+### R10. The mtime cache trusted mtime alone — RESOLVED
 
-`MtimeEntry` holds `(mtime, checksum)`. Tools that preserve mtimes (`tar
-x`, `cp -p`, `rsync -a`) can change content without changing it. Storing
-size, inode and ctime too, as git's index does, is cheap.
+`MtimeEntry` held `(mtime, checksum)`. Tools that preserve mtimes (`tar x`,
+`cp -p`, `rsync -a`) changed content without changing it, and the build
+skipped with stale outputs. **Fix:** entries hold a `platform::FileStamp`
+(mtime, ctime, size, inode); ctime cannot be set from user space. The
+"changed too recently to store" check uses the later of mtime and ctime.
 
 ### Minor (open)
 

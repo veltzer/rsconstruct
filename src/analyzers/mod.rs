@@ -448,6 +448,7 @@ impl Analysis {
                 progress.inc(product_ids.len() as u64);
             }
         }
+        self.flush_deps_cache();
         Ok(())
     }
 
@@ -519,7 +520,17 @@ impl Analysis {
                 .map(|p| (p.inputs.clone(), p.cache_key.clone()));
             moved |= before != after;
         }
+        self.flush_deps_cache();
         Ok(moved)
+    }
+
+    /// Write the entries this pass staged, in one transaction (see
+    /// `DepsCache::flush`). A failure is a warning, as a failed write always
+    /// was: the cache only saves rescans, and the next build rescans.
+    fn flush_deps_cache(&mut self) {
+        if let Err(e) = self.deps_cache.flush() {
+            crate::output::warn(&format!("failed to write the dependency cache: {e:#}"));
+        }
     }
 
     /// The dependencies of one source: from the deps cache when valid,

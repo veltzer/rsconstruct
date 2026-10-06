@@ -20,13 +20,19 @@ use crate::build_context::BuildContext;
 
 const MTIME_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("mtime_cache");
 
-/// Cached mtime-to-checksum mapping for a single file
+/// Cached stamp-to-checksum mapping for a single file. The checksum is
+/// trusted while the file's whole stamp — mtime, ctime, size and inode
+/// (see `platform::FileStamp`) — is unchanged. An entry from before the
+/// stamp existed fails to deserialize and is re-hashed once.
 #[derive(Serialize, Deserialize)]
 struct MtimeEntry {
-    mtime_secs: i64,
-    mtime_nanos: u32,
+    stamp: crate::platform::FileStamp,
     checksum: String,
 }
+
+/// Seconds within which a file counts as just changed: no entry is stored
+/// for it (see `fast_checksum`).
+const RECENT_CHANGE_SECS: i64 = 2;
 
 /// Open or get the mtime database from the `BuildContext`.
 fn get_mtime_db(ctx: &BuildContext) -> Result<std::sync::MutexGuard<'_, Option<redb::Database>>> {
@@ -152,14 +158,7 @@ fn fast_checksum(
 ) -> Result<(String, ChecksumPath, Option<DirtyMtimeEntry>)> {
     let metadata =
         fs::metadata(path).with_context(|| format!("Failed to stat file: {}", path.display()))?;
-    let mtime = metadata
-        .modified()
-        .with_context(|| format!("Failed to get mtime: {}", path.display()))?;
-    let duration = mtime
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or_default();
-    let mtime_secs = i64::try_from(duration.as_secs()).unwrap_or(i64::MAX);
-    let mtime_nanos = duration.subsec_nanos();
+    let stamp = crate::platform::file_stamp(&metadata);
 
     let path_str = path.display().to_string();
 
@@ -184,8 +183,7 @@ fn fast_checksum(
     drop(db_guard);
 
     if let Some(ref entry) = cached
-        && entry.mtime_secs == mtime_secs
-        && entry.mtime_nanos == mtime_nanos
+        && entry.stamp == stamp
     {
         let mut guard = ctx.checksum_cache.lock().unwrap();
         let cache = guard.get_or_insert_with(HashMap::new);
@@ -206,20 +204,21 @@ fn fast_checksum(
     let cache = guard.get_or_insert_with(HashMap::new);
     cache.insert(path.to_path_buf(), checksum.clone());
     drop(guard);
-    // Don't persist an entry for a file modified moments ago: on coarse-
-    // timestamp filesystems a write landing in the same mtime tick after we
-    // hashed would leave a permanently valid-looking (mtime, checksum) pair
-    // for stale content. The next run simply re-hashes such files.
-    let recently_modified = SystemTime::now()
-        .duration_since(mtime)
-        .is_ok_and(|age| age.as_secs() < 2);
-    if recently_modified {
+    // Don't persist an entry for a file changed moments ago: on coarse-
+    // timestamp filesystems a write landing in the same tick after we
+    // hashed would leave a permanently valid-looking (stamp, checksum) pair
+    // for stale content. The next run simply re-hashes such files. Judged
+    // by ctime as well as mtime: `cp -p` leaves an old mtime on a file it
+    // just wrote, and only ctime shows the write was just now.
+    let now_secs = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map_or(i64::MAX, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX));
+    if stamp.changed_within(now_secs, RECENT_CHANGE_SECS) {
         return Ok((checksum, ChecksumPath::FullRead, None));
     }
 
     let new_entry = MtimeEntry {
-        mtime_secs,
-        mtime_nanos,
+        stamp,
         checksum: checksum.clone(),
     };
 
@@ -435,6 +434,55 @@ pub fn bytes_checksum(data: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// What `cp -p` does: same length, new bytes, mtime put back. The mtime
+    /// cache used to compare mtime alone and keep serving the old checksum;
+    /// the stamp moves because ctime does.
+    #[test]
+    fn stamp_changes_when_content_is_rewritten_with_mtime_restored() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("f.txt");
+        fs::write(&path, "aaaa").unwrap();
+        let old_mtime = SystemTime::now() - std::time::Duration::from_secs(3600);
+        fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(old_mtime)
+            .unwrap();
+        let before = crate::platform::file_stamp(&fs::metadata(&path).unwrap());
+
+        // Clear the ctime tick of the first write on coarse filesystems.
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        fs::write(&path, "bbbb").unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(old_mtime)
+            .unwrap();
+        let after = crate::platform::file_stamp(&fs::metadata(&path).unwrap());
+
+        assert_eq!(before.mtime_secs, after.mtime_secs, "mtime was restored");
+        assert_eq!(before.size, after.size, "same length");
+        assert_ne!(before, after, "ctime still records the rewrite");
+    }
+
+    /// A file whose ctime is recent counts as just changed even when its
+    /// mtime is old, so no entry is stored for it.
+    #[test]
+    fn changed_within_uses_the_later_of_mtime_and_ctime() {
+        let stamp = crate::platform::FileStamp {
+            mtime_secs: 1_000,
+            mtime_nanos: 0,
+            ctime_secs: 5_000,
+            ctime_nanos: 0,
+            size: 4,
+            inode: 1,
+        };
+        assert!(stamp.changed_within(5_001, RECENT_CHANGE_SECS));
+        assert!(!stamp.changed_within(5_010, RECENT_CHANGE_SECS));
+    }
 
     /// Length-prefixing exists precisely so element boundaries can't be
     /// forged: ["a:b", "c"] and ["a", "b:c"] concatenate identically under
