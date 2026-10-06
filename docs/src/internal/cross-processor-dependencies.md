@@ -134,6 +134,10 @@ become ruff inputs.
 - **Con:** More configuration burden, loses the "convention over configuration"
   philosophy
 
+Revisited in [Explicit Processor Inputs](inputs-from.md), proposed as the
+replacement for Approach C: there the declaration replaces the search
+rather than adding to it.
+
 ### E. Make `out/` Visible to FileIndex
 
 The simplest mechanical fix: stop excluding `out/` from the `FileIndex`. Since

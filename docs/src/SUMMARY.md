@@ -153,6 +153,7 @@ The chapters below cover the internal design and implementation of rsconstruct. 
 - [Shared Output Directory](internal/shared-output-directory.md)
 - [Processor Ordering](internal/processor-ordering.md)
 - [Output Prediction](internal/output-prediction.md)
+- [Explicit Processor Inputs](internal/inputs-from.md)
 - [Per-Processor Statistics](internal/per-processor-stats.md)
 - [Profiling](internal/profiling.md)
 - [Fast `stat` on Linux](internal/fast-stat.md)

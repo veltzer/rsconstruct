@@ -437,7 +437,8 @@ processor runs its chunks serially.
 ### R8. Discovery re-runs every processor on every pass (open)
 
 The fixed-point loop rediscovers all processors each pass, not just those
-whose extensions match the newly added virtual files.
+whose extensions match the newly added virtual files. Proposed fix:
+[Explicit Processor Inputs](inputs-from.md), which removes the loop.
 
 ### R9. The deps cache commits once per scanned file (open)
 
