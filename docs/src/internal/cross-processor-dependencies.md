@@ -222,6 +222,13 @@ discovery loop). After each discovery pass, newly declared outputs are injected
 as virtual files into the `FileIndex`. Discovery re-runs with the expanded index
 until no new products are found (up to 10 iterations).
 
+Since 2026-10-06 the later passes *route* the new files instead of re-running
+everything: a processor that discovers one product per file
+(`Discovery::PerFile`) is handed an index of only the newly declared files,
+and only the other processors rescan the whole index. Connections are still
+inferred from the same scan settings. See
+[Routing Generated Files](output-routing.md).
+
 Key implementation details:
 
 - `FileIndex::add_virtual_files()` inserts declared output paths into the index

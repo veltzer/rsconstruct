@@ -97,6 +97,11 @@ impl crate::processor::Processor for JsonSchemaProcessor {
         &self.config.standard
     }
 
+    /// One product per scanned file (the default `discover`).
+    fn discovery(&self) -> crate::processor::Discovery {
+        crate::processor::Discovery::PerFile
+    }
+
     fn required_tools(&self) -> Vec<String> {
         Vec::new()
     }

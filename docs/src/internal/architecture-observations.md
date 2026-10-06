@@ -352,8 +352,8 @@ Likely a small refactor, but requires aligning on the output shape.
 
 A read-through of the build pipeline end to end (driver, graph, discovery,
 analyzers, deps cache, executor, checksums, object store). R1–R5 were
-correctness defects and are fixed, as are R9 and R10; R6–R8 and the minor
-items are open.
+correctness defects and are fixed, as are R9 and R10; R8 is partly fixed;
+R6, R7 and the remaining minor items are open.
 
 ### R1. Two decisions per product, only one of them the policy's — RESOLVED
 
@@ -435,12 +435,15 @@ balancing, and a chunk blocked on a `max_jobs` semaphore stalls the rest of
 it). Each batch group adds a thread on top of those, and a batching
 processor runs its chunks serially.
 
-### R8. Discovery re-runs every processor on every pass (open)
+### R8. Discovery re-ran every processor on every pass — PARTIALLY RESOLVED
 
-The fixed-point loop rediscovers all processors each pass, not just those
-whose extensions match the newly added virtual files. Proposed fix:
-[Routing Generated Files](output-routing.md), which replaces the loop
-with per-file routing and keeps connections automatic.
+The fixed-point loop rediscovered all processors each pass, not just those
+whose extensions match the newly added virtual files. **Fix so far:**
+[Routing Generated Files](output-routing.md) — per-file processors are
+handed only the newly declared files; processors that look at more than
+one file still rescan the whole index each pass. Verified identical on all
+222 fleet configs. Open: making those processors wait for their producers
+instead, which would let the loop's re-declaration machinery go.
 
 ### R9. The deps cache committed once per scanned file — RESOLVED
 

@@ -87,6 +87,11 @@ impl Processor for GeneratorProcessor {
         &self.config.standard
     }
 
+    /// One product per scanned file, its output path derived from the file.
+    fn discovery(&self) -> crate::processor::Discovery {
+        crate::processor::Discovery::PerFile
+    }
+
     fn config_json(&self) -> Option<String> {
         crate::processor::ProcessorBase::config_json(&self.config)
     }

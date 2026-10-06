@@ -750,6 +750,112 @@ src_extensions = [".txt"]
     );
 }
 
+/// Discovery routes each generated file to every processor whose settings
+/// accept it, through any number of steps, on a clean checkout. Covers
+/// each kind of consumer: per-file generators chained three deep (each
+/// handed only the files the previous step declared), a per-file checker
+/// fed from two different steps, and an explicit processor whose glob
+/// collects the last step's files (it rediscovers over the whole index).
+#[test]
+fn routing_reaches_every_consumer_through_a_chain() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let project_path = temp_dir.path();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        r#"
+[processor.generator.generic.to_b]
+command = "true"
+output_dir = "stage"
+output_extension = "b"
+batch = false
+src_extensions = [".a"]
+src_dirs = ["src"]
+
+[processor.generator.generic.to_c]
+command = "true"
+output_dir = "mid"
+output_extension = "c"
+batch = false
+src_extensions = [".b"]
+src_dirs = ["stage"]
+
+[processor.checker.ascii]
+src_dirs = ["stage", "mid"]
+src_extensions = [".b", ".c"]
+
+[processor.explicit.generic.collect]
+command = "true"
+input_globs = ["mid/*.c"]
+output_files = ["out/all.txt"]
+"#,
+    )
+    .unwrap();
+    fs::create_dir_all(project_path.join("src")).unwrap();
+    for name in ["one", "two", "three"] {
+        fs::write(project_path.join(format!("src/{name}.a")), name).unwrap();
+    }
+
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["--json", "processor", "files"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(
+        output.status.success(),
+        "processor files failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let parsed: Vec<serde_json::Value> =
+        serde_json::from_str(&String::from_utf8_lossy(&output.stdout)).unwrap();
+    let inputs_of = |processor: &str| -> Vec<Vec<String>> {
+        let mut found: Vec<Vec<String>> = parsed
+            .iter()
+            .filter(|p| p["processor"].as_str() == Some(processor))
+            .map(|p| {
+                p["inputs"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|i| i.as_str().unwrap().to_string())
+                    .filter(|i| !i.starts_with("toolbin") && i != "true")
+                    .collect()
+            })
+            .collect();
+        found.sort();
+        found
+    };
+    let primaries = |processor: &str| -> Vec<String> {
+        inputs_of(processor)
+            .into_iter()
+            .map(|inputs| inputs[0].clone())
+            .collect()
+    };
+
+    assert_eq!(
+        primaries("processor.generator.generic.to_c"),
+        vec!["stage/one.b", "stage/three.b", "stage/two.b"]
+    );
+    assert_eq!(
+        primaries("processor.checker.ascii"),
+        vec![
+            "mid/one.c",
+            "mid/three.c",
+            "mid/two.c",
+            "stage/one.b",
+            "stage/three.b",
+            "stage/two.b",
+        ]
+    );
+    let collect = inputs_of("processor.explicit.generic.collect");
+    assert_eq!(collect.len(), 1, "one explicit product: {collect:?}");
+    for c in ["mid/one.c", "mid/two.c", "mid/three.c"] {
+        assert!(
+            collect[0].iter().any(|i| i == c),
+            "the explicit product must collect {c}: {collect:?}"
+        );
+    }
+}
+
 /// Test the explicit processor: declares inputs, input_globs, and outputs explicitly.
 /// Verifies discovery creates a single product with all resolved inputs and the declared output.
 #[test]

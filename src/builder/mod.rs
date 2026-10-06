@@ -24,7 +24,7 @@ use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
 use crate::object_store::{ObjectStore, ObjectStoreOptions};
-use crate::processor::{LuaProcessor, Processor, ProcessorMap};
+use crate::processor::{Discovery, LuaProcessor, Processor, ProcessorMap};
 use crate::remote_cache;
 use crate::tool_lock;
 use anyhow::{Context as _, Result};
@@ -647,10 +647,24 @@ impl Builder {
         true
     }
 
-    /// Fixed-point product discovery loop.
-    /// Runs discovery for all active processors, then injects declared outputs
-    /// as virtual files so downstream processors can discover products for files
-    /// that don't exist on disk yet. Repeats until no new products are found.
+    /// Product discovery, routing generated files to the processors that
+    /// consume them (docs/src/internal/output-routing.md).
+    ///
+    /// Round 0 runs every processor over the files on disk. Each later round
+    /// takes the outputs the previous round declared that are new to the
+    /// index ("virtual files": they exist only once their producer has run)
+    /// and hands them on:
+    ///
+    /// - a [`Discovery::PerFile`] processor discovers over an index of only
+    ///   those new files, so it creates products for exactly the ones its
+    ///   scan settings accept and never rescans the rest;
+    /// - any other processor rediscovers over the whole index, as every
+    ///   processor did under the old fixed-point loop.
+    ///
+    /// Connections are inferred, never configured: a processor consumes a
+    /// generated file exactly when its scan settings accept the path, the
+    /// same rule as for files on disk. Discovery ends when a round declares
+    /// no new file.
     ///
     /// Returns the file index with every declared output added: the view
     /// of the tree as it will be once the build ran, which is what
@@ -666,18 +680,25 @@ impl Builder {
         let mut file_index = self.file_index.clone();
         let debug = phases_debug();
         let max_passes = self.config.build.max_discovery_passes;
+        // The files the previous round declared; None in round 0.
+        let mut routed: Option<FileIndex> = None;
 
         for pass in 0..max_passes {
             let before = graph.products().len();
             for name in active {
                 let name = name.as_ref();
-                if !processors[name].scan_config().enabled {
+                let processor = &processors[name];
+                if !processor.scan_config().enabled {
                     continue;
                 }
+                let view = match (&routed, processor.discovery()) {
+                    (Some(new_files), Discovery::PerFile) => new_files,
+                    _ => &file_index,
+                };
                 if for_clean {
-                    processors[name].discover_for_clean(graph, &file_index, name)?;
+                    processor.discover_for_clean(graph, view, name)?;
                 } else {
-                    processors[name].discover(graph, &file_index, name)?;
+                    processor.discover(graph, view, name)?;
                 }
             }
             let after = graph.products().len();
@@ -706,7 +727,7 @@ impl Builder {
                 .flat_map(|p| p.outputs.iter().cloned())
                 .collect();
             let added = file_index.add_virtual_files(&outputs);
-            if added == 0 {
+            if added.is_empty() {
                 break;
             }
             if debug {
@@ -716,10 +737,11 @@ impl Builder {
                         "    discover pass {}: {} new products, {} virtual files added",
                         pass + 1,
                         after - before,
-                        added
+                        added.len()
                     ))
                 );
             }
+            routed = Some(FileIndex::from_paths(added));
         }
 
         // After the fixed-point loop has settled, check every src_dirs and

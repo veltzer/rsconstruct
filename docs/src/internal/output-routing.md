@@ -1,6 +1,8 @@
 # Routing Generated Files Between Processors
 
-**Status: proposed (2026-10-06), not implemented.**
+**Status: routing implemented (2026-10-06); `inputs_from`, waiting
+processors and the creator tiers are not.** See
+[Implementation status](#implementation-status) at the end.
 
 This chapter proposes replacing the fixed-point discovery loop with
 *routing*: every file a processor declares as an output is handed to exactly
@@ -244,19 +246,76 @@ the aggregate waiting.
 
 ## Implementation plan
 
-1. A per-file/aggregate property in the processor plugin entry; default
-   aggregate.
+1. A per-file/aggregate property on each processor; default aggregate.
+   **Done**, as a trait method (see below).
 2. A routing function: path → processors whose scan settings accept it.
    Reuses the existing scan-setting matching so the rule cannot drift.
+   **Done**, by construction (see below).
 3. Discovery as a routing queue: pass 0, per-file discovery of routed files,
-   aggregate processors once their producers have settled. Keep the
-   fixed-point loop behind a switch for one release and compare the
-   resulting graphs on the fleet.
+   aggregate processors once their producers have settled. **Partly done:**
+   per-file processors are routed; aggregate processors still rediscover
+   every round rather than waiting.
 4. Record the routing graph; show it in `graph`; cycle errors.
 5. Delete the loop, virtual files as a discovery mechanism, and the
    re-declaration handling in `add_product`.
 6. `inputs_from` (restrict and assert), and the creator-output config error.
 7. Tier 2 (tree inputs from creators). Tier 3 only when a config needs it.
+
+## Implementation status
+
+**What is built.** `Processor::discovery()` returns `Discovery::PerFile` or
+`Discovery::WholeIndex`. In every round after the first,
+`Builder::discover_products` hands a per-file processor a `FileIndex` of
+only the files the previous round declared, and runs every other processor
+over the whole index as before. The processor's own `discover` runs on that
+smaller index, so "which new files does it accept" is decided by its own
+`FileIndex::scan` — the routing rule and the scan rule cannot drift apart,
+because they are the same code. `scan` judges each path on its own, which is
+what makes discovering over a subset exact.
+
+**Departures from the plan above:**
+
+- **A trait method, not a plugin-entry field.** A field would have to be
+  added to all ~100 plugin entries, and a field cannot default safely: the
+  wrong value for a processor whose `discover` looks at more than one file
+  would silently lose products. The trait method defaults to `WholeIndex`,
+  which is correct for every processor; `PerFile` is an opt-in
+  optimization.
+- **Aggregate processors re-run, they do not wait (yet).** A `WholeIndex`
+  processor rediscovers over the whole index in every round that declared
+  new files — exactly the old loop's behavior — so the re-declaration
+  handling in `add_product` stays. Making them wait for their producers
+  (step 3) is what would let step 5 delete it.
+- **No switch back to the old loop.** Instead of shipping both mechanisms,
+  the new discovery was compared against the released 0.9.106 binary on
+  copies of all 222 repos under `~/git` with an `rsconstruct.toml` (all but
+  `virtual-windows`, which is VM images), with build outputs removed so
+  every chain is a clean-checkout chain: `processor files --json`, sorted,
+  identical in every repo — 50,930 products, all exit codes 0.
+
+**Marked `PerFile` so far:** the `SimpleChecker` and `SimpleGenerator`
+wrappers (most checkers and generators), the processors using the default
+`discover` (`ascii`, `encoding`, `ijq`, `ijsonlint`, `itaplo`, `iyamllint`,
+`json_schema`, `marp_images`), and `generator.generic`, `checker.script`,
+`checker.zspell`, `checker.terms`, each audited to use the index only
+through `scan`. `generator.tera` is deliberately not: its `discover`
+captures the set of includable templates from the whole index.
+
+**Guard.** `per_file_discovery_over_a_subset_matches_the_full_index`
+(in `src/processor/mod.rs`) configures every `PerFile` processor — 64 of
+them — to scan a fixture held only in a `FileIndex`, and checks that
+discovering over half of it gives exactly the full index's products for
+that half. Every `PerFile` processor must produce products from the
+fixture, so none passes vacuously. Marking mdbook (which collects sibling
+files) `PerFile` makes it fail. It compares products, not state a
+`discover` stores for later — the reason tera stays `WholeIndex` has to be
+caught in review.
+
+**Effect.** Discovery-only runs (`build --stop-after discover`, release
+builds, best of seven) on the chain-heavy repos: teaching-syllabi 43 → 32
+ms, teaching-slides 89 → 78 ms, book-openbook unchanged at ~15 ms (its
+consumers are tera and explicit processors, which still rediscover).
+Discovery was never the expensive phase; the gain is real but small.
 
 ## Decisions
 

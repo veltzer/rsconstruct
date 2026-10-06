@@ -106,6 +106,12 @@ impl crate::processor::Processor for TermsProcessor {
         &self.config.standard
     }
 
+    /// One product per scanned file; the term lists it adds as inputs are
+    /// read from disk, not from the index.
+    fn discovery(&self) -> crate::processor::Discovery {
+        crate::processor::Discovery::PerFile
+    }
+
     // Serialize the FULL config (the trait default covers StandardConfig
     // only), so the extra fields reach config-change detection.
     fn config_json(&self) -> Option<String> {

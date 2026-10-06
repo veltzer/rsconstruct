@@ -1032,6 +1032,27 @@ impl ProcessorBase {
 /// ```
 ///
 /// Must be Sync + Send for parallel execution support.
+/// How a processor's discovery takes files that other processors generate.
+///
+/// Discovery routes each newly declared output to the processors whose scan
+/// settings accept it (docs/src/internal/output-routing.md). What happens
+/// next depends on the processor:
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Discovery {
+    /// One product per scanned file, built from that file alone (plus
+    /// `dep_inputs` and other files read from disk). Such a processor is
+    /// handed an index of just the new files its scan settings accept, and
+    /// discovers only those. Claiming this for a processor that looks at
+    /// the rest of the index — sibling files, a set of files, state captured
+    /// from the whole index — would lose products or corrupt that state.
+    PerFile,
+    /// Anything else: products over sets of files, sibling lookups, state
+    /// read from the whole index. Rediscovered over the full index whenever
+    /// a round declares new files — exactly what every processor did under
+    /// the old fixed-point loop.
+    WholeIndex,
+}
+
 pub trait Processor: Sync + Send {
     /// Access the standard config fields shared by every processor.
     ///
@@ -1063,6 +1084,15 @@ pub trait Processor: Sync + Send {
             <crate::config::StandardConfig as crate::config::KnownFields>::checksum_fields(),
             instance_name,
         )
+    }
+
+    /// How this processor's discovery takes files other processors generate
+    /// (see [`Discovery`]). The default, [`Discovery::WholeIndex`], is
+    /// correct for any `discover`; [`Discovery::PerFile`] is an optimization
+    /// a processor may claim only when its products depend on nothing in
+    /// the index but the file each was made for.
+    fn discovery(&self) -> Discovery {
+        Discovery::WholeIndex
     }
 
     /// Discover products for clean operation (outputs only, skip expensive dependency scanning).
@@ -1266,6 +1296,11 @@ impl Processor for SimpleChecker {
         tools
     }
 
+    /// One product per scanned file (`discover_checker_products`).
+    fn discovery(&self) -> Discovery {
+        Discovery::PerFile
+    }
+
     fn discover(
         &self,
         graph: &mut BuildGraph,
@@ -1399,6 +1434,11 @@ where
         tools
     }
 
+    /// One product per scanned file and format (`discover_multi_format`).
+    fn discovery(&self) -> Discovery {
+        Discovery::PerFile
+    }
+
     fn discover(
         &self,
         graph: &mut BuildGraph,
@@ -1433,6 +1473,162 @@ where
 mod tests {
     use super::*;
     use crate::builder::create_all_default_processors;
+
+    /// One product, reduced to what discovery decided about it.
+    fn product_signature(product: &Product) -> String {
+        format!(
+            "{} | {:?} -> {:?} | {:?} | {}",
+            product.processor,
+            product.inputs,
+            product.outputs,
+            product.variant,
+            product.descriptor_key("fixed-checksum"),
+        )
+    }
+
+    /// Every product `processor` discovers over an index of `files`, as
+    /// (primary input, signature) pairs.
+    fn discovered(
+        processor: &dyn Processor,
+        files: &[PathBuf],
+        name: &str,
+    ) -> Vec<(PathBuf, String)> {
+        let mut graph = BuildGraph::new();
+        processor
+            .discover(&mut graph, &FileIndex::from_paths(files.to_vec()), name)
+            .unwrap_or_else(|e| panic!("{name}: discover failed: {e:#}"));
+        let mut found: Vec<(PathBuf, String)> = graph
+            .products()
+            .iter()
+            .map(|p| (p.primary_input().to_path_buf(), product_signature(p)))
+            .collect();
+        found.sort();
+        found
+    }
+
+    /// The processor `pname` scanning the `fixture` directory, configured
+    /// so it discovers something:
+    /// - `src_extensions = [".txt"]` when it has no default extensions
+    ///   (generic generator, script: they scan nothing until told what);
+    /// - `command = "true"` when it has no default command (a generic
+    ///   generator or script with no command discovers nothing);
+    /// - `checker.terms` gets an existing (empty) term directory, without
+    ///   which its discovery stops early.
+    fn fixture_processor(pname: &str, scratch: &std::path::Path) -> Box<dyn Processor> {
+        let create = |table: &toml::map::Map<String, toml::Value>| {
+            crate::builder::create_processor_for_instance(pname, &toml::Value::Table(table.clone()))
+        };
+        let mut table = toml::map::Map::new();
+        table.insert("src_dirs".into(), toml::Value::from(vec!["fixture"]));
+        if pname == "processor.checker.terms" {
+            table.insert(
+                "dir_terms_unambiguous".into(),
+                toml::Value::from(scratch.display().to_string()),
+            );
+        }
+        let plain = create(&table)
+            .unwrap_or_else(|e| panic!("{pname}: {e:#}"))
+            .unwrap();
+        if plain.scan_config().src_extensions().is_empty() {
+            table.insert("src_extensions".into(), toml::Value::from(vec![".txt"]));
+        }
+        if plain.scan_config().command.is_empty() {
+            let mut with_command = table.clone();
+            with_command.insert("command".into(), toml::Value::from("true"));
+            if let Ok(Some(processor)) = create(&with_command) {
+                return processor;
+            }
+        }
+        create(&table)
+            .unwrap_or_else(|e| panic!("{pname}: {e:#}"))
+            .unwrap()
+    }
+
+    /// The contract a processor signs by returning `Discovery::PerFile`:
+    /// discovering over part of the index finds exactly the products the
+    /// full index finds for that part. Discovery relies on it — in rounds
+    /// after the first, a `PerFile` processor is handed only the newly
+    /// generated files — so a processor whose `discover` starts looking at
+    /// other files in the index (siblings, a whole set) must fail here
+    /// rather than silently lose products.
+    ///
+    /// It compares products only. State a `discover` stores from the index
+    /// for later use — `generator.tera` records every includable template —
+    /// is invisible here; such a processor must not be marked `PerFile` in
+    /// the first place (see `Discovery::PerFile`).
+    ///
+    /// Every registered `PerFile` processor is configured to scan a fixture
+    /// directory holding three files per accepted extension at different
+    /// depths, plus one file nothing accepts. Its products from the full
+    /// index, restricted to those whose primary input is in a half-subset,
+    /// must equal its products from the subset alone. The fixture lives only
+    /// in the index, not on disk: discovery reads the index for files and
+    /// the disk only for extra inputs, which are the same in both runs.
+    #[test]
+    fn per_file_discovery_over_a_subset_matches_the_full_index() {
+        let processors = create_all_default_processors().unwrap();
+        let mut names: Vec<&String> = processors
+            .iter()
+            .filter(|(_, p)| p.discovery() == Discovery::PerFile)
+            .map(|(name, _)| name)
+            .collect();
+        names.sort();
+
+        let scratch = tempfile::TempDir::new().unwrap();
+        let mut exercised: Vec<&str> = Vec::new();
+        let mut idle: Vec<&str> = Vec::new();
+        for name in names {
+            let processor = fixture_processor(name, scratch.path());
+            let mut full: Vec<PathBuf> = vec![PathBuf::from("fixture/unrelated.zzz-none")];
+            // Stems are unique per extension: `one.scss` and `one.sass` would
+            // both map to `one.css`, an output conflict of the fixture's own
+            // making.
+            for (n, ext) in processor.scan_config().src_extensions().iter().enumerate() {
+                for (dir, stem) in [
+                    ("fixture", "one"),
+                    ("fixture/sub", "two"),
+                    ("fixture/sub/deep", "three"),
+                ] {
+                    let file = if ext.starts_with('.') {
+                        format!("{stem}{n}{ext}")
+                    } else {
+                        ext.clone()
+                    };
+                    full.push(PathBuf::from(dir).join(file));
+                }
+            }
+            full.sort();
+            full.dedup();
+            let subset: Vec<PathBuf> = full.iter().step_by(2).cloned().collect();
+
+            let from_full = discovered(processor.as_ref(), &full, name);
+            let from_subset = discovered(processor.as_ref(), &subset, name);
+            let expected: Vec<&String> = from_full
+                .iter()
+                .filter(|(primary, _)| subset.contains(primary))
+                .map(|(_, signature)| signature)
+                .collect();
+            let actual: Vec<&String> = from_subset.iter().map(|(_, signature)| signature).collect();
+            assert_eq!(
+                actual, expected,
+                "{name} is marked Discovery::PerFile, but discovering over part of the \
+                 index does not give the full index's products for that part"
+            );
+            if actual.is_empty() {
+                idle.push(name);
+            } else {
+                exercised.push(name);
+            }
+        }
+        assert_eq!(
+            idle,
+            Vec::<&str>::new(),
+            "these PerFile processors produced no products from the fixture, so the \
+             comparison checked nothing for them — extend `fixture_processor` until \
+             they discover something ({} others were checked)",
+            exercised.len()
+        );
+    }
 
     /// Verify that every tool declared by any processor's `required_tools()` has
     /// an entry in the central TOOLS registry (install command + runtime category).

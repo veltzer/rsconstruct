@@ -72,6 +72,11 @@ impl Processor for ScriptProcessor {
         &self.config.standard
     }
 
+    /// One product per scanned file.
+    fn discovery(&self) -> crate::processor::Discovery {
+        crate::processor::Discovery::PerFile
+    }
+
     fn config_json(&self) -> Option<String> {
         crate::processor::ProcessorBase::config_json(&self.config)
     }

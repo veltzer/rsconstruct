@@ -228,6 +228,12 @@ impl Processor for ZspellProcessor {
         &self.config.standard
     }
 
+    /// One product per scanned file; the dictionaries it adds as inputs are
+    /// read from disk, not from the index.
+    fn discovery(&self) -> crate::processor::Discovery {
+        crate::processor::Discovery::PerFile
+    }
+
     fn config_json(&self) -> Option<String> {
         crate::processor::ProcessorBase::config_json(&self.config)
     }

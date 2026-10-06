@@ -15,16 +15,18 @@ pub struct FileIndex {
     files: Vec<PathBuf>,
 }
 
-#[cfg(test)]
 impl FileIndex {
-    /// Create a `FileIndex` from an explicit list of paths (for testing).
-    fn from_paths(mut files: Vec<PathBuf>) -> Self {
+    /// Create a `FileIndex` from an explicit list of paths. Discovery uses
+    /// it to hand a per-file processor only the files routed to it
+    /// (`processor::Discovery::PerFile`); `scan` judges each path on its
+    /// own, so scanning this index matches exactly the routed files the
+    /// processor's settings accept.
+    pub fn from_paths(mut files: Vec<PathBuf>) -> Self {
         files.sort();
+        files.dedup();
         Self { files }
     }
-}
 
-impl FileIndex {
     /// Build a file index by walking the current directory once.
     /// Uses `ignore::WalkBuilder` which natively handles `.gitignore` and
     /// `.rsconstructignore` (via `add_custom_ignore_filename`).
@@ -307,8 +309,9 @@ impl FileIndex {
     /// Add virtual files (declared outputs from generators) to the index.
     /// Used by the fixed-point discovery loop so downstream processors can
     /// discover products for files that don't exist on disk yet.
-    /// Returns the number of files actually added (not already present).
-    pub fn add_virtual_files(&mut self, paths: &[PathBuf]) -> usize {
+    /// Returns the files actually added (not already present), sorted — the
+    /// files the next discovery round routes.
+    pub fn add_virtual_files(&mut self, paths: &[PathBuf]) -> Vec<PathBuf> {
         // Collect first, insert after: pushing while binary-searching would
         // unsort the vec and make later searches (including duplicates within
         // `paths`) unreliable.
@@ -319,13 +322,11 @@ impl FileIndex {
             .collect();
         to_add.sort();
         to_add.dedup();
-        let added = to_add.len();
-        if added > 0 {
-            self.files.extend(to_add);
+        if !to_add.is_empty() {
+            self.files.extend(to_add.iter().cloned());
             self.files.sort();
-            self.files.dedup();
         }
-        added
+        to_add
     }
 
     /// Return all files in the index.
