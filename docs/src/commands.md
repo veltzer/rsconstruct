@@ -61,6 +61,18 @@ rsconstruct build --show-all-config-changes    # Show all config changes, not ju
 
 By default, tool output (compiler messages, linter output) is only shown when a command fails. Use `--show-output` to see all output.
 
+### Selecting processors (`-p`, `-x`)
+
+`-p` runs the named processors **and the processors that generate their
+inputs**, transitively — selecting a checker of generated files also runs
+the generator, so the checker has something to check even on a clean
+checkout. (`-t`/`-d` do the same for the products they select.)
+
+`-x` excludes a processor, and with it every product that needs its
+outputs: those could only run against files nobody is producing. An
+excluded processor is never pulled back in, even when a `-p` selection
+depends on it.
+
 ### Incremental recovery and batch behavior
 
 By default (fail-fast mode), rsconstruct executes each product independently, even for batch-capable processors. Successfully completed products are cached immediately, so if a build fails or is interrupted, the next run only rebuilds what wasn't completed.

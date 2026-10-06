@@ -477,7 +477,10 @@ skipped with stale outputs. **Fix:** entries hold a `platform::FileStamp`
   naming the package or command.
 - `build_graph_filtered` is a hand-copied fourth graph-building path that
   skips tool-version hashing.
-- `-p B` does not pull in the producers of B's inputs; `--target` does.
+- ~~`-p B` does not pull in the producers of B's inputs; `--target`
+  does.~~ **Resolved:** `-p` selects from the fully discovered graph with
+  the same upstream closure as `--target`; `-x` drops what depends on an
+  excluded processor.
 - ~~`@<name>` aliases: `@ruff` works only because ruff is also a tool name;
   the five type aliases are copy-pasted branches.~~ **Resolved:** `@x`
   matches short names (with instances) as well as tools, and the type

@@ -2261,3 +2261,78 @@ fn default_dep_auto_stays_optional() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+/// A two-step chain on a clean checkout: `first` copies `src/a.a` to
+/// `mid/a.b`, `second` copies that to `out/second/a.c`.
+fn copy_chain() -> TempDir {
+    let temp_dir = TempDir::new().unwrap();
+    let project = temp_dir.path();
+    fs::write(
+        project.join("rsconstruct.toml"),
+        r#"[build]
+hash_tool_versions = false
+
+[processor.generator.generic.first]
+command = "cp"
+output_dir = "mid"
+output_extension = "b"
+batch = false
+src_extensions = [".a"]
+src_dirs = ["src"]
+
+[processor.generator.generic.second]
+command = "cp"
+output_dir = "out/second"
+output_extension = "c"
+batch = false
+src_extensions = [".b"]
+src_dirs = ["mid"]
+"#,
+    )
+    .unwrap();
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(project.join("src/a.a"), "a\n").unwrap();
+    temp_dir
+}
+
+/// `-p` selects a processor together with the processors generating its
+/// inputs, as `--target` does for products. `-p` used to restrict discovery
+/// instead: the producer never ran, and on a clean checkout the selected
+/// processor found none of its generated inputs and did nothing.
+#[test]
+fn processor_filter_pulls_in_the_producers_of_its_inputs() {
+    let temp_dir = copy_chain();
+    let project = temp_dir.path();
+    let result = run_rsconstruct_json_with_env(
+        project,
+        &["build", "-p", "processor.generator.generic.second"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(result.exit_success, "{:?}", result.errors);
+    assert_eq!(result.success, 2, "the producer must run too: {result:?}");
+    assert!(project.join("out/second/a.c").exists());
+}
+
+/// An excluded processor is never pulled back in, and what needs its
+/// outputs is dropped with it — it could only run against files nobody is
+/// producing — whether or not it was selected with `-p`.
+#[test]
+fn excluded_producer_drops_its_consumers() {
+    for args in [
+        vec!["build", "-x", "processor.generator.generic.first"],
+        vec![
+            "build",
+            "-p",
+            "processor.generator.generic.second",
+            "-x",
+            "processor.generator.generic.first",
+        ],
+    ] {
+        let temp_dir = copy_chain();
+        let project = temp_dir.path();
+        let result = run_rsconstruct_json_with_env(project, &args, &[("NO_COLOR", "1")]);
+        assert!(result.exit_success, "{args:?}: {:?}", result.errors);
+        assert_eq!(result.total_products, 0, "{args:?}: {result:?}");
+        assert!(!project.join("out/second/a.c").exists());
+    }
+}

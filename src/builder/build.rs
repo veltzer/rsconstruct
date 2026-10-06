@@ -192,6 +192,51 @@ fn resolve_processor_filter(
     })
 }
 
+/// Apply `-p`/`-x` to a fully discovered graph.
+///
+/// `allowed` is the resolved allow-list (see `resolve_processor_filter`).
+/// Its processors' products are kept together with every product that
+/// generates their inputs, transitively — the processors that make a
+/// selected processor's generated inputs run too, as `--target` already
+/// does for its products. (`-p` used to restrict discovery instead, so
+/// those producers never ran and, on a clean checkout, the selected
+/// processor found none of its generated inputs.) An explicitly
+/// `excluded` processor is never pulled back in, and products that need
+/// its outputs are dropped with it: they could only run against files that
+/// are not being produced.
+///
+/// Before dependencies are resolved (`--stop-after discover` or
+/// `add-dependencies`) there are no edges to follow; the allowed
+/// processors' own products are kept.
+fn select_processors(
+    graph: &mut crate::graph::BuildGraph,
+    allowed: &[String],
+    excluded: &[String],
+    stop_after: BuildPhase,
+) {
+    let is_allowed = |p: &crate::graph::Product| allowed.contains(&p.processor);
+    if matches!(
+        stop_after,
+        BuildPhase::Discover | BuildPhase::AddDependencies
+    ) {
+        graph.retain_products(is_allowed);
+        return;
+    }
+    let selected: std::collections::HashSet<usize> = graph
+        .products()
+        .iter()
+        .filter(|p| is_allowed(p))
+        .map(|p| p.id)
+        .collect();
+    let excluded_ids: std::collections::HashSet<usize> = graph
+        .products()
+        .iter()
+        .filter(|p| excluded.contains(&p.processor))
+        .map(|p| p.id)
+        .collect();
+    graph.select_with_producers(&selected, &excluded_ids);
+}
+
 /// Everything discovery produced, ready to classify and execute.
 ///
 /// This is the intermediate that finding 7 said did not exist: previously
@@ -248,8 +293,10 @@ impl Builder {
     ///
     /// Returns the processor map (needed later for execution), the graph, and
     /// the phase timings collected so far. The processor filter is consumed
-    /// entirely within this phase — it selects what gets discovered, and the
-    /// resulting graph already reflects it.
+    /// entirely within this phase, and the resulting graph already reflects
+    /// it. Every processor is discovered, and `-p`/`-x` then select from
+    /// the graph (see `select_processors`): the selection needs the whole
+    /// graph to find the products that generate a selected product's inputs.
     ///
     /// The tool preflight lives here because *when* it runs depends on how the
     /// graph came out: in shared-config mode it is deferred until after
@@ -269,7 +316,11 @@ impl Builder {
             opts.exclude_filter.as_deref(),
             &processors,
         )?;
-        let processor_filter = expanded_filter.as_deref();
+        let excluded_processors: Vec<String> = opts
+            .exclude_filter
+            .as_deref()
+            .map(|f| expand_aliases(f, &processors))
+            .unwrap_or_default();
 
         // Check for config changes and display diffs
         self.detect_config_changes(&processors, opts.show_all_config_changes);
@@ -283,9 +334,13 @@ impl Builder {
             ctx,
             &processors,
             opts.stop_after,
-            processor_filter,
+            None,
             opts.verbose,
         )?;
+
+        if let Some(filter) = &expanded_filter {
+            select_processors(&mut graph, filter, &excluded_processors, opts.stop_after);
+        }
 
         // Verify required tools — after graph construction, so only processors
         // that actually produced products are checked. A declared processor
@@ -293,12 +348,14 @@ impl Builder {
         // lets one shared rsconstruct.toml serve repos with different layouts.
         // Disabled instances (`enabled = false`) are exempt — disabling a
         // processor exists precisely to keep its stanza while its tool is absent.
+        // After the -p/-x selection: a producer pulled in for a selected
+        // processor runs, so its tool is needed too.
         let with_products: std::collections::HashSet<&str> = graph
             .products()
             .iter()
             .map(|p| p.processor.as_str())
             .collect();
-        check_required_tools(&processors, processor_filter, Some(&with_products))?;
+        check_required_tools(&processors, None, Some(&with_products))?;
 
         // Filter by target patterns if specified
         if let Some(ref targets) = opts.targets {

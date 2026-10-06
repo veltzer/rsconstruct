@@ -863,7 +863,7 @@ impl BuildGraph {
         }
 
         // Collect IDs to keep
-        let mut keep: HashSet<usize> = self
+        let selected: HashSet<usize> = self
             .products
             .iter()
             .filter(|product| {
@@ -874,12 +874,35 @@ impl BuildGraph {
             })
             .map(|p| p.id)
             .collect();
+        self.select_with_producers(&selected, &HashSet::new());
+        Ok(())
+    }
 
-        // Close over upstream producers: a kept consumer's inputs may be
-        // produced by products that match no pattern themselves. Dropping
-        // the producer would leave the consumer building against a missing
-        // or stale input. Dependencies are already resolved at this point
-        // (the builder filters after graph construction).
+    /// Keep the `selected` products and every product they depend on,
+    /// transitively; drop the rest.
+    ///
+    /// Closing over upstream producers is what makes a selection buildable:
+    /// a selected consumer's inputs may be produced by products that were
+    /// not selected themselves, and dropping those would leave it building
+    /// against a missing or stale input. `excluded` products are never
+    /// kept, and neither is anything that depends on them, transitively —
+    /// it could only run against the outputs of a product that is not
+    /// running. Dependencies must already be resolved.
+    pub fn select_with_producers(&mut self, selected: &HashSet<usize>, excluded: &HashSet<usize>) {
+        // Everything downstream of an excluded product is out too.
+        let mut blocked: HashSet<usize> = excluded.clone();
+        let mut worklist: Vec<usize> = excluded.iter().copied().collect();
+        while let Some(id) = worklist.pop() {
+            for &dependent in self.get_dependents(id) {
+                if blocked.insert(dependent) {
+                    worklist.push(dependent);
+                }
+            }
+        }
+
+        // The selection, then its producers. A producer of an unblocked
+        // product cannot be blocked: blocking flows only downstream.
+        let mut keep: HashSet<usize> = selected.difference(&blocked).copied().collect();
         let mut worklist: Vec<usize> = keep.iter().copied().collect();
         while let Some(id) = worklist.pop() {
             for &dep_id in self.get_dependencies(id) {
@@ -892,7 +915,6 @@ impl BuildGraph {
         // Ids are indices, so products can't simply be removed — the graph is
         // rebuilt from the survivors.
         self.rebuild_retaining(&keep);
-        Ok(())
     }
 
     /// Run configurable validation checks on the fully-built graph.

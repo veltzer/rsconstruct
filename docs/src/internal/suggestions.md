@@ -88,19 +88,19 @@ Grades:
 - Useful for large projects where a full build is expensive.
 - **Urgency**: medium | **Complexity**: medium
 
-### Demand-driven builds: build only what was asked for
-- `rsconstruct build -p B` should also run the processors that produce B's
-  inputs, the way `--target` already pulls in the producers of the products
-  it selects. Today `-p B` alone skips them, so on a clean checkout B finds
-  none of its generated inputs. Bazel and Buck2 build exactly the closure of
-  the requested target.
-- Discovery's routing records which processor's outputs reached which
-  processor ([Routing Generated Files](output-routing.md)); keeping that
-  processor-level graph makes the upstream closure of `-p` a lookup.
-- Further step: trim *discovery* to that closure too, instead of
-  discovering everything and filtering afterwards (observation #9, the
+### Demand-driven discovery: discover only what was asked for
+- `-p B` now runs B together with the producers of its inputs
+  (`select_processors`, done 2026-10-06), but it gets there by discovering
+  *every* processor and selecting from the full graph afterwards. Bazel
+  and Buck2 never look at what the requested target does not need.
+- Trimming discovery itself to the upstream closure needs to know, before
+  discovering, which processors can feed B — the processor-level routing
+  graph ([Routing Generated Files](output-routing.md), step 4), kept
+  between runs since it is only known after discovery (observation #9, the
   supply-driven model).
-- **Urgency**: medium | **Complexity**: low (closure for `-p`) / high (demand-driven discovery)
+- Side effect today: under `-p`, every processor's config is validated
+  during discovery, not just the selected ones'.
+- **Urgency**: low | **Complexity**: high
 
 ### Critical path analysis
 - Identify the longest sequential chain of actions in a build.
