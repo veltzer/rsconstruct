@@ -715,25 +715,11 @@ fn defconfig_applies_defaults_for_every_plugin() {
 /// integration test file, and (checked separately below) the `mod`
 /// declaration. A missing docs page or test file is invisible to the
 /// compiler; `prettier` once shipped silently half-registered exactly this
-/// way. Grandfathered gaps are allowlisted — shrink the lists, never grow
-/// them.
+/// way. Every processor has its docs page, so that check has no exceptions;
+/// grandfathered test-file gaps are allowlisted — shrink that list, never
+/// grow it.
 #[test]
 fn every_plugin_has_docs_and_tests() {
-    const DOCS_ALLOWLIST: &[&str] = &[
-        "processor.checker.duplicate_files",
-        "processor.checker.encoding",
-        "processor.checker.ijq",
-        "processor.checker.ijsonlint",
-        "processor.generator.ipdfunite",
-        "processor.generator.isass",
-        "processor.checker.itaplo",
-        "processor.checker.iyamllint",
-        "processor.checker.license_header",
-        "processor.checker.marp_images",
-        "processor.checker.prettier",
-        "processor.checker.svglint",
-        "processor.checker.svgo",
-    ];
     const TESTS_ALLOWLIST: &[&str] = &[
         "processor.checker.checkpatch",
         "processor.generator.chromium",
@@ -762,7 +748,7 @@ fn every_plugin_has_docs_and_tests() {
         // file per processor, so `generic` can exist once per type.
         let dir = docs_dir_for(plugin.processor_type);
         let docs_page = format!("docs/src/processor/{dir}/{}.md", plugin.name);
-        if !DOCS_ALLOWLIST.contains(&pname.as_str()) && !std::path::Path::new(&docs_page).exists() {
+        if !std::path::Path::new(&docs_page).exists() {
             missing.push(format!("{pname}: no {docs_page}"));
         }
         let test_file = format!("tests/processor/{dir}/{}.rs", plugin.name);

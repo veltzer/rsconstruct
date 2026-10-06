@@ -63,6 +63,10 @@ system = ["pandoc", "graphviz"]  # System packages (checked but not auto-install
 
 [pages]
 dir = "out/web"  # Directory published to GitHub Pages (omit the section entirely for non-Pages repos)
+
+[command.symlink_install]
+sources = ["dotfiles"]  # Folders whose files `rsconstruct symlink-install` links...
+targets = ["~/"]        # ...into these folders, pairwise (same length as sources)
 ```
 
 Per-processor configuration is documented on each processor's page under [Processors](processors.md).
@@ -547,3 +551,12 @@ Declares that this repo publishes a directory to GitHub Pages. The section is op
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `dir` | string | required | Directory whose contents are published to GitHub Pages (e.g., `"out/web"` or `"_site"`). |
+
+### `[command.symlink_install]`
+
+Configures [`rsconstruct symlink-install`](commands.md#rsconstruct-symlink-install), which symlinks every file under each source folder into the matching target folder, recreating the directory structure. `sources[i]` is installed into `targets[i]`; the command fails if the arrays differ in length or are empty. A leading `~/` in a target is expanded to `$HOME`. The section is read only by that command, never by a build.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `sources` | string[] | `[]` | Folders (relative to the project root) whose files are linked. |
+| `targets` | string[] | `[]` | Folders the links are created in, one per entry of `sources`. |

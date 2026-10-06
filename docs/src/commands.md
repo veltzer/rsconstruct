@@ -693,8 +693,8 @@ Run fixers (auto-format, auto-fix) on source files, modifying them in place.
 
 ```bash
 rsconstruct fix list                    # List the fix-capable processors declared in this project
-rsconstruct fix run script.format       # Run one fixer (by iname)
-rsconstruct fix run script.a,script.b   # Run several, comma-separated
+rsconstruct fix run processor.checker.script.format    # Run one fixer (by full iname)
+rsconstruct fix run processor.checker.script.a,processor.checker.script.b  # Run several, comma-separated
 ```
 
 `fix run` requires at least one processor name. Today the only fix-capable processors are [`script`](processor/checker/script.md) instances that set `fix_command` (and optionally `fix_args`); no built-in processor declares a fixer, so the `Fix` column of `rsconstruct processor list` is `false` for all of them.

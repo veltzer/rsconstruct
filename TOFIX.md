@@ -1,15 +1,19 @@
 # TOFIX
 
-Findings from a code scan on 2026-10-04, plus gaps found on 2026-10-06 while
-rewriting the command reference.
+Findings from writing the missing processor docs pages on 2026-10-06. Each
+was reproduced in a scratch project; the pages document the current
+behavior, so fixing an item means updating its page too.
+
+## High
+
+- `src/processor/generator/isass.rs` (and `sass.rs`, which discovers the same way) - imported partials are not inputs of the importing product. Editing `_vars.scss` leaves `style.css` (which `@use`s it) "unchanged" and serving the old CSS: an incremental build produces wrong output. Needs a Sass analyzer that follows `@use`/`@import`/`@forward` (like the `icpp` one for `#include`). Workaround documented on the isass page: list partials in `dep_inputs`.
 
 ## Medium
 
-- `docs/src/SUMMARY.md:1` - 13 registered processors have no docs page and no SUMMARY entry: `duplicate_files`, `encoding`, `ijq`, `ijsonlint`, `ipdfunite`, `isass`, `itaplo`, `iyamllint`, `license_header`, `marp_images`, `prettier`, `svglint`, `svgo` (diff of `rsconstruct processor list` against `docs/src/processor/*/*.md`). Add a page for each.
-- `.markdownlint.json:1` - turns off 11 markdownlint rules (MD022, MD024, MD026, MD031, MD032, MD033, MD034, MD053, MD058 and loosens MD007/MD013), but nothing runs a markdown linter on this repo (`rsconstruct.toml` has no rumdl/markdownlint processor). The file is dead config, and a config-level ignore list goes against the lint policy. Delete it, or add `[processor.rumdl]` for `README.md`/`docs/src` and fix the findings instead of disabling the rules.
-- `docs/src/processor/checker/script.md` - does not document `fix_command`, `fix_args` or `fix_batch`, which since 2026-08-04 are the only way to make a processor fix-capable for `rsconstruct fix` (every plugin's `can_fix` is `false`). Add them.
-- `docs/src/configuration.md` - has no section for `[command.symlink_install]` (`sources`/`targets`); it is described only under `rsconstruct symlink-install` in `commands.md`. Add it to the configuration reference.
-
-## Low
-
-- `docs/src/internal/suggestions-done.md:108` - still lists ruff, black, prettier, eslint, stylelint, standard, taplo, rumdl and markdownlint as fix-capable; the 2026-08-04 decision set every `can_fix` to `false`. Note the reversal there.
+- `src/processor/checker/iyamllint.rs:27` - parses with `serde_yaml_ng::from_str`, which rejects valid multi-document YAML (`---` separators) with "more than one document is not supported". Parse with a multi-document loader instead. This also matters for plan.md Stage 1, which counts iyamllint as yamllint's Rust alternative: it honours none of `.yamllint.yaml`'s rules (syntax and duplicate keys only), so that row's "confirm every option is honoured" is really "implement the rules".
+- `src/processor/checker/license_header.rs:30` - an empty `header_lines` (the default) makes every file pass silently, against the strict-by-default rule; it should be a config error. The check also searches the whole file for any one of the strings, while the field doc says the lines "must appear at the top of each file"; and the shebang skip has no effect since every line is searched. Decide the intended semantics, then make code, FieldSpec doc and page agree.
+- `src/processor/generator/isass.rs` - partials (`_*.scss`) are compiled to their own `.css`, unlike the `sass` CLI. Skip files whose name starts with `_` by default.
+- `src/builder/fix.rs:43` - `rsconstruct fix run <name>` with a name that matches no fix-capable processor (e.g. the short `script.foo` instead of `processor.checker.script.foo`) prints "No matching processors with fix capability." and exits 0. A requested processor that does not exist should fail, and the short form could be accepted the way `build -p` accepts inames.
+- `src/processor/checker/script.rs:26` - `fix_batch` shows as type `?` in `rsconstruct processor defconfig processor.checker.script`: it has no `FieldSpec` with a type. Add one.
+- `plan.md` Stage 3 `iyq` row says "reuse ijq's filter evaluation", but `ijq` evaluates no filters: it is a JSON parse check identical to `ijsonlint`. The row needs a real jq engine (e.g. the `jaq` crate).
+- Markdown in `README.md` and `docs/src` is not linted. `.markdownlint.json` was deleted as dead config; adding a `rumdl` stanza (with the fleet-shared `.rumdl.toml`) would lint locally, but CI never runs `rsconstruct build` in rs* repos, so enforcing it needs a decision about the shared `ci.yml`.
