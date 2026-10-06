@@ -30,6 +30,10 @@ Grades:
   project that is not among the product's inputs. Run in CI, it turns
   "editing this header rebuilt nothing" into an error naming the product
   and the file.
+- **Researched 2026-10-06, deferred:** how Bazel, Buck2, Pants, Nix, tup
+  and BuildXL handle it, why observation fits rsconstruct better than a
+  sandbox, the candidate mechanisms (strace leading) and the open
+  questions are in [Undeclared Reads](undeclared-reads.md).
 - **Urgency**: medium (check mode) / low (full isolation) | **Complexity**: medium (check mode) / high (full isolation)
 
 ### Persistent daemon mode

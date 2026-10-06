@@ -154,6 +154,7 @@ The chapters below cover the internal design and implementation of rsconstruct. 
 - [Processor Ordering](internal/processor-ordering.md)
 - [Output Prediction](internal/output-prediction.md)
 - [Routing Generated Files](internal/output-routing.md)
+- [Undeclared Reads](internal/undeclared-reads.md)
 - [Per-Processor Statistics](internal/per-processor-stats.md)
 - [Profiling](internal/profiling.md)
 - [Fast `stat` on Linux](internal/fast-stat.md)

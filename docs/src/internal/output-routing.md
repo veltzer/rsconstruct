@@ -1,7 +1,9 @@
 # Routing Generated Files Between Processors
 
-**Status: routing implemented (2026-10-06); `inputs_from`, waiting
-processors and the creator tiers are not.** See
+**Status: routing implemented (2026-10-06). Making whole-index processors
+wait was set aside (see [Why whole-index processors do not
+wait](#why-whole-index-processors-do-not-wait)); `inputs_from` and the
+creator tiers are deferred until a config needs them.** See
 [Implementation status](#implementation-status) at the end.
 
 This chapter proposes replacing the fixed-point discovery loop with
@@ -254,12 +256,44 @@ the aggregate waiting.
 3. Discovery as a routing queue: pass 0, per-file discovery of routed files,
    aggregate processors once their producers have settled. **Partly done:**
    per-file processors are routed; aggregate processors still rediscover
-   every round rather than waiting.
-4. Record the routing graph; show it in `graph`; cycle errors.
+   every round rather than waiting — **and will**, see below.
+4. Record the routing graph; show it in `graph`; cycle errors. **Already
+   there:** `rsconstruct processor graph` (text, dot or JSON) prints which
+   processor feeds which, from the product edges routing creates. A cycle
+   between products is a graph error at topological sort; between
+   processors it is not an error (two processors may feed each other
+   different files).
 5. Delete the loop, virtual files as a discovery mechanism, and the
-   re-declaration handling in `add_product`.
+   re-declaration handling in `add_product`. **Set aside** with step 3's
+   waiting, which it depends on.
 6. `inputs_from` (restrict and assert), and the creator-output config error.
 7. Tier 2 (tree inputs from creators). Tier 3 only when a config needs it.
+
+## Why whole-index processors do not wait
+
+The plan had each `WholeIndex` processor wait until no processor that could
+still feed it had work left, then discover once — which would let the loop
+and its re-declaration handling go. That ordering cannot be computed:
+
+- A processor is `WholeIndex` precisely because "which files does it take"
+  is not a path test on its scan settings — explicit globs, sibling
+  lookups, a whole set, a plan. So whether a file *could* reach it is not
+  known in advance.
+- Whether one whole-index processor feeds another is only known after the
+  first has discovered (its outputs come from its own discovery: tera's
+  templates, a mass generator's plan).
+
+Ordering them soundly needs every processor to predict its outputs before
+discovering — Approach F in [Cross-Processor
+Dependencies](cross-processor-dependencies.md), set aside there because it
+duplicates each processor's output-path logic. Without it, a whole-index
+processor that ran "too early" would miss files and nothing would notice.
+
+What exists is correct and cheap: per-file processors (80 of 97) are routed
+only the new files; whole-index processors rescan the index in each round
+that declared new files, exactly as before, and their re-declarations are
+merged by `add_product`. Discovery was never the expensive phase. This is
+the endpoint unless output prediction is ever added for another reason.
 
 ## Implementation status
 

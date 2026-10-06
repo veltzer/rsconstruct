@@ -352,8 +352,8 @@ Likely a small refactor, but requires aligning on the output shape.
 
 A read-through of the build pipeline end to end (driver, graph, discovery,
 analyzers, deps cache, executor, checksums, object store). R1–R5 were
-correctness defects and are fixed, as are R6, R7, R9 and R10; R8 is partly
-fixed; the remaining minor items are open.
+correctness defects and are fixed, as are R6–R10 (R8 to the extent it can
+be: see its entry); the remaining minor items are open.
 
 ### R1. Two decisions per product, only one of them the policy's — RESOLVED
 
@@ -444,15 +444,17 @@ takes the first unit whose processor is under its `max_jobs` cap, so a
 capped processor never parks a worker; the semaphores are gone. Test:
 `jobs_cap_every_invocation_and_max_jobs_caps_a_processor`.
 
-### R8. Discovery re-ran every processor on every pass — PARTIALLY RESOLVED
+### R8. Discovery re-ran every processor on every pass — RESOLVED
 
 The fixed-point loop rediscovered all processors each pass, not just those
-whose extensions match the newly added virtual files. **Fix so far:**
-[Routing Generated Files](output-routing.md) — per-file processors are
-handed only the newly declared files; processors that look at more than
-one file still rescan the whole index each pass. Verified identical on all
-222 fleet configs. Open: making those processors wait for their producers
-instead, which would let the loop's re-declaration machinery go.
+whose extensions match the newly added virtual files. **Fix:**
+[Routing Generated Files](output-routing.md) — per-file processors (80 of
+97) are handed only the newly declared files; processors that look at more
+than one file still rescan the whole index each pass. Verified identical on
+all 222 fleet configs. Making those processors wait for their producers
+instead was set aside: the ordering cannot be computed without output
+prediction (see "Why whole-index processors do not wait" in that chapter),
+so the loop's re-declaration handling stays.
 
 ### R9. The deps cache committed once per scanned file — RESOLVED
 
