@@ -11,6 +11,7 @@ header_lines = [
     " * This file is part of the demo package.",
     " */",
 ]
+optional_prefix_lines = ["// SPDX-License-Identifier: GPL-2.0"]
 "#;
 
 const HEADER: &str = "/*\n * This file is part of the demo package.\n */\n";
@@ -112,6 +113,49 @@ fn license_header_reports_block_mismatch_after_spdx() {
     assert!(
         out.contains("src/broken.c:3: license header line 2 differs"),
         "mismatch should be reported inside the block: {out}"
+    );
+}
+
+/// The prefix must match exactly: another SPDX line is not the declared
+/// prefix, and a file ending right after the header without a newline does
+/// not have the header's last line.
+#[test]
+fn license_header_matches_prefix_and_newlines_exactly() {
+    let mit = format!("// SPDX-License-Identifier: MIT\n{HEADER}int x;\n");
+    let unterminated = HEADER.trim_end_matches('\n');
+    let temp_dir = project(&[("mit.c", &mit), ("unterminated.c", unterminated)]);
+    let (ok, out) = build(&temp_dir);
+    assert!(!ok, "build should fail: {out}");
+    assert!(
+        out.contains("src/mit.c:1: license header line 1 differs"),
+        "unknown SPDX line not reported: {out}"
+    );
+    assert!(
+        out.contains(
+            "src/unterminated.c:3: file ends without a newline after license header line 3"
+        ),
+        "missing final newline not reported: {out}"
+    );
+}
+
+/// `skip_shebang` (default on) lets scripts keep their `#!` line first.
+#[test]
+fn license_header_skip_shebang_is_configurable() {
+    let script = format!("#!/bin/sh\n{HEADER}int x;\n");
+    let temp_dir = project(&[("script.c", &script)]);
+    let (ok, out) = build(&temp_dir);
+    assert!(ok, "shebang is skipped by default: {out}");
+
+    let config = format!("{CONFIG}skip_shebang = false\n");
+    fs::write(temp_dir.path().join("rsconstruct.toml"), config).unwrap();
+    let (ok, out) = build(&temp_dir);
+    assert!(
+        !ok,
+        "with skip_shebang = false the #! line is not skipped: {out}"
+    );
+    assert!(
+        out.contains("src/script.c:1: license header line 1 differs"),
+        "unexpected error: {out}"
     );
 }
 

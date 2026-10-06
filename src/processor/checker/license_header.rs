@@ -6,12 +6,33 @@ use serde::{Deserialize, Serialize};
 use crate::config::StandardConfig;
 use crate::graph::Product;
 
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct LicenseHeaderConfig {
     #[serde(default)]
     pub header_lines: Vec<String>,
+    /// Lines that may come right before the header, all of them or none.
+    #[serde(default)]
+    pub optional_prefix_lines: Vec<String>,
+    /// Whether a leading `#!` line is skipped before looking for the header.
+    #[serde(default = "default_skip_shebang")]
+    pub skip_shebang: bool,
     #[serde(flatten)]
     pub standard: StandardConfig,
+}
+
+const fn default_skip_shebang() -> bool {
+    true
+}
+
+impl Default for LicenseHeaderConfig {
+    fn default() -> Self {
+        Self {
+            header_lines: Vec::new(),
+            optional_prefix_lines: Vec::new(),
+            skip_shebang: default_skip_shebang(),
+            standard: StandardConfig::default(),
+        }
+    }
 }
 
 pub struct LicenseHeaderProcessor {
@@ -35,7 +56,7 @@ impl LicenseHeaderProcessor {
                 std::fs::read_to_string(file),
                 &format!("Failed to read {}", file.display()),
             )?;
-            if let Some(problem) = header_problem(&content, &self.config.header_lines) {
+            if let Some(problem) = header_problem(&content, &self.config) {
                 errors.push(format!("{}:{}", file.display(), problem));
             }
         }
@@ -52,45 +73,67 @@ impl LicenseHeaderProcessor {
     }
 }
 
-/// Check that `content` starts with `header`, line for line, after an
-/// optional shebang line. The header may itself be the SPDX line
-/// (`header_lines = ["// SPDX-License-Identifier: GPL-2.0"]`, the line the
-/// Linux kernel requires first in every source file). When the header is a
-/// license block instead, it may follow an SPDX line, so kernel sources
-/// carry both. Returns `"<line>: <what is wrong>"` for the first mismatch
-/// at the top of the file, or None when the header is there.
-fn header_problem(content: &str, header: &[String]) -> Option<String> {
-    let lines: Vec<&str> = content.lines().collect();
-    let start = usize::from(lines.first().is_some_and(|l| l.starts_with("#!")));
-    let problem = header_problem_at(&lines, start, header)?;
-    let is_spdx = |l: &str| l.contains("SPDX-License-Identifier:");
-    // A file opening with an SPDX line, checked against a header that is not
-    // one: the header belongs after it, and that is where a mismatch is.
-    let header_is_spdx = header.first().is_some_and(|h| is_spdx(h));
-    if !header_is_spdx && lines.get(start).is_some_and(|l| is_spdx(l)) {
-        return header_problem_at(&lines, start + 1, header);
+/// Check that `content` starts with the header text: `header_lines`, each
+/// terminated by a newline, after an optional `#!` line (`skip_shebang`)
+/// and optionally preceded by `optional_prefix_lines`. Line endings are
+/// read as Python's text mode reads them (`\r\n` and `\r` become `\n`).
+/// Returns `"<line>: <what is wrong>"` for the first mismatch, or None when
+/// the header is there.
+fn header_problem(content: &str, config: &LicenseHeaderConfig) -> Option<String> {
+    let text = content.replace("\r\n", "\n").replace('\r', "\n");
+    let (mut body, mut skipped) = (text.as_str(), 0);
+    if config.skip_shebang && body.starts_with("#!") {
+        body = body.split_once('\n').map_or("", |(_, rest)| rest);
+        skipped = 1;
+    }
+    let problem = header_mismatch(body, &config.header_lines, skipped)?;
+    if !config.optional_prefix_lines.is_empty()
+        && let Some(rest) = body.strip_prefix(&as_text(&config.optional_prefix_lines))
+    {
+        // The prefix is there, so the header belongs after it, and that is
+        // where a mismatch is reported.
+        return header_mismatch(
+            rest,
+            &config.header_lines,
+            skipped + config.optional_prefix_lines.len(),
+        );
     }
     Some(problem)
 }
 
-/// Compare `header` with `lines` from index `start` on.
-fn header_problem_at(lines: &[&str], start: usize, header: &[String]) -> Option<String> {
+/// `lines` as text, each line terminated by a newline.
+fn as_text(lines: &[String]) -> String {
+    let mut text = String::new();
+    for line in lines {
+        text.push_str(line);
+        text.push('\n');
+    }
+    text
+}
+
+/// Describe where `text` stops starting with `header` (each line followed
+/// by a newline), or None when it does. `skipped` is how many file lines
+/// precede `text`, for the reported line number.
+fn header_mismatch(text: &str, header: &[String], skipped: usize) -> Option<String> {
+    let mut pieces = text.split_inclusive('\n');
     for (i, expected) in header.iter().enumerate() {
-        let line_no = start + i + 1;
-        match lines.get(start + i) {
-            Some(found) if found == expected => {}
-            Some(found) => {
-                return Some(format!(
-                    "{line_no}: license header line {} differs: expected {expected:?}, found {found:?}",
-                    i + 1,
-                ));
-            }
-            None => {
-                return Some(format!(
-                    "{line_no}: file ends before license header line {}: expected {expected:?}",
-                    i + 1,
-                ));
-            }
+        let line_no = skipped + i + 1;
+        let n = i + 1;
+        let Some(piece) = pieces.next() else {
+            return Some(format!(
+                "{line_no}: file ends before license header line {n}: expected {expected:?}"
+            ));
+        };
+        let found = piece.strip_suffix('\n').unwrap_or(piece);
+        if found != expected {
+            return Some(format!(
+                "{line_no}: license header line {n} differs: expected {expected:?}, found {found:?}"
+            ));
+        }
+        if !piece.ends_with('\n') {
+            return Some(format!(
+                "{line_no}: file ends without a newline after license header line {n}"
+            ));
         }
     }
     None
@@ -160,7 +203,13 @@ inventory::submit! {
         fields: &[
             crate::config::FieldSpec { name: "header_lines", ty: crate::config::FieldType::StringArray,
                 affects_output: true, required: true,
-                doc: "The license header every file must start with, one entry per line (after an optional shebang and SPDX line)" },
+                doc: "The license header every file must start with, one entry per line" },
+            crate::config::FieldSpec { name: "optional_prefix_lines", ty: crate::config::FieldType::StringArray,
+                affects_output: true, required: false,
+                doc: "Lines that may come right before the header, all or none (e.g. a kernel SPDX line)" },
+            crate::config::FieldSpec { name: "skip_shebang", ty: crate::config::FieldType::Bool,
+                affects_output: true, required: false,
+                doc: "Skip a leading #! line before looking for the header" },
         ],
         omit_standard_fields: &["command", "formats", "output_dir"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".bash"], src_exclude_dirs: &[] }),
