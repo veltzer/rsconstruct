@@ -439,7 +439,8 @@ processor runs its chunks serially.
 
 The fixed-point loop rediscovers all processors each pass, not just those
 whose extensions match the newly added virtual files. Proposed fix:
-[Explicit Processor Inputs](inputs-from.md), which removes the loop.
+[Routing Generated Files](output-routing.md), which replaces the loop
+with per-file routing and keeps connections automatic.
 
 ### R9. The deps cache committed once per scanned file — RESOLVED
 
