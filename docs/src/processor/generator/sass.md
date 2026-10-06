@@ -14,6 +14,8 @@ sass/style.scss  ->  out/processor.generator.sass/style.css
 sass/components/button.scss  ->  out/processor.generator.sass/components/button.css
 ```
 
+**Declare the [sass analyzer](../../analyzers/sass.md) alongside this processor.** It makes every file a stylesheet loads (`@use`, `@forward`, `@import`, transitively) an input of that stylesheet. Without it, editing a partial does **not** rebuild the stylesheets that use it, and they keep their old CSS. If you pass `--load-path` in `args`, give the analyzer the same directories in `load_paths`.
+
 ## Source Files
 
 - Input: `sass/**/*{src_extensions}`

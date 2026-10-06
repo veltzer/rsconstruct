@@ -6,7 +6,7 @@ behavior, so fixing an item means updating its page too.
 
 ## High
 
-- `src/processor/generator/isass.rs` (and `sass.rs`, which discovers the same way) - imported partials are not inputs of the importing product. Editing `_vars.scss` leaves `style.css` (which `@use`s it) "unchanged" and serving the old CSS: an incremental build produces wrong output. Needs a Sass analyzer that follows `@use`/`@import`/`@forward` (like the `icpp` one for `#include`). Workaround documented on the isass page: list partials in `dep_inputs`.
+- `src/analyzers/mod.rs` `analyze_with_scanner` + `src/deps_cache.rs` `get` - a cached dependency list is validated only against the source file's own checksum (and that each listed dep still exists). A header that gains a new `#include` leaves every `.c` that includes it with the old list, so changes to the newly included file never rebuild them. Reproduced with `icpp`: `main.c` includes `a.h`; change `a.h` to `#include "b.h"`, build, then edit `b.h` — the build reports `1 unchanged` and the binary keeps the old value. Exposed: `cpp` (its `gcc -MM` list is transitive) and `icpp`. `python` and `markdown` record direct references only, so they are not hit by this (though `python` does not follow imports of imports at all); `tera` and `sass` use `analyze_with_full_scanner`, which rescans every run. Fix: cache, per source, the checksums of all scanned files (source plus every transitive dep) and treat any mismatch as a miss.
 
 ## Medium
 

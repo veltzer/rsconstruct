@@ -7,6 +7,7 @@ mod cpp;
 mod icpp;
 mod markdown;
 pub mod python;
+mod sass;
 mod tera;
 
 use crate::deps_cache::DepsCache;

@@ -284,7 +284,7 @@ rsconstruct webcache list    # List all cached URLs and their sizes
 
 ## `rsconstruct analyzer`
 
-Manage dependency analyzers and inspect the dependency cache they fill. An analyzer scans source files for dependencies (C/C++ `#include`s, Python imports, Markdown and Tera references) and records them in `.rsconstruct/deps.redb`; see [Dependency Analyzers](analyzers.md). Analyzers are referred to by pname (the type: `cpp`, `icpp`, `markdown`, `python`, `tera`) or by iname (the instance as declared in `rsconstruct.toml`, e.g. `cpp` or `cpp.kernel`).
+Manage dependency analyzers and inspect the dependency cache they fill. An analyzer scans source files for dependencies (C/C++ `#include`s, Python imports, Sass `@use`s, Markdown and Tera references) and records them in `.rsconstruct/deps.redb`; see [Dependency Analyzers](analyzers.md). Analyzers are referred to by pname (the type: `cpp`, `icpp`, `markdown`, `python`, `sass`, `tera`) or by iname (the instance as declared in `rsconstruct.toml`, e.g. `cpp` or `cpp.kernel`).
 
 | Subcommand | Config required? |
 |------------|-----------------|

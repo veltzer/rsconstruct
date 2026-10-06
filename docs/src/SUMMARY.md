@@ -15,6 +15,7 @@
     - [icpp](analyzers/icpp.md)
     - [python](analyzers/python.md)
     - [markdown](analyzers/markdown.md)
+    - [sass](analyzers/sass.md)
     - [tera](analyzers/tera.md)
 - [Processors](processors.md)
     - [Processor Types](processor-types.md)

@@ -18,6 +18,7 @@ Per-analyzer reference pages:
 - [icpp](analyzers/icpp.md) — C/C++ `#include` scanning, pure Rust (no subprocess)
 - [python](analyzers/python.md) — Python `import` / `from ... import` resolution
 - [markdown](analyzers/markdown.md) — Markdown image and link references
+- [sass](analyzers/sass.md) — Sass/SCSS `@use`, `@forward` and `@import` resolution
 - [tera](analyzers/tera.md) — Tera `{% include %}`, `{% import %}`, `{% extends %}` references
 
 ## Configuration

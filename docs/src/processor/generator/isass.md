@@ -15,10 +15,9 @@ sass/components/button.scss ->  out/processor.generator.isass/components/button.
 
 `@use` and `@import` resolve relative to the importing file. Compile errors fail the product with grass's message.
 
-Two things differ from what the `sass` command line does:
+**Declare the [sass analyzer](../../analyzers/sass.md) alongside this processor.** It makes every file a stylesheet loads (`@use`, `@forward`, `@import`, transitively) an input of that stylesheet. Without it, a product's only input is its own source file: editing a partial does **not** rebuild the stylesheets that use it, and they keep their old CSS.
 
-- **Partials are compiled too.** Every matching file is a product, including partials such as `_vars.scss`, which produce their own (often empty) `.css`. Keep partials out with `src_exclude_files` or `src_exclude_paths`.
-- **Imported files are not tracked.** A product's inputs are its own source file only. Editing a partial that another file `@use`s does **not** rebuild the importer, which keeps its old CSS. List shared partials in `dep_inputs` so that a change to them rebuilds every file.
+Unlike the `sass` command line, **partials are compiled too**: every matching file is a product, including partials such as `_vars.scss`, which produce their own (often empty) `.css`. Keep partials out with `src_exclude_files` or `src_exclude_paths`.
 
 ## Source Files
 
@@ -33,7 +32,8 @@ The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` c
 [processor.generator.isass]
 src_dirs = ["sass"]
 src_exclude_files = ["_vars.scss", "_mixins.scss"]
-dep_inputs = ["sass/_vars.scss", "sass/_mixins.scss"]
+
+[analyzer.sass]
 ```
 
 | Key | Type | Default | Description |
@@ -41,7 +41,7 @@ dep_inputs = ["sass/_vars.scss", "sass/_mixins.scss"]
 | `src_dirs` | string[] | `[]` | Directories to scan |
 | `src_extensions` | string[] | `[".scss", ".sass"]` | File extensions to compile |
 | `output_dir` | string | `"out/processor.generator.isass"` | Output directory |
-| `dep_inputs` | string[] | `[]` | Extra files whose changes rebuild every product (list imported partials here) |
+| `dep_inputs` | string[] | `[]` | Extra files whose changes rebuild every product |
 
 ## Batch support
 

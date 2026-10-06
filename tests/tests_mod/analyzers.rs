@@ -345,3 +345,104 @@ src_dirs = ["."]
         combined
     );
 }
+
+/// Write a file under the project, creating its directory.
+fn write_project_file(project_path: &std::path::Path, rel: &str, content: &str) {
+    let path = project_path.join(rel);
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(path, content).unwrap();
+}
+
+/// Run `rsconstruct build`, failing the test on a non-zero exit.
+fn build_ok(project_path: &std::path::Path) {
+    let out = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        out.status.success(),
+        "build failed: {}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+const ISASS_WITH_SASS_ANALYZER: &str = r#"[processor.generator.isass]
+src_dirs = ["sass"]
+
+[analyzer.sass]
+"#;
+
+/// Editing a partial must rebuild every stylesheet that `@use`s it. Without
+/// the sass analyzer the importer's only input was its own file, so the
+/// build called it unchanged and kept serving the old CSS.
+#[test]
+fn sass_analyzer_rebuilds_importer_when_partial_changes() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    write_project_file(project_path, "rsconstruct.toml", ISASS_WITH_SASS_ANALYZER);
+    write_project_file(project_path, "sass/_vars.scss", "$c: red;\n");
+    write_project_file(
+        project_path,
+        "sass/style.scss",
+        "@use \"vars\";\nbody { color: vars.$c; }\n",
+    );
+    build_ok(project_path);
+
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    write_project_file(project_path, "sass/_vars.scss", "$c: blue;\n");
+    build_ok(project_path);
+
+    let css =
+        fs::read_to_string(project_path.join("out/processor.generator.isass/style.css")).unwrap();
+    assert!(css.contains("blue"), "style.css is stale: {css}");
+}
+
+/// A `@use` added inside a partial (the importer itself unchanged) must be
+/// picked up too: the analyzer rescans instead of trusting a dependency list
+/// cached against the importer's own checksum.
+#[test]
+fn sass_analyzer_follows_use_added_inside_partial() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    write_project_file(project_path, "rsconstruct.toml", ISASS_WITH_SASS_ANALYZER);
+    write_project_file(project_path, "sass/_vars.scss", "$c: red;\n");
+    write_project_file(
+        project_path,
+        "sass/style.scss",
+        "@use \"vars\";\nbody { color: vars.$c; }\n",
+    );
+    build_ok(project_path);
+
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    write_project_file(project_path, "sass/_more.scss", "$x: green;\n");
+    write_project_file(
+        project_path,
+        "sass/_vars.scss",
+        "@use \"more\";\n$c: more.$x;\n",
+    );
+    build_ok(project_path);
+
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    write_project_file(project_path, "sass/_more.scss", "$x: purple;\n");
+    build_ok(project_path);
+
+    let css =
+        fs::read_to_string(project_path.join("out/processor.generator.isass/style.css")).unwrap();
+    assert!(css.contains("purple"), "style.css is stale: {css}");
+}
+
+/// An import that resolves nowhere is an analyzer error naming the file and
+/// the URL, unless `skip_not_found` is set.
+#[test]
+fn sass_analyzer_rejects_unresolved_import() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    write_project_file(project_path, "rsconstruct.toml", ISASS_WITH_SASS_ANALYZER);
+    write_project_file(project_path, "sass/style.scss", "@use \"nope\";\n");
+
+    let out = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(!out.status.success(), "build should fail");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("Sass import not found: \"nope\" in sass/style.scss"),
+        "unexpected error: {stderr}"
+    );
+}

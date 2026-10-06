@@ -141,6 +141,37 @@ impl Default for MarkdownAnalyzerConfig {
     }
 }
 
+/// Configuration for the Sass dependency analyzer (`sass`).
+/// Scans `.scss`/`.sass` files for `@use`, `@forward` and `@import`.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct SassAnalyzerConfig {
+    /// Whether this analyzer is active. Set to false to disable without
+    /// removing the stanza from rsconstruct.toml.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Directories searched after the importing file's own directory, like
+    /// the Sass compiler's `--load-path`.
+    #[serde(default)]
+    pub load_paths: Vec<String>,
+    /// Whether to silently skip imports that cannot be resolved.
+    /// When false (default), an import of a local file that resolves nowhere
+    /// is a hard error. Built-in modules (`sass:math`), URLs and plain CSS
+    /// `@import`s are never resolved and never an error.
+    #[serde(default)]
+    pub skip_not_found: bool,
+}
+
+impl Default for SassAnalyzerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            load_paths: Vec::new(),
+            skip_not_found: false,
+        }
+    }
+}
+
 /// Configuration for the Tera template dependency analyzer (`tera`).
 /// Scans Tera template source files for includes.
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -223,6 +254,15 @@ impl KnownFields for MarkdownAnalyzerConfig {
     }
     fn checksum_fields() -> &'static [&'static str] {
         &[]
+    }
+}
+
+impl KnownFields for SassAnalyzerConfig {
+    fn known_fields() -> &'static [&'static str] {
+        &["enabled", "load_paths", "skip_not_found"]
+    }
+    fn checksum_fields() -> &'static [&'static str] {
+        &["load_paths", "skip_not_found"]
     }
 }
 

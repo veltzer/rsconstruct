@@ -63,7 +63,7 @@ Instance names are extracted from `[processor.TYPE.NAME]` and `[processor.TYPE.N
 
 ### Analyzer names
 
-These commands complete analyzer names (`cpp`, `markdown`, `python`, `tera`):
+These commands complete analyzer names (every registered analyzer, as listed by `rsconstruct analyzer list`):
 
 - `rsconstruct analyzer config <TAB>`
 - `rsconstruct analyzer clean --analyzer <TAB>`
