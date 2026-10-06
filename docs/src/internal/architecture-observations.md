@@ -466,8 +466,11 @@ skipped with stale outputs. **Fix:** entries hold a `platform::FileStamp`
 - `build_graph_filtered` is a hand-copied fourth graph-building path that
   skips tool-version hashing.
 - `-p B` does not pull in the producers of B's inputs; `--target` does.
-- `@<name>` aliases: `@ruff` works only because ruff is also a tool name;
-  the five type aliases are copy-pasted branches.
+- ~~`@<name>` aliases: `@ruff` works only because ruff is also a tool name;
+  the five type aliases are copy-pasted branches.~~ **Resolved:** `@x`
+  matches short names (with instances) as well as tools, and the type
+  aliases are one lookup over `ProcessorType`, which also adds the missing
+  `@explicit`.
 - Five `add_product*` constructors; `src/config/mod.rs` is 3,100+ lines.
 - Products predicted to build only because a dependency changes still have
   their outputs unlinked up front, so an unchanged rebuild ends as a

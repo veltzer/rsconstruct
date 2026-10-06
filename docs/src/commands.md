@@ -75,16 +75,19 @@ The `-p` flag supports `@`-prefixed shortcuts that expand to groups of processor
 - `@checker` — all checker processors (ruff, pylint, shellcheck, etc.)
 - `@generator` — all generator processors (tera, cc_single_file, etc.)
 - `@creator` — all creator processors (pip, npm, cargo, etc.)
+- `@explicit` — all explicit processors
 - `@mass_generator` — all mass generator processors
 - `@lua` — all Lua plugin processors
 
-**By tool:**
-- `@python3` — all processors that require `python3`
-- `@node` — all processors that require `node`
-- Any tool name works (matched against each processor's `required_tools()`)
+**By tool or name** — any other `@x` selects both of these:
+- every processor that requires tool `x` (`@python3`, `@node`; matched
+  against each processor's `required_tools()`)
+- every processor whose short name is `x`, with all its instances
+  (`@tera` → `processor.generator.tera` and e.g.
+  `processor.generator.tera.docs`; `@generic` → the generic processor of
+  every type)
 
-**By processor name:**
-- `@ruff` — equivalent to `ruff` (strips the `@` prefix)
+An `@x` that selects nothing is reported as an unknown processor.
 
 Examples:
 

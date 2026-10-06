@@ -16,90 +16,48 @@ use std::time::{Duration, Instant};
 
 /// Expand `@`-prefixed shortcuts in the processor filter.
 ///
-/// Three categories of shortcuts:
-/// - **By type**: `@checker`, `@generator`, `@creator`, `@mass_generator`, `@lua`
-/// - **By tool**: `@python3`, `@node`, etc. — matches processors whose `required_tools()` contains the name
-/// - **By processor name**: `@ruff` → `"ruff"` — strips the `@` prefix
+/// - **By type**: `@checker`, `@generator`, `@creator`, `@explicit`,
+///   `@mass_generator`, `@lua` — every processor (and instance) of that type.
+///   A type with no configured processors selects nothing.
+/// - **Anything else**, `@x`, selects the union of the processors whose
+///   `required_tools()` contains `x` (`@python3`) and the processors whose
+///   short name is `x` (`@tera` → `processor.generator.tera` and each of its
+///   instances; `@generic` → every generic processor of every type).
+/// - An `@x` that selects nothing stays as written, so validation reports
+///   it as an unknown processor.
+///
+/// The short-name case used to compare the bare word against full names
+/// (`processor.generator.tera`), which never matched: `@tera` failed, and
+/// `@ruff` only worked because `ruff` is also a tool name.
 fn expand_aliases(filter: &[String], processors: &ProcessorMap) -> Vec<String> {
+    use crate::registries::processor::parse_name;
     let mut expanded = Vec::new();
     for name in filter {
-        if let Some(alias) = name.strip_prefix('@') {
-            match alias {
-                "checker" => {
-                    expanded.extend(
-                        processors
-                            .iter()
-                            .filter(|(name, _)| {
-                                crate::registries::processor::processor_type_of(name.as_str())
-                                    == ProcessorType::Checker
-                            })
-                            .map(|(n, _)| n.clone()),
-                    );
-                }
-                "generator" => {
-                    expanded.extend(
-                        processors
-                            .iter()
-                            .filter(|(name, _)| {
-                                crate::registries::processor::processor_type_of(name.as_str())
-                                    == ProcessorType::Generator
-                            })
-                            .map(|(n, _)| n.clone()),
-                    );
-                }
-                "creator" => {
-                    expanded.extend(
-                        processors
-                            .iter()
-                            .filter(|(name, _)| {
-                                crate::registries::processor::processor_type_of(name.as_str())
-                                    == ProcessorType::Creator
-                            })
-                            .map(|(n, _)| n.clone()),
-                    );
-                }
-                "mass_generator" => {
-                    expanded.extend(
-                        processors
-                            .iter()
-                            .filter(|(name, _)| {
-                                crate::registries::processor::processor_type_of(name.as_str())
-                                    == ProcessorType::MassGenerator
-                            })
-                            .map(|(n, _)| n.clone()),
-                    );
-                }
-                "lua" => {
-                    expanded.extend(
-                        processors
-                            .iter()
-                            .filter(|(name, _)| {
-                                crate::registries::processor::processor_type_of(name.as_str())
-                                    == ProcessorType::Lua
-                            })
-                            .map(|(n, _)| n.clone()),
-                    );
-                }
-                _ => {
-                    // Check if it's a tool name
-                    let by_tool: Vec<_> = processors
-                        .iter()
-                        .filter(|(_, p)| p.required_tools().iter().any(|t| t == alias))
-                        .map(|(n, _)| n.clone())
-                        .collect();
-                    if !by_tool.is_empty() {
-                        expanded.extend(by_tool);
-                    } else if processors.contains_key(alias) {
-                        // Fall back to processor name
-                        expanded.push(alias.to_string());
-                    } else {
-                        // Unknown alias — keep original so validation reports the error
-                        expanded.push(name.clone());
-                    }
-                }
-            }
-        } else {
+        let Some(alias) = name.strip_prefix('@') else {
             expanded.push(name.clone());
+            continue;
+        };
+        if let Some(processor_type) = ProcessorType::parse(alias) {
+            expanded.extend(
+                processors
+                    .keys()
+                    .filter(|n| parse_name(n).is_some_and(|p| p.processor_type == processor_type))
+                    .cloned(),
+            );
+            continue;
+        }
+        let selected: Vec<String> = processors
+            .iter()
+            .filter(|(n, p)| {
+                p.required_tools().iter().any(|t| t == alias)
+                    || parse_name(n).is_some_and(|parsed| parsed.short == alias)
+            })
+            .map(|(n, _)| n.clone())
+            .collect();
+        if selected.is_empty() {
+            expanded.push(name.clone());
+        } else {
+            expanded.extend(selected);
         }
     }
     expanded.sort();
@@ -1019,5 +977,77 @@ mod tests {
         let err = resolve_processor_filter(None, Some(&bogus), &procs)
             .expect_err("unknown -x name must be rejected");
         assert!(format!("{err}").contains("definitely-not-a-processor"));
+    }
+
+    fn expand(alias: &str, procs: &ProcessorMap) -> Vec<String> {
+        expand_aliases(&[alias.to_string()], procs)
+    }
+
+    /// `@<short name>` selects that processor. It used to compare the bare
+    /// word against full names and never matched, so `@tera` (not a tool
+    /// name) was reported as an unknown processor.
+    #[test]
+    fn short_name_alias_selects_the_processor() {
+        let procs = create_all_default_processors().expect("default processors");
+        assert_eq!(expand("@tera", &procs), vec!["processor.generator.tera"]);
+        assert!(expand("@ruff", &procs).contains(&"processor.checker.ruff".to_string()));
+    }
+
+    /// A short name shared across types selects every processor carrying
+    /// it, and a short name selects the processor's instances too.
+    #[test]
+    fn short_name_alias_spans_types_and_instances() {
+        let mut procs = create_all_default_processors().expect("default processors");
+        let generic = expand("@generic", &procs);
+        for pname in [
+            "processor.checker.generic",
+            "processor.creator.generic",
+            "processor.generator.generic",
+            "processor.explicit.generic",
+        ] {
+            if procs.contains_key(pname) {
+                assert!(
+                    generic.contains(&pname.to_string()),
+                    "{pname} in {generic:?}"
+                );
+            }
+        }
+        assert!(generic.len() > 1, "{generic:?}");
+
+        let tera = procs.remove("processor.generator.tera").unwrap();
+        procs.insert("processor.generator.tera.docs".to_string(), tera);
+        assert_eq!(
+            expand("@tera", &procs),
+            vec!["processor.generator.tera.docs"]
+        );
+    }
+
+    /// Every processor type is an alias, `@explicit` included (it used to be
+    /// missing from the hand-written list), and selects only that type.
+    #[test]
+    fn type_aliases_cover_every_type() {
+        let procs = create_all_default_processors().expect("default processors");
+        let explicit = expand("@explicit", &procs);
+        assert_ne!(explicit.len(), 0, "@explicit must select something");
+        assert!(
+            explicit
+                .iter()
+                .all(|n| n.starts_with("processor.explicit.")),
+            "{explicit:?}"
+        );
+        let checkers = expand("@checker", &procs);
+        assert!(checkers.iter().all(|n| n.starts_with("processor.checker.")));
+        assert!(checkers.contains(&"processor.checker.ruff".to_string()));
+    }
+
+    /// An alias that selects nothing stays as written, so validation names
+    /// it as unknown.
+    #[test]
+    fn unmatched_alias_is_reported_unknown() {
+        let procs = create_all_default_processors().expect("default processors");
+        let filter = vec!["@definitely-not-anything".to_string()];
+        let err = resolve_processor_filter(Some(&filter), None, &procs)
+            .expect_err("unmatched alias must be rejected");
+        assert!(format!("{err}").contains("@definitely-not-anything"));
     }
 }
