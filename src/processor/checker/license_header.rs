@@ -144,6 +144,11 @@ impl crate::processor::Processor for LicenseHeaderProcessor {
         &self.config.standard
     }
 
+    /// One product per scanned file (`discover_checker_products`).
+    fn discovery(&self) -> crate::processor::Discovery {
+        crate::processor::Discovery::PerFile
+    }
+
     // Serialize the FULL config (the trait default covers StandardConfig
     // only), so the extra fields reach config-change detection.
     fn config_json(&self) -> Option<String> {

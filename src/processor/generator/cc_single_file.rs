@@ -685,6 +685,12 @@ impl Processor for CcSingleFileProcessor {
         &self.config.standard
     }
 
+    /// One product per scanned source file and compiler profile, for
+    /// discovery and for clean alike (`discover_impl`).
+    fn discovery(&self) -> crate::processor::Discovery {
+        crate::processor::Discovery::PerFile
+    }
+
     fn config_json(&self) -> Option<String> {
         crate::processor::ProcessorBase::config_json(&self.config)
     }

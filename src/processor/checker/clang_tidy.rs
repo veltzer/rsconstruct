@@ -52,6 +52,11 @@ impl crate::processor::Processor for ClangTidyProcessor {
         &self.config.standard
     }
 
+    /// One product per scanned file (`discover_checker_products`).
+    fn discovery(&self) -> crate::processor::Discovery {
+        crate::processor::Discovery::PerFile
+    }
+
     fn auto_detect(&self, file_index: &crate::file_index::FileIndex) -> bool {
         crate::processor::checker_auto_detect(&self.config.standard, file_index)
     }

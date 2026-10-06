@@ -499,6 +499,14 @@ impl Processor for CcProcessor {
         &self.config.standard
     }
 
+    /// One product per scanned manifest; sources come from the manifest on
+    /// disk. `discover` also records each manifest's compilers in
+    /// `manifest_compilers`, but only ever adds to that set, so discovering
+    /// file by file builds the same set as one pass over everything.
+    fn discovery(&self) -> crate::processor::Discovery {
+        crate::processor::Discovery::PerFile
+    }
+
     fn config_json(&self) -> Option<String> {
         crate::processor::ProcessorBase::config_json(&self.config)
     }

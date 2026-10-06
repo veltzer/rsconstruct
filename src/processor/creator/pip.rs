@@ -54,6 +54,11 @@ impl Processor for PipProcessor {
         &self.config.standard
     }
 
+    /// One product per scanned requirements file; no sibling lookup.
+    fn discovery(&self) -> crate::processor::Discovery {
+        crate::processor::Discovery::PerFile
+    }
+
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         !file_index.scan(&self.config.standard, false).is_empty()
     }

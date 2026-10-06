@@ -259,6 +259,12 @@ impl Processor for LinuxModuleProcessor {
         &self.config.standard
     }
 
+    /// One product per scanned manifest; the module sources it adds are
+    /// read from the manifest on disk, not from the index.
+    fn discovery(&self) -> crate::processor::Discovery {
+        crate::processor::Discovery::PerFile
+    }
+
     fn config_json(&self) -> Option<String> {
         crate::processor::ProcessorBase::config_json(&self.config)
     }

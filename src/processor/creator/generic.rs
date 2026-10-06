@@ -57,6 +57,12 @@ impl Processor for CreatorProcessor {
         &self.config.standard
     }
 
+    /// One product per scanned anchor file; its outputs come from config,
+    /// resolved against the anchor's directory. No sibling lookup.
+    fn discovery(&self) -> crate::processor::Discovery {
+        crate::processor::Discovery::PerFile
+    }
+
     fn config_json(&self) -> Option<String> {
         ProcessorBase::config_json(&self.config)
     }

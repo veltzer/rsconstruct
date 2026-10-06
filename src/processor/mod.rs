@@ -1506,20 +1506,27 @@ mod tests {
         found
     }
 
-    /// The processor `pname` scanning the `fixture` directory, configured
-    /// so it discovers something:
+    /// The processor `pname` scanning the fixture directory `fixture`,
+    /// configured so it discovers something:
     /// - `src_extensions = [".txt"]` when it has no default extensions
     ///   (generic generator, script: they scan nothing until told what);
     /// - `command = "true"` when it has no default command (a generic
     ///   generator or script with no command discovers nothing);
     /// - `checker.terms` gets an existing (empty) term directory, without
     ///   which its discovery stops early.
-    fn fixture_processor(pname: &str, scratch: &std::path::Path) -> Box<dyn Processor> {
+    fn fixture_processor(
+        pname: &str,
+        fixture: &std::path::Path,
+        scratch: &std::path::Path,
+    ) -> Box<dyn Processor> {
         let create = |table: &toml::map::Map<String, toml::Value>| {
             crate::builder::create_processor_for_instance(pname, &toml::Value::Table(table.clone()))
         };
         let mut table = toml::map::Map::new();
-        table.insert("src_dirs".into(), toml::Value::from(vec!["fixture"]));
+        table.insert(
+            "src_dirs".into(),
+            toml::Value::from(vec![fixture.display().to_string()]),
+        );
         if pname == "processor.checker.terms" {
             table.insert(
                 "dir_terms_unambiguous".into(),
@@ -1561,9 +1568,11 @@ mod tests {
     /// directory holding three files per accepted extension at different
     /// depths, plus one file nothing accepts. Its products from the full
     /// index, restricted to those whose primary input is in a half-subset,
-    /// must equal its products from the subset alone. The fixture lives only
-    /// in the index, not on disk: discovery reads the index for files and
-    /// the disk only for extra inputs, which are the same in both runs.
+    /// must equal its products from the subset alone. The fixture is also
+    /// written to disk (in a temporary directory, by absolute path), since
+    /// some processors read the file during discovery — `creator.cc` and
+    /// `creator.linux_module` parse their YAML manifests. That is allowed:
+    /// both index views see the same disk.
     #[test]
     fn per_file_discovery_over_a_subset_matches_the_full_index() {
         let processors = create_all_default_processors().unwrap();
@@ -1577,28 +1586,35 @@ mod tests {
         let scratch = tempfile::TempDir::new().unwrap();
         let mut exercised: Vec<&str> = Vec::new();
         let mut idle: Vec<&str> = Vec::new();
-        for name in names {
-            let processor = fixture_processor(name, scratch.path());
-            let mut full: Vec<PathBuf> = vec![PathBuf::from("fixture/unrelated.zzz-none")];
+        for (i, name) in names.into_iter().enumerate() {
+            let fixture = scratch.path().join(format!("p{i}"));
+            let processor = fixture_processor(name, &fixture, scratch.path());
+            // The smallest file each processor's discovery can parse.
+            let content = match name.as_str() {
+                "processor.creator.cc" => "{}\n",
+                "processor.creator.linux_module" => "modules: []\n",
+                _ => "",
+            };
+            let mut full: Vec<PathBuf> = vec![fixture.join("unrelated.zzz-none")];
             // Stems are unique per extension: `one.scss` and `one.sass` would
             // both map to `one.css`, an output conflict of the fixture's own
             // making.
             for (n, ext) in processor.scan_config().src_extensions().iter().enumerate() {
-                for (dir, stem) in [
-                    ("fixture", "one"),
-                    ("fixture/sub", "two"),
-                    ("fixture/sub/deep", "three"),
-                ] {
+                for (dir, stem) in [("", "one"), ("sub", "two"), ("sub/deep", "three")] {
                     let file = if ext.starts_with('.') {
                         format!("{stem}{n}{ext}")
                     } else {
                         ext.clone()
                     };
-                    full.push(PathBuf::from(dir).join(file));
+                    full.push(fixture.join(dir).join(file));
                 }
             }
             full.sort();
             full.dedup();
+            for path in &full {
+                std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+                std::fs::write(path, content).unwrap();
+            }
             let subset: Vec<PathBuf> = full.iter().step_by(2).cloned().collect();
 
             let from_full = discovered(processor.as_ref(), &full, name);

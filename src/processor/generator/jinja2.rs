@@ -76,6 +76,11 @@ impl Processor for Jinja2Processor {
         &self.config.standard
     }
 
+    /// One product per scanned template (`find_templates`).
+    fn discovery(&self) -> crate::processor::Discovery {
+        crate::processor::Discovery::PerFile
+    }
+
     fn config_json(&self) -> Option<String> {
         crate::processor::ProcessorBase::config_json(&self.config)
     }

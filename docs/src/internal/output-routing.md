@@ -293,19 +293,40 @@ what makes discovering over a subset exact.
   every chain is a clean-checkout chain: `processor files --json`, sorted,
   identical in every repo — 50,930 products, all exit codes 0.
 
-**Marked `PerFile` so far:** the `SimpleChecker` and `SimpleGenerator`
-wrappers (most checkers and generators), the processors using the default
-`discover` (`ascii`, `encoding`, `ijq`, `ijsonlint`, `itaplo`, `iyamllint`,
-`json_schema`, `marp_images`), and `generator.generic`, `checker.script`,
-`checker.zspell`, `checker.terms`, each audited to use the index only
-through `scan`. `generator.tera` is deliberately not: its `discover`
-captures the set of includable templates from the whole index.
+**Marked `PerFile`:** every processor whose discovery qualifies, each
+audited to touch the index only through `scan`, make one product per
+scanned file, and store nothing taken from the index:
+
+- the `SimpleChecker` and `SimpleGenerator` wrappers (most checkers and
+  generators);
+- the checkers using the default `discover`: `ascii`, `encoding`, `ijq`,
+  `ijsonlint`, `itaplo`, `iyamllint`, `json_schema`, `marp_images`;
+- custom checkers: `aspell`, `clang_tidy`, `iyamlschema`,
+  `license_header`, `markdownlint`, `mdl`, `script`, `terms`, `zspell`;
+- custom generators: `cc_single_file`, `generic`, `jinja2`, `mako`,
+  `marp`, `pdflatex`, `rust_single_file`;
+- creators: `cc`, `generic`, `linux_module`, `pip`. (`cc` and
+  `linux_module` read their manifest from disk, which both index views
+  share; `cc` also collects compiler names, but only adds to that set.)
+
+**Left `WholeIndex`, and why:**
+
+| Processor | Its discovery depends on |
+|---|---|
+| `generator.tera` | the set of includable templates, recorded from the whole index |
+| `generator.requirements`, `generator.tags`, `checker.duplicate_files` | one product over the whole set of scanned files |
+| `generator.pdfunite`, `generator.ipdfunite` | files grouped by directory |
+| `explicit.generic` | globs resolved against the index |
+| `creator.mdbook`, `creator.jekyll`, `checker.clippy`, `checker.make`, `creator.cargo`, `creator.npm`, `creator.gem`, `creator.sphinx` | sibling files collected around an anchor |
+| `mass_generator.generic`, `mass_generator.zola` | a predicted plan over the source set |
+
+Lua plugins are out of scope and keep the default.
 
 **Guard.** `per_file_discovery_over_a_subset_matches_the_full_index`
-(in `src/processor/mod.rs`) configures every `PerFile` processor — 64 of
-them — to scan a fixture held only in a `FileIndex`, and checks that
-discovering over half of it gives exactly the full index's products for
-that half. Every `PerFile` processor must produce products from the
+(in `src/processor/mod.rs`) configures every `PerFile` processor — 80 of
+the 97 — to scan a fixture written to a temporary directory, and checks
+that discovering over half of it gives exactly the full index's products
+for that half. Every `PerFile` processor must produce products from the
 fixture, so none passes vacuously. Marking mdbook (which collects sibling
 files) `PerFile` makes it fail. It compares products, not state a
 `discover` stores for later — the reason tera stays `WholeIndex` has to be
