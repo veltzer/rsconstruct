@@ -107,6 +107,11 @@ struct SharedState {
     /// Products that built or restored in the current level — what the
     /// [`GraphRefresh`] hook gets to see. Drained after each level.
     changed: Arc<Mutex<Vec<usize>>>,
+    /// Products a worker got to — skipped, restored or run, whatever the
+    /// outcome. A product predicted to change that is not in here when the
+    /// run ends never ran (a failed dependency, an error, Ctrl+C), and its
+    /// stale outputs are removed then.
+    attempted: Arc<Mutex<HashSet<usize>>>,
     global_current: Arc<AtomicUsize>,
     global_total: usize,
 }
@@ -124,8 +129,9 @@ pub struct ClassifiedProduct {
 /// topological order.
 ///
 /// This is a *prediction*, made before anything runs. It sizes the progress
-/// bar, feeds the "N to build" summary and decides which outputs
-/// [`unlink_pending_outputs`] removes. What actually happens to each product
+/// bar, feeds the "N to build" summary and names the products whose outputs
+/// are removed at the end of the run if they never ran (see
+/// `remove_outputs_never_rebuilt`). What actually happens to each product
 /// is decided again when it is dispatched — see `Executor::execute`.
 pub struct Classification {
     pub skip_count: usize,
@@ -208,32 +214,6 @@ pub fn classify_products(
         build_count,
         products,
     }
-}
-
-/// Unlink the on-disk outputs of every product classified as Build or Restore.
-///
-/// Called once between classify and execute so that any "to-be-rebuilt" output
-/// is guaranteed to be gone from disk by the time execution starts. If a
-/// processor then fails (or its upstream fails and it is skipped), the stale
-/// version cannot remain on disk — there is nothing to confuse the user into
-/// thinking the build succeeded.
-///
-/// Uses the same per-product unlink logic as the pre-execute cleanup
-/// ([`execution::remove_stale_outputs`]), so Creator-style products with
-/// shared `output_dirs` only remove files they previously owned.
-pub fn unlink_pending_outputs(
-    graph: &BuildGraph,
-    object_store: &ObjectStore,
-    classification: &Classification,
-) -> Result<()> {
-    for c in &classification.products {
-        if matches!(c.action, ProductAction::Skip) {
-            continue;
-        }
-        let product = graph.get_product(c.id).expect(errors::INVALID_PRODUCT_ID);
-        execution::remove_stale_outputs(product, object_store, &c.input_checksum)?;
-    }
-    Ok(())
 }
 
 /// Executor handles running products through their processors

@@ -484,9 +484,12 @@ skipped with stale outputs. **Fix:** entries hold a `platform::FileStamp`
   aliases are one lookup over `ProcessorType`, which also adds the missing
   `@explicit`.
 - Five `add_product*` constructors; `src/config/mod.rs` is 3,100+ lines.
-- Products predicted to build only because a dependency changes still have
-  their outputs unlinked up front, so an unchanged rebuild ends as a
-  restore rather than a skip.
+- ~~Products predicted to build only because a dependency changes still
+  have their outputs unlinked up front, so an unchanged rebuild ends as a
+  restore rather than a skip.~~ **Resolved:** stale outputs are removed per
+  product right before it restores or rebuilds, and at the end of the run
+  for predicted changes that never ran; an unchanged dependency now means a
+  skip.
 
 ## Summary of architectural recommendations
 

@@ -430,6 +430,7 @@ impl Executor<'_> {
             failed_messages: Arc::new(Mutex::new(Vec::new())),
             failed_processors: Arc::new(Mutex::new(HashSet::new())),
             changed: Arc::new(Mutex::new(Vec::new())),
+            attempted: Arc::new(Mutex::new(HashSet::new())),
             global_current: Arc::new(AtomicUsize::new(0)),
             global_total,
         };
@@ -491,7 +492,33 @@ impl Executor<'_> {
             crate::output::info(&color::yellow("Interrupted, saving progress..."));
         }
         result?;
+        Self::remove_outputs_never_rebuilt(graph, object_store, classification, &shared)?;
         Self::collect_build_stats(shared, keep_going, self.is_interrupted())
+    }
+
+    /// Remove the outputs of every product that was predicted to change but
+    /// never ran: skipped because a dependency failed, or never reached
+    /// because the build stopped on an error or Ctrl+C. Its inputs changed,
+    /// so what is on disk is stale, and leaving it there would look like
+    /// the build succeeded. Outputs used to be removed for every predicted
+    /// change before the run started; removing them only now, for products
+    /// that did not run, is what lets a product whose dependency rebuilt to
+    /// identical bytes be skipped with its outputs intact.
+    fn remove_outputs_never_rebuilt(
+        graph: &BuildGraph,
+        object_store: &ObjectStore,
+        classification: &Classification,
+        shared: &SharedState,
+    ) -> Result<()> {
+        let attempted = shared.attempted.lock();
+        for c in &classification.products {
+            if c.action == ProductAction::Skip || attempted.contains(&c.id) {
+                continue;
+            }
+            let product = graph.get_product(c.id).expect(errors::INVALID_PRODUCT_ID);
+            remove_stale_outputs(product, object_store, &c.input_checksum)?;
+        }
+        Ok(())
     }
 
     /// The coordinator loop: hand ready products to the workers, record
@@ -628,6 +655,7 @@ impl Executor<'_> {
         emit_fail_event: bool,
     ) -> PreCheckResult {
         let product = &item.product;
+        lctx.shared.attempted.lock().insert(item.product_id);
 
         if self.explain {
             let action = self.policy.explain(
@@ -640,33 +668,57 @@ impl Executor<'_> {
             self.print_explain(product, &action);
         }
 
-        match item.action {
-            ProductAction::Skip => {
-                self.handle_skip(product, lctx.shared);
-                // The bar counts predicted work; a product predicted to
-                // build (its dependency changed) that turns out unchanged
-                // still has to tick it off.
-                if lctx.predicted.get(&item.product_id) != Some(&ProductAction::Skip) {
-                    lctx.pb.inc(1);
-                }
-                PreCheckResult::Handled
+        let ctx = HandlerContext {
+            product,
+            id: item.product_id,
+            input_checksum: &item.input_checksum,
+            proc_name,
+            keep_going: lctx.keep_going,
+            shared: lctx.shared,
+            pb: lctx.pb,
+        };
+        if item.action == ProductAction::Skip {
+            // Unchanged: its outputs on disk are current and stay put. A
+            // product predicted to build because a dependency changed lands
+            // here when the dependency rebuilt to identical bytes —
+            // unchanged-output pruning: no rerun, no restore, no file touched.
+            self.handle_skip(product, lctx.shared);
+            // The bar counts predicted work; such a product still has to
+            // tick it off.
+            if lctx.predicted.get(&item.product_id) != Some(&ProductAction::Skip) {
+                lctx.pb.inc(1);
             }
+            return PreCheckResult::Handled;
+        }
+
+        // About to restore or rebuild: clear the outputs the previous build
+        // left (a restored hardlink is read-only, and a tool that writes in
+        // place cannot overwrite it). Done here, per product, and not for
+        // every product predicted to change before the run starts — that
+        // turned a product whose dependency rebuilt to identical bytes into
+        // a restore instead of a skip. Products that never get here are
+        // swept at the end of the run (see `execute_parallel`). A processor
+        // that replaces its own outputs (`Processor::replaces_own_outputs`)
+        // is left alone: its tool run may already have written them.
+        let replaces_own = self
+            .processors
+            .get(proc_name)
+            .is_some_and(|p| p.replaces_own_outputs());
+        if !replaces_own
+            && let Err(e) = remove_stale_outputs(product, lctx.object_store, &item.input_checksum)
+        {
+            self.handle_error(&ctx, e, None);
+            Self::inc_progress(lctx.pb, lctx.shared);
+            return PreCheckResult::Handled;
+        }
+        match item.action {
             ProductAction::Restore => {
-                let ctx = HandlerContext {
-                    product,
-                    id: item.product_id,
-                    input_checksum: &item.input_checksum,
-                    proc_name,
-                    keep_going: lctx.keep_going,
-                    shared: lctx.shared,
-                    pb: lctx.pb,
-                };
                 match self.handle_restore(&ctx, lctx.object_store, emit_fail_event) {
                     RestoreOutcome::Restored | RestoreOutcome::Failed => PreCheckResult::Handled,
                     RestoreOutcome::NotRestorable => PreCheckResult::NeedsExecution,
                 }
             }
-            ProductAction::Build => PreCheckResult::NeedsExecution,
+            ProductAction::Skip | ProductAction::Build => PreCheckResult::NeedsExecution,
         }
     }
 
@@ -742,7 +794,8 @@ impl Executor<'_> {
                 ));
             }
 
-            // Outputs were already unlinked at classify time; just announce starts.
+            // Stale outputs were removed per product in try_skip_or_restore;
+            // just announce starts.
             for p in &product_refs {
                 json_output::emit_product_start(&self.product_display(p), &p.processor);
             }

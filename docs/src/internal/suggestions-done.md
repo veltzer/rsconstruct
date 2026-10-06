@@ -16,6 +16,7 @@ Items from `suggestions.md` that have been implemented.
 - **Emit `ProductStart` JSON events** — Emitted before each product starts executing, pairs with `ProductComplete` for per-product timing.
 - **mypy processor** — Python type checking with mypy. Batch-capable. Auto-detects `mypy.ini` as extra input.
 - **Explain commands** — `--explain` flag shows skip/restore/rebuild reasons for each product during build.
+- **Unchanged-output pruning** — When a product rebuilds to identical bytes, the products reading it are skipped with their outputs untouched: no rerun, no restore. Each product is decided at dispatch from the inputs it will read (R1), and its stale outputs are removed only right before it actually restores or rebuilds — no longer for every predicted change before the run. Products predicted to change that never run (a failed dependency, an error, Ctrl+C) have their stale outputs removed at the end of the run, so a failed build still leaves none behind. Processors whose one tool run writes many products' outputs (mass generators) replace them themselves (`Processor::replaces_own_outputs`).
 - **Ready-queue scheduler** — Products run the moment their own dependencies finish, from a pool of exactly `-j` workers, instead of level by level. Batch chunks run in parallel and count against `-j`; `max_jobs` is enforced by the queue instead of semaphores. See R6/R7 in [Architecture Observations](architecture-observations.md).
 
 ## Completed Code Consolidation

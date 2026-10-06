@@ -1542,6 +1542,12 @@ impl Processor for ZolaProcessor {
         require_planned_output(product, &self.config.standard.command)
     }
 
+    /// `run_tool` builds into a staging directory and unlinks each planned
+    /// file before moving zola's version into place.
+    fn replaces_own_outputs(&self) -> bool {
+        true
+    }
+
     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
         ProcessorBase::clean(product, &product.processor, verbose)
     }

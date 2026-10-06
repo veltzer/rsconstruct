@@ -17,16 +17,122 @@ fn write_tool(project: &Path, name: &str, body: &str) {
 
 /// Build with `toolbin/` first on PATH, as JSON.
 fn build(project: &Path) -> crate::common::BuildResult {
+    build_with(project, &[])
+}
+
+/// `build` plus `extra` arguments, with `toolbin/` first on PATH, as JSON.
+fn build_with(project: &Path, extra: &[&str]) -> crate::common::BuildResult {
     let path_env = format!(
         "{}:{}",
         project.join("toolbin").display(),
         std::env::var("PATH").unwrap_or_default()
     );
-    run_rsconstruct_json_with_env(
+    let mut args = vec!["build"];
+    args.extend_from_slice(extra);
+    run_rsconstruct_json_with_env(project, &args, &[("NO_COLOR", "1"), ("PATH", &path_env)])
+}
+
+/// A two-step chain: `first` keeps only the first line of `src/a.src` (and
+/// fails on an input containing `FAIL`), `second` copies its output.
+fn first_line_chain() -> TempDir {
+    let temp_dir = TempDir::new().unwrap();
+    let project = temp_dir.path();
+    write_tool(
         project,
-        &["build"],
-        &[("NO_COLOR", "1"), ("PATH", &path_env)],
+        "first_line",
+        "grep -q FAIL \"$1\" && { echo 'FAIL in input' >&2; exit 1; }\nhead -n 1 \"$1\" > \"$2\"\n",
+    );
+    write_tool(project, "copy", "cp \"$1\" \"$2\"\n");
+    fs::write(
+        project.join("rsconstruct.toml"),
+        r#"[build]
+hash_tool_versions = false
+
+[processor.generator.generic.first]
+command = "first_line"
+output_dir = "mid"
+output_extension = "mid"
+batch = false
+src_extensions = [".src"]
+src_dirs = ["src"]
+
+[processor.generator.generic.second]
+command = "copy"
+output_dir = "out/second"
+output_extension = "out"
+batch = false
+src_extensions = [".mid"]
+src_dirs = ["mid"]
+"#,
     )
+    .unwrap();
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(project.join("src/a.src"), "title\n").unwrap();
+    temp_dir
+}
+
+fn status_of<'a>(result: &'a crate::common::BuildResult, processor: &str) -> Option<&'a str> {
+    result
+        .products
+        .iter()
+        .find(|p| p.processor == processor)
+        .map(|p| p.status.as_str())
+}
+
+/// Unchanged-output pruning: when a product rebuilds to identical bytes,
+/// the products reading it are skipped, outputs untouched — not re-run, and
+/// not restored from the cache either. (Their outputs used to be deleted
+/// before the run because a dependency was predicted to change, so they
+/// ended as a restore.)
+#[test]
+fn rebuilding_to_identical_bytes_skips_the_dependents() {
+    let temp_dir = first_line_chain();
+    let project = temp_dir.path();
+
+    let first = build(project);
+    assert!(first.exit_success, "{:?}", first.errors);
+    assert_eq!(first.success, 2);
+
+    // The first line is unchanged, so `first` writes the same bytes.
+    fs::write(project.join("src/a.src"), "title\nmore\n").unwrap();
+    let second = build(project);
+    assert!(second.exit_success, "{:?}", second.errors);
+    assert_eq!(
+        status_of(&second, "processor.generator.generic.first"),
+        Some("success")
+    );
+    assert_eq!(
+        status_of(&second, "processor.generator.generic.second"),
+        Some("skipped"),
+        "an unchanged dependency must not rerun or restore its consumer: {second:?}"
+    );
+    assert_eq!(second.restored, 0, "{second:?}");
+}
+
+/// When a product fails, what depends on it never runs — and must not keep
+/// its stale output either, or the tree would look built. Outputs are no
+/// longer removed before the run, so this is checked at the end of it, for
+/// both a build that stops at the failure and one that keeps going.
+#[test]
+fn a_failed_dependency_leaves_no_stale_downstream_output() {
+    for keep_going in [false, true] {
+        let temp_dir = first_line_chain();
+        let project = temp_dir.path();
+        let downstream = project.join("out/second/a.out");
+
+        let first = build(project);
+        assert!(first.exit_success, "{:?}", first.errors);
+        assert!(downstream.exists());
+
+        fs::write(project.join("src/a.src"), "FAIL\n").unwrap();
+        let args: &[&str] = if keep_going { &["--keep-going"] } else { &[] };
+        let second = build_with(project, args);
+        assert!(!second.exit_success, "the first step must fail");
+        assert!(
+            !downstream.exists(),
+            "keep_going = {keep_going}: the stale downstream output must be removed"
+        );
+    }
 }
 
 /// A source that one product generates and an analyzer scans is analyzed

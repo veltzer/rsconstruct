@@ -223,8 +223,8 @@ impl MassGeneratorProcessor {
         // The tool rewrites every predicted file, including the ones whose
         // products are clean this build. A clean file may be a read-only
         // hardlink left by a cache restore, which the tool cannot open for
-        // writing; unlinking first gives it a clear path. The executor only
-        // unlinks the outputs of the products it is about to build.
+        // writing; unlinking first gives it a clear path. The executor leaves
+        // this processor's outputs to it (`replaces_own_outputs`).
         for path in &predicted {
             match std::fs::remove_file(path) {
                 Ok(()) => {}
@@ -520,6 +520,12 @@ impl Processor for MassGeneratorProcessor {
             self.run_tool(ctx, instance_name)
         })?;
         require_planned_output(product, &self.config.standard.command)
+    }
+
+    /// `run_tool` unlinks every predicted file before the one tool run that
+    /// writes them all.
+    fn replaces_own_outputs(&self) -> bool {
+        true
     }
 
     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {

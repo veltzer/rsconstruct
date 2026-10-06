@@ -1095,6 +1095,21 @@ pub trait Processor: Sync + Send {
         Discovery::WholeIndex
     }
 
+    /// Whether this processor replaces its products' stale outputs itself
+    /// when its tool runs.
+    ///
+    /// The executor removes a product's outputs right before it restores or
+    /// rebuilds (a restored output may be a read-only hardlink the tool
+    /// cannot write over). That is wrong for a processor whose single tool
+    /// run writes the outputs of many products — the mass generators: the
+    /// run writes every planned file while executing the first product,
+    /// and removing the next product's outputs at its dispatch would delete
+    /// what the run just wrote. Such a processor must itself clear every
+    /// file before writing it, and returns true.
+    fn replaces_own_outputs(&self) -> bool {
+        false
+    }
+
     /// Discover products for clean operation (outputs only, skip expensive dependency scanning).
     fn discover_for_clean(
         &self,

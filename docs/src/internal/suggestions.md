@@ -32,20 +32,6 @@ Grades:
   and the file.
 - **Urgency**: medium (check mode) / low (full isolation) | **Complexity**: medium (check mode) / high (full isolation)
 
-### Content-addressable outputs (unchanged output pruning)
-- Hash outputs too to skip downstream rebuilds when an input changes but produces identical output.
-- Bazel calls this "unchanged output pruning."
-- **Where it stands.** Since R1 the executor decides each product at
-  dispatch from the inputs it will actually read, so a downstream product
-  whose upstream rebuilt to identical bytes finds its cache entry. But
-  `unlink_pending_outputs` already deleted its outputs (the up-front
-  prediction marks it BUILD because a dependency changes), so it ends as a
-  *restore* — a copy or hardlink — rather than a skip, and the prediction
-  counts it as work. Real pruning means deleting a product's outputs only
-  when it is actually rebuilt, or when it is skipped because a dependency
-  failed, instead of up front.
-- **Urgency**: medium | **Complexity**: medium
-
 ### Persistent daemon mode
 - Keep rsconstruct running as a background daemon to avoid startup overhead.
 - Benefits: instant file index via inotify, warm Lua VMs, connection pooling, faster incremental builds.

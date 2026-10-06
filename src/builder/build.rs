@@ -383,11 +383,10 @@ impl Builder {
             return Ok(());
         }
 
-        // Unlink outputs of every product we intend to execute. Doing this up
-        // front (rather than per-product right before execute) means a stale
-        // downstream output cannot survive on disk if its upstream fails: the
-        // downstream's outputs are already gone before execution starts.
-        crate::executor::unlink_pending_outputs(&graph, &self.object_store, &classification)?;
+        // Stale outputs are removed by the executor: per product right before
+        // it restores or rebuilds, and at the end of the run for products
+        // predicted to change that never ran (so a failed upstream still
+        // leaves no stale downstream output behind).
 
         // Create executor with parallelism from command line, env var, or config
         let parallel = opts
