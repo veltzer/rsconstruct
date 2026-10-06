@@ -4,24 +4,21 @@
 //! to products in the build graph.
 
 use anyhow::Result;
-use indicatif::ProgressBar;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 
 use crate::config::CppAnalyzerConfig;
-use crate::deps_cache::DepsCache;
 use crate::file_index::FileIndex;
-use crate::graph::{BuildGraph, Product};
+use crate::graph::Product;
 use crate::processor::{check_command_output, format_command, run_command_capture};
 
-use super::DepAnalyzer;
+use super::{DepAnalyzer, ScanResult};
 
 const CPP_MATCH_EXTENSIONS: &[&str] = &["c", "cc", "cpp", "cxx"];
 
 /// C/C++ dependency analyzer that scans source files for #include directives.
 pub struct CppDepAnalyzer {
-    iname: String,
     config: CppAnalyzerConfig,
     verbose: bool,
     /// Cached canonical project root path (for stripping absolute prefixes from compiler output)
@@ -33,9 +30,8 @@ pub struct CppDepAnalyzer {
 }
 
 impl CppDepAnalyzer {
-    pub fn new(iname: &str, config: CppAnalyzerConfig, verbose: bool) -> Self {
+    pub const fn new(config: CppAnalyzerConfig, verbose: bool) -> Self {
         Self {
-            iname: iname.to_string(),
             config,
             verbose,
             canonical_root: OnceLock::new(),
@@ -198,6 +194,18 @@ impl CppDepAnalyzer {
             .collect()
     }
 
+    /// The directories the compiler searches for a quoted include in
+    /// `source`, in order: the source's own directory, then the `-I` paths
+    /// in the order `scan_dependencies_compiler` passes them.
+    fn search_dirs(&self, ctx: &crate::build_context::BuildContext, source: &Path) -> Vec<PathBuf> {
+        std::iter::once(crate::processor::parent_dir_or_empty(source).to_path_buf())
+            .chain(self.config.include_paths.iter().map(PathBuf::from))
+            .chain(self.get_pkg_config_include_paths(ctx).iter().cloned())
+            .chain(self.get_command_include_paths(ctx).iter().cloned())
+            .map(|dir| without_cur_dir(&dir))
+            .collect()
+    }
+
     /// Scan dependencies using compiler -MM method.
     fn scan_dependencies(
         &self,
@@ -245,29 +253,66 @@ impl DepAnalyzer for CppDepAnalyzer {
         }
     }
 
-    fn analyze(
+    fn scan(
         &self,
         ctx: &crate::build_context::BuildContext,
-        graph: &mut BuildGraph,
-        deps_cache: &mut DepsCache,
+        source: &Path,
         _file_index: &FileIndex,
-        _verbose: bool,
-        progress: &ProgressBar,
-    ) -> Result<()> {
-        super::analyze_with_scanner(
-            ctx,
-            graph,
-            deps_cache,
-            &self.iname,
-            |p| self.match_product(p),
-            |source| {
-                let ext = source.extension().and_then(|s| s.to_str()).unwrap_or("");
-                let is_cpp = ext == "cc" || ext == "cpp" || ext == "cxx";
-                self.scan_dependencies(ctx, source, is_cpp)
-            },
-            progress,
-        )
+    ) -> Result<ScanResult> {
+        let ext = source.extension().and_then(|s| s.to_str()).unwrap_or("");
+        let is_cpp = ext == "cc" || ext == "cpp" || ext == "cxx";
+        let deps = self.scan_dependencies(ctx, source, is_cpp)?;
+        let absent = shadow_probes(&self.search_dirs(ctx, source), &deps);
+        Ok(ScanResult::deps(deps, absent))
     }
+
+    fn fingerprint_parts(&self, ctx: &crate::build_context::BuildContext) -> Result<Vec<String>> {
+        let mut parts = super::config_fingerprint(&self.config)?;
+        parts.extend(
+            self.get_pkg_config_include_paths(ctx)
+                .iter()
+                .chain(self.get_command_include_paths(ctx))
+                .map(|p| p.display().to_string()),
+        );
+        Ok(parts)
+    }
+}
+
+/// The paths the compiler probed, and found empty, before each of `deps`.
+///
+/// `-MM` names the header it found, not how it was spelled in the
+/// `#include`, so the spelling is reconstructed: for every search directory
+/// a header lies under, its path relative to that directory is a possible
+/// spelling, and that spelling under each directory searched *earlier* is a
+/// probe that came up empty — a file appearing there would now be found
+/// instead. Covering every possible spelling over-approximates (a
+/// superfluous probe can only cause a needless rescan), and the includer's
+/// own directory is approximated by the source's. Paths that exist are left
+/// out: they were not what the compiler found, so they were never probed.
+fn shadow_probes(search_dirs: &[PathBuf], deps: &[PathBuf]) -> Vec<PathBuf> {
+    let mut probes: Vec<PathBuf> = Vec::new();
+    for dep in deps {
+        for (found_at, dir) in search_dirs.iter().enumerate() {
+            let Ok(spelling) = dep.strip_prefix(dir) else {
+                continue;
+            };
+            for earlier in &search_dirs[..found_at] {
+                let probe = earlier.join(spelling);
+                if !probe.exists() && !probes.contains(&probe) {
+                    probes.push(probe);
+                }
+            }
+        }
+    }
+    probes
+}
+
+/// `dir` without `./` components, so `./include` and `include` both prefix
+/// the relative paths `-MM` reports.
+fn without_cur_dir(dir: &Path) -> PathBuf {
+    dir.components()
+        .filter(|c| !matches!(c, std::path::Component::CurDir))
+        .collect()
 }
 
 inventory::submit! {
@@ -275,13 +320,53 @@ inventory::submit! {
         name: "cpp",
         description: "Scan C/C++ source files for #include dependencies (using compiler -MM)",
         is_native: false,
-        create: |iname, toml_value, verbose| {
+        create: |toml_value, verbose| {
             let cfg: CppAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
-            Ok(Box::new(CppDepAnalyzer::new(iname, cfg, verbose)))
+            Ok(Box::new(CppDepAnalyzer::new(cfg, verbose)))
         },
         defconfig_toml: || {
             toml::to_string_pretty(&crate::config::CppAnalyzerConfig::default()).ok()
         },
         known_fields: crate::registries::typed_known_fields::<crate::config::CppAnalyzerConfig>,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `include/x.h` found through `-Iinclude` was spelled `x.h`, so the
+    /// compiler first tried `src/x.h`; spelled `include/x.h` it would be
+    /// found from the source directory first, which probes nothing. Both
+    /// spellings are covered. Paths that exist are never probes.
+    #[test]
+    fn shadow_probes_cover_every_spelling_before_the_hit() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let src = tmp.path().join("src");
+        let include = tmp.path().join("include");
+        let other = tmp.path().join("other");
+        fs_create(&[&src, &include, &other]);
+        let header = include.join("x.h");
+        std::fs::write(&header, "").unwrap();
+        std::fs::write(other.join("x.h"), "").unwrap();
+
+        let dirs = vec![src.clone(), include, other];
+        let probes = shadow_probes(&dirs, &[header]);
+        assert_eq!(probes, vec![src.join("x.h")]);
+    }
+
+    #[test]
+    fn without_cur_dir_strips_dot_components() {
+        assert_eq!(
+            without_cur_dir(Path::new("./include")),
+            PathBuf::from("include")
+        );
+        assert_eq!(without_cur_dir(Path::new(".")), PathBuf::new());
+    }
+
+    fn fs_create(dirs: &[&Path]) {
+        for dir in dirs {
+            std::fs::create_dir_all(dir).unwrap();
+        }
     }
 }

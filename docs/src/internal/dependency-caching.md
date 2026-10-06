@@ -17,6 +17,9 @@ Each cache entry consists of:
   - `source_checksum` — SHA-256 hash of the source file content
   - `dependencies` — list of dependency paths (header files)
   - `dependency_checksums` — SHA-256 hash of each dependency when it was scanned
+  - `absent` — paths the scan probed and found missing on the way to its answer
+  - `config_fingerprint` — hash of the analyzer's configuration (and run-time
+    resolved search paths) the scan ran under
 
 ## Cache Lookup Algorithm
 
@@ -24,12 +27,15 @@ When looking up dependencies for a source file:
 
 1. Look up the entry by source file path
 2. If not found → cache miss, scan the file
-3. If found, compute the current SHA-256 checksum of the source file
-4. Compare with the stored checksum:
+3. If its `config_fingerprint` differs from the analyzer's current one →
+   cache miss, re-scan
+4. If found, compute the current SHA-256 checksum of the source file
+5. Compare with the stored checksum:
    - If different → cache miss (file changed), re-scan
    - If same → check every cached dependency against its stored checksum
-5. If any dependency is missing or its content changed → cache miss, re-scan
-6. Otherwise → cache hit, return cached dependencies
+6. If any dependency is missing or its content changed → cache miss, re-scan
+7. If any `absent` path now exists → cache miss, re-scan
+8. Otherwise → cache hit, return cached dependencies
 
 Step 5 is what keeps transitive lists correct. When `a.h` gains
 `#include "b.h"`, `main.c` (which includes `a.h`) has not changed, but its
@@ -40,6 +46,22 @@ later edits to it never rebuilt `main.c`.
 
 Checksums go through the mtime cache, so an unchanged dependency costs a
 `stat`, not a read.
+
+Steps 3 and 7 cover what decides a dependency list without being file
+content. A resolution depends on which files are *missing*:
+`#include "x.h"` resolved to `include/x.h` because `src/x.h` did not
+exist, and once `src/x.h` appears it is the one the compiler finds. The
+analyzer reports those probes (`ScanResult::absent`), and an entry is only
+valid while all of them are still missing. It also depends on the
+analyzer's configuration: adding an include path can change what every
+`#include` resolves to, without any file changing. The `cpp` analyzer only
+sees the compiler's answer, not its probes, so it reconstructs them: for
+each header and each search directory it lies under, the same relative
+spelling under every earlier directory (a superset of the real probes).
+
+An entry is not stored when a dependency does not exist yet (a file
+another product will generate): it has no checksum to validate against.
+The source is scanned again once the file is generated.
 
 ## Why Path as Key (Not Checksum)?
 
@@ -107,6 +129,8 @@ The cache automatically invalidates entries when:
 
 - The source file content changes (checksum mismatch)
 - Any cached dependency file no longer exists, or its content changes
+- A path the scan found missing now exists
+- The analyzer's configuration changes
 
 You can manually clear the entire dependency cache by removing the `.rsconstruct/deps.redb` file, or by running `rsconstruct clean all` which removes the entire `.rsconstruct/` directory.
 

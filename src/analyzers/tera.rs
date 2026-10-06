@@ -15,27 +15,20 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use crate::config::TeraAnalyzerConfig;
-use crate::deps_cache::DepsCache;
 use crate::errors;
 use crate::file_index::FileIndex;
-use crate::graph::{BuildGraph, Product};
+use crate::graph::Product;
 
 use super::{DepAnalyzer, ScanResult};
 
-use indicatif::ProgressBar;
-
 /// Tera template dependency analyzer that scans for include/import/extends directives.
 pub struct TeraDepAnalyzer {
-    iname: String,
     config: TeraAnalyzerConfig,
 }
 
 impl TeraDepAnalyzer {
-    pub fn new(iname: &str, config: TeraAnalyzerConfig) -> Self {
-        Self {
-            iname: iname.to_string(),
-            config,
-        }
+    pub const fn new(config: TeraAnalyzerConfig) -> Self {
+        Self { config }
     }
 
     /// Scan a Tera template file for all dependency-affecting constructs.
@@ -69,6 +62,7 @@ impl TeraDepAnalyzer {
         Ok(ScanResult {
             deps: paths,
             hash_pieces,
+            absent: Vec::new(),
         })
     }
 }
@@ -455,24 +449,23 @@ impl DepAnalyzer for TeraDepAnalyzer {
         }
     }
 
-    fn analyze(
+    fn scan(
         &self,
         ctx: &crate::build_context::BuildContext,
-        graph: &mut BuildGraph,
-        deps_cache: &mut DepsCache,
+        source: &Path,
         _file_index: &FileIndex,
-        _verbose: bool,
-        progress: &ProgressBar,
-    ) -> Result<()> {
-        super::analyze_with_full_scanner(
-            ctx,
-            graph,
-            deps_cache,
-            &self.iname,
-            |p| self.match_product(p),
-            |source| self.scan_template(ctx, source),
-            progress,
-        )
+    ) -> Result<ScanResult> {
+        self.scan_template(ctx, source)
+    }
+
+    /// The hash pieces (glob results, command text) depend on filesystem
+    /// state the deps cache cannot represent.
+    fn always_rescan(&self) -> bool {
+        true
+    }
+
+    fn fingerprint_parts(&self, _ctx: &crate::build_context::BuildContext) -> Result<Vec<String>> {
+        super::config_fingerprint(&self.config)
     }
 
     fn scan_hash_pieces(
@@ -489,9 +482,9 @@ inventory::submit! {
         name: "tera",
         description: "Scan Tera templates for include/import/extends dependencies",
         is_native: true,
-        create: |iname, toml_value, _| {
+        create: |toml_value, _| {
             let cfg: TeraAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
-            Ok(Box::new(TeraDepAnalyzer::new(iname, cfg)))
+            Ok(Box::new(TeraDepAnalyzer::new(cfg)))
         },
         defconfig_toml: || {
             toml::to_string_pretty(&TeraAnalyzerConfig::default()).ok()

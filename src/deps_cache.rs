@@ -8,13 +8,23 @@
 //! `mypy-imports` pair) never overwrite each other's entries. The NUL
 //! separator is safe: neither analyzer inames nor paths can contain NUL.
 //!
-//! Cache value: (`source_checksum`, dependencies, `dependency_checksums`)
+//! Cache value: (`source_checksum`, dependencies, `dependency_checksums`,
+//! `absent`, `config_fingerprint`)
 //!
 //! The cache is invalidated when the source file or any listed dependency
 //! changes. Checking the dependencies matters for analyzers whose list is
 //! transitive (`icpp`, `cpp`): when `a.h` gains `#include "b.h"`, the source
 //! that includes `a.h` is unchanged, but its dependency list is now short —
 //! only `a.h`'s new checksum reveals that it must be rescanned.
+//!
+//! Two more things decide a dependency list without being file contents:
+//! - which files *do not* exist. `#include "x.h"` resolved to `include/x.h`
+//!   because `src/x.h` was absent; once `src/x.h` appears it shadows the
+//!   old match. The analyzer reports such probe paths as `absent`, and an
+//!   entry is dropped as soon as any of them exists.
+//! - the analyzer's configuration (include paths, load paths, pkg-config
+//!   output, ...). Every entry records the fingerprint it was scanned
+//!   under; an entry from another configuration is a miss.
 
 use anyhow::{Context, Result};
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
@@ -42,9 +52,28 @@ struct DepsEntry {
     /// none, fails the length check and is rescanned once.
     #[serde(default)]
     dependency_checksums: Vec<String>,
+    /// Paths whose absence the dependency list relies on (see the module
+    /// doc). The entry is invalid once any of them exists.
+    #[serde(default)]
+    absent: Vec<String>,
+    /// `AnalyzerId::fingerprint` the entry was scanned under.
+    #[serde(default)]
+    config_fingerprint: String,
     /// Name of the analyzer that created this entry (e.g., "cpp", "python")
     #[serde(default)]
     analyzer: String,
+}
+
+/// The analyzer instance a cache entry belongs to, and the configuration it
+/// scans under.
+#[derive(Debug, Clone, Copy)]
+pub struct AnalyzerId<'a> {
+    /// Analyzer instance name — part of the entry's key.
+    pub iname: &'a str,
+    /// Hash of everything other than file contents that decides how the
+    /// analyzer resolves dependencies: its config and any search paths it
+    /// resolved at run time. Stored in the entry; a mismatch is a miss.
+    pub fingerprint: &'a str,
 }
 
 /// Result of a `classify` call — the predict-pass analogue of `DepsCacheStats`.
@@ -114,50 +143,13 @@ impl DepsCache {
     pub fn get(
         &mut self,
         ctx: &BuildContext,
-        analyzer: &str,
+        analyzer: AnalyzerId<'_>,
         source: &Path,
     ) -> Option<Vec<PathBuf>> {
-        let key = key_for(analyzer, source);
-
-        // Any failure to reach the stored entry — DB not yet created, table
-        // missing, deserialization error, stat failure — counts as a miss.
-        // These paths all mean "we can't trust the cache for this file."
-        let Ok(read_txn) = self.db.begin_read() else {
+        let Some((deps, checksum_path)) = self.lookup(ctx, analyzer, source) else {
             self.stats.misses += 1;
             return None;
         };
-        let Ok(table) = read_txn.open_table(DEPS_TABLE) else {
-            self.stats.misses += 1;
-            return None;
-        };
-        let Ok(Some(data)) = table.get(key.as_str()) else {
-            self.stats.misses += 1;
-            return None;
-        };
-        let Ok(entry) = serde_json::from_slice::<DepsEntry>(data.value()) else {
-            self.stats.misses += 1;
-            return None;
-        };
-
-        // Verify source file hasn't changed. `checksum_fast` consults the
-        // persistent mtime cache so unchanged files skip the full read + hash.
-        let Ok((current_checksum, checksum_path)) = checksum_fast(ctx, source) else {
-            self.stats.misses += 1;
-            return None;
-        };
-        if entry.source_checksum != current_checksum {
-            self.stats.misses += 1;
-            return None;
-        }
-
-        // Verify every dependency still exists with the content it was
-        // scanned with (see the module doc for why).
-        if !dependencies_unchanged(ctx, &entry) {
-            self.stats.misses += 1;
-            return None;
-        }
-        let deps: Vec<PathBuf> = entry.dependencies.iter().map(PathBuf::from).collect();
-
         self.stats.hits += 1;
         match checksum_path {
             ChecksumPath::MtimeShortcut => self.stats.mtime_hits += 1,
@@ -171,33 +163,56 @@ impl DepsCache {
     /// Used by the pre-scan classify pass to count expected hits vs rescans
     /// before the actual scan runs. Identical validity rules to `get`.
     /// Does not touch stats.
-    pub fn classify(&self, ctx: &BuildContext, analyzer: &str, source: &Path) -> ClassifyResult {
-        let key = key_for(analyzer, source);
-        let Ok(read_txn) = self.db.begin_read() else {
-            return ClassifyResult::Miss;
-        };
-        let Ok(table) = read_txn.open_table(DEPS_TABLE) else {
-            return ClassifyResult::Miss;
-        };
-        let Ok(Some(data)) = table.get(key.as_str()) else {
-            return ClassifyResult::Miss;
-        };
-        let Ok(entry) = serde_json::from_slice::<DepsEntry>(data.value()) else {
-            return ClassifyResult::Miss;
-        };
-        let Ok((current_checksum, checksum_path)) = checksum_fast(ctx, source) else {
-            return ClassifyResult::Miss;
-        };
+    pub fn classify(
+        &self,
+        ctx: &BuildContext,
+        analyzer: AnalyzerId<'_>,
+        source: &Path,
+    ) -> ClassifyResult {
+        match self.lookup(ctx, analyzer, source) {
+            None => ClassifyResult::Miss,
+            Some((_, ChecksumPath::MtimeShortcut)) => ClassifyResult::MtimeHit,
+            Some((_, ChecksumPath::FullRead)) => ClassifyResult::ContentHit,
+        }
+    }
+
+    /// The validity rules shared by `get` and `classify`: the cached list for
+    /// `source` and how its checksum was confirmed, or None when the entry
+    /// cannot be trusted.
+    ///
+    /// Any failure to reach the stored entry — DB not yet created, table
+    /// missing, deserialization error, stat failure — is a miss: these all
+    /// mean "we can't trust the cache for this file."
+    fn lookup(
+        &self,
+        ctx: &BuildContext,
+        analyzer: AnalyzerId<'_>,
+        source: &Path,
+    ) -> Option<(Vec<PathBuf>, ChecksumPath)> {
+        let key = key_for(analyzer.iname, source);
+        let read_txn = self.db.begin_read().ok()?;
+        let table = read_txn.open_table(DEPS_TABLE).ok()?;
+        let data = table.get(key.as_str()).ok()??;
+        let entry = serde_json::from_slice::<DepsEntry>(data.value()).ok()?;
+
+        // Scanned under another configuration: its resolution may differ.
+        if entry.config_fingerprint != analyzer.fingerprint {
+            return None;
+        }
+        // Verify source file hasn't changed. `checksum_fast` consults the
+        // persistent mtime cache so unchanged files skip the full read + hash.
+        let (current_checksum, checksum_path) = checksum_fast(ctx, source).ok()?;
         if entry.source_checksum != current_checksum {
-            return ClassifyResult::Miss;
+            return None;
         }
-        if !dependencies_unchanged(ctx, &entry) {
-            return ClassifyResult::Miss;
+        // Verify every dependency still exists with the content it was
+        // scanned with, and that nothing has appeared where resolution
+        // relied on finding nothing (see the module doc for both).
+        if !dependencies_unchanged(ctx, &entry) || !absent_still_absent(&entry) {
+            return None;
         }
-        match checksum_path {
-            ChecksumPath::MtimeShortcut => ClassifyResult::MtimeHit,
-            ChecksumPath::FullRead => ClassifyResult::ContentHit,
-        }
+        let deps = entry.dependencies.iter().map(PathBuf::from).collect();
+        Some((deps, checksum_path))
     }
 
     /// Compute the source checksum for use with [`Self::set`]. Call this
@@ -219,15 +234,19 @@ impl DepsCache {
     /// recorded with its new content, and that one change goes unnoticed
     /// until the file changes again — the same window a build always has
     /// for an input edited while it runs.
+    ///
+    /// `absent` lists the paths the scan probed and found missing on the
+    /// way to its result (see the module doc).
     pub fn set(
         &self,
         ctx: &BuildContext,
-        analyzer: &str,
+        analyzer: AnalyzerId<'_>,
         source: &Path,
         source_checksum: String,
         dependencies: &[PathBuf],
+        absent: &[PathBuf],
     ) -> Result<()> {
-        let key = key_for(analyzer, source);
+        let key = key_for(analyzer.iname, source);
 
         let dependency_checksums = dependencies
             .iter()
@@ -244,7 +263,9 @@ impl DepsCache {
                 .map(|p| p.display().to_string())
                 .collect(),
             dependency_checksums,
-            analyzer: analyzer.to_string(),
+            absent: absent.iter().map(|p| p.display().to_string()).collect(),
+            config_fingerprint: analyzer.fingerprint.to_string(),
+            analyzer: analyzer.iname.to_string(),
         };
 
         let data = serde_json::to_vec(&entry).context("Failed to serialize dependency entry")?;
@@ -266,6 +287,12 @@ impl DepsCache {
             .context("Failed to commit dependency cache write")?;
 
         Ok(())
+    }
+
+    /// Count a scan that never consulted the cache (an analyzer that always
+    /// rescans) as a miss, so `misses` is every source actually scanned.
+    pub const fn count_uncached_scan(&mut self) {
+        self.stats.misses += 1;
     }
 
     /// Get cache statistics (hits and misses)
@@ -413,6 +440,16 @@ fn dependencies_unchanged(ctx: &BuildContext, entry: &DepsEntry) -> bool {
             })
 }
 
+/// Whether every path the scan relied on being missing is still missing.
+/// Anything at all appearing there — file, directory, symlink — may change
+/// how the analyzer resolves, so any existence counts.
+fn absent_still_absent(entry: &DepsEntry) -> bool {
+    entry
+        .absent
+        .iter()
+        .all(|path| fs::symlink_metadata(path).is_err())
+}
+
 /// Build the composite cache key for an (analyzer, source) pair. NUL is used
 /// as the separator because neither analyzer inames nor filesystem paths can
 /// contain NUL bytes, so there's no possible ambiguity.
@@ -505,19 +542,88 @@ mod tests {
         cache
             .set(
                 &ctx,
-                "icpp",
+                ICPP,
                 &source,
                 checksum,
                 std::slice::from_ref(&header),
+                &[],
             )
             .unwrap();
-        assert_eq!(cache.get(&ctx, "icpp", &source), Some(vec![header.clone()]));
+        assert_eq!(cache.get(&ctx, ICPP, &source), Some(vec![header.clone()]));
 
         // A fresh context drops the in-session checksum cache, as a new
         // build would.
         fs::write(&header, "#include \"b.h\"\n").unwrap();
         let ctx = fresh_ctx();
-        assert_eq!(cache.get(&ctx, "icpp", &source), None);
+        assert_eq!(cache.get(&ctx, ICPP, &source), None);
+    }
+
+    const ICPP: AnalyzerId<'static> = AnalyzerId {
+        iname: "icpp",
+        fingerprint: "config-a",
+    };
+
+    /// See `get_misses_when_a_dependency_changes` for why the mtime cache
+    /// is off.
+    fn content_only_ctx() -> crate::build_context::BuildContext {
+        let ctx = crate::build_context::BuildContext::new();
+        ctx.set_mtime_check(false);
+        ctx
+    }
+
+    /// An entry scanned under one analyzer configuration says nothing about
+    /// another: changing `include_paths` can resolve the same `#include` to
+    /// a different file without any file changing.
+    #[test]
+    fn get_misses_when_the_config_fingerprint_changes() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let ctx = content_only_ctx();
+        let mut cache = DepsCache::open_in(tmp.path()).expect("open fresh cache");
+        let source = tmp.path().join("main.c");
+        fs::write(&source, "int main;\n").unwrap();
+
+        let checksum = DepsCache::source_checksum(&ctx, &source).unwrap();
+        cache.set(&ctx, ICPP, &source, checksum, &[], &[]).unwrap();
+        assert_eq!(cache.get(&ctx, ICPP, &source), Some(Vec::new()));
+
+        let other = AnalyzerId {
+            iname: "icpp",
+            fingerprint: "config-b",
+        };
+        assert_eq!(cache.get(&ctx, other, &source), None);
+        assert_eq!(cache.classify(&ctx, other, &source), ClassifyResult::Miss);
+    }
+
+    /// A probe path that was missing when the source was scanned must still
+    /// be missing for the entry to hold: a header appearing earlier on the
+    /// search path shadows the one the list names.
+    #[test]
+    fn get_misses_when_an_absent_path_appears() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let ctx = content_only_ctx();
+        let mut cache = DepsCache::open_in(tmp.path()).expect("open fresh cache");
+        let source = tmp.path().join("main.c");
+        let found = tmp.path().join("include_x.h");
+        let shadow = tmp.path().join("x.h");
+        fs::write(&source, "#include \"x.h\"\n").unwrap();
+        fs::write(&found, "\n").unwrap();
+
+        let checksum = DepsCache::source_checksum(&ctx, &source).unwrap();
+        cache
+            .set(
+                &ctx,
+                ICPP,
+                &source,
+                checksum,
+                std::slice::from_ref(&found),
+                std::slice::from_ref(&shadow),
+            )
+            .unwrap();
+        assert_eq!(cache.get(&ctx, ICPP, &source), Some(vec![found]));
+
+        fs::write(&shadow, "\n").unwrap();
+        assert_eq!(cache.get(&ctx, ICPP, &source), None);
+        assert_eq!(cache.classify(&ctx, ICPP, &source), ClassifyResult::Miss);
     }
 
     /// Regression guard: every `get` call must increment exactly one counter.
@@ -535,7 +641,11 @@ mod tests {
         let ctx = crate::build_context::BuildContext::new();
         let mut cache = DepsCache::open_in(tmp.path()).expect("open fresh cache");
         let nonexistent = tmp.path().join("does_not_exist.py");
-        let result = cache.get(&ctx, "python", &nonexistent);
+        let python = AnalyzerId {
+            iname: "python",
+            fingerprint: "",
+        };
+        let result = cache.get(&ctx, python, &nonexistent);
 
         assert!(result.is_none(), "missing entry must return None");
         let stats = cache.stats();

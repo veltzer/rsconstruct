@@ -10,13 +10,13 @@ pub mod python;
 mod sass;
 mod tera;
 
-use crate::deps_cache::DepsCache;
+use crate::deps_cache::{AnalyzerId, ClassifyResult, DepsCache, DepsCacheStats};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use crate::processor::{format_command, run_command_capture};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use indicatif::ProgressBar;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -70,23 +70,34 @@ pub trait DepAnalyzer: Sync + Send {
             .collect()
     }
 
-    /// Analyze dependencies and add them to products in the graph.
+    /// Scan one source file (a `match_product` result) for its dependencies.
     ///
-    /// The analyzer should:
-    /// 1. Find products it can analyze (via `match_product`)
-    /// 2. For each product, scan the primary source file for dependencies
-    /// 3. Use `deps_cache` to avoid re-scanning unchanged files
-    /// 4. Add discovered dependencies to the product's inputs
-    /// 5. Tick `progress` once per product it processed (whether cache hit or miss)
-    fn analyze(
+    /// Report in `ScanResult::absent` every path the resolution probed and
+    /// found missing before settling on its answer — the deps cache drops
+    /// the entry once one of them appears. Iterating products, the deps
+    /// cache and applying the result to the graph are the framework's job
+    /// (see [`analyze_graph`]).
+    fn scan(
         &self,
         ctx: &crate::build_context::BuildContext,
-        graph: &mut BuildGraph,
-        deps_cache: &mut DepsCache,
+        source: &Path,
         file_index: &FileIndex,
-        verbose: bool,
-        progress: &ProgressBar,
-    ) -> Result<()>;
+    ) -> Result<ScanResult>;
+
+    /// Rescan every source on every run instead of trusting the deps cache.
+    /// Required for an analyzer whose `ScanResult` carries `hash_pieces`:
+    /// those depend on filesystem state (glob results) the per-source cache
+    /// cannot represent, so they are never cached.
+    fn always_rescan(&self) -> bool {
+        false
+    }
+
+    /// Everything besides file contents that decides what `scan` resolves:
+    /// the analyzer's configuration and any search paths it resolves at run
+    /// time (pkg-config, include-path commands). Hashed into the
+    /// fingerprint every deps-cache entry is stored under, so a config
+    /// change rescans instead of trusting lists resolved the old way.
+    fn fingerprint_parts(&self, ctx: &crate::build_context::BuildContext) -> Result<Vec<String>>;
 
     /// Recompute the hash pieces this analyzer would contribute for `source`,
     /// without touching the build graph or the deps cache. Used by
@@ -252,190 +263,354 @@ pub fn run_include_path_commands(
 /// The pieces are also surfaced via `rsconstruct analyzer show files <path>
 /// --hash-pieces` so users can see exactly what non-content state the analyzer
 /// is tracking for a given source.
+///
+/// `absent` lists the paths resolution probed and found missing on the way
+/// to `deps` (an earlier include directory, the `.py` candidate before the
+/// package `__init__.py`). If one of them appears later it may shadow what
+/// was found, so the deps cache treats the entry as stale.
+#[derive(Debug, Default)]
 pub struct ScanResult {
     pub deps: Vec<PathBuf>,
     pub hash_pieces: Vec<String>,
+    pub absent: Vec<PathBuf>,
 }
 
-/// Shared helper for analyzer `analyze()` implementations.
-///
-/// Iterates over products in the graph, filters them using `match_product`, checks the
-/// dependency cache, scans dependencies using `scan_deps` on cache miss, caches results,
-/// and adds discovered dependencies to product inputs. Shows a progress bar and cache stats.
-///
-/// - `match_product`: given a product, returns `Some(source_path)` if the product is relevant
-/// - `scan_deps`: given a source path, returns the list of dependency paths
-pub fn analyze_with_scanner<F, G>(
-    ctx: &crate::build_context::BuildContext,
-    graph: &mut BuildGraph,
-    deps_cache: &mut DepsCache,
-    analyzer_name: &str,
-    match_product: F,
-    scan_deps: G,
-    progress: &ProgressBar,
-) -> Result<()>
-where
-    F: Fn(&crate::graph::Product) -> Option<PathBuf>,
-    G: Fn(&Path) -> Result<Vec<PathBuf>>,
-{
-    // Group product IDs by source path so each unique source is scanned once,
-    // then fan the resulting deps out to every product that referenced it.
-    let mut by_source: std::collections::BTreeMap<PathBuf, Vec<usize>> =
-        std::collections::BTreeMap::new();
-    for p in graph.products() {
-        if let Some(source) = match_product(p) {
-            by_source.entry(source).or_default().push(p.id);
+impl ScanResult {
+    /// A result with dependencies and absent probes but no hash pieces —
+    /// what every analyzer except the glob-aware ones returns.
+    pub const fn deps(deps: Vec<PathBuf>, absent: Vec<PathBuf>) -> Self {
+        Self {
+            deps,
+            hash_pieces: Vec::new(),
+            absent,
         }
     }
+}
 
-    if by_source.is_empty() {
-        return Ok(());
+/// The cache-key piece a scan contributes to every product it applies to,
+/// or None when it has no hash pieces. Length-prefixed hash, not a '|' join:
+/// pieces embed file paths, which can contain any separator.
+fn joined_hash_pieces(result: &ScanResult) -> Option<String> {
+    if result.hash_pieces.is_empty() {
+        return None;
+    }
+    let parts: Vec<&str> = result.hash_pieces.iter().map(String::as_str).collect();
+    Some(crate::checksum::hash_parts(&parts))
+}
+
+/// One declared, enabled analyzer instance and the deps-cache fingerprint
+/// it scans under.
+struct ActiveAnalyzer {
+    iname: String,
+    analyzer: Box<dyn DepAnalyzer>,
+    fingerprint: String,
+}
+
+/// The dependency analysis of one graph: the active analyzers, in the order
+/// they contribute, and the deps cache they share.
+///
+/// Built and run during graph construction ([`analyze_graph`]). A build
+/// keeps it alive into execution: a file that some product *generates* is
+/// analyzed at graph time in whatever state it is on disk — or not at all,
+/// on a clean checkout — and that state is stale once its producer rebuilds
+/// it. [`reanalyze`] redoes the analysis of every product that read such a
+/// file right after the producer ran, so the product is checksummed,
+/// ordered and cached against what it will actually read.
+///
+/// [`analyze_graph`]: Self::analyze_graph
+/// [`reanalyze`]: Self::reanalyze
+pub struct Analysis {
+    /// Sorted by instance name. The order analyzers add inputs and key
+    /// pieces is part of each product's cache key, so re-analysis must
+    /// replay it exactly.
+    analyzers: Vec<ActiveAnalyzer>,
+    deps_cache: DepsCache,
+    /// The project's files plus every declared output, so a reference to a
+    /// file that another product will generate resolves to it.
+    file_index: FileIndex,
+}
+
+impl Analysis {
+    /// Fingerprint each analyzer (see `DepAnalyzer::fingerprint_parts`) and
+    /// order them by instance name.
+    pub fn new(
+        ctx: &crate::build_context::BuildContext,
+        analyzers: Vec<(String, Box<dyn DepAnalyzer>)>,
+        deps_cache: DepsCache,
+        file_index: FileIndex,
+    ) -> Result<Self> {
+        let mut active: Vec<ActiveAnalyzer> = analyzers
+            .into_iter()
+            .map(|(iname, analyzer)| {
+                let parts = analyzer.fingerprint_parts(ctx).with_context(|| {
+                    format!("Failed to fingerprint the configuration of analyzer '{iname}'")
+                })?;
+                let parts: Vec<&str> = parts.iter().map(String::as_str).collect();
+                Ok(ActiveAnalyzer {
+                    fingerprint: crate::checksum::hash_parts(&parts),
+                    iname,
+                    analyzer,
+                })
+            })
+            .collect::<Result<_>>()?;
+        active.sort_by(|a, b| a.iname.cmp(&b.iname));
+        Ok(Self {
+            analyzers: active,
+            deps_cache,
+            file_index,
+        })
     }
 
-    for (source, product_ids) in &by_source {
-        progress.set_message(format!("[{}] {}", analyzer_name, source.display()));
+    pub const fn is_empty(&self) -> bool {
+        self.analyzers.is_empty()
+    }
 
-        // A source that does not exist yet is a product of an earlier
-        // processor that has not run in this build (e.g. a generator writing
-        // out/processor.generator.generic/*.md that a markdown checker also scans). It has no
-        // dependencies to contribute now, and it gets scanned on the build
-        // after it exists. Stat'ing it here would abort the whole build with
-        // "Failed to stat file" on any clean checkout — which is precisely
-        // what CI does every run.
-        if !source.exists() {
-            progress.inc(product_ids.len() as u64);
-            continue;
+    /// Products matched, summed over analyzers: the progress-bar total.
+    pub fn count_matches(&self, graph: &BuildGraph) -> usize {
+        self.analyzers
+            .iter()
+            .map(|a| a.analyzer.count_matches(graph))
+            .sum()
+    }
+
+    /// The distinct (analyzer index, source) pairs the analysis scans.
+    pub fn unique_sources(&self, graph: &BuildGraph) -> HashSet<(usize, PathBuf)> {
+        self.analyzers
+            .iter()
+            .enumerate()
+            .flat_map(|(index, a)| {
+                a.analyzer
+                    .matching_sources(graph)
+                    .into_iter()
+                    .map(move |source| (index, source))
+            })
+            .collect()
+    }
+
+    /// Predict what scanning one (analyzer, source) pair will cost. An
+    /// analyzer that always rescans never hits the cache.
+    pub fn classify(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        index: usize,
+        source: &Path,
+    ) -> ClassifyResult {
+        let a = &self.analyzers[index];
+        if a.analyzer.always_rescan() {
+            return ClassifyResult::Miss;
         }
+        self.deps_cache.classify(ctx, a.id(), source)
+    }
 
-        // Try to get cached dependencies, otherwise scan. The checksum is
-        // taken before the scan so a mid-scan edit can't pair the new
-        // content's checksum with the old content's dependencies.
-        let deps = if let Some(cached) = deps_cache.get(ctx, analyzer_name, source) {
-            cached
-        } else {
-            let source_checksum = DepsCache::source_checksum(ctx, source)?;
-            let scanned = scan_deps(source)?;
-            if let Err(e) = deps_cache.set(ctx, analyzer_name, source, source_checksum, &scanned) {
-                crate::output::warn(&format!(
-                    "failed to cache dependencies for {}: {}",
-                    source.display(),
-                    e
-                ));
-            }
-            scanned
-        };
+    pub const fn stats(&self) -> &DepsCacheStats {
+        self.deps_cache.stats()
+    }
 
-        // Fan deps out to every product that has this source as primary input
-        if !deps.is_empty() {
-            for &id in product_ids {
-                if let Some(product) = graph.get_product_mut(id) {
-                    let existing: HashSet<&PathBuf> = product.inputs.iter().collect();
-                    let new_deps: Vec<PathBuf> = deps
-                        .iter()
-                        .filter(|dep| !existing.contains(dep))
-                        .cloned()
-                        .collect();
-                    product.inputs.extend(new_deps);
+    /// Analyze every product of the graph: each analyzer in turn scans each
+    /// distinct source it matches once and fans the result out to every
+    /// product that matched it. Ticks `progress` once per product.
+    ///
+    /// A source that does not exist yet is the output of a product that has
+    /// not run (a clean checkout, which is what CI builds every run). It
+    /// contributes nothing now; [`reanalyze`](Self::reanalyze) scans it
+    /// once its producer has run.
+    pub fn analyze_graph(
+        &mut self,
+        ctx: &crate::build_context::BuildContext,
+        graph: &mut BuildGraph,
+        progress: &ProgressBar,
+    ) -> Result<()> {
+        for index in 0..self.analyzers.len() {
+            // Group product ids by source so each unique source is scanned
+            // once, then fan the result out to every product that matched.
+            let mut by_source: BTreeMap<PathBuf, Vec<usize>> = BTreeMap::new();
+            for p in graph.products() {
+                if let Some(source) = self.analyzers[index].analyzer.match_product(p) {
+                    by_source.entry(source).or_default().push(p.id);
                 }
             }
+            for (source, product_ids) in &by_source {
+                progress.set_message(format!(
+                    "[{}] {}",
+                    self.analyzers[index].iname,
+                    source.display()
+                ));
+                if source.exists() {
+                    let result = self.scan_source(ctx, index, source)?;
+                    let piece = joined_hash_pieces(&result);
+                    for &id in product_ids {
+                        graph.add_inputs(id, &result.deps);
+                        if let Some(piece) = &piece {
+                            graph.extend_cache_key(id, piece);
+                        }
+                    }
+                }
+                progress.inc(product_ids.len() as u64);
+            }
         }
-
-        // Tick once per product so the progress total still matches the pre-scan count
-        progress.inc(product_ids.len() as u64);
+        Ok(())
     }
 
-    Ok(())
-}
-
-/// Like `analyze_with_scanner` but the scanner returns a [`ScanResult`] that
-/// can also contribute to each affected product's `config_hash`. Used by
-/// analyzers whose dependencies aren't only the contents of files (e.g., the
-/// Tera analyzer must also account for the *set* of paths matching a glob).
-///
-/// Cache: the path list is cached per source like in `analyze_with_scanner`,
-/// but the `hash_pieces` are **not** cached — they're recomputed on every
-/// analyzer run. That's intentional. Tera analysis is cheap, and the pieces
-/// often depend on filesystem state (the glob set) that the per-source
-/// content cache cannot represent.
-pub fn analyze_with_full_scanner<F, G>(
-    ctx: &crate::build_context::BuildContext,
-    graph: &mut BuildGraph,
-    deps_cache: &DepsCache,
-    analyzer_name: &str,
-    match_product: F,
-    scan: G,
-    progress: &ProgressBar,
-) -> Result<()>
-where
-    F: Fn(&crate::graph::Product) -> Option<PathBuf>,
-    G: Fn(&Path) -> Result<ScanResult>,
-{
-    let mut by_source: std::collections::BTreeMap<PathBuf, Vec<usize>> =
-        std::collections::BTreeMap::new();
-    for p in graph.products() {
-        if let Some(source) = match_product(p) {
-            by_source.entry(source).or_default().push(p.id);
+    /// Redo the analysis of every product whose analysis read a file that
+    /// one of `changed` (products just built or restored) wrote: the source
+    /// an analyzer scans, or a dependency it found (a generated header can
+    /// include further headers). Returns whether any product's inputs or
+    /// cache key moved — the caller then re-links the graph, since a new
+    /// input may be a not-yet-built output.
+    ///
+    /// A redone product is reset to its declared inputs and analyzed by
+    /// every analyzer in graph-time order, so it ends up identical to what
+    /// the next build will construct from scratch.
+    pub fn reanalyze(
+        &mut self,
+        ctx: &crate::build_context::BuildContext,
+        graph: &mut BuildGraph,
+        changed: &[usize],
+    ) -> Result<bool> {
+        if self.analyzers.is_empty() {
+            return Ok(false);
         }
+        let rewritten: HashSet<PathBuf> = changed
+            .iter()
+            .filter_map(|&id| graph.get_product(id))
+            .flat_map(|p| p.outputs.iter().cloned())
+            .collect();
+        if rewritten.is_empty() {
+            return Ok(false);
+        }
+        let targets: BTreeSet<usize> = graph
+            .products()
+            .iter()
+            .filter(|p| {
+                p.analyzer_inputs().iter().any(|i| rewritten.contains(i))
+                    || self.analyzers.iter().any(|a| {
+                        a.analyzer
+                            .match_product(p)
+                            .is_some_and(|source| rewritten.contains(&source))
+                    })
+            })
+            .map(|p| p.id)
+            .collect();
+
+        let mut moved = false;
+        for id in targets {
+            let before = graph
+                .get_product(id)
+                .map(|p| (p.inputs.clone(), p.cache_key.clone()));
+            graph.reset_analysis(id);
+            let mut pieces: Vec<String> = Vec::new();
+            for index in 0..self.analyzers.len() {
+                let product = graph
+                    .get_product(id)
+                    .expect(crate::errors::INVALID_PRODUCT_ID);
+                let Some(source) = self.analyzers[index].analyzer.match_product(product) else {
+                    continue;
+                };
+                if !source.exists() {
+                    continue;
+                }
+                let result = self.scan_source(ctx, index, &source)?;
+                graph.add_inputs(id, &result.deps);
+                pieces.extend(joined_hash_pieces(&result));
+            }
+            graph.set_analyzer_pieces(id, pieces);
+            let after = graph
+                .get_product(id)
+                .map(|p| (p.inputs.clone(), p.cache_key.clone()));
+            moved |= before != after;
+        }
+        Ok(moved)
     }
 
-    if by_source.is_empty() {
-        return Ok(());
-    }
-
-    for (source, product_ids) in &by_source {
-        progress.set_message(format!("[{}] {}", analyzer_name, source.display()));
-
-        // Not generated yet — see the same guard in `analyze_with_scanner`.
-        if !source.exists() {
-            progress.inc(product_ids.len() as u64);
-            continue;
+    /// The dependencies of one source: from the deps cache when valid,
+    /// otherwise scanned and stored. The source checksum is taken before
+    /// the scan so a mid-scan edit can't pair the new content's checksum
+    /// with the old content's dependencies.
+    fn scan_source(
+        &mut self,
+        ctx: &crate::build_context::BuildContext,
+        index: usize,
+        source: &Path,
+    ) -> Result<ScanResult> {
+        let Self {
+            analyzers,
+            deps_cache,
+            file_index,
+        } = self;
+        let a = &analyzers[index];
+        let cached = !a.analyzer.always_rescan();
+        if cached {
+            if let Some(deps) = deps_cache.get(ctx, a.id(), source) {
+                return Ok(ScanResult::deps(deps, Vec::new()));
+            }
+        } else {
+            // Matches the pre-scan prediction (`classify`), which counts
+            // every always-rescan source as a rescan.
+            deps_cache.count_uncached_scan();
         }
-
         let source_checksum = DepsCache::source_checksum(ctx, source)?;
-        let result = scan(source)?;
-
-        // Persist the dep list to the cache so commands like
-        // `analyzer show` can report what was discovered. The
-        // hash_pieces are intentionally NOT cached — they depend on
-        // filesystem state (glob results) that must be recomputed on
-        // every run. The checksum is taken before the scan (see set()).
-        if let Err(e) = deps_cache.set(ctx, analyzer_name, source, source_checksum, &result.deps) {
+        let result = a.analyzer.scan(ctx, source, file_index)?;
+        if cached && !result.hash_pieces.is_empty() {
+            anyhow::bail!(
+                "analyzer '{}' returned hash pieces for {} but caches its results; \
+                 hash pieces are not cached, so it must set always_rescan",
+                a.iname,
+                source.display()
+            );
+        }
+        // A probe that exists was not what resolution settled on, so it was
+        // never really a miss; storing it would void the entry at once.
+        let absent: Vec<PathBuf> = result
+            .absent
+            .iter()
+            .filter(|path| std::fs::symlink_metadata(path).is_err())
+            .cloned()
+            .collect();
+        // A dependency that does not exist yet is a file another product
+        // will generate. An entry naming it cannot be validated (it has no
+        // checksum to compare), so none is stored; the source is scanned
+        // again, mid-build once the file is generated or on the next build.
+        if result.deps.iter().any(|dep| !dep.exists()) {
+            return Ok(result);
+        }
+        // Stored even when always rescanning, so `analyzer show` can report
+        // what was discovered. Hash pieces are never stored.
+        if let Err(e) = deps_cache.set(ctx, a.id(), source, source_checksum, &result.deps, &absent)
+        {
             crate::output::warn(&format!(
                 "failed to cache dependencies for {}: {}",
                 source.display(),
                 e
             ));
         }
-
-        let joined_pieces = if result.hash_pieces.is_empty() {
-            None
-        } else {
-            // Length-prefixed hash, not a '|' join: pieces embed file paths,
-            // which can contain the separator (same injection class as the
-            // old CacheKey::material).
-            let parts: Vec<&str> = result.hash_pieces.iter().map(String::as_str).collect();
-            Some(crate::checksum::hash_parts(&parts))
-        };
-        for &id in product_ids {
-            if let Some(product) = graph.get_product_mut(id) {
-                if !result.deps.is_empty() {
-                    let existing: HashSet<&PathBuf> = product.inputs.iter().collect();
-                    let new_deps: Vec<PathBuf> = result
-                        .deps
-                        .iter()
-                        .filter(|dep| !existing.contains(dep))
-                        .cloned()
-                        .collect();
-                    product.inputs.extend(new_deps);
-                }
-                if let Some(ref piece) = joined_pieces {
-                    product.extend_config_hash(piece);
-                }
-            }
-        }
-
-        progress.inc(product_ids.len() as u64);
+        Ok(result)
     }
+}
 
-    Ok(())
+impl ActiveAnalyzer {
+    fn id(&self) -> AnalyzerId<'_> {
+        AnalyzerId {
+            iname: &self.iname,
+            fingerprint: &self.fingerprint,
+        }
+    }
+}
+
+/// The paths a search probed before `found`: every candidate up to (not
+/// including) the first that matched, or all of them when none did. These
+/// are a scan's `absent` paths — any of them appearing changes the answer.
+pub fn probed_before(candidates: &[PathBuf], found: Option<&PathBuf>) -> Vec<PathBuf> {
+    candidates
+        .iter()
+        .take_while(|c| Some(*c) != found)
+        .cloned()
+        .collect()
+}
+
+/// `fingerprint_parts` for an analyzer whose resolution depends on its
+/// config alone: the config, serialized.
+pub fn config_fingerprint<T: serde::Serialize>(config: &T) -> Result<Vec<String>> {
+    Ok(vec![
+        toml::to_string(config).context("Failed to serialize analyzer config")?,
+    ])
 }

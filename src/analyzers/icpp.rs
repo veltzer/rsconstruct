@@ -5,7 +5,6 @@
 //! use the `cpp` analyzer instead.
 
 use anyhow::Result;
-use indicatif::ProgressBar;
 use regex::Regex;
 use std::collections::HashSet;
 use std::fs;
@@ -13,18 +12,16 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use crate::config::IcppAnalyzerConfig;
-use crate::deps_cache::DepsCache;
 use crate::errors;
 use crate::file_index::FileIndex;
-use crate::graph::{BuildGraph, Product};
+use crate::graph::Product;
 
-use super::DepAnalyzer;
+use super::{DepAnalyzer, ScanResult};
 
 const CPP_MATCH_EXTENSIONS: &[&str] = &["c", "cc", "cpp", "cxx"];
 
 /// In-process C/C++ dependency analyzer using a pure-Rust regex scanner.
 pub struct IcppDepAnalyzer {
-    iname: String,
     config: IcppAnalyzerConfig,
     verbose: bool,
     /// Cached include paths discovered from pkg-config
@@ -34,9 +31,8 @@ pub struct IcppDepAnalyzer {
 }
 
 impl IcppDepAnalyzer {
-    pub fn new(iname: &str, config: IcppAnalyzerConfig, verbose: bool) -> Self {
+    pub const fn new(config: IcppAnalyzerConfig, verbose: bool) -> Self {
         Self {
-            iname: iname.to_string(),
             config,
             verbose,
             pkg_config_include_paths: OnceLock::new(),
@@ -76,48 +72,55 @@ impl IcppDepAnalyzer {
         })
     }
 
-    /// Resolve a single `#include` directive to a file, if any.
+    /// Resolve a single `#include` directive to a file, if any, along with
+    /// the candidates probed and found missing before it.
     /// Searches in order: including file's directory, configured `include_paths`,
     /// pkg-config-discovered include paths, then include paths from configured commands.
+    /// A candidate matches when it is on disk or another product generates
+    /// it (`file_index` holds declared outputs).
     fn resolve_include(
         &self,
         ctx: &crate::build_context::BuildContext,
         include: &str,
         including_dir: &Path,
-    ) -> Option<PathBuf> {
-        let candidate = including_dir.join(include);
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-        for inc_dir in &self.config.include_paths {
-            let candidate = Path::new(inc_dir).join(include);
-            if candidate.is_file() {
-                return Some(candidate);
-            }
-        }
-        for inc_dir in self.get_pkg_config_include_paths(ctx) {
-            let candidate = inc_dir.join(include);
-            if candidate.is_file() {
-                return Some(candidate);
-            }
-        }
-        for inc_dir in self.get_command_include_paths(ctx) {
-            let candidate = inc_dir.join(include);
-            if candidate.is_file() {
-                return Some(candidate);
-            }
-        }
-        None
+        file_index: &FileIndex,
+    ) -> (Option<PathBuf>, Vec<PathBuf>) {
+        let candidates: Vec<PathBuf> = std::iter::once(including_dir.join(include))
+            .chain(
+                self.config
+                    .include_paths
+                    .iter()
+                    .map(|dir| Path::new(dir).join(include)),
+            )
+            .chain(
+                self.get_pkg_config_include_paths(ctx)
+                    .iter()
+                    .map(|dir| dir.join(include)),
+            )
+            .chain(
+                self.get_command_include_paths(ctx)
+                    .iter()
+                    .map(|dir| dir.join(include)),
+            )
+            .collect();
+        let found = candidates
+            .iter()
+            .find(|c| c.is_file() || file_index.contains(c))
+            .cloned();
+        let absent = super::probed_before(&candidates, found.as_ref());
+        (found, absent)
     }
 
-    /// Scan a single file for `#include` directives. Returns resolved dep paths.
+    /// Scan a single file for `#include` directives. Returns resolved dep
+    /// paths and the paths probed and found missing (see `ScanResult`).
     /// Errors if a `"quoted"` include can't be resolved (system headers via `<angle>`
     /// are allowed to be unresolved — they may live in system include paths).
     fn scan_file_includes(
         &self,
         ctx: &crate::build_context::BuildContext,
         source: &Path,
-    ) -> Result<Vec<PathBuf>> {
+        file_index: &FileIndex,
+    ) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
         let content = errors::ctx(
             fs::read_to_string(source),
             &format!("Failed to read {}", source.display()),
@@ -131,6 +134,7 @@ impl IcppDepAnalyzer {
 
         let parent = crate::processor::parent_dir_or_empty(source);
         let mut deps = Vec::new();
+        let mut absent = Vec::new();
         for line in content.lines() {
             if let Some(caps) = re.captures(line) {
                 let is_quoted = &caps[1] == "\"";
@@ -138,7 +142,9 @@ impl IcppDepAnalyzer {
                 if !is_quoted && !self.config.follow_angle_brackets {
                     continue;
                 }
-                match self.resolve_include(ctx, include, parent) {
+                let (found, probed) = self.resolve_include(ctx, include, parent, file_index);
+                absent.extend(probed);
+                match found {
                     Some(resolved) => deps.push(resolved),
                     None if is_quoted && !self.config.skip_not_found => {
                         anyhow::bail!(
@@ -151,32 +157,43 @@ impl IcppDepAnalyzer {
                 }
             }
         }
-        Ok(deps)
+        Ok((deps, absent))
     }
 
-    /// Recursively scan `source` for transitive includes. Returns the full set
-    /// of project-local header files it depends on (excluding the source itself).
+    /// Recursively scan `source` for transitive includes: the full set of
+    /// project-local header files it depends on (excluding the source
+    /// itself), and every path probed and found missing along the way.
+    /// A header another product has yet to generate is a dependency but
+    /// cannot be read yet; the source is analyzed again once it is written
+    /// (`Analysis::reanalyze`).
     /// Propagates errors from `scan_file_includes` (including "Include not found").
     fn scan_includes(
         &self,
         ctx: &crate::build_context::BuildContext,
         source: &Path,
-    ) -> Result<Vec<PathBuf>> {
+        file_index: &FileIndex,
+    ) -> Result<ScanResult> {
         let mut seen: HashSet<PathBuf> = HashSet::new();
         let mut headers: Vec<PathBuf> = Vec::new();
+        let mut absent: Vec<PathBuf> = Vec::new();
         let mut queue: Vec<PathBuf> = vec![source.to_path_buf()];
 
         while let Some(file) = queue.pop() {
-            let direct_deps = self.scan_file_includes(ctx, &file)?;
+            let (direct_deps, probed) = self.scan_file_includes(ctx, &file, file_index)?;
+            absent.extend(probed);
             for dep in direct_deps {
                 if seen.insert(dep.clone()) {
                     headers.push(dep.clone());
-                    queue.push(dep);
+                    if dep.exists() {
+                        queue.push(dep);
+                    }
                 }
             }
         }
+        absent.sort();
+        absent.dedup();
 
-        Ok(headers)
+        Ok(ScanResult::deps(headers, absent))
     }
 }
 
@@ -215,24 +232,24 @@ impl DepAnalyzer for IcppDepAnalyzer {
         }
     }
 
-    fn analyze(
+    fn scan(
         &self,
         ctx: &crate::build_context::BuildContext,
-        graph: &mut BuildGraph,
-        deps_cache: &mut DepsCache,
-        _file_index: &FileIndex,
-        _verbose: bool,
-        progress: &ProgressBar,
-    ) -> Result<()> {
-        super::analyze_with_scanner(
-            ctx,
-            graph,
-            deps_cache,
-            &self.iname,
-            |p| self.match_product(p),
-            |source| self.scan_includes(ctx, source),
-            progress,
-        )
+        source: &Path,
+        file_index: &FileIndex,
+    ) -> Result<ScanResult> {
+        self.scan_includes(ctx, source, file_index)
+    }
+
+    fn fingerprint_parts(&self, ctx: &crate::build_context::BuildContext) -> Result<Vec<String>> {
+        let mut parts = super::config_fingerprint(&self.config)?;
+        parts.extend(
+            self.get_pkg_config_include_paths(ctx)
+                .iter()
+                .chain(self.get_command_include_paths(ctx))
+                .map(|p| p.display().to_string()),
+        );
+        Ok(parts)
     }
 }
 
@@ -241,9 +258,9 @@ inventory::submit! {
         name: "icpp",
         description: "Scan C/C++ source files for #include dependencies (in-process, regex-based)",
         is_native: true,
-        create: |iname, toml_value, verbose| {
+        create: |toml_value, verbose| {
             let cfg: IcppAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
-            Ok(Box::new(IcppDepAnalyzer::new(iname, cfg, verbose)))
+            Ok(Box::new(IcppDepAnalyzer::new(cfg, verbose)))
         },
         defconfig_toml: || {
             toml::to_string_pretty(&crate::config::IcppAnalyzerConfig::default()).ok()

@@ -112,6 +112,14 @@ declarative resolver.
 Alternate policies (dry-run, always-rebuild, time-windowed) are now a single
 trait implementation away — no executor changes needed.
 
+**Correction (2026-10-06):** the extraction was only half done. The
+executor decided every product a second time, at dispatch, by calling
+`ObjectStore::needs_rebuild_descriptor` directly — so the policy governed
+the printed counts but not what ran, and a non-default policy would have
+been ignored by execution. Now the dispatch-time decision *is* the policy's
+(`prepare_level_work` calls `BuildPolicy::classify`), and
+`classify_products` is documented as a prediction. See finding R1 below.
+
 **Load-bearing:** very high, but the tension is resolved.
 
 ---
@@ -147,7 +155,10 @@ cause of several "remembered to update both places?" bugs we've fixed.
 
 ### 6. Analyzers are inputs-only; they can't add products
 
-`DepAnalyzer::analyze()` walks existing products and adds *inputs* to them.
+An analyzer scans the sources of existing products, and the framework
+(`analyzers::Analysis`) adds what it finds as *inputs*. (Analyzers used to
+walk the graph themselves through `DepAnalyzer::analyze()`; since R3/R5
+they only implement `scan()`.)
 It cannot:
 - Create new products (the cpp analyzer can't spawn a product for a header
   it discovered).
@@ -336,6 +347,122 @@ Likely a small refactor, but requires aligning on the output shape.
 **Load-bearing:** low-medium.
 
 ---
+
+## Review of 2026-10-06: dependency management and execution stages
+
+A read-through of the build pipeline end to end (driver, graph, discovery,
+analyzers, deps cache, executor, checksums, object store). R1–R5 were
+correctness defects and are fixed; R6–R10 and the minor items are open.
+
+### R1. Two decisions per product, only one of them the policy's — RESOLVED
+
+`classify_products` decided skip/restore/build through `BuildPolicy`; the
+executor then decided again at dispatch with its own call to
+`needs_rebuild_descriptor`, using the classification only to size the
+progress bar. The `execute()` doc claimed classify-time checksums were
+reused; the code recomputed them. `dep_changed` was effectively ignored at
+execution (a checker predicted BUILD skipped if its marker matched), so
+the "N to build" counts were wrong.
+
+**Fix:** one decision per product, made at dispatch (all dependencies have
+run, inputs are final) by the policy. `dep_changed` is gone from the
+policy: with a content-addressed key the checksum *is* the dependency
+signal. `classify_products` is now documented as a pessimistic prediction
+that only sizes the bar, prints the counts and picks what to unlink.
+
+### R2. The cache key was taken after the tool ran — RESOLVED
+
+`handle_success` hashed the inputs after execution and cached the outputs
+under that key, to cope with products whose `dep_inputs` glob matched their
+own output. An input edited while its tool ran was cached as if the old
+output belonged to the new content: the next build skipped, stale.
+
+**Fix:** a product's own outputs are never its inputs
+(`graph::without_own_outputs`). Outputs are cached under the dispatch-time
+checksum; when the post-run checksum differs, the outputs are not cached
+and a warning says so, so the next build reruns the product. Limitation:
+the in-session checksum caches assume content is stable within a build —
+input lists of 32+ files are memoized, and with `--no-mtime-cache` every
+file is — so a mid-run edit is only detected through the mtime check.
+
+### R3. Analyzers wrote inputs behind the graph's indexes — RESOLVED
+
+Analyzers mutated `product.inputs` through `get_product_mut`, bypassing
+`input_to_products`, so `products_consuming` (and `graph` lookups built on
+it) never saw analyzer-found dependencies. **Fix:** `get_product_mut` is
+gone; inputs grow only through `BuildGraph::add_inputs`, which keeps the
+index. `resolve_dependencies` recomputes edges instead of appending, so it
+can run again mid-build.
+
+### R4. The deps cache ignored configuration and missing files — RESOLVED
+
+Entries were keyed by `(analyzer, path)` alone and validated only against
+file contents. Changing `include_paths` (or pkg-config output) kept the old
+lists; a new `src/x.h` shadowing `include/x.h` went unnoticed. **Fix:**
+entries carry the analyzer's config fingerprint and the paths resolution
+probed and found missing (`ScanResult::absent`). See
+`dependency-caching.md`.
+
+### R5. Generated sources were never analyzed in the build that wrote them — RESOLVED
+
+A source that did not exist at graph time was skipped (clean checkout), and
+one that existed was analyzed in its stale state. Its consumer could run
+before a generated header it included (no edge), and its cache key differed
+between a clean and an incremental build — so a CI-filled remote cache
+never hit locally, and the build after a clean build rebuilt.
+
+**Fix:** analyzers resolve against the post-discovery file index, which
+includes declared outputs, so references to not-yet-generated files become
+edges. `analyzers::Analysis` outlives graph construction: after each level
+the executor reports what built or restored (`executor::GraphRefresh`),
+and every product whose analysis read a rewritten file is reset to its
+declared inputs and re-analyzed in graph-time order. The executor then
+re-links and re-plans the remaining levels. The analyzer trait shrank to
+`scan()`; iteration, caching and graph updates live in the framework.
+
+### R6. Levels are barriers (open)
+
+`execute_parallel` runs level by level; one slow product holds up the whole
+next level. A ready-queue scheduler would dispatch each product the moment
+its dependencies finish — and is where R5's re-planning would naturally
+live.
+
+### R7. Work is split statically; `-j` is not a global cap (open)
+
+Non-batch items are cut into `parallel` fixed chunks up front (no load
+balancing, and a chunk blocked on a `max_jobs` semaphore stalls the rest of
+it). Each batch group adds a thread on top of those, and a batching
+processor runs its chunks serially.
+
+### R8. Discovery re-runs every processor on every pass (open)
+
+The fixed-point loop rediscovers all processors each pass, not just those
+whose extensions match the newly added virtual files.
+
+### R9. The deps cache commits once per scanned file (open)
+
+Each `DepsCache::set` is its own durable redb transaction — one fsync per
+file on a cold scan. Batch them, as `flush_mtime_entries` already does.
+
+### R10. The mtime cache trusts mtime alone (open)
+
+`MtimeEntry` holds `(mtime, checksum)`. Tools that preserve mtimes (`tar
+x`, `cp -p`, `rsync -a`) can change content without changing it. Storing
+size, inode and ctime too, as git's index does, is cheap.
+
+### Minor (open)
+
+- pkg-config and `include_path_commands` failures print a warning and
+  continue, silently dropping dependencies — against "strict by default".
+- `build_graph_filtered` is a hand-copied fourth graph-building path that
+  skips tool-version hashing.
+- `-p B` does not pull in the producers of B's inputs; `--target` does.
+- `@<name>` aliases: `@ruff` works only because ruff is also a tool name;
+  the five type aliases are copy-pasted branches.
+- Five `add_product*` constructors; `src/config/mod.rs` is 3,100+ lines.
+- Products predicted to build only because a dependency changes still have
+  their outputs unlinked up front, so an unchanged rebuild ends as a
+  restore rather than a skip.
 
 ## Summary of architectural recommendations
 

@@ -82,12 +82,8 @@ impl Executor<'_> {
         &self,
         ctx: &HandlerContext,
         object_store: &crate::object_store::ObjectStore,
-        force: bool,
         emit_fail_event: bool,
     ) -> RestoreOutcome {
-        if force {
-            return RestoreOutcome::NotRestorable;
-        }
         let desc_key = ctx.product.descriptor_key(ctx.input_checksum);
         let restore_result = object_store
             .restore_from_descriptor(self.build_ctx, &desc_key, &ctx.product.outputs)
@@ -105,6 +101,7 @@ impl Executor<'_> {
                 // The restore rewrote the outputs on disk; evict any
                 // pre-restore checksums from the in-session cache.
                 crate::checksum::forget_in_session(self.build_ctx, &ctx.product.outputs);
+                ctx.shared.changed.lock().push(ctx.id);
                 crate::output::detail(
                     self.verbose,
                     &format!(
@@ -183,20 +180,16 @@ impl Executor<'_> {
         // pre-write value. `fast_checksum` re-hashes on mtime change, but
         // with mtime checking off `file_checksum` has no other invalidation.
         crate::checksum::forget_in_session(self.build_ctx, &ctx.product.outputs);
+        ctx.shared.changed.lock().push(ctx.id);
 
-        // Recompute the input checksum NOW (post-execution) rather than reusing
-        // the classify-time value. The cache key must match what the *next*
-        // classify will compute from on-disk state, which means hashing inputs
-        // that exist right now:
-        //   - upstream-chain case (e.g. ipdfunite consuming marp's PDF on a
-        //     clean build): at classify time the upstream output didn't exist
-        //     yet and the checksum had MISSING:; here it does, and the hash
-        //     reflects real content.
-        //   - self-reference / output-also-as-input case (e.g. tera template
-        //     whose dep_inputs lists its own output): the product just rewrote
-        //     the file, so the post-execution hash matches what next classify
-        //     will see.
-        // Both cases break if we use the classify-time checksum.
+        // The outputs are cached under the checksum taken at dispatch
+        // (`ctx.input_checksum`): the inputs the tool was started on. Hash
+        // them again now — if they differ, an input was edited while the
+        // tool ran, and the outputs match neither version. Caching them
+        // under the new content would make the next build skip with stale
+        // outputs; caching under the old would serve them if that content
+        // ever came back. So they are not cached at all, and the next build
+        // runs the product again against whatever the input is then.
         let post_input_checksum =
             match crate::checksum::combined_input_checksum(self.build_ctx, &ctx.product.inputs) {
                 Ok(cs) => cs,
@@ -214,7 +207,16 @@ impl Executor<'_> {
                     return false;
                 }
             };
-        let desc_key = ctx.product.descriptor_key(&post_input_checksum);
+        if post_input_checksum != ctx.input_checksum {
+            crate::output::warn(&format!(
+                "[{}] {}: inputs changed while it ran; outputs not cached, it will run again next build",
+                ctx.product.processor,
+                self.product_display(ctx.product),
+            ));
+            self.report_success(ctx, duration);
+            return true;
+        }
+        let desc_key = ctx.product.descriptor_key(ctx.input_checksum);
         let cache_result = if ctx.product.outputs.is_empty() && !ctx.product.has_output_dirs() {
             // Checker: no outputs, just mark as passed
             object_store
@@ -261,6 +263,12 @@ impl Executor<'_> {
                 return false;
             }
         }
+        self.report_success(ctx, duration);
+        true
+    }
+
+    /// Emit the success event and count the product as processed.
+    fn report_success(&self, ctx: &HandlerContext, duration: Option<std::time::Duration>) {
         emit_product_complete(
             &self.product_display(ctx.product),
             &ctx.product.processor,
@@ -273,6 +281,5 @@ impl Executor<'_> {
             s.processed += 1;
             s.files_created += output_count;
         });
-        true
     }
 }

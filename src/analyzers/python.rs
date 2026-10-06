@@ -4,7 +4,6 @@
 //! to products in the build graph.
 
 use anyhow::Result;
-use indicatif::ProgressBar;
 use regex::Regex;
 use std::collections::HashSet;
 use std::fs;
@@ -12,12 +11,11 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use crate::config::PythonAnalyzerConfig;
-use crate::deps_cache::DepsCache;
 use crate::errors;
 use crate::file_index::FileIndex;
-use crate::graph::{BuildGraph, Product};
+use crate::graph::Product;
 
-use super::DepAnalyzer;
+use super::{DepAnalyzer, ScanResult};
 
 /// Scan a Python source file for `import` / `from X import ...` statements and
 /// return the top-level module names referenced. Comments are skipped. The
@@ -60,44 +58,47 @@ pub fn scan_python_imports(source: &Path) -> Result<Vec<String>> {
 
 /// Python dependency analyzer that scans source files for import statements.
 pub struct PythonDepAnalyzer {
-    iname: String,
     config: PythonAnalyzerConfig,
 }
 
 impl PythonDepAnalyzer {
-    pub fn new(iname: &str, config: PythonAnalyzerConfig) -> Self {
-        Self {
-            iname: iname.to_string(),
-            config,
-        }
+    pub const fn new(config: PythonAnalyzerConfig) -> Self {
+        Self { config }
     }
 
     /// Scan a Python file for import statements and return paths to local
     /// Python files that are imported. Stdlib and third-party modules are
     /// filtered out by `resolve_module`.
-    fn scan_imports(&self, source: &Path, file_index: &FileIndex) -> Result<Vec<PathBuf>> {
+    fn scan_imports(&self, source: &Path, file_index: &FileIndex) -> Result<ScanResult> {
         let modules = scan_python_imports(source)?;
         let mut imports = Vec::new();
+        let mut absent = Vec::new();
         let mut seen = HashSet::new();
         for module_name in modules {
-            if let Some(path) = self.resolve_module(source, &module_name, file_index)
+            let (found, probed) = self.resolve_module(source, &module_name, file_index);
+            absent.extend(probed);
+            if let Some(path) = found
                 && !seen.contains(&path)
             {
                 seen.insert(path.clone());
                 imports.push(path);
             }
         }
-        Ok(imports)
+        absent.sort();
+        absent.dedup();
+        Ok(ScanResult::deps(imports, absent))
     }
 
-    /// Try to resolve a Python module name to a local file path.
-    /// Returns None for stdlib/external modules.
+    /// Try to resolve a Python module name to a local file path, along with
+    /// the candidates probed and found missing before it. The path is None
+    /// for stdlib/external modules — whose candidates are all absent, so a
+    /// local module of that name appearing later is noticed.
     fn resolve_module(
         &self,
         source: &Path,
         module: &str,
         file_index: &FileIndex,
-    ) -> Option<PathBuf> {
+    ) -> (Option<PathBuf>, Vec<PathBuf>) {
         // Convert module.path to module/path
         let module_path = module.replace('.', "/");
 
@@ -119,18 +120,13 @@ impl PythonDepAnalyzer {
             PathBuf::from(&module_path).join("__init__.py"),
         ];
 
-        for candidate in &candidates {
-            // Check if this file exists in the file index
-            if file_index.contains(candidate) {
-                return Some(candidate.clone());
-            }
-            // Also check if the file exists on disk (cwd is project root)
-            if candidate.is_file() {
-                return Some(candidate.clone());
-            }
-        }
-
-        None
+        // In the file index, or on disk (cwd is project root).
+        let found = candidates
+            .iter()
+            .find(|candidate| file_index.contains(candidate) || candidate.is_file())
+            .cloned();
+        let absent = super::probed_before(&candidates, found.as_ref());
+        (found, absent)
     }
 }
 
@@ -161,24 +157,17 @@ impl DepAnalyzer for PythonDepAnalyzer {
         }
     }
 
-    fn analyze(
+    fn scan(
         &self,
-        ctx: &crate::build_context::BuildContext,
-        graph: &mut BuildGraph,
-        deps_cache: &mut DepsCache,
+        _ctx: &crate::build_context::BuildContext,
+        source: &Path,
         file_index: &FileIndex,
-        _verbose: bool,
-        progress: &ProgressBar,
-    ) -> Result<()> {
-        super::analyze_with_scanner(
-            ctx,
-            graph,
-            deps_cache,
-            &self.iname,
-            |p| self.match_product(p),
-            |source| self.scan_imports(source, file_index),
-            progress,
-        )
+    ) -> Result<ScanResult> {
+        self.scan_imports(source, file_index)
+    }
+
+    fn fingerprint_parts(&self, _ctx: &crate::build_context::BuildContext) -> Result<Vec<String>> {
+        super::config_fingerprint(&self.config)
     }
 }
 
@@ -187,9 +176,9 @@ inventory::submit! {
         name: "python",
         description: "Scan Python files for local import dependencies",
         is_native: true,
-        create: |iname, toml_value, _| {
+        create: |toml_value, _| {
             let cfg: PythonAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
-            Ok(Box::new(PythonDepAnalyzer::new(iname, cfg)))
+            Ok(Box::new(PythonDepAnalyzer::new(cfg)))
         },
         defconfig_toml: || {
             toml::to_string_pretty(&PythonAnalyzerConfig::default()).ok()

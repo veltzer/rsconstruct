@@ -36,6 +36,16 @@ use std::time::{Duration, Instant};
 /// Phase timing data collected during graph building.
 pub type PhaseTimings = Vec<(String, Duration)>;
 
+/// What graph construction produced.
+struct GraphBuild {
+    graph: BuildGraph,
+    phase_timings: PhaseTimings,
+    /// The dependency analysis, when the mode ran analyzers. A build hands
+    /// it to the executor to re-analyze sources regenerated mid-build;
+    /// everyone else drops it.
+    analysis: Option<crate::analyzers::Analysis>,
+}
+
 /// Controls which graph-building variant to use.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum GraphBuildMode {
@@ -384,7 +394,7 @@ impl Builder {
         for inst in &self.config.analyzer.instances {
             let plugin = crate::registries::find_analyzer_plugin(&inst.type_name)
                 .ok_or_else(|| anyhow::anyhow!("Unknown analyzer type '{}'", inst.type_name))?;
-            let analyzer = (plugin.create)(&inst.instance_name, &inst.config_toml, verbose)?;
+            let analyzer = (plugin.create)(&inst.config_toml, verbose)?;
             if !analyzer.enabled() {
                 continue;
             }
@@ -407,44 +417,45 @@ impl Builder {
     /// anyway, but reads the result instead of acting on it — and the
     /// in-memory checksum cache in `checksum.rs` dedupes work across the two
     /// passes, so nothing is read+hashed twice.
+    ///
+    /// Returns the [`Analysis`](crate::analyzers::Analysis) so a build can
+    /// re-analyze generated sources once their producers ran; every other
+    /// caller drops it (which also closes the deps cache).
+    /// `file_index` is the post-discovery index, declared outputs included
+    /// (see `discover_products`): analyzers resolve references against the
+    /// tree as the build will leave it, so a reference to a file another
+    /// product generates is a dependency even before that file exists.
     fn run_analyzers(
         &self,
         ctx: &crate::build_context::BuildContext,
         graph: &mut BuildGraph,
+        file_index: FileIndex,
         verbose: bool,
-    ) -> Result<()> {
+    ) -> Result<crate::analyzers::Analysis> {
         let analyzers = self.create_analyzers(verbose)?;
-        let mut deps_cache = DepsCache::open()?;
 
         // Only run analyzers that auto-detect relevant files in the project.
-        let active_analyzers: Vec<&String> = sorted_keys(&analyzers)
+        let active_analyzers: Vec<(String, Box<dyn DepAnalyzer>)> = analyzers
             .into_iter()
-            .filter(|name| analyzers[*name].auto_detect(&self.file_index))
+            .filter(|(_, analyzer)| analyzer.auto_detect(&file_index))
             .collect();
+        let mut analysis =
+            crate::analyzers::Analysis::new(ctx, active_analyzers, DepsCache::open()?, file_index)?;
 
-        if active_analyzers.is_empty() {
-            return Ok(());
+        if analysis.is_empty() {
+            return Ok(analysis);
         }
 
         // Per-product reference count: every matching product becomes one
         // reference, even when many products share the same source. Used
         // to drive the progress bar (which ticks once per product) and to
         // surface fan-out in the user-facing total.
-        let product_refs: usize = active_analyzers
-            .iter()
-            .map(|name| analyzers[*name].count_matches(graph))
-            .sum();
+        let product_refs = analysis.count_matches(graph);
 
         // Unique source count: dedup (analyzer, source) pairs. This matches
         // what the cache and the scanner actually see — one cache key and one
         // file read per pair, regardless of how many products reference it.
-        let mut unique_pairs: std::collections::HashSet<(&str, PathBuf)> =
-            std::collections::HashSet::new();
-        for name in &active_analyzers {
-            for source in analyzers[*name].matching_sources(graph) {
-                unique_pairs.insert((name.as_str(), source));
-            }
-        }
+        let unique_pairs = analysis.unique_sources(graph);
         let unique_count = unique_pairs.len();
 
         let suppress = crate::json_output::is_json_mode() || crate::runtime_flags::quiet();
@@ -469,8 +480,8 @@ impl Builder {
         let mut mtime_hits: usize = 0;
         let mut content_hits: usize = 0;
         let mut misses: usize = 0;
-        for (name, source) in &unique_pairs {
-            match deps_cache.classify(ctx, name, source) {
+        for (index, source) in &unique_pairs {
+            match analysis.classify(ctx, *index, source) {
                 crate::deps_cache::ClassifyResult::MtimeHit => mtime_hits += 1,
                 crate::deps_cache::ClassifyResult::ContentHit => content_hits += 1,
                 crate::deps_cache::ClassifyResult::Miss => misses += 1,
@@ -484,23 +495,14 @@ impl Builder {
         }
 
         // Stage 3: actual scan. Progress bar still ticks per-product since
-        // `analyze_with_scanner` ticks once per consuming product (so the bar
+        // `analyze_graph` ticks once per consuming product (so the bar
         // matches what users expect from the build graph).
         let hidden = verbose || crate::json_output::is_json_mode() || crate::runtime_flags::quiet();
         let pb = crate::progress::create_bar(product_refs as u64, hidden);
-        for name in &active_analyzers {
-            analyzers[*name].analyze(
-                ctx,
-                graph,
-                &mut deps_cache,
-                &self.file_index,
-                verbose,
-                &pb,
-            )?;
-        }
+        analysis.analyze_graph(ctx, graph, &pb)?;
         pb.finish_and_clear();
 
-        let stats = deps_cache.stats();
+        let stats = analysis.stats();
         if unique_count > 0 && !suppress {
             println!(
                 "[deps] summary: {} rescanned ({} cache hits: {} mtime, {} checksum)",
@@ -508,7 +510,7 @@ impl Builder {
             );
         }
 
-        Ok(())
+        Ok(analysis)
     }
 
     /// Build the dependency graph using provided processors
@@ -517,7 +519,7 @@ impl Builder {
         ctx: &crate::build_context::BuildContext,
         processors: &ProcessorMap,
     ) -> Result<BuildGraph> {
-        let (graph, _) = self.build_graph_with_processors_impl(
+        let built = self.build_graph_with_processors_impl(
             ctx,
             processors,
             GraphBuildMode::Normal,
@@ -525,7 +527,7 @@ impl Builder {
             None,
             false,
         )?;
-        Ok(graph)
+        Ok(built.graph)
     }
     /// Like `build_graph_with_processors`, but tolerant of `src_dirs`
     /// entries that don't exist (see `GraphBuildMode::ForRepair`).
@@ -534,7 +536,7 @@ impl Builder {
         ctx: &crate::build_context::BuildContext,
         processors: &ProcessorMap,
     ) -> Result<BuildGraph> {
-        let (graph, _) = self.build_graph_with_processors_impl(
+        let built = self.build_graph_with_processors_impl(
             ctx,
             processors,
             GraphBuildMode::ForRepair,
@@ -542,7 +544,7 @@ impl Builder {
             None,
             false,
         )?;
-        Ok(graph)
+        Ok(built.graph)
     }
 
     /// Build the dependency graph with optional early stopping
@@ -553,7 +555,7 @@ impl Builder {
         stop_after: BuildPhase,
         processor_filter: Option<&[String]>,
         verbose: bool,
-    ) -> Result<(BuildGraph, PhaseTimings)> {
+    ) -> Result<GraphBuild> {
         self.build_graph_with_processors_impl(
             ctx,
             processors,
@@ -570,7 +572,7 @@ impl Builder {
         ctx: &crate::build_context::BuildContext,
         processors: &ProcessorMap,
     ) -> Result<BuildGraph> {
-        let (graph, _) = self.build_graph_with_processors_impl(
+        let built = self.build_graph_with_processors_impl(
             ctx,
             processors,
             GraphBuildMode::ForClean,
@@ -578,7 +580,7 @@ impl Builder {
             None,
             false,
         )?;
-        Ok(graph)
+        Ok(built.graph)
     }
 
     /// Return the set of processor type names whose files are detected in the project.
@@ -649,13 +651,17 @@ impl Builder {
     /// Runs discovery for all active processors, then injects declared outputs
     /// as virtual files so downstream processors can discover products for files
     /// that don't exist on disk yet. Repeats until no new products are found.
+    ///
+    /// Returns the file index with every declared output added: the view
+    /// of the tree as it will be once the build ran, which is what
+    /// dependency analysis resolves references against.
     fn discover_products(
         &self,
         graph: &mut BuildGraph,
         processors: &ProcessorMap,
         active: &[impl AsRef<str>],
         mode: GraphBuildMode,
-    ) -> Result<()> {
+    ) -> Result<FileIndex> {
         let for_clean = mode == GraphBuildMode::ForClean;
         let mut file_index = self.file_index.clone();
         let debug = phases_debug();
@@ -796,7 +802,7 @@ impl Builder {
             missing_files.clear();
         }
         if missing_dirs.is_empty() && missing_files.is_empty() {
-            return Ok(());
+            return Ok(file_index);
         }
         let mut missing = missing_dirs;
         missing.extend(missing_files);
@@ -819,12 +825,13 @@ impl Builder {
         stop_after: BuildPhase,
         processor_filter: Option<&[String]>,
         verbose: bool,
-    ) -> Result<(BuildGraph, PhaseTimings)> {
+    ) -> Result<GraphBuild> {
         if phases_debug() {
             eprintln!("{}", color::bold("Phase: Building dependency graph..."));
         }
         let mut graph = BuildGraph::new();
         let mut phase_timings = PhaseTimings::new();
+        let mut analysis = None;
         print_graph_stats(GraphSnapshot::Start, &graph);
 
         // Collect which processors should run
@@ -845,12 +852,17 @@ impl Builder {
             crate::output::diagnostic(&color::dim("  Phase: discover"));
         }
         let t = Instant::now();
-        self.discover_products(&mut graph, processors, &active_processors, mode)?;
+        let file_index =
+            self.discover_products(&mut graph, processors, &active_processors, mode)?;
         phase_timings.push(("discover".to_string(), t.elapsed()));
         print_graph_stats(GraphSnapshot::AfterDiscover, &graph);
 
         if stop_after == BuildPhase::Discover {
-            return Ok((graph, phase_timings));
+            return Ok(GraphBuild {
+                graph,
+                phase_timings,
+                analysis,
+            });
         }
 
         // Phase 2: Run dependency analyzers (only for regular builds, not clean)
@@ -859,13 +871,17 @@ impl Builder {
                 crate::output::diagnostic(&color::dim("  Phase: add_dependencies"));
             }
             let t = Instant::now();
-            self.run_analyzers(ctx, &mut graph, verbose)?;
+            analysis = Some(self.run_analyzers(ctx, &mut graph, file_index, verbose)?);
             phase_timings.push(("add_dependencies".to_string(), t.elapsed()));
             print_graph_stats(GraphSnapshot::AfterAddDependencies, &graph);
         }
 
         if stop_after == BuildPhase::AddDependencies {
-            return Ok((graph, phase_timings));
+            return Ok(GraphBuild {
+                graph,
+                phase_timings,
+                analysis,
+            });
         }
 
         // Phase 3: Apply tool version hashes
@@ -904,7 +920,11 @@ impl Builder {
         phase_timings.push(("validate".to_string(), t.elapsed()));
 
         // Note: BuildPhase::Resolve and BuildPhase::Build both complete the graph
-        Ok((graph, phase_timings))
+        Ok(GraphBuild {
+            graph,
+            phase_timings,
+            analysis,
+        })
     }
 
     /// Build the dependency graph, optionally filtering to a single processor.
@@ -932,7 +952,7 @@ impl Builder {
             .collect();
 
         // Phase 1: Discover products (fixed-point loop for cross-processor deps)
-        self.discover_products(
+        let file_index = self.discover_products(
             &mut graph,
             &processors,
             &active_processors,
@@ -940,7 +960,7 @@ impl Builder {
         )?;
 
         // Phase 2: Run dependency analyzers
-        self.run_analyzers(ctx, &mut graph, false)?;
+        self.run_analyzers(ctx, &mut graph, file_index, false)?;
 
         graph.resolve_dependencies();
 

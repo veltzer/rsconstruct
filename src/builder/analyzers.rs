@@ -295,7 +295,7 @@ impl Builder {
                     .filter(|name| self.is_processor_active(name, processors[*name].as_ref()))
                     .cloned()
                     .collect();
-                self.discover_products(
+                let file_index = self.discover_products(
                     &mut graph,
                     &processors,
                     &active,
@@ -308,8 +308,9 @@ impl Builder {
                     return Ok(());
                 }
 
-                // Phase 2: Run dependency analyzers
-                self.run_analyzers(ctx, &mut graph, true)?;
+                // Phase 2: Run dependency analyzers. The analysis is dropped
+                // at once: it holds the deps cache, opened again below.
+                self.run_analyzers(ctx, &mut graph, file_index, true)?;
 
                 // Match the main pipeline: resolve edges and validate, so
                 // `analyzer build` and `build` agree on whether the project

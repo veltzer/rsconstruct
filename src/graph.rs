@@ -11,8 +11,14 @@ use crate::errors;
 /// All paths are relative to project root.
 #[derive(Debug, Clone)]
 pub struct Product {
-    /// Input files (relative paths)
+    /// Input files (relative paths): the ones the processor declared, then
+    /// the ones dependency analyzers added (see `declared_inputs`).
     pub inputs: Vec<PathBuf>,
+    /// How many leading entries of `inputs` the processor declared; the
+    /// rest came from analyzers. Lets a mid-build re-analysis drop the old
+    /// analyzer inputs instead of piling new ones on top
+    /// (`BuildGraph::reset_analysis`).
+    declared_inputs: usize,
     /// Output files (relative paths)
     pub outputs: Vec<PathBuf>,
     /// Which processor handles this product
@@ -40,6 +46,7 @@ impl Product {
         config_hash: Option<String>,
     ) -> Self {
         Self {
+            declared_inputs: inputs.len(),
             inputs,
             outputs,
             processor: processor.to_string(),
@@ -62,6 +69,7 @@ impl Product {
         let mut cache_key = CacheKey::from_config_hash(config_hash);
         cache_key.push(KeyComponent::Variant, variant);
         Self {
+            declared_inputs: inputs.len(),
             inputs,
             outputs,
             processor: processor.to_string(),
@@ -82,6 +90,11 @@ impl Product {
     /// Panics if the product has no outputs (a programming error — every generator product must have at least one).
     pub fn primary_output(&self) -> &Path {
         self.outputs.first().expect(errors::EMPTY_PRODUCT_OUTPUTS)
+    }
+
+    /// The inputs dependency analyzers added, after the declared ones.
+    pub fn analyzer_inputs(&self) -> &[PathBuf] {
+        &self.inputs[self.declared_inputs..]
     }
 
     /// Whether this product has output directories to cache.
@@ -233,6 +246,27 @@ impl PathInterner {
     }
 }
 
+/// Drop every path from `inputs` that is also in `outputs`.
+///
+/// A product never depends on its own output. A `dep_inputs` glob such as
+/// `*.md` matches the `README.md` the product itself writes; kept as an
+/// input, that file makes the input checksum differ before and after the
+/// product runs, so the cache could only be keyed by inputs hashed *after*
+/// execution — which caches an input edited mid-run under its new content.
+/// With own outputs removed, inputs are stable across a run, the key is
+/// taken before the tool starts, and the executor can tell a mid-run edit
+/// from a normal run.
+fn without_own_outputs(inputs: Vec<PathBuf>, outputs: &[PathBuf]) -> Vec<PathBuf> {
+    if outputs.is_empty() {
+        return inputs;
+    }
+    let outputs: HashSet<&PathBuf> = outputs.iter().collect();
+    inputs
+        .into_iter()
+        .filter(|input| !outputs.contains(input))
+        .collect()
+}
+
 /// Build graph with dependency resolution
 #[derive(Default)]
 pub struct BuildGraph {
@@ -294,6 +328,7 @@ impl BuildGraph {
             .filter(|p| !old_set.contains(p))
             .cloned()
             .collect();
+        self.products[product_id].declared_inputs = new_inputs.len();
         self.products[product_id].inputs = new_inputs;
         for path in &to_remove {
             if let Some(path_id) = self.interner.get(path)
@@ -335,6 +370,7 @@ impl BuildGraph {
         variant: Option<&str>,
     ) -> Result<usize> {
         let id = self.products.len();
+        let inputs = without_own_outputs(inputs, &outputs);
 
         // During fixed-point discovery, processors re-run and may re-declare
         // products that already exist. Detect and deduplicate these cases.
@@ -534,10 +570,91 @@ impl BuildGraph {
         }
     }
 
-    /// Resolve dependencies between products
+    /// Add analyzer-discovered `deps` to a product's inputs, keeping the
+    /// input index in step. Paths already among the inputs, and the
+    /// product's own outputs (see [`without_own_outputs`]), are skipped.
+    /// Returns how many inputs were added.
+    ///
+    /// This is the only way to grow a product's inputs after it was added:
+    /// writing `product.inputs` directly would leave `products_consuming`
+    /// blind to the new paths. Edges are not touched — call
+    /// [`resolve_dependencies`](Self::resolve_dependencies) once the inputs
+    /// are final.
+    pub fn add_inputs(&mut self, id: usize, deps: &[PathBuf]) -> usize {
+        let product = self
+            .products
+            .get(id)
+            .expect(crate::errors::INVALID_PRODUCT_ID);
+        let existing: HashSet<&PathBuf> = product.inputs.iter().collect();
+        let mut seen: HashSet<&PathBuf> = HashSet::new();
+        let new_deps: Vec<PathBuf> = deps
+            .iter()
+            .filter(|dep| !existing.contains(dep) && !product.outputs.contains(dep))
+            .filter(|dep| seen.insert(dep))
+            .cloned()
+            .collect();
+        for dep in &new_deps {
+            let path_id = self.interner.intern(dep);
+            self.input_to_products.entry(path_id).or_default().push(id);
+        }
+        let added = new_deps.len();
+        self.products[id].inputs.extend(new_deps);
+        added
+    }
+
+    /// Mix an analyzer-supplied piece into a product's cache key (see
+    /// [`Product::extend_config_hash`]).
+    pub fn extend_cache_key(&mut self, id: usize, piece: &str) {
+        self.products
+            .get_mut(id)
+            .expect(crate::errors::INVALID_PRODUCT_ID)
+            .extend_config_hash(piece);
+    }
+
+    /// Undo what analyzers contributed to a product — the inputs they added
+    /// and their cache-key pieces — so the analysis can be redone on a
+    /// source that changed mid-build. Follow with `add_inputs` and
+    /// [`set_analyzer_pieces`](Self::set_analyzer_pieces) in the order the
+    /// graph-time analysis used, so the product ends up exactly as the next
+    /// build will build it from scratch.
+    pub fn reset_analysis(&mut self, id: usize) {
+        let product = self
+            .products
+            .get_mut(id)
+            .expect(crate::errors::INVALID_PRODUCT_ID);
+        let removed = product.inputs.split_off(product.declared_inputs);
+        product
+            .cache_key
+            .replace(KeyComponent::Analyzer, Vec::new());
+        for path in &removed {
+            if let Some(path_id) = self.interner.get(path)
+                && let Some(ids) = self.input_to_products.get_mut(&path_id)
+            {
+                ids.retain(|&x| x != id);
+            }
+        }
+    }
+
+    /// Set a product's analyzer cache-key pieces, in the position the
+    /// graph-time analysis puts them (see `CacheKey::replace`).
+    pub fn set_analyzer_pieces(&mut self, id: usize, pieces: Vec<String>) {
+        self.products
+            .get_mut(id)
+            .expect(crate::errors::INVALID_PRODUCT_ID)
+            .cache_key
+            .replace(KeyComponent::Analyzer, pieces);
+    }
+
+    /// Resolve dependencies between products: an edge from every product
+    /// to each product that produces one of its inputs.
+    ///
+    /// Recomputes the edge set from scratch, so it can be called again after
+    /// inputs grew ([`add_inputs`](Self::add_inputs) during a build) without
+    /// duplicating edges. A consumer reading several outputs of one producer
+    /// gets a single edge.
     pub fn resolve_dependencies(&mut self) {
         // Collect edges first to avoid borrow conflict with self.products
-        let edges: Vec<(usize, usize)> = self
+        let mut edges: Vec<(usize, usize)> = self
             .products
             .iter()
             .flat_map(|product| {
@@ -551,7 +668,15 @@ impl BuildGraph {
                 })
             })
             .collect();
+        edges.sort_unstable();
+        edges.dedup();
 
+        for list in &mut self.dependents {
+            list.clear();
+        }
+        for list in &mut self.dependencies {
+            list.clear();
+        }
         for (producer_id, consumer_id) in edges {
             self.dependents
                 .get_mut(producer_id)
@@ -716,11 +841,6 @@ impl BuildGraph {
             }
         }
         deps
-    }
-
-    /// Get mutable access to a product by id
-    pub fn get_product_mut(&mut self, id: usize) -> Option<&mut Product> {
-        self.products.get_mut(id)
     }
 
     /// Filter the graph to only include products whose input files match any of the target patterns.
@@ -1503,5 +1623,101 @@ mod tests {
         let result = g.add_product(vec!["b.c".into()], vec!["out.o".into()], "cc", None);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Output conflict"));
+    }
+
+    /// A `dep_inputs` glob matching the product's own output must not make
+    /// that output an input: it would change under the product's own run.
+    #[test]
+    fn own_outputs_are_never_inputs() {
+        let mut g = BuildGraph::new();
+        let id = g
+            .add_product(
+                vec!["README.md.tera".into(), "README.md".into(), "x.md".into()],
+                vec!["README.md".into()],
+                "tera",
+                None,
+            )
+            .unwrap();
+        let product = g.get_product(id).unwrap();
+        assert_eq!(
+            product.inputs,
+            vec![PathBuf::from("README.md.tera"), PathBuf::from("x.md")]
+        );
+        assert_eq!(
+            g.products_consuming(Path::new("README.md")),
+            &[] as &[usize]
+        );
+
+        g.add_inputs(id, &["README.md".into()]);
+        assert_eq!(g.get_product(id).unwrap().inputs.len(), 2);
+    }
+
+    /// Inputs an analyzer adds must be visible to `products_consuming`, and
+    /// adding the same path twice is a no-op.
+    #[test]
+    fn add_inputs_keeps_the_consumer_index() {
+        let mut g = BuildGraph::new();
+        let id = g
+            .add_product(vec!["a.c".into()], vec!["a.o".into()], "cc", None)
+            .unwrap();
+        assert_eq!(
+            g.add_inputs(id, &["a.h".into(), "b.h".into(), "a.h".into()]),
+            2
+        );
+        assert_eq!(g.add_inputs(id, &["a.h".into(), "a.c".into()]), 0);
+        assert_eq!(g.products_consuming(Path::new("a.h")), &[id]);
+        assert_eq!(g.products_consuming(Path::new("b.h")), &[id]);
+        assert_eq!(
+            g.get_product(id).unwrap().analyzer_inputs(),
+            &[PathBuf::from("a.h"), PathBuf::from("b.h")]
+        );
+    }
+
+    /// Re-analysis starts from the declared inputs: the analyzer inputs and
+    /// key pieces go, and so do their index entries.
+    #[test]
+    fn reset_analysis_restores_declared_inputs() {
+        let mut g = BuildGraph::new();
+        let id = g
+            .add_product(vec!["a.c".into()], vec!["a.o".into()], "cc", None)
+            .unwrap();
+        let fresh_key = g.get_product(id).unwrap().cache_key.clone();
+        g.add_inputs(id, &["a.h".into()]);
+        g.extend_cache_key(id, "piece");
+
+        g.reset_analysis(id);
+        let product = g.get_product(id).unwrap();
+        assert_eq!(product.inputs, vec![PathBuf::from("a.c")]);
+        assert_eq!(product.cache_key, fresh_key);
+        assert_eq!(g.products_consuming(Path::new("a.h")), &[] as &[usize]);
+    }
+
+    /// Edges are recomputed, not appended: resolving again after inputs grew
+    /// mid-build must not duplicate edges, and a consumer reading several
+    /// outputs of one producer gets a single edge.
+    #[test]
+    fn resolve_dependencies_is_idempotent() {
+        let mut g = BuildGraph::new();
+        let producer = g
+            .add_product(
+                vec!["gen.src".into()],
+                vec!["a.h".into(), "b.h".into()],
+                "gen",
+                None,
+            )
+            .unwrap();
+        let consumer = g
+            .add_product(
+                vec!["main.c".into(), "a.h".into()],
+                vec!["main.o".into()],
+                "cc",
+                None,
+            )
+            .unwrap();
+        g.resolve_dependencies();
+        g.add_inputs(consumer, &["b.h".into()]);
+        g.resolve_dependencies();
+        assert_eq!(g.get_dependencies(consumer), &[producer]);
+        assert_eq!(g.topological_sort().unwrap(), vec![producer, consumer]);
     }
 }

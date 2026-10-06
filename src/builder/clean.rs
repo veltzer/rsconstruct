@@ -73,6 +73,9 @@ impl Builder {
                 batch_size: None,
                 explain: false,
                 retry: 0,
+                force: false,
+                keep_going: false,
+                timings: false,
             },
         );
         let stats = executor.clean(&graph, verbose)?;

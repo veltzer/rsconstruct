@@ -40,9 +40,21 @@ enum RestoreOutcome {
 /// A work item representing a product to be processed in a build level.
 struct WorkItem {
     product_id: usize,
+    /// Taken when the product is dispatched — after every upstream product
+    /// ran — and the key its outputs are cached under (see `handle_success`).
     input_checksum: String,
-    needs_rebuild: bool,
+    /// The policy's decision at dispatch time. This, not the up-front
+    /// [`Classification`], is what the executor acts on.
+    action: ProductAction,
 }
+
+/// Called by the executor after each level with the products that built or
+/// restored in it, before the next level is dispatched. It may grow the
+/// inputs of products that have not run yet — re-analysis of a source one
+/// of those products regenerated — and returns whether the graph changed,
+/// in which case the executor re-links it and re-plans the remaining
+/// levels.
+pub type GraphRefresh<'r> = dyn FnMut(&mut BuildGraph, &[usize]) -> Result<bool> + 'r;
 
 /// Context passed to handler methods for a single product operation.
 /// Groups the parameters common across `handle_restore`, `handle_error`, `handle_success`.
@@ -71,6 +83,12 @@ pub struct ExecutorOptions {
     pub batch_size: Option<usize>,
     pub explain: bool,
     pub retry: usize,
+    /// Rebuild everything, ignoring the cache.
+    pub force: bool,
+    /// Keep building independent products after a failure.
+    pub keep_going: bool,
+    /// Record per-product timings.
+    pub timings: bool,
 }
 
 /// Shared mutable state passed to product processing helpers.
@@ -81,6 +99,9 @@ struct SharedState {
     failed_products: Arc<Mutex<HashSet<usize>>>,
     failed_messages: Arc<Mutex<Vec<String>>>,
     failed_processors: Arc<Mutex<HashSet<String>>>,
+    /// Products that built or restored in the current level — what the
+    /// [`GraphRefresh`] hook gets to see. Drained after each level.
+    changed: Arc<Mutex<Vec<usize>>>,
     global_current: Arc<AtomicUsize>,
     global_total: usize,
 }
@@ -96,6 +117,11 @@ pub struct ClassifiedProduct {
 
 /// Result of [`classify_products`]: counts plus per-product actions in
 /// topological order.
+///
+/// This is a *prediction*, made before anything runs. It sizes the progress
+/// bar, feeds the "N to build" summary and decides which outputs
+/// [`unlink_pending_outputs`] removes. What actually happens to each product
+/// is decided again when it is dispatched — see `Executor::execute`.
 pub struct Classification {
     pub skip_count: usize,
     pub restore_count: usize,
@@ -103,10 +129,16 @@ pub struct Classification {
     pub products: Vec<ClassifiedProduct>,
 }
 
-/// Pre-build classification: count how many products will be skipped, restored, or built.
-/// This is a fast read-only pass (checksums + cache lookups, no mutations).
-/// Products are processed in topological order so that dependency changes propagate:
-/// if a product will be rebuilt or restored, its dependents are also marked for rebuild.
+/// Pre-build classification: predict how many products will be skipped,
+/// restored, or built. A fast read-only pass (checksums + cache lookups, no
+/// mutations), in topological order so that changes propagate.
+///
+/// The prediction is pessimistic downstream of a change: a product whose
+/// dependency will build or restore is predicted to build, since its inputs
+/// are about to be rewritten and their checksums taken now mean nothing.
+/// The policy only sees products whose inputs are settled. At dispatch the
+/// executor asks the policy again with the real inputs, so a dependency that
+/// rebuilt to identical bytes still lets the product skip or restore.
 pub fn classify_products(
     ctx: &crate::build_context::BuildContext,
     policy: &dyn BuildPolicy,
@@ -140,14 +172,11 @@ pub fn classify_products(
             continue;
         };
 
-        let action = policy.classify(
-            ctx,
-            product,
-            object_store,
-            &input_checksum,
-            dep_changed,
-            force,
-        );
+        let action = if dep_changed {
+            ProductAction::Build
+        } else {
+            policy.classify(ctx, product, object_store, &input_checksum, force)
+        };
         match action {
             ProductAction::Skip => {
                 skip_count += 1;
@@ -214,6 +243,9 @@ pub struct Executor<'a> {
     batch_size: Option<usize>,
     explain: bool,
     retry: usize,
+    force: bool,
+    keep_going: bool,
+    timings: bool,
 }
 
 impl<'a> Executor<'a> {
@@ -237,6 +269,9 @@ impl<'a> Executor<'a> {
             batch_size: opts.batch_size,
             explain: opts.explain,
             retry: opts.retry,
+            force: opts.force,
+            keep_going: opts.keep_going,
+            timings: opts.timings,
         }
     }
 
@@ -310,26 +345,23 @@ pub fn has_failed_dependency(graph: &BuildGraph, id: usize, failed: &HashSet<usi
 
 /// Compute levels of products that can be executed in parallel
 /// Products in the same level have no dependencies on each other
+///
+/// `order` is a topological order of the products to schedule. Dependencies
+/// outside it (products that already ran, when the remaining levels are
+/// re-planned mid-build) count as satisfied.
 pub fn compute_parallel_levels(graph: &BuildGraph, order: &[usize]) -> Vec<Vec<usize>> {
     let mut levels: Vec<Vec<usize>> = Vec::new();
     let mut product_level: HashMap<usize, usize> = HashMap::new();
 
     for &id in order {
-        // Find the maximum level of all dependencies
-        let max_dep_level = graph
+        // This product goes in the next level after its latest scheduled
+        // dependency, or first when none of them is scheduled.
+        let my_level = graph
             .get_dependencies(id)
             .iter()
-            .filter_map(|&dep_id| product_level.get(&dep_id))
+            .filter_map(|dep_id| product_level.get(dep_id))
             .max()
-            .copied()
-            .unwrap_or(0);
-
-        // This product goes in the next level after its dependencies
-        let my_level = if graph.get_dependencies(id).is_empty() {
-            0
-        } else {
-            max_dep_level + 1
-        };
+            .map_or(0, |level| level + 1);
 
         product_level.insert(id, my_level);
 
@@ -346,6 +378,86 @@ pub fn compute_parallel_levels(graph: &BuildGraph, order: &[usize]) -> Vec<Vec<u
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Re-planning mid-build schedules only the products not yet dispatched;
+    /// a dependency outside that set already ran and holds nothing back.
+    #[test]
+    fn parallel_levels_treat_unscheduled_dependencies_as_done() {
+        let mut g = BuildGraph::new();
+        let a = g
+            .add_product(vec!["a.src".into()], vec!["a.o".into()], "cc", None)
+            .unwrap();
+        let b = g
+            .add_product(vec!["a.o".into()], vec!["b.o".into()], "cc", None)
+            .unwrap();
+        let c = g
+            .add_product(vec!["b.o".into()], vec!["c.o".into()], "cc", None)
+            .unwrap();
+        g.resolve_dependencies();
+
+        let levels = compute_parallel_levels(&g, &[b, c]);
+        assert_eq!(levels, vec![vec![b], vec![c]], "a already ran");
+        assert_eq!(compute_parallel_levels(&g, &[a, b, c]).len(), 3);
+    }
+
+    /// The up-front prediction is pessimistic downstream of a change: a
+    /// product whose dependency will build is predicted to build even when
+    /// its own cache entry matches, since its inputs are about to change.
+    /// (At dispatch the policy decides again on the real inputs.)
+    #[test]
+    fn classify_predicts_build_downstream_of_a_change() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let store = ObjectStore::new_in(tmp.path());
+        let ctx = crate::build_context::BuildContext::new();
+        // The mtime cache is CWD-relative; keep parallel tests apart.
+        ctx.set_mtime_check(false);
+        let src = tmp.path().join("a.src");
+        let mid = tmp.path().join("a.mid");
+        std::fs::write(&src, "a").unwrap();
+        std::fs::write(&mid, "m").unwrap();
+
+        let mut g = BuildGraph::new();
+        let producer = g
+            .add_product(vec![src], vec![mid.clone()], "gen", None)
+            .unwrap();
+        let checker = g
+            .add_product(vec![mid.clone()], vec![], "check", None)
+            .unwrap();
+        g.resolve_dependencies();
+
+        // The checker has a matching PASS marker; the producer has nothing
+        // cached, so it builds.
+        let mid_checksum =
+            crate::checksum::combined_input_checksum(&ctx, std::slice::from_ref(&mid)).unwrap();
+        let marker_key = g
+            .get_product(checker)
+            .unwrap()
+            .descriptor_key(&mid_checksum);
+        store.store_marker(&ctx, &marker_key).unwrap();
+
+        let order = g.topological_sort().unwrap();
+        let classification = classify_products(&ctx, &IncrementalPolicy, &g, &order, &store, false);
+        let action_of = |id: usize| {
+            classification
+                .products
+                .iter()
+                .find(|c| c.id == id)
+                .map(|c| c.action)
+        };
+        assert_eq!(action_of(producer), Some(ProductAction::Build));
+        assert_eq!(action_of(checker), Some(ProductAction::Build));
+        assert_eq!(
+            IncrementalPolicy.classify(
+                &ctx,
+                g.get_product(checker).unwrap(),
+                &store,
+                &mid_checksum,
+                false
+            ),
+            ProductAction::Skip,
+            "the policy alone, on unchanged inputs, would skip it"
+        );
+    }
 
     /// A diamond top → {left, right} → bottom must schedule as three levels
     /// with left and right side by side; an independent node always lands in

@@ -19,6 +19,8 @@ mod exit_codes;
 mod explain;
 #[path = "tests_mod/graph.rs"]
 mod graph;
+#[path = "tests_mod/incremental.rs"]
+mod incremental;
 #[path = "tests_mod/init.rs"]
 mod init;
 #[path = "tests_mod/iset_pset.rs"]

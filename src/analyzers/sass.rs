@@ -8,7 +8,6 @@
 //! `_partial`, then the directory's `index` file.
 
 use anyhow::{Result, bail};
-use indicatif::ProgressBar;
 use regex::Regex;
 use std::collections::HashSet;
 use std::ffi::OsString;
@@ -17,10 +16,9 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use crate::config::SassAnalyzerConfig;
-use crate::deps_cache::DepsCache;
 use crate::errors;
 use crate::file_index::FileIndex;
-use crate::graph::{BuildGraph, Product};
+use crate::graph::Product;
 
 use super::{DepAnalyzer, ScanResult};
 
@@ -40,16 +38,12 @@ enum Rule {
 
 /// Sass dependency analyzer.
 pub struct SassDepAnalyzer {
-    iname: String,
     config: SassAnalyzerConfig,
 }
 
 impl SassDepAnalyzer {
-    pub fn new(iname: &str, config: SassAnalyzerConfig) -> Self {
-        Self {
-            iname: iname.to_string(),
-            config,
-        }
+    pub const fn new(config: SassAnalyzerConfig) -> Self {
+        Self { config }
     }
 
     /// Resolve a load URL against the importing file's directory, then each
@@ -61,16 +55,13 @@ impl SassDepAnalyzer {
     }
 
     /// Scan `source` and everything it loads. Rescanned on every build (see
-    /// `analyze`), so the result is never stale.
-    fn scan(&self, source: &Path) -> Result<ScanResult> {
+    /// `always_rescan`), so the result is never stale.
+    fn scan_source(&self, source: &Path) -> Result<ScanResult> {
         let mut deps: Vec<PathBuf> = Vec::new();
         let mut seen: HashSet<PathBuf> = HashSet::new();
         let mut scanned: HashSet<PathBuf> = HashSet::new();
         self.scan_recursive(source, &mut deps, &mut seen, &mut scanned)?;
-        Ok(ScanResult {
-            deps,
-            hash_pieces: Vec::new(),
-        })
+        Ok(ScanResult::deps(deps, Vec::new()))
     }
 
     /// `deps` and `seen` accumulate the input set; `scanned` is the cycle
@@ -327,24 +318,23 @@ impl DepAnalyzer for SassDepAnalyzer {
     /// partial would leave the cached list short — the same stale-output
     /// bug this analyzer exists to prevent. Scanning is a few regexes per
     /// file, cheap enough to always do.
-    fn analyze(
+    fn scan(
         &self,
-        ctx: &crate::build_context::BuildContext,
-        graph: &mut BuildGraph,
-        deps_cache: &mut DepsCache,
+        _ctx: &crate::build_context::BuildContext,
+        source: &Path,
         _file_index: &FileIndex,
-        _verbose: bool,
-        progress: &ProgressBar,
-    ) -> Result<()> {
-        super::analyze_with_full_scanner(
-            ctx,
-            graph,
-            deps_cache,
-            &self.iname,
-            |p| self.match_product(p),
-            |source| self.scan(source),
-            progress,
-        )
+    ) -> Result<ScanResult> {
+        self.scan_source(source)
+    }
+
+    /// Partials shadow one another by name and load path, so the result
+    /// is recomputed every run rather than trusted from the cache.
+    fn always_rescan(&self) -> bool {
+        true
+    }
+
+    fn fingerprint_parts(&self, _ctx: &crate::build_context::BuildContext) -> Result<Vec<String>> {
+        super::config_fingerprint(&self.config)
     }
 }
 
@@ -353,9 +343,9 @@ inventory::submit! {
         name: "sass",
         description: "Scan Sass/SCSS files for @use, @forward and @import dependencies",
         is_native: true,
-        create: |iname, toml_value, _| {
+        create: |toml_value, _| {
             let cfg: SassAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
-            Ok(Box::new(SassDepAnalyzer::new(iname, cfg)))
+            Ok(Box::new(SassDepAnalyzer::new(cfg)))
         },
         defconfig_toml: || {
             toml::to_string_pretty(&SassAnalyzerConfig::default()).ok()

@@ -47,6 +47,17 @@ impl Component {
             Self::Variant => "variant",
         }
     }
+
+    /// The build phase that contributes this kind: discovery (config,
+    /// variant), then analysis, then tool-version hashing. Contribution
+    /// order — and so the digest — follows the phases.
+    pub const fn phase(self) -> u8 {
+        match self {
+            Self::Config | Self::Variant => 0,
+            Self::Analyzer => 1,
+            Self::ToolVersion => 2,
+        }
+    }
 }
 
 impl fmt::Display for Component {
@@ -91,6 +102,41 @@ impl CacheKey {
     /// coexist previously.
     pub fn push(&mut self, component: Component, value: impl Into<String>) {
         self.components.push((component, value.into()));
+    }
+
+    /// Replace every component of `kind` with `values`, keeping the digest
+    /// identical to a key that had `values` pushed at the original time.
+    ///
+    /// Used when analysis is redone mid-build (a generated source changed):
+    /// the new analyzer pieces must land where the graph-time pieces sit,
+    /// because the next build pushes them at that point again and the order
+    /// is part of the digest. They go where the old pieces were, or — when
+    /// there were none — before the first component contributed after this
+    /// kind (see [`Component::phase`]).
+    pub fn replace(&mut self, kind: Component, values: Vec<String>) {
+        let at = self
+            .components
+            .iter()
+            .position(|(c, _)| *c == kind)
+            .or_else(|| {
+                self.components
+                    .iter()
+                    .position(|(c, _)| c.phase() > kind.phase())
+            })
+            .unwrap_or(self.components.len());
+        let before = self.components[..at]
+            .iter()
+            .filter(|(c, _)| *c != kind)
+            .cloned();
+        let after = self.components[at..]
+            .iter()
+            .filter(|(c, _)| *c != kind)
+            .cloned();
+        let replaced: Vec<(Component, String)> = before
+            .chain(values.into_iter().map(|v| (kind, v)))
+            .chain(after)
+            .collect();
+        self.components = replaced;
     }
 
     /// Whether any component has been contributed.
@@ -241,6 +287,41 @@ mod tests {
         assert_ne!(base, key.descriptor_key("other", "chk"));
         assert_ne!(base, key.descriptor_key("proc", "other"));
         assert_ne!(base, CacheKey::new().descriptor_key("proc", "chk"));
+    }
+
+    /// Redoing analysis mid-build must produce the key the next build
+    /// computes from scratch, where analyzer pieces come before tool
+    /// versions.
+    #[test]
+    fn replace_matches_a_key_built_in_phase_order() {
+        let mut fresh = CacheKey::new();
+        fresh.push(Component::Config, "c");
+        fresh.push(Component::Analyzer, "new");
+        fresh.push(Component::ToolVersion, "t");
+
+        let mut had_piece = CacheKey::new();
+        had_piece.push(Component::Config, "c");
+        had_piece.push(Component::Analyzer, "old");
+        had_piece.push(Component::ToolVersion, "t");
+        had_piece.replace(Component::Analyzer, vec!["new".into()]);
+        assert_eq!(had_piece, fresh);
+
+        let mut had_none = CacheKey::new();
+        had_none.push(Component::Config, "c");
+        had_none.push(Component::ToolVersion, "t");
+        had_none.replace(Component::Analyzer, vec!["new".into()]);
+        assert_eq!(had_none, fresh);
+
+        let mut cleared = fresh.clone();
+        cleared.replace(Component::Analyzer, Vec::new());
+        assert_eq!(cleared, had_none_without_piece());
+    }
+
+    fn had_none_without_piece() -> CacheKey {
+        let mut key = CacheKey::new();
+        key.push(Component::Config, "c");
+        key.push(Component::ToolVersion, "t");
+        key
     }
 
     #[test]

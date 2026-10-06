@@ -245,6 +245,8 @@ struct BuildPlan {
     processors: ProcessorMap,
     graph: crate::graph::BuildGraph,
     phase_timings: Vec<(String, Duration)>,
+    /// Kept for re-analyzing sources that products regenerate mid-build.
+    analysis: Option<crate::analyzers::Analysis>,
 }
 
 impl Builder {
@@ -315,7 +317,11 @@ impl Builder {
         self.detect_config_changes(&processors, opts.show_all_config_changes);
 
         // Build the dependency graph (may stop early based on stop_after)
-        let (mut graph, mut phase_timings) = self.build_graph_with_processors_and_phase(
+        let super::GraphBuild {
+            mut graph,
+            mut phase_timings,
+            analysis,
+        } = self.build_graph_with_processors_and_phase(
             ctx,
             &processors,
             opts.stop_after,
@@ -346,6 +352,7 @@ impl Builder {
             processors,
             graph,
             phase_timings,
+            analysis,
         })
     }
 
@@ -364,8 +371,9 @@ impl Builder {
 
         let BuildPlan {
             processors,
-            graph,
+            mut graph,
             mut phase_timings,
+            mut analysis,
         } = self.plan_build(ctx, opts)?;
 
         // Prepend init timings ahead of create_processors, which plan_build
@@ -455,20 +463,28 @@ impl Builder {
                 batch_size,
                 explain: opts.explain,
                 retry: opts.retry,
+                force: opts.force,
+                keep_going: opts.keep_going,
+                // Enable timings collection if trace output is requested
+                timings: opts.timings || opts.trace.is_some(),
             },
         );
 
-        // Execute the build (enable timings collection if trace output is requested)
+        // A product that regenerates a source some analyzer scans makes the
+        // graph-time scan of that source stale; re-analyze its consumers
+        // before they run.
+        let mut reanalyze = analysis.as_mut().map(|analysis| {
+            move |graph: &mut crate::graph::BuildGraph, changed: &[usize]| {
+                analysis.reanalyze(ctx, graph, changed)
+            }
+        });
+        let refresh = reanalyze
+            .as_mut()
+            .map(|f| f as &mut crate::executor::GraphRefresh<'_>);
+
+        // Execute the build
         let t = Instant::now();
-        let collect_timings = opts.timings || opts.trace.is_some();
-        let result = executor.execute(
-            &graph,
-            &self.object_store,
-            opts.force,
-            collect_timings,
-            opts.keep_going,
-            &classification,
-        );
+        let result = executor.execute(&mut graph, &self.object_store, &classification, refresh);
         let build_dur = t.elapsed();
         print_graph_stats(GraphSnapshot::AfterExecute, &graph);
 

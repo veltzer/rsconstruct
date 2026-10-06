@@ -18,19 +18,19 @@ pub enum ProductAction {
 /// behavior: skip if outputs match, restore if cache has blobs, else build.
 /// Future implementations could add time-based expiry, always-rebuild,
 /// demand-driven filtering, or deterministic-verification modes.
+///
+/// The executor consults the policy for every product at dispatch time,
+/// once all of its dependencies have run, so `input_checksum` is always
+/// the content the product will actually read: a changed dependency shows
+/// up as a changed checksum, and the policy needs no separate signal for it.
 pub trait BuildPolicy: Sync + Send {
     /// Classify a single product given the current cache state.
-    ///
-    /// `dep_changed` is true if any dependency of this product will be rebuilt
-    /// or restored in this run (i.e. its outputs cannot be trusted even if the
-    /// descriptor matches).
     fn classify(
         &self,
         ctx: &crate::build_context::BuildContext,
         product: &Product,
         object_store: &ObjectStore,
         input_checksum: &str,
-        dep_changed: bool,
         force: bool,
     ) -> ProductAction;
 
@@ -57,19 +57,18 @@ impl BuildPolicy for IncrementalPolicy {
         product: &Product,
         object_store: &ObjectStore,
         input_checksum: &str,
-        dep_changed: bool,
         force: bool,
     ) -> ProductAction {
+        if force {
+            return ProductAction::Build;
+        }
         let desc_key = product.descriptor_key(input_checksum);
-        let needs_rebuild = object_store.needs_rebuild_descriptor(ctx, &desc_key, &product.outputs);
-
         // can_restore is evaluated lazily: it warms the local cache from the
         // remote when pull is enabled, so asking about a product that is
-        // going to be skipped (or forcibly rebuilt) would download objects
-        // nobody needs.
-        if !force && !dep_changed && !needs_rebuild {
+        // going to be skipped would download objects nobody needs.
+        if !object_store.needs_rebuild_descriptor(ctx, &desc_key, &product.outputs) {
             ProductAction::Skip
-        } else if !force && !dep_changed && object_store.can_restore_descriptor(ctx, &desc_key) {
+        } else if object_store.can_restore_descriptor(ctx, &desc_key) {
             ProductAction::Restore
         } else {
             ProductAction::Build
@@ -96,9 +95,11 @@ mod tests {
     use crate::graph::BuildGraph;
     use std::fs;
 
-    /// The classify decision table over descriptor state, `dep_changed`, and
-    /// `force`. `dep_changed` and `force` must each beat both a matching
-    /// descriptor (no stale skip) and a restorable cache (no stale restore).
+    /// The classify decision table over descriptor state and `force`.
+    /// `force` must beat both a matching descriptor (no stale skip) and a
+    /// restorable cache (no stale restore). A changed dependency is not an
+    /// input here: at dispatch it is a changed `input_checksum` (the last
+    /// case), and the up-front prediction handles it in `classify_products`.
     #[test]
     fn classify_decision_table() {
         let tmp = tempfile::TempDir::new().unwrap();
@@ -127,27 +128,22 @@ mod tests {
         // No descriptor at all: must build, whatever the flags say.
         let generator = g.get_product(gen_id).unwrap();
         assert_eq!(
-            policy.classify(&ctx, generator, &store, chk, false, false),
+            policy.classify(&ctx, generator, &store, chk, false),
             ProductAction::Build
         );
 
-        // Checker with a stored PASS marker: skip — unless a dependency
-        // changed or the build is forced.
+        // Checker with a stored PASS marker: skip — unless the build is
+        // forced.
         let checker = g.get_product(chk_id).unwrap();
         store
             .store_marker(&ctx, &checker.descriptor_key(chk))
             .unwrap();
         assert_eq!(
-            policy.classify(&ctx, checker, &store, chk, false, false),
+            policy.classify(&ctx, checker, &store, chk, false),
             ProductAction::Skip
         );
         assert_eq!(
-            policy.classify(&ctx, checker, &store, chk, true, false),
-            ProductAction::Build,
-            "dep_changed must invalidate a matching marker"
-        );
-        assert_eq!(
-            policy.classify(&ctx, checker, &store, chk, false, true),
+            policy.classify(&ctx, checker, &store, chk, true),
             ProductAction::Build,
             "force must beat a matching marker"
         );
@@ -158,31 +154,26 @@ mod tests {
             .store_blob_descriptor(&ctx, &generator.descriptor_key(chk), &out)
             .unwrap();
         assert_eq!(
-            policy.classify(&ctx, generator, &store, chk, false, false),
+            policy.classify(&ctx, generator, &store, chk, false),
             ProductAction::Skip
         );
 
         // Output gone but the object is in the cache: restore, not build —
-        // unless a dependency changed or the build is forced.
+        // unless the build is forced.
         fs::remove_file(&out).unwrap();
         assert_eq!(
-            policy.classify(&ctx, generator, &store, chk, false, false),
+            policy.classify(&ctx, generator, &store, chk, false),
             ProductAction::Restore
         );
         assert_eq!(
-            policy.classify(&ctx, generator, &store, chk, true, false),
-            ProductAction::Build,
-            "dep_changed must beat a restorable cache"
-        );
-        assert_eq!(
-            policy.classify(&ctx, generator, &store, chk, false, true),
+            policy.classify(&ctx, generator, &store, chk, true),
             ProductAction::Build,
             "force must beat a restorable cache"
         );
 
         // A different input checksum is a different descriptor key: build.
         assert_eq!(
-            policy.classify(&ctx, generator, &store, "other993", false, false),
+            policy.classify(&ctx, generator, &store, "other993", false),
             ProductAction::Build
         );
     }
@@ -220,7 +211,7 @@ mod tests {
         fs::write(&out, b"corrupted").unwrap();
 
         assert_eq!(
-            policy.classify(&ctx, p, &store, chk, false, false),
+            policy.classify(&ctx, p, &store, chk, false),
             ProductAction::Restore
         );
     }

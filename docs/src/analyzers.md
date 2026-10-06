@@ -51,8 +51,29 @@ Analyzer results are cached in the dependency cache (`.rsconstruct/deps.redb`). 
 
 - If neither a source file nor any of its cached dependencies has changed, the cached dependencies are used.
 - If the source or any dependency has changed, or a dependency is gone, the source is re-scanned. Checking the dependencies is what catches a header that gains a new `#include`: the sources that include it are rescanned and pick up the new header.
+- If a file appears where resolution previously found nothing — a `src/x.h` that now shadows the `include/x.h` an `#include "x.h"` used to resolve to, or a local `foo.py` for an `import foo` that used to be external — the source is re-scanned. Analyzers record the paths they probed and found missing.
+- If the analyzer's configuration changes (`include_paths`, `load_paths`, pkg-config output, ...), every source it scanned is re-scanned: an entry is only trusted under the configuration it was scanned with.
 - The `sass` and `tera` analyzers do not use the cached list at all: they rescan every source on every build.
 - The cache is shared across all analyzers.
+
+## Generated files
+
+A reference to a file that another product generates is a dependency even
+before the file exists: analyzers resolve references against the project's
+files plus every declared output. The product that references it is ordered
+after the product that generates it.
+
+A source that is itself generated (or that includes a generated header) is
+analyzed again during the build, right after the product generating it ran.
+On a clean checkout that is the first time its content can be read; on an
+incremental build it replaces the analysis of the stale copy that was on
+disk when the graph was built. Either way the products reading it are
+ordered, checksummed and cached against what they will actually read, and
+the build after a clean build finds everything up to date.
+
+The `cpp` analyzer asks the compiler (`-MM`), which only sees files on disk,
+so it cannot resolve an include of a header that has not been generated
+yet; use `icpp` for projects that generate headers.
 
 Use the `analyzer` command to manage analyzers and inspect the cache (full
 reference in [Commands](commands.md#rsconstruct-analyzer)):
@@ -99,18 +120,31 @@ Analyzers implement the `DepAnalyzer` trait:
 pub trait DepAnalyzer: Sync + Send {
     fn description(&self) -> &str;
     fn auto_detect(&self, file_index: &FileIndex) -> bool;
-    fn analyze(
-        &self,
-        graph: &mut BuildGraph,
-        deps_cache: &mut DepsCache,
-        file_index: &FileIndex,
-        verbose: bool,
-    ) -> Result<()>;
+    fn match_product(&self, product: &Product) -> Option<PathBuf>;
+    fn scan(&self, ctx: &BuildContext, source: &Path, file_index: &FileIndex)
+        -> Result<ScanResult>;
+    fn fingerprint_parts(&self, ctx: &BuildContext) -> Result<Vec<String>>;
+    fn always_rescan(&self) -> bool { false }
 }
 ```
 
-The `analyze` method should:
+An analyzer only answers two questions: which source a product's
+dependencies come from (`match_product`), and what one source depends on
+(`scan`). Everything else — grouping products by source, the dependency
+cache, adding inputs to the graph, re-analysis of generated sources — is
+done by the framework (`analyzers::Analysis`), the same way for every
+analyzer.
 
-1. Find products with relevant source files.
-2. Scan each source file for dependencies (using the cache when available).
-3. Add discovered dependencies to the product's inputs.
+`scan` returns a `ScanResult`:
+
+- `deps` — the files the source depends on. Resolve against `file_index`
+  as well as the disk: it lists files other products will generate.
+- `absent` — every path resolution probed and found missing before its
+  answer. If one of them appears later, the cached result is dropped.
+- `hash_pieces` — non-file state to mix into the cache key (glob results,
+  command text). Only allowed with `always_rescan`, since it is never cached.
+
+`fingerprint_parts` returns everything besides file contents that decides
+what `scan` resolves — normally the serialized config
+(`analyzers::config_fingerprint`), plus any search paths resolved at run
+time.

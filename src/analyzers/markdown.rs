@@ -4,7 +4,6 @@
 //! adds referenced local files as dependencies to products in the build graph.
 
 use anyhow::Result;
-use indicatif::ProgressBar;
 use regex::Regex;
 use std::collections::HashSet;
 use std::fs;
@@ -12,35 +11,35 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use crate::config::MarkdownAnalyzerConfig;
-use crate::deps_cache::DepsCache;
 use crate::errors;
 use crate::file_index::FileIndex;
-use crate::graph::{BuildGraph, Product};
+use crate::graph::Product;
 
-use super::DepAnalyzer;
+use super::{DepAnalyzer, ScanResult};
 
 /// Markdown dependency analyzer that scans source files for image and link references.
 pub struct MarkdownDepAnalyzer {
-    iname: String,
     config: MarkdownAnalyzerConfig,
 }
 
 impl MarkdownDepAnalyzer {
-    pub fn new(iname: &str, config: MarkdownAnalyzerConfig) -> Self {
-        Self {
-            iname: iname.to_string(),
-            config,
-        }
+    pub const fn new(config: MarkdownAnalyzerConfig) -> Self {
+        Self { config }
     }
 
     /// Scan a Markdown file for local file references.
-    /// Returns paths to local files referenced via `![alt](path)` or `[text](path)` syntax.
-    fn scan_references(&self, source: &Path) -> Result<Vec<PathBuf>> {
+    /// Returns paths to local files referenced via `![alt](path)` or
+    /// `[text](path)` syntax, and the candidate paths probed and found
+    /// missing — a reference to a file that does not exist yet must be
+    /// picked up once it does. A reference resolves to a file on disk or to
+    /// one another product will generate (in `file_index`).
+    fn scan_references(&self, source: &Path, file_index: &FileIndex) -> Result<ScanResult> {
         let content = crate::errors::ctx(
             fs::read_to_string(source),
             &format!("Failed to read markdown: {}", source.display()),
         )?;
         let mut refs = Vec::new();
+        let mut absent = Vec::new();
         let mut seen = HashSet::new();
 
         // Match ![alt](path) and [text](path) — capture the path portion
@@ -77,16 +76,20 @@ impl MarkdownDepAnalyzer {
             // Try resolving relative to the source file's directory first,
             // then relative to the project root (cwd)
             let candidates = [source_dir.join(path_str), PathBuf::from(path_str)];
-            for candidate in &candidates {
-                if candidate.is_file() && !seen.contains(candidate) {
-                    seen.insert(candidate.clone());
-                    refs.push(candidate.clone());
-                    break;
-                }
+            let found = candidates
+                .iter()
+                .find(|c| c.is_file() || file_index.contains(c));
+            absent.extend(super::probed_before(&candidates, found));
+            if let Some(found) = found
+                && seen.insert(found.clone())
+            {
+                refs.push(found.clone());
             }
         }
+        absent.sort();
+        absent.dedup();
 
-        Ok(refs)
+        Ok(ScanResult::deps(refs, absent))
     }
 }
 
@@ -116,24 +119,17 @@ impl DepAnalyzer for MarkdownDepAnalyzer {
         }
     }
 
-    fn analyze(
+    fn scan(
         &self,
-        ctx: &crate::build_context::BuildContext,
-        graph: &mut BuildGraph,
-        deps_cache: &mut DepsCache,
-        _file_index: &FileIndex,
-        _verbose: bool,
-        progress: &ProgressBar,
-    ) -> Result<()> {
-        super::analyze_with_scanner(
-            ctx,
-            graph,
-            deps_cache,
-            &self.iname,
-            |p| self.match_product(p),
-            |source| self.scan_references(source),
-            progress,
-        )
+        _ctx: &crate::build_context::BuildContext,
+        source: &Path,
+        file_index: &FileIndex,
+    ) -> Result<ScanResult> {
+        self.scan_references(source, file_index)
+    }
+
+    fn fingerprint_parts(&self, _ctx: &crate::build_context::BuildContext) -> Result<Vec<String>> {
+        super::config_fingerprint(&self.config)
     }
 }
 
@@ -142,9 +138,9 @@ inventory::submit! {
         name: "markdown",
         description: "Scan Markdown files for local file dependencies",
         is_native: true,
-        create: |iname, toml_value, _| {
+        create: |toml_value, _| {
             let cfg: MarkdownAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
-            Ok(Box::new(MarkdownDepAnalyzer::new(iname, cfg)))
+            Ok(Box::new(MarkdownDepAnalyzer::new(cfg)))
         },
         defconfig_toml: || {
             toml::to_string_pretty(&MarkdownAnalyzerConfig::default()).ok()

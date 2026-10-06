@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use indicatif::ProgressBar;
 use parking_lot::{Condvar, Mutex};
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -18,8 +18,8 @@ use crate::progress;
 use crate::stats::{BuildStats, ProductTiming};
 
 use super::{
-    Classification, Executor, HandlerContext, LevelWork, PreCheckResult, RestoreOutcome,
-    SharedState, WorkItem,
+    Classification, Executor, GraphRefresh, HandlerContext, LevelWork, PreCheckResult,
+    ProductAction, RestoreOutcome, SharedState, WorkItem,
 };
 
 /// Compute the effective `max_jobs` for a processor instance. The config
@@ -188,30 +188,35 @@ struct ProgressCounters {
 struct LevelContext<'b> {
     graph: &'b BuildGraph,
     object_store: &'b ObjectStore,
-    force: bool,
     keep_going: bool,
     timings: bool,
     shared: &'b SharedState,
     pb: &'b ProgressBar,
     build_start: Instant,
+    /// The up-front prediction per product, used only to keep the progress
+    /// bar (sized from it) honest when dispatch decides differently.
+    predicted: &'b HashMap<usize, ProductAction>,
 }
 
 impl Executor<'_> {
     /// Execute all products in the graph that need rebuilding.
     ///
-    /// `classification` is the result of an earlier [`classify_products`]
-    /// pass. The executor reuses the per-product `input_checksum` values
-    /// recorded there instead of recomputing them, which matters when
-    /// outputs of one product are inputs of another and were unlinked
-    /// between classify and execute (see [`unlink_pending_outputs`]).
+    /// `classification` is the up-front prediction from
+    /// [`classify_products`](super::classify_products); it only sizes the
+    /// progress bar. Each product's fate is decided when it is dispatched,
+    /// after all its dependencies ran: its input checksum is taken then,
+    /// and the policy classifies it against that. A dependency that rebuilt
+    /// to identical bytes therefore leaves the product skippable, and the
+    /// checksum the outputs are cached under is the one the product read.
+    ///
+    /// `refresh`, when given, runs after every level (see [`GraphRefresh`]);
+    /// the graph is mutable for its sake.
     pub fn execute(
         &self,
-        graph: &BuildGraph,
+        graph: &mut BuildGraph,
         object_store: &ObjectStore,
-        force: bool,
-        timings: bool,
-        keep_going: bool,
         classification: &Classification,
+        refresh: Option<&mut GraphRefresh<'_>>,
     ) -> Result<BuildStats> {
         let build_start = Instant::now();
         let order = graph.topological_sort()?;
@@ -230,15 +235,7 @@ impl Executor<'_> {
         // Emit JSON build start event
         json_output::emit_build_start(order.len());
 
-        let result = self.execute_parallel(
-            graph,
-            &order,
-            object_store,
-            force,
-            timings,
-            keep_going,
-            classification,
-        );
+        let result = self.execute_parallel(graph, &order, object_store, classification, refresh);
 
         match result {
             Ok(mut stats) => {
@@ -280,25 +277,25 @@ impl Executor<'_> {
     /// Execute products in parallel where dependencies allow.
     /// Within each level, batch-supporting processors with multiple items
     /// are grouped and executed via `execute_batch()` in a single thread.
-    ///
-    /// 8 arguments against clippy's limit of 7. They are the whole build
-    /// request and are already grouped where grouping is meaningful
-    /// (`Classification`, `ObjectStore`); bundling the three remaining flags
-    /// into an options struct would add a type used at exactly one call site.
-    #[allow(clippy::too_many_arguments)]
     fn execute_parallel(
         &self,
-        graph: &BuildGraph,
+        graph: &mut BuildGraph,
         order: &[usize],
         object_store: &ObjectStore,
-        force: bool,
-        timings: bool,
-        keep_going: bool,
         classification: &Classification,
+        mut refresh: Option<&mut GraphRefresh<'_>>,
     ) -> Result<BuildStats> {
         let build_start = Instant::now();
+        let keep_going = self.keep_going;
         // Group products into levels that can run in parallel
-        let levels = super::compute_parallel_levels(graph, order);
+        let mut levels: VecDeque<Vec<usize>> = super::compute_parallel_levels(graph, order).into();
+        // Every product dispatched so far, whatever became of it.
+        let mut dispatched: HashSet<usize> = HashSet::new();
+        let predicted: HashMap<usize, ProductAction> = classification
+            .products
+            .iter()
+            .map(|c| (c.id, c.action))
+            .collect();
 
         // Count total products per processor for progress display
         let mut total_per_processor: HashMap<String, usize> = HashMap::new();
@@ -331,6 +328,7 @@ impl Executor<'_> {
             failed_products: Arc::new(Mutex::new(HashSet::new())),
             failed_messages: Arc::new(Mutex::new(Vec::new())),
             failed_processors: Arc::new(Mutex::new(HashSet::new())),
+            changed: Arc::new(Mutex::new(Vec::new())),
             global_current: Arc::new(AtomicUsize::new(0)),
             global_total,
         };
@@ -345,26 +343,27 @@ impl Executor<'_> {
             })
             .collect();
 
-        for level in levels {
+        while let Some(level) = levels.pop_front() {
             // Check for Ctrl+C before starting next level
             if self.is_interrupted() {
                 break;
             }
+            let graph_ref: &BuildGraph = graph;
 
             let LevelWork {
                 batch_groups,
                 non_batch_items,
-            } = self.prepare_level_work(graph, &level, object_store, force, keep_going, &shared);
+            } = self.prepare_level_work(graph_ref, &level, object_store, &shared);
 
             let lctx = LevelContext {
-                graph,
+                graph: graph_ref,
                 object_store,
-                force,
                 keep_going,
-                timings,
+                timings: self.timings,
                 shared: &shared,
                 pb: &pb,
                 build_start,
+                predicted: &predicted,
             };
 
             // Process this level in parallel using thread pool
@@ -410,10 +409,49 @@ impl Executor<'_> {
             if !keep_going && !shared.errors.lock().is_empty() {
                 break;
             }
+
+            dispatched.extend(level.iter().copied());
+            let changed = std::mem::take(&mut *shared.changed.lock());
+            if let Some(refresh) = refresh.as_deref_mut()
+                && !changed.is_empty()
+            {
+                match Self::refresh_graph(graph, refresh, &changed, &dispatched) {
+                    Ok(Some(replanned)) => levels = replanned,
+                    Ok(None) => {}
+                    Err(e) => {
+                        pb.finish_and_clear();
+                        return Err(e);
+                    }
+                }
+            }
         }
 
         pb.finish_and_clear();
         Self::collect_build_stats(shared, keep_going, self.is_interrupted())
+    }
+
+    /// Run the refresh hook for the products that just built or restored.
+    /// When it changed the graph, re-link it and return the levels for the
+    /// products not dispatched yet — a new input may be the output of one of
+    /// them, which must now run first.
+    fn refresh_graph(
+        graph: &mut BuildGraph,
+        refresh: &mut GraphRefresh<'_>,
+        changed: &[usize],
+        dispatched: &HashSet<usize>,
+    ) -> Result<Option<VecDeque<Vec<usize>>>> {
+        if !refresh(graph, changed).context("Failed to re-analyze regenerated sources")? {
+            return Ok(None);
+        }
+        graph.resolve_dependencies();
+        let remaining: Vec<usize> = graph
+            .topological_sort()?
+            .into_iter()
+            .filter(|id| !dispatched.contains(id))
+            .collect();
+        Ok(Some(
+            super::compute_parallel_levels(graph, &remaining).into(),
+        ))
     }
 
     /// Pre-check a work item: handle explain, skip-if-unchanged, and cache restore.
@@ -438,28 +476,38 @@ impl Executor<'_> {
                 product,
                 lctx.object_store,
                 &item.input_checksum,
-                lctx.force,
+                self.force,
             );
             self.print_explain(product, &action);
         }
 
-        if !item.needs_rebuild {
-            self.handle_skip(product, lctx.shared);
-            return PreCheckResult::Handled;
-        }
-
-        let ctx = HandlerContext {
-            product,
-            id: item.product_id,
-            input_checksum: &item.input_checksum,
-            proc_name,
-            keep_going: lctx.keep_going,
-            shared: lctx.shared,
-            pb: lctx.pb,
-        };
-        match self.handle_restore(&ctx, lctx.object_store, lctx.force, emit_fail_event) {
-            RestoreOutcome::Restored | RestoreOutcome::Failed => PreCheckResult::Handled,
-            RestoreOutcome::NotRestorable => PreCheckResult::NeedsExecution,
+        match item.action {
+            ProductAction::Skip => {
+                self.handle_skip(product, lctx.shared);
+                // The bar counts predicted work; a product predicted to
+                // build (its dependency changed) that turns out unchanged
+                // still has to tick it off.
+                if lctx.predicted.get(&item.product_id) != Some(&ProductAction::Skip) {
+                    lctx.pb.inc(1);
+                }
+                PreCheckResult::Handled
+            }
+            ProductAction::Restore => {
+                let ctx = HandlerContext {
+                    product,
+                    id: item.product_id,
+                    input_checksum: &item.input_checksum,
+                    proc_name,
+                    keep_going: lctx.keep_going,
+                    shared: lctx.shared,
+                    pb: lctx.pb,
+                };
+                match self.handle_restore(&ctx, lctx.object_store, emit_fail_event) {
+                    RestoreOutcome::Restored | RestoreOutcome::Failed => PreCheckResult::Handled,
+                    RestoreOutcome::NotRestorable => PreCheckResult::NeedsExecution,
+                }
+            }
+            ProductAction::Build => PreCheckResult::NeedsExecution,
         }
     }
 
@@ -892,18 +940,17 @@ impl Executor<'_> {
 
     /// Prepare work items for a single parallel level.
     ///
-    /// Skips products with failed dependencies, recomputes per-product input
-    /// checksums from current on-disk state, and separates items into batch
-    /// groups vs non-batch items.
+    /// Skips products with failed dependencies, takes each product's input
+    /// checksum from current on-disk state, has the policy decide its action,
+    /// and separates items into batch groups vs non-batch items.
     pub(super) fn prepare_level_work(
         &self,
         graph: &BuildGraph,
         level: &[usize],
         object_store: &ObjectStore,
-        force: bool,
-        keep_going: bool,
         shared: &SharedState,
     ) -> LevelWork {
+        let keep_going = self.keep_going;
         let mut work_items: Vec<WorkItem> = Vec::new();
 
         // First pass: identify products with failed dependencies
@@ -949,7 +996,7 @@ impl Executor<'_> {
                     shared.failed_products.lock().insert(id);
                     continue;
                 }
-                // Recompute the input checksum here (per-level, in topological
+                // Take the input checksum here (per-level, in topological
                 // order) rather than reusing the classify-time value. By the
                 // time we reach this level, every upstream level has completed,
                 // so reading inputs from disk gives the post-upstream content
@@ -959,15 +1006,10 @@ impl Executor<'_> {
                 // value can carry MISSING: for inputs that didn't exist yet,
                 // which would mint a cache key the next classify can never match.
                 //
-                // For products whose own outputs appear as inputs (e.g., a
-                // tera template with dep_inputs listing its own output): the
-                // input is currently MISSING here because unlink_pending_outputs
-                // removed it. That's fine: `needs_rebuild_descriptor` won't
-                // find a cache entry under the MISSING-keyed descriptor (no
-                // prior build cached under that key), so we build. After build,
-                // handle_success recomputes from the post-execution state and
-                // caches under the real-content key — which is what next
-                // classify will look up.
+                // This checksum is final: a product's inputs never include
+                // its own outputs (the graph strips them), so nothing the
+                // product itself writes can change it, and `handle_success`
+                // caches under exactly this key.
                 let input_checksum =
                     match crate::checksum::combined_input_checksum(self.build_ctx, &product.inputs)
                     {
@@ -993,17 +1035,18 @@ impl Executor<'_> {
                         }
                     };
 
-                let desc_key = product.descriptor_key(&input_checksum);
-                let needs_rebuild = force
-                    || object_store.needs_rebuild_descriptor(
-                        self.build_ctx,
-                        &desc_key,
-                        &product.outputs,
-                    );
+                // The one place a product's fate is decided (see `execute`).
+                let action = self.policy.classify(
+                    self.build_ctx,
+                    product,
+                    object_store,
+                    &input_checksum,
+                    self.force,
+                );
                 work_items.push(WorkItem {
                     product_id: id,
                     input_checksum,
-                    needs_rebuild,
+                    action,
                 });
             }
         }
@@ -1033,7 +1076,10 @@ impl Executor<'_> {
             let supports_batch =
                 processor.is_some_and(|p| effective_supports_batch(&proc_name, p.as_ref()));
             // Count items that actually need rebuild (not just cache-skip)
-            let rebuild_count = items.iter().filter(|item| item.needs_rebuild).count();
+            let rebuild_count = items
+                .iter()
+                .filter(|item| item.action != ProductAction::Skip)
+                .count();
 
             if should_batch(batching_enabled, supports_batch, rebuild_count) {
                 batch_groups.insert(proc_name, items);

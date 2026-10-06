@@ -218,7 +218,9 @@ the offending command, and migration advice.
 A new helper `analyzers::analyze_with_full_scanner` was added to support
 analyzers whose scanner returns a [`ScanResult`] (deps + config-hash piece)
 rather than just deps. The existing C/C++/Python/markdown analyzers
-continue to use the simpler `analyze_with_scanner`.
+continued to use the simpler `analyze_with_scanner`. (Both helpers have
+since been folded into `analyzers::Analysis`: every analyzer returns a
+`ScanResult`, and one that contributes hash pieces sets `always_rescan`.)
 
 **Runtime evaluation (the rendered-output path)** — `src/processor/generator/tera.rs`
 registers two functions on the Tera engine:
