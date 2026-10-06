@@ -52,16 +52,17 @@ Analyzer results are cached in the dependency cache (`.rsconstruct/deps.redb`). 
 - If a source file has changed, dependencies are re-scanned.
 - The cache is shared across all analyzers.
 
-Use the `analyzer` and `deps` commands to inspect the cache:
+Use the `analyzer` command to manage analyzers and inspect the cache (full
+reference in [Commands](commands.md#rsconstruct-analyzer)):
 
 ```bash
-rsconstruct analyzer list            # list available analyzers
-rsconstruct analyzer defconfig cpp   # show default config for an analyzer
-rsconstruct analyzer add cpp         # append [analyzer.cpp] to rsconstruct.toml with comments
-rsconstruct analyzer add cpp --dry-run  # preview without writing
-rsconstruct deps all                  # show all cached dependencies
-rsconstruct deps for src/main.c       # show dependencies for specific files
-rsconstruct deps clean                # clear the dependency cache
+rsconstruct analyzer list                   # list available analyzers
+rsconstruct analyzer defconfig cpp          # show default config for an analyzer
+rsconstruct analyzer add cpp                # append [analyzer.cpp] to rsconstruct.toml with comments
+rsconstruct analyzer add cpp --dry-run      # preview without writing
+rsconstruct analyzer show all               # show all cached dependencies
+rsconstruct analyzer show files src/main.c  # show dependencies for specific files
+rsconstruct analyzer clean                  # clear the dependency cache
 ```
 
 ## Build phases

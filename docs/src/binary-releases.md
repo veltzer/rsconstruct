@@ -1,7 +1,8 @@
 # Binary Releases
 
-RSConstruct publishes pre-built binaries as GitHub releases when a version tag
-(`v*`) is pushed.
+RSConstruct publishes pre-built binaries as GitHub releases. A release is made
+with `cargo release`; CI builds and publishes the binaries from the release
+commit it pushes.
 
 ## Supported Platforms
 
@@ -20,24 +21,45 @@ tool installation).
 ## How It Works
 
 Everything runs from the single CI workflow (`.github/workflows/ci.yml`).
-On a version tag push, three release jobs run after the test suite:
+The workflow triggers on branch pushes only. Every push runs the **test**
+job; a push to the default branch whose commit message starts with
+`chore: Release ` (the commit `cargo release` makes) also runs three release
+jobs:
 
 1. **build** — a matrix job that builds the release binary for each platform
    and uploads it as a GitHub Actions artifact. It runs only after the
    **test** job passes, so a release never ships from a commit whose tests
    fail.
-2. **release** — waits for all builds to finish, downloads the artifacts,
-   and creates a GitHub release with auto-generated release notes and all
+2. **release** — waits for all builds to finish, downloads the binary
+   artifacts, and creates a GitHub release named after the version in
+   `Cargo.toml` (`v<version>`), with auto-generated release notes and all
    binaries attached.
 3. **docs** — builds the mdBook documentation and deploys it to GitHub
    Pages.
 
+Pushing a tag on its own does nothing: `cargo release` pushes the tag
+together with the release commit, and the workflow ignores tag pushes so
+the two do not start two identical runs.
+
 ## Creating a Release
 
-1. Update `version` in `Cargo.toml`
-2. Commit and push
-3. Tag and push: `git tag v0.2.2 && git push origin v0.2.2`
-4. The workflow creates the GitHub release automatically
+```bash
+cargo release patch            # dry run: shows what would happen
+cargo release patch --execute  # bump, commit, tag, publish, push
+```
+
+Use `minor` or `major` instead of `patch` for a bigger bump. With
+`--execute`, `cargo release` (configured in `release.toml`):
+
+1. bumps `version` in `Cargo.toml`,
+2. commits it as `chore: Release rsconstruct version <version>`,
+3. creates a signed tag `v<version>`,
+4. publishes the crate to crates.io,
+5. pushes the commit and the tag.
+
+The push of that commit to the default branch starts the release jobs
+above. Bumping the version and tagging by hand does not produce a release,
+because the commit message would not start with `chore: Release `.
 
 ## Release Profile
 

@@ -475,9 +475,9 @@ larger structural items.
 - Either pull all semantic validation into `Config::load` (so `toml check` catches everything) or accept that semantic errors surface later and document which is which.
 - **Urgency**: low | **Complexity**: medium
 
-### `products list` CLI
+### `product list` CLI
 - Users can run `rsconstruct graph show` (full graph) or `rsconstruct status` (per-processor summary), but there's no flat list of "here are every product that would execute, with its primary input and output."
-- Add `rsconstruct products list` (parallel to `processor list` and `analyzer used`). Respects `-p`/`-x`/`--target` filters.
+- Add `rsconstruct product list` (beside the existing `product show`, parallel to `processor list` and `analyzer used`). Respects `-p`/`-x`/`--target` filters.
 - **Urgency**: low | **Complexity**: low
 
 ### `ProductTiming.start_offset` not populated for batch execution

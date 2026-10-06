@@ -68,25 +68,25 @@ This shows how many source files had their dependencies retrieved from cache (hi
 
 ## Viewing Dependencies
 
-Use the `rsconstruct deps` command to view the dependencies stored in the cache:
+Use the `rsconstruct analyzer` command to view the dependencies stored in the cache:
 
 ```bash
-rsconstruct deps all                    # Show all cached dependencies
-rsconstruct deps for src/main.c         # Show dependencies for a specific file
-rsconstruct deps for src/a.c src/b.c    # Show dependencies for multiple files
-rsconstruct deps clean                  # Clear the dependency cache
+rsconstruct analyzer show all                    # Show all cached dependencies
+rsconstruct analyzer show files src/main.c       # Show dependencies for a specific file
+rsconstruct analyzer show files src/a.c src/b.c  # Show dependencies for multiple files
+rsconstruct analyzer clean                       # Clear the dependency cache
 ```
 
 Example output:
 
 ```
-src/main.c: (no dependencies)
-src/test.c:
+src/main.c: [icpp] (no dependencies)
+src/test.c: [icpp]
   src/utils.h
   src/config.h
 ```
 
-The `rsconstruct deps` command reads directly from the dependency cache without building the graph. If the cache is empty (e.g., after `rsconstruct deps clean` or on a fresh checkout), run a build first to populate it.
+`analyzer show` reads directly from the dependency cache without building the graph. If the cache is empty (e.g., after `rsconstruct analyzer clean` or on a fresh checkout), run `rsconstruct analyzer build` or a build first to populate it.
 
 This is useful for debugging rebuild behavior or understanding the include structure of your project.
 

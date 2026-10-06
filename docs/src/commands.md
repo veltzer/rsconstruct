@@ -282,61 +282,75 @@ rsconstruct webcache stats   # Show cache size and entry count
 rsconstruct webcache list    # List all cached URLs and their sizes
 ```
 
-## `rsconstruct deps`
+## `rsconstruct analyzer`
 
-Show or manage source file dependencies from the dependency cache. The cache is populated during builds when dependency analyzers scan source files (e.g., C/C++ headers, Python imports).
+Manage dependency analyzers and inspect the dependency cache they fill. An analyzer scans source files for dependencies (C/C++ `#include`s, Python imports, Markdown and Tera references) and records them in `.rsconstruct/deps.redb`; see [Dependency Analyzers](analyzers.md). Analyzers are referred to by pname (the type: `cpp`, `icpp`, `markdown`, `python`, `tera`) or by iname (the instance as declared in `rsconstruct.toml`, e.g. `cpp` or `cpp.kernel`).
 
 | Subcommand | Config required? |
 |------------|-----------------|
-| `list` | No |
-| `used` | Yes |
+| `add` | Yes (`--dry-run`: no) |
 | `build` | Yes |
+| `clean` | Yes |
 | `config` | Yes |
+| `defconfig` | No |
+| `delete` | Yes |
+| `disable` | Yes |
+| `enable` | Yes |
+| `list` | No |
 | `show` | Yes |
 | `stats` | Yes |
-| `clean` | Yes |
+| `used` | Yes |
 
 ```bash
-rsconstruct deps list                          # List all available dependency analyzers
-rsconstruct deps build                         # Run dependency analysis without building
-rsconstruct deps show all                    # Show all cached dependencies
-rsconstruct deps show files src/main.c       # Show dependencies for a specific file
-rsconstruct deps show files src/a.c src/b.c  # Show dependencies for multiple files
-rsconstruct deps show analyzers cpp          # Show dependencies from the C/C++ analyzer
-rsconstruct deps show analyzers cpp python   # Show dependencies from multiple analyzers
-rsconstruct deps stats                       # Show statistics by analyzer
-rsconstruct deps clean                       # Clear the entire dependency cache
-rsconstruct deps clean --analyzer cpp        # Clear only C/C++ dependencies
-rsconstruct deps clean --analyzer python     # Clear only Python dependencies
+rsconstruct analyzer list                        # List all available analyzers
+rsconstruct analyzer used                        # Show which analyzers are enabled and detected
+rsconstruct analyzer defconfig cpp               # Show the default configuration of an analyzer type
+rsconstruct analyzer config                      # Show the resolved configuration of every declared analyzer
+rsconstruct analyzer config cpp                  # ...of one analyzer instance
+rsconstruct analyzer add cpp                     # Append [analyzer.cpp] to rsconstruct.toml with comments
+rsconstruct analyzer add cpp --dry-run           # Print the snippet instead of writing it
+rsconstruct analyzer enable cpp                  # Set enabled = true on the stanza
+rsconstruct analyzer disable cpp                 # Set enabled = false on the stanza
+rsconstruct analyzer delete cpp                  # Remove the stanza entirely
+rsconstruct analyzer build                       # Run dependency analysis without building
+rsconstruct analyzer show all                    # Show all cached dependencies
+rsconstruct analyzer show files src/main.c       # Show dependencies for a specific file
+rsconstruct analyzer show files src/a.c src/b.c  # ...for several files
+rsconstruct analyzer show files --hash-pieces src/main.c  # Also show each analyzer's hash pieces
+rsconstruct analyzer show analyzers cpp          # Show dependencies found by the C/C++ analyzer
+rsconstruct analyzer show analyzers cpp python   # ...by several analyzers
+rsconstruct analyzer stats                       # Show statistics by analyzer
+rsconstruct analyzer clean                       # Clear the entire dependency cache
+rsconstruct analyzer clean --analyzer cpp        # Clear only entries from the cpp analyzer
 ```
 
-Example output for `rsconstruct deps show all`:
+Example output for `rsconstruct analyzer show all`:
 
 ```
-src/main.c: [cpp] (no dependencies)
-src/test.c: [cpp]
+src/main.c: [icpp] (no dependencies)
+src/test.c: [icpp]
   src/utils.h
   src/config.h
-config/settings.py: [python]
-  config/base.py
 ```
 
-Example output for `rsconstruct deps stats`:
+Example output for `rsconstruct analyzer stats`:
 
 ```
-cpp: 15 files, 42 dependencies
-python: 8 files, 12 dependencies
-
-Total: 23 files, 54 dependencies
+╭──────────┬───────┬──────────────╮
+│ Analyzer │ Files │ Dependencies │
+├──────────┼───────┼──────────────┤
+│ icpp     │ 2     │ 2            │
+├──────────┼───────┼──────────────┤
+│ Total    │ 2     │ 2            │
+╰──────────┴───────┴──────────────╯
 ```
 
-Note: This command reads directly from the dependency cache (`.rsconstruct/deps.redb`). If the cache is empty, run a build first to populate it.
+`show`, `stats` and `clean` read the dependency cache directly. If it is empty, run `rsconstruct analyzer build` (or a build) first to populate it.
 
-This command is useful for:
+These commands are useful for:
 - Debugging why a file is being rebuilt
 - Understanding the include/import structure of your project
 - Verifying that dependency analyzers are finding the right files
-- Viewing statistics about cached dependencies by analyzer
 - Clearing dependencies for a specific analyzer without affecting others
 
 ## `rsconstruct smart`
@@ -374,28 +388,41 @@ rsconstruct smart remove-no-file-processors  # Remove processors that don't matc
 
 | Subcommand | Config required? |
 |------------|-----------------|
-| `list --all` | No |
-| `list` | Yes (without `--all`) |
-| `defconfig` | No |
-| `config` | Uses config if available |
-| `used` | Yes |
-| `files` | Yes |
+| `add` | Yes (`--dry-run`: no) |
 | `allowlist` | Yes |
+| `config` | Yes |
+| `defconfig` | No |
+| `delete` | Yes |
+| `disable` | Yes |
+| `enable` | Yes |
+| `files` | Yes |
 | `graph` | Yes |
+| `list` | No |
+| `names` | Yes |
+| `recommend` | No |
+| `search` | No |
+| `types` | No |
+| `used` | Yes |
 
 ```bash
-rsconstruct processor list              # List declared processors and descriptions
-rsconstruct processor list -a           # Show all built-in processors
-rsconstruct processor list -v           # ...with descriptions
+rsconstruct processor list              # List all built-in processors with type and description
+rsconstruct processor list --type checker  # ...only one processor type
 rsconstruct --json processor list       # Same list as JSON
+rsconstruct processor types             # List the processor types
+rsconstruct processor search yaml       # Search processors by name, description or keywords
+rsconstruct processor recommend         # Show the recommended processor for each file extension
+rsconstruct processor used              # Show which processors are enabled and detected
+rsconstruct processor names             # Print the iname of every enabled processor, one per line
 rsconstruct processor files             # Show source and target files for each declared processor
 rsconstruct processor files processor.checker.ruff        # Show files for a specific processor
-rsconstruct processor files              # Show files for enabled processors
 rsconstruct processor config processor.checker.ruff       # Show resolved configuration for a processor
 rsconstruct processor config --diff     # Show only fields that differ from defaults
 rsconstruct processor defconfig processor.checker.ruff    # Show default configuration for a processor
 rsconstruct processor add processor.checker.ruff          # Append [processor.checker.ruff] to rsconstruct.toml (fields pre-populated + comments)
 rsconstruct processor add processor.checker.ruff --dry-run  # Preview the snippet without writing
+rsconstruct processor enable processor.checker.ruff       # Set enabled = true on the stanza
+rsconstruct processor disable processor.checker.ruff      # Set enabled = false on the stanza
+rsconstruct processor delete processor.checker.ruff       # Remove the stanza entirely
 rsconstruct processor allowlist         # Show the current processor allowlist
 rsconstruct processor graph             # Show inter-processor dependencies
 rsconstruct processor graph --format dot    # Graphviz DOT format
@@ -407,7 +434,9 @@ rsconstruct processor files --headers   # Show files with processor headers
 (pure Rust inside rsconstruct, or `external` when it runs another program),
 `Rust` (whether the code that does the work is written in Rust — every native
 processor, plus external ones whose tool is Rust: ruff, taplo, rumdl, clippy,
-cargo, mdbook, pyrefly, rustc) and `Fix` (supports `rsconstruct fix`). The JSON
+cargo, mdbook, pyrefly, rustc) and `Fix` (has a built-in fixer for
+`rsconstruct fix`; currently `false` for every processor, see
+[`rsconstruct fix`](#rsconstruct-fix)). The JSON
 form carries the same as `native`, `rust` and `fix` booleans. `rust` is what to
 read when the question is "how much of this project's toolchain is Rust";
 `native` is what to read when the question is "which processors need no tool
@@ -599,7 +628,7 @@ Query GitHub Pages publishing settings from the [`[pages]`](configuration.md#pag
 
 ```bash
 rsconstruct page dir            # Print the published directory ([pages].dir)
-rsconstruct --json pages dir     # {"configured": true, "dir": "out/web"}
+rsconstruct --json page dir      # {"configured": true, "dir": "out/web"}
 ```
 
 `page dir` prints nothing and still exits 0 when `[pages]` is not configured — CI branches on the output being empty, not on exit codes. See [GitHub Actions](github-actions.md#github-pages-deployment) for the workflow pattern this enables.
@@ -632,6 +661,146 @@ each with its resolved path and whether it is present. Use it to find out
 which file a setting is coming from, or where the user config lives on a
 given machine. With `--json` the same list is emitted as an array of
 `{precedence, role, path, exists, note}` objects.
+
+## `rsconstruct error`
+
+**No config needed.** (no subcommands)
+
+List every exit code rsconstruct can return and its name. Errors are printed as `Error [EXIT_...]: ...`, so the name in a message maps back to the code here.
+
+```bash
+rsconstruct error
+```
+
+| Code | Name |
+|------|------|
+| 0 | `EXIT_SUCCESS` |
+| 1 | `EXIT_BUILD_ERROR` |
+| 2 | `EXIT_CONFIG_ERROR` |
+| 3 | `EXIT_TOOL_ERROR` |
+| 4 | `EXIT_GRAPH_ERROR` |
+| 5 | `EXIT_IO_ERROR` |
+| 130 | `EXIT_INTERRUPTED` |
+
+## `rsconstruct fix`
+
+Run fixers (auto-format, auto-fix) on source files, modifying them in place.
+
+| Subcommand | Config required? |
+|------------|-----------------|
+| `list` | Yes |
+| `run` | Yes |
+
+```bash
+rsconstruct fix list                    # List the fix-capable processors declared in this project
+rsconstruct fix run script.format       # Run one fixer (by iname)
+rsconstruct fix run script.a,script.b   # Run several, comma-separated
+```
+
+`fix run` requires at least one processor name. Today the only fix-capable processors are [`script`](processor/checker/script.md) instances that set `fix_command` (and optionally `fix_args`); no built-in processor declares a fixer, so the `Fix` column of `rsconstruct processor list` is `false` for all of them.
+
+## `rsconstruct function`
+
+**No config needed.**
+
+Inspect the built-in functions rsconstruct exposes to Tera templates (`load_python`, `load_lua`, `load_toml`, `toml_get`, ...).
+
+| Subcommand | Config required? |
+|------------|-----------------|
+| `list` | No |
+
+```bash
+rsconstruct function list   # Signature, return value, dependency tracking and an example for each function
+```
+
+Example entry:
+
+```
+load_toml(path: string)
+  Parse a TOML file and expose its top-level table to the template.
+  returns:       object (key → value, nested tables preserved)
+  dep tracking:  The file at `path` is added as an input (content-tracked).
+  example:       {% set cfg = load_toml(path="pyproject.toml") %}{{ cfg.project.version }}
+```
+
+## `rsconstruct hook`
+
+**No config needed.** (no subcommands)
+
+List the post-config hooks: built-in adjustments applied to the configuration after it is loaded, such as defaults that change when running under CI (`CI=true`).
+
+```bash
+rsconstruct hook
+```
+
+```
+╭──────────────────────┬─────────────────────────────────────────────────────────────────────╮
+│ Hook                 │ Description                                                         │
+├──────────────────────┼─────────────────────────────────────────────────────────────────────┤
+│ eatmydata_ci_default │ When CI=true, enable eatmydata wrapping for apt/dnf/pacman installs │
+│ marp_ci_cap          │ When CI=true and marp.max_jobs is unset, cap it at 2                │
+╰──────────────────────┴─────────────────────────────────────────────────────────────────────╯
+```
+
+## `rsconstruct product`
+
+**Requires config.**
+
+Inspect a single product in the build graph: everything that goes into its cache key and whether it would be rebuilt. Use it to answer "why is this file rebuilding?".
+
+| Subcommand | Config required? |
+|------------|-----------------|
+| `show` | Yes |
+
+```bash
+rsconstruct product show out/processor.generator.cc_single_file/src/main.elf  # By output path
+rsconstruct product show src/main.c                                            # By primary input
+```
+
+The path is looked up as an output first; if no product owns it, products that have it as their primary input are shown. Example output:
+
+```
+processor: processor.generator.cc_single_file
+outputs:
+  out/processor.generator.cc_single_file/src/test.elf
+inputs:
+  primary src/test.c
+  analyzer [icpp]
+    src/utils.h
+    src/config.h
+cache_key: 7b1eccc2...
+  config b884aa0c...
+  tool 2a4d5d7d...
+hash_pieces: (none)
+input_checksum: 71e9982e...
+descriptor_key: 8c2a5920...
+cache_state: BUILD (no cache entry)
+```
+
+## `rsconstruct symlink-install`
+
+**Requires config.** (no subcommands)
+
+Symlink every file under one or more source folders into target folders, recreating the directory structure. Configure the folder pairs in `rsconstruct.toml`; `sources[i]` is installed into `targets[i]`, so both arrays must have the same length. A leading `~/` in a target is expanded to `$HOME`.
+
+```toml
+[command.symlink_install]
+sources = ["dotfiles", "bin"]
+targets = ["~/", "~/.local/bin"]
+```
+
+```bash
+rsconstruct symlink-install
+```
+
+```
+dotfiles → /home/user/
+  created .bashrc
+  created .config/git/config
+Symlink install: 2 created, 0 updated, 0 unchanged
+```
+
+Each link points to the absolute path of the source file. Running it again is safe: links that already point to the right file are left alone (`unchanged`), and links pointing elsewhere are replaced (`updated`). **A regular file at a target path is deleted and replaced by the link**, so make sure the target folders hold nothing you want to keep under the same names.
 
 ## `rsconstruct version`
 
