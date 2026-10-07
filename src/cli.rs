@@ -161,8 +161,8 @@ pub enum Commands {
         #[arg(short, long)]
         force: bool,
 
-        /// Show what would be built without executing anything
-        #[arg(short = 'n', long)]
+        /// Show what would be built without executing anything (honors -p, -x, --target)
+        #[arg(short = 'n', long, conflicts_with = "stop_after")]
         dry_run: bool,
 
         /// Verify tool versions against .tools.versions before building

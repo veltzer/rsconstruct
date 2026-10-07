@@ -244,8 +244,9 @@ fn run() -> (Result<()>, bool) {
                 ref shared,
             } => {
                 if dry_run {
-                    let builder = Builder::new_with_overrides(&ctx, &shared.iset, &shared.pset)?;
-                    builder.dry_run(&ctx, force, shared.explain)?;
+                    let mut builder =
+                        Builder::new_with_overrides(&ctx, &shared.iset, &shared.pset)?;
+                    builder.dry_run(&ctx, &shared.to_build_options(&cli, force, stop_after))?;
                 } else {
                     let t = Instant::now();
                     let mut builder =

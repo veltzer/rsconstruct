@@ -80,6 +80,11 @@ pub enum RebuildReason {
     OutputMissing(String),
     /// Build was forced with --force flag
     Force,
+    /// A product this one depends on will be rebuilt or restored first, so
+    /// its inputs are about to change (a prediction; see `classify_products`)
+    DependencyChanged,
+    /// An input could not be read, so no descriptor key exists to look up
+    InputUnreadable,
 }
 
 impl std::fmt::Display for RebuildReason {
@@ -88,6 +93,8 @@ impl std::fmt::Display for RebuildReason {
             Self::NoCacheEntry => write!(f, "no cache entry"),
             Self::OutputMissing(path) => write!(f, "output missing: {path}"),
             Self::Force => write!(f, "forced"),
+            Self::DependencyChanged => write!(f, "a dependency will be rebuilt or restored"),
+            Self::InputUnreadable => write!(f, "an input could not be read"),
         }
     }
 }

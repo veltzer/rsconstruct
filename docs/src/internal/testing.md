@@ -188,7 +188,7 @@ mod processor {
 | Cache | `cache.rs` | Clear, size, trim, list operations |
 | Complete | `complete.rs` | Bash/zsh/fish generation, config-driven completion |
 | Config | `config.rs` | Show merged config, show defaults, annotation comments |
-| Dry run | `dry_run.rs` | Preview output, force flag, short flag |
+| Dry run | `dry_run.rs` | Preview output, force flag, short flag, downstream prediction, `-p`, config baseline |
 | Graph | `graph.rs` | DOT, mermaid, JSON, text formats, empty project |
 | Init | `init.rs` | Project creation, duplicate detection, existing directory preservation |
 | Processor command | `processor_cmd.rs` | List, all, auto-detect, files, unknown processor error |

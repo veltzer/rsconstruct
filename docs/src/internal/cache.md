@@ -11,7 +11,8 @@ The cache lives in `.rsconstruct/` and consists of:
 - `descriptors/` — cache descriptors (marker/blob/tree JSON), sharded the
   same way but addressed by the descriptor key rather than by content
 - `db.redb` — redb database holding the `processor_configs` table used for
-  config-change diffing
+  config-change diffing and the `product_last_tree` table used to unlink
+  stale outputs (see [Stale outputs before a rebuild](#stale-outputs-before-a-rebuild))
 - `deps.redb` — source file dependency cache (see [Dependency Caching](dependency-caching.md))
 - `mtime.redb` — mtime→checksum pre-check cache that lets unchanged files
   skip re-hashing

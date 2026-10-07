@@ -331,9 +331,21 @@ events, subscribers render them — would make this a two-file change
 
 ---
 
-### 14. No formal dry-run execution
+### 14. No formal dry-run execution — RESOLVED
 
-There's `--stop-after classify`, which stops after classification, and
+**Resolution (2026-10-07):** `--dry-run` now runs the build's own pipeline
+up to the point of execution: `plan_build` (the same `-p`/`-x`/`--target`
+selection, overrides and tool preflight) and `classify_products` (the same
+prediction, including downstream propagation, reported as
+`RebuildReason::DependencyChanged`). Before, it built its own graph,
+ignored the selection flags and looked each product up in isolation, so a
+product downstream of a change showed SKIP while the build rebuilt it.
+`plan_build` no longer advances the config baseline; `build` does that
+itself. `--stop-after classify` stays as a phase-debugging stop, conflicting
+with `--dry-run`, and `status` stays a current-state view
+(`Builder::current_action`). Tests: `tests/tests_mod/dry_run.rs`.
+
+**Original observation:** there's `--stop-after classify`, which stops after classification, and
 there's `dry_run()` (different from `--dry-run` which is a flag on build),
 and there's `--explain` which annotates per-product decisions. Three
 partially-overlapping mechanisms. The user-facing story is "to see what
@@ -529,7 +541,7 @@ All four highest-leverage refactors are now complete:
 Entries 3, 7, and 8 are partially addressed — the core issues are resolved
 but minor gaps remain (see individual entries above).
 
-Entries 1, 2, 5, 6, 9, 10, 12, 13, 14 are observations about the code's
+Entry 14 is resolved. Entries 1, 2, 5, 6, 9, 10, 12, 13 are observations about the code's
 shape — not necessarily problems to fix, but constraints a new contributor
 should understand before making structural changes.
 

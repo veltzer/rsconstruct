@@ -77,7 +77,20 @@ Preview what would be built without executing anything:
 
 ```bash
 rsconstruct build --dry-run
+rsconstruct build --dry-run --explain              # with the reason for each product
+rsconstruct build --dry-run -p processor.checker.ruff
 ```
+
+The dry run plans exactly what `build` with the same flags would: `-p`, `-x`,
+`--target`, `--dir`, `--force` and `--iset`/`--pset` apply as they do to a
+build. It uses the build's own prediction, so a product whose input another
+product is about to rewrite is shown as `BUILD` ("a dependency will be rebuilt
+or restored"), not `SKIP`. Nothing is executed and the stored config baseline
+is not advanced, so the next build still reports a config change.
+
+`rsconstruct status` answers a different question: what the cache says about
+each product as it stands now, without predicting what other products would
+do first.
 
 ## Keep going after errors
 

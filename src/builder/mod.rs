@@ -156,7 +156,6 @@ struct ProductStatusLabels<'a> {
 
 /// Options for `print_product_status`.
 struct StatusPrintOptions<'a> {
-    force: bool,
     labels: &'a ProductStatusLabels<'a>,
     explain: bool,
     display_opts: DisplayOptions,

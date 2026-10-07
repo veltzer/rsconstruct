@@ -37,7 +37,7 @@ Incremental build — only rebuilds products whose inputs have changed.
 rsconstruct build                              # Incremental build
 rsconstruct build --force                      # Force full rebuild
 rsconstruct build -j4                          # Build with 4 parallel jobs
-rsconstruct build --dry-run                    # Show what would be built without executing
+rsconstruct build --dry-run                    # Show what would be built without executing (honors -p/-x/-t)
 rsconstruct build --keep-going                 # Continue after errors
 rsconstruct build --timings                    # Show per-product and total timing info
 rsconstruct build --stop-after discover        # Stop after product discovery

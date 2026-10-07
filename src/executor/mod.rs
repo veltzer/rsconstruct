@@ -123,6 +123,9 @@ pub struct ClassifiedProduct {
     pub id: usize,
     pub action: ProductAction,
     pub input_checksum: String,
+    /// Predicted to build because a dependency will change; the policy was
+    /// not consulted.
+    pub dep_changed: bool,
 }
 
 /// Result of [`classify_products`]: counts plus per-product actions in
@@ -179,6 +182,7 @@ pub fn classify_products(
                 id,
                 action: ProductAction::Build,
                 input_checksum: String::new(),
+                dep_changed: false,
             });
             continue;
         };
@@ -205,6 +209,7 @@ pub fn classify_products(
             id,
             action,
             input_checksum,
+            dep_changed,
         });
     }
 

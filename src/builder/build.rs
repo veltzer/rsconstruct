@@ -5,7 +5,8 @@ use super::{
 use crate::cli::{BuildOptions, BuildPhase, DisplayOptions};
 use crate::color;
 use crate::errors;
-use crate::executor::{Executor, ExecutorOptions};
+use crate::executor::{BuildPolicy as _, Executor, ExecutorOptions};
+use crate::object_store::{ExplainAction, RebuildReason};
 use crate::processor::{ProcessorMap, ProcessorType};
 use crate::stats::BuildStats;
 use crate::tables;
@@ -302,6 +303,10 @@ impl Builder {
     /// graph came out: in shared-config mode it is deferred until after
     /// discovery so a processor with no work in this repo doesn't demand its
     /// tool be installed.
+    ///
+    /// Writes no outputs and advances no baseline (it may warm the dependency
+    /// and mtime caches): `--dry-run` plans with it too, so a preview selects
+    /// exactly what a build would.
     fn plan_build(
         &self,
         ctx: &crate::build_context::BuildContext,
@@ -321,9 +326,6 @@ impl Builder {
             .as_deref()
             .map(|f| expand_aliases(f, &processors))
             .unwrap_or_default();
-
-        // Check for config changes and display diffs
-        self.detect_config_changes(&processors, opts.show_all_config_changes);
 
         // Build the dependency graph (may stop early based on stop_after)
         let super::GraphBuild {
@@ -390,6 +392,11 @@ impl Builder {
             mut phase_timings,
             mut analysis,
         } = self.plan_build(ctx, opts)?;
+
+        // Check for config changes and display diffs. This advances the stored
+        // baseline, so it belongs to a real build, not to `plan_build` (which
+        // `--dry-run` shares).
+        self.detect_config_changes(&processors, opts.show_all_config_changes);
 
         // Prepend init timings ahead of create_processors, which plan_build
         // already inserted at the front.
@@ -537,15 +544,17 @@ impl Builder {
         Ok(())
     }
 
-    /// Show what would happen without executing anything
+    /// Show what a build with these options would do, without executing
+    /// anything: the same plan (`-p`, `-x`, `--target`, overrides) and the
+    /// same prediction (`classify_products`) as [`build`](Self::build), so a
+    /// product downstream of a change is shown as BUILD, not SKIP.
     pub fn dry_run(
-        &self,
+        &mut self,
         ctx: &crate::build_context::BuildContext,
-        force: bool,
-        explain: bool,
+        opts: &BuildOptions,
     ) -> anyhow::Result<()> {
-        let processors = self.create_processors()?;
-        let graph = self.build_graph_with_processors(ctx, &processors)?;
+        self.apply_cli_overrides(ctx, opts);
+        let BuildPlan { graph, .. } = self.plan_build(ctx, opts)?;
 
         let order = graph.topological_sort()?;
         if order.is_empty() {
@@ -553,9 +562,35 @@ impl Builder {
             return Ok(());
         }
 
-        let products: Vec<_> = order
+        let policy = crate::executor::IncrementalPolicy;
+        let classification = crate::executor::classify_products(
+            ctx,
+            &policy,
+            &graph,
+            &order,
+            &self.object_store,
+            opts.force,
+        );
+        let entries: Vec<_> = classification
+            .products
             .iter()
-            .map(|&id| graph.get_product(id).expect(errors::INVALID_PRODUCT_ID))
+            .map(|c| {
+                let product = graph.get_product(c.id).expect(errors::INVALID_PRODUCT_ID);
+                let action = if c.dep_changed {
+                    ExplainAction::Rebuild(RebuildReason::DependencyChanged)
+                } else if c.input_checksum.is_empty() {
+                    ExplainAction::Rebuild(RebuildReason::InputUnreadable)
+                } else {
+                    policy.explain(
+                        ctx,
+                        product,
+                        &self.object_store,
+                        &c.input_checksum,
+                        opts.force,
+                    )
+                };
+                (product, action)
+            })
             .collect();
 
         let labels = ProductStatusLabels {
@@ -565,13 +600,11 @@ impl Builder {
             new: (color::yellow("BUILD"), "build-new"),
         };
 
-        self.print_product_status(
-            ctx,
-            &products,
+        Self::print_product_status(
+            &entries,
             &StatusPrintOptions {
-                force,
                 labels: &labels,
-                explain,
+                explain: opts.explain,
                 display_opts: DisplayOptions::default(),
                 verbose: true,
                 all_processor_names: &[],
@@ -620,11 +653,13 @@ impl Builder {
             .filter(|(name, _)| crate::registries::processor::is_rust(name.as_str()))
             .map(|(name, _)| name.as_str())
             .collect();
-        self.print_product_status(
-            ctx,
-            &products,
+        let entries: Vec<_> = products
+            .iter()
+            .map(|product| (*product, self.current_action(ctx, product)))
+            .collect();
+        Self::print_product_status(
+            &entries,
             &StatusPrintOptions {
-                force: false,
                 labels: &labels,
                 explain: false,
                 display_opts: DisplayOptions::default(),
@@ -737,16 +772,31 @@ impl Builder {
         Ok(())
     }
 
-    /// Classify and print the status of each product, with per-processor and total summary.
-    /// When `verbose` is false, only the per-processor and total summary lines are printed.
-    pub(super) fn print_product_status(
+    /// What the cache says about a product as it stands now, ignoring what
+    /// other products would do first. This is `status`; `--dry-run` predicts
+    /// through `classify_products` instead.
+    fn current_action(
         &self,
         ctx: &crate::build_context::BuildContext,
-        products: &[&crate::graph::Product],
+        product: &crate::graph::Product,
+    ) -> ExplainAction {
+        match crate::checksum::combined_input_checksum(ctx, &product.inputs) {
+            Ok(input_checksum) => self.object_store.explain_descriptor(
+                ctx,
+                &product.descriptor_key(&input_checksum),
+                &product.outputs,
+                false,
+            ),
+            Err(_) => ExplainAction::Rebuild(RebuildReason::InputUnreadable),
+        }
+    }
+
+    /// Print the status of each product, with per-processor and total summary.
+    /// When `verbose` is false, only the per-processor and total summary lines are printed.
+    fn print_product_status(
+        entries: &[(&crate::graph::Product, ExplainAction)],
         opts: &StatusPrintOptions<'_>,
     ) {
-        use crate::object_store::ExplainAction;
-
         const NUM_STATES: usize = 4; // current, restorable, stale, new
         let mut counts = [0usize; NUM_STATES];
         let mut per_processor: BTreeMap<&str, [usize; NUM_STATES]> = BTreeMap::new();
@@ -762,38 +812,23 @@ impl Builder {
             &opts.labels.new.0,
         ];
 
-        for product in products {
+        for (product, action) in entries {
             let display = product.display(opts.display_opts);
-
-            let Ok(input_checksum) = crate::checksum::combined_input_checksum(ctx, &product.inputs)
-            else {
-                // Can't compute checksum (an input is unreadable) — without a
-                // descriptor key, stale and new are indistinguishable; report
-                // as new.
-                let idx = 3;
-                if opts.verbose {
-                    println!("{} [{}] {}", status_labels[idx], product.processor, display);
-                }
-                counts[idx] += 1;
-                per_processor.entry(&product.processor).or_default()[idx] += 1;
-                continue;
-            };
-
             // Same classification with and without --explain — the flag only
             // adds the reason text.
-            let desc_key = product.descriptor_key(&input_checksum);
-            let action =
-                self.object_store
-                    .explain_descriptor(ctx, &desc_key, &product.outputs, opts.force);
             let reason = if opts.explain {
                 format!(" ({action})")
             } else {
                 String::new()
             };
+            // Without a descriptor key (an input is unreadable), stale and new
+            // are indistinguishable; report as new.
             let status_idx = match action {
                 ExplainAction::Skip => 0,
                 ExplainAction::Restore(_) => 1,
-                ExplainAction::Rebuild(crate::object_store::RebuildReason::NoCacheEntry) => 3,
+                ExplainAction::Rebuild(
+                    RebuildReason::NoCacheEntry | RebuildReason::InputUnreadable,
+                ) => 3,
                 ExplainAction::Rebuild(_) => 2,
             };
 
