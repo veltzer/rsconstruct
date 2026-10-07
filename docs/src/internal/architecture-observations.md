@@ -353,7 +353,7 @@ Likely a small refactor, but requires aligning on the output shape.
 A read-through of the build pipeline end to end (driver, graph, discovery,
 analyzers, deps cache, executor, checksums, object store). R1–R5 were
 correctness defects and are fixed, as are R6–R10 (R8 to the extent it can
-be: see its entry); the remaining minor items are open.
+be: see its entry), and so are the minor items found alongside them.
 
 ### R1. Two decisions per product, only one of them the policy's — RESOLVED
 
@@ -471,7 +471,7 @@ skipped with stale outputs. **Fix:** entries hold a `platform::FileStamp`
 (mtime, ctime, size, inode); ctime cannot be set from user space. The
 "changed too recently to store" check uses the later of mtime and ctime.
 
-### Minor (open)
+### Minor — RESOLVED
 
 - ~~pkg-config and `include_path_commands` failures print a warning and
   continue, silently dropping dependencies — against "strict by
