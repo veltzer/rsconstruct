@@ -30,7 +30,7 @@ A marker entry — no files, no blobs. The marker's presence means "this check p
 
 Scans for `.py` files, runs `ruff check` on each. No output files produced.
 
-```
+```text
 src/main.py → (checker)
 src/utils.py → (checker)
 ```
@@ -97,7 +97,7 @@ One blob per output file. The blob is the raw file content, stored by its SHA-25
 
 Scans `tera.templates/` for `.tera` files, renders each template. The output path is the template path with the `.tera` extension stripped:
 
-```
+```text
 tera.templates/config.py.tera → config.py
 tera.templates/README.md.tera → README.md
 ```
@@ -110,7 +110,7 @@ tera.templates/README.md.tera → README.md
 
 Scans `marp/` for `.md` files, converts each to PDF (and optionally other formats):
 
-```
+```text
 marp/slides.md → out/processor.generator.marp/slides.pdf
 marp/intro.md → out/processor.generator.marp/intro.pdf
 ```
@@ -123,7 +123,7 @@ marp/intro.md → out/processor.generator.marp/intro.pdf
 
 Scans `pandoc/` for `.md` files, converts each to PDF, HTML, and DOCX. Each format is a separate product with its own cache entry:
 
-```
+```text
 pandoc/syllabus.md → out/processor.generator.pandoc/syllabus.pdf
 pandoc/syllabus.md → out/processor.generator.pandoc/syllabus.html
 pandoc/syllabus.md → out/processor.generator.pandoc/syllabus.docx
@@ -137,7 +137,7 @@ pandoc/syllabus.md → out/processor.generator.pandoc/syllabus.docx
 
 Scans `src/` for `.c` and `.cc` files, compiles each into an executable:
 
-```
+```text
 src/main.c → out/processor.generator.cc_single_file/src/main.elf
 src/test.c → out/processor.generator.cc_single_file/src/test.elf
 ```
@@ -150,7 +150,7 @@ src/test.c → out/processor.generator.cc_single_file/src/test.elf
 
 Scans for `.mmd` files, converts each to PNG (configurable formats):
 
-```
+```text
 diagrams/flow.mmd → out/processor.generator.mermaid/diagrams/flow.png
 ```
 
@@ -162,7 +162,7 @@ diagrams/flow.mmd → out/processor.generator.mermaid/diagrams/flow.png
 
 Scans `sass/` for `.scss` and `.sass` files, compiles each to CSS:
 
-```
+```text
 sass/styles.scss → out/processor.generator.sass/styles.css
 ```
 
@@ -223,7 +223,7 @@ Scans for `package.json` files, runs `npm run build`, caches the `dist/` directo
 
 Scans for `conf.py` files, runs `sphinx-build`, caches the output directory.
 
-```
+```text
 docs/conf.py → (creator)
 ```
 
@@ -235,7 +235,7 @@ docs/conf.py → (creator)
 
 Scans for `Cargo.toml` files, runs `cargo build`, optionally caches the `target/` directory.
 
-```
+```text
 Cargo.toml → (creator)
 ```
 
@@ -288,7 +288,7 @@ outputs = ["out/site/index.html", "out/site/style.css"]
 
 Waits for pandoc to produce HTML files, then combines them with templates into a site. All inputs are aggregated into one product:
 
-```
+```text
 out/processor.generator.pandoc/page1.html, out/processor.generator.pandoc/page2.html, templates/base.html, site.yaml → out/site/index.html, out/site/style.css
 ```
 
@@ -339,7 +339,7 @@ output_dirs     = ["_site"]
 
 `rssite plan` prints which `_site/*.html` files `rssite build` will write and which sources each depends on. Changing `docs/about.md` dirties only `_site/about/index.html`; a linter scanning `_site/` depends on each page individually.
 
-```
+```text
 docs/index.md, templates/default.html → _site/index.html
 docs/about.md, templates/default.html → _site/about/index.html
 ```

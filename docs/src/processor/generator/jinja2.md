@@ -10,7 +10,7 @@ Files matching configured extensions in `templates.jinja2/` are rendered via `py
 the `jinja2` Python library. Output is written with the extension stripped and the
 `templates.jinja2/` prefix removed:
 
-```
+```text
 templates.jinja2/app.config.j2  →  app.config
 templates.jinja2/sub/readme.txt.j2  →  sub/readme.txt
 ```

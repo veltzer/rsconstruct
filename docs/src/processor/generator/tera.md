@@ -10,7 +10,7 @@ configuration variables from Python or Lua files.
 Files matching configured extensions in `tera.templates/` are rendered and written
 to the project root with the extension stripped:
 
-```
+```text
 tera.templates/app.config.tera  →  app.config
 tera.templates/sub/readme.txt.tera  →  sub/readme.txt
 ```

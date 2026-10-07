@@ -32,7 +32,7 @@ dependency — are reported.
 
 ## Usage
 
-```
+```text
 rsconstruct graph unreferenced --extensions .svg[,.png,...] [--rm]
 ```
 
@@ -46,17 +46,17 @@ rsconstruct graph unreferenced --extensions .svg[,.png,...] [--rm]
 ### Examples
 
 Find unreferenced SVG files:
-```
+```text
 rsconstruct graph unreferenced --extensions .svg
 ```
 
 Find unreferenced images of any type:
-```
+```text
 rsconstruct graph unreferenced --extensions .svg,.png,.jpg
 ```
 
 Delete unreferenced SVG files:
-```
+```text
 rsconstruct graph unreferenced --extensions .svg --rm
 ```
 
@@ -64,7 +64,7 @@ rsconstruct graph unreferenced --extensions .svg --rm
 
 Plain list of file paths, one per line, relative to the project root:
 
-```
+```text
 assets/old_diagram.svg
 docs/unused_figure.svg
 scratch/test.svg
@@ -77,9 +77,9 @@ scratch/test.svg
   graph).
 - Finding unreferenced files does not mean they are useless. The user decides
   what to do. Common reasons a file might be unreferenced:
-  - It was part of a processor whose `src_dirs` or `src_extensions` excludes it
-  - It was intentionally left out of the build
-  - It is a leftover from a renamed or deleted processor instance
-  - It is a scratch/draft file
+    - It was part of a processor whose `src_dirs` or `src_extensions` excludes it
+    - It was intentionally left out of the build
+    - It is a leftover from a renamed or deleted processor instance
+    - It is a scratch/draft file
 - `--rm` deletes without confirmation. Use with care.
 - The command requires a `rsconstruct.toml` (the graph must be buildable).

@@ -154,7 +154,7 @@ A minimal distributed execution design that fits RSConstruct's architecture:
 
 Workers expose a simple HTTP API:
 
-```
+```text
 POST /execute
   body: { product_id, command, args, input_checksums: {path: sha256, ...} }
   response: { exit_code, stdout, stderr, output_checksums: {path: sha256, ...} }

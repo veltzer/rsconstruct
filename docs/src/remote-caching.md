@@ -124,7 +124,7 @@ Remote cache stores two types of objects, mirroring the local layout:
 
 ### Cache Hit Flow
 
-```
+```text
 Local cache hit → Restore from local → Done
        ↓ miss
 Remote cache hit → Download descriptor + objects → Restore → Done

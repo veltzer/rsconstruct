@@ -31,7 +31,7 @@ The third option is the "clean" fix but it has ongoing costs (API surface to mai
 
 ## Test directory layout
 
-```
+```text
 tests/
 ├── common/
 │   └── mod.rs                  # Shared helpers (not a test binary)

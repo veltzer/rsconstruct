@@ -14,12 +14,12 @@ Each cache entry consists of:
 
 - **Key**: Analyzer instance name and source file path (e.g., `icpp` + `src/main.c`)
 - **Value**:
-  - `source_checksum` — SHA-256 hash of the source file content
-  - `dependencies` — list of dependency paths (header files)
-  - `dependency_checksums` — SHA-256 hash of each dependency when it was scanned
-  - `absent` — paths the scan probed and found missing on the way to its answer
-  - `config_fingerprint` — hash of the analyzer's configuration (and run-time
-    resolved search paths) the scan ran under
+    - `source_checksum` — SHA-256 hash of the source file content
+    - `dependencies` — list of dependency paths (header files)
+    - `dependency_checksums` — SHA-256 hash of each dependency when it was scanned
+    - `absent` — paths the scan probed and found missing on the way to its answer
+    - `config_fingerprint` — hash of the analyzer's configuration (and run-time
+  resolved search paths) the scan ran under
 
 ## Cache Lookup Algorithm
 
@@ -83,7 +83,7 @@ An alternative design would use the source file's checksum as the cache key inst
 
 The current design is optimal:
 
-```
+```text
 Path (key) → O(1) lookup → Checksum validation (only on hit)
 ```
 
@@ -93,7 +93,7 @@ This minimizes work in the common case where files haven't changed.
 
 During graph construction, RSConstruct displays cache statistics:
 
-```
+```text
 [cc_single_file] Dependency cache: 42 hits, 3 recalculated
 ```
 
@@ -112,7 +112,7 @@ rsconstruct analyzer clean                       # Clear the dependency cache
 
 Example output:
 
-```
+```text
 src/main.c: [icpp] (no dependencies)
 src/test.c: [icpp]
   src/utils.h

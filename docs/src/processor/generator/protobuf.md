@@ -9,7 +9,7 @@ Compiles Protocol Buffer (`.proto`) files to generated source code using `protoc
 Files matching configured extensions in the `proto/` directory are compiled using the
 Protocol Buffer compiler. Output is written to `out/processor.generator.protobuf/`:
 
-```
+```text
 proto/hello.proto  →  out/processor.generator.protobuf/hello.pb.cc
 ```
 

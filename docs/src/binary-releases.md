@@ -23,7 +23,7 @@ tool installation).
 Everything runs from the single CI workflow (`.github/workflows/ci.yml`).
 The workflow triggers on branch pushes only. Every push runs the **test**
 job; a push to the default branch whose commit message starts with
-`chore: Release ` (the commit `cargo release` makes) also runs three release
+`chore: Release` (the commit `cargo release` makes) also runs three release
 jobs:
 
 1. **build** — a matrix job that builds the release binary for each platform

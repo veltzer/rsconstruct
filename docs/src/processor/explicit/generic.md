@@ -48,7 +48,7 @@ Rsconstruct uses this information for:
 
 The command is invoked as:
 
-```
+```text
 command [args...] --inputs <input1> <input2> ... --outputs <output1> <output2> ...
 ```
 

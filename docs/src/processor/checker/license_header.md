@@ -15,7 +15,7 @@ The SPDX line can also be the header itself: with `header_lines = ["// SPDX-Lice
 
 The first line that differs is reported, with its line number in the file and its number in the header. When a file starts with the prefix, the mismatch is reported in the header after it:
 
-```
+```text
 src/user.c:1: license header line 1 differs: expected "// SPDX-License-Identifier: GPL-2.0", found "/*"
 src/broken.c:3: license header line 2 differs: expected " * This file is part of the demo package.", found " * Some other package."
 src/short.c:17: file ends without a newline after license header line 17

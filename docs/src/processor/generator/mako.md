@@ -10,7 +10,7 @@ Files matching configured extensions in `templates.mako/` are rendered via `pyth
 the `mako` Python library. Output is written with the extension stripped and the
 `templates.mako/` prefix removed:
 
-```
+```text
 templates.mako/app.config.mako  →  app.config
 templates.mako/sub/readme.txt.mako  →  sub/readme.txt
 ```

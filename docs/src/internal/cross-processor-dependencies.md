@@ -7,7 +7,7 @@ input by another processor, and the design options for solving it.
 
 Consider a template that generates a Python file:
 
-```
+```text
 tera.templates/config.py.tera  →  (template processor)  →  config.py
 ```
 
@@ -15,7 +15,7 @@ Ideally, ruff should then lint the generated `config.py`. Or a template might
 generate a C++ source file that needs to be compiled by `cc_single_file` and
 linted by `cppcheck`. Chains can be arbitrarily deep:
 
-```
+```text
 template  →  generates foo.sh  →  shellcheck lints foo.sh
 template  →  generates bar.c   →  cc_single_file compiles bar.c  →  cppcheck lints bar.c
 ```
@@ -95,7 +95,7 @@ newly declared outputs and feed them back as known files for the next pass.
 Stop when a full pass adds no new products. Add a maximum iteration limit to
 catch cycles.
 
-```
+```text
 known_files = FileIndex (real files on disk)
 loop {
     run discover() for all processors, with known_files visible

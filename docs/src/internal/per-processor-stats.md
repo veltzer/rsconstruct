@@ -79,7 +79,7 @@ We **cannot** implement this today. If we listed declared processors with
 zeros, real entries would still be lumped into `"all"`, so the table would
 show:
 
-```
+```text
 all:    50 entries, 58 outputs, 3.2 MiB
 ruff:    0 entries, 0 outputs, 0 bytes      ← misleading
 pylint:  0 entries, 0 outputs, 0 bytes      ← misleading
@@ -109,7 +109,7 @@ field instead of hard-coding `"all"`.
 
 Layout changes from:
 
-```
+```text
 .rsconstruct/cache/descriptors/
     ab/
         cd/
@@ -118,7 +118,7 @@ Layout changes from:
 
 to:
 
-```
+```text
 .rsconstruct/cache/descriptors/
     ruff/
         abcd.json

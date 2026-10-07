@@ -46,7 +46,7 @@ This policy exists for **connection-level failures**: a connection reset,
 refused, or dropped during handshake. The motivating incident was a
 `tool install` run that died on:
 
-```
+```text
 curl: (35) Recv failure: Connection reset by peer
 FAILED [binary] rumdl, taplo: curl -fsSL -o /tmp/taplo.dl https://... exited with code 35
 ```
@@ -76,11 +76,11 @@ and cannot.
 
 ## Flags, and why each is there
 
-```
+```text
 --retry 3 --retry-delay 2 --retry-connrefused --retry-all-errors --connect-timeout 30
 ```
 
-`--retry-connrefused` and `--retry-all-errors` carry the weight.  Plain
+`--retry-connrefused` and `--retry-all-errors` carry the weight. Plain
 `--retry` covers HTTP 5xx responses and a narrow set of transport errors —
 it does **not** cover a connection reset during handshake, which is exit
 code 35 and precisely the case this policy addresses. Without those two
@@ -100,7 +100,7 @@ or `GH_TOKEN` is set (the CI workflow forwards `GITHUB_TOKEN` to the
 install step), `curl_argv` authenticates downloads from
 `raw.githubusercontent.com`:
 
-```
+```text
 --variable %GITHUB_TOKEN --expand-header 'Authorization: Bearer {{GITHUB_TOKEN}}'
 ```
 

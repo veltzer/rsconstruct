@@ -8,7 +8,7 @@ Checks that YAML files parse. Native (in-process, using `serde_yaml_ng`; no exte
 
 Each file is read and parsed as YAML. A file that does not parse fails its product with the parser's message and position:
 
-```
+```text
 bad.yaml: [processor.checker.iyamllint] Invalid YAML:
 bad.yaml: did not find expected ',' or ']' at line 2 column 1, while parsing a flow sequence at line 1 column 4
 ```

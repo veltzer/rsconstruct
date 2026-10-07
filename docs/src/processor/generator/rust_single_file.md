@@ -13,7 +13,7 @@ standalone program.
 
 Output is written to `out/processor.generator.rust_single_file/` preserving the directory structure:
 
-```
+```text
 src/hello.rs  →  out/processor.generator.rust_single_file/hello.elf
 src/exercises/ex1.rs  →  out/processor.generator.rust_single_file/exercises/ex1.elf
 ```

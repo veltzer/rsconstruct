@@ -8,7 +8,7 @@ Lints SVG files using [svglint](https://github.com/birjj/svglint).
 
 Runs `svglint <files>`. A non-zero exit fails the product. With no `.svglintrc.js`, svglint only checks that each file is valid SVG/XML:
 
-```
+```text
 x img/bad.svg
   x valid Expected closing tag 'g' (opened in line 1, col 6) instead of closing
            tag 'svg'.

@@ -8,7 +8,7 @@ Checks that TOML files parse. Native (in-process, using the `toml` crate; no ext
 
 Each file is read and parsed as TOML. A file that does not parse fails its product with the parser's message and a pointer to the position:
 
-```
+```text
 bad.toml: [processor.checker.itaplo] Invalid TOML:
 bad.toml: TOML parse error at line 1, column 5
   |

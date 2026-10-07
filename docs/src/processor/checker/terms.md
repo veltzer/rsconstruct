@@ -84,7 +84,7 @@ Each `.txt` file in a terms directory contains one term per line. Files are
 typically organized by category. Projects that distinguish unambiguous
 from ambiguous terms use two parallel directories:
 
-```
+```text
 terms/unambiguous/
   programming_languages.txt
   frameworks_and_libraries.txt
@@ -101,7 +101,7 @@ both. The build fails (with the overlapping term names listed) if the
 invariant is violated.
 
 Example `programming_languages.txt`:
-```
+```text
 Python
 JavaScript
 TypeScript

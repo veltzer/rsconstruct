@@ -8,7 +8,7 @@ Checks that every local image referenced from a Markdown file exists. Built for 
 
 Every `![alt](path)` and `![alt](path "title")` reference is read from each file, line by line. References to `http://`, `https://` and `data:` URIs are skipped. Every other path is resolved **relative to the directory of the Markdown file**, and must exist:
 
-```
+```text
 slides/deck.md: [processor.checker.marp_images] Missing image references:
 slides/deck.md:2: missing image: img/missing.png
 ```

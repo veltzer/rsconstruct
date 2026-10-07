@@ -1,9 +1,10 @@
 # rsconstruct build configuration for this repository.
 #
-# Mirrors .github/workflows/ci.yml step for step: what CI runs is what
-# `rsconstruct build` runs here, so a green local build means a green CI
-# run. Every cargo invocation goes through rsconstruct rather than being
-# typed by hand.
+# This file is the build. The test job of .github/workflows/ci.yml
+# (byte-identical across all rs* repos) runs `rsconstruct build` and nothing
+# else, so what passes here is what passes in CI, and `rsmultigit build`
+# runs the same thing across the fleet. Every cargo invocation goes through
+# rsconstruct rather than being typed by hand.
 
 [build]
 # src_dirs entries name directories; "." (the whole tree) is a config error
@@ -13,10 +14,10 @@ reject_dot_src_dirs = true
 
 # The crates every rs* repo's build and release run, installed with
 # `rsconstruct tool install-deps` (cargo install --locked, by crate name).
-# cargo-deny and cargo-nextest are what the shared ci.yml runs, mdbook builds
-# docs/, and cargo-release reads release.toml. rustfmt and clippy are rustup
-# components, not crates, so they are absent. This block is byte-identical
-# across all rs* repos: change it everywhere or nowhere.
+# cargo-deny and cargo-nextest are what the clippy instances below run,
+# mdbook builds docs/, and cargo-release reads release.toml. rustfmt and
+# clippy are rustup components, not crates, so they are absent. This block
+# is byte-identical across all rs* repos: change it everywhere or nowhere.
 [dependencies]
 cargo = ["cargo-deny", "cargo-nextest", "cargo-release", "mdbook"]
 
@@ -32,6 +33,16 @@ cargo = ["cargo-deny", "cargo-nextest", "cargo-release", "mdbook"]
 dep_auto = ["config/project.lua"]
 src_dirs = ["tera.templates"]
 
+# ─── markdown ────────────────────────────────────────────────────────────────
+
+# rumdl over the README and the mdBook sources, with the fleet-shared
+# .rumdl.toml. docs/src/SUMMARY.md is excluded: mdBook part titles are
+# multiple level-1 headings by design, which MD025 would demote.
+[processor.checker.rumdl]
+src_dirs = ["docs/src"]
+src_files = ["README.md"]
+src_exclude_paths = ["docs/src/SUMMARY.md"]
+
 # ─── rust ────────────────────────────────────────────────────────────────────
 
 # `cargo build`. CI builds the dev profile only; release binaries come from
@@ -46,10 +57,10 @@ cache_output_dir = false
 
 # The clippy processor is "run `cargo <command> <args>` once per Cargo.toml,
 # re-run when any .rs or .toml under it changes". That is exactly the shape
-# of every other cargo check CI runs, so each one is an instance of it with
-# a different command. Arguments are CI's, verbatim.
+# of every other cargo check, so each one is an instance of it with a
+# different command.
 
-# cargo fmt --all --check
+# cargo fmt --all --check: stock rustfmt, there is no rustfmt.toml in the fleet
 [processor.checker.clippy.fmt]
 src_files = ["Cargo.toml"]
 command = "fmt"
@@ -60,7 +71,8 @@ args = ["--all", "--check"]
 src_files = ["Cargo.toml"]
 args = ["--all-targets", "--", "-D", "warnings"]
 
-# cargo deny check: Cargo.lock against the RustSec advisory database
+# cargo deny check: Cargo.lock against the RustSec advisory database, with
+# the fleet-shared deny.toml
 [processor.checker.clippy.deny]
 src_files = ["Cargo.toml"]
 command = "deny"
@@ -74,4 +86,3 @@ args = ["run"]
 
 # No doctest instance: nextest does not run doctests, but `cargo test --doc`
 # errors outright on a binary-only crate, and this crate has no src/lib.rs.
-# CI skips its doctest step on the same condition.

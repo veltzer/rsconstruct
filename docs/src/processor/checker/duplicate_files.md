@@ -8,7 +8,7 @@ Finds files with identical content. Native (in-process, SHA-256; no external too
 
 Unlike most checkers, this processor creates **one product for the whole set** of scanned files, because duplication is a property of the set, not of a single file. Every file is hashed with SHA-256, and the product fails if two or more files share a hash, listing each group:
 
-```
+```text
 src/__init__.py: [processor.checker.duplicate_files] 2 set(s) of duplicate files found:
   src/__init__.py, src/empty.py
   src/b.sh, src/c.sh

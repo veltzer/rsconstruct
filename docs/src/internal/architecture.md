@@ -165,7 +165,7 @@ Each enabled processor queries the file index and adds products to the
 `BuildGraph`. Discovery runs in a **fixed-point loop** to handle
 cross-processor dependencies:
 
-```
+```text
 file_index = walk filesystem
 loop (max 10 passes):
     for each processor:
@@ -292,7 +292,7 @@ For each product:
 
 All processor code lives under `src/processor/`. The folder structure mirrors processor type:
 
-```
+```text
 src/processor/
 ├── mod.rs          # Processor trait, shared helpers (run_command, run_checker,
 │                   # SimpleChecker, SimpleGenerator, ProcessorBase, …)

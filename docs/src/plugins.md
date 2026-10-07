@@ -6,7 +6,7 @@ RSConstruct supports custom processors written in Lua. Drop a `.lua` file in the
 
 **1. Create the plugin file:**
 
-```
+```text
 plugins/eslint.lua
 ```
 

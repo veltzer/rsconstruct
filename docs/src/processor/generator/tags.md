@@ -39,7 +39,7 @@ The `tags_dir` directory (default: `tags/`) contains `.txt` files that
 define the allowed tags. Each file `<name>.txt` contributes tags as
 `<name>:<line>` pairs. For example:
 
-```
+```text
 tags/
 ├── level.txt        # Contains: beginner, intermediate, advanced
 ├── languages.txt    # Contains: python, rust, go, ...
@@ -67,7 +67,7 @@ Files with no frontmatter block at all also fail:
 required_fields = ["tags", "level", "category", "duration_hours", "audiences"]
 ```
 
-```
+```text
 Missing required frontmatter fields:
   syllabi/courses/intro.md: category, duration_hours
   syllabi/courses/advanced.md: audiences
@@ -91,7 +91,7 @@ A file with `duration_hours` passes. A file with both `duration_hours_long` and
 `duration_hours_short` passes. A file with only `duration_hours_short` (partial
 group) or none of these fields fails:
 
-```
+```text
 Files missing required field groups (must satisfy at least one):
   syllabi/courses/intro.md: none of [duration_hours] or [duration_hours_long, duration_hours_short]
 ```
@@ -107,7 +107,7 @@ scalar values:
 required_values = ["level", "category"]
 ```
 
-```
+```text
 Invalid values for validated fields:
   syllabi/courses/intro.md: level=begginer (not in tags/level.txt)
 ```
@@ -124,7 +124,7 @@ level = "scalar"
 duration_hours = "number"
 ```
 
-```
+```text
 Field type mismatches:
   syllabi/courses/intro.md: 'level' expected list, got scalar
 ```
@@ -139,7 +139,7 @@ that field:
 unique_fields = ["title"]
 ```
 
-```
+```text
 Duplicate values for unique fields:
   title='Intro to Docker' in:
     - syllabi/courses/docker_intro.md
@@ -156,7 +156,7 @@ in lexicographic sorted order. This reduces diff noise in version control:
 sorted_tags = true
 ```
 
-```
+```text
 List tags are not in sorted order:
   syllabi/courses/intro.md field 'tags': 'tools:alpha' should come after 'tools:beta'
 ```
@@ -165,7 +165,7 @@ List tags are not in sorted order:
 
 The same tag cannot appear twice in a single file's frontmatter:
 
-```
+```text
 Duplicate tags found within files:
   tools:docker in syllabi/courses/containers/intro.md
 ```
@@ -176,7 +176,7 @@ The same `category:value` tag cannot be defined in multiple `tags_dir/*.txt`
 files. Note that the same value in different categories is fine (`tools:docker`
 and `infra:docker` are distinct tags):
 
-```
+```text
 Duplicate tags found across tags files:
   tools:docker in tools.txt and infra.txt
 ```
@@ -186,7 +186,7 @@ Duplicate tags found across tags files:
 Every tag found in frontmatter must exist in `tags_dir`. Unknown tags cause an
 error with a typo suggestion (Levenshtein distance):
 
-```
+```text
 Unknown tags found (not in tags):
   tools:dockker (did you mean 'tools:docker'?)
     - syllabi/courses/containers/intro.md
@@ -197,7 +197,7 @@ Unknown tags found (not in tags):
 Every tag defined in `tags_dir/*.txt` must be used by at least one `.md` file.
 This catches stale entries that should be cleaned up:
 
-```
+```text
 Unused tags in tags (not used by any file):
   tools:vagrant
   languages:fortran
@@ -235,7 +235,7 @@ duration_hours = "number"                                         # Must be nume
 | `output` | string | `"out/processor.generator.tags/tags.db"` | Path to the tags database file |
 | `tags_dir` | string | `"tags"` | Directory containing `.txt` tag list files |
 | `required_fields` | string[] | `[]` | Frontmatter fields that every `.md` file must have |
-| `required_field_groups` | string[][] | `[]` | Alternative field groups; at least one group must be fully present |
+| `required_field_groups` | `string[][]` | `[]` | Alternative field groups; at least one group must be fully present |
 | `required_values` | string[] | `[]` | Scalar fields whose values must exist in `tags/<field>.txt` |
 | `unique_fields` | string[] | `[]` | Fields whose values must be unique across all files |
 | `field_types` | map | `{}` | Expected types per field: `"list"`, `"scalar"`, or `"number"` |

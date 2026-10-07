@@ -12,7 +12,7 @@ Built for course/module workflows, where the slide decks of a course live in one
 2. For each directory, the PDF the upstream processor made from each file is located under `source_output_dir`, at the same relative path with a `.pdf` extension.
 3. Those PDFs are merged, in file-name order, into `<output_dir>/<directory>.pdf`.
 
-```
+```text
 marp/courses/rust/01-intro.md  ->  out/processor.generator.marp/courses/rust/01-intro.pdf  ┐
 marp/courses/rust/02-types.md  ->  out/processor.generator.marp/courses/rust/02-types.pdf  ┴> out/processor.generator.ipdfunite/rust.pdf
 ```

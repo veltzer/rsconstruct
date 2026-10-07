@@ -8,7 +8,7 @@ Compiles Sass and SCSS files to CSS. Native (in-process, using the [grass](https
 
 Each `.scss` or `.sass` file under `src_dirs` is compiled to a `.css` file under `output_dir`, keeping its path relative to the source directory:
 
-```
+```text
 sass/style.scss             ->  out/processor.generator.isass/style.css
 sass/components/button.scss ->  out/processor.generator.isass/components/button.css
 ```

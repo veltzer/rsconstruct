@@ -4,7 +4,7 @@ RSConstruct follows a convention-over-configuration approach. The directory layo
 
 ## Directory layout
 
-```
+```text
 project/
 ├── rsconstruct.toml          # Configuration file
 ├── .rsconstructignore        # Glob patterns for files to exclude

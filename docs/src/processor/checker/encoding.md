@@ -12,7 +12,7 @@ Each file is read as bytes and rejected if it:
 - starts with a UTF-16 BOM (`FF FE` or `FE FF`): `file appears to be UTF-16 encoded`
 - contains bytes that are not valid UTF-8: `invalid UTF-8 at byte 5 (line 1)`
 
-```
+```text
 src/bom.py: [processor.checker.encoding] Encoding errors found:
 src/bom.py: file has UTF-8 BOM (byte order mark)
 ```

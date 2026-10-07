@@ -121,7 +121,7 @@ src_dirs = ["docs"]
 
 Layout:
 
-```
+```text
 project/
 ├── rsconstruct.toml
 ├── src/main.py                      # ruff lints this

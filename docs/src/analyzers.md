@@ -101,7 +101,7 @@ rsconstruct --phases build
 
 Output:
 
-```
+```text
 Phase: Building dependency graph...
   Phase: discover
   Phase: add_dependencies    # Analyzers run here

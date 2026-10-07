@@ -118,7 +118,7 @@ Violations are hard errors; partial output is left on disk for debugging.
 
 With a MassGenerator producing N planned files, the graph looks like this:
 
-```
+```text
   source files (markdown, templates, config)
          |
          | (as inputs to each planned file's product)
@@ -142,7 +142,21 @@ The dependency system then naturally orders: phase product runs once (if any fil
 
 This shape keeps the executor simple and reuses all existing caching, skipping, and restore logic without modification.
 
-**Status note.** The implementation reaches the same end without the phase product. Every file product is an ordinary product (inputs = its sources, outputs = its path), and the processor keeps a per-instance `tool_run` state behind a mutex. `execute(product)` asks that state: not run yet → run the tool, verify, record the outcome; already succeeded → do nothing; already failed → fail this product with the recorded message. So the tool runs at most once per build, clean products never trigger it, and a failure is reported once per product without re-running a build that just failed. The plugin caps the instance at `max_jobs = 1`, so products of one instance execute one at a time instead of parking threads on the mutex. The reasons the phase product lost: a product with no outputs cannot be depended upon through the graph (edges come from inputs matching outputs), so it would have needed a stamp output, and a restored stamp would have marked every file product `dep_changed` → build on a fresh checkout with a warm remote cache, where the right answer is restore.
+**Status note.** The implementation reaches the same end without the phase
+product. Every file product is an ordinary product (inputs = its sources,
+outputs = its path), and the processor keeps a per-instance `tool_run` state
+behind a mutex. `execute(product)` asks that state: not run yet → run the
+tool, verify, record the outcome; already succeeded → do nothing; already
+failed → fail this product with the recorded message. So the tool runs at most
+once per build, clean products never trigger it, and a failure is reported
+once per product without re-running a build that just failed. The plugin caps
+the instance at `max_jobs = 1`, so products of one instance execute one at a
+time instead of parking threads on the mutex. The reasons the phase product
+lost: a product with no outputs cannot be depended upon through the graph
+(edges come from inputs matching outputs), so it would have needed a stamp
+output, and a restored stamp would have marked every file product
+`dep_changed` → build on a fresh checkout with a warm remote cache, where the
+right answer is restore.
 
 Before the tool runs, the processor unlinks every predicted path, clean ones included: a clean file may be a read-only hardlink from an earlier restore, which the tool could not overwrite. The executor's own pre-run unlink only covers the products it is about to build.
 

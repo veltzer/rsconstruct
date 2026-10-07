@@ -46,7 +46,7 @@ consumes hundreds of megabytes of RAM. When running parallel builds with `-j N`,
 too many simultaneous Chromium instances cause resource exhaustion and
 non-deterministic crashes:
 
-```
+```text
 TargetCloseError: Protocol error (Target.setDiscoverTargets): Target closed
 ```
 

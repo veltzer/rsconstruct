@@ -8,7 +8,7 @@ Checks that files are formatted the way [Prettier](https://prettier.io/) would f
 
 Runs `prettier --check <files>`. Prettier exits non-zero when a file is not formatted, which fails the product; its output names the files:
 
-```
+```text
 [warn] web/a.js
 [warn] Code style issues found in the above file. Run Prettier with --write to fix.
 ```

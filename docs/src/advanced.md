@@ -53,7 +53,7 @@ RSConstruct respects `.gitignore` files automatically. Any file ignored by git i
 
 For project-specific exclusions that should not go in `.gitignore`, create a `.rsconstructignore` file in the project root with glob patterns (one per line):
 
-```
+```text
 /src/experiments/**
 *.bak
 ```

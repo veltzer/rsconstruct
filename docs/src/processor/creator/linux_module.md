@@ -73,7 +73,7 @@ modules:
 
 Output is placed under `out/linux-module/<yaml-relative-dir>/`:
 
-```
+```text
 out/linux-module/<yaml-dir>/
   <module_name>.ko
 ```
@@ -81,7 +81,7 @@ out/linux-module/<yaml-dir>/
 For example, a manifest at `src/kernel/hello/linux-module.yaml` defining
 module `hello` produces:
 
-```
+```text
 out/linux-module/src/kernel/hello/hello.ko
 ```
 
@@ -146,7 +146,7 @@ any source file or the yaml manifest changes.
 
 Given this project layout:
 
-```
+```text
 myproject/
   rsconstruct.toml
   drivers/
@@ -186,7 +186,7 @@ module_exit(hello_exit);
 
 Running `rsconstruct build` produces:
 
-```
+```text
 out/linux-module/drivers/hello/hello.ko
 ```
 

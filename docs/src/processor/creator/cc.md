@@ -21,7 +21,7 @@ A manifest at the project root produces output in `out/processor.creator.cc/`.
 
 Source files are compiled to object files, then linked into the final targets:
 
-```
+```text
 src/exercises/foo/cc.yaml defines:
   library "mymath" (static) from math.c, utils.c
   program "main" from main.c, links mymath
@@ -98,7 +98,7 @@ Global `cflags` are used for C files and `cxxflags` for C++ files.
 
 Output is placed under `out/processor.creator.cc/<cc.yaml-relative-dir>/`:
 
-```
+```text
 out/processor.creator.cc/<cc.yaml-dir>/
   obj/<target_name>/    # Object files per target
     file.o
@@ -169,7 +169,7 @@ Runs as a single whole-project operation (e.g., `cargo build`, `npm install`).
 
 Given this project layout:
 
-```
+```text
 myproject/
   rsconstruct.toml
   exercises/
@@ -199,7 +199,7 @@ programs:
 
 Running `rsconstruct build` produces:
 
-```
+```text
 out/processor.creator.cc/exercises/math/obj/math/math.o
 out/processor.creator.cc/exercises/math/lib/libmath.a
 out/processor.creator.cc/exercises/math/obj/main/main.o

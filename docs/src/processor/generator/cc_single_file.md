@@ -9,7 +9,7 @@ Compiles C (`.c`) and C++ (`.cc`) source files into executables, one source file
 Source files under the configured source directory are compiled into executables
 under `out/processor.generator.cc_single_file/`, mirroring the directory structure:
 
-```
+```text
 src/main.c       →  out/processor.generator.cc_single_file/main.elf
 src/a/b.c        →  out/processor.generator.cc_single_file/a/b.elf
 src/app.cc       →  out/processor.generator.cc_single_file/app.elf
@@ -171,7 +171,7 @@ Directives can appear in any of these comment styles:
 
 The compiler command is constructed in this order:
 
-```
+```text
 compiler -MMD -MF deps -I... [compile_before] [cflags/cxxflags] [compile_after] -o output source [link_before] [ldflags] [link_after]
 ```
 
@@ -243,7 +243,7 @@ output_suffix = ".elf"
 
 When using multiple compilers, outputs are organized by compiler name:
 
-```
+```text
 src/main.c  →  out/processor.generator.cc_single_file/gcc/main.elf
             →  out/processor.generator.cc_single_file/clang/main.elf
 ```

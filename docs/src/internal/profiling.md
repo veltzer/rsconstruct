@@ -21,7 +21,7 @@ debug = true
 
 Build with:
 
-```
+```text
 cargo build --profile profiling
 # binary lands in target/profiling/rsconstruct
 ```
@@ -31,7 +31,7 @@ cargo build --profile profiling
 Kernel sampling (perf, samply) requires `kernel.perf_event_paranoid <= 1`. On
 a personal dev machine, persist it:
 
-```
+```text
 echo 'kernel.perf_event_paranoid = 1' | sudo tee /etc/sysctl.d/60-perf.conf
 sudo sysctl --system
 ```
@@ -42,7 +42,7 @@ On CPUs without LBR (most laptops), DWARF unwinding is very slow to
 post-process — don't use `--call-graph dwarf` unless you're patient. Without a
 call graph you still get reliable self-time attribution:
 
-```
+```text
 perf record -F 999 -o /tmp/rsc.perf.data -- \
     target/profiling/rsconstruct --quiet --color=never status
 
@@ -52,7 +52,7 @@ perf report -i /tmp/rsc.perf.data --stdio --no-children \
 
 ### Alternative: `samply` (Firefox-Profiler UI)
 
-```
+```text
 cargo install samply
 samply record -r 4000 -o /tmp/rsc.json.gz -- \
     target/profiling/rsconstruct --quiet --color=never status
@@ -62,7 +62,7 @@ Default behavior opens a local UI. Use `--save-only` to just write the file.
 
 ### Hardware counters
 
-```
+```text
 perf stat -d -- target/profiling/rsconstruct --quiet --color=never status
 ```
 

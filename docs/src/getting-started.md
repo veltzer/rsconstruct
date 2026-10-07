@@ -45,14 +45,14 @@ rsconstruct build
 
 Expected output:
 
-```
+```text
 Processing ruff (1 product)
   hello.py
 ```
 
 Run again — nothing has changed, so rsconstruct skips the check:
 
-```
+```text
 Processing ruff (1 product)
   Up to date
 ```
@@ -133,7 +133,7 @@ rsconstruct build
 
 Expected output:
 
-```
+```text
 Processing cc_single_file (1 product)
   hello.elf
 ```
@@ -142,7 +142,7 @@ The compiled executable is at `out/processor.generator.cc_single_file/hello.elf`
 
 Run again — the source hasn't changed, so rsconstruct restores from cache:
 
-```
+```text
 Processing cc_single_file (1 product)
   Up to date
 ```

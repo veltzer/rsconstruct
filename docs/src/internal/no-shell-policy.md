@@ -29,7 +29,7 @@ substring break out and run arbitrary code with rsconstruct's privileges.
 
 This is not theoretical. The bug that motivated the policy was this:
 
-```
+```text
 Running: [pip] setuptools<82, manim, manim_voiceover (pip install setuptools<82 manim manim_voiceover)
 ```
 

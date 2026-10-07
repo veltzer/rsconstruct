@@ -35,7 +35,7 @@ skip_not_found = false
 
 - `false` (default) — an import of a local file that resolves nowhere is a hard error naming the file, the URL and the directories searched:
 
-  ```
+  ```text
   Sass import not found: "nope" in sass/style.scss (searched sass and load_paths []). Add its directory to load_paths, or set skip_not_found = true.
   ```
 

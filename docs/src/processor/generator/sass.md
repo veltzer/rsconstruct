@@ -9,7 +9,7 @@ Compiles SCSS and SASS files into CSS using the Sass compiler.
 Files matching configured extensions in the `sass/` directory are compiled to CSS.
 Output is written to `out/processor.generator.sass/` preserving the directory structure:
 
-```
+```text
 sass/style.scss  ->  out/processor.generator.sass/style.css
 sass/components/button.scss  ->  out/processor.generator.sass/components/button.css
 ```

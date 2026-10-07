@@ -205,7 +205,7 @@ rsconstruct smart auto
 
 Example output:
 
-```
+```text
 Added 3 processor(s): pylint, ruff, shellcheck
 ```
 
@@ -341,7 +341,7 @@ rsconstruct analyzer clean --analyzer cpp        # Clear only entries from the c
 
 Example output for `rsconstruct analyzer show all`:
 
-```
+```text
 src/main.c: [icpp] (no dependencies)
 src/test.c: [icpp]
   src/utils.h
@@ -350,7 +350,7 @@ src/test.c: [icpp]
 
 Example output for `rsconstruct analyzer stats`:
 
-```
+```text
 ╭──────────┬───────┬──────────────╮
 │ Analyzer │ Files │ Dependencies │
 ├──────────┼───────┼──────────────┤
@@ -742,7 +742,7 @@ rsconstruct function list   # Signature, return value, dependency tracking and a
 
 Example entry:
 
-```
+```text
 load_toml(path: string)
   Parse a TOML file and expose its top-level table to the template.
   returns:       object (key → value, nested tables preserved)
@@ -760,7 +760,7 @@ List the post-config hooks: built-in adjustments applied to the configuration af
 rsconstruct hook
 ```
 
-```
+```text
 ╭──────────────────────┬─────────────────────────────────────────────────────────────────────╮
 │ Hook                 │ Description                                                         │
 ├──────────────────────┼─────────────────────────────────────────────────────────────────────┤
@@ -786,7 +786,7 @@ rsconstruct product show src/main.c                                            #
 
 The path is looked up as an output first; if no product owns it, products that have it as their primary input are shown. Example output:
 
-```
+```text
 processor: processor.generator.cc_single_file
 outputs:
   out/processor.generator.cc_single_file/src/test.elf
@@ -820,7 +820,7 @@ targets = ["~/", "~/.local/bin"]
 rsconstruct symlink-install
 ```
 
-```
+```text
 dotfiles → /home/user/
   created .bashrc
   created .config/git/config

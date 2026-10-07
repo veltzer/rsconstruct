@@ -8,7 +8,7 @@ Checks that JSON files parse. Native (in-process, using `serde_json`; no externa
 
 Each file is read and parsed as JSON. A file that does not parse fails its product with the parser's message and position:
 
-```
+```text
 data/bad.json: [processor.checker.ijsonlint] Invalid JSON:
 data/bad.json: trailing comma at line 1 column 9
 ```

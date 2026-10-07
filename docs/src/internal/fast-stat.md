@@ -189,10 +189,10 @@ so future work doesn't have to redo it) showed the following:
 - `combined_input_checksum(ctx, &product.inputs)` in `src/checksum.rs` —
   one `fs::metadata` per input via `fast_checksum`. Called from four
   sites, all per-product:
-  - `src/builder/build.rs` (status pass — `for product in products`)
-  - `src/executor/mod.rs` (planning pass — `for &id in order`)
-  - `src/executor/execution.rs` (execution pass — `for &id in level`)
-  - `src/builder/product.rs` (single-product diagnostics)
+    - `src/builder/build.rs` (status pass — `for product in products`)
+    - `src/executor/mod.rs` (planning pass — `for &id in order`)
+    - `src/executor/execution.rs` (execution pass — `for &id in level`)
+    - `src/builder/product.rs` (single-product diagnostics)
 - `checksum_fast(ctx, source)` in `src/deps_cache.rs` — one stat per
   (analyzer, source) pair from inside `get` / `classify` / `set`.
 
