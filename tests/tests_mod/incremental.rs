@@ -248,6 +248,140 @@ src_dirs = ["gen"]
     );
 }
 
+/// Build a project whose `use` product loads `need`, a file the `make`
+/// product generates and which does not exist before the first build, then
+/// check the analyzer ordered `use` after `make`, cached it under its full
+/// input set, and rebuilds it when the generated file changes.
+fn assert_generated_reference_resolves(project: &Path, maker_input: &str, need: &str) {
+    let first = build(project);
+    assert!(
+        first.exit_success,
+        "clean build must order the consumer after the file it loads: {:?}",
+        first.errors
+    );
+    assert_eq!(first.success, 2, "both products build: {first:?}");
+
+    let second = build(project);
+    assert!(second.exit_success, "{:?}", second.errors);
+    assert_eq!(
+        second.success, 0,
+        "the consumer was cached under its full input set: {second:?}"
+    );
+
+    fs::write(project.join(maker_input), "v2\n").unwrap();
+    let third = build(project);
+    assert!(third.exit_success, "{:?}", third.errors);
+    let status_of = |processor: &str| {
+        third
+            .products
+            .iter()
+            .find(|p| p.processor == processor)
+            .map(|p| p.status.as_str())
+    };
+    assert_eq!(
+        status_of("processor.generator.generic.use"),
+        Some("success"),
+        "a changed {need} must rebuild its consumer: {third:?}"
+    );
+}
+
+/// The sass analyzer resolves a `@use` of a partial another product
+/// generates, through the declared outputs in the file index.
+#[test]
+fn sass_use_of_generated_partial_is_a_dependency() {
+    let temp_dir = TempDir::new().unwrap();
+    let project = temp_dir.path();
+
+    write_tool(project, "copy", "cp \"$1\" \"$2\"\n");
+    write_tool(
+        project,
+        "needpartial",
+        "test -f partials/_colors.scss || { echo 'partials/_colors.scss missing' >&2; exit 1; }\ncp \"$1\" \"$2\"\n",
+    );
+    fs::write(
+        project.join("rsconstruct.toml"),
+        r#"[build]
+hash_tool_versions = false
+
+[analyzer.sass]
+load_paths = ["partials"]
+
+[processor.generator.generic.make]
+command = "copy"
+output_dir = "partials"
+output_extension = "scss"
+batch = false
+src_extensions = [".pal"]
+src_dirs = ["pal"]
+
+[processor.generator.generic.use]
+command = "needpartial"
+output_dir = "out/css"
+output_extension = "css"
+batch = false
+src_extensions = [".scss"]
+src_dirs = ["styles"]
+"#,
+    )
+    .unwrap();
+    fs::create_dir_all(project.join("pal")).unwrap();
+    fs::create_dir_all(project.join("styles")).unwrap();
+    fs::write(project.join("pal/_colors.pal"), "v1\n").unwrap();
+    fs::write(project.join("styles/main.scss"), "@use \"colors\";\n").unwrap();
+
+    assert_generated_reference_resolves(project, "pal/_colors.pal", "partial");
+}
+
+/// The tera analyzer resolves an `{% include %}` of a template another
+/// product generates, through the declared outputs in the file index.
+#[test]
+fn tera_include_of_generated_template_is_a_dependency() {
+    let temp_dir = TempDir::new().unwrap();
+    let project = temp_dir.path();
+
+    write_tool(project, "copy", "cp \"$1\" \"$2\"\n");
+    write_tool(
+        project,
+        "needpart",
+        "test -f gen/part.tera || { echo 'gen/part.tera missing' >&2; exit 1; }\ncp \"$1\" \"$2\"\n",
+    );
+    fs::write(
+        project.join("rsconstruct.toml"),
+        r#"[build]
+hash_tool_versions = false
+
+[analyzer.tera]
+
+[processor.generator.generic.make]
+command = "copy"
+output_dir = "gen"
+output_extension = "tera"
+batch = false
+src_extensions = [".part"]
+src_dirs = ["parts"]
+
+[processor.generator.generic.use]
+command = "needpart"
+output_dir = "out/pages"
+output_extension = "html"
+batch = false
+src_extensions = [".tera"]
+src_dirs = ["pages"]
+"#,
+    )
+    .unwrap();
+    fs::create_dir_all(project.join("parts")).unwrap();
+    fs::create_dir_all(project.join("pages")).unwrap();
+    fs::write(project.join("parts/part.part"), "v1\n").unwrap();
+    fs::write(
+        project.join("pages/index.tera"),
+        "{% include \"gen/part.tera\" %}\n",
+    )
+    .unwrap();
+
+    assert_generated_reference_resolves(project, "parts/part.part", "template");
+}
+
 /// A product whose `dep_inputs` glob matches its own output does not depend
 /// on that output. Otherwise the output joins the inputs once it exists, and
 /// the second build sees a different key than the first and reruns.

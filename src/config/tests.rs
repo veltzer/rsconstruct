@@ -624,6 +624,21 @@ fn substitute_variables_rejects_partial_undefined_references() {
 use crate::config::SCAN_CONFIG_FIELDS;
 use crate::registries::processor::all_plugins;
 
+/// Every processor describes itself: `processor info` and `processor list`
+/// show the description, and a blank one leaves the user guessing.
+#[test]
+fn every_processor_has_a_description() {
+    let blank: Vec<String> = all_plugins()
+        .filter(|p| p.description.trim().is_empty())
+        .map(crate::registries::ProcessorPlugin::pname)
+        .collect();
+    assert_eq!(
+        blank,
+        Vec::<String>::new(),
+        "processors without a description"
+    );
+}
+
 /// `FieldSpec` entries must be well-formed: non-empty name, non-empty doc
 /// (a blank doc is a blank cell in `processor defconfig`), no duplicate
 /// names within a plugin, and no collision with scan fields (scan fields

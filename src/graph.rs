@@ -356,12 +356,31 @@ impl BuildGraph {
         processor: &str,
         config_hash: Option<String>,
     ) -> Result<usize> {
-        self.add_product_with_variant(inputs, outputs, processor, config_hash, None)
+        self.insert_product(inputs, outputs, processor, config_hash, None)
     }
 
-    /// Add a product to the graph with an optional variant/profile name.
-    /// Returns an error if any output path is already claimed by another product.
-    pub fn add_product_with_variant(
+    /// `add_product` with an optional variant/profile name and the output
+    /// directories a creator caches and restores as a whole (empty for
+    /// none).
+    pub fn add_product_with(
+        &mut self,
+        inputs: Vec<PathBuf>,
+        outputs: Vec<PathBuf>,
+        processor: &str,
+        config_hash: Option<String>,
+        variant: Option<&str>,
+        output_dirs: Vec<PathBuf>,
+    ) -> Result<usize> {
+        let id = self.insert_product(inputs, outputs, processor, config_hash, variant)?;
+        if !output_dirs.is_empty() {
+            self.products[id].output_dirs = output_dirs.into_iter().map(Arc::new).collect();
+        }
+        Ok(id)
+    }
+
+    /// Add a product, or return the id of the one it re-declares. Returns
+    /// an error if any output path is already claimed by another product.
+    fn insert_product(
         &mut self,
         inputs: Vec<PathBuf>,
         outputs: Vec<PathBuf>,
@@ -465,7 +484,7 @@ impl BuildGraph {
     /// parallel `products` / `dependents` / `dependencies` vectors.
     ///
     /// The one place that knows what "adding a product to the graph" means.
-    /// `add_product_with_variant` and `filter_by_targets` used to each carry
+    /// `insert_product` and `filter_by_targets` used to each carry
     /// their own copy of this — two sites that had to evolve in lockstep,
     /// with `Product.id == index` upheld by hand in both. The product's `id`
     /// is assigned here from the vector length, so the invariant holds by
@@ -499,61 +518,6 @@ impl BuildGraph {
         self.products.push(product);
         self.dependents.push(Vec::new());
         self.dependencies.push(Vec::new());
-    }
-
-    /// Add a product with an output directory for creator caching.
-    /// The `output_dir` is the directory whose contents will be cached/restored as a whole.
-    pub fn add_product_with_output_dir(
-        &mut self,
-        inputs: Vec<PathBuf>,
-        outputs: Vec<PathBuf>,
-        processor: &str,
-        config_hash: Option<String>,
-        output_dir: PathBuf,
-    ) -> Result<usize> {
-        self.add_product_with_output_dirs_and_variant(
-            inputs,
-            outputs,
-            processor,
-            config_hash,
-            vec![output_dir],
-            None,
-        )
-    }
-
-    /// Add a product with an output directory and an optional variant/profile name.
-    pub fn add_product_with_output_dir_and_variant(
-        &mut self,
-        inputs: Vec<PathBuf>,
-        outputs: Vec<PathBuf>,
-        processor: &str,
-        config_hash: Option<String>,
-        output_dir: PathBuf,
-        variant: Option<&str>,
-    ) -> Result<usize> {
-        self.add_product_with_output_dirs_and_variant(
-            inputs,
-            outputs,
-            processor,
-            config_hash,
-            vec![output_dir],
-            variant,
-        )
-    }
-
-    /// Add a product with multiple output directories and an optional variant/profile name.
-    pub fn add_product_with_output_dirs_and_variant(
-        &mut self,
-        inputs: Vec<PathBuf>,
-        outputs: Vec<PathBuf>,
-        processor: &str,
-        config_hash: Option<String>,
-        output_dirs: Vec<PathBuf>,
-        variant: Option<&str>,
-    ) -> Result<usize> {
-        let id = self.add_product_with_variant(inputs, outputs, processor, config_hash, variant)?;
-        self.products[id].output_dirs = output_dirs.into_iter().map(Arc::new).collect();
-        Ok(id)
     }
 
     /// Incorporate tool version hashes into product cache keys.
@@ -1435,12 +1399,13 @@ mod tests {
         let mut g = BuildGraph::new();
         g.add_product(vec!["drop.txt".into()], vec![], "check", None)
             .unwrap();
-        g.add_product_with_output_dir(
+        g.add_product_with(
             vec!["keep.rs".into()],
             vec!["keep.bin".into()],
             "cargo",
             Some("cfg".into()),
-            PathBuf::from("target/debug"),
+            None,
+            vec![PathBuf::from("target/debug")],
         )
         .unwrap();
         // A checker on the kept input, to exercise the dedup index.

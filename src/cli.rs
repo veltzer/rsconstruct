@@ -507,6 +507,12 @@ pub enum ProcessorAction {
         #[arg(short, long, value_enum, default_value = "text")]
         format: GraphFormat,
     },
+    /// Show a processor's description and config fields (no config needed)
+    Info {
+        /// Processor name (pname) — the full name, processor.<type>.<name> (omit to show all)
+        #[arg(value_parser = crate::registries::processor_name_parser())]
+        pname: Option<String>,
+    },
     /// List all built-in processors with type and description (no config needed)
     List {
         /// Filter by processor type (checker, generator, creator, explicit, `mass_generator`)

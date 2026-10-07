@@ -1,5 +1,5 @@
 use anyhow::Result;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use serde::{Deserialize, Serialize};
@@ -138,30 +138,19 @@ impl Processor for CargoProcessor {
                 crate::processor::build_anchor_inputs(&anchor, &sibling_files, &extra);
 
             for profile in &self.config.profiles {
-                let inputs = base_inputs.clone();
-                if self.config.cache_output_dir {
-                    let output_dir = if anchor_dir.as_os_str().is_empty() {
-                        PathBuf::from("target")
-                    } else {
-                        anchor_dir.join("target")
-                    };
-                    graph.add_product_with_output_dir_and_variant(
-                        inputs,
-                        vec![],
-                        instance_name,
-                        hash.clone(),
-                        output_dir,
-                        Some(profile),
-                    )?;
+                let output_dirs = if self.config.cache_output_dir {
+                    vec![anchor_dir.join("target")]
                 } else {
-                    graph.add_product_with_variant(
-                        inputs,
-                        vec![],
-                        instance_name,
-                        hash.clone(),
-                        Some(profile),
-                    )?;
-                }
+                    Vec::new()
+                };
+                graph.add_product_with(
+                    base_inputs.clone(),
+                    vec![],
+                    instance_name,
+                    hash.clone(),
+                    Some(profile),
+                    output_dirs,
+                )?;
             }
         }
 

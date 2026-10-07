@@ -615,23 +615,20 @@ pub fn discover_directory_products(
 
         let inputs = build_anchor_inputs(&anchor, &sibling_files, &extra);
 
-        if let Some(dir_name) = output_dir_name {
-            let output_dir = if anchor_dir.as_os_str().is_empty() {
-                PathBuf::from(dir_name)
-            } else {
-                anchor_dir.join(dir_name)
-            };
-            graph.add_product_with_output_dir(
-                inputs,
-                vec![],
-                processor_name,
-                hash.clone(),
-                output_dir,
-            )?;
-        } else {
-            // Empty outputs: cache entry = success record
-            graph.add_product(inputs, vec![], processor_name, hash.clone())?;
-        }
+        // Without an output directory the outputs are empty: the cache
+        // entry is a success record.
+        let output_dirs: Vec<PathBuf> = output_dir_name
+            .map(|dir_name| anchor_dir.join(dir_name))
+            .into_iter()
+            .collect();
+        graph.add_product_with(
+            inputs,
+            vec![],
+            processor_name,
+            hash.clone(),
+            None,
+            output_dirs,
+        )?;
     }
 
     Ok(())

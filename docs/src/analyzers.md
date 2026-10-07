@@ -73,7 +73,10 @@ the build after a clean build finds everything up to date.
 
 The `cpp` analyzer asks the compiler (`-MM`), which only sees files on disk,
 so it cannot resolve an include of a header that has not been generated
-yet; use `icpp` for projects that generate headers.
+yet; use `icpp` for projects that generate headers. The `icpp`, `markdown`,
+`sass` and `tera` analyzers all resolve generated files. The tera
+functions that query a directory (`glob`, `grep_count`, `shell_output`'s
+`depends_on`, `workflow_names`) see only the files on disk.
 
 Use the `analyzer` command to manage analyzers and inspect the cache (full
 reference in [Commands](commands.md#rsconstruct-analyzer)):

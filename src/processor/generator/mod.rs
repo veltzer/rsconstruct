@@ -142,12 +142,13 @@ pub fn discover_multi_format(
             inputs.push(source.clone());
             inputs.extend_from_slice(&extra);
 
-            graph.add_product_with_variant(
+            graph.add_product_with(
                 inputs,
                 vec![output],
                 params.processor_name,
                 hash.clone(),
                 Some(format),
+                Vec::new(),
             )?;
         }
     }

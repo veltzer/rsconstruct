@@ -513,22 +513,27 @@ impl Builder {
         Ok(analysis)
     }
 
+    /// The complete graph built in `mode`, quietly.
+    fn complete_graph(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        processors: &ProcessorMap,
+        mode: GraphBuildMode,
+    ) -> Result<BuildGraph> {
+        let built =
+            self.build_graph_with_processors_impl(ctx, processors, mode, BuildPhase::Build, false)?;
+        Ok(built.graph)
+    }
+
     /// Build the dependency graph using provided processors
     fn build_graph_with_processors(
         &self,
         ctx: &crate::build_context::BuildContext,
         processors: &ProcessorMap,
     ) -> Result<BuildGraph> {
-        let built = self.build_graph_with_processors_impl(
-            ctx,
-            processors,
-            GraphBuildMode::Normal,
-            BuildPhase::Build,
-            None,
-            false,
-        )?;
-        Ok(built.graph)
+        self.complete_graph(ctx, processors, GraphBuildMode::Normal)
     }
+
     /// Like `build_graph_with_processors`, but tolerant of `src_dirs`
     /// entries that don't exist (see `GraphBuildMode::ForRepair`).
     fn build_graph_for_repair_with_processors(
@@ -536,34 +541,7 @@ impl Builder {
         ctx: &crate::build_context::BuildContext,
         processors: &ProcessorMap,
     ) -> Result<BuildGraph> {
-        let built = self.build_graph_with_processors_impl(
-            ctx,
-            processors,
-            GraphBuildMode::ForRepair,
-            BuildPhase::Build,
-            None,
-            false,
-        )?;
-        Ok(built.graph)
-    }
-
-    /// Build the dependency graph with optional early stopping
-    fn build_graph_with_processors_and_phase(
-        &self,
-        ctx: &crate::build_context::BuildContext,
-        processors: &ProcessorMap,
-        stop_after: BuildPhase,
-        processor_filter: Option<&[String]>,
-        verbose: bool,
-    ) -> Result<GraphBuild> {
-        self.build_graph_with_processors_impl(
-            ctx,
-            processors,
-            GraphBuildMode::Normal,
-            stop_after,
-            processor_filter,
-            verbose,
-        )
+        self.complete_graph(ctx, processors, GraphBuildMode::ForRepair)
     }
 
     /// Build the dependency graph for clean (skip expensive dependency scanning)
@@ -572,15 +550,7 @@ impl Builder {
         ctx: &crate::build_context::BuildContext,
         processors: &ProcessorMap,
     ) -> Result<BuildGraph> {
-        let built = self.build_graph_with_processors_impl(
-            ctx,
-            processors,
-            GraphBuildMode::ForClean,
-            BuildPhase::Build,
-            None,
-            false,
-        )?;
-        Ok(built.graph)
+        self.complete_graph(ctx, processors, GraphBuildMode::ForClean)
     }
 
     /// Return the set of processor type names whose files are detected in the project.
@@ -837,15 +807,15 @@ impl Builder {
         )))
     }
 
-    /// Build the dependency graph using provided processors
-    /// `processor_filter`: if Some, only run processors in this list (in addition to enabled check)
+    /// Build the dependency graph using provided processors. Every active
+    /// processor takes part: `-p`/`-x` select from the finished graph (see
+    /// `select_processors`), since a selection needs its producers.
     fn build_graph_with_processors_impl(
         &self,
         ctx: &crate::build_context::BuildContext,
         processors: &ProcessorMap,
         mode: GraphBuildMode,
         stop_after: BuildPhase,
-        processor_filter: Option<&[String]>,
         verbose: bool,
     ) -> Result<GraphBuild> {
         if phases_debug() {
@@ -859,14 +829,7 @@ impl Builder {
         // Collect which processors should run
         let active_processors: Vec<&String> = sorted_keys(processors)
             .into_iter()
-            .filter(|name| {
-                if let Some(filter) = processor_filter
-                    && !filter.iter().any(|f| f == *name)
-                {
-                    return false;
-                }
-                self.is_processor_active(name, processors[*name].as_ref())
-            })
+            .filter(|name| self.is_processor_active(name, processors[*name].as_ref()))
             .collect();
 
         // Phase 1: Discover products
@@ -947,51 +910,6 @@ impl Builder {
             phase_timings,
             analysis,
         })
-    }
-
-    /// Build the dependency graph, optionally filtering to a single processor.
-    /// If `include_all` is true, skip enabled/auto-detect checks.
-    pub fn build_graph_filtered(
-        &self,
-        ctx: &crate::build_context::BuildContext,
-        filter_name: Option<&str>,
-        include_all: bool,
-    ) -> Result<BuildGraph> {
-        let processors = self.create_processors()?;
-        let mut graph = BuildGraph::new();
-
-        // Collect active processors
-        let active_processors: Vec<&String> = sorted_keys(&processors)
-            .into_iter()
-            .filter(|name| {
-                if let Some(filter) = filter_name
-                    && name.as_str() != filter
-                {
-                    return false;
-                }
-                include_all || self.is_processor_active(name, processors[*name].as_ref())
-            })
-            .collect();
-
-        // Phase 1: Discover products (fixed-point loop for cross-processor deps)
-        let file_index = self.discover_products(
-            &mut graph,
-            &processors,
-            &active_processors,
-            GraphBuildMode::Normal,
-        )?;
-
-        // Phase 2: Run dependency analyzers
-        self.run_analyzers(ctx, &mut graph, file_index, false)?;
-
-        graph.resolve_dependencies();
-
-        let validation_errors = graph.validate(&self.config.graph);
-        if !validation_errors.is_empty() {
-            anyhow::bail!("Graph validation failed:\n{}", validation_errors.join("\n"));
-        }
-
-        Ok(graph)
     }
 
     /// Build the dependency graph (creates processors internally)

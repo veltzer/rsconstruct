@@ -13,6 +13,7 @@ Scans Sass and SCSS files for `@use`, `@forward` and `@import` rules and adds ev
 - Follows imports transitively: a partial that `@use`s another partial makes both inputs of every stylesheet that loads it.
 - Ignores what loads no project file: built-in modules (`@use "sass:math"`), `pkg:` and remote URLs, and plain CSS imports (`@import "x.css"`, `@import url(...)`). A `@use "x.css"` does load the file and is tracked.
 - Ignores rules inside `//` and `/* */` comments.
+- Resolves a partial that another product generates, before it exists: the stylesheet is built after the partial's producer (see [Generated files](../analyzers.md#generated-files)).
 
 Every source is rescanned on every build rather than read from the dependency cache. The cache is keyed by the importing file's own contents, so it cannot see a `@use` added inside a partial; scanning is cheap enough that always rescanning costs nothing noticeable.
 

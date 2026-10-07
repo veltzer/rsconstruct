@@ -666,12 +666,13 @@ impl CcSingleFileProcessor {
                 inputs.push(source.clone());
                 inputs.extend_from_slice(&extra);
 
-                graph.add_product_with_variant(
+                graph.add_product_with(
                     inputs,
                     vec![executable],
                     instance_name,
                     cfg_hash.clone(),
                     variant,
+                    Vec::new(),
                 )?;
             }
         }

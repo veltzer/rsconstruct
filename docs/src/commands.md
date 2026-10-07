@@ -412,6 +412,7 @@ rsconstruct smart remove-no-file-processors  # Remove processors that don't matc
 | `enable` | Yes |
 | `files` | Yes |
 | `graph` | Yes |
+| `info` | No |
 | `list` | No |
 | `names` | Yes |
 | `recommend` | No |
@@ -423,6 +424,9 @@ rsconstruct smart remove-no-file-processors  # Remove processors that don't matc
 rsconstruct processor list              # List all built-in processors with type and description
 rsconstruct processor list --type checker  # ...only one processor type
 rsconstruct --json processor list       # Same list as JSON
+rsconstruct processor info processor.checker.ruff         # Describe a processor and every config field
+rsconstruct processor info              # ...every processor
+rsconstruct --json processor info       # Same as JSON
 rsconstruct processor types             # List the processor types
 rsconstruct processor search yaml       # Search processors by name, description or keywords
 rsconstruct processor recommend         # Show the recommended processor for each file extension
@@ -456,6 +460,14 @@ form carries the same as `native`, `rust` and `fix` booleans. `rust` is what to
 read when the question is "how much of this project's toolchain is Rust";
 `native` is what to read when the question is "which processors need no tool
 installed".
+
+`info` is the long form of one processor (or, without a name, of every
+processor): its description, type, keywords, the same flags as `list` plus
+batch support, the `max_jobs` cap and the implementation version, then a table
+of every config field it accepts — type, default, whether it is required,
+whether it is part of the cache key (`Checksum`), and what it does. It is
+`defconfig -v` with the processor's own description on top, and reads only
+the processors' built-in metadata, so it needs no `rsconstruct.toml`.
 
 ## `rsconstruct tool`
 

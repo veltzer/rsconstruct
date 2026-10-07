@@ -149,22 +149,19 @@ impl Processor for GemProcessor {
             let inputs = crate::processor::build_anchor_inputs(&anchor, &sibling_files, &extra);
             let outputs = vec![stamp_path(&anchor_dir)];
 
-            if self.config.cache_output_dir {
-                let output_dir = if anchor_dir.as_os_str().is_empty() {
-                    PathBuf::from(&self.config.gem_home)
-                } else {
-                    anchor_dir.join(&self.config.gem_home)
-                };
-                graph.add_product_with_output_dir(
-                    inputs,
-                    outputs,
-                    instance_name,
-                    hash.clone(),
-                    output_dir,
-                )?;
+            let output_dirs = if self.config.cache_output_dir {
+                vec![anchor_dir.join(&self.config.gem_home)]
             } else {
-                graph.add_product(inputs, outputs, instance_name, hash.clone())?;
-            }
+                Vec::new()
+            };
+            graph.add_product_with(
+                inputs,
+                outputs,
+                instance_name,
+                hash.clone(),
+                None,
+                output_dirs,
+            )?;
         }
 
         Ok(())

@@ -47,20 +47,21 @@ impl SassDepAnalyzer {
     }
 
     /// Resolve a load URL against the importing file's directory, then each
-    /// configured load path. Returns the first file that exists.
-    fn resolve(&self, url: &str, including_dir: &Path) -> Option<PathBuf> {
+    /// configured load path. Returns the first file that exists or that
+    /// another product will generate (see `resolve_in`).
+    fn resolve(&self, url: &str, including_dir: &Path, file_index: &FileIndex) -> Option<PathBuf> {
         std::iter::once(including_dir.to_path_buf())
             .chain(self.config.load_paths.iter().map(PathBuf::from))
-            .find_map(|dir| resolve_in(&dir.join(url)))
+            .find_map(|dir| resolve_in(&dir.join(url), file_index))
     }
 
     /// Scan `source` and everything it loads. Rescanned on every build (see
     /// `always_rescan`), so the result is never stale.
-    fn scan_source(&self, source: &Path) -> Result<ScanResult> {
+    fn scan_source(&self, source: &Path, file_index: &FileIndex) -> Result<ScanResult> {
         let mut deps: Vec<PathBuf> = Vec::new();
         let mut seen: HashSet<PathBuf> = HashSet::new();
         let mut scanned: HashSet<PathBuf> = HashSet::new();
-        self.scan_recursive(source, &mut deps, &mut seen, &mut scanned)?;
+        self.scan_recursive(source, file_index, &mut deps, &mut seen, &mut scanned)?;
         Ok(ScanResult::deps(deps, Vec::new()))
     }
 
@@ -69,12 +70,20 @@ impl SassDepAnalyzer {
     fn scan_recursive(
         &self,
         file: &Path,
+        file_index: &FileIndex,
         deps: &mut Vec<PathBuf>,
         seen: &mut HashSet<PathBuf>,
         scanned: &mut HashSet<PathBuf>,
     ) -> Result<()> {
         let canonical = file.canonicalize().unwrap_or_else(|_| file.to_path_buf());
         if !scanned.insert(canonical) {
+            return Ok(());
+        }
+        // A partial another product generates does not exist before its
+        // producer runs. It is already a dependency — which orders this
+        // product after the producer — and once it is written, the
+        // mid-build re-analysis reads it and adds what it loads.
+        if !file.exists() {
             return Ok(());
         }
         let content = errors::ctx(
@@ -85,7 +94,7 @@ impl SassDepAnalyzer {
         let including_dir = crate::processor::parent_dir_or_empty(file);
 
         for url in load_urls(&content, indented) {
-            let Some(resolved) = self.resolve(&url, including_dir) else {
+            let Some(resolved) = self.resolve(&url, including_dir, file_index) else {
                 if self.config.skip_not_found {
                     continue;
                 }
@@ -111,7 +120,7 @@ impl SassDepAnalyzer {
                 .and_then(|e| e.to_str())
                 .is_some_and(|e| SASS_MATCH_EXTENSIONS.contains(&e));
             if is_sass {
-                self.scan_recursive(&resolved, deps, seen, scanned)?;
+                self.scan_recursive(&resolved, file_index, deps, seen, scanned)?;
             }
         }
         Ok(())
@@ -247,8 +256,10 @@ fn strip_comments(content: &str) -> String {
 /// The Sass resolution rules for one base path (`dir.join(url)`): a path
 /// with a Sass/CSS extension is tried as written and as a partial;
 /// otherwise each of `.scss`, `.sass` and `.css`, also as a partial, then
-/// `index` / `_index` inside the directory of that name.
-fn resolve_in(base: &Path) -> Option<PathBuf> {
+/// `index` / `_index` inside the directory of that name. A candidate
+/// matches when it is on disk or in `file_index`, which also holds the
+/// outputs other products declare.
+fn resolve_in(base: &Path, file_index: &FileIndex) -> Option<PathBuf> {
     let has_load_ext = base
         .extension()
         .and_then(|e| e.to_str())
@@ -268,7 +279,9 @@ fn resolve_in(base: &Path) -> Option<PathBuf> {
             candidates.push(base.join(format!("index.{ext}")));
         }
     }
-    candidates.into_iter().find(|c| c.is_file())
+    candidates
+        .into_iter()
+        .find(|c| c.is_file() || file_index.contains(c))
 }
 
 /// `dir/name.ext` → `dir/_name.ext`; None when the name is already a partial.
@@ -322,9 +335,9 @@ impl DepAnalyzer for SassDepAnalyzer {
         &self,
         _ctx: &crate::build_context::BuildContext,
         source: &Path,
-        _file_index: &FileIndex,
+        file_index: &FileIndex,
     ) -> Result<ScanResult> {
-        self.scan_source(source)
+        self.scan_source(source, file_index)
     }
 
     /// Partials shadow one another by name and load path, so the result
@@ -405,20 +418,49 @@ mod tests {
         fs::create_dir(d.join("comp")).unwrap();
         fs::write(d.join("comp/_index.scss"), "").unwrap();
         fs::write(d.join("lib.css"), "").unwrap();
+        let none = FileIndex::from_paths(Vec::new());
 
-        assert_eq!(resolve_in(&d.join("vars")), Some(d.join("_vars.scss")));
-        assert_eq!(resolve_in(&d.join("_vars")), Some(d.join("_vars.scss")));
-        assert_eq!(resolve_in(&d.join("vars.scss")), Some(d.join("_vars.scss")));
-        assert_eq!(resolve_in(&d.join("plain")), Some(d.join("plain.scss")));
         assert_eq!(
-            resolve_in(&d.join("theme.dark")),
+            resolve_in(&d.join("vars"), &none),
+            Some(d.join("_vars.scss"))
+        );
+        assert_eq!(
+            resolve_in(&d.join("_vars"), &none),
+            Some(d.join("_vars.scss"))
+        );
+        assert_eq!(
+            resolve_in(&d.join("vars.scss"), &none),
+            Some(d.join("_vars.scss"))
+        );
+        assert_eq!(
+            resolve_in(&d.join("plain"), &none),
+            Some(d.join("plain.scss"))
+        );
+        assert_eq!(
+            resolve_in(&d.join("theme.dark"), &none),
             Some(d.join("theme.dark.scss"))
         );
         assert_eq!(
-            resolve_in(&d.join("comp")),
+            resolve_in(&d.join("comp"), &none),
             Some(d.join("comp/_index.scss"))
         );
-        assert_eq!(resolve_in(&d.join("lib")), Some(d.join("lib.css")));
-        assert_eq!(resolve_in(&d.join("missing")), None);
+        assert_eq!(resolve_in(&d.join("lib"), &none), Some(d.join("lib.css")));
+        assert_eq!(resolve_in(&d.join("missing"), &none), None);
+    }
+
+    #[test]
+    fn resolve_in_finds_generated_partials() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        // Neither file exists on disk; another product declares both.
+        let generated = FileIndex::from_paths(vec![d.join("_colors.scss"), d.join("gen.css")]);
+        assert_eq!(
+            resolve_in(&d.join("colors"), &generated),
+            Some(d.join("_colors.scss"))
+        );
+        assert_eq!(
+            resolve_in(&d.join("gen"), &generated),
+            Some(d.join("gen.css"))
+        );
     }
 }

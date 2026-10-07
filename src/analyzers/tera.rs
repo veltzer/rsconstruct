@@ -35,10 +35,14 @@ impl TeraDepAnalyzer {
     /// Returns the resolved file paths (added to product.inputs) and the
     /// hash pieces that capture non-content state — the sorted set of paths
     /// matching each glob, plus the literal text of each shell command.
+    ///
+    /// A referenced file resolves when it is on disk or in `file_index`,
+    /// which also holds the outputs other products declare.
     pub(crate) fn scan_template(
         &self,
         ctx: &crate::build_context::BuildContext,
         source: &Path,
+        file_index: &FileIndex,
     ) -> Result<ScanResult> {
         let mut paths: Vec<PathBuf> = Vec::new();
         let mut seen: HashSet<PathBuf> = HashSet::new();
@@ -53,6 +57,7 @@ impl TeraDepAnalyzer {
         scan_template_recursive(
             ctx,
             source,
+            file_index,
             &mut paths,
             &mut seen,
             &mut hash_pieces,
@@ -78,6 +83,7 @@ impl TeraDepAnalyzer {
 fn scan_template_recursive(
     ctx: &crate::build_context::BuildContext,
     source: &Path,
+    file_index: &FileIndex,
     paths: &mut Vec<PathBuf>,
     seen: &mut HashSet<PathBuf>,
     hash_pieces: &mut Vec<String>,
@@ -91,10 +97,11 @@ fn scan_template_recursive(
     }
 
     // A template that is itself a build output (e.g. a generated driver
-    // template) does not exist before its producer runs, which is exactly
-    // the situation on a cold build. Skip it: the consuming product is
-    // already ordered behind the producer by the graph's input/output
-    // edges, and the next dependency scan — with the file on disk — picks
+    // template, or an included one that resolved through `file_index`)
+    // does not exist before its producer runs, which is exactly the
+    // situation on a cold build. Skip reading it: it is already a
+    // dependency, which orders the consuming product behind the producer,
+    // and once it is written the mid-build re-analysis reads it and picks
     // up its transitive dependencies. A genuinely missing hand-written
     // template still fails loudly when the tera processor tries to render
     // it.
@@ -201,12 +208,20 @@ fn scan_template_recursive(
         }
         let candidates = [source_dir.join(path_str), PathBuf::from(path_str)];
         for candidate in &candidates {
-            if candidate.is_file() {
+            if candidate.is_file() || file_index.contains(candidate) {
                 if !seen.contains(candidate) {
                     seen.insert(candidate.clone());
                     paths.push(candidate.clone());
                 }
-                scan_template_recursive(ctx, candidate, paths, seen, hash_pieces, scanned)?;
+                scan_template_recursive(
+                    ctx,
+                    candidate,
+                    file_index,
+                    paths,
+                    seen,
+                    hash_pieces,
+                    scanned,
+                )?;
                 break;
             }
         }
@@ -217,12 +232,12 @@ fn scan_template_recursive(
             continue;
         }
         let candidates = [source_dir.join(path_str), PathBuf::from(path_str)];
-        for candidate in &candidates {
-            if candidate.is_file() && !seen.contains(candidate) {
-                seen.insert(candidate.clone());
-                paths.push(candidate.clone());
-                break;
-            }
+        if let Some(candidate) = candidates
+            .iter()
+            .find(|c| c.is_file() || file_index.contains(c))
+            && seen.insert(candidate.clone())
+        {
+            paths.push(candidate.clone());
         }
     }
     for caps in version_str_re.captures_iter(&content) {
@@ -231,12 +246,12 @@ fn scan_template_recursive(
             continue;
         }
         let candidates = [source_dir.join(path_str), PathBuf::from(path_str)];
-        for candidate in &candidates {
-            if candidate.is_file() && !seen.contains(candidate) {
-                seen.insert(candidate.clone());
-                paths.push(candidate.clone());
-                break;
-            }
+        if let Some(candidate) = candidates
+            .iter()
+            .find(|c| c.is_file() || file_index.contains(c))
+            && seen.insert(candidate.clone())
+        {
+            paths.push(candidate.clone());
         }
     }
 
@@ -453,9 +468,9 @@ impl DepAnalyzer for TeraDepAnalyzer {
         &self,
         ctx: &crate::build_context::BuildContext,
         source: &Path,
-        _file_index: &FileIndex,
+        file_index: &FileIndex,
     ) -> Result<ScanResult> {
-        self.scan_template(ctx, source)
+        self.scan_template(ctx, source, file_index)
     }
 
     /// The hash pieces (glob results, command text) depend on filesystem
@@ -473,7 +488,13 @@ impl DepAnalyzer for TeraDepAnalyzer {
         ctx: &crate::build_context::BuildContext,
         source: &Path,
     ) -> Result<Option<Vec<String>>> {
-        Ok(Some(self.scan_template(ctx, source)?.hash_pieces))
+        // Hash pieces come only from templates that are read, and a
+        // template is read only once it exists on disk, so resolving
+        // against the disk alone yields the pieces the build used.
+        let disk_only = FileIndex::from_paths(Vec::new());
+        Ok(Some(
+            self.scan_template(ctx, source, &disk_only)?.hash_pieces,
+        ))
     }
 }
 

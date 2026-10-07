@@ -122,18 +122,7 @@ impl Processor for ExplicitProcessor {
             &crate::config::checksum_fields_of(instance_name),
         ));
 
-        if output_dirs.is_empty() {
-            graph.add_product(inputs, output_files, instance_name, hash)?;
-        } else {
-            graph.add_product_with_output_dirs_and_variant(
-                inputs,
-                output_files,
-                instance_name,
-                hash,
-                output_dirs,
-                None,
-            )?;
-        }
+        graph.add_product_with(inputs, output_files, instance_name, hash, None, output_dirs)?;
 
         Ok(())
     }

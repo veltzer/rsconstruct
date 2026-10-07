@@ -431,6 +431,9 @@ fn run() -> (Result<()>, bool) {
                     cli::ProcessorAction::Defconfig { ref pname } => {
                         builder::processor::processor_defconfig(pname, cli.verbose)?;
                     }
+                    cli::ProcessorAction::Info { ref pname } => {
+                        builder::processor::processor_info(pname.as_deref())?;
+                    }
                     cli::ProcessorAction::Add { ref pname, dry_run } => {
                         builder::add_processor(pname, dry_run)?;
                     }

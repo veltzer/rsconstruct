@@ -122,19 +122,20 @@ impl Processor for SphinxProcessor {
                 &[],
             );
             let inputs = crate::processor::build_anchor_inputs(&anchor, &sibling_files, &extra);
-            if self.config.cache_output_dir {
+            let output_dirs = if self.config.cache_output_dir {
                 // output_dir is at project root, NOT joined with anchor_dir
-                let output_dir = PathBuf::from(&self.config.standard.output_dir);
-                graph.add_product_with_output_dir(
-                    inputs,
-                    vec![],
-                    instance_name,
-                    hash.clone(),
-                    output_dir,
-                )?;
+                vec![PathBuf::from(&self.config.standard.output_dir)]
             } else {
-                graph.add_product(inputs, vec![], instance_name, hash.clone())?;
-            }
+                Vec::new()
+            };
+            graph.add_product_with(
+                inputs,
+                vec![],
+                instance_name,
+                hash.clone(),
+                None,
+                output_dirs,
+            )?;
         }
         Ok(())
     }

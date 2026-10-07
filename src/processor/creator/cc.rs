@@ -584,18 +584,19 @@ impl Processor for CcProcessor {
 
             inputs.extend_from_slice(&extra);
 
-            if self.config.cache_output_dir {
-                let output_dir = Self::output_dir_for(&yaml_path);
-                graph.add_product_with_output_dir(
-                    inputs,
-                    vec![],
-                    instance_name,
-                    hash.clone(),
-                    output_dir,
-                )?;
+            let output_dirs = if self.config.cache_output_dir {
+                vec![Self::output_dir_for(&yaml_path)]
             } else {
-                graph.add_product(inputs, vec![], instance_name, hash.clone())?;
-            }
+                Vec::new()
+            };
+            graph.add_product_with(
+                inputs,
+                vec![],
+                instance_name,
+                hash.clone(),
+                None,
+                output_dirs,
+            )?;
         }
         Ok(())
     }

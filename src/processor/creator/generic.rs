@@ -123,18 +123,14 @@ impl Processor for CreatorProcessor {
             let output_dirs: Vec<PathBuf> =
                 self.config.output_dirs.iter().map(|d| resolve(d)).collect();
 
-            if output_dirs.is_empty() {
-                graph.add_product(inputs, output_files, instance_name, hash.clone())?;
-            } else {
-                graph.add_product_with_output_dirs_and_variant(
-                    inputs,
-                    output_files,
-                    instance_name,
-                    hash.clone(),
-                    output_dirs,
-                    None,
-                )?;
-            }
+            graph.add_product_with(
+                inputs,
+                output_files,
+                instance_name,
+                hash.clone(),
+                None,
+                output_dirs,
+            )?;
         }
 
         Ok(())

@@ -441,14 +441,25 @@ fn config_diff(name: &str, current: &serde_json::Value) -> serde_json::Value {
     serde_json::Value::Object(diff)
 }
 
-/// Print metadata annotations (required fields and checksum-affecting fields) for a processor.
-/// Only shown in text mode (not JSON mode).
-///
-/// Columns: Field, Type, Default, Required, Checksum (and Description in verbose mode).
-/// - Required: "yes" if the field is in `must_fields()` (must be set non-empty by user).
-/// - Checksum: "yes" if the field is in `checksum_fields()` (changes affect what the tool produces
-///   and trigger rebuilds).
-fn print_processor_metadata(name: &str, verbose: bool) {
+/// One config field of a processor, as `processor defconfig` and
+/// `processor info` show it.
+#[derive(serde::Serialize)]
+struct FieldInfo {
+    name: &'static str,
+    #[serde(rename = "type")]
+    ty: &'static str,
+    default: Option<serde_json::Value>,
+    /// Must be set non-empty by the user (`must_fields`).
+    required: bool,
+    /// Changes what the tool produces, so it is part of the cache key
+    /// (`checksum_fields`).
+    checksum: bool,
+    description: &'static str,
+}
+
+/// The config fields of processor `name`: its own fields first, then the
+/// shared dependency/execution fields, then the scan fields.
+fn processor_fields(name: &str) -> Vec<FieldInfo> {
     use crate::config::{SCAN_FIELD_DESCRIPTIONS, SHARED_FIELD_DESCRIPTIONS};
 
     let proc_descs =
@@ -469,60 +480,64 @@ fn print_processor_metadata(name: &str, verbose: bool) {
         .and_then(|j| serde_json::from_str(&j).ok())
         .unwrap_or(serde_json::Value::Null);
 
-    // Processor-specific fields first, then shared dep/exec, then scan fields.
-    let all_descs: Vec<(&str, &str)> = proc_descs
-        .iter()
-        .map(|(f, d)| (*f, *d))
-        .chain(SHARED_FIELD_DESCRIPTIONS.iter().map(|(f, d)| (*f, *d)))
-        .chain(SCAN_FIELD_DESCRIPTIONS.iter().map(|(f, d)| (*f, *d)))
-        .collect();
-
     let plugin = crate::registries::processor::find_plugin(name);
-    let rows: Vec<Vec<String>> = all_descs
-        .iter()
+    // Processor-specific fields first, then shared dep/exec, then scan fields.
+    proc_descs
+        .into_iter()
+        .chain(SHARED_FIELD_DESCRIPTIONS.iter().copied())
+        .chain(SCAN_FIELD_DESCRIPTIONS.iter().copied())
         .map(|(field, desc)| {
-            let val = defaults.get(*field);
-            let type_str = match val {
+            let val = defaults.get(field);
+            let ty = match val {
                 Some(serde_json::Value::String(_)) => "string",
                 Some(serde_json::Value::Array(_)) => "string[]",
                 Some(serde_json::Value::Bool(_)) => "bool",
                 Some(serde_json::Value::Number(_)) => "int",
                 Some(serde_json::Value::Object(_)) => "object",
-                _ if *field == "max_jobs" => "int",
+                _ if field == "max_jobs" => "int",
                 _ => "?",
             };
-            let default_str = if *field == "batch"
+            let default = if field == "batch"
                 && let Some(p) = plugin
                 && !p.supports_batch
             {
-                "false".to_string()
+                Some(serde_json::Value::Bool(false))
             } else {
-                tables::opt_json(val)
+                val.cloned()
             };
-            let required = tables::yes_no(must_fields.contains(*field));
-            let checksum = tables::yes_no(checksum_fields.contains(*field));
-            if verbose {
-                vec![
-                    field.to_string(),
-                    type_str.to_string(),
-                    default_str,
-                    required.to_string(),
-                    checksum.to_string(),
-                    desc.to_string(),
-                ]
-            } else {
-                vec![
-                    field.to_string(),
-                    type_str.to_string(),
-                    default_str,
-                    required.to_string(),
-                    checksum.to_string(),
-                ]
+            FieldInfo {
+                name: field,
+                ty,
+                default,
+                required: must_fields.contains(field),
+                checksum: checksum_fields.contains(field),
+                description: desc,
             }
+        })
+        .collect()
+}
+
+/// Print the config fields of processor `name` as a table. Columns: Field,
+/// Type, Default, Required, Checksum, and Description when `descriptions`.
+fn print_processor_metadata(name: &str, descriptions: bool) {
+    let rows: Vec<Vec<String>> = processor_fields(name)
+        .into_iter()
+        .map(|f| {
+            let mut row = vec![
+                f.name.to_string(),
+                f.ty.to_string(),
+                tables::opt_json(f.default.as_ref()),
+                tables::yes_no(f.required).to_string(),
+                tables::yes_no(f.checksum).to_string(),
+            ];
+            if descriptions {
+                row.push(f.description.to_string());
+            }
+            row
         })
         .collect();
 
-    if verbose {
+    if descriptions {
         tables::print_table(
             &[
                 "Field",
@@ -554,6 +569,73 @@ pub fn processor_defconfig(name: &str, verbose: bool) -> Result<()> {
     Ok(())
 }
 
+/// Show what a processor is and how it is configured: its description,
+/// type, capabilities, and every config field with its type, default and
+/// description. `None` shows every processor, sorted by name. Works without
+/// rsconstruct.toml: everything comes from the processors' plugin entries.
+pub fn processor_info(pname: Option<&str>) -> Result<()> {
+    let names: Vec<String> = match pname {
+        Some(name) => vec![name.to_string()],
+        None => crate::registries::processor::all_pnames(),
+    };
+    let mut plugins = Vec::new();
+    for name in &names {
+        let plugin = crate::registries::processor::find_plugin(name).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Unknown processor: '{name}'. Run 'rsconstruct processor list' to see available processors."
+            )
+        })?;
+        plugins.push((name.as_str(), plugin));
+    }
+
+    if crate::json_output::is_json_mode() {
+        let entries: Vec<serde_json::Value> = plugins
+            .iter()
+            .map(|(name, p)| {
+                serde_json::json!({
+                    "name": name,
+                    "type": p.processor_type.as_str(),
+                    "description": p.description,
+                    "keywords": p.keywords,
+                    "version": p.version,
+                    "native": p.is_native,
+                    "rust": p.is_rust,
+                    "can_fix": p.can_fix,
+                    "supports_batch": p.supports_batch,
+                    "max_jobs_cap": p.max_jobs_cap,
+                    "fields": processor_fields(name),
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&entries)?);
+        return Ok(());
+    }
+
+    for (i, (name, p)) in plugins.iter().enumerate() {
+        if i > 0 {
+            println!();
+        }
+        println!("{} ({})", color::bold(name), p.processor_type.as_str());
+        println!("  {}", p.description);
+        if !p.keywords.is_empty() {
+            println!("  Keywords: {}", p.keywords.join(", "));
+        }
+        println!(
+            "  Native: {}  Rust: {}  Fix: {}  Batch: {}  Max jobs: {}  Version: {}",
+            tables::yes_no(p.is_native),
+            tables::yes_no(p.is_rust),
+            tables::yes_no(p.can_fix),
+            tables::yes_no(p.supports_batch),
+            p.max_jobs_cap
+                .map_or_else(|| "unlimited".to_string(), |n| n.to_string()),
+            p.version,
+        );
+        println!();
+        print_processor_metadata(name, true);
+    }
+    Ok(())
+}
+
 impl Builder {
     /// Handle `rsconstruct processor` subcommands
     pub fn processor(
@@ -574,6 +656,7 @@ impl Builder {
             | ProcessorAction::Delete { .. }
             | ProcessorAction::Disable { .. }
             | ProcessorAction::Enable { .. }
+            | ProcessorAction::Info { .. }
             | ProcessorAction::Search { .. } => {
                 unreachable!("handled before Builder is constructed")
             }
@@ -783,9 +866,14 @@ impl Builder {
                     );
                 }
 
-                let graph = self.build_graph_filtered(ctx, name.as_deref(), false)?;
-
-                let products = graph.products();
+                // The whole graph, so a processor's products include inputs
+                // generated by other processors; the listing then narrows.
+                let graph = self.build_graph_with_processors(ctx, &processors)?;
+                let products: Vec<&crate::graph::Product> = graph
+                    .products()
+                    .iter()
+                    .filter(|p| name.as_deref().is_none_or(|n| p.processor == n))
+                    .collect();
 
                 if crate::json_output::is_json_mode() {
                     let entries: Vec<crate::json_output::ProcessorFileEntry> = products
@@ -821,12 +909,12 @@ impl Builder {
                 }
 
                 let mut counts: HashMap<&str, usize> = HashMap::new();
-                for p in products {
+                for p in &products {
                     *counts.entry(p.processor.as_str()).or_insert(0) += 1;
                 }
 
                 let mut current_processor = "";
-                for product in products {
+                for product in &products {
                     if product.processor.as_str() != current_processor {
                         if headers && !current_processor.is_empty() {
                             println!();

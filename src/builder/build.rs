@@ -330,11 +330,11 @@ impl Builder {
             mut graph,
             mut phase_timings,
             analysis,
-        } = self.build_graph_with_processors_and_phase(
+        } = self.build_graph_with_processors_impl(
             ctx,
             &processors,
+            super::GraphBuildMode::Normal,
             opts.stop_after,
-            None,
             opts.verbose,
         )?;
 

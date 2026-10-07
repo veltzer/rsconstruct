@@ -1,5 +1,5 @@
 use anyhow::Result;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use serde::{Deserialize, Serialize};
@@ -113,22 +113,19 @@ impl Processor for NpmProcessor {
 
             let inputs = crate::processor::build_anchor_inputs(&anchor, &sibling_files, &extra);
 
-            if self.config.cache_output_dir {
-                let output_dir = if anchor_dir.as_os_str().is_empty() {
-                    PathBuf::from("node_modules")
-                } else {
-                    anchor_dir.join("node_modules")
-                };
-                graph.add_product_with_output_dir(
-                    inputs,
-                    vec![],
-                    instance_name,
-                    hash.clone(),
-                    output_dir,
-                )?;
+            let output_dirs = if self.config.cache_output_dir {
+                vec![anchor_dir.join("node_modules")]
             } else {
-                graph.add_product(inputs, vec![], instance_name, hash.clone())?;
-            }
+                Vec::new()
+            };
+            graph.add_product_with(
+                inputs,
+                vec![],
+                instance_name,
+                hash.clone(),
+                None,
+                output_dirs,
+            )?;
         }
 
         Ok(())

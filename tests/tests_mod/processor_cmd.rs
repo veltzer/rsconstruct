@@ -166,6 +166,124 @@ fn processors_files_json_output() {
     assert_eq!(entry["processor_type"], "generator");
 }
 
+/// `processor files <name>` lists the products the build would run for that
+/// processor, including those whose inputs another processor generates.
+#[test]
+fn processors_files_named_includes_generated_inputs() {
+    let temp_dir = TempDir::new().unwrap();
+    let project = temp_dir.path();
+    fs::write(
+        project.join("rsconstruct.toml"),
+        r#"[build]
+hash_tool_versions = false
+
+[processor.generator.generic.make]
+command = "cp"
+output_dir = "gen"
+output_extension = "mid"
+batch = false
+src_extensions = [".raw"]
+src_dirs = ["raw"]
+
+[processor.generator.generic.use]
+command = "cp"
+output_dir = "out/use"
+output_extension = "txt"
+batch = false
+src_extensions = [".mid"]
+src_dirs = ["gen"]
+"#,
+    )
+    .unwrap();
+    fs::create_dir_all(project.join("raw")).unwrap();
+    fs::write(project.join("raw/a.raw"), "a\n").unwrap();
+
+    let output = run_rsconstruct_with_env(
+        project,
+        &[
+            "--json",
+            "processor",
+            "files",
+            "processor.generator.generic.use",
+        ],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(
+        output.status.success(),
+        "processor files failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let entries: Vec<serde_json::Value> =
+        serde_json::from_slice(&output.stdout).expect("Expected valid JSON array");
+    assert_eq!(entries.len(), 1, "only the named processor: {entries:?}");
+    assert_eq!(entries[0]["processor"], "processor.generator.generic.use");
+    assert_eq!(entries[0]["inputs"][0], "gen/a.mid");
+}
+
+/// `processor info <pname>` shows the processor's description and its
+/// fields, with each field's description; no config is needed.
+#[test]
+fn processor_info_shows_description_and_fields() {
+    let temp_dir = TempDir::new().unwrap();
+    let output = run_rsconstruct_with_env(
+        temp_dir.path(),
+        &["processor", "info", "processor.checker.ruff"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(
+        output.status.success(),
+        "processor info failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("processor.checker.ruff (checker)"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("Lint and format Python files"), "{stdout}");
+    assert!(stdout.contains("src_extensions"), "{stdout}");
+    assert!(
+        stdout.contains("File extensions to match during scanning"),
+        "field descriptions are shown: {stdout}"
+    );
+}
+
+/// Without a name, `processor info` covers every processor, each with a
+/// description and its fields.
+#[test]
+fn processor_info_without_name_covers_every_processor() {
+    let temp_dir = TempDir::new().unwrap();
+    let listed = run_rsconstruct_with_env(
+        temp_dir.path(),
+        &["--json", "processor", "list"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(listed.status.success());
+    let listed: Vec<serde_json::Value> = serde_json::from_slice(&listed.stdout).unwrap();
+
+    let output = run_rsconstruct_with_env(
+        temp_dir.path(),
+        &["--json", "processor", "info"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(
+        output.status.success(),
+        "processor info failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let entries: Vec<serde_json::Value> =
+        serde_json::from_slice(&output.stdout).expect("Expected valid JSON array");
+    assert_eq!(entries.len(), listed.len(), "one entry per processor");
+    for entry in &entries {
+        assert_ne!(entry["description"], "", "{entry}");
+        let fields = entry["fields"].as_array().expect("fields array");
+        assert!(
+            fields.iter().any(|f| f["name"] == "enabled"),
+            "every processor has the standard fields: {entry}"
+        );
+    }
+}
+
 #[test]
 fn processors_files_json_empty() {
     let temp_dir = setup_test_project();
