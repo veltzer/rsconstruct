@@ -483,6 +483,114 @@ fn icpp_rescans_source_when_included_header_gains_include() {
     );
 }
 
+/// `encoding` stands in for any processor of `.py` files: every product
+/// whose primary input is a `.py` file gets the python analyzer's imports.
+const ENCODING_WITH_PYTHON_ANALYZER: &str = "[processor.checker.encoding]\nsrc_dirs = [\"src\"]\nsrc_extensions = [\".py\"]\n\n[analyzer.python]\n";
+
+fn analyzer_files(project_path: &std::path::Path, source: &str) -> String {
+    let out = run_rsconstruct_with_env(
+        project_path,
+        &["analyzer", "show", "files", source],
+        &[("NO_COLOR", "1")],
+    );
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+/// Running `main.py` runs what its imports import, so a module two imports
+/// away is a dependency: editing it must rebuild `main.py`'s product. The
+/// analyzer used to record direct imports only.
+#[test]
+fn python_analyzer_follows_imports_transitively() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    write_project_file(
+        project_path,
+        "rsconstruct.toml",
+        ENCODING_WITH_PYTHON_ANALYZER,
+    );
+    write_project_file(project_path, "src/main.py", "import os\nimport helper\n");
+    write_project_file(project_path, "src/helper.py", "from util import x\n");
+    write_project_file(project_path, "src/util.py", "x = 1\n");
+    build_ok(project_path);
+
+    let files = analyzer_files(project_path, "src/main.py");
+    assert!(files.contains("src/helper.py"), "direct import: {files}");
+    assert!(
+        files.contains("src/util.py"),
+        "import of an import: {files}"
+    );
+
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    write_project_file(project_path, "src/util.py", "x = 2\n");
+    let out = run_rsconstruct_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("BUILD [processor.checker.encoding] src/main.py"),
+        "main.py must rebuild when util.py changes: {stdout}"
+    );
+}
+
+/// A `src/`-layout package imported by absolute name: `from app.util import
+/// fs` resolves under `src/` (the default `search_paths`), picks up the
+/// submodule `fs`, and depends on every `__init__.py` that importing it runs.
+#[test]
+fn python_analyzer_resolves_src_layout_packages() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    write_project_file(
+        project_path,
+        "rsconstruct.toml",
+        ENCODING_WITH_PYTHON_ANALYZER,
+    );
+    write_project_file(project_path, "src/app/__init__.py", "");
+    write_project_file(
+        project_path,
+        "src/app/main.py",
+        "from app.util import fs, VERSION\n",
+    );
+    write_project_file(project_path, "src/app/util/__init__.py", "VERSION = 1\n");
+    write_project_file(project_path, "src/app/util/fs.py", "import os, app.log\n");
+    write_project_file(project_path, "src/app/log.py", "");
+    build_ok(project_path);
+
+    let files = analyzer_files(project_path, "src/app/main.py");
+    for dep in [
+        "src/app/__init__.py",
+        "src/app/util/__init__.py",
+        "src/app/util/fs.py",
+        "src/app/log.py",
+    ] {
+        assert!(files.contains(dep), "missing {dep}: {files}");
+    }
+}
+
+/// Modules that import each other terminate the scan, and a module is not
+/// its own dependency.
+#[test]
+fn python_analyzer_handles_import_cycles() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    write_project_file(
+        project_path,
+        "rsconstruct.toml",
+        ENCODING_WITH_PYTHON_ANALYZER,
+    );
+    write_project_file(project_path, "src/a.py", "import b\n");
+    write_project_file(project_path, "src/b.py", "import c\n");
+    write_project_file(project_path, "src/c.py", "import a\n");
+    build_ok(project_path);
+
+    let files = analyzer_files(project_path, "src/a.py");
+    assert!(
+        files.contains("src/b.py") && files.contains("src/c.py"),
+        "{files}"
+    );
+    assert!(
+        !files.contains("  src/a.py"),
+        "a.py listed as its own dependency: {files}"
+    );
+}
+
 /// A project with one `.c` source checked by `encoding` (a native checker
 /// standing in for a compiler) and an icpp analyzer with `analyzer_extra`
 /// appended to its stanza.

@@ -116,11 +116,24 @@ pub struct PythonAnalyzerConfig {
     /// removing the stanza from rsconstruct.toml.
     #[serde(default = "default_true")]
     pub enabled: bool,
+    /// Directories (relative to the project root) that absolute imports
+    /// resolve against, after the importing file's directory and the project
+    /// root — the source roots of an installed package. The default covers
+    /// the `src/` layout; a directory that does not exist matches nothing.
+    #[serde(default = "default_python_search_paths")]
+    pub search_paths: Vec<String>,
+}
+
+fn default_python_search_paths() -> Vec<String> {
+    vec!["src".to_string()]
 }
 
 impl Default for PythonAnalyzerConfig {
     fn default() -> Self {
-        Self { enabled: true }
+        Self {
+            enabled: true,
+            search_paths: default_python_search_paths(),
+        }
     }
 }
 
@@ -241,10 +254,10 @@ impl KnownFields for IcppAnalyzerConfig {
 
 impl KnownFields for PythonAnalyzerConfig {
     fn known_fields() -> &'static [&'static str] {
-        &["enabled"]
+        &["enabled", "search_paths"]
     }
     fn checksum_fields() -> &'static [&'static str] {
-        &[]
+        &["search_paths"]
     }
 }
 
