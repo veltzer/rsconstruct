@@ -477,8 +477,10 @@ skipped with stale outputs. **Fix:** entries hold a `platform::FileStamp`
   continue, silently dropping dependencies — against "strict by
   default".~~ **Resolved:** every failure is an error at analyzer setup,
   naming the package or command.
-- `build_graph_filtered` is a hand-copied fourth graph-building path that
-  skips tool-version hashing.
+- ~~`build_graph_filtered` is a hand-copied fourth graph-building path that
+  skips tool-version hashing.~~ **Resolved:** `processor files` builds the
+  normal graph and filters the listing, which also fixed `processor files
+  <name>` failing when another processor generates that processor's inputs.
 - ~~`-p B` does not pull in the producers of B's inputs; `--target`
   does.~~ **Resolved:** `-p` selects from the fully discovered graph with
   the same upstream closure as `--target`; `-x` drops what depends on an
@@ -488,7 +490,11 @@ skipped with stale outputs. **Fix:** entries hold a `platform::FileStamp`
   matches short names (with instances) as well as tools, and the type
   aliases are one lookup over `ProcessorType`, which also adds the missing
   `@explicit`.
-- Five `add_product*` constructors; `src/config/mod.rs` is 3,100+ lines.
+- ~~Five `add_product*` constructors; `src/config/mod.rs` is 3,100+
+  lines.~~ **Resolved:** `add_product` plus one `add_product_with(…,
+  variant, output_dirs)`; `config/mod.rs` (about 1,100 lines) keeps config
+  loading and the schema types, with `dependencies`, `processors`,
+  `settings`, `validation` and `overrides` split out beside it.
 - ~~Products predicted to build only because a dependency changes still
   have their outputs unlinked up front, so an unchanged rebuild ends as a
   restore rather than a skip.~~ **Resolved:** stale outputs are removed per

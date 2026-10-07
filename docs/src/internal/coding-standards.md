@@ -210,7 +210,7 @@ filesystem to build the `FileIndex`, and created CPU-bound infrastructure
 the user doesn't need just to see "you typoed a field name."
 
 The validators are `validate_processor_fields_raw` and
-`validate_analyzer_fields_raw` in `src/config/mod.rs`. They return
+`validate_analyzer_fields_raw` in `src/config/validation.rs`. They return
 `Vec<String>` so `Config::load()` can surface errors from both validators
 together under a single `Invalid config:` header. If you add a new config
 surface (a new top-level section with its own registered plugins), add a

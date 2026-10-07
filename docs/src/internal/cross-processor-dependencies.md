@@ -235,8 +235,8 @@ Key implementation details:
   so downstream processors can discover them via `scan()`.
 - `BuildGraph::add_product()` handles re-declarations during multi-pass
   discovery (see below).
-- The loop runs in all three discovery sites: the main build graph builder,
-  `build_graph_filtered`, and the deps builder.
+- The loop runs in both discovery sites: the main build graph builder and
+  the deps builder.
 - `--phases` output shows per-pass statistics when multiple passes are needed.
 - Most projects converge in 1 pass (no cross-processor chains). Projects with
   generator → checker chains converge in 2 passes.
