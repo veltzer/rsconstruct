@@ -285,6 +285,80 @@ fn assert_generated_reference_resolves(project: &Path, maker_input: &str, need: 
     );
 }
 
+/// Build a generator whose output names its input, rename the input
+/// without changing its content, and build again. Returns the second
+/// build and the renamed output's text.
+fn rename_with_name_in_output(name_in_key: bool) -> (crate::common::BuildResult, String) {
+    let temp_dir = TempDir::new().unwrap();
+    let project = temp_dir.path();
+    write_tool(
+        project,
+        "stamp",
+        "{ echo \"generated from $1\"; cat \"$1\"; } > \"$2\"\n",
+    );
+    fs::write(
+        project.join("rsconstruct.toml"),
+        format!(
+            r#"[build]
+hash_tool_versions = false
+
+[processor.generator.generic.stamp]
+command = "stamp"
+output_dir = "out/stamp"
+output_extension = "txt"
+batch = false
+src_extensions = [".src"]
+src_dirs = ["src"]
+output_depends_on_input_name = {name_in_key}
+"#
+        ),
+    )
+    .unwrap();
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(project.join("src/a.src"), "same content\n").unwrap();
+
+    let first = build(project);
+    assert!(first.exit_success, "{:?}", first.errors);
+    assert_eq!(first.success, 1, "{first:?}");
+    let unchanged = build(project);
+    assert_eq!(
+        unchanged.success + unchanged.restored,
+        0,
+        "an unchanged input is skipped either way: {unchanged:?}"
+    );
+
+    fs::rename(project.join("src/a.src"), project.join("src/b.src")).unwrap();
+    let renamed = build(project);
+    assert!(renamed.exit_success, "{:?}", renamed.errors);
+    let text = fs::read_to_string(project.join("out/stamp/b.txt")).unwrap();
+    (renamed, text)
+}
+
+/// By default the cache key is path-free: a renamed input with the same
+/// content restores the cached output, even one that names the old file.
+#[test]
+fn renamed_input_restores_by_default() {
+    let (renamed, text) = rename_with_name_in_output(false);
+    assert_eq!(renamed.restored, 1, "{renamed:?}");
+    assert!(
+        text.contains("generated from src/a.src"),
+        "the restored output still names the old file: {text}"
+    );
+}
+
+/// `output_depends_on_input_name` puts the input paths in the cache key, so
+/// the renamed input is rebuilt and its output names the new file.
+#[test]
+fn output_depends_on_input_name_rebuilds_renamed_input() {
+    let (renamed, text) = rename_with_name_in_output(true);
+    assert_eq!(renamed.success, 1, "rebuilt, not restored: {renamed:?}");
+    assert_eq!(renamed.restored, 0, "{renamed:?}");
+    assert!(
+        text.contains("generated from src/b.src"),
+        "the output names the renamed file: {text}"
+    );
+}
+
 /// The sass analyzer resolves a `@use` of a partial another product
 /// generates, through the declared outputs in the file index.
 #[test]

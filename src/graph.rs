@@ -35,6 +35,10 @@ pub struct Product {
     /// Output directories for creators / creators (relative to project root).
     /// When non-empty, the executor caches/restores these directories instead of individual output files.
     pub output_dirs: Vec<Arc<PathBuf>>,
+    /// Mix the input paths into the descriptor key, not just their content:
+    /// the processor's `output_depends_on_input_name` is set. See
+    /// [`descriptor_key`](Self::descriptor_key).
+    pub input_paths_in_key: bool,
 }
 
 impl Product {
@@ -54,6 +58,7 @@ impl Product {
             cache_key: CacheKey::from_config_hash(config_hash),
             variant: None,
             output_dirs: Vec::new(),
+            input_paths_in_key: false,
         }
     }
 
@@ -77,6 +82,7 @@ impl Product {
             cache_key,
             variant: Some(variant.to_string()),
             output_dirs: Vec::new(),
+            input_paths_in_key: false,
         }
     }
 
@@ -111,9 +117,28 @@ impl Product {
 
     /// Compute the content-addressed descriptor key for this product.
     /// Composition lives in `CacheKey` — see `src/cache_key.rs`.
+    ///
+    /// The key is path-free: it covers the inputs' content, so a renamed
+    /// file with the same content, or two identical files, share one cache
+    /// entry. With `input_paths_in_key` the input paths are hashed in too,
+    /// for a processor whose result depends on them (output naming its
+    /// input, a checker with per-path rules). They are read from the
+    /// current `inputs`, so inputs an analyzer adds mid-build count as well.
     pub fn descriptor_key(&self, input_checksum: &str) -> String {
-        self.cache_key
-            .descriptor_key(&self.processor, input_checksum)
+        if !self.input_paths_in_key {
+            return self
+                .cache_key
+                .descriptor_key(&self.processor, input_checksum);
+        }
+        let paths: Vec<String> = self
+            .inputs
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect();
+        let mut parts: Vec<&str> = vec![input_checksum];
+        parts.extend(paths.iter().map(String::as_str));
+        let with_paths = crate::checksum::hash_parts(&parts);
+        self.cache_key.descriptor_key(&self.processor, &with_paths)
     }
 
     /// Stable identity of this product across builds: which processor
@@ -518,6 +543,17 @@ impl BuildGraph {
         self.products.push(product);
         self.dependents.push(Vec::new());
         self.dependencies.push(Vec::new());
+    }
+
+    /// Key the products of each processor in `processors` (instance names)
+    /// by their input paths as well as their content. See
+    /// [`Product::descriptor_key`].
+    pub fn key_by_input_paths(&mut self, processors: &HashSet<String>) {
+        for product in &mut self.products {
+            if processors.contains(&product.processor) {
+                product.input_paths_in_key = true;
+            }
+        }
     }
 
     /// Incorporate tool version hashes into product cache keys.
@@ -1129,6 +1165,22 @@ mod tests {
             p_pdf.descriptor_key("chk"),
             p_docx.descriptor_key("chk"),
             "PDF and DOCX products must have different descriptor keys"
+        );
+    }
+
+    #[test]
+    fn descriptor_key_includes_input_paths_only_when_asked() {
+        let at = |path: &str, by_path: bool| {
+            let mut p = Product::new(vec![path.into()], vec![], "ruff", 0, None);
+            p.input_paths_in_key = by_path;
+            p.descriptor_key("same-content")
+        };
+        assert_eq!(at("a.py", false), at("b.py", false), "path-free by default");
+        assert_ne!(at("a.py", true), at("b.py", true), "keyed by path when set");
+        assert_ne!(
+            at("a.py", true),
+            at("a.py", false),
+            "turning it on is a new key"
         );
     }
 

@@ -807,6 +807,24 @@ impl Builder {
         )))
     }
 
+    /// Instance names whose config sets `output_depends_on_input_name`.
+    /// Read from the declared config, not from the processors: the field is
+    /// the framework's, applied to the products in the graph.
+    fn processors_keyed_by_input_paths(&self) -> std::collections::HashSet<String> {
+        self.config
+            .processor
+            .instances
+            .iter()
+            .filter(|inst| {
+                inst.config_toml
+                    .get(crate::config::OUTPUT_DEPENDS_ON_INPUT_NAME)
+                    .and_then(toml::Value::as_bool)
+                    == Some(true)
+            })
+            .map(|inst| inst.instance_name.clone())
+            .collect()
+    }
+
     /// Build the dependency graph using provided processors. Every active
     /// processor takes part: `-p`/`-x` select from the finished graph (see
     /// `select_processors`), since a selection needs its producers.
@@ -839,6 +857,7 @@ impl Builder {
         let t = Instant::now();
         let file_index =
             self.discover_products(&mut graph, processors, &active_processors, mode)?;
+        graph.key_by_input_paths(&self.processors_keyed_by_input_paths());
         phase_timings.push(("discover".to_string(), t.elapsed()));
         print_graph_stats(GraphSnapshot::AfterDiscover, &graph);
 

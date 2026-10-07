@@ -36,6 +36,15 @@ pub struct StandardConfig {
     /// removing the stanza from rsconstruct.toml.
     #[serde(default = "default_true")]
     pub enabled: bool,
+    /// The result depends on the input files' paths, not only their
+    /// content: the output names its input (`// Generated from foo.c`), or
+    /// a checker applies per-path rules (ruff's `per-file-ignores`). Adds
+    /// the input paths to the cache key, so a renamed file, or an identical
+    /// file elsewhere, is rebuilt instead of reusing a cached result.
+    /// Read by the builder (`BuildGraph::key_by_input_paths`), not by the
+    /// processor itself.
+    #[serde(default)]
+    pub output_depends_on_input_name: bool,
     // --- Scan fields (file discovery) ---
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub src_dirs: Option<Vec<String>>,
@@ -64,6 +73,7 @@ impl Default for StandardConfig {
             batch: true,
             max_jobs: None,
             enabled: true,
+            output_depends_on_input_name: false,
             src_dirs: None,
             src_extensions: None,
             src_exclude_dirs: None,

@@ -130,9 +130,11 @@ descriptor-key change is attributable to exactly one of them (or to
 
 For processors that produce multiple output formats from the same input (e.g., pandoc producing PDF, HTML, and DOCX), each format is a separate product with a separate cache key. The output format is mixed into the key as the `variant` component, so each format gets its own key naturally.
 
-### Output depends on input name (known limitation)
+### Output depends on input name
 
-Most processors produce output that depends only on input content. However, a processor that embeds the input filename in its output (e.g., a `// Generated from foo.c` header) can get a false cache hit when a file is renamed without a content change, because the descriptor key hashes input *content*, not input *path*. A per-processor `output_depends_on_input_name` opt-in is planned but not implemented (see `todo.md`). A rename with identical content is a cache hit by design (the blob is path-free and is restored to the product's current output path — see the `cache_survives_input_rename` test), which is exactly why a filename-embedding processor would restore output still mentioning the old name.
+Most processors produce output that depends only on input content, so the descriptor key hashes input *content*, not input *path*. A rename with identical content is a cache hit by design: the blob is path-free and is restored to the product's current output path (see the `cache_survives_input_rename` test), and two identical files at different paths share one entry.
+
+That is wrong for a processor whose result depends on the path: one that embeds the input filename in its output (a `// Generated from foo.c` header) would restore output still naming the old file, and a checker with per-path rules (ruff's `per-file-ignores`) could reuse another path's verdict. Such a processor sets `output_depends_on_input_name = true`, a universal field like `enabled`. The builder reads it from the declared config after discovery and marks the instance's products (`BuildGraph::key_by_input_paths`); `Product::descriptor_key` then hashes the input paths together with the input checksum. The paths are taken from the product's current inputs at key time, so inputs an analyzer adds mid-build are covered too. Turning the field on yields new keys, so the first build after it rebuilds. Tests: `renamed_input_restores_by_default` and `output_depends_on_input_name_rebuilds_renamed_input` (`tests/tests_mod/incremental.rs`).
 
 ## Flows
 
