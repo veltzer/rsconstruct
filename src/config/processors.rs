@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use super::{
-    FieldProvenance, KnownFields, ProcessorDefaults, ProvenanceMap, SCAN_CONFIG_FIELDS,
-    STANDARD_EXTRA_FIELDS, ScanDefaultsData, StandardConfig, provenance,
+    FieldProvenance, KnownFields, OUTPUT_DEPENDS_ON_INPUT_NAME, ProcessorDefaults, ProvenanceMap,
+    SCAN_CONFIG_FIELDS, STANDARD_EXTRA_FIELDS, ScanDefaultsData, StandardConfig, provenance,
 };
 use crate::registries::{self as registry, ProcessorPlugin};
 
@@ -246,6 +246,17 @@ pub fn apply_processor_defaults(
     {
         table.insert("batch".into(), toml::Value::Boolean(batch));
         provenance::record_if_absent(provenance, "batch", FieldProvenance::ProcessorDefault);
+    }
+    if defaults.output_depends_on_input_name && !table.contains_key(OUTPUT_DEPENDS_ON_INPUT_NAME) {
+        table.insert(
+            OUTPUT_DEPENDS_ON_INPUT_NAME.into(),
+            toml::Value::Boolean(true),
+        );
+        provenance::record_if_absent(
+            provenance,
+            OUTPUT_DEPENDS_ON_INPUT_NAME,
+            FieldProvenance::ProcessorDefault,
+        );
     }
 }
 

@@ -282,6 +282,9 @@ pub struct ProcessorDefaults {
     pub args: &'static [&'static str],
     /// Override for batch. None means leave the `StandardConfig` default (true).
     pub batch: Option<bool>,
+    /// Default `output_depends_on_input_name`: true for a tool whose verdict
+    /// depends on the file's path (per-file rules, module names).
+    pub output_depends_on_input_name: bool,
 }
 
 impl ProcessorDefaults {
@@ -294,6 +297,7 @@ impl ProcessorDefaults {
         formats: &[],
         args: &[],
         batch: None,
+        output_depends_on_input_name: false,
     };
 }
 

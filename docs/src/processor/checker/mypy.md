@@ -35,6 +35,7 @@ dep_inputs = []                            # Additional files that trigger rebui
 | `command` | string | `"mypy"` | The mypy executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to mypy |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `output_depends_on_input_name` | bool | `true` | Key cached results by file path as well as content, because mypy derives module identity and per-module settings from the path. A renamed file is re-checked instead of reusing its old verdict. See [`output_depends_on_input_name`](../../configuration.md) |
 
 ## Batch support
 

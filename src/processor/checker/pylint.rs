@@ -25,7 +25,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     fields: &[],
     omit_standard_fields: &[],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".py"], src_exclude_dirs: &[] }),
-    defaults: Some(crate::config::ProcessorDefaults { command: "pylint", dep_auto: &[".pylintrc"], ..crate::config::ProcessorDefaults::EMPTY }),
+    defaults: Some(crate::config::ProcessorDefaults { command: "pylint", dep_auto: &[".pylintrc"], output_depends_on_input_name: true, ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["python", "linter", "py", "pip"],
     description: "Lint Python files using pylint",

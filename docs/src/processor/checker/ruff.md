@@ -32,6 +32,7 @@ dep_inputs = []                          # Additional files that trigger rebuild
 | `command` | string | `"ruff"` | The ruff executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to ruff |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `output_depends_on_input_name` | bool | `true` | Key cached results by file path as well as content, because `per-file-ignores`, `INP001`, `N999` and import sorting depend on where a file lives. A renamed file is re-checked instead of reusing its old verdict. See [`output_depends_on_input_name`](../../configuration.md) |
 
 ## Batch support
 

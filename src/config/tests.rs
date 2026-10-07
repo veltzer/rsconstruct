@@ -639,6 +639,38 @@ fn every_processor_has_a_description() {
     );
 }
 
+/// Python linters judge a file by its path as well as its content
+/// (per-file-ignores, module names), so they key their results by input
+/// path unless the user turns that off. Other processors keep path-free keys.
+#[test]
+fn path_sensitive_checkers_default_output_depends_on_input_name() {
+    let resolve = |pname: &str, user: &str| {
+        let mut value = toml_of(user);
+        let mut prov = crate::config::ProvenanceMap::new();
+        crate::config::apply_processor_defaults(pname, &mut value, &mut prov);
+        value
+            .get(crate::config::OUTPUT_DEPENDS_ON_INPUT_NAME)
+            .and_then(toml::Value::as_bool)
+    };
+    for pname in [
+        "processor.checker.ruff",
+        "processor.checker.pylint",
+        "processor.checker.mypy",
+    ] {
+        assert_eq!(resolve(pname, ""), Some(true), "{pname} default");
+        assert_eq!(
+            resolve(pname, "output_depends_on_input_name = false"),
+            Some(false),
+            "{pname} must keep the user's value"
+        );
+    }
+    assert_eq!(
+        resolve("processor.checker.black", ""),
+        None,
+        "black has no path-dependent rules"
+    );
+}
+
 /// `FieldSpec` entries must be well-formed: non-empty name, non-empty doc
 /// (a blank doc is a blank cell in `processor defconfig`), no duplicate
 /// names within a plugin, and no collision with scan fields (scan fields
