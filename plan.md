@@ -50,7 +50,7 @@ concentrated in a handful of processors, which is what orders the stages:
 | sphinx | 51 | Covered: mdbook (Rust) builds documentation; a sphinx repo that wants Rust rewrites its sources for mdbook, which is a per-repo choice, not this plan |
 | htmlhint | 29 | Stage 3: native `ihtml` |
 | xmllint | 28 | Stage 3: native `ixmllint` |
-| yamllint | 27 | Stage 1: iyamllint (exists) |
+| yamllint | 27 | Stage 1: iyamllint (done, fleet switched 2026-10-08) |
 | cppcheck | 23 | Inherent for now (no Rust C++ analyser) |
 | eslint | 21 | Stage 2: oxlint |
 | stylelint | 16 | Stage 2: biome |
@@ -107,7 +107,7 @@ the existing processor's docs page. Ordered by repos using the non-Rust one.
 | Capability (non-Rust processor) | Repos | Rust processor | Status | Notes |
 |---|---|---|---|---|
 | Python type checking (mypy) | 127 | pyrefly | in progress | pyrefly is younger than mypy; run both over the 127 repos and record which mypy checks it lacks. If the gap is large, `ty` (Stage 2) is a second Rust option |
-| YAML lint (yamllint) | 27 | iyamllint | done | Native. All 23 yamllint rules with every option, `.yamllint.yaml` read as yamllint reads it (`extends`, levels, `ignore`, directives), verified identical to yamllint 1.38.0 over the fleet's 362 YAML files (`src/yamllint/`). Not supported: the `locale` key (key-ordering collates by code point) and the user-level `~/.config/yamllint/config`. Switching a repo is `yamllint` → `iyamllint` in rsconstruct.toml |
+| YAML lint (yamllint) | 27 | iyamllint | done | Native. All 23 yamllint rules with every option, `.yamllint.yaml` read as yamllint reads it (`extends`, levels, `ignore`, directives), verified identical to yamllint 1.38.0 over the fleet's 362 YAML files (`src/yamllint/`). Not supported: the `locale` key (key-ordering collates by code point) and the user-level `~/.config/yamllint/config`. Switching a repo is `yamllint` → `iyamllint` in rsconstruct.toml; the fleet switched on 2026-10-08 (26 repos, `yamllint` dropped from their pyproject dev groups) |
 | Spelling (aspell) | 1 | zspell | in progress | zspell reads Hunspell dictionaries; the one aspell user (veltzer.github.io) checks Hebrew with a compiled aspell dictionary, so the Hebrew Hunspell dictionary must be tried against its allowlist |
 | Python formatting check (black) | 0 | ruff | todo | ruff's processor runs `check`; it needs a `format --check` mode (a config field or a `ruff_format` instance) before this row is covered |
 | Python lint (pylint) | 0 | ruff | in progress | ruff's `PL` rule set; confirm the pylint rules the fleet's `.pylintrc` enables all have ruff equivalents |
