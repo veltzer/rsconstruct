@@ -66,6 +66,7 @@ mod processor {
         pub mod hadolint;
         pub mod htmlhint;
         pub mod htmllint;
+        pub mod iyamllint;
         pub mod iyamlschema;
         pub mod jq;
         pub mod jshint;
@@ -118,6 +119,7 @@ mod processor {
         pub mod cc_single_file;
         pub mod drawio;
         pub mod generic;
+        pub mod isass;
         pub mod jinja2;
         pub mod libreoffice;
         pub mod mako;

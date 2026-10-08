@@ -115,6 +115,7 @@ fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
         SimpleGeneratorParams {
             extra_tools: &[],
             extra_tools_fn: Some(pdf_engine_tools),
+            source_filter: None,
             discover_mode: DiscoverMode::MultiFormat,
             execute_fn: execute_pandoc,
             is_native: false,

@@ -36,6 +36,7 @@ fn create_imarkdown2html(
             SimpleGeneratorParams {
                 extra_tools: &[],
                 extra_tools_fn: None,
+                source_filter: None,
                 discover_mode: DiscoverMode::SingleFormat("html"),
                 execute_fn: execute_imarkdown2html,
                 is_native: true,

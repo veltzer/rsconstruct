@@ -107,7 +107,7 @@ the existing processor's docs page. Ordered by repos using the non-Rust one.
 | Capability (non-Rust processor) | Repos | Rust processor | Status | Notes |
 |---|---|---|---|---|
 | Python type checking (mypy) | 127 | pyrefly | in progress | pyrefly is younger than mypy; run both over the 127 repos and record which mypy checks it lacks. If the gap is large, `ty` (Stage 2) is a second Rust option |
-| YAML lint (yamllint) | 27 | iyamllint | in progress | Native; confirm every `.yamllint.yaml` option the fleet sets is honoured |
+| YAML lint (yamllint) | 27 | iyamllint | in progress | Native. Parses (multi-document files included) and rejects duplicate keys, but runs none of yamllint's rules and does not read `.yamllint.yaml`. To cover this row, implement the rules the fleet's `.yamllint.yaml` sets: yamllint's `default` set minus `document-start` and `comments-indentation`, with `truthy` limited to `true`/`false` (keys unchecked), `line-length` 240, and `indentation` of 2 spaces with sequences indented either way |
 | Spelling (aspell) | 1 | zspell | in progress | zspell reads Hunspell dictionaries; the one aspell user (veltzer.github.io) checks Hebrew with a compiled aspell dictionary, so the Hebrew Hunspell dictionary must be tried against its allowlist |
 | Python formatting check (black) | 0 | ruff | todo | ruff's processor runs `check`; it needs a `format --check` mode (a config field or a `ruff_format` instance) before this row is covered |
 | Python lint (pylint) | 0 | ruff | in progress | ruff's `PL` rule set; confirm the pylint rules the fleet's `.pylintrc` enables all have ruff equivalents |
@@ -139,7 +139,7 @@ Each is a `SimpleChecker`/`SimpleGenerator` over a crate, `is_native: true`,
 | Dockerfile lint (hadolint) | 15 | dockerfile-parser | `idockerfile` | todo | Implement the DL30xx/DL40xx rules the fleet actually triggers (measured first); hadolint's full set is not the target |
 | CSS/SCSS lint (stylelint) | 16 | lightningcss, grass (for SCSS) | `icss` | won't do | biome (Stage 2) covers the fleet's CSS: counted 2026-10-03, of the 16 stylelint repos only veltzer.github.io has SCSS, and only one authored file (`sass/style.scss`), which stays on stylelint. Revisit only if SCSS spreads |
 | SVG lint (svglint) | 2 | usvg | `isvglint` | todo | usvg parse = valid SVG; cheap |
-| YAML query (yq) | 0 | serde_yaml + the `ijq` engine | `iyq` | todo | YAML to JSON, then reuse ijq's filter evaluation |
+| YAML query (yq) | 0 | serde_yaml_ng + a jq engine (the `jaq` crate) | `iyq` | todo | YAML to JSON, then evaluate the filter with jaq. `ijq` has nothing to reuse here: it evaluates no filters and is a JSON parse check identical to `ijsonlint`, so `ijq` itself needs the same engine before either covers a `jq` use |
 | Jinja2 templates (jinja2) | 0 | minijinja | `ijinja2` | todo | minijinja is Jinja2-compatible; covers the rare template that cannot be ported to tera |
 | Protobuf compile (protobuf) | 0 | protox, prost-build | `iprotobuf` | todo | protox is a pure-Rust protoc; output languages limited to what prost generates (Rust) unless protoc plugins are wrapped |
 | Shell lint (shellcheck) | 80 | tree-sitter-bash | `ishellcheck` | blocked | No Rust shellcheck exists and a faithful port is a project of its own. Blocked on either a Rust shellcheck appearing or a decision to fund a subset (quoting, `$?` misuse, unset vars). Recorded here so 80 repos are not forgotten |

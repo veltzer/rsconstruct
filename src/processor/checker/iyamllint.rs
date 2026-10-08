@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use serde::Deserialize;
 use std::path::Path;
 
 use crate::config::IyamllintConfig;
@@ -23,8 +24,15 @@ impl IyamllintProcessor {
         for file in files {
             let contents = std::fs::read_to_string(file)
                 .with_context(|| format!("Failed to read {}", file.display()))?;
-            if let Err(e) = serde_yaml_ng::from_str::<serde_yaml_ng::Value>(&contents) {
-                errors.push(format!("{}: {}", file.display(), e));
+            // One deserializer per document: a file with several documents
+            // (`---` separators) is valid YAML, and `from_str` over the whole
+            // text would reject it as "more than one document". The first
+            // bad document is reported; the rest of the file is not parsed.
+            for document in serde_yaml_ng::Deserializer::from_str(&contents) {
+                if let Err(e) = serde_yaml_ng::Value::deserialize(document) {
+                    errors.push(format!("{}: {}", file.display(), e));
+                    break;
+                }
             }
         }
 

@@ -60,6 +60,7 @@ fn create_libreoffice(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::proce
             SimpleGeneratorParams {
                 extra_tools: &["flock"],
                 extra_tools_fn: None,
+                source_filter: None,
                 discover_mode: DiscoverMode::MultiFormat,
                 execute_fn: execute_libreoffice,
                 is_native: false,

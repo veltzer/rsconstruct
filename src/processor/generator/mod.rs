@@ -94,6 +94,9 @@ pub struct DiscoverParams<'a, C: Serialize> {
     /// Allowlist of field names to include in the config-change checksum,
     /// derived from the plugin's `FieldSpec` list (`checksum_fields_of`).
     pub checksum_fields: Vec<&'static str>,
+    /// Keep only the scanned sources this returns `true` for; `None` keeps
+    /// every scanned source. See `SimpleGeneratorParams::source_filter`.
+    pub source_filter: Option<fn(&C, &Path) -> bool>,
 }
 
 /// Compute the output path for a source file.
@@ -135,6 +138,11 @@ pub fn discover_multi_format(
     let src_dirs = params.scan.src_dirs();
 
     for source in &files {
+        if let Some(keep) = params.source_filter
+            && !keep(params.config, source)
+        {
+            continue;
+        }
         for format in formats {
             let output = output_path(source, src_dirs, params.output_dir, format);
 

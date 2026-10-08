@@ -18,7 +18,7 @@ What it covers, compared to yamllint:
 - **Syntax errors** are reported.
 - **Duplicate mapping keys** are reported (`duplicate entry with key "a"`).
 - **None of yamllint's style rules** run (line length, indentation, truthy values, document start, ...), and `.yamllint.yaml` is not read.
-- **Multi-document files are rejected.** A file containing several documents separated by `---` fails with `deserializing from YAML containing more than one document is not supported`, although it is valid YAML. Keep such files on yamllint, or out of this processor's `src_dirs`.
+- **Multi-document files are accepted.** Each document separated by `---` is parsed in turn, so a file holding several documents is valid, as it is for yamllint. The first document that does not parse fails the file.
 
 ## Source Files
 

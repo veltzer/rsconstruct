@@ -40,6 +40,7 @@ fn create_markdown2html(
             SimpleGeneratorParams {
                 extra_tools: &["perl"],
                 extra_tools_fn: None,
+                source_filter: None,
                 discover_mode: DiscoverMode::SingleFormat("html"),
                 execute_fn: execute_markdown2html,
                 is_native: false,

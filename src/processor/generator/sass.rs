@@ -34,6 +34,7 @@ fn create_sass(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::P
             SimpleGeneratorParams {
                 extra_tools: &[],
                 extra_tools_fn: None,
+                source_filter: None,
                 discover_mode: DiscoverMode::SingleFormat("css"),
                 execute_fn: execute_sass,
                 is_native: false,

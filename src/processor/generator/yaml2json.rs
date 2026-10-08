@@ -38,6 +38,7 @@ fn create_yaml2json(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::process
             SimpleGeneratorParams {
                 extra_tools: &[],
                 extra_tools_fn: None,
+                source_filter: None,
                 discover_mode: DiscoverMode::SingleFormat("json"),
                 execute_fn: execute_yaml2json,
                 is_native: true,

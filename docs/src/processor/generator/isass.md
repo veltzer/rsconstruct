@@ -17,7 +17,7 @@ sass/components/button.scss ->  out/processor.generator.isass/components/button.
 
 **Declare the [sass analyzer](../../analyzers/sass.md) alongside this processor.** It makes every file a stylesheet loads (`@use`, `@forward`, `@import`, transitively) an input of that stylesheet. Without it, a product's only input is its own source file: editing a partial does **not** rebuild the stylesheets that use it, and they keep their old CSS.
 
-Unlike the `sass` command line, **partials are compiled too**: every matching file is a product, including partials such as `_vars.scss`, which produce their own (often empty) `.css`. Keep partials out with `src_exclude_files` or `src_exclude_paths`.
+Like the `sass` command line, **partials are not compiled**: a file whose name starts with `_` (`_vars.scss`) exists to be `@use`d by other stylesheets and gets no `.css` of its own. Set `skip_partials = false` to compile every matching file, partials included.
 
 ## Source Files
 
@@ -31,7 +31,6 @@ The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` c
 ```toml
 [processor.generator.isass]
 src_dirs = ["sass"]
-src_exclude_files = ["_vars.scss", "_mixins.scss"]
 
 [analyzer.sass]
 ```
@@ -41,6 +40,7 @@ src_exclude_files = ["_vars.scss", "_mixins.scss"]
 | `src_dirs` | string[] | `[]` | Directories to scan |
 | `src_extensions` | string[] | `[".scss", ".sass"]` | File extensions to compile |
 | `output_dir` | string | `"out/processor.generator.isass"` | Output directory |
+| `skip_partials` | bool | `true` | Leave files whose name starts with `_` (partials) out of discovery, as the `sass` CLI does. `false` compiles every matching file |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes rebuild every product |
 
 ## Batch support

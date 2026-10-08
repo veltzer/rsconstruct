@@ -1376,11 +1376,16 @@ pub enum DiscoverMode {
 /// say) use `SimpleGenerator` instead of hand-rolling the whole trait.
 /// `extra_tools_fn` covers the other reason generators used to be hand-rolled:
 /// a required tool named by a config field rather than a constant.
+/// `source_filter` covers a third: a scanned file that must not become a
+/// product for a reason the scan fields cannot express (isass's `_partial.scss`).
 pub struct SimpleGeneratorParams<C> {
     pub extra_tools: &'static [&'static str],
     /// Additional required tools derived from the config (e.g. pandoc's
     /// `pdf_engine`). `None` means the static `extra_tools` are the whole set.
     pub extra_tools_fn: Option<fn(&C) -> Vec<String>>,
+    /// Keep only the scanned sources this returns `true` for; `None` keeps
+    /// every scanned source. Runs after the `src_*` scan fields, per file.
+    pub source_filter: Option<fn(&C, &Path) -> bool>,
     pub discover_mode: DiscoverMode,
     pub execute_fn: fn(&crate::build_context::BuildContext, &C, &Product) -> Result<()>,
     pub is_native: bool,
@@ -1465,6 +1470,7 @@ where
             output_dir: &scan.output_dir,
             processor_name: instance_name,
             checksum_fields: crate::config::checksum_fields_of(instance_name),
+            source_filter: self.params.source_filter,
         };
         match &self.params.discover_mode {
             DiscoverMode::MultiFormat => {

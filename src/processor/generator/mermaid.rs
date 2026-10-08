@@ -35,6 +35,7 @@ fn create_mermaid(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor
             SimpleGeneratorParams {
                 extra_tools: &["node"],
                 extra_tools_fn: None,
+                source_filter: None,
                 discover_mode: DiscoverMode::MultiFormat,
                 execute_fn: execute_mermaid,
                 is_native: false,

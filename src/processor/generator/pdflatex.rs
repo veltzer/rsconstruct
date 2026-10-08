@@ -92,6 +92,7 @@ impl Processor for PdflatexProcessor {
             output_dir: &self.config.standard.output_dir,
             processor_name: instance_name,
             checksum_fields: crate::config::checksum_fields_of(instance_name),
+            source_filter: None,
         };
         super::discover_single_format(graph, file_index, &params, "pdf")
     }

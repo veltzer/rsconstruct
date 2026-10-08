@@ -42,6 +42,7 @@ fn create_chromium(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processo
             SimpleGeneratorParams {
                 extra_tools: &[],
                 extra_tools_fn: None,
+                source_filter: None,
                 discover_mode: DiscoverMode::SingleFormat("pdf"),
                 execute_fn: execute_chromium,
                 is_native: false,

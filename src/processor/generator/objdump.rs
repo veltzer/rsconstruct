@@ -39,6 +39,7 @@ fn create_objdump(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor
             SimpleGeneratorParams {
                 extra_tools: &[],
                 extra_tools_fn: None,
+                source_filter: None,
                 discover_mode: DiscoverMode::SingleFormat("dis"),
                 execute_fn: execute_objdump,
                 is_native: false,
