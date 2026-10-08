@@ -30,16 +30,20 @@ Both tools ultimately just validate that files are well-formed JSON.
 **Crate:** `serde_json` (already in deps)
 **Complexity:** Low — parse file, report error with line/column
 
-### iyamllint — YAML validation
+### iyamllint — YAML linting (done)
 
 Replaces: `yamllint` (Python YAML linter)
 
-Validate that YAML files parse correctly. `yamllint` also checks style rules
-(line length, indentation, etc.) which would need to be reimplemented if desired,
-but basic validity checking is trivial.
+A full port of yamllint lives in `src/yamllint/`: its config format, its 23
+rules and its directives, verified identical to yamllint 1.38.0 over the
+fleet's YAML files. Tokens come from `libyaml-safer`, a safe port of libyaml,
+whose scanner matches PyYAML's token for token (both are Kirill Simonov's
+design), which is what lets the rules be ported line for line.
 
-**Crate:** `serde_yaml`
-**Complexity:** Low for validation only, medium if style rules are needed
+**Crate:** `libyaml-safer`
+**Complexity:** Medium — the rules are mechanical ports; the token-stream
+details (marks, comment extraction, implicit block sequences) are where
+fidelity is won or lost
 
 ### itaplo — TOML validation
 

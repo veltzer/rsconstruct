@@ -20,6 +20,10 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_sign_loss)]
+// Also buffer offsets and columns cast to i64 in src/yamllint, where the
+// ported arithmetic needs -1 as a sentinel: a YAML file is nowhere near 2^63
+// bytes, and ~40 `i64::try_from(..).expect(..)` would say nothing more.
+#![allow(clippy::cast_possible_wrap)]
 // Local `static REGEX: OnceLock<Regex>` declarations sit immediately above
 // the `get_or_init` that uses them — 8 of them in analyzers/tera.rs alone.
 // Hoisting them to the top of the function to satisfy this lint would
@@ -97,6 +101,7 @@ mod tools;
 mod watcher;
 mod webcache;
 pub(crate) mod word_manager;
+mod yamllint;
 
 use anyhow::{Context, Result, bail};
 use builder::Builder;

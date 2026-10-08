@@ -49,6 +49,7 @@ tabled = { version = "0.21.0", default-features = false, features = ["ansi", "st
 ureq = "3"
 strum = { version = "0.28.0", features = ["derive"] }
 inventory = "0.3.24"
+libyaml-safer = "0.3"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

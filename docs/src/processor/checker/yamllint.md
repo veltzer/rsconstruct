@@ -4,6 +4,8 @@
 
 Lints YAML files using [yamllint](https://github.com/adrienverge/yamllint).
 
+The Rust alternative is [iyamllint](iyamllint.md): the same rules and the same `.yamllint.yaml`, in-process, with no Python to install. Switching is `yamllint` → `iyamllint` in the stanza header.
+
 ## How It Works
 
 Discovers `.yml` and `.yaml` files in the project (excluding common build tool

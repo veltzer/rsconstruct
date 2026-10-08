@@ -258,8 +258,6 @@ pub type IjqConfig = CheckerConfig;
 
 pub type IjsonlintConfig = CheckerConfig;
 
-pub type IyamllintConfig = CheckerConfig;
-
 pub type ItaploConfig = CheckerConfig;
 
 // RustSingleFileConfig lives in src/processor/generator/rust_single_file.rs.
