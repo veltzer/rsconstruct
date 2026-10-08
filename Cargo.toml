@@ -35,7 +35,7 @@ serde_yaml_ng = "0.10"
 # Same slugifier as zola (its `slugify_paths`), so the zola mass generator
 # predicts exactly the paths zola writes.
 slug = "0.1"
-zstd = "0.13"
+zstd = "0.14"
 lopdf = "0.45"
 grass = { version = "0.13.4", default-features = false }
 pulldown-cmark = { version = "0.13.3", default-features = false, features = ["html"] }
