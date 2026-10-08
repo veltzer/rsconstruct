@@ -101,6 +101,7 @@ mod tools;
 mod watcher;
 mod webcache;
 pub(crate) mod word_manager;
+mod xml;
 mod yamllint;
 
 use anyhow::{Context, Result, bail};

@@ -4,6 +4,8 @@
 
 Validates XML files using [xmllint](http://xmlsoft.org/xmllint.html).
 
+The Rust alternative is [ixmllint](ixmllint.md): the same well-formedness checks and `--schema` validation, in-process, with libxml2's messages and verdicts. Switching is `xmllint` → `ixmllint` in the stanza header, and `args = ["--schema", "x.xsd"]` → `schema = "x.xsd"`. Files that need `--valid`, `--dtdvalid` or `--relaxng` stay here.
+
 ## How It Works
 
 Discovers `.xml` files in the project (excluding common build tool directories),

@@ -45,6 +45,29 @@ design), which is what lets the rules be ported line for line.
 details (marks, comment extraction, implicit block sequences) are where
 fidelity is won or lost
 
+### ixmllint — XML well-formedness and XSD validation (done)
+
+Replaces: `xmllint --noout [--schema x.xsd]` (libxml2)
+
+`src/xml/` tokenizes with `xmlparser` (roxmltree's tokenizer) and implements
+above it what xmllint checks: tag matching, duplicate attributes, entity and
+character references against the internal DTD subset, namespace
+declarations and prefixes, document shape; then an XSD validator for the
+schema constructs in use (sequence/choice/all content models with
+occurrence bounds, mixed and simple content, attributes, facets, lists,
+unions, extension, include). Messages, lines and verdicts are libxml2's,
+including its quirks: a duplicate attribute is reported where the start tag
+ends, "premature end" only when nothing else failed, a relative namespace
+URI is warned about only on the default namespace. Checked against xmllint
+over the fleet's 6256 XML/SVG files plus hand-made edge cases: same
+verdicts, same lines. A schema using an unsupported construct is a build
+failure naming it, never a partial check.
+
+**Crate:** `xmlparser`
+**Complexity:** Medium — the tokenizer gives the lexical level for free; the
+libxml2 behaviours above are what the differential run against xmllint
+pinned down
+
 ### itaplo — TOML validation
 
 Replaces: `taplo` (TOML formatter/linter)

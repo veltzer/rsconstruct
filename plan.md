@@ -49,7 +49,7 @@ concentrated in a handful of processors, which is what orders the stages:
 | pytest | 62 | Inherent: runs Python |
 | sphinx | 51 | Covered: mdbook (Rust) builds documentation; a sphinx repo that wants Rust rewrites its sources for mdbook, which is a per-repo choice, not this plan |
 | htmlhint | 29 | Stage 3: native `ihtml` |
-| xmllint | 28 | Stage 3: native `ixmllint` |
+| xmllint | 28 | Stage 3: native `ixmllint` (done 2026-10-08) |
 | yamllint | 27 | Stage 1: iyamllint (done, fleet switched 2026-10-08) |
 | cppcheck | 23 | Inherent for now (no Rust C++ analyser) |
 | eslint | 21 | Stage 2: oxlint |
@@ -135,7 +135,7 @@ Each is a `SimpleChecker`/`SimpleGenerator` over a crate, `is_native: true`,
 |---|---|---|---|---|---|
 | GitHub workflow lint (actionlint) | 199 | existing `iyamlschema` + vendored SchemaStore `github-workflow.json`; later `regex` for `${{ }}` expression checks | `iactionlint` | todo | First cut is schema validation only, which catches the structural errors actionlint catches (unknown keys, wrong types, missing `runs-on`). Expression and shell-in-`run` checks come after; the docs page lists what is not covered. Zero install: the biggest usability win in the plan |
 | HTML lint (htmlhint, tidy, htmllint) | 43 | html5ever, scraper | `ihtml` | todo | Parse errors from html5ever plus a rule set covering what the fleet's `.htmlhintrc` enables (doctype, unique ids, attr quoting, closed tags). tidy's "clean" pass is out of scope; validation only |
-| XML well-formedness (xmllint) | 28 | roxmltree or quick-xml | `ixmllint` | todo | Well-formedness only. No Rust XSD validator exists; repos that pass `--schema` today stay on xmllint, and the row stays open for them |
+| XML well-formedness and XSD validation (xmllint) | 28 | xmlparser | `ixmllint` | done | `src/xml/`: well-formedness, namespaces and an XSD validator covering the constructs the fleet uses (unsupported ones are a build failure naming them). Verified against xmllint over the fleet's 6256 XML/SVG files and the java-keynote schema: same verdicts, lines and messages. Switching a repo is `xmllint` → `ixmllint` (`args = ["--schema", x]` → `schema = x`); DTD and RelaxNG validation stay on xmllint |
 | Dockerfile lint (hadolint) | 15 | dockerfile-parser | `idockerfile` | todo | Implement the DL30xx/DL40xx rules the fleet actually triggers (measured first); hadolint's full set is not the target |
 | CSS/SCSS lint (stylelint) | 16 | lightningcss, grass (for SCSS) | `icss` | won't do | biome (Stage 2) covers the fleet's CSS: counted 2026-10-03, of the 16 stylelint repos only veltzer.github.io has SCSS, and only one authored file (`sass/style.scss`), which stays on stylelint. Revisit only if SCSS spreads |
 | SVG lint (svglint) | 2 | usvg | `isvglint` | todo | usvg parse = valid SVG; cheap |

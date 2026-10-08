@@ -47,6 +47,7 @@ mod encoding;
 mod ijq;
 mod ijsonlint;
 mod itaplo;
+mod ixmllint;
 mod iyamllint;
 mod iyamlschema;
 mod json_schema;

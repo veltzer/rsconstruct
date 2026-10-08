@@ -42,6 +42,7 @@
         - [Ijq](processor/checker/ijq.md)
         - [Ijsonlint](processor/checker/ijsonlint.md)
         - [Itaplo](processor/checker/itaplo.md)
+        - [Ixmllint](processor/checker/ixmllint.md)
         - [Iyamllint](processor/checker/iyamllint.md)
         - [Iyamlschema](processor/checker/iyamlschema.md)
         - [Jq](processor/checker/jq.md)
