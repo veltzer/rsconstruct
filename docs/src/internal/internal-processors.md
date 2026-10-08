@@ -68,6 +68,28 @@ failure naming it, never a partial check.
 libxml2 behaviours above are what the differential run against xmllint
 pinned down
 
+### iactionlint — GitHub Actions workflow linting (done)
+
+Replaces: `actionlint` (Go), except its `shellcheck` and `pyflakes` rules,
+which run external tools over `run:` scripts.
+
+`src/actionlint/` is a file-by-file port of actionlint v1.7.12: the YAML
+tree with go-yaml's tag resolution and alias handling, the workflow parser
+with its `syntax-check` messages, the `${{ }}` lexer, parser, type system
+and semantics checker (including untrusted-input tracking), and the fifteen
+rules. The popular-actions data set actionlint ships is embedded as JSON,
+generated from `popular_actions.go` by
+`scripts/gen-actionlint-popular-actions.py`. Verified against actionlint's
+own test corpus (`testdata/err`, `examples`, `ok`, `projects`): all 740
+reported problems identical in position and wording; the fleet's 343
+workflow files are clean under both tools.
+
+**Crate:** `libyaml-safer` (events with marks, like go-yaml's), `regex`,
+`serde_json`
+**Complexity:** High — the expression type checker and the position rules
+(go-yaml's node positions, text/scanner columns inside expressions) are
+where fidelity is won or lost
+
 ### itaplo — TOML validation
 
 Replaces: `taplo` (TOML formatter/linter)

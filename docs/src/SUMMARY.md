@@ -39,6 +39,7 @@
         - [Hadolint](processor/checker/hadolint.md)
         - [HTMLHint](processor/checker/htmlhint.md)
         - [HTMLLint](processor/checker/htmllint.md)
+        - [Iactionlint](processor/checker/iactionlint.md)
         - [Ijq](processor/checker/ijq.md)
         - [Ijsonlint](processor/checker/ijsonlint.md)
         - [Itaplo](processor/checker/itaplo.md)

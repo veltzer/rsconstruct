@@ -44,6 +44,7 @@ mod clang_tidy;
 mod clippy;
 mod duplicate_files;
 mod encoding;
+mod iactionlint;
 mod ijq;
 mod ijsonlint;
 mod itaplo;

@@ -66,6 +66,7 @@
 // shows real contention.
 #![allow(clippy::significant_drop_tightening)]
 
+mod actionlint;
 mod analyzers;
 mod build_context;
 mod builder;

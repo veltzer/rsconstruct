@@ -5,6 +5,12 @@
 Lints GitHub Actions workflow files using
 [actionlint](https://github.com/rhysd/actionlint).
 
+The Rust alternative is [iactionlint](iactionlint.md): the same rules, the
+same `.github/actionlint.yaml`, the same messages, in-process. Switching is
+`actionlint` → `iactionlint` in the stanza header. It does not run
+`shellcheck` or `pyflakes` over `run:` scripts; a repository that relies on
+that stays here.
+
 ## How It Works
 
 Discovers `.yml`/`.yaml` files in the configured directories, runs
