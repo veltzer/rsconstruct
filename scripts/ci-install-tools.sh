@@ -1,49 +1,45 @@
 #!/bin/bash
-# Install the system libraries this repo's build links against, the
-# external tools its tests shell out to, and the rsconstruct that runs the
-# build. The canonical ci.yml runs this in every repo before `rsconstruct
-# build`. Keep it strict: anything that fails to install must fail the build
-# here, not surface later as a confusing build or test failure.
+# Install what ci.yml's Build step (`rsconstruct build`) needs. This file is
+# byte-identical across all rs* repos (rsmultigit check same): everything a
+# crate needs beyond the shared setup - the system libraries its build links
+# against, the external tools its tests shell out to - lives in
+# scripts/ci-install-tools.repo.sh, which this script runs in every repo.
+# Keep both strict: anything that fails to install must fail the build here,
+# not surface later as a confusing build or test failure.
 set -euo pipefail
 
-# TARGET is set only by ci.yml's release build job, which runs nothing but
-# `cargo build --release`. rsconstruct links no system library (mlua-sys and
-# zstd-sys build from vendored sources; the macOS release jobs, which never
-# run this script, prove the build needs nothing from it), so the release
-# job has nothing to install. Installing the test matrix there anyway put
-# every release behind ~10 downloads no step uses, and one of them,
-# checkpatch.pl from raw.githubusercontent.com, failed a release on an
-# anonymous-rate-limit 429 (run 37225847062).
-if [[ -n "${TARGET:-}" ]]; then
-	exit 0
+bin="${CARGO_HOME:-${HOME}/.cargo}/bin"
+
+# ci.yml's Build step is `rsconstruct build`, so rsconstruct is the one tool
+# every repo installs. The release binary is downloaded rather than built (a
+# 20 MB fetch against minutes of compile) into cargo's bin dir, which is on
+# PATH and which rust-cache carries between runs together with everything
+# the two install commands below put there.
+#
+# Test job only. TARGET is set by ci.yml's build job, which runs nothing but
+# `cargo build --release`: there the crates would be compiled for no caller,
+# once per release target, on a per-target cache that never holds them -
+# an hour per Linux release job when this did run there (run 36876289729).
+if [[ -z "${TARGET:-}" ]]; then
+	curl -fsSL https://github.com/veltzer/rsconstruct/releases/latest/download/rsconstruct-linux-x86_64 -o "${bin}/rsconstruct"
+	chmod +x "${bin}/rsconstruct"
 fi
 
-# This repo is rsconstruct, so the binary ci.yml's Build step runs is the
-# one under test: built here from the checkout (the Build step's cargo
-# creator reuses the same artifacts) and copied into cargo's bin dir, which
-# is on PATH. The other rs* repos download the latest release instead; doing
-# that here would build every commit with the previous release, and a change
-# this repo's own rsconstruct.toml needs would fail CI until released.
-cargo build
-cp target/debug/rsconstruct "${CARGO_HOME:-${HOME}/.cargo}/bin/rsconstruct"
+# The repo's own installs. It runs in both jobs (a cross build needs its
+# foreign libraries too, and the hook reads TARGET to tell them apart), after
+# the download so a repo may put its own binary on PATH in place of the
+# release (rsconstruct itself installs the one the checkout builds), and
+# before the install commands below so what they look for is in place. The
+# file is required: a repo with nothing to add keeps an explicit no-op, and
+# a missing one fails here rather than silently skipping its setup.
+./scripts/ci-install-tools.repo.sh
 
-# The whole tool matrix, in one registry-driven command: every external tool
-# the tests exercise comes from its own registry entry, so adding a
-# processor never requires touching CI.
-#
-# Nothing is skipped and nothing is filtered — `--all` treats a tool it
-# cannot install automatically as a hard error rather than a warning, so a
-# registry entry that loses its install method fails this step instead of
-# quietly shrinking the matrix. This is a superset of what `tool install`
-# puts in place for the processors rsconstruct.toml enables (rumdl, ...).
-#
-# drawio's .deb URL is resolved from the GitHub releases API at install time,
-# so this inherits GITHUB_TOKEN from the workflow step to stay under the
-# authenticated rate limit (see the comment on that step in ci.yml). Unset
-# locally, where one machine never approaches the anonymous 60/hour.
-rsconstruct tool install --all
-
-# The cargo subcommands rsconstruct.toml runs (cargo deny, cargo nextest)
-# are declared under [dependencies] cargo there, the fleet's one list of
-# them; the binary just built reads it.
-rsconstruct tool install-deps
+# `tool install-deps` installs the cargo subcommands rsconstruct.toml declares
+# under [dependencies] cargo (cargo deny, cargo nextest); `tool install`
+# installs the external tools of its enabled processors (rumdl, ...). Nothing
+# here or in ci.yml names a tool: rsconstruct.toml is the fleet's one list of
+# them. Test job only, like the download above.
+if [[ -z "${TARGET:-}" ]]; then
+	rsconstruct tool install-deps
+	rsconstruct tool install
+fi
