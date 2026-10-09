@@ -639,9 +639,10 @@ fn every_processor_has_a_description() {
     );
 }
 
-/// Python linters judge a file by its path as well as its content
-/// (per-file-ignores, module names), so they key their results by input
-/// path unless the user turns that off. Other processors keep path-free keys.
+/// Python linters and iluacheck judge a file by its path as well as its
+/// content (per-file-ignores, module names, luacheck's `files[...]`
+/// overrides), so they key their results by input path unless the user
+/// turns that off. Other processors keep path-free keys.
 #[test]
 fn path_sensitive_checkers_default_output_depends_on_input_name() {
     let resolve = |pname: &str, user: &str| {
@@ -656,6 +657,7 @@ fn path_sensitive_checkers_default_output_depends_on_input_name() {
         "processor.checker.ruff",
         "processor.checker.pylint",
         "processor.checker.mypy",
+        "processor.checker.iluacheck",
     ] {
         assert_eq!(resolve(pname, ""), Some(true), "{pname} default");
         assert_eq!(

@@ -3,7 +3,7 @@
 ## Purpose
 
 Lints Lua scripts using [luacheck](https://github.com/lunarmodules/luacheck).
-A Rust alternative is [selene](selene.md).
+Rust alternatives are [iluacheck](iluacheck.md), a port of luacheck with the same findings, and [selene](selene.md).
 
 ## How It Works
 

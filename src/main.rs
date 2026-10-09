@@ -88,6 +88,7 @@ mod file_index;
 mod graph;
 mod graph_render;
 mod json_output;
+mod luacheck;
 mod object_store;
 mod output;
 mod phases;

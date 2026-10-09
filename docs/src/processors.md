@@ -44,6 +44,7 @@ Use `rsconstruct processor files` to see which files each processor discovers.
 - [Rumdl](processor/checker/rumdl.md) — lints Markdown files with rumdl
 - [Oxlint](processor/checker/oxlint.md) — lints JavaScript/TypeScript files with oxlint
 - [Selene](processor/checker/selene.md) — lints Lua files with selene
+- [Iluacheck](processor/checker/iluacheck.md) — lints Lua files with luacheck's analysis (native)
 - [Biome](processor/checker/biome.md) — lints CSS/JavaScript/TypeScript/JSON files with biome
 - [Make](processor/checker/make.md) — runs make in directories containing Makefiles
 - [Cargo](processor/creator/cargo.md) — builds Rust projects using Cargo
