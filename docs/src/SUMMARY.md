@@ -45,6 +45,7 @@
         - [Ijq](processor/checker/ijq.md)
         - [Ijsonlint](processor/checker/ijsonlint.md)
         - [Iluacheck](processor/checker/iluacheck.md)
+        - [Ishellcheck](processor/checker/ishellcheck.md)
         - [Isvglint](processor/checker/isvglint.md)
         - [Itaplo](processor/checker/itaplo.md)
         - [Itidy](processor/checker/itidy.md)

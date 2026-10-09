@@ -51,6 +51,7 @@ mod idockerfile;
 mod ijq;
 mod ijsonlint;
 mod iluacheck;
+mod ishellcheck;
 mod isvglint;
 mod itaplo;
 mod itidy;

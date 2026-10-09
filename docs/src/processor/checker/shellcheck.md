@@ -4,6 +4,8 @@
 
 Lints shell scripts using [shellcheck](https://www.shellcheck.net/).
 
+The Rust alternative is [ishellcheck](ishellcheck.md): ShellCheck's analysis, in-process, with shellcheck's codes, messages and positions. Switching is `shellcheck` → `ishellcheck` in the stanza header, and options in `args` become fields (`args = ["-e", "SC1091"]` → `exclude = ["SC1091"]`).
+
 ## How It Works
 
 Discovers `.sh` and `.bash` files in the project (excluding common build tool

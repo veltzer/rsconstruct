@@ -6,6 +6,7 @@ pub mod actionlint;
 pub mod cpplint;
 pub mod hadolint;
 pub mod luacheck;
+pub mod shellcheck;
 pub mod svglint;
 pub mod tidy;
 pub mod xmllint;
