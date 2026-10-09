@@ -67,6 +67,7 @@ mod processor {
         pub mod htmlhint;
         pub mod htmllint;
         pub mod iactionlint;
+        pub mod icpplint;
         pub mod idockerfile;
         pub mod isvglint;
         pub mod itidy;

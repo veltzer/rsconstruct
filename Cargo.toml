@@ -60,6 +60,9 @@ protox = "0.10.0"
 prost-build = "0.14.4"
 prost-types = "0.14.4"
 prost = "0.14.4"
+fancy-regex = "0.19.2"
+unicode-width = "0.2.2"
+unicode-normalization = "0.1.25"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

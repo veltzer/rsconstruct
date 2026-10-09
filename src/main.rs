@@ -75,6 +75,7 @@ mod checksum;
 mod cli;
 mod color;
 mod config;
+mod cpplint;
 mod db;
 mod deps_cache;
 mod display;

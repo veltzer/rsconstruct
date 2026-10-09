@@ -334,7 +334,7 @@ scanned file, and store nothing taken from the index:
 - the `SimpleChecker` and `SimpleGenerator` wrappers (most checkers and
   generators);
 - the checkers using the default `discover`: `ascii`, `encoding`,
-  `iactionlint`, `idockerfile`, `ijq`, `ijsonlint`, `isvglint`, `itaplo`,
+  `iactionlint`, `icpplint`, `idockerfile`, `ijq`, `ijsonlint`, `isvglint`, `itaplo`,
   `itidy`, `ixmllint`, `iyamllint`, `iyq`, `json_schema`, `marp_images`;
 - custom checkers: `aspell`, `clang_tidy`, `iyamlschema`,
   `license_header`, `markdownlint`, `mdl`, `script`, `terms`, `zspell`;

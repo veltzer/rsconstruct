@@ -706,6 +706,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fancy-regex"
+version = "0.19.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d301f5bf187b3c295fce6468d3875037a0bccc5f6b151c63cac2f85babf21912"
+dependencies = [
+ "bit-set",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1364,7 +1375,7 @@ dependencies = [
  "bytecount",
  "data-encoding",
  "email_address",
- "fancy-regex",
+ "fancy-regex 0.17.0",
  "fraction",
  "getrandom 0.3.4",
  "idna",
@@ -2387,6 +2398,7 @@ dependencies = [
  "chrono",
  "clap",
  "clap_complete",
+ "fancy-regex 0.19.2",
  "glob",
  "grass",
  "hex",
@@ -2426,6 +2438,8 @@ dependencies = [
  "tokio",
  "toml",
  "toml_edit",
+ "unicode-normalization",
+ "unicode-width 0.2.2",
  "ureq",
  "which",
  "xmlparser",

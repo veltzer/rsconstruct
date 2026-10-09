@@ -40,6 +40,7 @@
         - [HTMLHint](processor/checker/htmlhint.md)
         - [HTMLLint](processor/checker/htmllint.md)
         - [Iactionlint](processor/checker/iactionlint.md)
+        - [Icpplint](processor/checker/icpplint.md)
         - [Idockerfile](processor/checker/idockerfile.md)
         - [Ijq](processor/checker/ijq.md)
         - [Ijsonlint](processor/checker/ijsonlint.md)

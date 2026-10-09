@@ -4,6 +4,8 @@
 
 Lints C/C++ files using [cpplint](https://github.com/cpplint/cpplint) (Google C++ style checker).
 
+The Rust alternative is [icpplint](icpplint.md): cpplint 2.0.2's checks, `CPPLINT.cfg` chain and `NOLINT` handling, in-process, with cpplint's messages and exit rule. Switching is `cpplint` → `icpplint` in the stanza header, with `args = ["--config=NAME"]` becoming `config_file = "NAME"`.
+
 ## How It Works
 
 Discovers `.c`, `.cc`, `.h`, and `.hh` files under `src/` (excluding common

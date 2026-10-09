@@ -123,6 +123,35 @@ workflow files are clean under both tools.
 (go-yaml's node positions, text/scanner columns inside expressions) are
 where fidelity is won or lost
 
+### icpplint — C/C++ style linting (done)
+
+Replaces: `cpplint` (cpplint 2.0.2, Python)
+
+`src/cpplint/` is a function-by-function port of cpplint: its four line
+views (`CleansedLines`: raw, raw strings blanked, comments removed, strings
+collapsed), the cross-line brace and template matchers (`CloseExpression`
+and its reverse), the nesting stack (namespaces, classes, `extern "C"`,
+constructors and member-initializer lists, with the `#if`/`#else`
+checkpoints), the include-order and function-length state, `NOLINT`
+suppressions in all four forms, the `--filter` semantics (defaults, flag,
+`CPPLINT.cfg` chain in cpplint's priority order, `cat:file:line`
+selectors), header-guard derivation (`FileInfo.RepositoryName` with its
+`.git`/`.hg`/`.svn` search, `--root`, `--repository`) and every check, with
+cpplint's regular expressions kept verbatim (fancy-regex, for the
+lookarounds and backreferences) behind helpers that give `re.match` and
+`re.search` their Python shapes. Verified against cpplint over its own
+sample corpus (22 files under 12 option sets), the 1245 snippets its unit
+tests lint, demos-os-linux's 1231 files with and without the repo's
+`.cpplint`, and 3000 mutants: identical findings. Not reproduced, on
+purpose: the "Unexpected \r" warning (dead in cpplint, which reads in
+Python text mode) and the leak of one directory's `linelength`/`root`/
+`headers`/`extensions` into later files of the same run.
+
+**Crate:** `fancy-regex` (cpplint's patterns as they are), `unicode-width`,
+`unicode-normalization` (`GetLineWidth`)
+**Complexity:** High — no parser to port, but 7.9k lines of state-carrying
+regex code where every `[i-1]` and `[:5]` is a decision
+
 ### idockerfile — Dockerfile linting (done)
 
 Replaces: `hadolint` (hadolint 2.15.1, Haskell), except its ShellCheck
