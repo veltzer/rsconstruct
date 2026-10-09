@@ -78,6 +78,7 @@ mod config;
 mod db;
 mod deps_cache;
 mod display;
+mod dockerfile;
 mod download;
 mod errors;
 mod executor;

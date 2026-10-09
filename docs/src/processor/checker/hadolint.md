@@ -4,6 +4,8 @@
 
 Lints Dockerfiles using [Hadolint](https://github.com/hadolint/hadolint).
 
+The Rust alternative is [idockerfile](idockerfile.md): hadolint's `DL` rules, pragmas and `.hadolint.yaml`, in-process, with hadolint's messages and exit rule. Switching is `hadolint` → `idockerfile` in the stanza header. It does not run ShellCheck, so a repo that wants the `SC` findings on its `RUN` scripts stays here.
+
 ## How It Works
 
 Discovers `Dockerfile` files in the project (excluding common build tool

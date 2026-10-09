@@ -45,6 +45,7 @@ mod clippy;
 mod duplicate_files;
 mod encoding;
 mod iactionlint;
+mod idockerfile;
 mod ijq;
 mod ijsonlint;
 mod isvglint;

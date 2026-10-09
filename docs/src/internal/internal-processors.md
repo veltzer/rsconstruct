@@ -90,6 +90,30 @@ workflow files are clean under both tools.
 (go-yaml's node positions, text/scanner columns inside expressions) are
 where fidelity is won or lost
 
+### idockerfile — Dockerfile linting (done)
+
+Replaces: `hadolint` (hadolint 2.15.1, Haskell), except its ShellCheck
+findings (`SC` codes), which come from a separate program.
+
+`src/dockerfile/` ports hadolint's own half: the Dockerfile parser
+(language-docker 16.0.0's grammar, combinator by combinator: escaped line
+breaks, heredocs, `--mount` arguments, exec-form arrays, pragmas), the view
+of `RUN` scripts the rules query (commands, arguments, flags, pipes; a shell
+reader written for those queries, with the quirks of hadolint's walk over
+ShellCheck's tree copied: every command is yielded twice, an unparsable
+script yields nothing), the `# hadolint ignore=` / `stage ignore=` / `global
+ignore=` pragmas, `.hadolint.yaml` (ignored, override, trustedRegistries,
+label-schema, strict-labels, failure-threshold), all 71 `DL` rules with
+their messages, and hadolint's exit rule (fail at or above the threshold).
+Verified against hadolint over the fleet's 154 Dockerfiles with and without
+the fleet's config and 2000 mutants: identical `DL` findings. Known
+divergence: hadolint 2.15.1's parser rejects a heredoc followed directly by
+the next instruction (fixed upstream); idockerfile accepts it.
+
+**Crate:** `serde_yaml_ng` (the configuration file)
+**Complexity:** High — 71 rules is the easy part; the shell view and the
+parser's whitespace rules are where fidelity is won or lost
+
 ### itidy — HTML checking (done)
 
 Replaces: `tidy -errors -q [-config x] [--option value]` (HTML Tidy 5.8.0, C)
