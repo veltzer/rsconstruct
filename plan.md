@@ -143,7 +143,7 @@ Each is a `SimpleChecker`/`SimpleGenerator` over a crate, `is_native: true`,
 | Jinja2 templates (jinja2) | 0 | minijinja | `ijinja2` | todo | minijinja is Jinja2-compatible; covers the rare template that cannot be ported to tera |
 | Protobuf compile (protobuf) | 0 | protox, prost-build | `iprotobuf` | todo | protox is a pure-Rust protoc; output languages limited to what prost generates (Rust) unless protoc plugins are wrapped |
 | Shell lint (shellcheck) | 80 | tree-sitter-bash | `ishellcheck` | blocked | No Rust shellcheck exists and a faithful port is a project of its own. Blocked on either a Rust shellcheck appearing or a decision to fund a subset (quoting, `$?` misuse, unset vars). Recorded here so 80 repos are not forgotten |
-| C/C++ lint (cpplint) | 1 | regex | `icpplint` | todo | cpplint's rules are regex-level; one repo uses it. Low priority, easy |
+| C/C++ lint (cpplint) | 1 | regex | `icpplint` | todo | Not the small job it looks like: cpplint 2.0.2 is 7.9k lines of Python with no parser but a lot of state on top of its regexes (comment/string-stripped line views, a nesting stack of namespace/class/extern-C/preprocessor blocks, cross-line brace and template balancing, include-order and header-guard state, NOLINT suppressions, a CPPLINT.cfg hierarchy). A faithful port costs about what iactionlint did. One repo uses it (demos-os-linux, 1191 files, 26 categories filtered off). Lowest priority on the plan |
 
 ## Stage 4: inherently not Rust
 
