@@ -119,6 +119,32 @@ blank is decided from a stale byte past its end.
 position depends on the exact token stream; the differential run is the
 only way to know the port is right
 
+### isvglint — SVG linting (done)
+
+Replaces: `svglint` (svglint 4.2.1, Node), except its `custom` rules,
+which are JavaScript functions.
+
+`src/svglint/` ports the three built-in rules and what they run on: the
+lenient parser (htmlparser2 3.10.1 in XML mode without entity decoding,
+with its chained node start positions, over UTF-16 code units so columns
+agree), a CSS selector engine with css-select's XML-mode semantics (the
+seven attribute operators, four combinators, `:not`/`:is`/`:has`, the
+`-child`/`-of-type` families, `:empty`, `:contains`), fast-xml-parser
+5.10.1's validator for `valid`, and the `elm` and `attr` rules with their
+messages. Rules come from TOML (`valid`, an `elm` table, `attr` tables)
+instead of `.svglintrc.js`; selectors or rule values svglint would only
+warn about are configuration errors. Verified against svglint over the
+fleet's 5776 SVG files and 3000 mutants under the default rules and two
+rule sets covering every selector and attribute feature: identical
+findings. Positions are printed 1-based (svglint prints them 0-based and
+miscounts after a leading newline).
+
+**Crate:** `regex` (for `{ regex = ... }` attribute values)
+**Complexity:** Medium — three small libraries to port faithfully rather
+than one large one; the lenient parser's position chaining and the
+validator's blind spots (self-closing roots, declarations after a tag) are
+what the differential run pinned down
+
 ### itaplo — TOML validation
 
 Replaces: `taplo` (TOML formatter/linter)

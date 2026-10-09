@@ -42,6 +42,7 @@
         - [Iactionlint](processor/checker/iactionlint.md)
         - [Ijq](processor/checker/ijq.md)
         - [Ijsonlint](processor/checker/ijsonlint.md)
+        - [Isvglint](processor/checker/isvglint.md)
         - [Itaplo](processor/checker/itaplo.md)
         - [Itidy](processor/checker/itidy.md)
         - [Ixmllint](processor/checker/ixmllint.md)

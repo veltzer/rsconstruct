@@ -4,6 +4,8 @@
 
 Lints SVG files using [svglint](https://github.com/birjj/svglint).
 
+The Rust alternative is [isvglint](isvglint.md): svglint's `valid`, `elm` and `attr` rules, in-process, with svglint's messages, the rules written as TOML in the stanza instead of `.svglintrc.js`. Switching is `svglint` → `isvglint` in the stanza header plus the rules translated; a repo with `custom` (JavaScript) rules stays here.
+
 ## How It Works
 
 Runs `svglint <files>`. A non-zero exit fails the product. With no `.svglintrc.js`, svglint only checks that each file is valid SVG/XML:
