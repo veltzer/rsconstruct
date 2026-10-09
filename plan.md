@@ -42,7 +42,7 @@ concentrated in a handful of processors, which is what orders the stages:
 
 | Non-Rust processor | Repos | Route |
 |---|---|---|
-| actionlint | 199 | Stage 3: native `iactionlint` (done 2026-10-08) |
+| actionlint | 199 | Stage 3: native `iactionlint` (done, fleet switched 2026-10-09) |
 | mypy | 127 | Stage 1: pyrefly (exists), Stage 2: ty |
 | luacheck | 109 | Stage 2: selene |
 | shellcheck | 80 | Stage 4 for now (no Rust equivalent), revisit |
@@ -133,7 +133,7 @@ Each is a `SimpleChecker`/`SimpleGenerator` over a crate, `is_native: true`,
 
 | Capability (old) | Repos | Crate(s) | New processor | Status | Notes |
 |---|---|---|---|---|---|
-| GitHub workflow lint (actionlint) | 199 | libyaml-safer, regex, serde_json | `iactionlint` | done | `src/actionlint/`: a file-by-file port of actionlint v1.7.12 (syntax-check, expression type checking, all fifteen rules, the popular-actions data set embedded). Not ported: the shellcheck and pyflakes rules, which run external tools. Verified against actionlint's own test corpus: all 740 problems identical. Switching a repo is `actionlint` → `iactionlint`; a repo that wants shellcheck over `run:` scripts stays on actionlint |
+| GitHub workflow lint (actionlint) | 199 | libyaml-safer, regex, serde_json | `iactionlint` | done | `src/actionlint/`: a file-by-file port of actionlint v1.7.12 (syntax-check, expression type checking, all fifteen rules, the popular-actions data set embedded). Not ported: the shellcheck and pyflakes rules, which run external tools. Verified against actionlint's own test corpus: all 740 problems identical. Switching a repo is `actionlint` → `iactionlint`; a repo that wants shellcheck over `run:` scripts stays on actionlint. The fleet switched on 2026-10-09 (199 repos, none kept actionlint; the shared `.github/actionlint.yaml` still lists `ubuntu-26.04`, which iactionlint, like actionlint 1.7.12, does not know) |
 | HTML lint (htmlhint, tidy, htmllint) | 43 | html5ever, scraper | `ihtml` | todo | Parse errors from html5ever plus a rule set covering what the fleet's `.htmlhintrc` enables (doctype, unique ids, attr quoting, closed tags). tidy's "clean" pass is out of scope; validation only |
 | XML well-formedness and XSD validation (xmllint) | 28 | xmlparser | `ixmllint` | done | `src/xml/`: well-formedness, namespaces and an XSD validator covering the constructs the fleet uses (unsupported ones are a build failure naming them). Verified against xmllint over the fleet's 6256 XML/SVG files and the java-keynote schema: same verdicts, lines and messages. Switching a repo is `xmllint` → `ixmllint` (`args = ["--schema", x]` → `schema = x`); DTD and RelaxNG validation stay on xmllint. The fleet switched on 2026-10-08 (27 repos; java-keynote keeps its schema via `schema = "xsd/keynote.xsd"`) |
 | Dockerfile lint (hadolint) | 15 | dockerfile-parser | `idockerfile` | todo | Implement the DL30xx/DL40xx rules the fleet actually triggers (measured first); hadolint's full set is not the target |
