@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use regex::Regex;
 use serde::Deserialize;
 
-use crate::actionlint::LintError;
+use crate::engines::actionlint::LintError;
 
 #[derive(Debug, Clone)]
 pub struct PathConfig {

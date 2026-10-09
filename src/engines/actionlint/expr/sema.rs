@@ -9,8 +9,8 @@ use super::ExprError;
 use super::insecure::UntrustedInputChecker;
 use super::parser::{CompareKind, ExprNode, LogicalKind, error_at_token};
 use super::types::{ExprType, ObjectType, type_of_json_value};
-use crate::actionlint::parse::{quotes, sorted_quotes};
-use crate::actionlint::yaml::go_quote;
+use crate::engines::actionlint::parse::{quotes, sorted_quotes};
+use crate::engines::actionlint::yaml::go_quote;
 
 fn ordinal(i: usize) -> String {
     let suffix = match i % 10 {

@@ -2,10 +2,10 @@
 //! inputs and secrets passed to local ones.
 
 use super::{Rule, RuleBase};
-use crate::actionlint::ast::{Event, Job, Pos, Workflow, WorkflowCall};
-use crate::actionlint::parse::sorted_quotes;
-use crate::actionlint::reusable_workflow::LocalReusableWorkflowCache;
-use crate::actionlint::yaml::go_quote;
+use crate::engines::actionlint::ast::{Event, Job, Pos, Workflow, WorkflowCall};
+use crate::engines::actionlint::parse::sorted_quotes;
+use crate::engines::actionlint::reusable_workflow::LocalReusableWorkflowCache;
+use crate::engines::actionlint::yaml::go_quote;
 
 pub struct RuleWorkflowCall<'a> {
     base: RuleBase,

@@ -1,10 +1,10 @@
 //! The `if-cond` rule: conditions that are always true or always false.
 
 use super::{Rule, RuleBase};
-use crate::actionlint::ast::{Job, Pos, Step, Str};
-use crate::actionlint::expr::parser::Parser;
-use crate::actionlint::expr::sema::SemanticsChecker;
-use crate::actionlint::yaml::go_quote;
+use crate::engines::actionlint::ast::{Job, Pos, Step, Str};
+use crate::engines::actionlint::expr::parser::Parser;
+use crate::engines::actionlint::expr::sema::SemanticsChecker;
+use crate::engines::actionlint::yaml::go_quote;
 
 pub struct RuleIfCond {
     base: RuleBase,

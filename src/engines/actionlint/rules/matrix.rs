@@ -4,9 +4,9 @@
 use std::collections::BTreeMap;
 
 use super::{Rule, RuleBase};
-use crate::actionlint::ast::{Job, Matrix, MatrixRow, RawYamlValue, contains_expression};
-use crate::actionlint::parse::sorted_quotes;
-use crate::actionlint::yaml::go_quote;
+use crate::engines::actionlint::ast::{Job, Matrix, MatrixRow, RawYamlValue, contains_expression};
+use crate::engines::actionlint::parse::sorted_quotes;
+use crate::engines::actionlint::yaml::go_quote;
 
 pub struct RuleMatrix {
     base: RuleBase,

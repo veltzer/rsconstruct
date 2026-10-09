@@ -1,8 +1,8 @@
 //! The `credentials` rule: passwords written into `container:`/`services:`.
 
 use super::{Rule, RuleBase};
-use crate::actionlint::ast::{Container, Job};
-use crate::actionlint::yaml::go_quote;
+use crate::engines::actionlint::ast::{Container, Job};
+use crate::engines::actionlint::yaml::go_quote;
 
 pub struct RuleCredentials {
     base: RuleBase,

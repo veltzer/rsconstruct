@@ -593,7 +593,7 @@ impl Loader<'_> {
         anyhow::anyhow!(
             "{}:{}: unsupported XSD construct: {what}. ixmllint implements the schema \
              constructs in use across the fleet; keep this file on xmllint or extend \
-             src/xml/xsd.rs",
+             src/engines/xmllint/xsd.rs",
             self.path,
             element.line
         )

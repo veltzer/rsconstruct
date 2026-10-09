@@ -8,7 +8,7 @@ use std::sync::LazyLock;
 
 use super::ExprError;
 use super::parser::{ExprNode, error_at_token};
-use crate::actionlint::parse::sorted_quotes;
+use crate::engines::actionlint::parse::sorted_quotes;
 
 /// A node in the tree of untrusted inputs; a leaf has no children.
 #[derive(Debug)]
@@ -233,7 +233,7 @@ impl UntrustedInputChecker {
                     start.token(),
                     format!(
                         "{} is potentially untrusted. avoid using it directly in inline scripts. instead, pass it through an environment variable. see https://docs.github.com/en/actions/reference/security/secure-use#good-practices-for-mitigating-script-injection-attacks for more details",
-                        crate::actionlint::yaml::go_quote(&inputs[0])
+                        crate::engines::actionlint::yaml::go_quote(&inputs[0])
                     ),
                 ));
             } else if inputs.len() > 1 {

@@ -3,7 +3,7 @@
 
 use super::ExprError;
 use super::lexer::{Lexer, Token, TokenKind};
-use crate::actionlint::yaml::{go_parse_float, go_parse_int_base0, go_quote};
+use crate::engines::actionlint::yaml::{go_parse_float, go_parse_int_base0, go_quote};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompareKind {

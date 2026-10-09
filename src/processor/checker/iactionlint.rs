@@ -1,6 +1,6 @@
 //! iactionlint checker: actionlint's rules, in-process.
 //!
-//! The engine is `crate::actionlint`, a port of actionlint v1.7.12. This
+//! The engine is `crate::engines::actionlint`, a port of actionlint v1.7.12. This
 //! file is the processor around it: which config file is read, how the
 //! repository root is found, how problems are reported.
 
@@ -10,8 +10,8 @@ use std::sync::OnceLock;
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
-use crate::actionlint::{Config as LintConfig, Linter};
 use crate::config::StandardConfig;
+use crate::engines::actionlint::{Config as LintConfig, Linter};
 use crate::graph::Product;
 
 /// Where actionlint looks for its configuration, in order.

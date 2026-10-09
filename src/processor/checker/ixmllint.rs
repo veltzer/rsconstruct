@@ -1,6 +1,6 @@
 //! ixmllint checker: `xmllint --noout [--schema x.xsd]`, in-process.
 //!
-//! The engine is `crate::xml`: well-formedness and namespace checks that
+//! The engine is `crate::engines::xmllint`: well-formedness and namespace checks that
 //! report what xmllint reports, and an XSD validator for the schema
 //! constructs in use. This file is the processor around it: which schema is
 //! read, what fails a product, how problems are reported.
@@ -12,8 +12,8 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::config::StandardConfig;
+use crate::engines::xmllint::{self, Schema};
 use crate::graph::Product;
-use crate::xml::{self, Schema};
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct IxmllintConfig {
@@ -71,12 +71,12 @@ impl IxmllintProcessor {
         for file in files {
             let bytes = std::fs::read(file)
                 .with_context(|| format!("Failed to read {}", file.display()))?;
-            let document = xml::parse(&bytes);
+            let document = xmllint::parse(&bytes);
             let well_formed = document.is_well_formed();
             let mut problems = document.problems;
             if let (Some(schema), Some(root), true) = (schema, document.root.as_ref(), well_formed)
             {
-                let found = xml::validate(root, schema).with_context(|| {
+                let found = xmllint::validate(root, schema).with_context(|| {
                     format!(
                         "Failed to validate {} against {}",
                         file.display(),

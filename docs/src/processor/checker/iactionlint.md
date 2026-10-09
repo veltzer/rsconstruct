@@ -30,7 +30,7 @@ actionlint knows the inputs and outputs of a few hundred widely used actions (`a
 
 ### Fidelity
 
-The port follows actionlint v1.7.12 file by file (`src/actionlint/` mirrors `parse.go`, `expr_*.go` and `rule_*.go`). It was checked against actionlint's own test corpus: every one of the 740 problems actionlint reports over its `testdata/err`, `testdata/examples`, `testdata/ok` and `testdata/projects` cases (local actions, reusable workflows, configuration files included) is reported at the same position with the same message, and nothing else is. Over the fleet's 343 workflow files in 219 repositories both tools report nothing.
+The port follows actionlint v1.7.12 file by file (`src/engines/actionlint/` mirrors `parse.go`, `expr_*.go` and `rule_*.go`). It was checked against actionlint's own test corpus: every one of the 740 problems actionlint reports over its `testdata/err`, `testdata/examples`, `testdata/ok` and `testdata/projects` cases (local actions, reusable workflows, configuration files included) is reported at the same position with the same message, and nothing else is. Over the fleet's 343 workflow files in 219 repositories both tools report nothing.
 
 ## Source Files
 

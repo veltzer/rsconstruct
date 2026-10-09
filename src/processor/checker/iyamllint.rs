@@ -1,6 +1,6 @@
 //! iyamllint checker: yamllint's rules, in-process.
 //!
-//! The linting engine is `crate::yamllint`, a port of yamllint's parser,
+//! The linting engine is `crate::engines::yamllint`, a port of yamllint's parser,
 //! configuration and 23 rules. This file is the processor around it: which
 //! config file is read, what fails a product, how problems are reported.
 
@@ -11,8 +11,8 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::config::StandardConfig;
+use crate::engines::yamllint::{self, Config as LintConfig, Level};
 use crate::graph::Product;
-use crate::yamllint::{self, Config as LintConfig, Level};
 
 /// The config files yamllint looks for in the working directory, in its
 /// order of preference. The user-level `~/.config/yamllint/config` yamllint

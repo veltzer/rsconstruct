@@ -6,8 +6,8 @@ use std::sync::LazyLock;
 use regex::Regex;
 
 use super::{Rule, RuleBase};
-use crate::actionlint::ast::{Job, Pos, Step, Str};
-use crate::actionlint::yaml::go_quote;
+use crate::engines::actionlint::ast::{Job, Pos, Step, Str};
+use crate::engines::actionlint::yaml::go_quote;
 
 static JOB_ID_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_-]*$").expect("valid regex"));

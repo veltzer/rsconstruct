@@ -422,7 +422,7 @@ const TABLES_JSON: &str = include_str!("tables.json");
 
 fn build() -> Tables {
     let json: JsonTables = serde_json::from_str(TABLES_JSON)
-        .expect("src/tidy/tables.json is generated and must parse");
+        .expect("src/engines/tidy/tables.json is generated and must parse");
     let attr_by_id: HashMap<&str, usize> = json
         .attributes
         .iter()

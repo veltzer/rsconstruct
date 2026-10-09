@@ -7,6 +7,11 @@ and work on any platform with rsconstruct.
 The naming convention is to prefix with `i` (for internal), e.g., `ipdfunite` replaces `pdfunite`.
 Both the original and internal variants coexist — users choose which to use.
 
+An internal processor that ports a whole tool keeps the port in its own
+module under `src/engines/`, named after the tool it reproduces
+(`src/engines/hadolint/`, `src/engines/xmllint/`, ...); the processor file
+in `src/processor/` is only the front end that drives it.
+
 ## Implemented
 
 ### ipdfunite
@@ -67,7 +72,7 @@ output contract
 
 Replaces: `yamllint` (Python YAML linter)
 
-A full port of yamllint lives in `src/yamllint/`: its config format, its 23
+A full port of yamllint lives in `src/engines/yamllint/`: its config format, its 23
 rules and its directives, verified identical to yamllint 1.38.0 over the
 fleet's YAML files. Tokens come from `libyaml-safer`, a safe port of libyaml,
 whose scanner matches PyYAML's token for token (both are Kirill Simonov's
@@ -82,7 +87,7 @@ fidelity is won or lost
 
 Replaces: `xmllint --noout [--schema x.xsd]` (libxml2)
 
-`src/xml/` tokenizes with `xmlparser` (roxmltree's tokenizer) and implements
+`src/engines/xmllint/` tokenizes with `xmlparser` (roxmltree's tokenizer) and implements
 above it what xmllint checks: tag matching, duplicate attributes, entity and
 character references against the internal DTD subset, namespace
 declarations and prefixes, document shape; then an XSD validator for the
@@ -106,7 +111,7 @@ pinned down
 Replaces: `actionlint` (Go), except its `shellcheck` and `pyflakes` rules,
 which run external tools over `run:` scripts.
 
-`src/actionlint/` is a file-by-file port of actionlint v1.7.12: the YAML
+`src/engines/actionlint/` is a file-by-file port of actionlint v1.7.12: the YAML
 tree with go-yaml's tag resolution and alias handling, the workflow parser
 with its `syntax-check` messages, the `${{ }}` lexer, parser, type system
 and semantics checker (including untrusted-input tracking), and the fifteen
@@ -127,7 +132,7 @@ where fidelity is won or lost
 
 Replaces: `cpplint` (cpplint 2.0.2, Python)
 
-`src/cpplint/` is a function-by-function port of cpplint: its four line
+`src/engines/cpplint/` is a function-by-function port of cpplint: its four line
 views (`CleansedLines`: raw, raw strings blanked, comments removed, strings
 collapsed), the cross-line brace and template matchers (`CloseExpression`
 and its reverse), the nesting stack (namespaces, classes, `extern "C"`,
@@ -157,7 +162,7 @@ regex code where every `[i-1]` and `[:5]` is a decision
 Replaces: `hadolint` (hadolint 2.15.1, Haskell), except its ShellCheck
 findings (`SC` codes), which come from a separate program.
 
-`src/dockerfile/` ports hadolint's own half: the Dockerfile parser
+`src/engines/hadolint/` ports hadolint's own half: the Dockerfile parser
 (language-docker 16.0.0's grammar, combinator by combinator: escaped line
 breaks, heredocs, `--mount` arguments, exec-form arrays, pragmas), the view
 of `RUN` scripts the rules query (commands, arguments, flags, pipes; a shell
@@ -180,7 +185,7 @@ parser's whitespace rules are where fidelity is won or lost
 
 Replaces: `tidy -errors -q [-config x] [--option value]` (HTML Tidy 5.8.0, C)
 
-`src/tidy/` is a port of tidy's checking half: the UTF-8 stream reader
+`src/engines/tidy/` is a port of tidy's checking half: the UTF-8 stream reader
 (streamio.c, with its tab expansion and 64-entry column ring for pushed-back
 characters), the lexer (lexer.c: tokens, entities, attributes, doctype
 declarations, the inline stack), the element parsers (parser.c, one routine
@@ -210,7 +215,7 @@ only way to know the port is right
 Replaces: `svglint` (svglint 4.2.1, Node), except its `custom` rules,
 which are JavaScript functions.
 
-`src/svglint/` ports the three built-in rules and what they run on: the
+`src/engines/svglint/` ports the three built-in rules and what they run on: the
 lenient parser (htmlparser2 3.10.1 in XML mode without entity decoding,
 with its chained node start positions, over UTF-16 code units so columns
 agree), a CSS selector engine with css-select's XML-mode semantics (the

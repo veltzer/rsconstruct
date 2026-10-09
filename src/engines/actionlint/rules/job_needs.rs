@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 
 use super::{Rule, RuleBase};
-use crate::actionlint::ast::{Job, Pos, Workflow};
-use crate::actionlint::yaml::go_quote;
+use crate::engines::actionlint::ast::{Job, Pos, Workflow};
+use crate::engines::actionlint::yaml::go_quote;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Status {

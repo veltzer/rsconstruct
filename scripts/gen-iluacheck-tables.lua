@@ -1,9 +1,9 @@
--- Generates src/luacheck/tables.json for iluacheck from luacheck's own sources:
+-- Generates src/engines/luacheck/tables.json for iluacheck from luacheck's own sources:
 -- the built-in standards (luacheck.builtin_standards, as luacheck builds them
 -- when it runs on Lua 5.1, which decides what `_G` means) and the Unicode
 -- printability boundaries.
 --
--- Usage: lua5.1 scripts/gen-iluacheck-tables.lua LUACHECK_LUA_DIR > src/luacheck/tables.json
+-- Usage: lua5.1 scripts/gen-iluacheck-tables.lua LUACHECK_LUA_DIR > src/engines/luacheck/tables.json
 -- where LUACHECK_LUA_DIR holds luacheck/ (the apt package: /usr/share/lua/5.1;
 -- a checkout: its src/ directory).
 --

@@ -1,9 +1,9 @@
 //! The `shell-name` rule: `shell:` values, per the job's platform.
 
 use super::{Rule, RuleBase};
-use crate::actionlint::ast::{Exec, Job, Runner, Step, Str, Workflow};
-use crate::actionlint::parse::sorted_quotes;
-use crate::actionlint::yaml::go_quote;
+use crate::engines::actionlint::ast::{Exec, Job, Runner, Step, Str, Workflow};
+use crate::engines::actionlint::parse::sorted_quotes;
+use crate::engines::actionlint::yaml::go_quote;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Platform {

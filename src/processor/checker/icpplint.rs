@@ -1,6 +1,6 @@
 //! icpplint checker: cpplint's rules, in-process.
 //!
-//! The engine is `crate::cpplint`, a port of cpplint 2.0.2. This file is the
+//! The engine is `crate::engines::cpplint`, a port of cpplint 2.0.2. This file is the
 //! processor around it: cpplint's command-line options as TOML fields, the
 //! per-directory `CPPLINT.cfg` chain (or the file `config_file` names), and
 //! findings printed in cpplint's own `file:line:  message  [category]
@@ -13,7 +13,7 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::config::StandardConfig;
-use crate::cpplint::{IncludeOrder, Options, Outcome};
+use crate::engines::cpplint::{IncludeOrder, Options, Outcome};
 use crate::graph::Product;
 
 const fn default_verbose() -> u32 {
@@ -145,7 +145,7 @@ impl IcpplintProcessor {
     fn check_file(&self, file: &Path) -> Result<()> {
         let options = self.options()?;
         let name = file.display().to_string();
-        let outcome = crate::cpplint::lint_file(&name, options)
+        let outcome = crate::engines::cpplint::lint_file(&name, options)
             .with_context(|| format!("cpplint failed on {name}"))?;
         match outcome {
             Outcome::Excluded => Ok(()),

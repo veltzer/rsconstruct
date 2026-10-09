@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate src/tidy/tables.json from the HTML Tidy sources.
+"""Generate src/engines/tidy/tables.json from the HTML Tidy sources.
 
 itidy (processor.checker.itidy) is a port of HTML Tidy 5.8.0; its tag,
 attribute, attribute-version and entity tables are data, not code, so they
@@ -8,7 +8,7 @@ built from nested macros (version bit sets, INCLUDE_ARIA, ...), so the
 sources are run through the C preprocessor first and the expanded
 initializers are parsed.
 
-Usage: gen-itidy-tables.py <tidy-html5 checkout> > src/tidy/tables.json
+Usage: gen-itidy-tables.py <tidy-html5 checkout> > src/engines/tidy/tables.json
 """
 
 import json

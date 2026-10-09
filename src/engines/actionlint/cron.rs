@@ -3,7 +3,7 @@
 //! (minute, hour, day of month, month, day of week) and `Next`, which gives
 //! the first run after a time.
 
-use crate::actionlint::yaml::go_quote;
+use crate::engines::actionlint::yaml::go_quote;
 
 const STAR_BIT: u64 = 1 << 63;
 
@@ -82,7 +82,7 @@ pub fn parse(spec: &str) -> Result<Schedule, String> {
             ));
         };
         let name = &spec[eq + 1..i];
-        if !crate::actionlint::rules::events::timezone_exists(name) {
+        if !crate::engines::actionlint::rules::events::timezone_exists(name) {
             return Err(format!(
                 "provided bad location {name}: unknown time zone {name}"
             ));

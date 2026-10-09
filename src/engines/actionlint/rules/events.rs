@@ -4,13 +4,13 @@
 use std::path::Path;
 
 use super::{Rule, RuleBase};
-use crate::actionlint::ast::{
+use crate::engines::actionlint::ast::{
     DispatchInputType, Event, ImageVersionEvent, Pos, Str, WebhookEvent, WebhookEventFilter,
     Workflow, WorkflowCallEvent, WorkflowCallInputType, WorkflowDispatchEvent, filter_is_empty,
 };
-use crate::actionlint::cron;
-use crate::actionlint::parse::{quotes, sorted_quotes};
-use crate::actionlint::yaml::{go_parse_float, go_quote};
+use crate::engines::actionlint::cron;
+use crate::engines::actionlint::parse::{quotes, sorted_quotes};
+use crate::engines::actionlint::yaml::{go_parse_float, go_quote};
 
 /// Webhook events and their activity types; `None` for an event that has no
 /// `types` filter at all.

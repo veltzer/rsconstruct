@@ -36,7 +36,7 @@ Syntax errors are reported like yamllint's, at the position the parser gives up.
 
 ### Fidelity
 
-The port follows yamllint's source file by file (`src/yamllint/` mirrors `yamllint/parser.py`, `config.py`, `linter.py` and `rules/`). It was checked against yamllint 1.38.0 over the fleet's 362 tracked YAML files, under each repository's own `.yamllint.yaml` and again under yamllint's stricter `default` configuration: every one of the 1505 problems yamllint reported was reported at the same file, line, column, level and rule, and nothing else was.
+The port follows yamllint's source file by file (`src/engines/yamllint/` mirrors `yamllint/parser.py`, `config.py`, `linter.py` and `rules/`). It was checked against yamllint 1.38.0 over the fleet's 362 tracked YAML files, under each repository's own `.yamllint.yaml` and again under yamllint's stricter `default` configuration: every one of the 1505 problems yamllint reported was reported at the same file, line, column, level and rule, and nothing else was.
 
 ## Source Files
 

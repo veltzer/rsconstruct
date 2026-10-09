@@ -1,9 +1,9 @@
 //! The `permissions` rule: scope names and their values.
 
 use super::{Rule, RuleBase};
-use crate::actionlint::ast::{Job, Permissions, Workflow};
-use crate::actionlint::parse::{quotes, sorted_quotes};
-use crate::actionlint::yaml::go_quote;
+use crate::engines::actionlint::ast::{Job, Permissions, Workflow};
+use crate::engines::actionlint::parse::{quotes, sorted_quotes};
+use crate::engines::actionlint::yaml::go_quote;
 
 const ALL_PERMISSION_SCOPES: &[(&str, &[&str])] = &[
     ("actions", &["read", "write", "none"]),

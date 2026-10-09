@@ -1,8 +1,8 @@
 //! The `env-var` rule: environment variable names.
 
 use super::{Rule, RuleBase};
-use crate::actionlint::ast::{Env, Job, Step, Workflow};
-use crate::actionlint::yaml::go_quote;
+use crate::engines::actionlint::ast::{Env, Job, Step, Workflow};
+use crate::engines::actionlint::yaml::go_quote;
 
 pub struct RuleEnvVar {
     base: RuleBase,

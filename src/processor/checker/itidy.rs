@@ -1,6 +1,6 @@
 //! itidy checker: `tidy -errors -q`, in-process.
 //!
-//! The engine is `crate::tidy`, a port of HTML Tidy 5.8.0's lexer, parser,
+//! The engine is `crate::engines::tidy`, a port of HTML Tidy 5.8.0's lexer, parser,
 //! attribute checks and clean-up passes: it reports what tidy reports, at
 //! the same line and column, with the same warning and error totals. This
 //! file is the processor around it: which tidy options apply, what fails a
@@ -13,8 +13,8 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::config::StandardConfig;
+use crate::engines::tidy::{self, Options};
 use crate::graph::Product;
-use crate::tidy::{self, Options};
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct ItidyConfig {

@@ -20,7 +20,7 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_sign_loss)]
-// Also buffer offsets and columns cast to i64 in src/yamllint, where the
+// Also buffer offsets and columns cast to i64 in src/engines/yamllint, where the
 // ported arithmetic needs -1 as a sentinel: a YAML file is nowhere near 2^63
 // bytes, and ~40 `i64::try_from(..).expect(..)` would say nothing more.
 #![allow(clippy::cast_possible_wrap)]
@@ -66,7 +66,6 @@
 // shows real contention.
 #![allow(clippy::significant_drop_tightening)]
 
-mod actionlint;
 mod analyzers;
 mod build_context;
 mod builder;
@@ -75,12 +74,11 @@ mod checksum;
 mod cli;
 mod color;
 mod config;
-mod cpplint;
 mod db;
 mod deps_cache;
 mod display;
-mod dockerfile;
 mod download;
+mod engines;
 mod errors;
 mod executor;
 mod exit_code;
@@ -88,7 +86,6 @@ mod file_index;
 mod graph;
 mod graph_render;
 mod json_output;
-mod luacheck;
 mod object_store;
 mod output;
 mod phases;
@@ -99,16 +96,12 @@ mod registries;
 mod remote_cache;
 mod runtime_flags;
 mod stats;
-mod svglint;
 mod tables;
-mod tidy;
 mod tool_lock;
 mod tools;
 mod watcher;
 mod webcache;
 pub(crate) mod word_manager;
-mod xml;
-mod yamllint;
 
 use anyhow::{Context, Result, bail};
 use builder::Builder;

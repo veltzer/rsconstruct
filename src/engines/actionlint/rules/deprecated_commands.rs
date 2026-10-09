@@ -5,8 +5,8 @@ use std::sync::LazyLock;
 use regex::Regex;
 
 use super::{Rule, RuleBase};
-use crate::actionlint::ast::{Exec, Step};
-use crate::actionlint::yaml::go_quote;
+use crate::engines::actionlint::ast::{Exec, Step};
+use crate::engines::actionlint::yaml::go_quote;
 
 static DEPRECATED_COMMANDS_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Convert actionlint's popular_actions.go into src/actionlint/popular_actions.json.
+"""Convert actionlint's popular_actions.go into src/engines/actionlint/popular_actions.json.
 
-iactionlint (src/actionlint/) is a port of actionlint and checks `uses:` of
+iactionlint (src/engines/actionlint/) is a port of actionlint and checks `uses:` of
 well-known actions against the same data set actionlint ships: the inputs
 and outputs of each popular action, and the specs whose runner is too old.
 actionlint generates that data into a Go source file; this script turns the
@@ -9,7 +9,7 @@ Go file into the JSON iactionlint embeds, so the two tools agree.
 
 usage: gen-actionlint-popular-actions.py path/to/actionlint/popular_actions.go
 
-Writes src/actionlint/popular_actions.json next to this repository's src/.
+Writes src/engines/actionlint/popular_actions.json next to this repository's src/.
 Re-run it when moving iactionlint to a newer actionlint release.
 """
 import json
@@ -90,7 +90,7 @@ def main() -> int:
             section = None
         if line == "\t},":
             cur = None
-    out = Path(__file__).resolve().parent.parent / "src" / "actionlint" / "popular_actions.json"
+    out = Path(__file__).resolve().parent.parent / "src" / "engines" / "actionlint" / "popular_actions.json"
     data = {"actions": actions, "outdated": sorted(outdated)}
     out.write_text(json.dumps(data, separators=(",", ":"), sort_keys=True) + "\n")
     print(f"{len(actions)} actions, {len(outdated)} outdated specs -> {out}")

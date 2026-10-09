@@ -1,6 +1,6 @@
 //! idockerfile checker: hadolint's DL rules, in-process.
 //!
-//! The engine is `crate::dockerfile`, a port of hadolint 2.15.1's parser,
+//! The engine is `crate::engines::hadolint`, a port of hadolint 2.15.1's parser,
 //! pragmas and rules. This file is the processor around it: where the
 //! configuration comes from (`.hadolint.yaml` found like hadolint finds it,
 //! or a named file, plus TOML fields), what fails a product (hadolint's
@@ -14,7 +14,7 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::config::StandardConfig;
-use crate::dockerfile::{self, config::Config, config::LabelType, config::Severity};
+use crate::engines::hadolint::{self, config::Config, config::LabelType, config::Severity};
 use crate::graph::Product;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -123,8 +123,8 @@ impl IdockerfileProcessor {
         let cfg = self.hadolint_config()?;
         let bytes =
             std::fs::read(file).with_context(|| format!("Failed to read {}", file.display()))?;
-        let source = dockerfile::decode(&bytes);
-        let report = match dockerfile::lint(&source, cfg) {
+        let source = hadolint::decode(&bytes);
+        let report = match hadolint::lint(&source, cfg) {
             Ok(r) => r,
             Err(e) => bail!("{}:{}:{} {}", file.display(), e.line, e.column, e.message),
         };

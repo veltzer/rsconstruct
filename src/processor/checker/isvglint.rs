@@ -1,6 +1,6 @@
 //! isvglint checker: svglint's built-in rules, in-process.
 //!
-//! The engine is `crate::svglint`, a port of svglint 4.2.1's lenient SVG
+//! The engine is `crate::engines::svglint`, a port of svglint 4.2.1's lenient SVG
 //! parser, CSS selector matching, XML validity check and the `elm` and
 //! `attr` rules. This file is the processor around it: the rules come from
 //! TOML fields instead of a JavaScript config file, and every finding
@@ -13,8 +13,8 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::config::StandardConfig;
+use crate::engines::svglint::{self, Rules};
 use crate::graph::Product;
-use crate::svglint::{self, Rules};
 
 const fn default_true() -> bool {
     true

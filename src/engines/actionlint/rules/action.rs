@@ -4,13 +4,13 @@
 use std::path::Path;
 
 use super::{Rule, RuleBase};
-use crate::actionlint::action_metadata::{
+use crate::engines::actionlint::action_metadata::{
     ActionMetadata, ActionMetadataRuns, LocalActionsCache, is_outdated_popular_action,
     popular_action,
 };
-use crate::actionlint::ast::{Exec, ExecAction, Pos, Step};
-use crate::actionlint::parse::sorted_quotes;
-use crate::actionlint::yaml::go_quote;
+use crate::engines::actionlint::ast::{Exec, ExecAction, Pos, Step};
+use crate::engines::actionlint::parse::sorted_quotes;
+use crate::engines::actionlint::yaml::go_quote;
 
 const BRANDING_COLORS: &[&str] = &[
     "white",

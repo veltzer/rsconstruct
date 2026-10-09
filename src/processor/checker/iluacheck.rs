@@ -1,6 +1,6 @@
 //! iluacheck checker: luacheck's analysis, in-process.
 //!
-//! The engine is `crate::luacheck`, a port of luacheck 1.2.0. This file is
+//! The engine is `crate::engines::luacheck`, a port of luacheck 1.2.0. This file is
 //! the processor around it: luacheck's command-line options as TOML fields,
 //! the `.luacheckrc` configuration, and findings printed as `luacheck
 //! --formatter plain --codes` prints them. Any finding fails the build, as
@@ -17,9 +17,9 @@ use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
+use crate::engines::luacheck::{CliOptions, FileResult, Limit};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::luacheck::{CliOptions, FileResult, Limit};
 
 fn default_config_file() -> String {
     ".luacheckrc".to_string()
@@ -195,7 +195,7 @@ impl IluacheckProcessor {
 
     fn check_files(&self, files: &[&Path]) -> Result<()> {
         let names: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
-        let results = crate::luacheck::run(&names, &self.config.cli_options())?;
+        let results = crate::engines::luacheck::run(&names, &self.config.cli_options())?;
         let mut lines = Vec::new();
         for (_, result) in results {
             match result {

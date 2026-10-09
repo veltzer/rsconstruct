@@ -2,8 +2,8 @@
 //! actionlint's `glob.go` and `rule_glob.go`.
 
 use super::{Rule, RuleBase};
-use crate::actionlint::ast::{Event, Job, Pos, Str, WebhookEventFilter, Workflow};
-use crate::actionlint::expr::lexer::go_quote_rune;
+use crate::engines::actionlint::ast::{Event, Job, Pos, Str, WebhookEventFilter, Workflow};
+use crate::engines::actionlint::expr::lexer::go_quote_rune;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InvalidGlobPattern {
