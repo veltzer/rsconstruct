@@ -90,6 +90,35 @@ workflow files are clean under both tools.
 (go-yaml's node positions, text/scanner columns inside expressions) are
 where fidelity is won or lost
 
+### itidy — HTML checking (done)
+
+Replaces: `tidy -errors -q [-config x] [--option value]` (HTML Tidy 5.8.0, C)
+
+`src/tidy/` is a port of tidy's checking half: the UTF-8 stream reader
+(streamio.c, with its tab expansion and 64-entry column ring for pushed-back
+characters), the lexer (lexer.c: tokens, entities, attributes, doctype
+declarations, the inline stack), the element parsers (parser.c, one routine
+per content model), the attribute and element checks (attrs.c, tags.c), the
+default clean-up passes (clean.c: style elements, nested emphasis, the meta
+charset, the doctype, HTML5-removed and proprietary elements) and the
+message table (message.c, language_en.h). The tag, attribute and entity
+tables are generated from tidy's sources by `scripts/gen-itidy-tables.py`.
+The pretty-printer is not ported. Every tidy option is parsed and validated;
+options that only shape the output are ignored and the few whose effect is
+not reproduced (`clean`, `gdoc`, `bare`, `word-2000`, `logical-emphasis`,
+`input-xml`, `accessibility-check`, `mute`, non-UTF-8 encodings) are
+refused. Verified against tidy over the fleet's 599 HTML files and 6000
+mutated copies, under the fleet's option sets: identical report lines in
+the same order. The quirks that had to be copied: an empty attribute value
+is treated as absent (`tmbstrndup` returns NULL for length 0), an ESC
+character does not count as a column, and whether an emptied text node was
+blank is decided from a stale byte past its end.
+
+**Crate:** none (serde_json for the generated tables)
+**Complexity:** High — tidy's parser repairs as it reads, so every report's
+position depends on the exact token stream; the differential run is the
+only way to know the port is right
+
 ### itaplo — TOML validation
 
 Replaces: `taplo` (TOML formatter/linter)

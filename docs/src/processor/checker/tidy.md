@@ -4,6 +4,8 @@
 
 Validates HTML files using [HTML Tidy](https://www.html-tidy.org/).
 
+The Rust alternative is [itidy](itidy.md): tidy's checks, in-process, with tidy's messages, positions and verdicts. Switching is `tidy` → `itidy` in the stanza header, `args = ["-config", "x.conf"]` → `config_file = "x.conf"`, and `args = ["--name", "value"]` → `options = ["name: value"]`. Files that need tidy's `clean`, `gdoc` or accessibility checks stay here.
+
 ## How It Works
 
 Discovers `.html` and `.htm` files in the project (excluding common build tool

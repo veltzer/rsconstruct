@@ -48,6 +48,7 @@ mod iactionlint;
 mod ijq;
 mod ijsonlint;
 mod itaplo;
+mod itidy;
 mod ixmllint;
 mod iyamllint;
 mod iyamlschema;

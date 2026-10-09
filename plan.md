@@ -48,7 +48,7 @@ concentrated in a handful of processors, which is what orders the stages:
 | shellcheck | 80 | Stage 4 for now (no Rust equivalent), revisit |
 | pytest | 62 | Inherent: runs Python |
 | sphinx | 51 | Covered: mdbook (Rust) builds documentation; a sphinx repo that wants Rust rewrites its sources for mdbook, which is a per-repo choice, not this plan |
-| htmlhint | 29 | Stage 3: native `ihtml` |
+| htmlhint | 0 | Was 29 at the first count; the fleet's HTML checking is all `tidy` now (0 htmlhint, 0 htmllint) |
 | xmllint | 28 | Stage 3: native `ixmllint` (done, fleet switched 2026-10-08) |
 | yamllint | 27 | Stage 1: iyamllint (done, fleet switched 2026-10-08) |
 | cppcheck | 23 | Inherent for now (no Rust C++ analyser) |
@@ -56,7 +56,7 @@ concentrated in a handful of processors, which is what orders the stages:
 | stylelint | 16 | Stage 2: biome |
 | checkstyle | 15 | Inherent: Java |
 | hadolint | 15 | Stage 3: native `idockerfile` |
-| tidy | 14 | Stage 3: native `ihtml` |
+| tidy | 29 | Stage 3: native `itidy` (done 2026-10-09, fleet switch pending a release) |
 
 Everything with fewer than ten repos is in the per-stage tables below.
 
@@ -134,7 +134,7 @@ Each is a `SimpleChecker`/`SimpleGenerator` over a crate, `is_native: true`,
 | Capability (old) | Repos | Crate(s) | New processor | Status | Notes |
 |---|---|---|---|---|---|
 | GitHub workflow lint (actionlint) | 199 | libyaml-safer, regex, serde_json | `iactionlint` | done | `src/actionlint/`: a file-by-file port of actionlint v1.7.12 (syntax-check, expression type checking, all fifteen rules, the popular-actions data set embedded). Not ported: the shellcheck and pyflakes rules, which run external tools. Verified against actionlint's own test corpus: all 740 problems identical. Switching a repo is `actionlint` → `iactionlint`; a repo that wants shellcheck over `run:` scripts stays on actionlint. The fleet switched on 2026-10-09 (199 repos, none kept actionlint; the shared `.github/actionlint.yaml` still lists `ubuntu-26.04`, which iactionlint, like actionlint 1.7.12, does not know) |
-| HTML lint (htmlhint, tidy, htmllint) | 43 | html5ever, scraper | `ihtml` | todo | Parse errors from html5ever plus a rule set covering what the fleet's `.htmlhintrc` enables (doctype, unique ids, attr quoting, closed tags). tidy's "clean" pass is out of scope; validation only |
+| HTML checking (tidy) | 29 | none (serde_json for the generated tables) | `itidy` | done | `src/tidy/`: a port of HTML Tidy 5.8.0's checking half (stream reader, lexer, element parsers, attribute and element checks, default clean-up passes, message table; tables generated from tidy's sources by `scripts/gen-itidy-tables.py`). The pretty-printer is not ported. Every tidy option is accepted and validated; the ones whose effect is not reproduced (`clean`, `gdoc`, `bare`, `word-2000`, `logical-emphasis`, `input-xml`, `accessibility-check`, `mute`, non-UTF-8 encodings) are refused by name. Verified against `tidy -errors -q` over the fleet's 599 HTML files and 6000 mutants under the fleet's option sets: identical report lines. The original `ihtml` idea (html5ever + an htmlhint rule set) was dropped when a recount showed the fleet's 29 HTML-checking repos all use tidy and none use htmlhint or htmllint: a faithful tidy port is what lets them switch without new findings. Switching a repo is `tidy` → `itidy`, `-config x` → `config_file = "x"`, `--name value` → `options = ["name: value"]`. Fleet switch pending a release |
 | XML well-formedness and XSD validation (xmllint) | 28 | xmlparser | `ixmllint` | done | `src/xml/`: well-formedness, namespaces and an XSD validator covering the constructs the fleet uses (unsupported ones are a build failure naming them). Verified against xmllint over the fleet's 6256 XML/SVG files and the java-keynote schema: same verdicts, lines and messages. Switching a repo is `xmllint` → `ixmllint` (`args = ["--schema", x]` → `schema = x`); DTD and RelaxNG validation stay on xmllint. The fleet switched on 2026-10-08 (27 repos; java-keynote keeps its schema via `schema = "xsd/keynote.xsd"`) |
 | Dockerfile lint (hadolint) | 15 | dockerfile-parser | `idockerfile` | todo | Implement the DL30xx/DL40xx rules the fleet actually triggers (measured first); hadolint's full set is not the target |
 | CSS/SCSS lint (stylelint) | 16 | lightningcss, grass (for SCSS) | `icss` | won't do | biome (Stage 2) covers the fleet's CSS: counted 2026-10-03, of the 16 stylelint repos only veltzer.github.io has SCSS, and only one authored file (`sass/style.scss`), which stays on stylelint. Revisit only if SCSS spreads |

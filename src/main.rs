@@ -97,6 +97,7 @@ mod remote_cache;
 mod runtime_flags;
 mod stats;
 mod tables;
+mod tidy;
 mod tool_lock;
 mod tools;
 mod watcher;
