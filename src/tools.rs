@@ -663,6 +663,14 @@ fn describe_binary(pkg: &str) -> Vec<Vec<String>> {
                     "/tmp".to_string(),
                     inner.to_string(),
                 ],
+                ArchiveKind::Zip { inner } => vec![
+                    "unzip".to_string(),
+                    "-o".to_string(),
+                    dl,
+                    inner.to_string(),
+                    "-d".to_string(),
+                    "/tmp".to_string(),
+                ],
                 ArchiveKind::Gunzip => vec!["gunzip".to_string(), "-f".to_string(), dl],
                 ArchiveKind::Raw => vec!["mv".to_string(), dl, tmp.clone()],
                 ArchiveKind::Deb { .. } => unreachable!("matched by the Deb arm above"),
@@ -804,6 +812,16 @@ fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
             }
             std::fs::remove_file(&download).ok();
         }
+        ArchiveKind::Zip { inner } => {
+            exec(&["unzip", "-o", &download, inner, "-d", "/tmp"])?;
+            // After unzip, the member is at /tmp/<inner>; rename to final_tmp.
+            let inner_path = format!("/tmp/{inner}");
+            if inner_path != final_tmp {
+                std::fs::rename(&inner_path, &final_tmp)
+                    .with_context(|| format!("rename {inner_path} -> {final_tmp}"))?;
+            }
+            std::fs::remove_file(&download).ok();
+        }
         ArchiveKind::Gunzip => {
             // gunzip strips the .gz extension. Our download path ends in
             // .dl; rename to .dl.gz so gunzip leaves /tmp/<dest>.dl, then
@@ -836,6 +854,10 @@ struct BinaryRecipe {
 
 enum ArchiveKind {
     TarGz {
+        inner: &'static str,
+    },
+    /// A `.zip` holding the binary as the member `inner`.
+    Zip {
         inner: &'static str,
     },
     Gunzip,
@@ -910,6 +932,15 @@ fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
                 inner: "actionlint",
             },
             dest: "actionlint",
+        }),
+        // Pinned like actionlint: selene's release assets embed the version
+        // in the filename (selene-0.32.0-linux.zip). Bump this deliberately.
+        // The full build, not selene-light: only the full one carries the
+        // Roblox standard library, and the size difference is irrelevant.
+        "selene" => Some(BinaryRecipe {
+            url: "https://github.com/Kampfkarren/selene/releases/download/0.32.0/selene-0.32.0-linux.zip",
+            archive: ArchiveKind::Zip { inner: "selene" },
+            dest: "selene",
         }),
         "hadolint" => Some(BinaryRecipe {
             url: "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64",
@@ -2085,7 +2116,7 @@ mod tests {
     /// chmod, mv) with no shell metacharacters anywhere.
     #[test]
     fn binary_describe_has_no_shell_metachars() {
-        for pkg in &["taplo", "rumdl", "zola", "oxlint"] {
+        for pkg in &["taplo", "rumdl", "zola", "oxlint", "selene"] {
             let steps = describe("binary", &[pkg]);
             assert!(steps.len() >= 3, "binary {pkg} should have >=3 steps");
             for step in &steps {

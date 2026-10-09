@@ -73,6 +73,7 @@
         - [Ruff](processor/checker/ruff.md)
         - [Rumdl](processor/checker/rumdl.md)
         - [Script](processor/checker/script.md)
+        - [Selene](processor/checker/selene.md)
         - [Shellcheck](processor/checker/shellcheck.md)
         - [Slidev](processor/checker/slidev.md)
         - [Standard](processor/checker/standard.md)

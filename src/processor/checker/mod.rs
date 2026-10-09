@@ -26,6 +26,7 @@ mod pyrefly;
 mod pytest;
 mod ruff;
 mod rumdl;
+mod selene;
 mod shellcheck;
 mod slidev;
 mod standard;

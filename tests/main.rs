@@ -95,6 +95,7 @@ mod processor {
         pub mod ruff;
         pub mod rumdl;
         pub mod script;
+        pub mod selene;
         pub mod shellcheck;
         pub mod slidev;
         pub mod standard;
