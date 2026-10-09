@@ -96,6 +96,7 @@ mod registries;
 mod remote_cache;
 mod runtime_flags;
 mod stats;
+mod svglint;
 mod tables;
 mod tidy;
 mod tool_lock;

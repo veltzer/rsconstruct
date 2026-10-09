@@ -67,6 +67,7 @@ mod processor {
         pub mod htmlhint;
         pub mod htmllint;
         pub mod iactionlint;
+        pub mod isvglint;
         pub mod itidy;
         pub mod ixmllint;
         pub mod iyamllint;

@@ -47,6 +47,7 @@ mod encoding;
 mod iactionlint;
 mod ijq;
 mod ijsonlint;
+mod isvglint;
 mod itaplo;
 mod itidy;
 mod ixmllint;
