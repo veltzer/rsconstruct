@@ -69,7 +69,7 @@ Scans for `.md` files, checks spelling with the built-in zspell engine.
 
 ### Built-in checkers
 
-actionlint, ascii, aspell, biome, black, checkpatch, checkstyle, clang_tidy, clippy, cmake, cppcheck, cpplint, doctest, duplicate_files, encoding, eslint, hadolint, htmlhint, htmllint, iactionlint, idockerfile, ijq, ijsonlint, isvglint, itaplo, itidy, ixmllint, iyamllint, iyamlschema, jq, jshint, jslint, json_schema, jsonlint, license_header, luacheck, make, markdownlint, marp_images, mdl, mypy, oxlint, perlcritic, php_lint, prettier, pylint, pyrefly, pytest, ruff, rumdl, script, shellcheck, slidev, standard, stylelint, svglint, svgo, taplo, terms, tidy, xmllint, yamllint, yq, zspell
+actionlint, ascii, aspell, biome, black, checkpatch, checkstyle, clang_tidy, clippy, cmake, cppcheck, cpplint, doctest, duplicate_files, encoding, eslint, hadolint, htmlhint, htmllint, iactionlint, idockerfile, ijq, ijsonlint, isvglint, itaplo, itidy, ixmllint, iyamllint, iyamlschema, iyq, jq, jshint, jslint, json_schema, jsonlint, license_header, luacheck, make, markdownlint, marp_images, mdl, mypy, oxlint, perlcritic, php_lint, prettier, pylint, pyrefly, pytest, ruff, rumdl, script, shellcheck, slidev, standard, stylelint, svglint, svgo, taplo, terms, tidy, xmllint, yamllint, yq, zspell
 
 ## Generator
 
@@ -168,7 +168,7 @@ sass/styles.scss → out/processor.generator.sass/styles.css
 
 ### Built-in generators
 
-a2x, cc_single_file, chromium, drawio, generic, ijinja2, imarkdown2html, ipdfunite, isass, jinja2, libreoffice, mako, markdown2html, marp, mermaid, objdump, pandoc, pdflatex, pdfunite, protobuf, requirements, rust_single_file, sass, tags, tera, yaml2json
+a2x, cc_single_file, chromium, drawio, generic, ijinja2, imarkdown2html, ipdfunite, iprotobuf, isass, jinja2, libreoffice, mako, markdown2html, marp, mermaid, objdump, pandoc, pdflatex, pdfunite, protobuf, requirements, rust_single_file, sass, tags, tera, yaml2json
 
 ## Creator
 

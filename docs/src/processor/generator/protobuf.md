@@ -4,6 +4,8 @@
 
 Compiles Protocol Buffer (`.proto`) files to generated source code using `protoc`.
 
+The Rust alternative is [iprotobuf](iprotobuf.md): the files compiled in-process with protox (descriptors byte-identical to protoc's) and Rust code generated with prost, one file per package. It emits Rust only; a repo that needs the C++ output stays here.
+
 ## How It Works
 
 Files matching configured extensions in the `proto/` directory are compiled using the

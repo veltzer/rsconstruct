@@ -73,6 +73,7 @@ mod processor {
         pub mod ixmllint;
         pub mod iyamllint;
         pub mod iyamlschema;
+        pub mod iyq;
         pub mod jq;
         pub mod jshint;
         pub mod jslint;
@@ -125,6 +126,7 @@ mod processor {
         pub mod drawio;
         pub mod generic;
         pub mod ijinja2;
+        pub mod iprotobuf;
         pub mod isass;
         pub mod jinja2;
         pub mod libreoffice;

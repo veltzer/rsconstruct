@@ -6,6 +6,7 @@ mod generic;
 mod ijinja2;
 mod imarkdown2html;
 mod ipdfunite;
+mod iprotobuf;
 mod isass;
 mod jinja2;
 mod libreoffice;

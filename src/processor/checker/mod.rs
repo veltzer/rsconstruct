@@ -54,6 +54,7 @@ mod itidy;
 mod ixmllint;
 mod iyamllint;
 mod iyamlschema;
+mod iyq;
 mod json_schema;
 mod license_header;
 mod make;

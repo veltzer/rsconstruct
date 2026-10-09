@@ -30,6 +30,39 @@ Both tools ultimately just validate that files are well-formed JSON.
 **Crate:** `serde_json` (already in deps)
 **Complexity:** Low — parse file, report error with line/column
 
+### iyq — YAML checked with a jq filter (done)
+
+Replaces: `yq FILTER file` (the jq wrapper; the fleet's `yq` stanzas ran `yq .`)
+
+`src/processor/checker/iyq.rs` reads every document of the file with
+`serde_yaml_ng` (a leading byte order mark skipped, as PyYAML does), turns
+each into JSON and evaluates the configured filter over it with `jaq`
+(jaq-core, jaq-std, jaq-json); a YAML error or a filter error fails the
+file, outputs are discarded. Checked against `yq` over the fleet's 1015 YAML
+files under two filters: the same pass/fail verdicts.
+
+**Crate:** `jaq-core`, `jaq-std`, `jaq-json`, `serde_yaml_ng`
+**Complexity:** Low — the engines are the crates; the work is yq's document
+handling
+
+### iprotobuf — Protocol Buffers to Rust (done)
+
+Replaces: the `protobuf` generator (`protoc --cpp_out`), for Rust output
+
+`src/processor/generator/iprotobuf.rs` compiles a stanza's `.proto` files
+with `protox` (imports against `include_paths` or the `src_dirs`; the
+well-known types built in) and generates Rust with `prost-build`, one
+`<package>.rs` per package into the output directory, so the stanza is one
+product whose outputs are known from the files' `package` statements. The
+descriptor set can be written too. protox's descriptor set was compared
+with protoc 3.21's over proto2/proto3 files covering the syntax (nested and
+map fields, oneofs, reserved ranges, groups, extensions, defaults, options,
+streaming services, imports): byte-identical without source info.
+
+**Crate:** `protox`, `prost-build`, `prost-types`, `prost`
+**Complexity:** Low — the compiler is the crate; the work is the per-package
+output contract
+
 ### iyamllint — YAML linting (done)
 
 Replaces: `yamllint` (Python YAML linter)

@@ -4,6 +4,8 @@
 
 Validates YAML files using [yq](https://github.com/mikefarah/yq).
 
+The Rust alternative is [iyq](iyq.md): YAML read in-process and the jq filter evaluated with jaq, the same files passing and failing. Switching is `yq` → `iyq` in the stanza header, with `args = ["FILTER"]` → `filter = "FILTER"`.
+
 ## How It Works
 
 Discovers `.yml` and `.yaml` files in the project (excluding common build tool
