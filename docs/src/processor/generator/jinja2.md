@@ -4,6 +4,8 @@
 
 Renders Jinja2 template files into output files using the Python Jinja2 template library.
 
+The Rust alternative is [ijinja2](ijinja2.md): the same discovery, output paths and environment-variable context, rendered in-process with minijinja. Switching is `jinja2` → `ijinja2` in the stanza header. A template that leans on Python-only calls (`'{}'.format()`, `%`-formatting, `pprint`) stays here.
+
 ## How It Works
 
 Files matching configured extensions in `templates.jinja2/` are rendered via `python3` using

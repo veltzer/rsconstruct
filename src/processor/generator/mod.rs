@@ -3,6 +3,7 @@ mod cc_single_file;
 mod chromium;
 mod drawio;
 mod generic;
+mod ijinja2;
 mod imarkdown2html;
 mod ipdfunite;
 mod isass;

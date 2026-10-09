@@ -51,6 +51,8 @@ strum = { version = "0.28.0", features = ["derive"] }
 inventory = "0.3.24"
 libyaml-safer = "0.3"
 xmlparser = "0.13"
+minijinja = { version = "3.0.0", features = ["json", "urlencode"] }
+minijinja-contrib = { version = "3.0.0", features = ["pycompat", "wordcount", "wordwrap", "rand"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

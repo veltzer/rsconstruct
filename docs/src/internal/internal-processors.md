@@ -215,6 +215,28 @@ Convert YAML files to pretty-printed JSON.
 **Crate:** `serde_yaml_ng`, `serde_json`
 **Complexity:** Low — parse YAML, serialize as JSON
 
+### ijinja2 — Jinja2 templates (done)
+
+Replaces: the `jinja2` generator (Python Jinja2 through `python3 -c`)
+
+`src/processor/generator/ijinja2.rs` keeps the generator's contract (the
+shared `find_templates` discovery, the output path with the extension
+removed, the project root as loader root, the environment as context) and
+renders with minijinja set up like a plain Jinja2 `Environment`: no
+autoescaping, trailing newline dropped, line endings normalised, the
+Python string and dict methods from minijinja-contrib's `pycompat`, and
+Jinja2's argument lists for `truncate`, `replace`, `round`, `int`, `sum`,
+`center` and `forceescape` supplied where minijinja's are shorter. Checked
+against Python Jinja2 over 34 templates and 59 single-construct probes:
+identical except keyword-only `wordwrap(width=)` and `truncate(leeway=)`,
+numeric-only `sum`, `2 ** -1`, dict keys named like Python methods, the
+`attr` filter on dicts, `reverse` on a list (Jinja2 prints an iterator) and
+`+` vs `%20` in `urlencode` of a dict.
+
+**Crate:** `minijinja`, `minijinja-contrib`
+**Complexity:** Low — the engine is the crate; the work is matching Jinja2's
+defaults and knowing the gaps
+
 ### isass — Sass/SCSS to CSS
 
 Replaces: `sass` (Dart Sass CLI)

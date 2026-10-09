@@ -338,8 +338,8 @@ scanned file, and store nothing taken from the index:
   `itidy`, `ixmllint`, `iyamllint`, `json_schema`, `marp_images`;
 - custom checkers: `aspell`, `clang_tidy`, `iyamlschema`,
   `license_header`, `markdownlint`, `mdl`, `script`, `terms`, `zspell`;
-- custom generators: `cc_single_file`, `generic`, `jinja2`, `mako`,
-  `marp`, `pdflatex`, `rust_single_file`;
+- custom generators: `cc_single_file`, `generic`, `ijinja2`, `jinja2`,
+  `mako`, `marp`, `pdflatex`, `rust_single_file`;
 - creators: `cc`, `generic`, `linux_module`, `pip`. (`cc` and
   `linux_module` read their manifest from disk, which both index views
   share; `cc` also collects compiler names, but only adds to that set.)

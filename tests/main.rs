@@ -124,6 +124,7 @@ mod processor {
         pub mod cc_single_file;
         pub mod drawio;
         pub mod generic;
+        pub mod ijinja2;
         pub mod isass;
         pub mod jinja2;
         pub mod libreoffice;

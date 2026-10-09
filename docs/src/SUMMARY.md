@@ -90,6 +90,7 @@
         - [Chromium](processor/generator/chromium.md)
         - [Drawio](processor/generator/drawio.md)
         - [Generator](processor/generator/generic.md)
+        - [Ijinja2](processor/generator/ijinja2.md)
         - [Imarkdown2html](processor/generator/imarkdown2html.md)
         - [Ipdfunite](processor/generator/ipdfunite.md)
         - [Isass](processor/generator/isass.md)
