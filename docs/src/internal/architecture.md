@@ -273,12 +273,24 @@ by `-j` / `RSCONSTRUCT_THREADS`). Batch-capable processors group their
 products into a single tool invocation.
 
 **Batch chunk sizing:** By default a batch group is sent as one chunk — all
-of a batch-capable processor's rebuilding products in the level go to the
-tool in a single invocation. With `--batch-size N`, chunks are limited to N
-products. `--batch-size -1` disables batching entirely, giving per-product
-execution and caching — the best incremental recovery after partial failure,
-at the cost of one tool invocation per file. In fail-fast mode (no
-`--keep-going`), a failing chunk stops later chunks from being dispatched.
+of a batch-capable processor's rebuilding products that became ready
+together go to the tool in a single invocation. With `--batch-size N`,
+chunks are limited to N products. `--batch-size -1` disables batching
+entirely, giving per-product execution and caching — the best incremental
+recovery after partial failure, at the cost of one tool invocation per file.
+In fail-fast mode (no `--keep-going`), a failing chunk stops later chunks
+from being dispatched.
+
+**Held checkers:** products become ready as their own dependencies finish,
+so a batching checker whose files partly depend on generated files would
+form several batches, one per wave, running at the same time. That breaks
+tools that assume one process over the whole set: pytest given only
+`__init__.py` files collects no tests and exits 5, and two mypy processes
+sharing `.mypy_cache` crash with INTERNAL ERROR. The `ReadyTracker`
+therefore holds a batching checker's ready products back until none of its
+products still waits on a dependency, and releases them all in one wave.
+Only checkers are held: nothing depends on a checker's products, so the hold
+delays nothing else, while a generator's products may feed one another.
 
 For each product:
 1. Compute input checksum (if not already done in classify)

@@ -535,7 +535,23 @@ impl Executor<'_> {
         shared: &SharedState,
         mut refresh: Option<&mut GraphRefresh<'_>>,
     ) -> Result<()> {
-        let mut tracker = ReadyTracker::new(&graph.read());
+        // Batching checkers run once over all their files (see
+        // `ReadyTracker`); with batching off every product is its own
+        // invocation and there is nothing to hold together.
+        let held: HashSet<String> = if self.batch_size.is_some() {
+            self.processors
+                .iter()
+                .filter(|(name, processor)| {
+                    crate::registries::processor::processor_type_of(name)
+                        == crate::processor::ProcessorType::Checker
+                        && effective_supports_batch(name, processor.as_ref())
+                })
+                .map(|(name, _)| name.clone())
+                .collect()
+        } else {
+            HashSet::new()
+        };
+        let mut tracker = ReadyTracker::new(&graph.read(), &held);
         loop {
             let stopping =
                 self.is_interrupted() || (!self.keep_going && !shared.errors.lock().is_empty());

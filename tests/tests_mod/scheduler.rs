@@ -169,3 +169,53 @@ fn jobs_cap_every_invocation_and_max_jobs_caps_a_processor() {
     );
     assert_eq!(max_of("concurrency.single"), 1, "max_jobs = 1 was exceeded");
 }
+
+/// A batching checker runs once over all its files even when they become
+/// ready at different moments. `gen/b.chk` is generated from `src/b.gen`,
+/// so its check waits for the generator while `src/a.chk` is ready from the
+/// start. Dispatched as they become ready, the checker would run twice, the
+/// two runs overlapping — and pytest over a wave with no test in it collects
+/// nothing and exits 5, two mypy processes race on `.mypy_cache`. The
+/// checker's products are held until the last of them is ready, then run as
+/// one batch: `count_args` logs a single invocation with two files.
+#[test]
+fn a_batching_checker_waits_for_all_its_files() {
+    let temp_dir = TempDir::new().unwrap();
+    let project = temp_dir.path();
+
+    write_tool(project, "copy", "cp \"$1\" \"$2\"\n");
+    write_tool(project, "count_args", "echo \"$#\" >> invocations.log\n");
+    fs::write(
+        project.join("rsconstruct.toml"),
+        r#"[build]
+hash_tool_versions = false
+
+[processor.generator.generic]
+command = "copy"
+output_dir = "gen"
+output_extension = "chk"
+batch = false
+src_extensions = [".gen"]
+src_dirs = ["src"]
+
+[processor.checker.script]
+command = "count_args"
+src_extensions = [".chk"]
+src_dirs = ["src", "gen"]
+"#,
+    )
+    .unwrap();
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::create_dir_all(project.join("gen")).unwrap();
+    fs::write(project.join("src/a.chk"), "a\n").unwrap();
+    fs::write(project.join("src/b.gen"), "b\n").unwrap();
+    // Left by an earlier build and stale: the checker discovers it, and its
+    // product depends on the generator's.
+    fs::write(project.join("gen/b.chk"), "old\n").unwrap();
+
+    let result = build(project, &["-j", "4"]);
+    assert!(result.exit_success, "{:?}", result.errors);
+    assert_eq!(result.success, 3, "{result:?}");
+    let log = fs::read_to_string(project.join("invocations.log")).unwrap();
+    assert_eq!(log, "2\n", "one invocation over both files, got {log:?}");
+}

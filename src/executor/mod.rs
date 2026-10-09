@@ -350,6 +350,18 @@ enum ProductState {
 /// This replaces scheduling by levels. A product is ready the moment its
 /// last dependency finishes, not when everything in an earlier level has —
 /// a level was a barrier, and one slow product held up the whole next one.
+///
+/// The exception is a *held* processor: a batching checker. Its products
+/// become ready at different moments when some of its files depend on a
+/// generated file and most do not, and each wave of them would be a tool
+/// invocation of its own, the invocations overlapping. pytest over a wave
+/// holding only `__init__.py` files collects no tests and exits 5; two mypy
+/// processes share `.mypy_cache` and one dies with INTERNAL ERROR. So a
+/// held processor's ready products are kept back while any product of it
+/// still waits on a dependency, and all go out in one wave, which the
+/// executor turns into one batch. Only checkers are held: nothing depends
+/// on a checker's products, so holding them cannot hold up anything else,
+/// while a generator's products may feed each other.
 struct ReadyTracker {
     unfinished_deps: Vec<usize>,
     state: Vec<ProductState>,
@@ -358,16 +370,40 @@ struct ReadyTracker {
     ready: BTreeSet<usize>,
     /// Handed out and not yet finished.
     in_flight: usize,
+    /// For a product of a held processor, the index of its group.
+    group: Vec<Option<usize>>,
+    /// Per group, how many of its products still wait on a dependency.
+    group_waiting: Vec<usize>,
 }
 
 impl ReadyTracker {
-    fn new(graph: &BuildGraph) -> Self {
+    /// `held` names the processors whose products go out together.
+    fn new(graph: &BuildGraph, held: &HashSet<String>) -> Self {
         let count = graph.products().len();
+        let mut group_of_processor: HashMap<&str, usize> = HashMap::new();
+        let mut group: Vec<Option<usize>> = vec![None; count];
+        for (id, slot) in group.iter_mut().enumerate() {
+            let product = graph.get_product(id).expect(errors::INVALID_PRODUCT_ID);
+            // A product something depends on is never held: the hold waits
+            // for the group's dependencies, and a dependent of the group
+            // that one of those dependencies needs would be a deadlock.
+            if !held.contains(&product.processor) || !graph.get_dependents(id).is_empty() {
+                continue;
+            }
+            let next = group_of_processor.len();
+            *slot = Some(
+                *group_of_processor
+                    .entry(product.processor.as_str())
+                    .or_insert(next),
+            );
+        }
         let mut tracker = Self {
             unfinished_deps: vec![0; count],
             state: vec![ProductState::Waiting; count],
             ready: BTreeSet::new(),
             in_flight: 0,
+            group,
+            group_waiting: vec![0; group_of_processor.len()],
         };
         tracker.recount(graph);
         tracker
@@ -378,6 +414,7 @@ impl ReadyTracker {
     /// ready may now wait for a product that has not run.
     fn recount(&mut self, graph: &BuildGraph) {
         self.ready.clear();
+        self.group_waiting.fill(0);
         for id in 0..self.state.len() {
             if self.state[id] != ProductState::Waiting {
                 continue;
@@ -389,13 +426,19 @@ impl ReadyTracker {
                 .count();
             if self.unfinished_deps[id] == 0 {
                 self.ready.insert(id);
+            } else if let Some(group) = self.group[id] {
+                self.group_waiting[group] += 1;
             }
         }
     }
 
-    /// Hand out every ready product.
+    /// Hand out every ready product, except those of a held processor
+    /// that still has a product waiting on a dependency.
     fn take_ready(&mut self) -> Vec<usize> {
-        let ready: Vec<usize> = std::mem::take(&mut self.ready).into_iter().collect();
+        let (ready, held): (Vec<usize>, Vec<usize>) = std::mem::take(&mut self.ready)
+            .into_iter()
+            .partition(|&id| self.group[id].is_none_or(|group| self.group_waiting[group] == 0));
+        self.ready.extend(held);
         for &id in &ready {
             self.state[id] = ProductState::Dispatched;
         }
@@ -414,6 +457,9 @@ impl ReadyTracker {
                 self.unfinished_deps[dependent] -= 1;
                 if self.unfinished_deps[dependent] == 0 {
                     self.ready.insert(dependent);
+                    if let Some(group) = self.group[dependent] {
+                        self.group_waiting[group] -= 1;
+                    }
                 }
             }
         }
@@ -453,7 +499,7 @@ mod tests {
             .unwrap();
         g.resolve_dependencies();
 
-        let mut tracker = ReadyTracker::new(&g);
+        let mut tracker = ReadyTracker::new(&g, &HashSet::new());
         assert_eq!(tracker.take_ready(), vec![top, slow]);
         tracker.finish(&g, top);
         assert_eq!(tracker.take_ready(), vec![left, right], "slow still runs");
@@ -489,7 +535,7 @@ mod tests {
         g.resolve_dependencies();
 
         // All three are ready while nothing links them.
-        let mut tracker = ReadyTracker::new(&g);
+        let mut tracker = ReadyTracker::new(&g, &HashSet::new());
         assert_eq!(
             tracker.ready.iter().copied().collect::<Vec<_>>(),
             vec![producer, blocker, consumer]
@@ -580,7 +626,7 @@ mod tests {
             .unwrap();
         g.resolve_dependencies();
 
-        let mut tracker = ReadyTracker::new(&g);
+        let mut tracker = ReadyTracker::new(&g, &HashSet::new());
         let mut handed_out: Vec<usize> = Vec::new();
         loop {
             let wave = tracker.take_ready();
@@ -594,6 +640,48 @@ mod tests {
         }
         handed_out.sort_unstable();
         assert_eq!(handed_out, vec![0, 1, 2]);
+    }
+
+    /// A held processor's products go out together: `check_gen` waits for
+    /// the generator, so `check_src`, ready from the start, is kept back
+    /// until `gen` finishes, and both are handed out in one wave. A product
+    /// of another processor is not held, and a recount keeps the hold.
+    #[test]
+    fn ready_tracker_holds_a_batching_checker_for_its_last_product() {
+        let mut g = BuildGraph::new();
+        let generator = g
+            .add_product(vec!["b.src".into()], vec!["b.gen".into()], "gen", None)
+            .unwrap();
+        let check_src = g
+            .add_product(vec!["a.src".into()], vec![], "check", None)
+            .unwrap();
+        let check_gen = g
+            .add_product(vec!["b.gen".into()], vec![], "check", None)
+            .unwrap();
+        let other = g
+            .add_product(vec!["c.src".into()], vec!["c.o".into()], "cc", None)
+            .unwrap();
+        g.resolve_dependencies();
+
+        let held: HashSet<String> = ["check".to_string()].into();
+        let mut tracker = ReadyTracker::new(&g, &held);
+        tracker.recount(&g);
+        assert_eq!(
+            tracker.take_ready(),
+            vec![generator, other],
+            "check_src is held while check_gen waits"
+        );
+        assert_eq!(tracker.take_ready(), Vec::<usize>::new());
+        tracker.finish(&g, generator);
+        assert_eq!(
+            tracker.take_ready(),
+            vec![check_src, check_gen],
+            "the whole group goes out at once"
+        );
+        tracker.finish(&g, other);
+        tracker.finish(&g, check_src);
+        tracker.finish(&g, check_gen);
+        assert_eq!(tracker.in_flight, 0);
     }
 
     /// Only direct dependencies count as failed here — transitive failure

@@ -75,9 +75,7 @@ depends on it.
 
 ### Incremental recovery and batch behavior
 
-By default (fail-fast mode), rsconstruct executes each product independently, even for batch-capable processors. Successfully completed products are cached immediately, so if a build fails or is interrupted, the next run only rebuilds what wasn't completed.
-
-With `--keep-going`, batch-capable processors group all their products into a single tool invocation. If the tool fails, all products in the batch are marked failed and must be rebuilt. Use `--batch-size N` to limit batch chunks and improve recovery granularity.
+Batch-capable processors run their rebuilding products in a single tool invocation, with or without `--keep-going`. A batch-capable checker waits until every one of its products is ready (its files that depend on a generated file included) and then runs once over all of them; a batch-capable generator's products run as they become ready, since one of them may feed another. If the tool fails, all products in the batch are marked failed and must be rebuilt. Use `--batch-size N` to limit batch chunks and improve recovery granularity, or `--batch-size -1` to run every product on its own; successfully completed products are cached as soon as their invocation finishes, so after a failure or an interruption the next run only rebuilds what wasn't completed.
 
 ### Processor Shortcuts (`@` aliases)
 

@@ -127,7 +127,12 @@ are marked failed — there is no way to determine which outputs are valid.
 files in-process should return per-file results so that partial failure is
 handled correctly — only the actually-failed products are rebuilt on the next run.
 
-**Chunk sizing:** In fail-fast mode (default), the executor uses `chunk_size=1`
-even for batch-capable processors, so each product is cached individually. This
-gives the best incremental recovery. Larger chunks are used only with
-`--keep-going` or explicit `--batch-size`.
+**Chunk sizing:** By default a batch-capable processor's rebuilding products
+go to the tool in one chunk, whether or not `--keep-going` is given. An
+explicit `--batch-size N` limits chunks to N products; `--batch-size -1`
+disables batching, so each product is cached individually, which gives the
+best incremental recovery. A batch-capable checker is also *held*: its
+products are dispatched only when the last of them is ready, so files that
+depend on a generated file do not split the checker into two overlapping
+invocations (pytest over `__init__.py` files alone collects no tests; two
+mypy processes race on `.mypy_cache`).
