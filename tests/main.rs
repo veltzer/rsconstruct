@@ -71,6 +71,7 @@ mod processor {
         pub mod icpplint;
         pub mod idockerfile;
         pub mod iluacheck;
+        pub mod iperlcritic;
         pub mod ishellcheck;
         pub mod isvglint;
         pub mod itidy;

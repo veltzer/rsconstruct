@@ -1,0 +1,13 @@
+open my $fh, '<', $f;
+open(FH, "<$f");
+open my $p, '-|';
+open(my $fh2, '<:utf8', $f);
+binmode STDOUT, ':utf8';
+binmode($fh, ':encoding(UTF-8)');
+open($fh, '<:encoding(utf8)', $f);
+open FH;
+open(STDOUT, '>', $f);
+open(my $fh3, qw(< f));
+sysopen(FH, $f, 0);
+open(local *FH, '<', $f);
+open BEGIN {};

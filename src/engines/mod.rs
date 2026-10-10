@@ -7,6 +7,7 @@ pub mod checkstyle;
 pub mod cpplint;
 pub mod hadolint;
 pub mod luacheck;
+pub mod perlcritic;
 pub mod shellcheck;
 pub mod svglint;
 pub mod tidy;

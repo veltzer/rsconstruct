@@ -1,0 +1,2 @@
+print <<EOT;
+never ends

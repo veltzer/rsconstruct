@@ -1,0 +1,1 @@
+chmod 0755, $f; mkdir $d, 0755; mkdir($d, 0700); sysopen(my $fh, $f, O_RDONLY, 0644); umask 022; dbmopen(%h, $f, 0644); my $x = 010; my $y = 0_7; my $z = 00; mkfifo($f, 0600); POSIX::mkfifo($f, 0600); sysopen(FH, $f, 0, 0600);

@@ -1,0 +1,14 @@
+map { $_ =~ s/a/b/ } @x;
+grep { chomp } @x;
+map { substr($_, 0, 1, '') } @x;
+map { $_++ } @x;
+map { tr/a-z//d } @x;
+map { s/a/b/r } @x;
+List::Util::first { $_ = 1 } @x;
+map { y/a/a/ } @x;
+map { tr/a//c } @x;
+grep { undef } @x;
+grep { chop($_) } @x;
+map { ++$_ } @x;
+map { $x =~ s/a/b/ } @x;
+map { s/a/b/ } @x;

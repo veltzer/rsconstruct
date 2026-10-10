@@ -4,6 +4,8 @@
 
 Analyzes Perl code using [Perl::Critic](https://metacpan.org/pod/Perl::Critic).
 
+The Rust alternative is [iperlcritic](iperlcritic.md): PPI and the severity-5 policies, in-process, with perlcritic's violations and positions. Switching is `perlcritic` → `iperlcritic` in the stanza header; `.perlcriticrc` is read as before.
+
 ## How It Works
 
 Discovers `.pl` and `.pm` files in the project (excluding common build tool
