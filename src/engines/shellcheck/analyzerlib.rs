@@ -4,11 +4,11 @@
 //! share.
 
 use std::borrow::Cow;
-use std::collections::HashMap;
 
 use super::analyzer::AnalysisSpec;
 use super::ast::{
-    Annotation, AssignmentMode, ConditionType, Id, Inner, Token, do_analysis, do_stack_analysis,
+    Annotation, AssignmentMode, ConditionType, Id, Inner, IntMap, Token, do_analysis,
+    do_stack_analysis,
 };
 use super::astlib::{
     concat_oversimplify, executable_from_shebang, get_all_flags, get_braced_modifier,
@@ -33,7 +33,7 @@ use Inner::{
     TC_Nullary, TC_Unary,
 };
 
-pub type Tree<'a> = HashMap<Id, &'a Token>;
+pub type Tree<'a> = IntMap<Id, &'a Token>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Scope {
@@ -86,7 +86,7 @@ pub struct Parameters<'a> {
     pub shell_type: Shell,
     pub shell_type_specified: bool,
     pub root_node: &'a Token,
-    pub token_positions: &'a HashMap<Id, (Position, Position)>,
+    pub token_positions: &'a IntMap<Id, (Position, Position)>,
     pub cfg_analysis: Option<CfgAnalysis>,
 }
 
@@ -294,14 +294,14 @@ pub fn get_parent_tree(t: &Token) -> Tree<'_> {
             walk(c, map);
         });
     }
-    let mut map: Tree<'_> = HashMap::new();
+    let mut map: Tree<'_> = Tree::default();
     walk(t, &mut map);
     map
 }
 
 /// `getTokenMap`.
 pub fn get_token_map(t: &Token) -> Tree<'_> {
-    let mut map: Tree<'_> = HashMap::new();
+    let mut map: Tree<'_> = Tree::default();
     do_analysis(t, &mut |x| {
         map.insert(x.id, x);
     });

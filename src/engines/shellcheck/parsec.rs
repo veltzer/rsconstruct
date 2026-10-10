@@ -25,63 +25,70 @@ use super::hchar::is_alpha;
 pub use super::interface::Severity;
 use super::interface::Shell;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Msg {
-    SysUnExpect,
-    UnExpect,
-    Expect,
-    Message(String),
-}
-
-impl Msg {
-    const fn kind(&self) -> u8 {
-        match self {
-            Self::SysUnExpect => 0,
-            Self::UnExpect => 1,
-            Self::Expect => 2,
-            Self::Message(_) => 3,
-        }
-    }
-}
-
+/// Parsec's `ParseError`, reduced to what is read from it. Parsec keeps a
+/// list of messages (`SysUnExpect`, `UnExpect`, `Expect`, `Message`), but
+/// merging only asks whether the list is empty, and `ShellCheck`'s
+/// `getStringFromParsec` shows only the last non-empty `Message` (the
+/// messages sorted by kind, stably, put the `Message`s last in their
+/// order). Every backtracking point copies the carried error and every
+/// merge at one position concatenates two lists, so with the full list
+/// copying it was a third of the parse time.
 #[derive(Clone, Debug)]
 pub struct ParseError {
     pub pos: SourcePos,
-    pub msgs: Vec<Msg>,
+    /// Whether Parsec's message list is non-empty.
+    pub has_messages: bool,
+    /// The last non-empty `Message` in the list.
+    pub last_message: Option<Rc<str>>,
 }
 
 impl ParseError {
+    /// An error with no messages (`newErrorUnknown`).
     pub const fn unknown(pos: SourcePos) -> Self {
         Self {
             pos,
-            msgs: Vec::new(),
+            has_messages: false,
+            last_message: None,
+        }
+    }
+
+    /// An error with messages but no `Message` (what `satisfy`, `string`
+    /// and `eof` raise).
+    pub const fn unexpected(pos: SourcePos) -> Self {
+        Self {
+            pos,
+            has_messages: true,
+            last_message: None,
+        }
+    }
+
+    /// An error with one `Message` (`fail`).
+    pub fn message(pos: SourcePos, msg: &str) -> Self {
+        Self {
+            pos,
+            has_messages: true,
+            last_message: (!msg.is_empty()).then(|| Rc::from(msg)),
         }
     }
 
     /// Parsec's `mergeError`.
     pub fn merge(e1: &Self, e2: &Self) -> Self {
-        if e2.msgs.is_empty() && !e1.msgs.is_empty() {
+        if !e2.has_messages && e1.has_messages {
             return e1.clone();
         }
-        if e1.msgs.is_empty() && !e2.msgs.is_empty() {
+        if !e1.has_messages && e2.has_messages {
             return e2.clone();
         }
         match e1.pos.cmp(&e2.pos) {
-            std::cmp::Ordering::Equal => {
-                let mut msgs = e1.msgs.clone();
-                msgs.extend(e2.msgs.iter().cloned());
-                Self { pos: e1.pos, msgs }
-            }
+            // The lists concatenated: e2's messages come last.
+            std::cmp::Ordering::Equal => Self {
+                pos: e1.pos,
+                has_messages: e1.has_messages || e2.has_messages,
+                last_message: e2.last_message.clone().or_else(|| e1.last_message.clone()),
+            },
             std::cmp::Ordering::Greater => e1.clone(),
             std::cmp::Ordering::Less => e2.clone(),
         }
-    }
-
-    /// Parsec's `errorMessages`: sorted by kind, stably.
-    pub fn sorted_messages(&self) -> Vec<Msg> {
-        let mut msgs = self.msgs.clone();
-        msgs.sort_by_key(Msg::kind);
-        msgs
     }
 }
 
@@ -281,10 +288,7 @@ impl P {
 
     /// `fail msg`.
     pub fn fail<T>(&self, msg: &str) -> R<T> {
-        self.empty_fail(&ParseError {
-            pos: self.pos,
-            msgs: vec![Msg::Message(msg.to_string())],
-        })
+        self.empty_fail(&ParseError::message(self.pos, msg))
     }
 
     /// `mzero` / a failed `guard`.
@@ -329,10 +333,7 @@ impl P {
                 self.advance(c);
                 Ok(c)
             }
-            _ => self.empty_fail(&ParseError {
-                pos: self.pos,
-                msgs: vec![Msg::SysUnExpect, Msg::Expect],
-            }),
+            _ => self.empty_fail(&ParseError::unexpected(self.pos)),
         }
     }
 
@@ -368,10 +369,7 @@ impl P {
             return Ok(String::new());
         }
         let start_pos = self.pos;
-        let err = ParseError {
-            pos: start_pos,
-            msgs: vec![Msg::SysUnExpect, Msg::Expect],
-        };
+        let err = ParseError::unexpected(start_pos);
         match self.peek() {
             Some(c) if c == chars[0] => {}
             _ => return self.empty_fail(&err),
@@ -404,10 +402,7 @@ impl P {
             self.err = ParseError::merge(&self.err, &ParseError::unknown(self.pos));
             Ok(())
         } else {
-            self.empty_fail(&ParseError {
-                pos: self.pos,
-                msgs: vec![Msg::Expect, Msg::UnExpect],
-            })
+            self.empty_fail(&ParseError::unexpected(self.pos))
         }
     }
 

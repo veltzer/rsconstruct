@@ -1,10 +1,8 @@
 //! The analyzer (`ShellCheck.Analyzer`): runs the checks over a parsed
 //! script.
 
-use std::collections::HashMap;
-
 use super::analyzerlib::{filter_by_annotation, make_parameters};
-use super::ast::{Id, Token, do_analysis};
+use super::ast::{Id, IntMap, Token, do_analysis};
 use super::interface::{Position, Shell, TokenComment};
 
 /// `AnalysisSpec`.
@@ -15,7 +13,7 @@ pub struct AnalysisSpec<'a> {
     pub check_sourced: bool,
     pub optional_checks: Vec<String>,
     pub extended_analysis: Option<bool>,
-    pub token_positions: &'a HashMap<Id, (Position, Position)>,
+    pub token_positions: &'a IntMap<Id, (Position, Position)>,
 }
 
 /// `analyzeScript`.

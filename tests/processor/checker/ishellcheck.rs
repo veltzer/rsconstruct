@@ -115,3 +115,130 @@ fn ishellcheck_rejects_an_unknown_shell() {
         "ishellcheck: unknown shell \"fish\"",
     );
 }
+
+/// The engine's own fixtures (`src/engines/shellcheck/testdata`), which its
+/// unit tests check against shellcheck under each engine option.
+fn engine_fixtures() -> Vec<(String, Vec<u8>)> {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/engines/shellcheck/testdata");
+    let mut files: Vec<(String, Vec<u8>)> = fs::read_dir(&dir)
+        .expect("read the engine's testdata")
+        .map(|e| {
+            let path = e.expect("testdata entry").path();
+            let name = path.file_name().unwrap().to_string_lossy().into_owned();
+            (name, fs::read(&path).expect("read a fixture"))
+        })
+        .collect();
+    files.sort();
+    files
+}
+
+/// The findings in a build's output: the gcc-format lines of the failed
+/// products as they fail, on stderr (the summary on stdout repeats them).
+fn reported_findings(output: &std::process::Output) -> Vec<String> {
+    let text = String::from_utf8_lossy(&output.stderr);
+    let mut lines: Vec<String> = text
+        .lines()
+        .map(|l| match l.split_once("[processor.checker.ishellcheck] ") {
+            Some((_, rest)) => rest,
+            None => l,
+        })
+        .filter(|l| {
+            l.starts_with("src/") && l.contains(": ") && l.ends_with(']') && l.contains(" [SC")
+        })
+        .map(str::to_string)
+        .collect();
+    lines.sort();
+    lines
+}
+
+/// `shellcheck --format=gcc ARGS FILE` for each file on its own, as each
+/// file is its own product: a file is never an input of another's check.
+fn shellcheck_findings(project: &Path, args: &[&str], files: &[String]) -> Vec<String> {
+    let mut lines = Vec::new();
+    for file in files {
+        let out = std::process::Command::new("shellcheck")
+            .current_dir(project)
+            .arg("--format=gcc")
+            .args(args)
+            .arg(file)
+            .output()
+            .expect("run shellcheck");
+        lines.extend(
+            String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .map(str::to_string),
+        );
+    }
+    lines.sort();
+    lines
+}
+
+/// Each `ishellcheck` field reaches the engine as the shellcheck option of
+/// the same name does: the processor's findings over the engine's fixtures
+/// are shellcheck's with the matching command line.
+#[test]
+fn ishellcheck_fields_match_shellcheck_options() {
+    crate::common::require_tool("shellcheck");
+    let fixtures = engine_fixtures();
+    let cases: &[(&str, &[&str])] = &[
+        ("norc = true", &["--norc"]),
+        ("norc = true\nshell = \"sh\"", &["--norc", "--shell=sh"]),
+        (
+            "norc = true\nseverity = \"warning\"",
+            &["--norc", "--severity=warning"],
+        ),
+        (
+            "norc = true\nexclude = [\"SC2086\", \"2034\"]",
+            &["--norc", "--exclude=SC2086,SC2034"],
+        ),
+        (
+            "norc = true\ninclude = [\"SC2154\"]",
+            &["--norc", "--include=SC2154"],
+        ),
+        (
+            "norc = true\nenable = [\"all\"]",
+            &["--norc", "--enable=all"],
+        ),
+        (
+            "norc = true\nexternal_sources = true\ncheck_sourced = true\nsource_path = [\"SCRIPTDIR\"]",
+            &[
+                "--norc",
+                "--external-sources",
+                "--check-sourced",
+                "--source-path=SCRIPTDIR",
+            ],
+        ),
+        (
+            "norc = true\nextended_analysis = \"false\"",
+            &["--norc", "--extended-analysis=false"],
+        ),
+        ("rcfile = \"checkrc\"", &["--rcfile=checkrc"]),
+    ];
+    for (fields, args) in cases {
+        let config = format!(
+            "[processor.checker.ishellcheck]\nsrc_dirs = [\"src\"]\nsrc_extensions = [\".sh\", \".bash\", \".ksh\"]\n{fields}\n"
+        );
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let project = temp_dir.path();
+        fs::write(project.join("rsconstruct.toml"), &config).expect("write rsconstruct.toml");
+        fs::write(
+            project.join("checkrc"),
+            "disable=SC2086\nenable=require-variable-braces\n",
+        )
+        .expect("write the rcfile");
+        fs::create_dir(project.join("src")).expect("create src");
+        let mut names = Vec::new();
+        for (name, contents) in &fixtures {
+            fs::write(project.join("src").join(name), contents).expect("write a fixture");
+            names.push(format!("src/{name}"));
+        }
+        let output = run_rsconstruct_with_env(project, &["build", "-k"], &[("NO_COLOR", "1")]);
+        let expected = shellcheck_findings(project, args, &names);
+        assert!(!expected.is_empty(), "{fields}: the fixtures have findings");
+        assert_eq!(
+            reported_findings(&output),
+            expected,
+            "{fields} against shellcheck {args:?}: ishellcheck (left) and shellcheck (right)"
+        );
+    }
+}

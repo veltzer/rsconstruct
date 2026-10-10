@@ -28,6 +28,8 @@ pub mod parser_cmd;
 pub mod parser_cond;
 pub mod regex;
 pub mod shellsupport;
+#[cfg(test)]
+mod tests;
 
 use std::cell::RefCell;
 use std::collections::HashMap;

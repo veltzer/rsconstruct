@@ -26,7 +26,9 @@ severity = "warning"
 
 Checked against shellcheck 0.11.0 over 4494 real scripts (1850 from the fleet, 2644 from a development machine's `/usr/bin` and friends), the 2194 snippets of ShellCheck's own unit tests, and 28000 mutated copies (broken quotes, brackets and keywords, swapped operators, deleted and duplicated lines): the same findings, line for line (about 360,000 compared), under default options, each `shell` override, `external_sources` and `check_sourced`. Neither side crashes on any of them.
 
-It is also faster and smaller than shellcheck: the 4494 real scripts take 8 seconds against shellcheck's 43 on 16 threads (87 against 556 seconds of CPU), and the largest script, a 3500-line `dkms`, takes 4.3 seconds and 1.0 GB against 6.4 seconds and 1.9 GB.
+It is also faster and smaller than shellcheck: 2781 real scripts (the fleet's and a development machine's) take 2.3 seconds against shellcheck's 15.7 on 16 threads (18 against 137 seconds of CPU), and the largest script, a 3500-line `dkms`, takes 1.0 second and 400 MB against 6.4 seconds and 1.9 GB.
+
+The engine's unit tests (`src/engines/shellcheck/tests.rs`) keep it that way: they run `shellcheck` 0.11.0 itself (a missing or different version fails them) and the engine over the scripts in `src/engines/shellcheck/testdata/` and deterministic mutants of them, under each option, and require the same output line for line. The processor's tests check that each TOML field matches the shellcheck option of the same name.
 
 Not supported: output formats other than `gcc`, auto-fixes (`--format=diff`), and the `--wiki-link-count`/`--color` presentation options.
 

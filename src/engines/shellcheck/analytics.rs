@@ -2605,8 +2605,7 @@ fn check_spacefulness_cfg_ext(
         Some(
             value
                 .variable_properties
-                .iter()
-                .all(|s| s.contains(&super::cfg::CfVariableProp::CFVPInteger))
+                .all_contain(super::cfg::CfVariableProp::CFVPInteger)
                 || value.variable_value.space_status == cfganalysis::SpaceStatus::SpaceStatusClean,
         )
     })()

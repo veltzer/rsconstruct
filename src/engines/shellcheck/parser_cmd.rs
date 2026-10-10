@@ -1,10 +1,9 @@
 //! `ShellCheck`'s parser, part three: commands, compound commands, `source`,
 //! the script itself, and `parseShell`, which turns a parse into comments.
 
-use std::collections::HashMap;
 use std::rc::Rc;
 
-use super::ast::{Annotation, CaseType, Id, Inner, SourcePos, Token};
+use super::ast::{Annotation, CaseType, Id, Inner, IntMap, SourcePos, Token};
 use super::astlib::{
     executable_from_shebang, get_associative_arrays, get_literal_string, get_word_parts,
     is_string_expansion,
@@ -12,7 +11,7 @@ use super::astlib::{
 use super::hchar::{is_alpha, is_space, lower_string, to_lower, to_upper};
 use super::interface::{Comment, Position, PositionedComment, Shell};
 use super::parsec::{
-    Context, Environment, Fail, Msg, P, ParseError, ParseNote, R,
+    Context, Environment, Fail, P, ParseError, ParseNote, R,
     Severity::{ErrorC, InfoC, WarningC},
     SystemInterface, context_disables_code,
 };
@@ -34,7 +33,7 @@ use Inner::{
 /// `ParseResult`.
 pub struct ParseResult {
     pub comments: Vec<PositionedComment>,
-    pub token_positions: HashMap<Id, (Position, Position)>,
+    pub token_positions: IntMap<Id, (Position, Position)>,
     pub root: Option<Token>,
 }
 
@@ -2137,7 +2136,7 @@ impl P {
                     p.read_pending_here_docs()?;
                     p.verify_eof()?;
                     let script = tk(annotation_id, T_Annotation(annotations, bx(tk(id, T_Script(bx(shebang), commands)))));
-                    let mut here_docs: HashMap<Id, Vec<Token>> = HashMap::new();
+                    let mut here_docs: IntMap<Id, Vec<Token>> = IntMap::default();
                     for (hid, list) in &p.user.here_docs {
                         here_docs.insert(*hid, list.clone());
                     }
@@ -2323,7 +2322,7 @@ fn is_valid_shell(s: &str) -> Option<bool> {
     }
 }
 
-fn reattach_here_docs(mut root: Token, map: &HashMap<Id, Vec<Token>>) -> Token {
+fn reattach_here_docs(mut root: Token, map: &IntMap<Id, Vec<Token>>) -> Token {
     super::ast::do_transform(&mut root, &mut |t| {
         if let T_HereDoc(_, _, _, list) = &mut t.inner
             && list.is_empty()
@@ -2337,15 +2336,12 @@ fn reattach_here_docs(mut root: Token, map: &HashMap<Id, Vec<Token>>) -> Token {
 
 /// `getStringFromParsec`.
 pub fn get_string_from_parsec(err: &ParseError) -> String {
-    let msgs = err.sorted_messages();
-    let last = msgs.iter().rev().find_map(|m| match m {
-        Msg::Message(s) if !s.is_empty() => Some(format!("{s}.")),
-        _ => None,
-    });
-    format!(
-        "{} Fix any mentioned problems and try again.",
-        last.unwrap_or_default()
-    )
+    let last = err
+        .last_message
+        .as_ref()
+        .map(|s| format!("{s}."))
+        .unwrap_or_default();
+    format!("{last} Fix any mentioned problems and try again.")
 }
 
 fn make_error_for(err: &ParseError) -> ParseNote {
@@ -2437,7 +2433,7 @@ pub fn parse_script(system: Rc<dyn SystemInterface>, spec: &ParseSpec) -> ParseR
                 .iter()
                 .map(|n| to_positioned_comment(&p.files, n))
                 .collect();
-            let mut token_positions = HashMap::new();
+            let mut token_positions = IntMap::default();
             if let Some(last) = p.user.last_id {
                 for i in 0..=last {
                     let (s, e) = p.user.positions[i];
@@ -2474,7 +2470,7 @@ pub fn parse_script(system: Rc<dyn SystemInterface>, spec: &ParseSpec) -> ParseR
             );
             ParseResult {
                 comments,
-                token_positions: HashMap::new(),
+                token_positions: IntMap::default(),
                 root: None,
             }
         }

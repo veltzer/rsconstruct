@@ -8,9 +8,9 @@
 //! subshell node from lower-numbered nodes; the post-dominators are computed
 //! on that graph.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
-use super::ast::{AssignmentMode, CaseType, ConditionType, Id, Inner, Token};
+use super::ast::{AssignmentMode, CaseType, ConditionType, Id, Inner, IntMap, Token};
 use super::astlib::{
     PseudoGlob, get_braced_modifier, get_braced_reference, get_bsd_opts, get_generic_opts,
     get_gnu_opts, get_index_references, get_literal_string, get_literal_string_def,
@@ -75,8 +75,8 @@ pub enum CfEdge {
     reason = "the variant names are ShellCheck's CFEffect constructors"
 )]
 pub enum CfEffect {
-    CFSetProps(Option<Scope>, String, BTreeSet<CfVariableProp>),
-    CFUnsetProps(Option<Scope>, String, BTreeSet<CfVariableProp>),
+    CFSetProps(Option<Scope>, String, PropSet),
+    CFUnsetProps(Option<Scope>, String, PropSet),
     CFReadVariable(String),
     CFWriteVariable(String, CfValue),
     CFWriteGlobal(String, CfValue),
@@ -127,6 +127,79 @@ pub enum CfVariableProp {
     CFVPArray,
     CFVPAssociative,
     CFVPInteger,
+}
+
+impl CfVariableProp {
+    const ALL: [Self; 4] = [
+        Self::CFVPExport,
+        Self::CFVPArray,
+        Self::CFVPAssociative,
+        Self::CFVPInteger,
+    ];
+
+    const fn bit(self) -> u8 {
+        1 << self as u8
+    }
+}
+
+/// `Set CFVariableProp`, one bit per property. Ordered as the `Data.Set`
+/// is, by its elements in order. The dataflow states hold sets of these
+/// for every variable, and a `BTreeSet` stores even one property in a
+/// node allocated for eleven.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct PropSet(u8);
+
+impl PropSet {
+    /// The number of distinct sets.
+    pub const COUNT: usize = 1 << CfVariableProp::ALL.len();
+
+    pub const fn bits(self) -> u8 {
+        self.0
+    }
+
+    /// The set whose `bits` are `bits`.
+    pub const fn from_bits(bits: u8) -> Self {
+        Self(bits)
+    }
+
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    pub const fn insert(&mut self, p: CfVariableProp) {
+        self.0 |= p.bit();
+    }
+
+    pub const fn contains(self, p: CfVariableProp) -> bool {
+        self.0 & p.bit() != 0
+    }
+
+    pub const fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    pub const fn difference(self, other: Self) -> Self {
+        Self(self.0 & !other.0)
+    }
+
+    /// The properties in order.
+    pub fn iter(self) -> impl Iterator<Item = CfVariableProp> {
+        CfVariableProp::ALL
+            .into_iter()
+            .filter(move |p| self.contains(*p))
+    }
+}
+
+impl Ord for PropSet {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.iter().cmp(other.iter())
+    }
+}
+
+impl PartialOrd for PropSet {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -354,7 +427,7 @@ impl Graph {
             }
         }
         order.reverse();
-        let index: HashMap<Node, usize> = order.iter().enumerate().map(|(i, n)| (*n, i)).collect();
+        let index: IntMap<Node, usize> = order.iter().enumerate().map(|(i, n)| (*n, i)).collect();
         // Cooper, Harvey and Kennedy's iterative algorithm.
         let mut idom: Vec<Option<usize>> = vec![None; order.len()];
         idom[0] = Some(0);
@@ -415,8 +488,8 @@ impl Graph {
 /// `CFGResult`.
 pub struct CfgResult {
     pub graph: Graph,
-    pub id_to_range: HashMap<Id, (Node, Node)>,
-    pub id_to_nodes: HashMap<Id, BTreeSet<Node>>,
+    pub id_to_range: IntMap<Id, (Node, Node)>,
+    pub id_to_nodes: IntMap<Id, BTreeSet<Node>>,
     /// Indexed by node: the nodes that post-dominate it.
     pub post_dominators: Vec<BTreeSet<Node>>,
 }
@@ -448,11 +521,11 @@ pub fn build_graph(params: CfgParameters, root: &Token) -> CfgResult {
     b.build_root(&ctx, root);
     let (nodes, edges, mapping, association) =
         remove_unnecessary_structural_nodes((b.nodes, b.edges, b.mapping, b.association));
-    let mut id_to_range: HashMap<Id, (Node, Node)> = HashMap::new();
+    let mut id_to_range: IntMap<Id, (Node, Node)> = IntMap::default();
     for (id, r) in &mapping {
         id_to_range.insert(*id, *r);
     }
-    let mut id_to_nodes: HashMap<Id, BTreeSet<Node>> = HashMap::new();
+    let mut id_to_nodes: IntMap<Id, BTreeSet<Node>> = IntMap::default();
     for (id, n) in &association {
         id_to_nodes.entry(*id).or_default().insert(*n);
     }
@@ -533,8 +606,8 @@ fn remove_unnecessary_structural_nodes(g: Cfw) -> Cfw {
         .iter()
         .filter(|(_, _, l)| *l == CfEdge::CFEFlow)
         .collect();
-    let mut in_degree: HashMap<Node, usize> = HashMap::new();
-    let mut out_degree: HashMap<Node, usize> = HashMap::new();
+    let mut in_degree: IntMap<Node, usize> = IntMap::default();
+    let mut out_degree: IntMap<Node, usize> = IntMap::default();
     for (from, to, _) in &regular_edges {
         *in_degree.entry(*from).or_default() += 1;
         *out_degree.entry(*to).or_default() += 1;
@@ -1471,7 +1544,7 @@ impl Builder {
         } else {
             None
         };
-        let mut added_props: BTreeSet<CfVariableProp> = BTreeSet::new();
+        let mut added_props = PropSet::default();
         if array {
             added_props.insert(CfVariableProp::CFVPArray);
         }
@@ -1490,7 +1563,7 @@ impl Builder {
             .filter(|s| s.starts_with('+'))
             .map(|s| s[1..].to_string())
             .collect();
-        let mut removed_props: BTreeSet<CfVariableProp> = BTreeSet::new();
+        let mut removed_props = PropSet::default();
         if unset_options.contains('i') {
             removed_props.insert(CfVariableProp::CFVPInteger);
         }
@@ -1517,14 +1590,14 @@ impl Builder {
                 if !added_props.is_empty() {
                     added.push(IdTagged(
                         t.id,
-                        CfEffect::CFSetProps(scope, var.clone(), added_props.clone()),
+                        CfEffect::CFSetProps(scope, var.clone(), added_props),
                     ));
                 }
                 if !removed_props.is_empty() {
                     // ShellCheck unsets the added properties here.
                     removed.push(IdTagged(
                         t.id,
-                        CfEffect::CFUnsetProps(scope, var.clone(), added_props.clone()),
+                        CfEffect::CFUnsetProps(scope, var.clone(), added_props),
                     ));
                 }
             } else {
@@ -1559,11 +1632,11 @@ impl Builder {
                 }
                 added.push(IdTagged(
                     t.id,
-                    CfEffect::CFSetProps(scope, name.clone(), added_props.clone()),
+                    CfEffect::CFSetProps(scope, name.clone(), added_props),
                 ));
                 removed.push(IdTagged(
                     t.id,
-                    CfEffect::CFUnsetProps(scope, name, removed_props.clone()),
+                    CfEffect::CFUnsetProps(scope, name, removed_props),
                 ));
             }
         }

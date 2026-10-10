@@ -12,10 +12,42 @@
 
 #![allow(non_camel_case_types)]
 
+use std::collections::HashMap;
 use std::fmt;
+use std::hash::{BuildHasherDefault, Hasher};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Id(pub usize);
+
+/// A hasher for the small dense integers the analysis keys its maps by
+/// (token ids, graph nodes): a multiplication spreads them over the hash
+/// bits. The default `SipHash` guards against crafted keys, which an id
+/// cannot be, and cost a twentieth of the analysis.
+#[derive(Default)]
+pub struct IntHasher(u64);
+
+impl Hasher for IntHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.write_u64(u64::from(b));
+        }
+    }
+
+    fn write_u64(&mut self, n: u64) {
+        self.0 = (self.0.rotate_left(5) ^ n).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    }
+
+    fn write_usize(&mut self, n: usize) {
+        self.write_u64(n as u64);
+    }
+}
+
+/// A map keyed by an `Id` or a graph node.
+pub type IntMap<K, V> = HashMap<K, V, BuildHasherDefault<IntHasher>>;
 
 /// A Parsec source position: file, 1-based line and column (tabs to 8).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

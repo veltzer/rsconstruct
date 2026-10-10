@@ -7,15 +7,17 @@
 //! caching and its versioning are `ShellCheck`'s: the cache can change which
 //! states are merged, so it is part of the semantics.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
-use imbl::OrdMap;
+use imbl::GenericOrdMap;
+use imbl::ordmap::DiffItem;
+use imbl::shared_ptr::RcK;
 
-use super::ast::{Id, Token};
+use super::ast::{Id, IntMap, Token};
 use super::cfg::{
     CfEdge, CfEffect, CfNode, CfStringPart, CfValue, CfVariableProp, CfgParameters, Graph,
-    IdTagged, Node, Scope, build_graph,
+    IdTagged, Node, PropSet, Scope, build_graph,
 };
 use super::data;
 
@@ -53,7 +55,60 @@ pub struct VariableValue {
     pub numerical_status: NumericalStatus,
 }
 
-pub type VariableProperties = BTreeSet<BTreeSet<CfVariableProp>>;
+/// `Set (Set CFVariableProp)`: which of the sixteen `PropSet`s are
+/// members, one bit each, so a variable state allocates nothing for its
+/// properties. Ordered as the `Data.Set` is, by its members in order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct VariableProperties(u16);
+
+impl VariableProperties {
+    const fn single(set: PropSet) -> Self {
+        Self(1 << set.bits())
+    }
+
+    /// The members, in no particular order.
+    fn members(self) -> impl Iterator<Item = PropSet> {
+        (0..PropSet::COUNT as u8)
+            .filter(move |b| self.0 & (1 << b) != 0)
+            .map(PropSet::from_bits)
+    }
+
+    /// Whether any member has the property.
+    pub fn any_contains(self, p: CfVariableProp) -> bool {
+        self.members().any(|s| s.contains(p))
+    }
+
+    /// Whether every member has the property.
+    pub fn all_contain(self, p: CfVariableProp) -> bool {
+        self.members().all(|s| s.contains(p))
+    }
+
+    const fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    /// `S.map f`.
+    fn map(self, f: impl Fn(PropSet) -> PropSet) -> Self {
+        Self(self.members().fold(0, |acc, s| acc | Self::single(f(s)).0))
+    }
+}
+
+impl Ord for VariableProperties {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let sorted = |v: Self| {
+            let mut members: Vec<PropSet> = v.members().collect();
+            members.sort();
+            members
+        };
+        sorted(*self).cmp(&sorted(*other))
+    }
+}
+
+impl PartialOrd for VariableProperties {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct VariableState {
@@ -94,8 +149,8 @@ impl ProgramState {
 /// `CFGAnalysis`.
 pub struct CfgAnalysis {
     pub graph: Graph,
-    pub token_to_range: HashMap<Id, (Node, Node)>,
-    pub token_to_nodes: HashMap<Id, BTreeSet<Node>>,
+    pub token_to_range: IntMap<Id, (Node, Node)>,
+    pub token_to_nodes: IntMap<Id, BTreeSet<Node>>,
     pub post_dominators: Vec<BTreeSet<Node>>,
     pub node_to_data: BTreeMap<Node, (ProgramState, ProgramState)>,
 }
@@ -126,12 +181,7 @@ fn variable_may_have_state(
     property: CfVariableProp,
 ) -> Option<bool> {
     let value = state.variable(var)?;
-    Some(
-        value
-            .variable_properties
-            .iter()
-            .any(|s| s.contains(&property)),
-    )
+    Some(value.variable_properties.any_contains(property))
 }
 
 /// `variableMayBeDeclaredInteger`.
@@ -147,52 +197,58 @@ pub fn variable_may_be_assigned_integer(state: &ProgramState, var: &str) -> Opti
 
 // ----- versioned maps
 
-/// `VersionedMap`. The storage is a persistent map, as Haskell's
-/// `Data.Map` is: a copy shares structure with the map it came from. The
-/// analysis patches a full state per node and invocation, and with deep
-/// copies a large script needs gigabytes. The values are shared too: a
-/// changed map node copies its entries, and a value is a nest of sets.
+/// A variable or function name, as the maps key it: copying a changed map
+/// node clones every key in it, and a shared name makes that a reference
+/// count instead of an allocation.
+pub type Name = Rc<str>;
+
+/// The storage of a `VersionedMap`: a persistent map, as Haskell's
+/// `Data.Map` is, so a copy shares structure with the map it came from.
+/// The analysis runs on one thread, so the nodes are counted with `Rc`.
+pub type Storage<V> = GenericOrdMap<Name, Rc<V>, RcK>;
+
+/// `VersionedMap`. The analysis patches a full state per node and
+/// invocation, and with deep copies a large script needs gigabytes. The
+/// values are shared too: a changed map node copies its entries, and a
+/// value is a nest of sets.
 #[derive(Clone, Debug)]
-pub struct VersionedMap<K: Ord + Clone, V: Clone> {
+pub struct VersionedMap<V: Clone> {
     pub version: i64,
-    pub storage: OrdMap<K, Rc<V>>,
+    pub storage: Storage<V>,
 }
 
-impl<K: Ord + Clone, V: Clone + PartialEq> PartialEq for VersionedMap<K, V> {
+impl<V: Clone + PartialEq> PartialEq for VersionedMap<V> {
     fn eq(&self, other: &Self) -> bool {
         vm_is_quick_equal(self, other) || self.storage == other.storage
     }
 }
 
-fn vm_empty<K: Ord + Clone, V: Clone>() -> VersionedMap<K, V> {
+fn vm_empty<V: Clone>() -> VersionedMap<V> {
     VersionedMap {
         version: 0,
-        storage: OrdMap::new(),
+        storage: Storage::new(),
     }
 }
 
-const fn vm_is_quick_equal<K: Ord + Clone, V: Clone>(
-    a: &VersionedMap<K, V>,
-    b: &VersionedMap<K, V>,
-) -> bool {
+const fn vm_is_quick_equal<V: Clone>(a: &VersionedMap<V>, b: &VersionedMap<V>) -> bool {
     a.version >= 0 && b.version >= 0 && a.version == b.version
 }
 
-fn vm_lookup<'m, K: Ord + Clone, V: Clone>(k: &K, m: &'m VersionedMap<K, V>) -> Option<&'m V> {
+fn vm_lookup<'m, V: Clone>(k: &str, m: &'m VersionedMap<V>) -> Option<&'m V> {
     m.storage.get(k).map(Rc::as_ref)
 }
 
-fn vm_insert<K: Ord + Clone, V: Clone>(k: K, v: V, m: &VersionedMap<K, V>) -> VersionedMap<K, V> {
+fn vm_insert<V: Clone>(k: &str, v: V, m: &VersionedMap<V>) -> VersionedMap<V> {
     VersionedMap {
         version: -1,
-        storage: m.storage.update(k, Rc::new(v)),
+        storage: m.storage.update(Name::from(k), Rc::new(v)),
     }
 }
 
-fn vm_patch<K: Ord + Clone, V: Clone>(
-    base: &VersionedMap<K, V>,
-    diff: &VersionedMap<K, V>,
-) -> VersionedMap<K, V> {
+fn vm_patch<V: Clone + PartialEq>(
+    base: &VersionedMap<V>,
+    diff: &VersionedMap<V>,
+) -> VersionedMap<V> {
     if base.version == 0 {
         return diff.clone();
     }
@@ -202,10 +258,59 @@ fn vm_patch<K: Ord + Clone, V: Clone>(
     if vm_is_quick_equal(base, diff) {
         return diff.clone();
     }
-    // `M.union diff base`: diff's entries win.
+    // `M.union diff base`: diff's entries win. The result is built on the
+    // base, which the analysis usually keeps, so the two share nodes; only
+    // a base much smaller than the diff (a dependency state patched with a
+    // full one) is added to the diff instead. A much smaller map is added
+    // entry by entry; between maps of similar size `diff` walks the two,
+    // skipping the subtrees they share. An entry the result already holds
+    // is not inserted again, so no node is copied for it.
+    let (b, d) = (base.storage.len(), diff.storage.len());
+    if d <= b / 4 {
+        let mut out = base.storage.clone();
+        for (k, v) in &diff.storage {
+            if out.get(k).is_none_or(|old| !Rc::ptr_eq(old, v)) {
+                out.insert(Name::clone(k), Rc::clone(v));
+            }
+        }
+        if out.ptr_eq(&base.storage) {
+            return base.clone();
+        }
+        return VersionedMap {
+            version: -1,
+            storage: out,
+        };
+    }
+    if b <= d / 4 {
+        let mut out = diff.storage.clone();
+        for (k, v) in &base.storage {
+            if !out.contains_key(k) {
+                out.insert(Name::clone(k), Rc::clone(v));
+            }
+        }
+        if out.ptr_eq(&diff.storage) {
+            return diff.clone();
+        }
+        return VersionedMap {
+            version: -1,
+            storage: out,
+        };
+    }
+    let mut out = base.storage.clone();
+    for item in base.storage.diff(&diff.storage) {
+        match item {
+            DiffItem::Add(k, v) | DiffItem::Update { new: (k, v), .. } => {
+                out.insert(Name::clone(k), Rc::clone(v));
+            }
+            DiffItem::Remove(..) => {}
+        }
+    }
+    if out.ptr_eq(&base.storage) {
+        return base.clone();
+    }
     VersionedMap {
         version: -1,
-        storage: diff.storage.clone().union(base.storage.clone()),
+        storage: out,
     }
 }
 
@@ -214,18 +319,41 @@ fn vm_patch<K: Ord + Clone, V: Clone>(
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum FunctionDefinition {
     FunctionUnknown,
-    FunctionDefinition(String, Node, Node),
+    FunctionDefinition(Name, Node, Node),
 }
 
-type FunctionValue = BTreeSet<FunctionDefinition>;
+/// `Set FunctionDefinition`, as a sorted vector: a set holds one or two
+/// definitions, which a `BTreeSet` stores in a node allocated for eleven.
+/// The derived order is the `Data.Set`'s, by members in order.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct FunctionValue(Vec<FunctionDefinition>);
+
+impl FunctionValue {
+    fn single(d: FunctionDefinition) -> Self {
+        Self(vec![d])
+    }
+
+    fn iter(&self) -> impl Iterator<Item = &FunctionDefinition> {
+        self.0.iter()
+    }
+
+    fn union(&self, other: &Self) -> Self {
+        let mut all = Vec::with_capacity(self.0.len() + other.0.len());
+        all.extend(self.0.iter().cloned());
+        all.extend(other.0.iter().cloned());
+        all.sort();
+        all.dedup();
+        Self(all)
+    }
+}
 
 #[derive(Clone, Debug)]
 struct InternalState {
     version: i64,
-    global_values: VersionedMap<String, VariableState>,
-    local_values: VersionedMap<String, VariableState>,
-    prefix_values: VersionedMap<String, VariableState>,
-    function_targets: VersionedMap<String, FunctionValue>,
+    global_values: VersionedMap<VariableState>,
+    local_values: VersionedMap<VariableState>,
+    prefix_values: VersionedMap<VariableState>,
+    function_targets: VersionedMap<FunctionValue>,
     exit_codes: Option<Rc<BTreeSet<Id>>>,
     is_reachable: Option<bool>,
 }
@@ -264,10 +392,8 @@ fn unreachable_state() -> InternalState {
     modified(s)
 }
 
-fn default_properties() -> VariableProperties {
-    let mut s = BTreeSet::new();
-    s.insert(BTreeSet::new());
-    s
+const fn default_properties() -> VariableProperties {
+    VariableProperties::single(PropSet::from_bits(0))
 }
 
 const fn unknown_variable_value() -> VariableValue {
@@ -294,14 +420,14 @@ const fn unknown_integer_value() -> VariableValue {
     }
 }
 
-fn unknown_variable_state() -> VariableState {
+const fn unknown_variable_state() -> VariableState {
     VariableState {
         variable_value: unknown_variable_value(),
         variable_properties: default_properties(),
     }
 }
 
-fn unset_variable_state() -> VariableState {
+const fn unset_variable_state() -> VariableState {
     VariableState {
         variable_value: empty_variable_value(),
         variable_properties: default_properties(),
@@ -309,54 +435,44 @@ fn unset_variable_state() -> VariableState {
 }
 
 fn unknown_function_value() -> FunctionValue {
-    let mut s = BTreeSet::new();
-    s.insert(FunctionDefinition::FunctionUnknown);
-    s
+    FunctionValue::single(FunctionDefinition::FunctionUnknown)
 }
 
 fn insert_global(name: &str, value: VariableState, state: InternalState) -> InternalState {
     let mut s = state;
-    s.global_values = vm_insert(name.to_string(), value, &s.global_values);
+    s.global_values = vm_insert(name, value, &s.global_values);
     modified(s)
 }
 
 fn insert_local(name: &str, value: VariableState, state: InternalState) -> InternalState {
     let mut s = state;
-    s.local_values = vm_insert(name.to_string(), value, &s.local_values);
+    s.local_values = vm_insert(name, value, &s.local_values);
     modified(s)
 }
 
 fn insert_prefix(name: &str, value: VariableState, state: InternalState) -> InternalState {
     let mut s = state;
-    s.prefix_values = vm_insert(name.to_string(), value, &s.prefix_values);
+    s.prefix_values = vm_insert(name, value, &s.prefix_values);
     modified(s)
 }
 
 fn insert_function(name: &str, value: FunctionValue, state: InternalState) -> InternalState {
     let mut s = state;
-    s.function_targets = vm_insert(name.to_string(), value, &s.function_targets);
+    s.function_targets = vm_insert(name, value, &s.function_targets);
     modified(s)
 }
 
-fn add_properties(props: &BTreeSet<CfVariableProp>, state: VariableState) -> VariableState {
+fn add_properties(props: PropSet, state: VariableState) -> VariableState {
     VariableState {
         variable_value: state.variable_value,
-        variable_properties: state
-            .variable_properties
-            .into_iter()
-            .map(|s| s.union(props).copied().collect())
-            .collect(),
+        variable_properties: state.variable_properties.map(|s| s.union(props)),
     }
 }
 
-fn remove_properties(props: &BTreeSet<CfVariableProp>, state: VariableState) -> VariableState {
+fn remove_properties(props: PropSet, state: VariableState) -> VariableState {
     VariableState {
         variable_value: state.variable_value,
-        variable_properties: state
-            .variable_properties
-            .into_iter()
-            .map(|s| s.difference(props).copied().collect())
-            .collect(),
+        variable_properties: state.variable_properties.map(|s| s.difference(props)),
     }
 }
 
@@ -416,7 +532,7 @@ fn deps_to_state(set: &BTreeSet<StateDependency>) -> InternalState {
             StateDependency::DepProperties(scope, name, props) => {
                 let v = VariableState {
                     variable_value: unknown_variable_value(),
-                    variable_properties: props.clone(),
+                    variable_properties: *props,
                 };
                 insert_in(false, *scope, name, v, state)
             }
@@ -435,9 +551,9 @@ fn insert_in(
     state: InternalState,
 ) -> InternalState {
     let already_exists = match scope {
-        Scope::PrefixScope => vm_lookup(&name.to_string(), &state.prefix_values).is_some(),
-        Scope::LocalScope => vm_lookup(&name.to_string(), &state.local_values).is_some(),
-        Scope::GlobalScope => vm_lookup(&name.to_string(), &state.global_values).is_some(),
+        Scope::PrefixScope => vm_lookup(name, &state.prefix_values).is_some(),
+        Scope::LocalScope => vm_lookup(name, &state.local_values).is_some(),
+        Scope::GlobalScope => vm_lookup(name, &state.global_values).is_some(),
     };
     if overwrite || !already_exists {
         match scope {
@@ -453,11 +569,7 @@ fn insert_in(
 fn merge_variable_state(a: &VariableState, b: &VariableState) -> VariableState {
     VariableState {
         variable_value: merge_variable_value(&a.variable_value, &b.variable_value),
-        variable_properties: a
-            .variable_properties
-            .union(&b.variable_properties)
-            .cloned()
-            .collect(),
+        variable_properties: a.variable_properties.union(b.variable_properties),
     }
 }
 
@@ -545,14 +657,14 @@ type StateMap = BTreeMap<Node, (InternalState, InternalState)>;
 struct Ctx<'g> {
     graph: &'g Graph,
     counter: i64,
-    cache: HashMap<Node, Vec<(BTreeSet<StateDependency>, InternalState)>>,
+    cache: IntMap<Node, Vec<(BTreeSet<StateDependency>, InternalState)>>,
     enable_cache: bool,
     invocations: BTreeMap<Vec<Node>, (BTreeSet<StateDependency>, StateMap)>,
     /// Innermost last.
     stack: Vec<StackEntry>,
     /// The current frame is the last.
     frames: Vec<Frame>,
-    contexts: HashMap<Node, NodeContext>,
+    contexts: IntMap<Node, NodeContext>,
 }
 
 /// A node's label and adjacency, as `context graph node` gives them.
@@ -595,10 +707,7 @@ impl Ctx<'_> {
         n
     }
 
-    fn version_map<K: Ord + Clone, V: Clone>(
-        &mut self,
-        m: VersionedMap<K, V>,
-    ) -> VersionedMap<K, V> {
+    fn version_map<V: Clone>(&mut self, m: VersionedMap<V>) -> VersionedMap<V> {
         if m.version >= 0 {
             m
         } else {
@@ -700,7 +809,7 @@ impl Ctx<'_> {
             false,
             &|s| get_variable_with_scope(s, &n).map(|(v, scope)| (v.variable_properties, scope)),
             &|(val, scope): &(VariableProperties, Scope)| {
-                StateDependency::DepProperties(*scope, n.clone(), val.clone())
+                StateDependency::DepProperties(*scope, n.clone(), *val)
             },
             (default_properties(), Scope::GlobalScope),
         )
@@ -730,9 +839,9 @@ impl Ctx<'_> {
         let n = name.to_string();
         self.lookup_stack(
             false,
-            &|s| vm_lookup(&n, &s.global_values).map(|v| v.variable_properties.clone()),
+            &|s| vm_lookup(&n, &s.global_values).map(|v| v.variable_properties),
             &|v: &VariableProperties| {
-                StateDependency::DepProperties(Scope::GlobalScope, n.clone(), v.clone())
+                StateDependency::DepProperties(Scope::GlobalScope, n.clone(), *v)
             },
             default_properties(),
         )
@@ -754,14 +863,14 @@ impl Ctx<'_> {
             true,
             &|s| {
                 vm_lookup(&n, &s.local_values)
-                    .map(|v| (v.variable_properties.clone(), Scope::LocalScope))
+                    .map(|v| (v.variable_properties, Scope::LocalScope))
                     .or_else(|| {
                         vm_lookup(&n, &s.prefix_values)
-                            .map(|v| (v.variable_properties.clone(), Scope::PrefixScope))
+                            .map(|v| (v.variable_properties, Scope::PrefixScope))
                     })
             },
             &|(val, scope): &(VariableProperties, Scope)| {
-                StateDependency::DepProperties(*scope, n.clone(), val.clone())
+                StateDependency::DepProperties(*scope, n.clone(), *val)
             },
             (default_properties(), Scope::LocalScope),
         )
@@ -809,9 +918,7 @@ impl Ctx<'_> {
     }
 
     fn write_function(&mut self, name: &str, val: FunctionDefinition) {
-        let mut set = BTreeSet::new();
-        set.insert(val);
-        self.modify_output(|s| insert_function(name, set, s));
+        self.modify_output(|s| insert_function(name, FunctionValue::single(val), s));
     }
 
     fn update_variable_value(&mut self, name: &str, val: VariableValue) {
@@ -899,7 +1006,7 @@ impl Ctx<'_> {
             &b.prefix_values,
         );
         let funcs = self.merge_maps(
-            &|x: &FunctionValue, y: &FunctionValue| x.union(y).cloned().collect(),
+            &FunctionValue::union,
             &|c, k| c.read_function(k),
             &a.function_targets,
             &b.function_targets,
@@ -927,59 +1034,60 @@ impl Ctx<'_> {
         }
     }
 
-    /// `mergeMaps`.
+    /// `mergeMaps`. A key in both maps with equal values keeps its value,
+    /// as every merger is idempotent, so the result starts as a copy of `a`
+    /// and only the entries that differ are visited: the maps are usually
+    /// versions of one another, and `diff` skips the subtrees they share.
+    /// A key in one map only is merged with the value the stack gives it,
+    /// which `reader` records as a dependency.
     fn merge_maps<V: Clone + PartialEq>(
         &mut self,
         merger: &dyn Fn(&V, &V) -> V,
         reader: &dyn Fn(&mut Self, &str) -> V,
-        a: &VersionedMap<String, V>,
-        b: &VersionedMap<String, V>,
-    ) -> VersionedMap<String, V> {
+        a: &VersionedMap<V>,
+        b: &VersionedMap<V>,
+    ) -> VersionedMap<V> {
         if vm_is_quick_equal(a, b) {
             return a.clone();
         }
-        let mut out: OrdMap<String, Rc<V>> = OrdMap::new();
-        let mut ia = a.storage.iter().peekable();
-        let mut ib = b.storage.iter().peekable();
-        loop {
-            match (ia.peek(), ib.peek()) {
-                (None, None) => break,
-                (None, Some((k, v))) => {
-                    // `f l [] b = f l b []`: b's entries, merged as the first argument.
-                    let other = reader(self, k);
-                    out.insert((*k).clone(), Rc::new(merger(v, &other)));
-                    ib.next();
-                }
-                (Some((k, v)), None) => {
-                    let other = reader(self, k);
-                    out.insert((*k).clone(), Rc::new(merger(v, &other)));
-                    ia.next();
-                }
-                (Some((k1, v1)), Some((k2, v2))) => match k1.cmp(k2) {
-                    std::cmp::Ordering::Equal => {
-                        // Every merger is idempotent, so an equal pair keeps the
-                        // shared value instead of building a copy of it.
-                        let value = if Rc::ptr_eq(v1, v2) || v1 == v2 {
-                            Rc::clone(v1)
-                        } else {
-                            Rc::new(merger(v1, v2))
-                        };
-                        out.insert((*k1).clone(), value);
-                        ia.next();
-                        ib.next();
-                    }
-                    std::cmp::Ordering::Less => {
-                        let nv2 = reader(self, k1);
-                        out.insert((*k1).clone(), Rc::new(merger(v1, &nv2)));
-                        ia.next();
-                    }
-                    std::cmp::Ordering::Greater => {
-                        let nv1 = reader(self, k2);
-                        out.insert((*k2).clone(), Rc::new(merger(&nv1, v2)));
-                        ib.next();
-                    }
-                },
+        let a_last = a.storage.get_max().map(|(k, _)| Name::clone(k));
+        let mut out = a.storage.clone();
+        // A merge that leaves a's value as it was leaves `out` untouched:
+        // no node of it is copied.
+        let merge_into_a = |out: &mut Storage<V>, k: &Name, va: &V, merged: V| {
+            if merged != *va {
+                out.insert(Name::clone(k), Rc::new(merged));
             }
+        };
+        for item in a.storage.diff(&b.storage) {
+            match item {
+                DiffItem::Remove(k, va) => {
+                    let other = reader(self, k);
+                    merge_into_a(&mut out, k, va, merger(va, &other));
+                }
+                DiffItem::Add(k, vb) => {
+                    let other = reader(self, k);
+                    // `f l [] b = f l b []`: once `a` is exhausted, b's
+                    // entries are merged as the first argument.
+                    let value = if a_last.as_ref().is_none_or(|last| k > last) {
+                        merger(vb, &other)
+                    } else {
+                        merger(&other, vb)
+                    };
+                    out.insert(Name::clone(k), Rc::new(value));
+                }
+                DiffItem::Update {
+                    old: (k, va),
+                    new: (_, vb),
+                } => {
+                    merge_into_a(&mut out, k, va, merger(va, vb));
+                }
+            }
+        }
+        // Nothing changed: the result is `a`, and keeping its version keeps
+        // later comparisons with it quick.
+        if out.ptr_eq(&a.storage) {
+            return a.clone();
         }
         VersionedMap {
             version: -1,
@@ -1188,9 +1296,9 @@ impl Ctx<'_> {
         let targets = self.read_function(name);
         let original = self.output().clone();
         let mut branches = Vec::new();
-        for t in targets {
+        for t in targets.iter() {
             self.set_output(original.clone());
-            self.transfer_function_value(&t);
+            self.transfer_function_value(t);
             branches.push(self.output().clone());
         }
         let merged = self.merge_states(original.clone(), &branches);
@@ -1250,29 +1358,29 @@ impl Ctx<'_> {
             CfEffect::CFSetProps(scope, name, props) => match scope {
                 None => {
                     let state = self.read_variable(name);
-                    self.write_variable(name, add_properties(props, state));
+                    self.write_variable(name, add_properties(*props, state));
                 }
                 Some(Scope::GlobalScope) => {
                     let state = self.read_global(name);
-                    self.write_global(name, add_properties(props, state));
+                    self.write_global(name, add_properties(*props, state));
                 }
                 Some(Scope::LocalScope | Scope::PrefixScope) => {
                     let state = self.read_local(name);
-                    self.write_local(name, add_properties(props, state));
+                    self.write_local(name, add_properties(*props, state));
                 }
             },
             CfEffect::CFUnsetProps(scope, name, props) => match scope {
                 None => {
                     let state = self.read_variable(name);
-                    self.write_variable(name, remove_properties(props, state));
+                    self.write_variable(name, remove_properties(*props, state));
                 }
                 Some(Scope::GlobalScope) => {
                     let state = self.read_global(name);
-                    self.write_global(name, remove_properties(props, state));
+                    self.write_global(name, remove_properties(*props, state));
                 }
                 Some(Scope::LocalScope | Scope::PrefixScope) => {
                     let state = self.read_local(name);
-                    self.write_local(name, remove_properties(props, state));
+                    self.write_local(name, remove_properties(*props, state));
                 }
             },
             CfEffect::CFUndefineVariable(name) | CfEffect::CFUndefineNameref(name) => {
@@ -1288,7 +1396,11 @@ impl Ctx<'_> {
             CfEffect::CFDefineFunction(name, _, entry, exit) => {
                 self.write_function(
                     name,
-                    FunctionDefinition::FunctionDefinition(name.clone(), *entry, *exit),
+                    FunctionDefinition::FunctionDefinition(
+                        Name::from(name.as_str()),
+                        *entry,
+                        *exit,
+                    ),
                 );
             }
             CfEffect::CFHintArray(_) => {}
@@ -1319,8 +1431,7 @@ impl Ctx<'_> {
                 let state = self.read_variable(name);
                 if state
                     .variable_properties
-                    .iter()
-                    .all(|s| s.contains(&CfVariableProp::CFVPInteger))
+                    .all_contain(CfVariableProp::CFVPInteger)
                 {
                     unknown_integer_value()
                 } else {
@@ -1520,7 +1631,7 @@ pub fn analyze_control_flow(params: CfgParameters, t: &Token) -> CfgAnalysis {
     let mut ctx = Ctx {
         graph: &cfg.graph,
         counter: 1,
-        cache: HashMap::new(),
+        cache: IntMap::default(),
         enable_cache: true,
         invocations: BTreeMap::new(),
         stack: Vec::new(),
@@ -1529,7 +1640,7 @@ pub fn analyze_control_flow(params: CfgParameters, t: &Token) -> CfgAnalysis {
             input: env.clone(),
             output: env.clone(),
         }],
-        contexts: HashMap::new(),
+        contexts: IntMap::default(),
     };
 
     // runRoot
