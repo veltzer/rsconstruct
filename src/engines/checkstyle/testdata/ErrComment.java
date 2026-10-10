@@ -1,0 +1,3 @@
+class ErrComment {
+    /* never closed
+}

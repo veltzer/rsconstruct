@@ -1,0 +1,4 @@
+class ErrParse {
+    void f( {
+    }
+}

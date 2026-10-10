@@ -4,6 +4,8 @@
 
 Checks Java code style using [Checkstyle](https://checkstyle.org/).
 
+The Rust alternative is [icheckstyle](icheckstyle.md): checkstyle's grammar and the checks of the fleet's `checkstyle.xml`, in-process, with checkstyle's messages and positions. Switching is `checkstyle` → `icheckstyle` in the stanza header, dropping `args = ["-c", "checkstyle.xml"]`.
+
 ## How It Works
 
 Discovers `.java` files in the project (excluding common build tool directories),
