@@ -168,7 +168,7 @@ implementation of the capability itself appears.
 | cppcheck, clang_tidy | 23, 1 | C/C++ static analysis; no Rust analyser of C/C++ exists | blocked (2026-09-21) |
 | chromium, drawio, libreoffice | 0 | Drive those applications for rendering; the application is the capability | won't do |
 | slidev, marp, mermaid | 0, 1, 1 | Node renderers with no Rust implementation of the format | blocked (2026-09-21) |
-| pandoc | 5 | Multi-format conversion; `imarkdown2html` covers Markdown to HTML, nothing in Rust covers the rest | blocked (2026-09-21); note per-repo which conversion is used |
+| pandoc | 5 | Multi-format conversion; `imarkdown2html` covers Markdown to HTML, nothing in Rust covers the rest | in progress (2026-10-11) as the separate MIT tool rspandoc: HTML (with `--standalone`, `--embed-resources`, `--css`, `--lua-filter`) matches pandoc byte for byte on teaching-syllabi, business-syllabi and data. Still needed: DOCX and PDF (all five repos; data and demos-ai-coding with xelatex, demos-lang-md PDF only), and demos-ai-coding's Markdown (ordered lists, fenced code with highlighting, setext headers) |
 | a2x | 1 | AsciiDoc; no mature Rust AsciiDoc implementation | blocked (2026-09-21) |
 | objdump | 0 | binutils; the `object` crate could dump sections but not disassemble faithfully | blocked (2026-09-21) |
 | npm, gem | 0 | Package managers of other ecosystems | won't do |
