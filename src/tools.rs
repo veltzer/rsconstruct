@@ -961,8 +961,15 @@ fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
         // torvalds/linux master is the automatable equivalent of "copy it out
         // of a kernel checkout", and keeps the tool out of the manual-only
         // bucket that `tool install --all` rejects.
+        //
+        // Pinned to one kernel commit, not master: icheckpatch is a port of
+        // this exact script and its tests compare the two line for line, so
+        // a checkpatch.pl that moved on would fail them for changes the port
+        // has not followed yet. Moving the pin means porting the diff
+        // between the two commits into src/engines/checkpatch/ - do both in
+        // the same change.
         "checkpatch.pl" => Some(BinaryRecipe {
-            url: "https://raw.githubusercontent.com/torvalds/linux/master/scripts/checkpatch.pl",
+            url: "https://raw.githubusercontent.com/torvalds/linux/e5f92606156a6a823992294d214c285b49cd72e9/scripts/checkpatch.pl",
             archive: ArchiveKind::Raw,
             dest: "checkpatch.pl",
         }),

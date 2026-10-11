@@ -40,6 +40,7 @@
         - [HTMLHint](processor/checker/htmlhint.md)
         - [HTMLLint](processor/checker/htmllint.md)
         - [Iactionlint](processor/checker/iactionlint.md)
+        - [Icheckpatch](processor/checker/icheckpatch.md)
         - [Icheckstyle](processor/checker/icheckstyle.md)
         - [Icpplint](processor/checker/icpplint.md)
         - [Idockerfile](processor/checker/idockerfile.md)

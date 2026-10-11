@@ -1,0 +1,16 @@
+config FOO
+	bool "Enable foo"
+	help
+	  Short.
+
+config BAR
+	tristate "Bar"
+	depends on FOO
+	help
+	  Line one.
+	  Line two.
+	  Line three.
+	  Line four.
+
+menuconfig BAZ
+	bool "Baz"

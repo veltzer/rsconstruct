@@ -4,6 +4,8 @@
 
 Checks C source files using the Linux kernel's `checkpatch.pl` script.
 
+The Rust alternative is [icheckpatch](icheckpatch.md): checkpatch's file-mode checks, in-process, with checkpatch's report. Switching is `checkpatch` → `icheckpatch` in the stanza header.
+
 ## How It Works
 
 Discovers `.c` and `.h` files under `src/` (excluding common C/C++ build

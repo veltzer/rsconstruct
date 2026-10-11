@@ -117,6 +117,12 @@ pub fn file_stamp(metadata: &std::fs::Metadata) -> FileStamp {
     }
 }
 
+/// The file system's preferred I/O size for the file (`st_blksize`).
+pub fn block_size(metadata: &std::fs::Metadata) -> u64 {
+    use std::os::unix::fs::MetadataExt;
+    metadata.blksize()
+}
+
 /// Register a SIGINT stream. Must be called inside a tokio runtime.
 ///
 /// Registration happens at call time — unlike `tokio::signal::ctrl_c()`,

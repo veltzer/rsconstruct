@@ -3,6 +3,7 @@
 //! `src/processor/` is the front end; the engine here does the work.
 
 pub mod actionlint;
+pub mod checkpatch;
 pub mod checkstyle;
 pub mod cpplint;
 pub mod hadolint;

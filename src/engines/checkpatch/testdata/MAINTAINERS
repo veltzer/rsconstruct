@@ -1,0 +1,8 @@
+MAINTAINERS FOR TEST
+M:	Someone <a@b.c>
+L:  list@example.com
+S:	Maintained
+F:	z/file.c
+F:	a/file.c
+Q:	queue
+Z:	unknown
