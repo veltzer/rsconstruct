@@ -131,6 +131,10 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
                 batch: false, // not available from static metadata
                 native: p.is_native,
                 rust: p.is_rust,
+                rust_alternatives: crate::registries::rust_alternatives(&p.pname())
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
                 fix: p.can_fix,
                 description: p.description.to_string(),
             })
@@ -139,45 +143,29 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
         return Ok(());
     }
 
+    let rows: Vec<Vec<String>> = plugins
+        .iter()
+        .map(|p| {
+            let native_tag = if p.is_native { "native" } else { "external" };
+            let mut row = vec![
+                p.pname(),
+                p.processor_type.as_str().to_string(),
+                native_tag.to_string(),
+                tables::yes_no(p.is_rust).to_string(),
+                crate::registries::rust_alternatives(&p.pname()).join(", "),
+                tables::yes_no(p.can_fix).to_string(),
+            ];
+            if verbose {
+                row.push(p.description.to_string());
+            }
+            row
+        })
+        .collect();
+    let mut headers = vec!["Name", "Type", "Native", "Rust", "Rust alternative", "Fix"];
     if verbose {
-        let rows: Vec<Vec<String>> = plugins
-            .iter()
-            .map(|p| {
-                let native_tag = if p.is_native { "native" } else { "external" };
-                let rust_tag = tables::yes_no(p.is_rust);
-                let fix_tag = tables::yes_no(p.can_fix);
-                vec![
-                    p.pname(),
-                    p.processor_type.as_str().to_string(),
-                    native_tag.to_string(),
-                    rust_tag.to_string(),
-                    fix_tag.to_string(),
-                    p.description.to_string(),
-                ]
-            })
-            .collect();
-        tables::print_table(
-            &["Name", "Type", "Native", "Rust", "Fix", "Description"],
-            &rows,
-        );
-    } else {
-        let rows: Vec<Vec<String>> = plugins
-            .iter()
-            .map(|p| {
-                let native_tag = if p.is_native { "native" } else { "external" };
-                let rust_tag = tables::yes_no(p.is_rust);
-                let fix_tag = tables::yes_no(p.can_fix);
-                vec![
-                    p.pname(),
-                    p.processor_type.as_str().to_string(),
-                    native_tag.to_string(),
-                    rust_tag.to_string(),
-                    fix_tag.to_string(),
-                ]
-            })
-            .collect();
-        tables::print_table(&["Name", "Type", "Native", "Rust", "Fix"], &rows);
+        headers.push("Description");
     }
+    tables::print_table(&headers, &rows);
 
     Ok(())
 }
@@ -383,13 +371,29 @@ pub fn list_recommendations() {
         ),
     ];
 
+    // Where a Rust processor can replace the recommended one, it comes first
+    // and the other is listed as "also".
+    let resolved: Vec<(&str, Vec<&str>, Vec<&str>, &str)> = recommendations
+        .iter()
+        .map(|&(ext, proc, reason)| {
+            let alternatives = crate::registries::rust_alternatives(proc);
+            if alternatives.is_empty() {
+                (ext, vec![proc], Vec::new(), reason)
+            } else {
+                (ext, alternatives, vec![proc], reason)
+            }
+        })
+        .collect();
+
     if crate::json_output::is_json_mode() {
-        let entries: Vec<serde_json::Value> = recommendations
+        let entries: Vec<serde_json::Value> = resolved
             .iter()
-            .map(|(ext, proc, reason)| {
+            .map(|(ext, procs, also, reason)| {
                 serde_json::json!({
                     "extension": ext,
-                    "processor": proc,
+                    "processor": procs[0],
+                    "processors": procs,
+                    "also": also,
                     "reason": reason,
                 })
             })
@@ -399,11 +403,18 @@ pub fn list_recommendations() {
             serde_json::to_string_pretty(&entries).expect(crate::errors::JSON_SERIALIZE)
         );
     } else {
-        let rows: Vec<Vec<String>> = recommendations
+        let rows: Vec<Vec<String>> = resolved
             .iter()
-            .map(|(ext, proc, reason)| vec![ext.to_string(), proc.to_string(), reason.to_string()])
+            .map(|(ext, procs, also, reason)| {
+                vec![
+                    ext.to_string(),
+                    procs.join(", "),
+                    also.join(", "),
+                    reason.to_string(),
+                ]
+            })
             .collect();
-        tables::print_table(&["Extension / File", "Processor", "Reason"], &rows);
+        tables::print_table(&["Extension / File", "Processor", "Also", "Reason"], &rows);
     }
 }
 

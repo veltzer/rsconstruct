@@ -85,6 +85,9 @@ fn create_isass(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::
         ))
     })
 }
+inventory::submit! {
+    crate::registries::RustAlternative { replaces: "processor.generator.sass", by: "processor.generator.isass" }
+}
 inventory::submit! { crate::registries::ProcessorPlugin {
     // v2: partials (`_*.scss`) are no longer discovered by default.
     version: 2,

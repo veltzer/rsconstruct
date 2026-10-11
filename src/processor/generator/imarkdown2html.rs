@@ -44,6 +44,9 @@ fn create_imarkdown2html(
         ))
     })
 }
+inventory::submit! {
+    crate::registries::RustAlternative { replaces: "processor.generator.markdown2html", by: "processor.generator.imarkdown2html" }
+}
 inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "imarkdown2html", processor_type: crate::processor::ProcessorType::Generator, create: create_imarkdown2html,

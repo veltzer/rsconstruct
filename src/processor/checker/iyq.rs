@@ -159,6 +159,9 @@ fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
     crate::registries::deserialize_and_create(toml, |cfg| Box::new(IyqProcessor::new(cfg)))
 }
 inventory::submit! {
+    crate::registries::RustAlternative { replaces: "processor.checker.yq", by: "processor.checker.iyq" }
+}
+inventory::submit! {
     crate::registries::ProcessorPlugin {
         version: 1,
         name: "iyq",

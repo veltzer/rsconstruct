@@ -24,6 +24,9 @@ fn create_selene(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
         ))
     })
 }
+inventory::submit! {
+    crate::registries::RustAlternative { replaces: "processor.checker.luacheck", by: "processor.checker.selene" }
+}
 inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "selene", processor_type: crate::processor::ProcessorType::Checker, create: create_selene,

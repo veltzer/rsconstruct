@@ -140,6 +140,9 @@ fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
     crate::registries::deserialize_and_create(toml, |cfg| Box::new(IxmllintProcessor::new(cfg)))
 }
 inventory::submit! {
+    crate::registries::RustAlternative { replaces: "processor.checker.xmllint", by: "processor.checker.ixmllint" }
+}
+inventory::submit! {
     crate::registries::ProcessorPlugin {
         version: 1,
         name: "ixmllint",

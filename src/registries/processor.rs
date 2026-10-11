@@ -90,6 +90,30 @@ pub fn all_plugins() -> impl Iterator<Item = &'static ProcessorPlugin> {
     inventory::iter::<ProcessorPlugin>.into_iter()
 }
 
+/// A Rust processor declaring a non-Rust processor it can replace: submitted
+/// from the Rust processor's own file, next to its plugin entry. `processor
+/// list` shows the pairs, `processor recommend` prefers the Rust side, and a
+/// test keeps the replaced processor's docs page naming its alternative.
+pub struct RustAlternative {
+    /// The non-Rust processor (`processor.checker.shellcheck`).
+    pub replaces: &'static str,
+    /// The Rust processor that replaces it (`processor.checker.ishellcheck`).
+    pub by: &'static str,
+}
+
+inventory::collect!(RustAlternative);
+
+/// The Rust alternatives of processor `name`, sorted.
+pub fn rust_alternatives(name: &str) -> Vec<&'static str> {
+    let mut out: Vec<&'static str> = inventory::iter::<RustAlternative>
+        .into_iter()
+        .filter(|a| a.replaces == name)
+        .map(|a| a.by)
+        .collect();
+    out.sort_unstable();
+    out
+}
+
 /// Every processor name starts with this: a processor is named by its full
 /// path, `processor.<type>.<name>`, exactly as its module is
 /// (`processor::checker::ruff`), and an instance appends one more segment.
@@ -428,5 +452,45 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Every Rust alternative pairs a non-Rust processor with a Rust one,
+    /// both real, and the replaced processor's docs page links its
+    /// alternative, so a reader of the old page finds the new one.
+    #[test]
+    fn rust_alternatives_are_consistent() {
+        let docs = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/src/processor");
+        let mut failures = Vec::new();
+        for alt in inventory::iter::<RustAlternative> {
+            let replaced = find_plugin(alt.replaces).unwrap_or_else(|| {
+                panic!("Rust alternative of unknown processor '{}'", alt.replaces)
+            });
+            let by = find_plugin(alt.by)
+                .unwrap_or_else(|| panic!("unknown Rust alternative '{}'", alt.by));
+            assert!(
+                by.is_rust,
+                "'{}' is named as a Rust alternative but is not Rust",
+                alt.by
+            );
+            assert!(
+                !replaced.is_rust,
+                "'{}' is Rust already, it needs no alternative",
+                alt.replaces
+            );
+            let page = docs
+                .join(replaced.processor_type.as_str())
+                .join(format!("{}.md", replaced.name));
+            let text = std::fs::read_to_string(&page)
+                .unwrap_or_else(|e| panic!("reading {}: {e}", page.display()));
+            let link = format!("]({}.md)", by.name);
+            if !text.contains(&link) {
+                failures.push(format!("{} does not link {link}", page.display()));
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "Rust alternatives missing from docs:\n{}",
+            failures.join("\n")
+        );
     }
 }

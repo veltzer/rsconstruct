@@ -264,6 +264,9 @@ fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
 }
 
 inventory::submit! {
+    crate::registries::RustAlternative { replaces: "processor.checker.luacheck", by: "processor.checker.iluacheck" }
+}
+inventory::submit! {
     crate::registries::ProcessorPlugin {
         version: 1,
         name: "iluacheck",

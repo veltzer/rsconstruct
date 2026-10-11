@@ -80,6 +80,9 @@ fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
     crate::registries::deserialize_and_create(toml, |cfg| Box::new(IcheckpatchProcessor::new(cfg)))
 }
 inventory::submit! {
+    crate::registries::RustAlternative { replaces: "processor.checker.checkpatch", by: "processor.checker.icheckpatch" }
+}
+inventory::submit! {
     crate::registries::ProcessorPlugin {
         version: 1,
         name: "icheckpatch",

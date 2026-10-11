@@ -19,6 +19,12 @@ fn create_rumdl(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::
         ))
     })
 }
+inventory::submit! {
+    crate::registries::RustAlternative { replaces: "processor.checker.markdownlint", by: "processor.checker.rumdl" }
+}
+inventory::submit! {
+    crate::registries::RustAlternative { replaces: "processor.checker.mdl", by: "processor.checker.rumdl" }
+}
 inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "rumdl", processor_type: crate::processor::ProcessorType::Checker, create: create_rumdl,

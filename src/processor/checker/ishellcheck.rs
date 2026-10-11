@@ -209,6 +209,9 @@ fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
     crate::registries::deserialize_and_create(toml, |cfg| Box::new(IshellcheckProcessor::new(cfg)))
 }
 inventory::submit! {
+    crate::registries::RustAlternative { replaces: "processor.checker.shellcheck", by: "processor.checker.ishellcheck" }
+}
+inventory::submit! {
     crate::registries::ProcessorPlugin {
         version: 1,
         name: "ishellcheck",

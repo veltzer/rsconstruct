@@ -4,6 +4,8 @@
 
 Lints JSON files using [jsonlint](https://github.com/zaach/jsonlint).
 
+The Rust alternative is [ijsonlint](ijsonlint.md): each file parsed in-process with serde_json, no Node.
+
 ## How It Works
 
 Discovers `.json` files in the project (excluding common build tool

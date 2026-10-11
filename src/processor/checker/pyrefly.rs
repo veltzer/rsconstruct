@@ -19,6 +19,9 @@ fn create_pyrefly(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor
         ))
     })
 }
+inventory::submit! {
+    crate::registries::RustAlternative { replaces: "processor.checker.mypy", by: "processor.checker.pyrefly" }
+}
 inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "pyrefly", processor_type: crate::processor::ProcessorType::Checker, create: create_pyrefly,

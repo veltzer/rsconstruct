@@ -4,6 +4,8 @@
 
 Converts Markdown files to HTML using the [markdown](https://daringfireball.net/projects/markdown/) Perl script.
 
+The Rust alternative is [imarkdown2html](imarkdown2html.md): Markdown converted in-process with pulldown-cmark, no Perl script. pulldown-cmark follows CommonMark, so its HTML can differ from the `markdown` script's in the corners where the two disagree. Switching is `markdown2html` → `imarkdown2html` in the stanza header.
+
 ## How It Works
 
 Discovers `.md` files in the project and runs `markdown` on each file,

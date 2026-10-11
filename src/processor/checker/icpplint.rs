@@ -195,6 +195,9 @@ fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
     crate::registries::deserialize_and_create(toml, |cfg| Box::new(IcpplintProcessor::new(cfg)))
 }
 inventory::submit! {
+    crate::registries::RustAlternative { replaces: "processor.checker.cpplint", by: "processor.checker.icpplint" }
+}
+inventory::submit! {
     crate::registries::ProcessorPlugin {
         version: 1,
         name: "icpplint",

@@ -4,6 +4,8 @@
 
 Compiles SCSS and SASS files into CSS using the Sass compiler.
 
+The Rust alternative is [isass](isass.md): Sass and SCSS compiled in-process with the grass compiler, no Sass installation needed. Switching is `sass` → `isass` in the stanza header.
+
 ## How It Works
 
 Files matching configured extensions in the `sass/` directory are compiled to CSS.

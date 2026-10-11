@@ -4,6 +4,8 @@
 
 Validates JSON files using [jq](https://jqlang.org/).
 
+The Rust alternative is [ijq](ijq.md): each file parsed as JSON in-process. It only checks that a file parses; no jq filter is evaluated.
+
 ## How It Works
 
 Discovers `.json` files in the project (excluding common build tool

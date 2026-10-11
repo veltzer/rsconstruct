@@ -459,6 +459,17 @@ read when the question is "how much of this project's toolchain is Rust";
 `native` is what to read when the question is "which processors need no tool
 installed".
 
+A fourth column, `Rust alternative`, names the Rust processors that can
+replace a non-Rust one (`ishellcheck` for `shellcheck`, `iluacheck` and
+`selene` for `luacheck`); the JSON form has them as a `rust_alternatives` array, empty
+where there is none. Each Rust processor declares what it replaces in its own
+file, and its alternative's docs page links it.
+
+`recommend` maps file extensions to the processor for them. Where a Rust
+processor can replace the classic recommendation, the Rust one is listed and
+the classic one moves to the `Also` column (`also` in the JSON, next to
+`processors`, every Rust option, and `processor`, the first of them).
+
 `info` is the long form of one processor (or, without a name, of every
 processor): its description, type, keywords, the same flags as `list` plus
 batch support, the `max_jobs` cap and the implementation version, then a table

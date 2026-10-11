@@ -25,6 +25,9 @@ fn create_oxlint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
         ))
     })
 }
+inventory::submit! {
+    crate::registries::RustAlternative { replaces: "processor.checker.eslint", by: "processor.checker.oxlint" }
+}
 inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "oxlint", processor_type: crate::processor::ProcessorType::Checker, create: create_oxlint,

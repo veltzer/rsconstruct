@@ -28,6 +28,9 @@ fn create_biome(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::
         ))
     })
 }
+inventory::submit! {
+    crate::registries::RustAlternative { replaces: "processor.checker.stylelint", by: "processor.checker.biome" }
+}
 inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "biome", processor_type: crate::processor::ProcessorType::Checker, create: create_biome,

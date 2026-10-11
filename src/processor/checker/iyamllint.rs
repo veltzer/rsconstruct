@@ -142,6 +142,9 @@ fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
     crate::registries::deserialize_and_create(toml, |cfg| Box::new(IyamllintProcessor::new(cfg)))
 }
 inventory::submit! {
+    crate::registries::RustAlternative { replaces: "processor.checker.yamllint", by: "processor.checker.iyamllint" }
+}
+inventory::submit! {
     crate::registries::ProcessorPlugin {
         // v2: yamllint's rules and `.yamllint.yaml` are applied; v1 only
         // parsed the file.

@@ -4,6 +4,8 @@
 
 Merges PDF files from subdirectories into single combined PDFs using [pdfunite](https://poppler.freedesktop.org/).
 
+The Rust alternative is [ipdfunite](ipdfunite.md): the same one PDF per subdirectory, merged in-process with lopdf, no poppler. Switching is `pdfunite` → `ipdfunite` in the stanza header.
+
 ## How It Works
 
 Scans subdirectories of the configured source directory for files matching the

@@ -4,6 +4,8 @@
 
 Lints Markdown files using [mdl](https://github.com/markdownlint/markdownlint) (Ruby markdownlint).
 
+The Rust alternative is [rumdl](rumdl.md), a Markdown linter written in Rust with markdownlint's rules.
+
 ## How It Works
 
 Discovers `.md` files in the project and runs `mdl` on each file. A non-zero

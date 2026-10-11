@@ -113,6 +113,9 @@ pub struct ProcessorListEntry {
     /// Whether the implementation (rsconstruct itself for a native processor,
     /// the external tool otherwise) is written in Rust.
     pub rust: bool,
+    /// The Rust processors that can replace this one (empty when it is
+    /// Rust already, or when none can).
+    pub rust_alternatives: Vec<String>,
     pub fix: bool,
     pub description: String,
 }

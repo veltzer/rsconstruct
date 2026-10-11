@@ -95,8 +95,8 @@ Everything with fewer than ten repos is in the per-stage tables below.
 
 | Item | Status | Notes |
 |---|---|---|
-| Fleet usage + coverage script (below) checked in as `scripts/rust_coverage.py` | todo | Prints the two baseline tables; run before and after every stage |
-| Coverage number in the log at the bottom, updated per stage | todo | |
+| Fleet usage + coverage script (below) checked in as `scripts/rust_coverage.py` | done | Prints the two baseline tables (with each non-Rust processor's Rust alternatives); run before and after every stage |
+| Coverage number in the log at the bottom, updated per stage | done | Measured 2026-10-11 with the script |
 
 ## Stage 1: capabilities a Rust processor already covers
 
@@ -176,9 +176,9 @@ easy to find and easy to choose.
 
 | Item | Status | Notes |
 |---|---|---|
-| Docs page of every non-Rust processor names its Rust alternative(s) | todo | One line per page, added as each Stage 1-3 row lands; the page otherwise stays as it is |
-| `rsconstruct processor list` shows the Rust alternative | todo | A `Rust alternative` column or a `--rust` filter; whichever reads better in the table. The JSON gains a `rust_alternatives` array |
-| `rsconstruct processor recommend` prefers the Rust option where one exists | todo | The recommendation table already maps extensions to processors; where both exist, list the Rust one first and the other as "also" |
+| Docs page of every non-Rust processor names its Rust alternative(s) | done | A Rust processor declares what it replaces (`RustAlternative`, in its own file); the `rust_alternatives_are_consistent` test fails when the replaced processor's page does not link it |
+| `rsconstruct processor list` shows the Rust alternative | done | A `Rust alternative` column; the JSON has a `rust_alternatives` array |
+| `rsconstruct processor recommend` prefers the Rust option where one exists | done | The Rust processor is listed, the other moves to the `Also` column (`also` in the JSON) |
 | Per-repo switching stays a per-repo decision | won't do | No rsmultigit sweep, no deprecation. A repo owner who wants the Rust path edits its `rsconstruct.toml`; the coverage script's usage column shows the uptake, nothing enforces it |
 
 ## How to work an item
@@ -205,7 +205,9 @@ easy to find and easy to choose.
 
 ## Measuring
 
-Until the script is checked in, this is what produced the baseline. It reads
+`scripts/rust_coverage.py` (fleet directory as its argument, `~/git` by
+default) prints the coverage line and the non-Rust processors the fleet still
+declares. Below is the first version, which produced the baseline; it reads
 `rsconstruct --json processor list` and every `rsconstruct.toml` under
 `~/git`.
 
@@ -233,3 +235,4 @@ for e in sorted(entries, key=lambda e: -len(usage.get(e["name"], ()))):
 |---|---|---|---|
 | 2026-09-21 | `is_rust` flag added; baseline measured; plan written | 28 / 93 | 708 / 1610 (44 %) |
 | 2026-10-04 | Done rows removed (is_rust flag; JSON, Markdown, TOML lint; templating; Sass; PDF merge; Markdown to HTML; oxlint; biome); `icss` set to won't do; script updated for `processor.<type>.<name>` names | 30 / 96 | 741 / 1587 (46 %) |
+| 2026-10-11 | Script checked in; Rust alternatives in `processor list`, `recommend` and the docs; fleet on ishellcheck, icheckstyle, iperlcritic, icheckpatch; mypy, eslint, stylelint gone from the fleet | 46 / 112 | 1454 / 1665 (87 %) |

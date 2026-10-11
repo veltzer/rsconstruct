@@ -4,6 +4,8 @@
 
 Type-checks Python source files using [mypy](https://mypy.readthedocs.io/).
 
+The Rust alternative is [pyrefly](pyrefly.md), a Python type checker written in Rust, which the fleet type-checks with. It is a different checker, not a port of mypy: its findings are its own.
+
 ## How It Works
 
 Discovers `.py` files in the project (excluding common non-source directories),

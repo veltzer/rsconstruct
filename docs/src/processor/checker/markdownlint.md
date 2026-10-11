@@ -4,6 +4,8 @@
 
 Lints Markdown files using [markdownlint](https://github.com/DavidAnson/markdownlint) (Node.js).
 
+The Rust alternative is [rumdl](rumdl.md), a Markdown linter written in Rust with markdownlint's rules.
+
 ## How It Works
 
 Discovers `.md` files in the project and runs `markdownlint` on each file. A
