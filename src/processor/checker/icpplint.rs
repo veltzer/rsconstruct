@@ -169,7 +169,46 @@ impl crate::processor::Processor for IcpplintProcessor {
         crate::processor::ProcessorBase::config_json(&self.config)
     }
 
-    /// One product per scanned file (the default `discover`).
+    /// One product per scanned file. cpplint reads `config_file` from the
+    /// file's directory and every directory above it, so each copy that
+    /// exists between the file and the project root is an input of that
+    /// product: an edit to any of them invalidates cached passes.
+    fn discover(
+        &self,
+        graph: &mut crate::graph::BuildGraph,
+        file_index: &crate::file_index::FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
+        let files = file_index.scan(&self.config.standard, true);
+        if files.is_empty() {
+            return Ok(());
+        }
+        let mut dep_inputs = self.config.standard.dep_inputs.clone();
+        for ai in &self.config.standard.dep_auto {
+            dep_inputs.extend(crate::processor::config_file_inputs(ai));
+        }
+        let extra = crate::config::resolve_extra_inputs(&dep_inputs)?;
+        let hash = Some(crate::config::output_config_hash(
+            &self.config,
+            &crate::config::checksum_fields_of(instance_name),
+        ));
+        for file in files {
+            let mut inputs = vec![file.clone()];
+            let mut dir = file.parent();
+            while let Some(d) = dir {
+                let cfg = d.join(&self.config.config_file);
+                if cfg.is_file() && !inputs.contains(&cfg) && !extra.contains(&cfg) {
+                    inputs.push(cfg);
+                }
+                dir = d.parent();
+            }
+            inputs.extend_from_slice(&extra);
+            graph.add_product(inputs, vec![], instance_name, hash.clone())?;
+        }
+        Ok(())
+    }
+
+    /// One product per scanned file, plus config files read from disk.
     fn discovery(&self) -> crate::processor::Discovery {
         crate::processor::Discovery::PerFile
     }
@@ -235,7 +274,7 @@ inventory::submit! {
         ],
         omit_standard_fields: &[],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".c", ".cc", ".cpp", ".cxx", ".c++", ".cu", ".h", ".hh", ".hpp", ".hxx", ".h++", ".cuh"], src_exclude_dirs: &[] }),
-        defaults: Some(crate::config::ProcessorDefaults { dep_auto: &["CPPLINT.cfg"], ..crate::config::ProcessorDefaults::EMPTY }),
+        defaults: None,
         keywords: &["c", "cpp", "linter", "google", "cpplint", "cc", "h", "hpp", "rust"],
         description: "Lint C/C++ files with cpplint's rules (in-process)",
         is_native: true,

@@ -19,7 +19,7 @@ Header guards are derived the way cpplint derives them: from the path relative t
 
 ### Configuration
 
-cpplint's per-directory configuration files work as they do in cpplint: `CPPLINT.cfg` (or the file `config_file` names) is read from the file's directory upwards until one says `set noparent`, with `filter`, `exclude_files`, `linelength`, `root`, `headers`, `extensions` and `includeorder`. The TOML fields are cpplint's command-line options:
+cpplint's per-directory configuration files work as they do in cpplint: `CPPLINT.cfg` (or the file `config_file` names) is read from the file's directory upwards until one says `set noparent`, with `filter`, `exclude_files`, `linelength`, `root`, `headers`, `extensions` and `includeorder`. Every such file between a source file and the project root is an input of that file's product, so editing one re-checks the files under it; there is no need to list them in `dep_inputs`. The TOML fields are cpplint's command-line options:
 
 ```toml
 [processor.checker.icpplint]
@@ -58,9 +58,9 @@ The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` c
 | `src_dirs` | string[] | `[]` | Directories to scan |
 | `src_extensions` | string[] | the twelve above | File name suffixes to check |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
-| `dep_auto` | string[] | `["CPPLINT.cfg"]` | Config files that are inputs when they exist |
+| `dep_auto` | string[] | `[]` | Config files that are inputs when they exist (the `config_file` chain is tracked already) |
 
-Switching a repo from cpplint: `[processor.checker.cpplint]` → `[processor.checker.icpplint]`, and `args = ["--config=.cpplint"]` becomes `config_file = ".cpplint"` (keep `dep_inputs = [".cpplint"]`, since `dep_auto` only knows the default name). Any other `--option=value` in `args` becomes the field of the same name.
+Switching a repo from cpplint: `[processor.checker.cpplint]` → `[processor.checker.icpplint]`, and `args = ["--config=.cpplint"]` becomes `config_file = ".cpplint"`. Any other `--option=value` in `args` becomes the field of the same name.
 
 ## Batch support
 

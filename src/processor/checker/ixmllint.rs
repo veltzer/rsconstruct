@@ -114,7 +114,35 @@ impl crate::processor::Processor for IxmllintProcessor {
         crate::processor::ProcessorBase::config_json(&self.config)
     }
 
-    /// One product per scanned file (the default `discover`).
+    /// One product per scanned file. The schema decides pass/fail just as
+    /// much as the file itself, so it is an input of every product: an edit
+    /// to it invalidates cached passes without a `dep_inputs` entry.
+    fn discover(
+        &self,
+        graph: &mut crate::graph::BuildGraph,
+        file_index: &crate::file_index::FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
+        let mut dep_inputs = self.config.standard.dep_inputs.clone();
+        if !self.config.schema.is_empty() {
+            if !Path::new(&self.config.schema).is_file() {
+                bail!("ixmllint schema not found: {}", self.config.schema);
+            }
+            dep_inputs.push(self.config.schema.clone());
+        }
+        crate::processor::discover_checker_products(
+            graph,
+            &self.config.standard,
+            file_index,
+            &dep_inputs,
+            &self.config.standard.dep_auto,
+            &self.config,
+            &crate::config::checksum_fields_of(instance_name),
+            instance_name,
+        )
+    }
+
+    /// One product per scanned file, plus the schema read from disk.
     fn discovery(&self) -> crate::processor::Discovery {
         crate::processor::Discovery::PerFile
     }

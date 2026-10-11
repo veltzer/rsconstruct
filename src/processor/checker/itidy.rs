@@ -113,7 +113,35 @@ impl crate::processor::Processor for ItidyProcessor {
         crate::processor::ProcessorBase::config_json(&self.config)
     }
 
-    /// One product per scanned file (the default `discover`).
+    /// One product per scanned file. The tidy config file decides pass/fail
+    /// just as much as the file itself, so it is an input of every product:
+    /// an edit to it invalidates cached passes without a `dep_inputs` entry.
+    fn discover(
+        &self,
+        graph: &mut crate::graph::BuildGraph,
+        file_index: &crate::file_index::FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
+        let mut dep_inputs = self.config.standard.dep_inputs.clone();
+        if !self.config.config_file.is_empty() {
+            if !Path::new(&self.config.config_file).is_file() {
+                bail!("itidy config_file not found: {}", self.config.config_file);
+            }
+            dep_inputs.push(self.config.config_file.clone());
+        }
+        crate::processor::discover_checker_products(
+            graph,
+            &self.config.standard,
+            file_index,
+            &dep_inputs,
+            &self.config.standard.dep_auto,
+            &self.config,
+            &crate::config::checksum_fields_of(instance_name),
+            instance_name,
+        )
+    }
+
+    /// One product per scanned file, plus the config file read from disk.
     fn discovery(&self) -> crate::processor::Discovery {
         crate::processor::Discovery::PerFile
     }

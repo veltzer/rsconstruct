@@ -21,7 +21,7 @@ Where xmllint reports a problem is reproduced as well: a duplicate attribute, an
 
 ### Schema validation
 
-`schema` names an XSD file, relative to the project root, like `--schema`. Every file must validate against it; the schema is read once per build. The schema file is not tracked automatically: list it in `dep_inputs` so a change to it re-checks every file.
+`schema` names an XSD file, relative to the project root, like `--schema`. Every file must validate against it; the schema is read once per build. The schema file is an input of every product, so a change to it re-checks every file; there is no need to list it in `dep_inputs`.
 
 The validator implements the schema constructs in use: global and local elements, named and anonymous complex types with `sequence`, `choice` and `all` content models (with `minOccurs`/`maxOccurs`), `any`, mixed and simple content, attributes with `use` and `fixed`, `anyAttribute`, simple types restricted by the standard facets (`enumeration`, `pattern`, lengths, bounds, digits, `whiteSpace`), `list` and `union`, `extension` of simple and complex types, `include`, and the built-in types from `xs:string` to `xs:dateTime`. A schema using anything else (`group`, `attributeGroup`, `import`, `redefine`, `key`/`unique`, substitution groups, `abstract`, complex-type `restriction`, `xsi:type` in a document) is a build failure naming the construct and its line: a schema that is only half enforced would pass files xmllint rejects. Keep such a file on the [xmllint](xmllint.md) processor, or extend `src/engines/xmllint/xsd.rs`.
 
@@ -49,7 +49,6 @@ src_dirs = ["src"]
 [processor.checker.ixmllint.presentations]
 src_dirs = ["presentations"]
 schema = "xsd/keynote.xsd"
-dep_inputs = ["xsd/keynote.xsd"]
 ```
 
 | Key | Type | Default | Description |
@@ -58,7 +57,7 @@ dep_inputs = ["xsd/keynote.xsd"]
 | `strict` | bool | `false` | Fail on namespace errors and parser warnings too (xmllint exits 0 on them) |
 | `src_dirs` | string[] | `[]` | Directories to scan |
 | `src_extensions` | string[] | `[".xml", ".svg"]` | File extensions to check |
-| `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds (put the schema here) |
+| `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds (`schema` is tracked already) |
 
 ## Batch support
 

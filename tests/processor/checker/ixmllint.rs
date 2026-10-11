@@ -131,7 +131,7 @@ const SCHEMA: &str = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
 
 fn setup_schema_project(xml: &str) -> TempDir {
     let temp_dir = setup_project_with(
-        "[processor.checker.ixmllint]\nsrc_dirs = [\"\"]\nsrc_extensions = [\".xml\"]\nschema = \"xsd/a.xsd\"\ndep_inputs = [\"xsd/a.xsd\"]\n",
+        "[processor.checker.ixmllint]\nsrc_dirs = [\"\"]\nsrc_extensions = [\".xml\"]\nschema = \"xsd/a.xsd\"\n",
         xml,
     );
     fs::create_dir_all(temp_dir.path().join("xsd")).unwrap();
@@ -156,6 +156,24 @@ fn ixmllint_validates_against_a_schema() {
         &build(temp_dir.path()),
         "a bad value",
         "Element 'b': 'x' is not a valid value of the atomic type 'xs:int'.",
+    );
+}
+
+/// The schema is an input of every product: editing it re-checks a file
+/// that passed, without a `dep_inputs` entry naming it.
+#[test]
+fn ixmllint_schema_edit_rechecks() {
+    let temp_dir = setup_schema_project("<a><b>1</b><b>2</b></a>\n");
+    assert_passes(&build(temp_dir.path()), "a valid document");
+    fs::write(
+        temp_dir.path().join("xsd/a.xsd"),
+        SCHEMA.replace(" maxOccurs=\"unbounded\"", ""),
+    )
+    .unwrap();
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "the same document once the schema allows one b",
+        "Schemas validity error",
     );
 }
 

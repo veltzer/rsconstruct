@@ -122,6 +122,28 @@ fn itidy_config_file_field() {
     );
 }
 
+/// The config file is an input of every product: editing it re-checks a
+/// file that passed, without a `dep_inputs` entry naming it.
+#[test]
+fn itidy_config_file_edit_rechecks() {
+    let temp_dir = setup_project_with(
+        "[processor.checker.itidy]\nsrc_dirs = [\"html\"]\nconfig_file = \"tidy.conf\"\n",
+        "<!DOCTYPE html>\n<html><head><title>t</title></head>\n<body><md-list>x</md-list></body></html>\n",
+    );
+    fs::write(
+        temp_dir.path().join("tidy.conf"),
+        "new-blocklevel-tags: md-list\n",
+    )
+    .unwrap();
+    assert_passes(&build(temp_dir.path()), "a tag the config file declares");
+    fs::write(temp_dir.path().join("tidy.conf"), "# no tags\n").unwrap();
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "the same file once the config file no longer declares the tag",
+        "<md-list> is not recognized!",
+    );
+}
+
 /// An unknown option in the config file is a build error, not a warning
 /// tidy prints and ignores.
 #[test]

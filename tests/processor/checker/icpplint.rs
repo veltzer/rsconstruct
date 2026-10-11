@@ -138,6 +138,29 @@ fn icpplint_named_config_file_and_nolint() {
     );
 }
 
+/// Every copy of the config file between a source file and the project
+/// root is an input of its product: editing one in a subdirectory re-checks
+/// a file that passed, without a `dep_inputs` entry naming it.
+#[test]
+fn icpplint_config_file_edit_rechecks() {
+    let source = "// Copyright 2024 Example\nint main() {\n\tint x = 3;\n  return x;\n}\n";
+    let config = "[processor.checker.icpplint]\nsrc_dirs = [\"src\"]\nconfig_file = \".cpplint\"\n";
+    let temp_dir = setup_project(
+        config,
+        &[
+            ("src/main.cc", source),
+            ("src/.cpplint", "filter=-whitespace/tab\n"),
+        ],
+    );
+    assert_passes(&build(temp_dir.path()), "a tab the config file filters");
+    fs::write(temp_dir.path().join("src/.cpplint"), "# no filters\n").unwrap();
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "the same file once the config file no longer filters tabs",
+        "[whitespace/tab]",
+    );
+}
+
 #[test]
 fn icpplint_line_length_field() {
     // The return line is 93 columns wide: over 80, under 120.

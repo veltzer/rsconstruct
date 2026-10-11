@@ -20,7 +20,7 @@ The verdict is tidy's: a file with warnings or errors fails (tidy exits 1 or 2),
 
 ### Options
 
-tidy's options drive the checks exactly as they drive `tidy`. `config_file` names a tidy configuration file (`name: value` lines, `#` comments, continuation lines), read like `tidy -config FILE`. `options` lists further settings as `"name: value"` strings, applied after the file in order, like `--name value` arguments:
+tidy's options drive the checks exactly as they drive `tidy`. `config_file` names a tidy configuration file (`name: value` lines, `#` comments, continuation lines), read like `tidy -config FILE`. The file is an input of every product, so editing it re-checks every file; there is no need to list it in `dep_inputs`. `options` lists further settings as `"name: value"` strings, applied after the file in order, like `--name value` arguments:
 
 ```toml
 [processor.checker.itidy]
@@ -50,7 +50,6 @@ The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` c
 src_dirs = ["docs"]
 config_file = "support/tidy.conf"
 options = ["warn-proprietary-attributes: no"]
-dep_inputs = ["support/tidy.conf"]
 ```
 
 | Key | Type | Default | Description |
@@ -59,7 +58,7 @@ dep_inputs = ["support/tidy.conf"]
 | `options` | string[] | `[]` | Further tidy options as `"name: value"` strings, applied after the config file, like `--name value` arguments |
 | `src_dirs` | string[] | `[]` | Directories to scan |
 | `src_extensions` | string[] | `[".html", ".htm"]` | File extensions to check |
-| `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds (put the config file here) |
+| `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds (`config_file` is tracked already) |
 
 Switching a repo from tidy: `[processor.checker.tidy]` → `[processor.checker.itidy]`; `args = ["-config", "x.conf"]` → `config_file = "x.conf"`; `args = ["--name", "value"]` → `options = ["name: value"]`; `-errors`, `-q` and `-utf8` are the behaviour already and are dropped.
 
