@@ -63,6 +63,12 @@ Everything with fewer than ten repos is in the per-stage tables below.
 
 ## Principles
 
+- **Mind the original's license.** A port written by translating another
+  tool's source is a derivative of it. Six engines are ports of GPL, LGPL or
+  Artistic-licensed code while rsconstruct is MIT; see
+  `docs/src/internal/licensing.md` (recorded 2026-10-11, undecided). New
+  engines are not ported from GPL or LGPL source; where the original is
+  copyleft, write from its documented and observed behaviour instead.
 - **Native first, wrapper second.** When a Rust crate implements the
   capability (html5ever, roxmltree, minijinja, protox, usvg, lightningcss,
   grass), write a native processor: zero tools to install, one fewer thing

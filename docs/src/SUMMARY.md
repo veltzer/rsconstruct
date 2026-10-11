@@ -155,6 +155,7 @@ The chapters below cover the internal design and implementation of rsconstruct. 
 - [Coding Standards](internal/coding-standards.md)
 - [No-Shell Policy](internal/no-shell-policy.md)
 - [Download Policy](internal/download-policy.md)
+- [Licensing of Ported Engines](internal/licensing.md)
 - [Strictness](internal/strictness.md)
 - [Testing](internal/testing.md)
 - [Parameter Naming](internal/parameter-naming.md)
