@@ -39,7 +39,7 @@ zstd = "0.13"
 lopdf = "0.45"
 grass = { version = "0.13.4", default-features = false }
 pulldown-cmark = { version = "0.13.3", default-features = false, features = ["html"] }
-jsonschema = { version = "0.45.1", default-features = false, features = ["resolve-file"] }
+jsonschema = { version = "0.58.6", default-features = false, features = ["resolve-file"] }
 # `default-features = false` drops tabled's `derive` feature, which is the
 # only thing pulling in proc-macro-error2 — a crate that re-exports the
 # private `proc_macro` extern, which future Rust rejects (rust#127909). We
