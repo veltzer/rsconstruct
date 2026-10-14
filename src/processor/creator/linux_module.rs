@@ -73,7 +73,7 @@ impl LinuxModuleProcessor {
     fn parse_manifest(yaml_path: &Path) -> Result<LinuxModuleManifest> {
         let content = fs::read_to_string(yaml_path)
             .with_context(|| format!("Failed to read {}", yaml_path.display()))?;
-        let manifest: LinuxModuleManifest = serde_yaml_ng::from_str(&content)
+        let manifest: LinuxModuleManifest = serde_norway::from_str(&content)
             .with_context(|| format!("Failed to parse {}", yaml_path.display()))?;
         Ok(manifest)
     }

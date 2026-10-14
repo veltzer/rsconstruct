@@ -131,7 +131,7 @@ impl Config {
     /// Apply a `.hadolint.yaml` on top of this configuration (the file's
     /// lists extend, its scalars replace).
     pub fn apply_yaml(&mut self, text: &str) -> Result<(), String> {
-        let file: ConfigFile = serde_yaml_ng::from_str(text).map_err(|e| format!("{e}"))?;
+        let file: ConfigFile = serde_norway::from_str(text).map_err(|e| format!("{e}"))?;
         if let Some(b) = file.no_fail {
             self.no_fail = b;
         }

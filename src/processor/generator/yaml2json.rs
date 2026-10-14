@@ -19,7 +19,7 @@ fn execute_yaml2json(
     ensure_output_dir(output)?;
     let contents =
         fs::read_to_string(input).with_context(|| format!("Failed to read {}", input.display()))?;
-    let value: serde_json::Value = serde_yaml_ng::from_str(&contents)
+    let value: serde_json::Value = serde_norway::from_str(&contents)
         .with_context(|| format!("Failed to parse YAML from {}", input.display()))?;
     let json = serde_json::to_string_pretty(&value)
         .with_context(|| format!("Failed to serialize JSON for {}", input.display()))?;

@@ -53,7 +53,7 @@ impl Config {
     /// Parses the file's text. The error text is for a build failure.
     pub fn parse(text: &str) -> Result<Self, String> {
         let raw: Raw =
-            serde_yaml_ng::from_str(text).map_err(|e| e.to_string().replace('\n', " "))?;
+            serde_norway::from_str(text).map_err(|e| e.to_string().replace('\n', " "))?;
         let mut paths = Vec::new();
         for (pattern, cfg) in raw.paths.unwrap_or_default() {
             let mut ignore = Vec::new();

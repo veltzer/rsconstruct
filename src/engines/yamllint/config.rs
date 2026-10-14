@@ -13,7 +13,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
-use serde_yaml_ng::Value;
+use serde_norway::Value;
 
 use super::Level;
 use super::rules::{self, Alt, Default as OptDefault, OptKind, RuleSpec};
@@ -348,7 +348,7 @@ fn parse_level(value: &Value) -> Result<Level> {
     }
 }
 
-fn parse_rule_settings(base_dir: &Path, map: &serde_yaml_ng::Mapping) -> Result<RuleConf> {
+fn parse_rule_settings(base_dir: &Path, map: &serde_norway::Mapping) -> Result<RuleConf> {
     let mut conf = RuleConf::default();
     let mut ignore = None;
     let mut ignore_from_file = None;
@@ -376,7 +376,7 @@ fn parse_rule_settings(base_dir: &Path, map: &serde_yaml_ng::Mapping) -> Result<
 
 fn parse(text: &str, base_dir: &Path) -> Result<Parsed> {
     let conf: Value =
-        serde_yaml_ng::from_str(text).map_err(|e| anyhow::anyhow!("invalid config: {e}"))?;
+        serde_norway::from_str(text).map_err(|e| anyhow::anyhow!("invalid config: {e}"))?;
     let Value::Mapping(conf) = &conf else {
         bail!("invalid config: not a mapping")
     };

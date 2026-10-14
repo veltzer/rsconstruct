@@ -40,13 +40,13 @@ Both tools ultimately just validate that files are well-formed JSON.
 Replaces: `yq FILTER file` (the jq wrapper; the fleet's `yq` stanzas ran `yq .`)
 
 `src/processor/checker/iyq.rs` reads every document of the file with
-`serde_yaml_ng` (a leading byte order mark skipped, as PyYAML does), turns
+`serde_norway` (a leading byte order mark skipped, as PyYAML does), turns
 each into JSON and evaluates the configured filter over it with `jaq`
 (jaq-core, jaq-std, jaq-json); a YAML error or a filter error fails the
 file, outputs are discarded. Checked against `yq` over the fleet's 1015 YAML
 files under two filters: the same pass/fail verdicts.
 
-**Crate:** `jaq-core`, `jaq-std`, `jaq-json`, `serde_yaml_ng`
+**Crate:** `jaq-core`, `jaq-std`, `jaq-json`, `serde_norway`
 **Complexity:** Low — the engines are the crates; the work is yq's document
 handling
 
@@ -177,7 +177,7 @@ the fleet's config and 2000 mutants: identical `DL` findings. Known
 divergence: hadolint 2.15.1's parser rejects a heredoc followed directly by
 the next instruction (fixed upstream); idockerfile accepts it.
 
-**Crate:** `serde_yaml_ng` (the configuration file)
+**Crate:** `serde_norway` (the configuration file)
 **Complexity:** High — 71 rules is the easy part; the shell view and the
 parser's whitespace rules are where fidelity is won or lost
 
@@ -272,14 +272,14 @@ Validates YAML files against JSON schemas referenced by `$schema` URLs.
 Fetches and caches schemas via the webcache, validates data against the schema
 (including remote `$ref` resolution), and checks property ordering.
 
-**Crate:** `jsonschema`, `ureq`, `serde_yaml_ng`
+**Crate:** `jsonschema`, `ureq`, `serde_norway`
 **Complexity:** Medium — HTTP fetching, schema compilation, recursive ordering checks
 
 ### yaml2json — YAML to JSON Conversion
 
 Convert YAML files to pretty-printed JSON.
 
-**Crate:** `serde_yaml_ng`, `serde_json`
+**Crate:** `serde_norway`, `serde_json`
 **Complexity:** Low — parse YAML, serialize as JSON
 
 ### ijinja2 — Jinja2 templates (done)

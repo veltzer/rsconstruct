@@ -581,7 +581,7 @@ fn parse_front_matter<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> 
         toml::from_str(&caps[1])
             .with_context(|| format!("Invalid TOML front matter in {}", path.display()))
     } else if let Some(caps) = YAML_FRONT_MATTER.captures(&content) {
-        serde_yaml_ng::from_str(&caps[1])
+        serde_norway::from_str(&caps[1])
             .with_context(|| format!("Invalid YAML front matter in {}", path.display()))
     } else {
         anyhow::bail!(

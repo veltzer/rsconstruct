@@ -86,8 +86,8 @@ struct CcManifestRaw {
 
 impl CcManifest {
     /// Parse cc.yaml content, inheriting unset fields from the config.
-    pub fn parse(content: &str, defaults: &CcConfig) -> Result<Self, serde_yaml_ng::Error> {
-        let raw: CcManifestRaw = serde_yaml_ng::from_str(content)?;
+    pub fn parse(content: &str, defaults: &CcConfig) -> Result<Self, serde_norway::Error> {
+        let raw: CcManifestRaw = serde_norway::from_str(content)?;
         Ok(Self {
             cc: raw.cc.unwrap_or_else(|| defaults.cc.clone()),
             cxx: raw.cxx.unwrap_or_else(|| defaults.cxx.clone()),

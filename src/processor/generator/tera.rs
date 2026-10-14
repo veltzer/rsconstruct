@@ -463,7 +463,7 @@ impl Function for WorkflowNamesFunction {
                 tera::Error::msg(format!("workflow_names: read {}: {e}", path.display()))
             })?;
 
-            let yaml: serde_yaml_ng::Value = serde_yaml_ng::from_str(&content).map_err(|e| {
+            let yaml: serde_norway::Value = serde_norway::from_str(&content).map_err(|e| {
                 tera::Error::msg(format!("workflow_names: parse {}: {e}", path.display()))
             })?;
 

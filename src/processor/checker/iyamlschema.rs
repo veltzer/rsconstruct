@@ -80,7 +80,7 @@ impl IyamlschemaProcessor {
             .with_context(|| format!("Failed to read {}", path.display()))?;
 
         // Parse YAML into a JSON Value (for jsonschema validation)
-        let data: Value = serde_yaml_ng::from_str(&contents)
+        let data: Value = serde_norway::from_str(&contents)
             .with_context(|| format!("Failed to parse YAML in {}", path.display()))?;
 
         // Extract $schema URL

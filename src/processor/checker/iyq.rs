@@ -61,7 +61,7 @@ impl IyqProcessor {
         // A byte order mark is not YAML content; PyYAML (and so yq) skips it.
         let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
         let mut docs = Vec::new();
-        for document in serde_yaml_ng::Deserializer::from_str(text) {
+        for document in serde_norway::Deserializer::from_str(text) {
             let value = serde_json::Value::deserialize(document)
                 .map_err(|e| anyhow!("{}: {e}", file.display()))?;
             docs.push(value);
