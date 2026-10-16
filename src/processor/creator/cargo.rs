@@ -110,7 +110,7 @@ impl Processor for CargoProcessor {
         };
 
         let siblings = SiblingFilter {
-            extensions: &[".rs", ".toml"],
+            extensions: &[".rs", ".toml", "Cargo.lock"],
             excludes: &["/.git/", "/target/", "/.rsconstruct/"],
         };
         let hash = Some(output_config_hash(

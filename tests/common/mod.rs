@@ -100,6 +100,33 @@ pub fn make_executable(path: &Path) {
     fs::set_permissions(path, perms).unwrap();
 }
 
+/// Write the Cargo.lock for the crate at `crate_dir` with `cargo
+/// generate-lockfile`, the way a committed lockfile exists in a real
+/// project. The cargo and clippy processors track Cargo.lock as an input,
+/// so a fixture without one sees cargo create it on the first build and
+/// legitimately rebuilds on the second; tests that assert a skip need the
+/// lockfile in place before the first build.
+pub fn generate_lockfile(crate_dir: &Path) {
+    let status = Command::new("cargo")
+        .arg("generate-lockfile")
+        .arg("--offline")
+        .current_dir(crate_dir)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::inherit())
+        .status()
+        .unwrap_or_else(|e| {
+            panic!(
+                "running cargo generate-lockfile in {}: {e}",
+                crate_dir.display()
+            )
+        });
+    assert!(
+        status.success(),
+        "cargo generate-lockfile failed in {}",
+        crate_dir.display()
+    );
+}
+
 /// Create a file at the given path, creating parent directories as needed.
 pub fn write_file(base: &Path, relative: &str, content: &str) {
     let path = base.join(relative);

@@ -12,7 +12,7 @@ the processor runs `cargo build` (or a configured command) in that directory.
 
 ### Input Tracking
 
-The cargo processor tracks **all `.rs` and `.toml` files** in the Cargo.toml's
+The cargo processor tracks **all `.rs` and `.toml` files, plus `Cargo.lock`,** in the Cargo.toml's
 directory tree as inputs. This includes:
 
 - `Cargo.toml` and `Cargo.lock`
@@ -30,7 +30,7 @@ member directories, or configure `src_dirs` to limit discovery.
 
 ## Source Files
 
-- Input: `Cargo.toml` plus all `.rs` and `.toml` files in the project tree
+- Input: `Cargo.toml` plus all `.rs` and `.toml` files and `Cargo.lock` in the project tree
 - Output: None (creator — produces output in `target` directory)
 
 ## Configuration

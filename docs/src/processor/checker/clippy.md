@@ -12,7 +12,7 @@ the processor runs `cargo clippy` in that directory. A non-zero exit code fails 
 
 ### Input Tracking
 
-The clippy processor tracks **all `.rs` and `.toml` files** in the Cargo.toml's
+The clippy processor tracks **all `.rs` and `.toml` files, plus `Cargo.lock`,** in the Cargo.toml's
 directory tree as inputs. This includes:
 
 - `Cargo.toml` and `Cargo.lock`
@@ -24,7 +24,7 @@ When any tracked file changes, rsconstruct will re-run clippy.
 
 ## Source Files
 
-- Input: `Cargo.toml` plus all `.rs` and `.toml` files in the project tree
+- Input: `Cargo.toml` plus all `.rs` and `.toml` files and `Cargo.lock` in the project tree
 - Output: None (checker-style caching)
 
 ## Configuration

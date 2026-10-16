@@ -1,4 +1,4 @@
-use crate::common::{require_tool, run_rsconstruct_with_env};
+use crate::common::{generate_lockfile, require_tool, run_rsconstruct_with_env};
 use std::fs;
 use tempfile::TempDir;
 
@@ -72,6 +72,7 @@ fn clippy_incremental_skip() {
         "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n",
     )
     .unwrap();
+    generate_lockfile(&project_path.join("mylib"));
 
     // First build
     let output1 = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
@@ -85,6 +86,56 @@ fn clippy_incremental_skip() {
     assert!(
         stdout2.contains("[processor.checker.clippy] Skipping (unchanged):"),
         "Second build should skip: {}",
+        stdout2
+    );
+}
+
+/// Cargo.lock is an input: a dependency bump that touches no .rs or .toml
+/// file must still re-run the check (cargo deny reads only the lockfile).
+#[test]
+fn clippy_rebuild_on_lockfile_change() {
+    require_tool("cargo");
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.checker.clippy]\nsrc_dirs = [\".\"]\n",
+    )
+    .unwrap();
+
+    fs::create_dir_all(project_path.join("mylib/src")).unwrap();
+
+    fs::write(
+        project_path.join("mylib/Cargo.toml"),
+        "[package]\nname = \"mylib\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .unwrap();
+
+    fs::write(
+        project_path.join("mylib/src/lib.rs"),
+        "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n",
+    )
+    .unwrap();
+    generate_lockfile(&project_path.join("mylib"));
+
+    let output1 = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(output1.status.success());
+
+    // Change only the lockfile. A comment keeps it valid TOML that cargo
+    // has no reason to rewrite, while changing its checksum.
+    let lockfile = project_path.join("mylib/Cargo.lock");
+    let mut contents = fs::read_to_string(&lockfile).unwrap();
+    contents.push_str("\n# a dependency bump\n");
+    fs::write(&lockfile, contents).unwrap();
+
+    let output2 = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    assert!(output2.status.success());
+    let stdout2 = String::from_utf8_lossy(&output2.stdout);
+    assert!(
+        stdout2.contains("Processing:"),
+        "Should rebuild after Cargo.lock change: {}",
         stdout2
     );
 }

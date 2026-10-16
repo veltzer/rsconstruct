@@ -94,7 +94,7 @@ impl Processor for ClippyProcessor {
                 cfg_hash: &self.config,
                 checksum_fields: crate::config::checksum_fields_of(instance_name),
                 siblings: &SiblingFilter {
-                    extensions: &[".rs", ".toml"],
+                    extensions: &[".rs", ".toml", "Cargo.lock"],
                     excludes: &["/.git/", "/target/", "/.rsconstruct/"],
                 },
                 processor_name: instance_name,
