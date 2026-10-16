@@ -317,7 +317,7 @@ A mass generator runs a tool that produces many files in one invocation and can 
 2. Creates one product per manifest entry: `inputs` = the entry's `sources`, `outputs` = its `path`
 3. Classifies each product individually (skip, restore, or build)
 4. The first product that needs building runs `command`; the rest find the tool already run
-5. Compares the files the tool wrote against the plan — a missing predicted file or an off-plan write fails the build
+5. Compares the files the tool wrote against the plan — a missing predicted file or an off-plan write fails the build. Files another product declares, as `output_files` or under its `output_dirs`, are that product's and are not reported even when it writes them during the tool's run
 6. Stores each predicted file as a content-addressed blob
 
 ### What gets cached

@@ -42,6 +42,9 @@ pub struct BuildContext {
     /// declared file from a file its tool wrote off-plan — `execute` has no
     /// other route to the graph.
     pub(crate) declared_outputs: Mutex<HashSet<PathBuf>>,
+    /// Every product's declared output directories: a path under one of
+    /// them belongs to that product, whatever its name.
+    pub(crate) declared_output_dirs: Mutex<Vec<PathBuf>>,
     /// In-session memo of combined input checksums for large input lists.
     /// See `checksum::combined_input_checksum`.
     pub(crate) combined_memo: Mutex<crate::checksum::CombinedMemo>,
@@ -63,6 +66,7 @@ impl BuildContext {
             webcache_ttl_secs: std::sync::atomic::AtomicU64::new(7 * 24 * 60 * 60),
             command_timeout_secs: std::sync::atomic::AtomicU64::new(0),
             declared_outputs: Mutex::new(HashSet::new()),
+            declared_output_dirs: Mutex::new(Vec::new()),
             combined_memo: Mutex::new(crate::checksum::CombinedMemo::default()),
         }
     }
@@ -70,13 +74,26 @@ impl BuildContext {
     /// Record the declared outputs of every product in the graph about to
     /// be executed. Replaces any earlier set: a context outlives one graph
     /// in watch mode.
-    pub(crate) fn set_declared_outputs(&self, paths: HashSet<PathBuf>) {
+    pub(crate) fn set_declared_outputs(&self, paths: HashSet<PathBuf>, dirs: Vec<PathBuf>) {
         *self.declared_outputs.lock().unwrap() = paths;
+        *self.declared_output_dirs.lock().unwrap() = dirs;
     }
 
     /// Whether some product of the current graph declares `path` as an output.
+    /// Whether some product owns `path`: it is a declared output file, or it
+    /// lies under a declared output directory. A step that writes a
+    /// directory of files (`output_dirs = ["_site/logos"]`) owns every file
+    /// in it, so a mass generator sharing `_site/` must not report them as
+    /// written off its plan when the two run at the same time.
     pub fn is_declared_output(&self, path: &std::path::Path) -> bool {
-        self.declared_outputs.lock().unwrap().contains(path)
+        if self.declared_outputs.lock().unwrap().contains(path) {
+            return true;
+        }
+        self.declared_output_dirs
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|dir| path.starts_with(dir))
     }
 
     pub(crate) fn set_command_timeout_secs(&self, n: u64) {
@@ -127,5 +144,25 @@ impl BuildContext {
 
     pub(crate) fn interrupt_receiver(&self) -> watch::Receiver<bool> {
         self.interrupt_rx.clone()
+    }
+}
+
+#[cfg(test)]
+mod declared_output_tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn a_file_under_a_declared_output_dir_is_owned() {
+        let ctx = BuildContext::new();
+        ctx.set_declared_outputs(
+            HashSet::from([PathBuf::from("_site/data/companies.json.gz")]),
+            vec![PathBuf::from("_site/logos")],
+        );
+        assert!(ctx.is_declared_output(Path::new("_site/data/companies.json.gz")));
+        assert!(ctx.is_declared_output(Path::new("_site/logos/redhat.svg")));
+        assert!(ctx.is_declared_output(Path::new("_site/logos/deep/er.svg")));
+        assert!(!ctx.is_declared_output(Path::new("_site/logos-old/x.svg")));
+        assert!(!ctx.is_declared_output(Path::new("_site/en/index.html")));
     }
 }

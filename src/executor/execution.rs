@@ -324,6 +324,11 @@ impl Executor<'_> {
                 .iter()
                 .flat_map(|p| p.outputs.iter().cloned())
                 .collect(),
+            graph
+                .products()
+                .iter()
+                .flat_map(|p| p.output_dirs.iter().map(|d| d.as_ref().clone()))
+                .collect(),
         );
 
         // Emit JSON build start event

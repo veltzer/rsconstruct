@@ -445,7 +445,8 @@ fn snapshot_mtimes(dirs: &[PathBuf]) -> Result<BTreeMap<PathBuf, SystemTime>> {
 /// Compare what the tool wrote against what it predicted. A predicted file
 /// that is absent afterwards is missing. A file that is new or rewritten
 /// since the `before` snapshot, is not predicted, and is not another
-/// product's declared output (`foreign`) was written off-plan. Files the
+/// product's declared output or under its declared output directory
+/// (`foreign`) was written off-plan. Files the
 /// tool left untouched — a neighbor processor's output, a committed CNAME,
 /// a page from an older plan — are not its business and are not reported.
 fn plan_mismatches(
