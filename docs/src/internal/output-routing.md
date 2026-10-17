@@ -355,8 +355,6 @@ scanned file, and store nothing taken from the index:
 | `creator.mdbook`, `creator.jekyll`, `checker.clippy`, `checker.make`, `creator.cargo`, `creator.npm`, `creator.gem`, `creator.sphinx` | sibling files collected around an anchor |
 | `mass_generator.generic`, `mass_generator.zola` | a predicted plan over the source set |
 
-Lua plugins are out of scope and keep the default.
-
 **Guard.** `per_file_discovery_over_a_subset_matches_the_full_index`
 (in `src/processor/mod.rs`) configures every `PerFile` processor — 80 of
 the 97 — to scan a fixture written to a temporary directory, and checks
@@ -379,8 +377,6 @@ Discovery was never the expensive phase; the gain is real but small.
   nothing by hand unless a producer cannot predict its outputs.
 - **Instances, not types,** in `inputs_from`.
 - **Variants: all of them**, filtered by path when needed.
-- **Lua plugins are out of scope.** They are unmaintained; this design
-  does not cover them.
 
 ## Relation to earlier designs
 

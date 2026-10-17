@@ -51,20 +51,6 @@ Agent claimed not unwrapping `failed_processors` Arc prevents other `Arc::try_un
 
 Templates in subdirectories produce output at project root (e.g., `tera.templates/sub/README.md.tera` → `README.md`). This is intentional — the comment on line 105 explicitly says "Output is at project root with the .tera extension stripped." By design.
 
-## Lua stub_path uses suffix as directory name
-
-**File:** `src/processor/lua_processor.rs` (line 126)
-**Flagged in:** round 10
-
-`rsconstruct.stub_path(source, suffix)` uses `suffix` to construct the output directory (`out/{suffix}`). This is the designed Lua API — plugins control their own output directory naming via the suffix parameter.
-
-## Lua clean count masking with saturating_sub
-
-**File:** `src/processor/lua_processor.rs` (lines 450-468)
-**Flagged in:** rounds 10, 11
-
-Custom Lua clean functions report removal count via `existed_before.saturating_sub(exist_after)`. If the Lua function doesn't remove files, that's the plugin's responsibility. The count accurately reflects what was actually removed. Not a bug.
-
 ## file_index src_exclude_dirs substring matching
 
 **File:** `src/file_index.rs` (lines 76-80)

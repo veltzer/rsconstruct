@@ -114,9 +114,9 @@ Grades:
 
 ## Extensibility
 
-### Plugin registry
-- A central repository of community-contributed Lua plugins.
-- Install with `rsconstruct plugin install eslint`.
+### Config registry
+- A central repository of community-contributed processor configs.
+- Install with `rsconstruct config install eslint`.
 - Registry could be a GitHub repository with a JSON index.
 - Version pinning in `rsconstruct.toml`.
 - **Urgency**: low | **Complexity**: high
@@ -362,8 +362,8 @@ Grades:
 - **Urgency**: low | **Complexity**: high
 
 ### Processor marketplace / registry
-- A central repository of community-contributed processor configs and Lua plugins.
-- Install with `rsconstruct plugin install prettier`.
+- A central repository of community-contributed processor configs.
+- Install with `rsconstruct config install prettier`.
 - Registry as a GitHub repository with a JSON index. Version pinning in `rsconstruct.toml`.
 - **Urgency**: low | **Complexity**: high
 

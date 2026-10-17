@@ -37,7 +37,7 @@ This means:
 
 ## Rules for processor authors
 
-When implementing a processor (built-in or Lua plugin):
+When implementing a processor:
 
 1. **Never read `std::env::var()`** to determine build behavior. If a value is configurable, add it to the processor's config struct in `rsconstruct.toml`.
 

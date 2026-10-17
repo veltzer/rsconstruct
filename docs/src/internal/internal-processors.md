@@ -340,4 +340,4 @@ The main constraint is that Rust has no stable ABI. You cannot use Rust traits, 
 
 Crates like `abi_stable` attempt to provide a stable ABI layer for Rust-to-Rust dynamic loading, but they add significant complexity.
 
-The current Lua plugin system avoids this problem entirely — Lua has a stable, simple FFI. A binary plugin system would offer better performance but at the cost of a much more complex plugin interface and build process (plugins would need to be compiled separately and matched to the host's ABI).
+The Lua plugin host that used to exist avoided this problem — Lua has a stable, simple FFI — and was removed unused. A binary plugin system would offer better performance but at the cost of a much more complex plugin interface and build process (plugins would need to be compiled separately and matched to the host's ABI).

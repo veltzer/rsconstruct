@@ -48,9 +48,6 @@ enabled = ["cpp", "python"]
 [graph]
 viewer = "google-chrome"  # Command to open graph files (default: platform-specific)
 
-[plugins]
-dir = "plugins"  # Directory containing .lua processor plugins
-
 [completions]
 shells = ["bash"]
 
@@ -70,7 +67,6 @@ targets = ["~/"]        # ...into these folders, pairwise (same length as source
 ```
 
 Per-processor configuration is documented on each processor's page under [Processors](processors.md).
-Lua plugin configuration is documented under [Lua Plugins](plugins.md).
 
 ## Processor instances
 
@@ -138,7 +134,6 @@ Until rsconstruct 0.9.x a processor was named by its bare name (`[processor.ruff
 | `[processor.pylint.core]` | `[processor.checker.pylint.core]` |
 | `[processor.creator.venv]` | `[processor.creator.generic.venv]` |
 | `[processor.explicit]` | `[processor.explicit.generic]` |
-| `[processor.myplugin]` (Lua) | `[processor.lua.myplugin]` |
 | `src_dirs = ["out/tera"]` | `src_dirs = ["out/processor.generator.tera"]` |
 | `rsconstruct build -p ruff` | `rsconstruct build -p processor.checker.ruff` |
 
@@ -265,7 +260,7 @@ The `output_dir` prefix is purely a layout choice — `rsconstruct clean outputs
 
 ### `[processor.TYPE.NAME]`
 
-Each `[processor.TYPE.NAME]` section declares a processor instance. The header is the processor's full name: `TYPE` is its type (`checker`, `generator`, `creator`, `explicit`, `mass_generator`, or `lua` for a [Lua plugin](plugins.md)) and `NAME` the processor within that type (`[processor.checker.ruff]`, `[processor.generator.cc_single_file]`, `[processor.lua.myplugin]`). A fourth segment names an instance (`[processor.checker.pylint.core]`).
+Each `[processor.TYPE.NAME]` section declares a processor instance. The header is the processor's full name: `TYPE` is its type (`checker`, `generator`, `creator`, `explicit`, or `mass_generator`) and `NAME` the processor within that type (`[processor.checker.ruff]`, `[processor.generator.cc_single_file]`). A fourth segment names an instance (`[processor.checker.pylint.core]`).
 
 Common fields available to all processors:
 
@@ -314,12 +309,6 @@ Processor-specific fields are documented on each processor's page under [Process
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `viewer` | string | platform-specific | Command to open graph files |
-
-### `[plugins]`
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `dir` | string | `"plugins"` | Directory containing `.lua` processor plugins |
 
 ### `[completions]`
 

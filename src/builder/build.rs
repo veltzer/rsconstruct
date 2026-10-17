@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 /// Expand `@`-prefixed shortcuts in the processor filter.
 ///
 /// - **By type**: `@checker`, `@generator`, `@creator`, `@explicit`,
-///   `@mass_generator`, `@lua` — every processor (and instance) of that type.
+///   `@mass_generator` — every processor (and instance) of that type.
 ///   A type with no configured processors selects nothing.
 /// - **Anything else**, `@x`, selects the union of the processors whose
 ///   `required_tools()` contains `x` (`@python3`) and the processors whose

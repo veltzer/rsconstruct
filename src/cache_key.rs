@@ -179,8 +179,8 @@ impl CacheKey {
     /// The key mixes in the processor's implementation `version` (from its
     /// plugin registration). Bumping that version invalidates every cache
     /// entry produced by this processor — see docs/src/processor-versioning.md
-    /// for the bump rule. For processors not in the builtin registry (e.g. Lua
-    /// plugins), `v0` is used.
+    /// for the bump rule. For processor names not in the registry, `v0` is
+    /// used.
     pub fn descriptor_key(&self, processor: &str, input_checksum: &str) -> String {
         let version = crate::registries::processor_version(processor)
             .unwrap_or(0)

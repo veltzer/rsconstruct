@@ -64,7 +64,7 @@ def main() -> None:
     unknown = sorted(name for name in usage if name not in by_name)
     if unknown:
         print()
-        print("declared but not built in (lua plugins or typos): " + ", ".join(unknown))
+        print("declared but not built in (typos): " + ", ".join(unknown))
 
 
 if __name__ == "__main__":

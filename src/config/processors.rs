@@ -4,7 +4,6 @@
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 use super::{
     FieldProvenance, KnownFields, OUTPUT_DEPENDS_ON_INPUT_NAME, ProcessorDefaults, ProvenanceMap,
@@ -95,7 +94,7 @@ impl ProcessorConfig {
         dirs
     }
 
-    /// Return known fields for a builtin processor type, or None for Lua plugins.
+    /// Return known fields for a processor, or None when the name is not registered.
     pub(crate) fn known_fields_for(type_name: &str) -> Option<Vec<&'static str>> {
         let e = find_registry_entry(type_name)?;
         // Standard fields (minus this processor's omissions) plus the
@@ -114,7 +113,7 @@ impl ProcessorConfig {
         Some(fields)
     }
 
-    /// Return checksum-affecting fields for a builtin processor type, or None for Lua plugins.
+    /// Return checksum-affecting fields for a processor, or None when the name is not registered.
     pub(crate) fn checksum_fields_for(type_name: &str) -> Option<Vec<&'static str>> {
         let e = find_registry_entry(type_name)?;
         // A spec that shadows a standard field owns its checksum membership.
@@ -133,7 +132,7 @@ impl ProcessorConfig {
         Some(fields)
     }
 
-    /// Return must fields (required non-empty fields) for a builtin processor type, or None for Lua plugins.
+    /// Return must fields (required non-empty fields) for a processor, or None when the name is not registered.
     pub(crate) fn must_fields_for(type_name: &str) -> Option<Vec<&'static str>> {
         let e = find_registry_entry(type_name)?;
         Some(
@@ -145,7 +144,7 @@ impl ProcessorConfig {
         )
     }
 
-    /// Return (field, description) pairs for a builtin processor type, or None for Lua plugins.
+    /// Return (field, description) pairs for a processor, or None when the name is not registered.
     /// Standard-field descriptions come from `StandardConfig` (minus omissions,
     /// minus shadowed); the plugin's spec docs follow.
     pub(crate) fn field_descriptions_for(
@@ -376,8 +375,6 @@ pub fn apply_scan_defaults(
 pub struct ProcessorConfig {
     /// All declared processor instances
     pub instances: Vec<ProcessorInstance>,
-    /// Lua plugin configs (processor types not in the builtin registry)
-    pub extra: HashMap<String, toml::Value>,
 }
 
 impl Serialize for ProcessorConfig {
@@ -409,16 +406,6 @@ impl Serialize for ProcessorConfig {
                     if let Some(name_table) = name_table.as_table_mut() {
                         name_table.insert(instance.to_string(), inst.config_toml.clone());
                     }
-                }
-            }
-        }
-        if !self.extra.is_empty() {
-            let lua = root
-                .entry(crate::processor::ProcessorType::Lua.as_str().to_string())
-                .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
-            if let Some(lua) = lua.as_table_mut() {
-                for (name, value) in &self.extra {
-                    lua.insert(name.clone(), value.clone());
                 }
             }
         }
@@ -458,7 +445,6 @@ impl ProcessorConfig {
         };
 
         let mut instances = Vec::new();
-        let mut extra = HashMap::new();
 
         // The tree is processor → type → name → (fields | instances). Anything
         // that does not fit is skipped here and reported by
@@ -467,18 +453,13 @@ impl ProcessorConfig {
             let Some(type_table) = type_val.as_table() else {
                 continue;
             };
-            let Some(processor_type) = crate::processor::ProcessorType::parse(type_key) else {
+            if crate::processor::ProcessorType::parse(type_key).is_none() {
                 continue;
-            };
+            }
             for (short, val) in type_table {
                 let Some(sub_table) = val.as_table() else {
                     continue;
                 };
-                if processor_type == crate::processor::ProcessorType::Lua {
-                    // Lua plugins are keyed by the plugin file's stem.
-                    extra.insert(short.clone(), val.clone());
-                    continue;
-                }
                 let pname = format!("{}{type_key}.{short}", registry::NAME_PREFIX);
                 if !is_builtin_type(&pname) {
                     continue;
@@ -512,7 +493,7 @@ impl ProcessorConfig {
             }
         }
 
-        Self { instances, extra }
+        Self { instances }
     }
 
     /// Determine if a processor section contains named sub-instances (multi-instance)
@@ -547,7 +528,7 @@ impl ProcessorConfig {
         }
 
         let Some(known) = Self::known_fields_for(type_name) else {
-            // Unknown type (Lua plugin): no field list to compare against, so
+            // Not a registered processor: no field list to compare against, so
             // multi-instance is undecidable and the section is taken as one
             // instance. See `multi_instance_requires_known_fields` in the docs.
             return SectionShape::SingleInstance;

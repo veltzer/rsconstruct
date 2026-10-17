@@ -120,7 +120,7 @@ class Migrator:
             if second == "generic" or self.types.get(second) == head:
                 return None
             return ".".join([head, "generic"] + parts[1:])
-        if head in ("checker", "lua"):
+        if head == "checker":
             # Already a type segment: the header is new-style.
             return None
         if head in self.types:

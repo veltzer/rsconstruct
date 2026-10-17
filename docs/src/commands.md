@@ -87,7 +87,6 @@ The `-p` flag supports `@`-prefixed shortcuts that expand to groups of processor
 - `@creator` — all creator processors (pip, npm, cargo, etc.)
 - `@explicit` — all explicit processors
 - `@mass_generator` — all mass generator processors
-- `@lua` — all Lua plugin processors
 
 **By tool or name** — any other `@x` selects both of these:
 - every processor that requires tool `x` (`@python3`, `@node`; matched
@@ -149,7 +148,6 @@ What gets removed depends on each product's processor type:
 - **Creators** (mdbook, sphinx, jekyll, cargo, npm, gem, cc, …) — invoke an external build that produces an unknown set of files inside a declared output directory (e.g. `book/`, `_site/`, `target/`). The whole declared `output_dir` is removed recursively. This is the only path that recursively deletes a directory, and it only ever affects directories the creator itself declared.
 - **Explicit** — declares both `output_files` and `output_dirs` directly in `rsconstruct.toml`. Files are removed individually; declared `output_dirs` are removed recursively (because the user asked for that).
 - **Mass generators** — every file the tool's plan predicted is a declared output and is removed individually. The `output_dirs` a mass generator declares only bound where predicted files may live and are never removed.
-- **Lua plugins** — call the plugin's own `clean()` function if defined; otherwise fall back to file-only removal.
 
 #### Empty-directory sweep
 

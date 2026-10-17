@@ -728,7 +728,6 @@ fn docs_dir_for(processor_type: crate::processor::ProcessorType) -> &'static str
         ProcessorType::Creator => "creator",
         ProcessorType::Explicit => "explicit",
         ProcessorType::MassGenerator => "mass_generator",
-        ProcessorType::Lua => panic!("Lua processors are not built-in and have no docs page"),
     }
 }
 
@@ -823,7 +822,6 @@ fn every_processor_file_is_declared() {
         "src/processor/generator",
         "src/processor/creator",
         "src/processor/explicit",
-        "src/processor/lua",
         "src/processor/mass_generator",
     ] {
         let mod_src = std::fs::read_to_string(format!("{dir}/mod.rs")).unwrap();

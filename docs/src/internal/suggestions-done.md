@@ -5,7 +5,7 @@ Items from `suggestions.md` that have been implemented.
 ## Completed Features
 
 - **Remote caching** — See [Remote Caching](../remote-caching.md). Share build artifacts across machines via S3, HTTP, or filesystem.
-- **Lua plugin system** — See [Lua Plugins](../plugins.md). Define custom processors in Lua without forking rsconstruct.
+- **Lua plugin system** — built, then removed on 2026-10-17: no repository ever declared a `[processor.lua.*]` stanza, and the host could not take part in cache versioning or field validation. Custom commands go through the config-driven processors (`script`, `generic`) instead.
 - **Tool version locking** — `rsconstruct tool lock` locks and verifies external tool versions. Tool versions are included in cache keys.
 - **JSON output mode** — `--json` flag for machine-readable JSON Lines output (build_start, product_start, product_complete, build_summary events).
 - **Native C/C++ include scanner** — Default `include_scanner = "native"` uses regex-based scanning. Falls back to `include_scanner = "compiler"` (gcc -MM).

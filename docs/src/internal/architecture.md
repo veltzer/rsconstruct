@@ -319,12 +319,9 @@ src/processor/
 ├── explicit/       # Explicit processor (user-defined command with declared outputs)
 │   ├── mod.rs
 │   └── explicit.rs
-├── mass_generator/ # Mass generator (tool that enumerates its outputs via predict_command)
-│   ├── mod.rs
-│   └── mass_generator.rs
-└── lua/            # Lua plugin host
+└── mass_generator/ # Mass generator (tool that enumerates its outputs via predict_command)
     ├── mod.rs
-    └── lua_processor.rs
+    └── mass_generator.rs
 ```
 
 Category directories are singular (`checker/`, not `checkers/`), like every other module in the crate; a category that holds a processor named after itself (`generator::generator`, `creator::creator`, `explicit::explicit`, `mass_generator::mass_generator`) carries a `#[allow(clippy::module_inception)]` on that one `mod` line.

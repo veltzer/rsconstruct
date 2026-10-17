@@ -14,7 +14,6 @@ Full documentation: <https://veltzer.github.io/rsconstruct/>
 - **Parallel execution** of independent build products with `-j` flag
 - **Template processing** via the Tera templating engine
 - **Python linting** with ruff (configurable)
-- **Lua plugins** — extend with custom processors without forking
 - **Deterministic builds** — same input always produces same build order
 - **Graceful interrupt** — Ctrl+C saves progress, next build resumes where it left off
 - **Config-aware caching** — changing compiler flags or linter config triggers rebuilds

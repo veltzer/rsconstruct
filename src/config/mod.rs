@@ -406,7 +406,7 @@ pub const SHARED_FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
 /// `FieldSpec` list — the convenience form for processor `discover()` call
 /// sites feeding [`output_config_hash`]. Accepts instance names
 /// ("pylint.core") and strips the suffix, so discover sites can pass their
-/// `instance_name` directly. Empty for unregistered types (Lua).
+/// `instance_name` directly. Empty for a name that is not registered.
 pub fn checksum_fields_of(name: &str) -> Vec<&'static str> {
     ProcessorConfig::checksum_fields_for(&registry::pname_of(name)).unwrap_or_default()
 }
@@ -428,27 +428,6 @@ pub fn output_config_hash(value: &impl Serialize, checksum_fields: &[&str]) -> S
     hex::encode(hash)
 }
 
-const DEFAULT_PLUGINS_DIR: &str = "plugins";
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(deny_unknown_fields)]
-pub struct PluginsConfig {
-    #[serde(default = "default_plugins_dir")]
-    pub dir: String,
-}
-
-fn default_plugins_dir() -> String {
-    DEFAULT_PLUGINS_DIR.into()
-}
-
-impl Default for PluginsConfig {
-    fn default() -> Self {
-        Self {
-            dir: DEFAULT_PLUGINS_DIR.into(),
-        }
-    }
-}
-
 #[derive(Debug, Deserialize, Serialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -464,8 +443,6 @@ pub struct Config {
     pub completions: CompletionsConfig,
     #[serde(default)]
     pub graph: GraphConfig,
-    #[serde(default)]
-    pub plugins: PluginsConfig,
     #[serde(default)]
     pub dependencies: DependenciesConfig,
     #[serde(default)]
@@ -1029,73 +1006,6 @@ fn apply_spans_to_instance(
             }
         }
     }
-}
-
-/// Extract a `StandardConfig` with scan fields from a dynamic TOML table (used by Lua plugins).
-/// Falls back to the given defaults for any missing scan fields.
-pub fn standard_config_from_toml(
-    value: &toml::Value,
-    default_src_dirs: &[&str],
-    default_src_extensions: &[&str],
-    default_exclude_dirs: &[&str],
-) -> StandardConfig {
-    let table = value.as_table();
-
-    let toml_array = |key: &str| -> Option<Vec<String>> {
-        table
-            .and_then(|t| t.get(key))
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str().map(String::from))
-                    .collect()
-            })
-    };
-
-    let mut cfg = StandardConfig {
-        src_dirs: toml_array("src_dirs"),
-        src_extensions: toml_array("src_extensions"),
-        src_exclude_dirs: toml_array("src_exclude_dirs"),
-        src_exclude_files: toml_array("src_exclude_files"),
-        src_exclude_paths: toml_array("src_exclude_paths"),
-        src_files: toml_array("src_files"),
-        ..StandardConfig::default()
-    };
-    // Fill defaults for None fields
-    if cfg.src_dirs.is_none() {
-        cfg.src_dirs = Some(
-            default_src_dirs
-                .iter()
-                .map(std::string::ToString::to_string)
-                .collect(),
-        );
-    }
-    if cfg.src_extensions.is_none() {
-        cfg.src_extensions = Some(
-            default_src_extensions
-                .iter()
-                .map(std::string::ToString::to_string)
-                .collect(),
-        );
-    }
-    if cfg.src_exclude_dirs.is_none() {
-        cfg.src_exclude_dirs = Some(
-            default_exclude_dirs
-                .iter()
-                .map(std::string::ToString::to_string)
-                .collect(),
-        );
-    }
-    if cfg.src_exclude_files.is_none() {
-        cfg.src_exclude_files = Some(Vec::new());
-    }
-    if cfg.src_exclude_paths.is_none() {
-        cfg.src_exclude_paths = Some(Vec::new());
-    }
-    if cfg.src_files.is_none() {
-        cfg.src_files = Some(Vec::new());
-    }
-    cfg
 }
 
 /// Post-config hook: when `CI=true` is in the environment, enable the

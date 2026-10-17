@@ -57,10 +57,10 @@ consequences:
   all processor names, so the processor-count gets rediscovered on every
   run, and static checks (e.g. "every processor has a corresponding config
   struct") have to be runtime assertions.
-- **Lua plugins are second-class**: they arrive at runtime after the static
-  registry is frozen. The registry API has to tolerate two populations
-  (static + dynamic) in parallel, which is why `find_registry_entry` and
-  `find_analyzer_plugin` have to fall through both.
+- **No runtime registration**: the registry is frozen at link time, so a
+  processor that is not compiled in does not exist. (The Lua plugin host
+  that used to arrive at runtime after the freeze was removed on
+  2026-10-17.)
 - **Ordering is alphabetical everywhere**: because `inventory` doesn't
   preserve submission order, every code path that touches plugins has to
   sort by name. This is a minor tax but it's baked in everywhere.

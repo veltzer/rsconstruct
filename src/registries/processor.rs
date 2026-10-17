@@ -144,8 +144,8 @@ impl ParsedName<'_> {
 
 /// Take a processor or instance name apart. `None` when it is not of the form
 /// `processor.<known type>.<name>[.<instance>]`; every segment must be
-/// non-empty. Lua plugin names (`processor.lua.<name>`) parse too — the type
-/// is known even though no plugin entry exists for them.
+/// non-empty. Parsing checks the type only: a name of an unregistered
+/// processor parses too, and `find_plugin` is what says whether it exists.
 pub fn parse_name(name: &str) -> Option<ParsedName<'_>> {
     let rest = name.strip_prefix(NAME_PREFIX)?;
     let (type_str, rest) = rest.split_once('.')?;
@@ -199,7 +199,7 @@ pub fn description_of(name: &str) -> &'static str {
 }
 
 /// Return the processor type for a processor by instance name. The type is a
-/// segment of the name, so this works for Lua plugins too; a name that does
+/// segment of the name, so no registry lookup is needed; a name that does
 /// not parse at all reports `Checker`.
 pub fn processor_type_of(name: &str) -> crate::processor::ProcessorType {
     parse_name(name).map_or(crate::processor::ProcessorType::Checker, |p| {
@@ -224,7 +224,7 @@ pub fn can_fix(name: &str) -> bool {
 }
 
 /// Look up a processor's implementation version by instance name.
-/// Returns `None` for processor names not in the builtin registry (e.g. Lua plugins).
+/// Returns `None` for processor names not in the registry.
 /// Used by `Product::descriptor_key` to mix the processor's version into every
 /// cache key, so bumping a processor's `version` invalidates exactly that
 /// processor's cached outputs.
@@ -409,9 +409,9 @@ mod tests {
             "processor.checker.script"
         );
 
-        let p = parse_name("processor.lua.myplugin").unwrap();
-        assert_eq!(p.processor_type, ProcessorType::Lua);
-        assert!(find_plugin("processor.lua.myplugin").is_none());
+        let p = parse_name("processor.checker.nosuchprocessor").unwrap();
+        assert_eq!(p.processor_type, ProcessorType::Checker);
+        assert!(find_plugin("processor.checker.nosuchprocessor").is_none());
 
         for bad in [
             "ruff",

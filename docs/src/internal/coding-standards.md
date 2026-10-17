@@ -171,9 +171,10 @@ Nested structs inside a flattened parent (e.g. `CcLibraryDef` inside
 `CcManifest`) must use `deny_unknown_fields` — they don't flatten, so the
 direct mechanism works.
 
-The only legitimate exception: structs that *intentionally* capture unknown
-fields (`ProcessorConfig.extra` for Lua plugins). These are rare and must
-be documented at the field.
+The only legitimate exception: a struct that *intentionally* captures unknown
+fields. None exists today (`ProcessorConfig.extra`, which held Lua plugin
+sections, went with the Lua processor type); one that is added must be
+documented at the field.
 
 ### Rule 2: every accepted field must be read
 

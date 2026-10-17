@@ -6,8 +6,8 @@ use anyhow::Result;
 use std::path::Path;
 
 use super::{
-    BuildConfig, DEFAULT_PLUGINS_DIR, FieldProvenance, ProcessorConfig, ProcessorInstance,
-    SCAN_CONFIG_FIELDS, STANDARD_EXTRA_FIELDS, SectionShape, find_registry_entry, is_builtin_type,
+    BuildConfig, FieldProvenance, ProcessorConfig, ProcessorInstance, SCAN_CONFIG_FIELDS,
+    STANDARD_EXTRA_FIELDS, SectionShape, find_registry_entry, is_builtin_type,
 };
 use crate::registries::{self as registry, ProcessorPlugin};
 
@@ -118,7 +118,7 @@ pub(super) fn validate_single_processor(
 ) {
     let own_fields: Vec<&'static str> = match ProcessorConfig::known_fields_for(type_name) {
         Some(fields) => fields,
-        None => return, // unknown = Lua plugin, skip
+        None => return, // not a registered processor; reported by the raw check
     };
 
     // A zero-permit semaphore can never grant a permit: max_jobs = 0 would
@@ -354,7 +354,7 @@ pub(super) fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
             ));
             continue;
         };
-        let Some(processor_type) = crate::processor::ProcessorType::parse(type_key) else {
+        if crate::processor::ProcessorType::parse(type_key).is_none() {
             // The most likely cause is a pre-rename config: `[processor.ruff]`
             // where `[processor.checker.ruff]` is meant. Say so when the
             // key names a processor of some type.
@@ -367,7 +367,7 @@ pub(super) fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
                  processor.<type>.<name>; types: {type_names}){hint}",
             ));
             continue;
-        };
+        }
 
         for (short, value) in type_table {
             let Some(table) = value.as_table() else {
@@ -378,23 +378,6 @@ pub(super) fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
                 continue;
             };
             let pname = format!("{}{type_key}.{short}", registry::NAME_PREFIX);
-
-            if processor_type == crate::processor::ProcessorType::Lua {
-                // A Lua plugin is a file in the plugins directory.
-                let plugins_dir = raw
-                    .get("plugins")
-                    .and_then(|p| p.get("dir"))
-                    .and_then(|d| d.as_str())
-                    .unwrap_or(DEFAULT_PLUGINS_DIR);
-                let plugin_path = std::path::Path::new(plugins_dir).join(format!("{short}.lua"));
-                if !plugin_path.exists() {
-                    errors.push(format!(
-                        "[{pname}]: no Lua plugin at {}",
-                        plugin_path.display(),
-                    ));
-                }
-                continue;
-            }
 
             if !is_builtin_type(&pname) {
                 let elsewhere: Vec<String> = registry::all_plugins()

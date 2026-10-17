@@ -70,8 +70,6 @@ what *that* product produced. Concretely:
 - **Mass generators** remove every predicted file in `product.outputs`,
   like Generators. Their `output_dirs` only bound where predicted files may
   live and are never removed: the directory is shared by design.
-- **Lua plugins** may override `clean(product)`; the default falls back to
-  file-only removal.
 
 Recursive directory removal is reserved for Creators (and the user-declared
 `output_dirs` of Explicit). All other processor types remove individually

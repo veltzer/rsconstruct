@@ -24,7 +24,7 @@ use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
 use crate::object_store::{ObjectStore, ObjectStoreOptions};
-use crate::processor::{Discovery, LuaProcessor, Processor, ProcessorMap};
+use crate::processor::{Discovery, Processor, ProcessorMap};
 use crate::remote_cache;
 use crate::tool_lock;
 use anyhow::{Context as _, Result};
@@ -168,7 +168,7 @@ struct StatusPrintOptions<'a> {
 }
 
 /// Create a processor from a type name and TOML config value.
-/// Returns None for unknown types (Lua plugins handled separately).
+/// Returns None when the name is not a registered processor.
 pub fn create_processor_for_instance(
     type_name: &str,
     config_toml: &toml::Value,
@@ -296,21 +296,6 @@ impl Builder {
             }
         }
 
-        // Lua plugin processors, named like every other processor:
-        // `processor.lua.<plugin file stem>`.
-        let lua_plugins = LuaProcessor::discover_plugins(&self.config.plugins.dir, &cfg.extra)?;
-        for (name, proc) in lua_plugins {
-            let iname = format!(
-                "{}{}.{name}",
-                crate::registries::NAME_PREFIX,
-                crate::processor::ProcessorType::Lua.as_str()
-            );
-            if processors.contains_key(&iname) {
-                anyhow::bail!("Lua plugin '{iname}' conflicts with processor instance");
-            }
-            processors.insert(iname, Box::new(proc));
-        }
-
         Ok(processors)
     }
 
@@ -376,7 +361,7 @@ impl Builder {
                     .collect();
                 serde_json::to_string(&filtered).unwrap_or_else(|_| json.to_string())
             }
-            // Lua plugins: no checksum_fields declaration, use full config
+            // Not a registered processor: no checksum_fields declaration, use full config
             None => json.to_string(),
         }
     }
@@ -1003,12 +988,6 @@ impl Builder {
             if p.exists() {
                 paths.push(p);
             }
-        }
-
-        // Plugins directory
-        let plugins = PathBuf::from(&self.config.plugins.dir);
-        if plugins.exists() {
-            paths.push(plugins);
         }
 
         paths.sort();

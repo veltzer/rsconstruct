@@ -78,11 +78,6 @@ natural.
 
 ## Ecosystem
 
-### Richer plugin SDK
-Lua plugins exist (`src/processor/lua/`). A documented, versioned plugin API
-plus a plugin registry/marketplace would let the community add processors
-without forking.
-
 ### CI provider integrations
 First-class GitHub Actions / GitLab CI templates that set up the remote cache,
 run `tools verify` against the lock file, and emit the JSON build events

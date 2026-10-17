@@ -951,9 +951,6 @@ fn init_project() -> Result<()> {
 
 [completions]
 # shells = ["bash"]
-
-# [plugins]
-# dir = "plugins"  # directory containing .lua processor plugins
 "#;
     crate::errors::ctx(
         fs::write(&config_path, config_content),

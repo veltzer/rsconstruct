@@ -240,61 +240,39 @@ already `Ord`); a single `ProductState` consumed by classify, executor,
 
 ---
 
-## 3. Capabilities live on the link-time registry entry, so the only user extension path is structurally crippled
+## 3. Capabilities live on the link-time registry entry, so config-dependent capabilities have no home
 
 `supports_batch`, `can_fix`, `max_jobs_cap`, `version`, `is_native`, and
 all four field-metadata accessors are `&'static` fields on
 `ProcessorPlugin`, registered via `inventory::submit!` at link time.
 Anything not compiled into the binary therefore **cannot have
-capabilities**. Lua plugins — the only extension mechanism available to a
-user who cannot rebuild rsconstruct — get the execution trait and none of
-the metadata registry:
+capabilities**. (This section used to be about the Lua plugin host, which
+got the execution trait and none of the metadata registry — no cache
+versioning, no field validation, no multi-instance sections, no
+completion — and whose scripting runtime downgraded real errors to
+warnings. The Lua processor type was removed on 2026-10-17: nothing in the
+fleet used it. What remains is the native half of the problem.)
 
-| Capability | Native | Lua |
-|---|---|---|
-| discover / execute / clean / auto_detect | yes | yes |
-| batch execution | yes | no |
-| fix | yes | no |
-| max_jobs cap | yes | no |
-| **cache versioning** | yes | **no — `processor_version` → None → v0** |
-| field validation / known_fields | yes | no |
-| multi-instance config sections | yes | no |
-| defconfig / list / search / clap completion | yes | no |
-
-The versioning row is a live correctness hole: editing a Lua plugin's logic
-does not invalidate its cached outputs (the script is in no input list and
-the version is a constant 0). Two more structural consequences:
-
-- The trait's fallibility model cannot host a scripting runtime:
-  `auto_detect` and `required_tools` return non-`Result` types, so the Lua
-  host downgrades real errors to `eprintln!` warnings — a direct violation
-  of the project's own strictness rule, with comments showing the author
-  knew and had no alternative.
-- The limitation bites natively too. The `script` processor declares
-  `can_fix: false` beside a working `fix()` implementation, reconciled by
-  `registries::can_fix(name) || processors[name].config_has_fix()` at the
-  call site — the static flag can only lie about config-dependent
-  capabilities. Every capability now exists as a flag/method pair, and the
-  flag lives on the registry for some capabilities, the trait for others,
-  and both for two of them, with nothing naming the boundary.
+The `script` processor declares `can_fix: false` beside a working `fix()`
+implementation, reconciled by
+`registries::can_fix(name) || processors[name].config_has_fix()` at the
+call site — the static flag can only lie about config-dependent
+capabilities. Every capability now exists as a flag/method pair, and the
+flag lives on the registry for some capabilities, the trait for others,
+and both for two of them, with nothing naming the boundary.
 
 This is not neglect; it is forced by pairing link-time registration with
 the no-dummy-instances rule. Link-time registration itself is a good trade
 for this tool (no central construction table, metadata without
-instantiation, whole-registry tests, static clap completion) — but it
-concentrates all its cost in one place: **native extension is compile-time
-only, so Lua is the real user extension surface, so the Lua capability gap
-is the model's most consequential property.**
+instantiation, whole-registry tests, static clap completion); the cost is
+that a capability a processor only has under some configuration has to be
+answered twice.
 
 ### Fix shape
 
-A capability descriptor the processor supplies at registration **or** at
-runtime — a synthetic `ProcessorPlugin` built at Lua discovery time
-(version = content hash of the script, closing the cache hole; batch / fix
-/ cap / fields from optional Lua globals) — so `find_plugin` never returns
-`None` for a live processor and capability queries have exactly one home.
 Generalize `config_has_fix` into the pattern for all config-dependent
-capabilities instead of an ad-hoc `||` per capability.
+capabilities instead of an ad-hoc `||` per capability, so capability
+queries have exactly one home.
 
 ---
 
@@ -498,8 +476,8 @@ and a structurally second-class plugin system.
    Not the deepest flaw, but the enabler: it is what makes §1 and §2 safe
    to execute, because it finally makes the command layer unit-testable
    (5 tests vs 31 entry points today).
-4. **§3 — capability descriptor / synthetic Lua plugin entry.** Contained;
-   closes a real cache-correctness hole for the only user extension path.
+4. **§3 — one home for config-dependent capabilities.** Contained; small
+   since the Lua half of the section went with the Lua processor type.
 5. **§5 — persistence `Store` trait + single-process decision + backend
    conformance suite.** Contained; mostly subtraction.
 6. **§6 — widen the cache model** (per-file batch results, negative space

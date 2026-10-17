@@ -95,7 +95,6 @@ cache_output_dir = false   # Disable for large target/ directories
 | Creator | Each declared output directory (`product.output_dirs`) | **Yes** |
 | Explicit | Declared `output_files` + declared `output_dirs` | Yes (for `output_dirs` only) |
 | Mass generator | Each predicted output file (`product.outputs`) | No |
-| Lua plugin | Custom `clean()` if defined; otherwise file-only | No (unless plugin code does it) |
 
 Recursive directory removal is reserved for Creators (whose external build tool produces an unknown set of files inside a known directory) and the user-declared `output_dirs` of Explicit. All other processor types remove individually-declared files and nothing else. A mass generator's `output_dirs` only bound where its predicted files may live; the directory itself is never removed.
 
@@ -154,4 +153,4 @@ If you ran `rsconstruct clean outputs -p processor.generator.tera`, only step 2 
 
 ## Custom Processors
 
-You can define custom processors in Lua. See [Lua Plugins](plugins.md) for details.
+A command of your own runs through a config-driven processor: `[processor.checker.script]` for a check, `[processor.generator.generic]` for one output per input, `[processor.creator.generic]` for a tool that fills a directory, `[processor.explicit.generic]` for declared inputs and outputs, and `[processor.mass_generator.generic]` for a tool that can predict its outputs. A new tool with its own discovery or output rules is a new processor file under `src/processor/`.

@@ -2,7 +2,6 @@ mod checker;
 mod creator;
 mod explicit;
 pub mod generator;
-pub mod lua;
 mod mass_generator;
 
 use anyhow::{Context, Result};
@@ -344,18 +343,6 @@ pub fn check_command_output(output: &Output, context: impl std::fmt::Display) ->
         anyhow::bail!("{msg}");
     }
     Ok(())
-}
-
-/// Compute a stub path for a source file.
-/// Maps `a/b/file.ext` -> `stub_dir/a_b_file.ext.suffix`.
-/// Source path is already relative to project root.
-pub fn stub_path(stub_dir: &Path, source: &Path, suffix: &str) -> PathBuf {
-    let stub_name = format!(
-        "{}.{}",
-        source.display().to_string().replace(['/', '\\'], "_"),
-        suffix,
-    );
-    stub_dir.join(stub_name)
 }
 
 /// Convert a DOT graph string to SVG using the `dot` command.
@@ -718,15 +705,6 @@ pub fn anchor_display_dir(anchor: &Path) -> &str {
         .unwrap_or(".")
 }
 
-/// Ensure a stub directory exists, creating it if necessary.
-pub fn ensure_stub_dir(stub_dir: &Path, processor_name: &str) -> Result<()> {
-    if !stub_dir.exists() {
-        fs::create_dir_all(stub_dir)
-            .with_context(|| format!("Failed to create {processor_name} stub directory"))?;
-    }
-    Ok(())
-}
-
 /// Run a checker tool on one or more files.
 ///
 /// Builds a command from the tool name, optional subcommand, config args, and file paths,
@@ -877,7 +855,6 @@ where
 
 pub use checker::terms;
 pub use generator::tags as tags_cmd;
-pub use lua::LuaProcessor;
 
 /// Map from processor name to processor instance. Used throughout the build pipeline.
 pub type ProcessorMap = HashMap<String, Box<dyn Processor>>;
@@ -924,10 +901,6 @@ pub enum ProcessorType {
     /// own inputs and blob cache entry; the tool itself runs at most once per
     /// build, when any of those products is dirty. The transparent Creator.
     MassGenerator,
-    /// A user-defined processor implemented in Lua via the plugin runtime.
-    /// (A `processor_type()` Lua hook was once documented as overriding this;
-    /// no Rust code ever read it — all Lua plugins are categorized as Lua.)
-    Lua,
 }
 
 impl ProcessorType {
@@ -946,7 +919,6 @@ impl ProcessorType {
             Self::Creator => "creator",
             Self::Explicit => "explicit",
             Self::MassGenerator => "mass_generator",
-            Self::Lua => "lua",
         }
     }
 
@@ -964,7 +936,6 @@ impl ProcessorType {
             Self::MassGenerator => {
                 "Runs a tool that enumerates its outputs in advance; one cached product per predicted file"
             }
-            Self::Lua => "User-defined processor implemented in Lua via the plugin runtime",
         }
     }
 }

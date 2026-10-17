@@ -137,7 +137,6 @@
         - [Mass Generator](processor/mass_generator/generic.md)
         - [Zola](processor/mass_generator/zola.md)
 - [GitHub Actions](github-actions.md)
-- [Lua Plugins](plugins.md)
 - [Advanced Usage](advanced.md)
 - [Environment Variables](environment-variables.md)
 - [Release Info](release-info.md)
