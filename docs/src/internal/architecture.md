@@ -30,8 +30,7 @@ by the processor's `StandardConfig`. The main methods:
 | `execute(&BuildContext, &Product)` | Build a single product |
 | `clean(&Product, verbose) -> Result<usize>` | Remove a product's outputs, returning how many files were removed |
 
-Batch execution (`execute_batch`), fixing (`fix`, `fix_batch`,
-`config_has_fix`), and tool declaration (`required_tools`,
+Batch execution (`execute_batch`) and tool declaration (`required_tools`,
 `tool_version_commands`) round out the trait.
 
 Both `auto_detect` and `discover` receive a `&FileIndex` — a pre-built index of all non-ignored files in the project (see [File indexing](#file-indexing) below).
