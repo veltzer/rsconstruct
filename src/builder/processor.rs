@@ -121,7 +121,7 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
                 processor_type: p.processor_type.as_str().to_string(),
                 enabled: false,
                 detected: false,
-                batch: false, // not available from static metadata
+                supports_batch: p.supports_batch,
                 native: p.is_native,
                 rust: p.is_rust,
                 rust_alternatives: crate::registries::rust_alternatives(&p.pname())
@@ -144,6 +144,7 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
                 p.processor_type.as_str().to_string(),
                 native_tag.to_string(),
                 tables::yes_no(p.is_rust).to_string(),
+                tables::yes_no(p.supports_batch).to_string(),
                 crate::registries::rust_alternatives(&p.pname()).join(", "),
             ];
             if verbose {
@@ -152,7 +153,14 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
             row
         })
         .collect();
-    let mut headers = vec!["Name", "Type", "Native", "Rust", "Rust alternative"];
+    let mut headers = vec![
+        "Name",
+        "Type",
+        "Native",
+        "Rust",
+        "Batch",
+        "Rust alternative",
+    ];
     if verbose {
         headers.push("Description");
     }

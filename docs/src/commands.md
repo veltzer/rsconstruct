@@ -445,17 +445,22 @@ rsconstruct processor graph --format mermaid # Mermaid format
 rsconstruct processor files --headers   # Show files with processor headers
 ```
 
-`list` prints one row per processor with its type and two flags: `Native`
-(pure Rust inside rsconstruct, or `external` when it runs another program)
-and `Rust` (whether the code that does the work is written in Rust — every
+`list` prints one row per processor with its type and three flags: `Native`
+(pure Rust inside rsconstruct, or `external` when it runs another program),
+`Rust` (whether the code that does the work is written in Rust — every
 native processor, plus external ones whose tool is Rust: ruff, taplo, rumdl,
-clippy, cargo, mdbook, pyrefly, rustc). The JSON
-form carries the same as `native` and `rust` booleans. `rust` is what to
-read when the question is "how much of this project's toolchain is Rust";
-`native` is what to read when the question is "which processors need no tool
-installed".
+clippy, cargo, mdbook, pyrefly, rustc) and `Batch` (whether the processor can
+take several input files in one tool invocation — a linter that accepts a
+file list can, a converter that writes one output per input such as pandoc
+or marp cannot). The JSON form carries the same as `native`, `rust` and
+`supports_batch` booleans. `rust` is what to read when the question is "how
+much of this project's toolchain is Rust"; `native` is what to read when the
+question is "which processors need no tool installed"; `supports_batch` is
+what decides whether a stanza's `batch` field and the build's `--batch-size`
+have any effect on it (a processor that cannot batch runs one file per
+invocation whatever they say).
 
-A fourth column, `Rust alternative`, names the Rust processors that can
+A fifth column, `Rust alternative`, names the Rust processors that can
 replace a non-Rust one (`ishellcheck` for `shellcheck`, `iluacheck` and
 `selene` for `luacheck`); the JSON form has them as a `rust_alternatives` array, empty
 where there is none. Each Rust processor declares what it replaces in its own
@@ -467,8 +472,8 @@ the classic one moves to the `Also` column (`also` in the JSON, next to
 `processors`, every Rust option, and `processor`, the first of them).
 
 `info` is the long form of one processor (or, without a name, of every
-processor): its description, type, keywords, the same flags as `list` plus
-batch support, the `max_jobs` cap and the implementation version, then a table
+processor): its description, type, keywords, the same flags as `list`, the
+`max_jobs` cap and the implementation version, then a table
 of every config field it accepts — type, default, whether it is required,
 whether it is part of the cache key (`Checksum`), and what it does. It is
 `defconfig -v` with the processor's own description on top, and reads only

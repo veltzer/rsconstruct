@@ -108,7 +108,11 @@ pub struct ProcessorListEntry {
     pub processor_type: String,
     pub enabled: bool,
     pub detected: bool,
-    pub batch: bool,
+    /// Whether the processor can take several input files in one tool
+    /// invocation (the plugin's `supports_batch`, as `info --json` reports
+    /// it). A user's `batch = false` can switch batching off for an instance,
+    /// but never on for a processor that reports `false` here.
+    pub supports_batch: bool,
     pub native: bool,
     /// Whether the implementation (rsconstruct itself for a native processor,
     /// the external tool otherwise) is written in Rust.

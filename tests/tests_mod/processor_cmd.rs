@@ -364,6 +364,67 @@ fn processors_list_works_without_config() {
     );
 }
 
+/// `processor list` reports whether each processor can take several input
+/// files in one tool invocation: the plugin's `supports_batch` flag, the
+/// same value `processor info` prints. A linter that accepts a file list
+/// (ruff) can; a converter that writes one output per input (pandoc, marp)
+/// cannot. Checked through the JSON form, which is what scripts read, and
+/// the table header, which is what people read.
+#[test]
+fn processors_list_reports_batch() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+
+    let output = run_rsconstruct_with_env(
+        temp_dir.path(),
+        &["--json", "processor", "list"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(
+        output.status.success(),
+        "processor list --json failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let entries: Vec<serde_json::Value> =
+        serde_json::from_str(&stdout).expect("Expected valid JSON array");
+
+    let by_name = |name: &str| -> &serde_json::Value {
+        entries
+            .iter()
+            .find(|e| e["name"] == name)
+            .unwrap_or_else(|| panic!("no '{name}' entry in processor list --json"))
+    };
+    assert_eq!(by_name("processor.checker.ruff")["supports_batch"], true);
+    assert_eq!(
+        by_name("processor.checker.shellcheck")["supports_batch"],
+        true
+    );
+    assert_eq!(
+        by_name("processor.generator.pandoc")["supports_batch"],
+        false
+    );
+    assert_eq!(by_name("processor.generator.marp")["supports_batch"], false);
+
+    for entry in &entries {
+        assert!(
+            entry["supports_batch"].is_boolean(),
+            "'supports_batch' must be a boolean on every entry, got {entry}"
+        );
+    }
+
+    let table = run_rsconstruct_with_env(
+        temp_dir.path(),
+        &["processor", "list"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(table.status.success());
+    let table_out = String::from_utf8_lossy(&table.stdout);
+    assert!(
+        table_out.contains("Batch"),
+        "processor list table should have a Batch column:\n{table_out}"
+    );
+}
+
 /// `processor list` reports whether each processor's implementation is
 /// written in Rust: every native one is, and an external one is only when
 /// its tool is (ruff yes, pylint no). Checked through the JSON form, which
@@ -550,8 +611,8 @@ fn processors_list_json() {
             "Entry should have 'detected' field"
         );
         assert!(
-            entry.get("batch").is_some(),
-            "Entry should have 'batch' field"
+            entry.get("supports_batch").is_some(),
+            "Entry should have 'supports_batch' field"
         );
         assert!(
             entry.get("description").is_some(),
@@ -598,8 +659,8 @@ fn processors_list_all_json_without_config() {
             "Entry should have 'processor_type' field"
         );
         assert!(
-            entry.get("batch").is_some(),
-            "Entry should have 'batch' field"
+            entry.get("supports_batch").is_some(),
+            "Entry should have 'supports_batch' field"
         );
         assert!(
             entry.get("description").is_some(),

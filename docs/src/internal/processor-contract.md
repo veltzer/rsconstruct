@@ -112,9 +112,13 @@ decides whether to abort or continue based on `--keep-going`.
 
 ## Batch execution and partial failure
 
-Batch-capable processors implement `supports_batch()` and `execute_batch()`.
-The `execute_batch()` method receives multiple products and must return one
-`Result` per product, in the same order as the input.
+A processor declares whether it can take several inputs in one invocation
+with the `supports_batch` flag on its `ProcessorPlugin` (every plugin sets
+it; `processor list` and `processor info` show it). A batch-capable one
+overrides `execute_batch()`, which receives multiple products and must return
+one `Result` per product, in the same order as the input. The executor calls
+it only when the flag is true and the stanza's `batch` field (default true)
+has not switched batching off.
 
 **External tool processors** that invoke a single subprocess for the entire
 batch typically use `execute_generator_batch()`, which maps a single exit code
