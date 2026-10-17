@@ -63,7 +63,7 @@ pub fn search_processors(query: &str) -> Result<()> {
             ]
         })
         .collect();
-    tables::print_table(&["Name", "Type", "Description", "Keywords"], &rows);
+    tables::print(&tables::defs::PROCESSOR_SEARCH, false, &rows);
 
     Ok(())
 }
@@ -92,7 +92,7 @@ pub fn list_processor_types() -> Result<()> {
     let rows: Vec<Vec<String>> = ProcessorType::iter()
         .map(|pt| vec![pt.as_str().to_string(), pt.description().to_string()])
         .collect();
-    tables::print_table(&["Type", "Description"], &rows);
+    tables::print(&tables::defs::PROCESSOR_TYPES, false, &rows);
     Ok(())
 }
 
@@ -139,32 +139,18 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
         .iter()
         .map(|p| {
             let native_tag = if p.is_native { "native" } else { "external" };
-            let mut row = vec![
+            vec![
                 p.pname(),
                 p.processor_type.as_str().to_string(),
                 native_tag.to_string(),
                 tables::yes_no(p.is_rust).to_string(),
                 tables::yes_no(p.supports_batch).to_string(),
                 crate::registries::rust_alternatives(&p.pname()).join(", "),
-            ];
-            if verbose {
-                row.push(p.description.to_string());
-            }
-            row
+                p.description.to_string(),
+            ]
         })
         .collect();
-    let mut headers = vec![
-        "Name",
-        "Type",
-        "Native",
-        "Rust",
-        "Batch",
-        "Rust alternative",
-    ];
-    if verbose {
-        headers.push("Description");
-    }
-    tables::print_table(&headers, &rows);
+    tables::print(&tables::defs::PROCESSOR_LIST, verbose, &rows);
 
     Ok(())
 }
@@ -413,7 +399,7 @@ pub fn list_recommendations() {
                 ]
             })
             .collect();
-        tables::print_table(&["Extension / File", "Processor", "Also", "Reason"], &rows);
+        tables::print(&tables::defs::PROCESSOR_RECOMMEND, false, &rows);
     }
 }
 
@@ -533,35 +519,17 @@ fn print_processor_metadata(name: &str, descriptions: bool) {
     let rows: Vec<Vec<String>> = processor_fields(name)
         .into_iter()
         .map(|f| {
-            let mut row = vec![
+            vec![
                 f.name.to_string(),
                 f.ty.to_string(),
                 tables::opt_json(f.default.as_ref()),
                 tables::yes_no(f.required).to_string(),
                 tables::yes_no(f.checksum).to_string(),
-            ];
-            if descriptions {
-                row.push(f.description.to_string());
-            }
-            row
+                f.description.to_string(),
+            ]
         })
         .collect();
-
-    if descriptions {
-        tables::print_table(
-            &[
-                "Field",
-                "Type",
-                "Default",
-                "Required",
-                "Checksum",
-                "Description",
-            ],
-            &rows,
-        );
-    } else {
-        tables::print_table(&["Field", "Type", "Default", "Required", "Checksum"], &rows);
-    }
+    tables::print(&tables::defs::PROCESSOR_FIELDS, descriptions, &rows);
 }
 
 /// Show default configuration for a processor (works without rsconstruct.toml).
@@ -680,7 +648,7 @@ impl Builder {
                         })
                     }).collect();
                     println!("{}", serde_json::to_string_pretty(&entries)?);
-                } else if verbose {
+                } else {
                     let rows: Vec<Vec<String>> = proc_names
                         .iter()
                         .map(|name| {
@@ -697,23 +665,7 @@ impl Builder {
                             ]
                         })
                         .collect();
-                    tables::print_table(&["Name", "Type", "Detected", "Description"], &rows);
-                } else {
-                    let rows: Vec<Vec<String>> = proc_names
-                        .iter()
-                        .map(|name| {
-                            let proc = &processors[name.as_str()];
-                            let detected_str = tables::yes_no(proc.auto_detect(&self.file_index));
-                            vec![
-                                (*name).clone(),
-                                crate::registries::processor::processor_type_of(name.as_str())
-                                    .as_str()
-                                    .to_string(),
-                                detected_str.to_string(),
-                            ]
-                        })
-                        .collect();
-                    tables::print_table(&["Name", "Type", "Detected"], &rows);
+                    tables::print(&tables::defs::PROCESSOR_USED, verbose, &rows);
                 }
             }
             ProcessorAction::Config { ref iname, diff } => {
@@ -760,7 +712,7 @@ impl Builder {
                                 .collect(),
                             other => vec![vec!["(value)".to_string(), format_config_value(other)]],
                         };
-                        crate::tables::print_table(&["Field", "Value"], &rows);
+                        crate::tables::print(&crate::tables::defs::PROCESSOR_CONFIG, false, &rows);
                         // The registry lookup strips an instance suffix itself.
                         println!("\nParameters:");
                         print_processor_metadata(n, verbose);

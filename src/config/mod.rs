@@ -43,9 +43,14 @@ const CONFIG_FILE: &str = "rsconstruct.toml";
 pub const LOCAL_CONFIG_FILE: &str = "rsconstruct.local.toml";
 
 /// The user-level config file, relative to `$XDG_CONFIG_HOME` (or
-/// `~/.config`). It may set `[build]` keys only and sits *under* the repo's
-/// files: rsconstruct.toml overrides it, rsconstruct.local.toml overrides both.
+/// `~/.config`). It may set `[build]` keys, which sit *under* the repo's
+/// files (rsconstruct.toml overrides it, rsconstruct.local.toml overrides
+/// both), and `[tables]`, which chooses the columns the CLI's tables show
+/// and is read by nothing else.
 pub const USER_CONFIG_FILE: &str = "rsconstruct/config.toml";
+
+/// The top-level tables the user config may contain.
+const USER_CONFIG_SECTIONS: &[&str] = &["build", "tables"];
 
 /// Path of the user-level config file, or `None` when neither
 /// `$XDG_CONFIG_HOME` nor `$HOME` is set.
@@ -111,7 +116,7 @@ pub fn config_files() -> Vec<ConfigFile> {
             Some(1),
             "user",
             user_config_path(),
-            "[build] keys only; sets per-user defaults, never read in CI",
+            "[build] and [tables] only; per-user defaults and table columns, never read in CI",
         ),
         entry(
             Some(2),
@@ -142,11 +147,12 @@ pub fn config_files() -> Vec<ConfigFile> {
 
 /// Read the user-level config file, if present, as a raw TOML value.
 ///
-/// Only a `[build]` table is accepted. A machine-wide file that could add
-/// processors or change what a repo scans would make the same repo build
-/// differently on two machines — and differently from CI, which never sees
-/// this file. Build-policy switches are the one thing that is safe to
-/// default per user, and they stay overridable per repo.
+/// Only `[build]` and `[tables]` are accepted. A machine-wide file that
+/// could add processors or change what a repo scans would make the same
+/// repo build differently on two machines — and differently from CI, which
+/// never sees this file. Build-policy switches are the one thing that is
+/// safe to default per user, and they stay overridable per repo; `[tables]`
+/// only changes which columns the CLI's tables print.
 fn read_user_config() -> Result<Option<toml::Value>> {
     let Some(path) = user_config_path() else {
         return Ok(None);
@@ -165,10 +171,13 @@ fn read_user_config() -> Result<Option<toml::Value>> {
         ))
     })?;
     if let Some(table) = raw.as_table() {
-        let foreign: Vec<&String> = table.keys().filter(|k| k.as_str() != "build").collect();
+        let foreign: Vec<&String> = table
+            .keys()
+            .filter(|k| !USER_CONFIG_SECTIONS.contains(&k.as_str()))
+            .collect();
         if !foreign.is_empty() {
             return Err(crate::exit_code::config_error(format!(
-                "Invalid user config {}: only a [build] table is allowed here, found [{}] — \
+                "Invalid user config {}: only a [build] table and a [tables] table are allowed here, found [{}] — \
                  processors, analyzers and every other section belong in the repo's rsconstruct.toml, \
                  where CI sees them too",
                 path.display(),
@@ -181,6 +190,64 @@ fn read_user_config() -> Result<Option<toml::Value>> {
         }
     }
     Ok(Some(raw))
+}
+
+/// The user config's `[build]` part, for merging under the repo's files.
+/// `[tables]` is presentation only and is not part of `Config`, so it is
+/// dropped here; `user_tables_config` reads it.
+fn read_user_build_config() -> Result<Option<toml::Value>> {
+    let mut raw = read_user_config()?;
+    if let Some(table) = raw.as_mut().and_then(toml::Value::as_table_mut) {
+        table.remove("tables");
+    }
+    Ok(raw)
+}
+
+/// The `[tables]` section of the user config: table name to the columns it
+/// shows, validated against the table definitions. Empty when the file or
+/// the section is absent. A key that names no table, a field that is not a
+/// column of its table, or a value that is not a list of strings is a
+/// config error, so a typo shows up on the next command instead of quietly
+/// leaving the default columns in place.
+pub fn user_tables_config() -> Result<std::collections::BTreeMap<String, Vec<String>>> {
+    let mut config = std::collections::BTreeMap::new();
+    let Some(raw) = read_user_config()? else {
+        return Ok(config);
+    };
+    let Some(tables) = raw.get("tables") else {
+        return Ok(config);
+    };
+    let path = user_config_path().map_or_else(String::new, |p| p.display().to_string());
+    let Some(tables) = tables.as_table() else {
+        return Err(crate::exit_code::config_error(format!(
+            "Invalid user config {path}: [tables] must be a table of `<table name> = [\"Field\", ...]` entries"
+        )));
+    };
+    let mut errors = Vec::new();
+    for (name, value) in tables {
+        let fields: Option<Vec<String>> = value.as_array().and_then(|items| {
+            items
+                .iter()
+                .map(|v| v.as_str().map(str::to_string))
+                .collect()
+        });
+        match fields {
+            Some(fields) => {
+                config.insert(name.clone(), fields);
+            }
+            None => errors.push(format!(
+                "[tables] {name}: the value must be a list of field names, like [\"Name\", \"Type\"]"
+            )),
+        }
+    }
+    errors.extend(crate::tables::validate_config(&config));
+    if !errors.is_empty() {
+        return Err(crate::exit_code::config_error(format!(
+            "Invalid user config {path}:\n{}\nRun a command with --fields to see a table's name and fields.",
+            errors.join("\n")
+        )));
+    }
+    Ok(config)
 }
 
 /// Scan field names in `StandardConfig`.
@@ -756,7 +823,7 @@ impl Config {
                 })?;
                 // The user-level file sits underneath: its [build] keys are
                 // defaults that the repo's own [build] overrides key by key.
-                let mut raw = read_user_config()?
+                let mut raw = read_user_build_config()?
                     .unwrap_or_else(|| toml::Value::Table(toml::map::Map::new()));
                 merge_toml_values(&mut raw, repo_raw);
                 // Overlay: rsconstruct.local.toml, when present, is deep-merged
@@ -812,7 +879,7 @@ impl Config {
                         "{LOCAL_CONFIG_FILE} found without {CONFIG_FILE} — the local overlay only extends a main config file",
                     );
                 }
-                let config = match read_user_config()? {
+                let config = match read_user_build_config()? {
                     Some(raw) => raw.try_into().map_err(|e| {
                         crate::exit_code::config_error(format!(
                             "Failed to parse user config file: {e}"

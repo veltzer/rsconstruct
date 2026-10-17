@@ -362,11 +362,7 @@ pub fn run_sloc(file_index: &FileIndex, cocomo: bool, salary: u64) -> Result<()>
             total_comment.to_string(),
             total_code.to_string(),
         ];
-        tables::print_table_with_total(
-            &["Language", "Files", "Blank", "Comment", "Code"],
-            &rows,
-            &total,
-        );
+        tables::print_with_total(&tables::defs::SLOC, false, &rows, &total);
 
         if let Some(ref est) = cocomo_estimate {
             println!();

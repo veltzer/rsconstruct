@@ -20,6 +20,10 @@ pub struct RuntimeFlags {
     pub json_mode: bool,
     /// Suppress all output except errors (--quiet)
     pub quiet: bool,
+    /// Show every column of every table (--all)
+    pub all_fields: bool,
+    /// Print each table's name and column names only, no data (--fields)
+    pub fields_only: bool,
     /// Whether to emit ANSI color escape sequences.
     /// Resolved from --color (auto/always/never) and the `NO_COLOR` env var.
     pub color_enabled: bool,
@@ -44,6 +48,8 @@ pub fn init_for_test() {
         graph_stats: false,
         json_mode: false,
         quiet: true,
+        all_fields: false,
+        fields_only: false,
         color_enabled: false,
     });
 }
@@ -75,6 +81,17 @@ pub fn json_mode() -> bool {
 
 pub fn quiet() -> bool {
     get().quiet
+}
+
+/// `--all`: every table shows every column it has. Safe before `init()`
+/// (false), since tables print only after startup.
+pub fn all_fields() -> bool {
+    FLAGS.get().is_some_and(|f| f.all_fields)
+}
+
+/// `--fields`: every table prints its name and column names only.
+pub fn fields_only() -> bool {
+    FLAGS.get().is_some_and(|f| f.fields_only)
 }
 
 pub fn color_enabled() -> bool {

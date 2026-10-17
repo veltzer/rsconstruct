@@ -346,7 +346,8 @@ fn user_config_rejects_sections_other_than_build() {
         "a [processor] table in the user config must be refused: {stderr}"
     );
     assert!(
-        stderr.contains("only a [build] table") && stderr.contains("[processor]"),
+        stderr.contains("only a [build] table and a [tables] table")
+            && stderr.contains("[processor]"),
         "error must say what is allowed and what was found: {stderr}"
     );
 }

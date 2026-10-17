@@ -827,7 +827,7 @@ pub fn count_tags(db_path: &str) -> Result<()> {
             .iter()
             .map(|(tag, count)| vec![count.to_string(), tag.clone()])
             .collect();
-        tables::print_table(&["Count", "Tag"], &rows);
+        tables::print(&tables::defs::TAG_COUNT, false, &rows);
     }
 
     Ok(())
@@ -1285,7 +1285,7 @@ pub fn matrix_tags(db_path: &str) -> Result<()> {
                 row
             })
             .collect();
-        tables::print_table(&headers, &rows);
+        tables::print_dynamic(&tables::defs::TAG_MATRIX, &headers, &rows);
     }
     Ok(())
 }
@@ -1347,7 +1347,7 @@ pub fn coverage_tags(db_path: &str) -> Result<()> {
             .iter()
             .map(|(cat, count, pct)| vec![cat.clone(), count.to_string(), format!("{:.0}%", pct)])
             .collect();
-        tables::print_table(&["Category", "Files", "Coverage"], &rows);
+        tables::print(&tables::defs::TAG_COVERAGE, false, &rows);
         println!("Total files: {total_files}");
     }
     Ok(())
@@ -1736,7 +1736,7 @@ pub fn suggest_tags(db_path: &str, path: &str, config: &TagsConfig) -> Result<()
             .take(config.suggested_tags_limit)
             .map(|(tag, score)| vec![tag.clone(), format!("{:.2}", score)])
             .collect();
-        tables::print_table(&["Tag", "Score"], &rows);
+        tables::print(&tables::defs::TAG_SUGGEST, false, &rows);
     }
     Ok(())
 }

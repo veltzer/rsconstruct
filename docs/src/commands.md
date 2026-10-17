@@ -14,6 +14,8 @@ These flags can be used with any command:
 | `--show-output` | Show tool output even on success (default: only show on failure) |
 | `--json` | Output in JSON Lines format (machine-readable) |
 | `--quiet`, `-q` | Suppress all output except errors (useful for CI) |
+| `--all` | Show every column of every table, including the ones hidden by default and the ones the user config leaves out |
+| `--fields` | Print each table's name and column names only, no data |
 | `--phases` | Show build phase messages (discover, add_dependencies, etc.) |
 
 Example:
@@ -25,7 +27,32 @@ rsconstruct --show-output build               # Show compiler/linter output even
 rsconstruct --phases --show-child-processes build # Show both phases and commands
 rsconstruct -O path build                     # Show output file paths in build messages
 rsconstruct -I all build                      # Show all input files (including headers)
+rsconstruct --all processor list              # Every column, Description included
+rsconstruct --fields tool list                # The table's name and columns, no rows
 ```
+
+### Table columns
+
+Every table a command prints has a name and a fixed set of columns, and
+some columns are hidden unless `--verbose` asks for them (`processor list`
+hides `Description`, `hook` hides `Function` and `Location`). Which columns
+show is decided in this order:
+
+1. `--fields`: the table's name, the command that prints it, and its
+   column names, with no data rows. This is how to find the names for the
+   next two.
+2. `--all`: every column.
+3. `[tables]` in the user config, `~/.config/rsconstruct/config.toml`:
+   exactly the columns listed there, in that order. See
+   [`[tables]`](configuration.md#tables) for the file format and the list
+   of every table.
+4. Otherwise the default: every column except the hidden ones, which
+   `--verbose` adds back.
+
+`--all` goes before the command name on `tool install` and
+`tool list-configured`, which have an `--all` of their own
+(`rsconstruct --all tool list-configured`). JSON output is not affected by
+any of this: `--json` always carries every field.
 
 ## `rsconstruct build`
 

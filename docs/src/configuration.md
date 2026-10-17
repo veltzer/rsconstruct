@@ -3,7 +3,8 @@
 RSConstruct is configured via an `rsconstruct.toml` file in the project root.
 An optional `rsconstruct.local.toml` overlay, when present, is merged over the
 main file at load time — see [Local overlay](#local-overlay-rsconstructlocaltoml).
-An optional user-level file can set `[build]` defaults underneath both — see
+An optional user-level file can set `[build]` defaults underneath both and
+choose the columns the CLI's tables show — see
 [User config](#user-config-configrsconstructconfigtoml).
 
 ## Full reference
@@ -204,8 +205,9 @@ exists for a project that still wants that.
 
 A per-user file, read from `$XDG_CONFIG_HOME/rsconstruct/config.toml` (or
 `~/.config/rsconstruct/config.toml` when `XDG_CONFIG_HOME` is unset), sets
-`[build]` defaults for every project you build on this machine. Precedence,
-lowest first:
+`[build]` defaults for every project you build on this machine, and under
+[`[tables]`](#tables) chooses which columns the CLI's tables show. For
+`[build]` the precedence is, lowest first:
 
 1. built-in defaults
 2. the user config
@@ -223,12 +225,13 @@ reject_dot_src_dirs = true
 
 Rules:
 
-- **Only `[build]` is allowed.** A `[processor.*]`, `[analyzer.*]` or any
-  other table in this file is a config error naming the offending section.
-  Anything that changes what a repo scans or builds belongs in the repo's own
-  files, where every machine and CI see the same thing; a machine-wide file
-  that could add processors would make the same repo build differently on
-  two machines.
+- **Only `[build]` and `[tables]` are allowed.** A `[processor.*]`,
+  `[analyzer.*]` or any other table in this file is a config error naming
+  the offending section. Anything that changes what a repo scans or builds
+  belongs in the repo's own files, where every machine and CI see the same
+  thing; a machine-wide file that could add processors would make the same
+  repo build differently on two machines. `[tables]` passes because it
+  changes nothing about the build, only how the CLI prints its tables.
 - **CI never reads it.** Continuous integration checks out the repo and
   nothing else, so a switch that must hold in CI has to be set in
   `rsconstruct.toml`. The user file is a local safety net and a way to try a
@@ -238,6 +241,65 @@ Rules:
 - Watch mode does not watch this file; restart the watcher after editing it.
 - `rsconstruct toml files` prints the resolved path of this file, together
   with the rest of the chain, and whether each one exists.
+
+### `[tables]`
+
+Every table rsconstruct prints has a name and a fixed set of columns. By
+default a table shows all of them except a few that are hidden unless
+`--verbose` asks for them. An entry under `[tables]` replaces that default
+for one table: the value is the list of columns to show, in the order to
+show them, spelled exactly as the column headers are.
+
+```toml
+# ~/.config/rsconstruct/config.toml
+[tables]
+# processor list: just the names and whether each one batches.
+processor_list = ["Name", "Batch"]
+# tool list: always show how to install a tool, without --verbose.
+tool_list = ["Tool", "Status", "Install"]
+# hook: the Lua function names first, descriptions last.
+hook_list = ["Function", "Hook", "Description"]
+```
+
+`rsconstruct --fields <command>` prints a table's name, the command that
+prints it and its column names, with no data; `rsconstruct --all <command>`
+shows every column of every table, whatever this section says. A key that
+names no table, or a column that the table does not have, is a config error
+listing the valid names. The two tables whose columns depend on the data
+(`product_status`, `tag_matrix`) are checked when they are printed; an
+unknown column there is a warning and is skipped.
+
+The tables, their commands and their columns; a column marked *(verbose)*
+is hidden by default:
+
+| Table | Command | Columns |
+|---|---|---|
+| `analyzer_defconfig` | `rsconstruct analyzer defconfig` | `Field`, `Type`, `Default` |
+| `analyzer_list` | `rsconstruct analyzer list` | `Name`, `Native`, `Description` *(verbose)* |
+| `analyzer_stats` | `rsconstruct analyzer stats, analyzer build` | `Analyzer`, `Files`, `Dependencies` |
+| `analyzer_used` | `rsconstruct analyzer used` | `Name`, `Detected`, `Description` *(verbose)* |
+| `build_timings` | `rsconstruct build --timings` | `Phase`, `Duration` |
+| `error_list` | `rsconstruct error` | `Code`, `Name`, `Description` *(verbose)* |
+| `hook_list` | `rsconstruct hook` | `Hook`, `Function` *(verbose)*, `Location` *(verbose)*, `Description` |
+| `info_source` | `rsconstruct info source` | `Extension`, `Count` |
+| `processor_config` | `rsconstruct processor config` | `Field`, `Value` |
+| `processor_fields` | `rsconstruct processor defconfig, processor info` | `Field`, `Type`, `Default`, `Required`, `Checksum`, `Description` *(verbose)* |
+| `processor_list` | `rsconstruct processor list` | `Name`, `Type`, `Native`, `Rust`, `Batch`, `Rust alternative`, `Description` *(verbose)* |
+| `processor_recommend` | `rsconstruct processor recommend` | `Extension / File`, `Processor`, `Also`, `Reason` |
+| `processor_search` | `rsconstruct processor search` | `Name`, `Type`, `Description`, `Keywords` |
+| `processor_types` | `rsconstruct processor types` | `Type`, `Description` |
+| `processor_used` | `rsconstruct processor used` | `Name`, `Type`, `Detected`, `Description` *(verbose)* |
+| `product_status` | `rsconstruct status, build --dry-run` | `Processor`, one column per product state (`up-to-date`, `restorable`, `stale`, `new` for `status`; `skip`, `restore`, `build`, `build-new` for `build --dry-run`), `native`, `rust` |
+| `sloc` | `rsconstruct sloc` | `Language`, `Files`, `Blank`, `Comment`, `Code` |
+| `status_breakdown` | `rsconstruct status --breakdown` | `Processor`, `Files`, `Breakdown` |
+| `tag_count` | `rsconstruct tag count` | `Count`, `Tag` |
+| `tag_coverage` | `rsconstruct tag coverage` | `Category`, `Files`, `Coverage` |
+| `tag_matrix` | `rsconstruct tag matrix` | `File`, then one column per tag category |
+| `tag_suggest` | `rsconstruct tag suggest` | `Tag`, `Score` |
+| `tool_list` | `rsconstruct tool list` | `Tool`, `Status`, `Runtime`, `Install` *(verbose)* |
+| `tool_runtimes` | `rsconstruct tool stats` | `Runtime`, `Installed` |
+| `tool_stats` | `rsconstruct tool stats` | `Tool`, `Status`, `Processors`, `Install` |
+| `webcache_list` | `rsconstruct webcache list` | `URL`, `Size`, `Age`, `State` |
 
 ## Section details
 

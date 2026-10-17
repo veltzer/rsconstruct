@@ -263,13 +263,10 @@ fn run_tools_command(
             tools.sort_by_key(|t| t.name);
 
             // The install command is noise for the common "what tools exist?"
-            // question, so it's hidden by default — shown only with --verbose
-            // (or --methods for every method). JSON always carries it.
+            // question, so the Install column is hidden by default — shown
+            // with --verbose (or --methods for every method), or when --all
+            // or the user's [tables] config asks for it. JSON always carries it.
             let show_install = verbose || show_methods;
-            let mut headers: Vec<&str> = vec!["Tool", "Status", "Runtime"];
-            if show_install {
-                headers.push("Install");
-            }
             let rows: Vec<Vec<String>> = tools
                 .iter()
                 .map(|info| {
@@ -283,30 +280,27 @@ fn run_tools_command(
                         status.to_string(),
                         info.runtime.to_string(),
                     ];
-                    if show_install {
-                        let install_str = if show_methods {
-                            let methods: Vec<String> = info
-                                .install_methods
-                                .iter()
-                                .map(|m| format!("{}: {}", m.method, m.command()))
-                                .collect();
-                            if methods.is_empty() {
-                                "?".to_string()
-                            } else {
-                                methods.join(" | ")
-                            }
+                    let install_str = if show_methods {
+                        let methods: Vec<String> = info
+                            .install_methods
+                            .iter()
+                            .map(|m| format!("{}: {}", m.method, m.command()))
+                            .collect();
+                        if methods.is_empty() {
+                            "?".to_string()
                         } else {
-                            info.install_methods.first().map_or_else(
-                                || "?".to_string(),
-                                crate::tools::InstallMethod::command,
-                            )
-                        };
-                        row.push(install_str);
-                    }
+                            methods.join(" | ")
+                        }
+                    } else {
+                        info.install_methods
+                            .first()
+                            .map_or_else(|| "?".to_string(), crate::tools::InstallMethod::command)
+                    };
+                    row.push(install_str);
                     row
                 })
                 .collect();
-            tables::print_table(&headers, &rows);
+            tables::print(&tables::defs::TOOL_LIST, show_install, &rows);
         }
         ToolAction::ListConfigured { .. } => {
             if crate::json_output::is_json_mode() {
@@ -541,7 +535,7 @@ fn run_tools_command(
                         vec![stat.name.clone(), status.to_string(), procs, install]
                     })
                     .collect();
-                tables::print_table(&["Tool", "Status", "Processors", "Install"], &rows);
+                tables::print(&tables::defs::TOOL_STATS, false, &rows);
 
                 println!();
                 println!("Runtime summary:");
@@ -568,7 +562,7 @@ fn run_tools_command(
                         })
                     })
                     .collect();
-                tables::print_table(&["Runtime", "Installed"], &rt_rows);
+                tables::print(&tables::defs::TOOL_RUNTIMES, false, &rt_rows);
 
                 println!();
                 let total_line = format!("Total: {installed_count}/{total_tools} tools installed");

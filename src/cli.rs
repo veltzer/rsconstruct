@@ -60,6 +60,18 @@ pub struct Cli {
     #[arg(short, long, global = true)]
     pub quiet: bool,
 
+    /// Show every column of every table, including the ones hidden by
+    /// default and the ones the user config leaves out. (On `tool install`
+    /// and `tool list-configured`, which have their own `--all`, this flag
+    /// goes before the command name: `rsconstruct --all tool ...`.)
+    #[arg(long, global = true)]
+    pub all: bool,
+
+    /// Print each table's name and column names only, no data: the names to
+    /// use under `[tables]` in the user config to choose its columns
+    #[arg(long, global = true)]
+    pub fields: bool,
+
     /// Show build phase messages (discover, `add_dependencies`, etc.)
     #[arg(long, global = true)]
     pub phases: bool,

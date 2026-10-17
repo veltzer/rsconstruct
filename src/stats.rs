@@ -152,7 +152,7 @@ impl BuildStats {
                     .iter()
                     .map(|(name, dur)| vec![name.clone(), format!("{:.3}s", dur.as_secs_f64())])
                     .collect();
-                crate::tables::print_table(&["Phase", "Duration"], &rows);
+                crate::tables::print(&crate::tables::defs::BUILD_TIMINGS, false, &rows);
             }
 
             // Per-product timings

@@ -39,6 +39,8 @@ mod rsconstructignore;
 mod scheduler;
 #[path = "tests_mod/status.rs"]
 mod status;
+#[path = "tests_mod/tables.rs"]
+mod tables;
 #[path = "tests_mod/toml_files.rs"]
 mod toml_files;
 #[path = "tests_mod/tools.rs"]

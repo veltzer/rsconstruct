@@ -185,8 +185,17 @@ fn run() -> (Result<()>, bool) {
         graph_stats: cli.graph_stats,
         json_mode: cli.json,
         quiet: cli.quiet,
+        all_fields: cli.all,
+        fields_only: cli.fields,
         color_enabled,
     });
+    // Which columns each table shows, from the user config. Read here, once,
+    // because tables are printed by commands with and without a project
+    // config; a bad entry is a config error like any other.
+    match config::user_tables_config() {
+        Ok(tables_config) => tables::init(tables_config),
+        Err(err) => return (Err(err), false),
+    }
 
     // Create the build context before the signal handler so the handler can
     // call ctx.interrupt() to signal all running subprocesses.
@@ -748,7 +757,7 @@ fn run() -> (Result<()>, bool) {
                                 ]
                             })
                             .collect();
-                        tables::print_table(&["URL", "Size", "Age", "State"], &rows);
+                        tables::print(&tables::defs::WEBCACHE_LIST, false, &rows);
                     }
                 }
             },
@@ -804,23 +813,16 @@ fn list_exit_codes(verbose: bool) -> Result<()> {
         return Ok(());
     }
 
-    if verbose {
-        let rows: Vec<Vec<String>> = RsconstructExitCode::iter()
-            .map(|e| {
-                vec![
-                    e.code().to_string(),
-                    e.name().to_string(),
-                    e.description().to_string(),
-                ]
-            })
-            .collect();
-        tables::print_table(&["Code", "Name", "Description"], &rows);
-    } else {
-        let rows: Vec<Vec<String>> = RsconstructExitCode::iter()
-            .map(|e| vec![e.code().to_string(), e.name().to_string()])
-            .collect();
-        tables::print_table(&["Code", "Name"], &rows);
-    }
+    let rows: Vec<Vec<String>> = RsconstructExitCode::iter()
+        .map(|e| {
+            vec![
+                e.code().to_string(),
+                e.name().to_string(),
+                e.description().to_string(),
+            ]
+        })
+        .collect();
+    tables::print(&tables::defs::ERROR_LIST, verbose, &rows);
     Ok(())
 }
 
@@ -844,7 +846,7 @@ fn list_hooks(verbose: bool) -> Result<()> {
             })
             .collect();
         println!("{}", serde_json::to_string_pretty(&entries)?);
-    } else if verbose {
+    } else {
         let rows: Vec<Vec<String>> = hooks
             .iter()
             .map(|h| {
@@ -856,13 +858,7 @@ fn list_hooks(verbose: bool) -> Result<()> {
                 ]
             })
             .collect();
-        tables::print_table(&["Hook", "Function", "Location", "Description"], &rows);
-    } else {
-        let rows: Vec<Vec<String>> = hooks
-            .iter()
-            .map(|h| vec![h.name.to_string(), h.description.to_string()])
-            .collect();
-        tables::print_table(&["Hook", "Description"], &rows);
+        tables::print(&tables::defs::HOOK_LIST, verbose, &rows);
     }
     Ok(())
 }

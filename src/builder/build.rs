@@ -719,7 +719,7 @@ impl Builder {
                     ]
                 })
                 .collect();
-            tables::print_table(&["Processor", "Files", "Breakdown"], &rows);
+            tables::print(&tables::defs::STATUS_BREAKDOWN, false, &rows);
         }
 
         Ok(())
@@ -767,7 +767,7 @@ impl Builder {
                 .iter()
                 .map(|(ext, count)| vec![format!(".{}", ext), count.to_string()])
                 .collect();
-            tables::print_table(&["Extension", "Count"], &rows);
+            tables::print(&tables::defs::INFO_SOURCE, false, &rows);
         }
         Ok(())
     }
@@ -909,7 +909,8 @@ impl Builder {
             String::new(),
             String::new(),
         ];
-        tables::print_table_with_total(
+        tables::print_dynamic_with_total(
+            &tables::defs::PRODUCT_STATUS,
             &[
                 "Processor",
                 col_labels[0],

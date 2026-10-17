@@ -35,37 +35,22 @@ pub fn list_analyzers(verbose: bool) {
         return;
     }
 
-    if verbose {
-        let rows: Vec<Vec<String>> = plugins
-            .iter()
-            .map(|plugin| {
-                let native_tag = if plugin.is_native {
-                    "native"
-                } else {
-                    "external"
-                };
-                vec![
-                    plugin.name.to_string(),
-                    native_tag.to_string(),
-                    plugin.description.to_string(),
-                ]
-            })
-            .collect();
-        tables::print_table(&["Name", "Native", "Description"], &rows);
-    } else {
-        let rows: Vec<Vec<String>> = plugins
-            .iter()
-            .map(|plugin| {
-                let native_tag = if plugin.is_native {
-                    "native"
-                } else {
-                    "external"
-                };
-                vec![plugin.name.to_string(), native_tag.to_string()]
-            })
-            .collect();
-        tables::print_table(&["Name", "Native"], &rows);
-    }
+    let rows: Vec<Vec<String>> = plugins
+        .iter()
+        .map(|plugin| {
+            let native_tag = if plugin.is_native {
+                "native"
+            } else {
+                "external"
+            };
+            vec![
+                plugin.name.to_string(),
+                native_tag.to_string(),
+                plugin.description.to_string(),
+            ]
+        })
+        .collect();
+    tables::print(&tables::defs::ANALYZER_LIST, verbose, &rows);
 }
 
 /// Show default analyzer configuration (works without rsconstruct.toml).
@@ -153,7 +138,7 @@ fn print_config_table(toml_str: &str) -> Result<()> {
             vec![key.clone(), type_str.to_string(), default_str]
         })
         .collect();
-    tables::print_table(&["Field", "Type", "Default"], &rows);
+    tables::print(&tables::defs::ANALYZER_DEFCONFIG, false, &rows);
     Ok(())
 }
 
@@ -223,7 +208,7 @@ fn print_deps_stats(
         total_files.to_string(),
         total_deps.to_string(),
     ];
-    tables::print_table_with_total(&["Analyzer", "Files", "Dependencies"], &rows, &total);
+    tables::print_with_total(&tables::defs::ANALYZER_STATS, false, &rows, &total);
     Ok(())
 }
 
@@ -259,7 +244,7 @@ impl Builder {
                         })
                         .collect();
                     println!("{}", serde_json::to_string_pretty(&entries)?);
-                } else if verbose {
+                } else {
                     let rows: Vec<Vec<String>> = sorted_keys(&analyzers)
                         .into_iter()
                         .map(|name| {
@@ -272,17 +257,7 @@ impl Builder {
                             ]
                         })
                         .collect();
-                    tables::print_table(&["Name", "Detected", "Description"], &rows);
-                } else {
-                    let rows: Vec<Vec<String>> = sorted_keys(&analyzers)
-                        .into_iter()
-                        .map(|name| {
-                            let analyzer = &analyzers[name];
-                            let detected = tables::yes_no(analyzer.auto_detect(&self.file_index));
-                            vec![name.clone(), detected.to_string()]
-                        })
-                        .collect();
-                    tables::print_table(&["Name", "Detected"], &rows);
+                    tables::print(&tables::defs::ANALYZER_USED, verbose, &rows);
                 }
             }
             AnalyzerAction::Build => {
