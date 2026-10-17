@@ -22,7 +22,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, LazyLock};
 
-use super::{OnceTool, PlannedOutput, add_planned_products, require_planned_output};
+use super::{
+    OnceTool, PlannedOutput, add_planned_products, files_under, fresh_state_dir, install_staged,
+    relative_slash_path, require_planned_output,
+};
 use crate::config::{StandardConfig, checksum_fields_of, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
@@ -38,9 +41,6 @@ const ZOLA_VERSION: &str = "0.23.3";
 /// Above this many URLs zola splits the sitemap into `sitemapN.xml` files,
 /// which this planner does not model.
 const SITEMAP_SPLIT: usize = 30_000;
-
-/// Where zola builds before its files are moved into place.
-const STAGING_DIR: &str = ".rsconstruct/mass_generator";
 
 /// Zola processor config.
 /// Custom fields: `root`, `loose_manifest`. `output_dir` (standard) overrides
@@ -139,12 +139,10 @@ impl ZolaProcessor {
             self.plan.lock().clone().with_context(|| {
                 format!("[{instance_name}] executed before its plan was loaded")
             })?;
-        let staging = Path::new(STAGING_DIR).join(format!("{instance_name}.staging"));
-        remove_dir_if_present(&staging)?;
-        if let Some(parent) = staging.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create {}", parent.display()))?;
-        }
+        // zola refuses a non-empty output directory without `--force`, and
+        // `--force` deletes it first; an empty fresh directory keeps both
+        // behaviours out of the picture.
+        let staging = fresh_state_dir(instance_name, ".staging")?;
 
         let mut cmd = Command::new(&self.config.standard.command);
         if !self.config.root.is_empty() {
@@ -160,54 +158,14 @@ impl ZolaProcessor {
             &output,
             format_args!("[{instance_name}] {}", format_command(&cmd)),
         )?;
-
-        let written: BTreeSet<String> = files_under(&staging)?
-            .into_iter()
-            .map(|p| relative_slash_path(&staging, &p))
-            .collect();
-        let mut mismatches: Vec<String> = plan
-            .relative
-            .difference(&written)
-            .map(|p| format!("missing: {p} (planned but not written by zola)"))
-            .collect();
-        mismatches.extend(
-            written
-                .difference(&plan.relative)
-                .map(|p| format!("unexpected: {p} (written by zola but not planned)")),
-        );
-        if !mismatches.is_empty() {
-            let msg = format!(
-                "[{instance_name}] zola's output does not match the plan (staging kept at {}):\n  {}",
-                staging.display(),
-                mismatches.join("\n  ")
-            );
-            if self.config.loose_manifest {
-                crate::output::warn(&format!("{msg}\n  (loose_manifest = true: continuing)"));
-            } else {
-                anyhow::bail!("{msg}");
-            }
-        }
-
-        // Move every planned file zola wrote into place. A planned file that
-        // is already there may be a read-only hardlink from a cache restore,
-        // so it is unlinked rather than overwritten.
-        for rel in plan.relative.intersection(&written) {
-            let from = staging.join(rel);
-            let to = plan.output_dir.join(rel);
-            match std::fs::remove_file(&to) {
-                Ok(()) => {}
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                Err(e) => {
-                    return Err(anyhow::Error::from(e)
-                        .context(format!("Failed to remove stale output {}", to.display())));
-                }
-            }
-            crate::processor::ensure_output_dir(&to)?;
-            std::fs::rename(&from, &to).with_context(|| {
-                format!("Failed to move {} to {}", from.display(), to.display())
-            })?;
-        }
-        remove_dir_if_present(&staging)
+        install_staged(
+            &staging,
+            &plan.relative,
+            &plan.output_dir,
+            instance_name,
+            "zola",
+            self.config.loose_manifest,
+        )
     }
 }
 
@@ -232,53 +190,6 @@ fn check_zola_version(command: &str) -> Result<()> {
         );
     }
     Ok(())
-}
-
-fn remove_dir_if_present(dir: &Path) -> Result<()> {
-    match std::fs::remove_dir_all(dir) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => {
-            Err(anyhow::Error::from(e).context(format!("Failed to remove {}", dir.display())))
-        }
-    }
-}
-
-/// Every regular file under `dir`, following symlinks as zola's walkers do.
-/// A missing directory is empty.
-fn files_under(dir: &Path) -> Result<Vec<PathBuf>> {
-    let mut out = Vec::new();
-    if !dir.exists() {
-        return Ok(out);
-    }
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(current) = stack.pop() {
-        let entries = std::fs::read_dir(&current)
-            .with_context(|| format!("Failed to read directory {}", current.display()))?;
-        for entry in entries {
-            let entry = entry.with_context(|| format!("Failed to read {}", current.display()))?;
-            let path = entry.path();
-            let meta = std::fs::metadata(&path)
-                .with_context(|| format!("Failed to stat {}", path.display()))?;
-            if meta.is_dir() {
-                stack.push(path);
-            } else if meta.is_file() {
-                out.push(path);
-            }
-        }
-    }
-    out.sort();
-    Ok(out)
-}
-
-/// `path` below `base`, with `/` separators.
-fn relative_slash_path(base: &Path, path: &Path) -> String {
-    path.strip_prefix(base)
-        .unwrap_or(path)
-        .components()
-        .map(|c| c.as_os_str().to_string_lossy().into_owned())
-        .collect::<Vec<_>>()
-        .join("/")
 }
 
 // ---------------------------------------------------------------------------

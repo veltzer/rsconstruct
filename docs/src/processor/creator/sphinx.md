@@ -1,5 +1,9 @@
 # Sphinx Processor
 
+> **Superseded.** Use [`processor.mass_generator.sphinx`](../mass_generator/sphinx.md),
+> which plans Sphinx's output file by file and caches each one. This creator
+> stays only until its last configuration is converted.
+
 ## Purpose
 
 Builds Sphinx documentation projects.

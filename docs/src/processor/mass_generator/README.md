@@ -8,9 +8,11 @@ runs at most once per build. See
 [Processor Types](../../processor-types.md#mass-generator) for how mass
 generators work and how they differ from creators.
 
-Two mass generators are built in: `processor.mass_generator.generic`, driven
-entirely by config — any tool that honors the manifest contract plugs into it
-without a new processor file — and `processor.mass_generator.zola`, which
-computes the plan for a zola site itself because zola has no plan mode.
+Three mass generators are built in: `processor.mass_generator.generic`,
+driven entirely by config — any tool that honors the manifest contract plugs
+into it without a new processor file — `processor.mass_generator.zola`, which
+computes the plan for a zola site itself because zola has no plan mode, and
+`processor.mass_generator.sphinx`, which gets the plan from Sphinx's own read
+phase.
 
 Run `rsconstruct processor list` for the full list with each processor's type.

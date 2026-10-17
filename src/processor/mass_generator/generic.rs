@@ -7,7 +7,10 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use super::{OnceTool, PlannedOutput, add_planned_products, require_planned_output};
+use super::{
+    OnceTool, PlannedOutput, add_planned_products, plan_cache_path, read_plan_cache,
+    require_planned_output, write_plan_cache,
+};
 use crate::config::{StandardConfig, checksum_fields_of, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
@@ -266,57 +269,6 @@ impl MassGeneratorProcessor {
         }
         Ok(())
     }
-}
-
-/// Where cached plans live, one file per instance.
-const PLAN_CACHE_DIR: &str = ".rsconstruct/mass_generator";
-
-fn plan_cache_path(instance_name: &str) -> PathBuf {
-    Path::new(PLAN_CACHE_DIR).join(format!("{instance_name}.json"))
-}
-
-/// A cached plan: the manifest exactly as `predict_command` printed it, and
-/// the key it is valid for.
-#[derive(Serialize, Deserialize)]
-struct PlanCache {
-    key: String,
-    manifest: String,
-}
-
-/// The cached manifest if the cache file exists and was written for `key`;
-/// `None` for a missing file or another key (both mean "plan again"). A file
-/// that exists but does not parse is an error: it is rsconstruct's own state,
-/// so garbage there is a bug or tampering, not a reason to quietly re-plan.
-fn read_plan_cache(path: &Path, key: &str) -> Result<Option<String>> {
-    let text = match std::fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => {
-            return Err(anyhow::Error::from(e)
-                .context(format!("Failed to read plan cache {}", path.display())));
-        }
-    };
-    let cache: PlanCache = serde_json::from_str(&text).with_context(|| {
-        format!(
-            "Plan cache {} is corrupt; delete it and rerun",
-            path.display()
-        )
-    })?;
-    Ok((cache.key == key).then_some(cache.manifest))
-}
-
-fn write_plan_cache(path: &Path, key: &str, manifest: &str) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create {}", parent.display()))?;
-    }
-    let cache = PlanCache {
-        key: key.to_string(),
-        manifest: manifest.to_string(),
-    };
-    let text = serde_json::to_string(&cache).context("Failed to serialize the plan cache")?;
-    std::fs::write(path, text)
-        .with_context(|| format!("Failed to write plan cache {}", path.display()))
 }
 
 /// Run `predict_command` and return what it printed.
@@ -758,33 +710,6 @@ mod tests {
         assert!(!proc(Some(vec![]), Some(vec![])).declares_plan_inputs());
         assert!(proc(Some(vec![]), Some(vec!["site.toml"])).declares_plan_inputs());
         assert!(proc(None, Some(vec!["site.toml"])).declares_plan_inputs());
-    }
-
-    #[test]
-    fn plan_cache_round_trips_and_rejects_other_keys_and_garbage() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let path = tmp.path().join("sub/site.json");
-        assert_eq!(
-            read_plan_cache(&path, "k1").unwrap(),
-            None,
-            "missing file is a miss"
-        );
-        write_plan_cache(&path, "k1", "{\"version\":1,\"outputs\":[]}").unwrap();
-        assert_eq!(
-            read_plan_cache(&path, "k1").unwrap().as_deref(),
-            Some("{\"version\":1,\"outputs\":[]}")
-        );
-        assert_eq!(
-            read_plan_cache(&path, "k2").unwrap(),
-            None,
-            "other key is a miss"
-        );
-        std::fs::write(&path, "not json").unwrap();
-        let err = read_plan_cache(&path, "k1").unwrap_err();
-        assert!(
-            format!("{err:#}").contains("is corrupt; delete it"),
-            "{err:#}"
-        );
     }
 
     #[test]

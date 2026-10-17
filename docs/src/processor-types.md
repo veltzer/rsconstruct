@@ -344,9 +344,22 @@ docs/index.md, templates/default.html → _site/index.html
 docs/about.md, templates/default.html → _site/about/index.html
 ```
 
+**Build documentation with Sphinx:**
+
+```toml
+[processor.mass_generator.sphinx]
+dep_inputs = ["src/mypkg/**/*.py", "pyproject.toml", "uv.lock"]
+```
+
+Asks Sphinx itself which files `sphinx-build -b html` will write (a planner runs Sphinx's read phase, nothing more), builds `sphinx/` into `docs/` through a staging directory, and caches every page, static file and index as a product of its own.
+
+```text
+sphinx/*, src/mypkg/**/*.py → docs/index.html, docs/mypkg.html, docs/_static/basic.css, …
+```
+
 ### Built-in mass generators
 
-generic, zola
+generic, sphinx, zola
 
 Any tool that honors the manifest contract plugs into the config-driven `generic` mass generator via `[processor.mass_generator.generic.NAME]`; see [Mass Generator](processor/mass_generator/generic.md).
 

@@ -152,6 +152,7 @@ mod processor {
     }
     pub mod mass_generator {
         pub mod generic;
+        pub mod sphinx;
         pub mod zola;
     }
     pub mod markdown;
