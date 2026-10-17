@@ -775,10 +775,20 @@ mod tests {
     fn ready_tracker_releases_a_mass_generator_run_together() {
         let mut g = BuildGraph::new();
         let info = g
-            .add_product(vec![".git/HEAD".into()], vec!["info.toml".into()], "info", None)
+            .add_product(
+                vec![".git/HEAD".into()],
+                vec!["info.toml".into()],
+                "info",
+                None,
+            )
             .unwrap();
         let atom = g
-            .add_product(vec!["post.md".into()], vec!["_site/atom.xml".into()], "site", None)
+            .add_product(
+                vec!["post.md".into()],
+                vec!["_site/atom.xml".into()],
+                "site",
+                None,
+            )
             .unwrap();
         let page = g
             .add_product(
@@ -789,7 +799,12 @@ mod tests {
             )
             .unwrap();
         let feed = g
-            .add_product(vec!["_site/atom.xml".into()], vec!["feed.xml".into()], "feed", None)
+            .add_product(
+                vec!["_site/atom.xml".into()],
+                vec!["feed.xml".into()],
+                "feed",
+                None,
+            )
             .unwrap();
         g.resolve_dependencies();
 
@@ -805,7 +820,11 @@ mod tests {
         tracker.finish(&g, info);
         assert_eq!(tracker.take_ready(), vec![page]);
         tracker.recount(&g);
-        assert_eq!(tracker.take_ready(), Vec::<usize>::new(), "a recount keeps the wait");
+        assert_eq!(
+            tracker.take_ready(),
+            Vec::<usize>::new(),
+            "a recount keeps the wait"
+        );
         tracker.finish(&g, page);
         assert_eq!(tracker.take_ready(), vec![feed]);
         tracker.finish(&g, feed);
@@ -819,13 +838,28 @@ mod tests {
     fn ready_tracker_does_not_tie_a_run_that_feeds_itself() {
         let mut g = BuildGraph::new();
         let first = g
-            .add_product(vec!["a.md".into()], vec!["_site/a.html".into()], "site", None)
+            .add_product(
+                vec!["a.md".into()],
+                vec!["_site/a.html".into()],
+                "site",
+                None,
+            )
             .unwrap();
         let mid = g
-            .add_product(vec!["_site/a.html".into()], vec!["index.toml".into()], "index", None)
+            .add_product(
+                vec!["_site/a.html".into()],
+                vec!["index.toml".into()],
+                "index",
+                None,
+            )
             .unwrap();
         let last = g
-            .add_product(vec!["index.toml".into()], vec!["_site/b.html".into()], "site", None)
+            .add_product(
+                vec!["index.toml".into()],
+                vec!["_site/b.html".into()],
+                "site",
+                None,
+            )
             .unwrap();
         g.resolve_dependencies();
 
