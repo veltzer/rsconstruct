@@ -116,6 +116,38 @@ fn processors_list_shows_descriptions() {
     assert!(stdout.contains("tera"), "Expected tera processor");
 }
 
+/// `processor config` of an instance ends with the processor's own field
+/// table. It used to split the name by hand and look up a processor called
+/// "processor", which printed only the shared fields with type `?`.
+#[test]
+fn processor_config_of_an_instance_lists_its_own_fields() {
+    let temp_dir =
+        setup_project_with_config("[processor.generator.marp.slides]\nsrc_dirs = [\"slides\"]\n");
+    let output = run_rsconstruct_with_env(
+        temp_dir.path(),
+        &["processor", "config", "processor.generator.marp.slides"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(
+        output.status.success(),
+        "processor config failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parameters = stdout
+        .split_once("Parameters:")
+        .map(|(_, rest)| rest)
+        .expect("a Parameters table follows the config");
+    assert!(
+        parameters.contains("timeout_secs"),
+        "marp's own field must be in the Parameters table:\n{stdout}"
+    );
+    assert!(
+        !parameters.contains("| ?"),
+        "every field must show its type, not `?`:\n{stdout}"
+    );
+}
+
 #[test]
 fn processors_files_json_output() {
     let temp_dir = setup_test_project();

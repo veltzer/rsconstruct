@@ -764,11 +764,9 @@ impl Builder {
                             other => vec![vec!["(value)".to_string(), format_config_value(other)]],
                         };
                         crate::tables::print_table(&["Field", "Value"], &rows);
-                        // Show the processor's type name for metadata lookup.
-                        // Multi-instance names are like "explicit.report" — strip the instance suffix.
-                        let type_name = n.split('.').next().unwrap_or(n);
+                        // The registry lookup strips an instance suffix itself.
                         println!("\nParameters:");
-                        print_processor_metadata(type_name, verbose);
+                        print_processor_metadata(n, verbose);
                         if i + 1 < names.len() {
                             println!();
                         }
