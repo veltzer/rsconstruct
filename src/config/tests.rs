@@ -986,6 +986,29 @@ fn required_tools_is_a_known_standard_field() {
     );
 }
 
+/// Every field shared by all processors has a type the validator checks.
+/// `expected_field_type` lists them by hand, and `required_tools` was added
+/// to `known_fields` without a type: a wrong value passed the unknown-field
+/// check, skipped the type check, and failed later with a raw serde message
+/// instead of `[section]: field 'x' must be ...`. A processor name that has
+/// no own fields keeps the lookup to the shared arms.
+#[test]
+fn every_shared_field_has_an_expected_type() {
+    use crate::config::KnownFields as _;
+    let mut untyped: Vec<&str> = crate::config::StandardConfig::known_fields()
+        .iter()
+        .chain(crate::config::SCAN_CONFIG_FIELDS.iter())
+        .chain(crate::config::STANDARD_EXTRA_FIELDS.iter())
+        .copied()
+        .filter(|f| crate::config::expected_field_type("processor.checker.ruff", f).is_none())
+        .collect();
+    untyped.sort_unstable();
+    assert!(
+        untyped.is_empty(),
+        "shared fields with no expected type in expected_field_type: {untyped:?}"
+    );
+}
+
 /// The field round-trips from TOML rather than being silently dropped by serde.
 #[test]
 fn required_tools_deserializes_from_toml() {

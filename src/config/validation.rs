@@ -86,6 +86,7 @@ pub(super) fn expected_field_type(processor: &str, field: &str) -> Option<FieldT
         "args" => return Some(FieldType::StringArray),
         "dep_inputs" => return Some(FieldType::StringArray),
         "dep_auto" => return Some(FieldType::StringArray),
+        "required_tools" => return Some(FieldType::StringArray),
         "max_jobs" => return Some(FieldType::Integer),
         "enabled" => return Some(FieldType::Bool),
         super::OUTPUT_DEPENDS_ON_INPUT_NAME => return Some(FieldType::Bool),
