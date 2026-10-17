@@ -169,13 +169,20 @@ fn fast_checksum(
             db.begin_read(),
             "Failed to begin read transaction for mtime cache",
         )?;
+        // A table that does not exist yet is a fresh cache: a miss. Any other
+        // storage error is reported rather than turning the mtime cache off
+        // for good without a word. An entry that does not parse (written by
+        // another rsconstruct version) is a miss: the file is re-hashed and
+        // the entry rewritten.
         match read_txn.open_table(MTIME_TABLE) {
             Ok(table) => table
                 .get(path_str.as_str())
-                .ok()
-                .flatten()
+                .with_context(|| format!("Failed to read the mtime cache entry of {path_str}"))?
                 .and_then(|data| serde_json::from_slice::<MtimeEntry>(data.value()).ok()),
-            Err(_) => None,
+            Err(redb::TableError::TableDoesNotExist(_)) => None,
+            Err(e) => {
+                return Err(anyhow::Error::from(e).context("Failed to open the mtime cache table"));
+            }
         }
     } else {
         None

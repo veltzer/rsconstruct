@@ -444,7 +444,11 @@ impl DepsCache {
                     .open_table(DEPS_TABLE)
                     .context("Failed to open deps table")?;
                 for key in &keys_to_remove {
-                    if table.remove(key.as_str()).is_ok() {
+                    if table
+                        .remove(key.as_str())
+                        .with_context(|| format!("Failed to remove dependency cache entry {key}"))?
+                        .is_some()
+                    {
                         removed += 1;
                     }
                 }

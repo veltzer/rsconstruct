@@ -324,8 +324,19 @@ impl Builder {
                 Self::filter_checksum_fields(name, &config_json)
             };
 
-            // Store the config and check if it changed
-            if let Ok(Some(old_json)) = self.object_store.store_processor_config(name, &config_json)
+            // Store the config and check if it changed. A failed store is
+            // reported: dropped silently, the next build would diff against
+            // a stale baseline again and nobody would know why.
+            let stored = match self.object_store.store_processor_config(name, &config_json) {
+                Ok(stored) => stored,
+                Err(e) => {
+                    crate::output::warn(&format!(
+                        "could not record the config of [{name}] for change detection: {e:#}"
+                    ));
+                    None
+                }
+            };
+            if let Some(old_json) = stored
                 && print
             {
                 // Config changed - show diff

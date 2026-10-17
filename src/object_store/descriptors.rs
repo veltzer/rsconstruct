@@ -79,10 +79,36 @@ impl ObjectStore {
     /// Read a cache descriptor for a cache key from the local store.
     /// Returns None if not found. Read paths that can legitimately consult
     /// the remote cache should use `get_descriptor_pulling` instead.
+    ///
+    /// Descriptors are written atomically (temp file plus rename), so one
+    /// that cannot be read or parsed is damage, not a half-written entry.
+    /// It still counts as a miss, so the product rebuilds and rewrites it,
+    /// but the damage is reported: `cache trim` refuses to run over such a
+    /// file, and a silent miss here would leave it in place unexplained.
     pub(super) fn get_descriptor(&self, cache_key: &str) -> Option<CacheDescriptor> {
         let path = self.descriptor_path(cache_key);
-        let data = fs::read(&path).ok()?;
-        serde_json::from_slice(&data).ok()
+        let data = match fs::read(&path) {
+            Ok(data) => data,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+            Err(e) => {
+                crate::output::warn(&format!(
+                    "cannot read cache descriptor {} ({e}); treating it as a miss",
+                    path.display()
+                ));
+                return None;
+            }
+        };
+        match serde_json::from_slice(&data) {
+            Ok(descriptor) => Some(descriptor),
+            Err(e) => {
+                crate::output::warn(&format!(
+                    "cache descriptor {} is corrupt ({e}); treating it as a miss, the \
+                     rebuild rewrites it",
+                    path.display()
+                ));
+                None
+            }
+        }
     }
 
     /// Read a cache descriptor, falling back to the remote cache on a local
@@ -354,5 +380,19 @@ mod tests {
             store.get_descriptor("cdcd1212"),
             Some(CacheDescriptor::Marker)
         ));
+    }
+
+    /// A missing descriptor and a corrupt one both read as a miss (the
+    /// corrupt one also warns), so the product rebuilds and rewrites it.
+    #[test]
+    fn missing_and_corrupt_descriptors_are_misses() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let store = ObjectStore::new_in(tmp.path());
+        assert!(store.get_descriptor("efef3434").is_none());
+
+        let path = store.descriptor_path("efef3434");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, b"{ not json").unwrap();
+        assert!(store.get_descriptor("efef3434").is_none());
     }
 }
