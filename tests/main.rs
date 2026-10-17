@@ -115,17 +115,6 @@ mod processor {
         pub mod yq;
         pub mod zspell;
     }
-    pub mod creator {
-        pub mod cargo;
-        pub mod cc;
-        pub mod gem;
-        pub mod generic;
-        pub mod jekyll;
-        pub mod linux_module;
-        pub mod mdbook;
-        pub mod npm;
-        pub mod pip;
-    }
     pub mod generator {
         pub mod a2x;
         pub mod cc_single_file;
@@ -150,7 +139,15 @@ mod processor {
         pub mod tera;
     }
     pub mod mass_generator {
+        pub mod cargo;
+        pub mod cc;
+        pub mod gem;
         pub mod generic;
+        pub mod jekyll;
+        pub mod linux_module;
+        pub mod mdbook;
+        pub mod npm;
+        pub mod pip;
         pub mod sphinx;
         pub mod zola;
     }

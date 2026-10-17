@@ -3,25 +3,43 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
-fn pip_valid_project() {
-    require_tool("pip");
+fn mdbook_valid_project() {
+    require_tool("mdbook");
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.pip]\nsrc_dirs = [\".\"]\n",
+        "[processor.mass_generator.mdbook]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
 
-    // Empty requirements file — pip install succeeds with nothing to install
-    fs::write(project_path.join("requirements.txt"), "# no dependencies\n").unwrap();
+    // Create a minimal mdbook project in a subdirectory
+    fs::create_dir_all(project_path.join("docs/src")).unwrap();
+
+    fs::write(
+        project_path.join("docs/book.toml"),
+        "[book]\ntitle = \"Test\"\n",
+    )
+    .unwrap();
+
+    fs::write(
+        project_path.join("docs/src/SUMMARY.md"),
+        "# Summary\n\n- [Chapter 1](./chapter1.md)\n",
+    )
+    .unwrap();
+
+    fs::write(
+        project_path.join("docs/src/chapter1.md"),
+        "# Chapter 1\n\nHello world.\n",
+    )
+    .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
-        "Build should succeed with empty requirements.txt: stdout={}, stderr={}",
+        "Build should succeed with valid mdbook project: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
@@ -29,25 +47,43 @@ fn pip_valid_project() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Processing:"),
-        "Should process pip: {}",
+        "Should process mdbook: {}",
         stdout
     );
 }
 
 #[test]
-fn pip_incremental_skip() {
-    require_tool("pip");
+fn mdbook_incremental_skip() {
+    require_tool("mdbook");
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.pip]\nsrc_dirs = [\".\"]\n",
+        "[processor.mass_generator.mdbook]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
 
-    fs::write(project_path.join("requirements.txt"), "# no dependencies\n").unwrap();
+    fs::create_dir_all(project_path.join("docs/src")).unwrap();
+
+    fs::write(
+        project_path.join("docs/book.toml"),
+        "[book]\ntitle = \"Test\"\n",
+    )
+    .unwrap();
+
+    fs::write(
+        project_path.join("docs/src/SUMMARY.md"),
+        "# Summary\n\n- [Chapter 1](./chapter1.md)\n",
+    )
+    .unwrap();
+
+    fs::write(
+        project_path.join("docs/src/chapter1.md"),
+        "# Chapter 1\n\nHello world.\n",
+    )
+    .unwrap();
 
     // First build
     let output1 = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
@@ -59,20 +95,20 @@ fn pip_incremental_skip() {
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
-        stdout2.contains("[processor.creator.pip] Skipping (unchanged):"),
+        stdout2.contains("[processor.mass_generator.mdbook] Skipping (unchanged):"),
         "Second build should skip: {}",
         stdout2
     );
 }
 
 #[test]
-fn pip_no_project_discovered() {
+fn mdbook_no_project_discovered() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.pip]\nsrc_dirs = [\".\"]\n",
+        "[processor.mass_generator.mdbook]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
 

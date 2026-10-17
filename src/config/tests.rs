@@ -725,7 +725,6 @@ fn docs_dir_for(processor_type: crate::processor::ProcessorType) -> &'static str
     match processor_type {
         ProcessorType::Checker => "checker",
         ProcessorType::Generator => "generator",
-        ProcessorType::Creator => "creator",
         ProcessorType::Explicit => "explicit",
         ProcessorType::MassGenerator => "mass_generator",
     }
@@ -823,7 +822,6 @@ fn every_processor_file_is_declared() {
     for dir in [
         "src/processor/checker",
         "src/processor/generator",
-        "src/processor/creator",
         "src/processor/explicit",
         "src/processor/mass_generator",
     ] {
@@ -850,17 +848,13 @@ fn every_processor_file_is_declared() {
 
 /// A processor's source file sits in the directory of its type: a processor
 /// is named `processor.<type>.<name>` exactly as its module path, so a file
-/// under `generator/` that registers a Creator names itself wrongly.
-/// `linux_module` lived in `generator/` as a Creator until 2026-10-04, and
-/// nothing noticed — the docs/tests completeness checks key on the type,
-/// not on where the source is.
+/// under `generator/` that registers a different type names itself wrongly.
 #[test]
 fn every_processor_file_sits_in_its_type_directory() {
     let mut misplaced: Vec<String> = Vec::new();
     for (dir, variant) in [
         ("checker", "Checker"),
         ("generator", "Generator"),
-        ("creator", "Creator"),
         ("explicit", "Explicit"),
         ("mass_generator", "MassGenerator"),
     ] {

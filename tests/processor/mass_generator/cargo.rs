@@ -4,7 +4,7 @@ use tempfile::TempDir;
 
 /// Config that builds only the dev profile for faster tests
 const SINGLE_PROFILE_CONFIG: &str =
-    "[processor.creator.cargo]\nprofiles = [\"dev\"]\nsrc_dirs = [\".\"]\n";
+    "[processor.mass_generator.cargo]\nprofiles = [\"dev\"]\nsrc_dirs = [\".\"]\n";
 
 #[test]
 fn cargo_valid_project() {
@@ -80,7 +80,7 @@ fn cargo_incremental_skip() {
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
-        stdout2.contains("[processor.creator.cargo] Skipping (unchanged):"),
+        stdout2.contains("[processor.mass_generator.cargo] Skipping (unchanged):"),
         "Second build should skip: {}",
         stdout2
     );
@@ -184,7 +184,7 @@ fn cargo_no_project_discovered() {
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.cargo]\nsrc_dirs = [\".\"]\n",
+        "[processor.mass_generator.cargo]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
 
@@ -246,7 +246,7 @@ fn cargo_check_command() {
     // Use "cargo check" instead of "cargo build", single profile for speed
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.cargo]\ncommand = \"check\"\nprofiles = [\"dev\"]\nsrc_dirs = [\".\"]\n",
+        "[processor.mass_generator.cargo]\ncommand = \"check\"\nprofiles = [\"dev\"]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
 
@@ -293,7 +293,7 @@ fn cargo_multi_profile() {
     // concurrent execution — the race is a separate concern.
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.cargo]\nsrc_dirs = [\".\"]\nmax_jobs = 1\n",
+        "[processor.mass_generator.cargo]\nsrc_dirs = [\".\"]\nmax_jobs = 1\n",
     )
     .unwrap();
 

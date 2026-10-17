@@ -1,32 +1,34 @@
-use anyhow::Result;
-use std::path::Path;
+use anyhow::{Context, Result};
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 
+use super::{PlannedOutput, add_planned_products};
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use crate::processor::{
-    Processor, SiblingFilter, anchor_display_dir, check_command_output, run_in_anchor_dir,
+    Processor, SiblingFilter, anchor_display_dir, check_command_output, ensure_output_dir,
+    run_in_anchor_dir,
 };
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-/// Npm config. Custom: `cache_output_dir`.
-pub struct NpmConfig {
-    #[serde(default = "crate::config::default_true")]
-    pub cache_output_dir: bool,
-    #[serde(flatten)]
-    pub standard: StandardConfig,
+const STAMP_DIR: &str = "out/processor.mass_generator.npm";
+const ROOT_STAMP: &str = "out/processor.mass_generator.npm/root.stamp";
+
+fn stamp_path(anchor_dir: &Path) -> PathBuf {
+    if anchor_dir.as_os_str().is_empty() {
+        return PathBuf::from(ROOT_STAMP);
+    }
+    let flat = anchor_dir.to_string_lossy().replace('/', "_");
+    Path::new(STAMP_DIR).join(format!("{flat}.stamp"))
 }
 
-impl Default for NpmConfig {
-    fn default() -> Self {
-        Self {
-            cache_output_dir: true,
-            standard: StandardConfig::default(),
-        }
-    }
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+/// Npm config.
+pub struct NpmConfig {
+    #[serde(flatten)]
+    pub standard: StandardConfig,
 }
 
 pub struct NpmProcessor {
@@ -68,7 +70,7 @@ impl Processor for NpmProcessor {
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
-        crate::processor::ProcessorBase::clean_output_dir(product, &product.processor, verbose)
+        crate::processor::ProcessorBase::clean(product, &product.processor, verbose)
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -85,10 +87,10 @@ impl Processor for NpmProcessor {
             return Ok(());
         };
 
-        let hash = Some(output_config_hash(
+        let config_hash = output_config_hash(
             &self.config,
             &crate::config::checksum_fields_of(instance_name),
-        ));
+        );
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
         let siblings = SiblingFilter {
@@ -96,6 +98,7 @@ impl Processor for NpmProcessor {
             excludes: &["/.git/", "/out/", "/.rsconstruct/", "/node_modules/"],
         };
 
+        let mut planned = Vec::with_capacity(files.len());
         for anchor in files {
             let anchor_dir = anchor
                 .parent()
@@ -111,28 +114,22 @@ impl Processor for NpmProcessor {
                 &[],
             );
 
-            let inputs = crate::processor::build_anchor_inputs(&anchor, &sibling_files, &extra);
-
-            let output_dirs = if self.config.cache_output_dir {
-                vec![anchor_dir.join("node_modules")]
-            } else {
-                Vec::new()
-            };
-            graph.add_product_with(
-                inputs,
-                vec![],
-                instance_name,
-                hash.clone(),
-                None,
-                output_dirs,
-            )?;
+            let inputs = crate::processor::build_anchor_inputs(&anchor, &sibling_files, &[]);
+            planned.push(PlannedOutput {
+                path: stamp_path(&anchor_dir),
+                sources: inputs,
+            });
         }
 
-        Ok(())
+        add_planned_products(graph, &planned, instance_name, &config_hash, &extra)
     }
 
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
-        self.execute_npm(ctx, product.primary_input())
+        self.execute_npm(ctx, product.primary_input())?;
+        let stamp = product.primary_output();
+        ensure_output_dir(stamp)?;
+        std::fs::write(stamp, "installed\n")
+            .with_context(|| format!("Failed to write npm install stamp {}", stamp.display()))
     }
 }
 
@@ -141,15 +138,11 @@ fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
 }
 inventory::submit! {
     crate::registries::ProcessorPlugin {
-        version: 1,
+        version: 2,
         name: "npm",
-        processor_type: crate::processor::ProcessorType::Creator,
+        processor_type: crate::processor::ProcessorType::MassGenerator,
         create: plugin_create,
-        fields: &[
-            crate::config::FieldSpec { name: "cache_output_dir", ty: crate::config::FieldType::Bool,
-                affects_output: false, required: false,
-                doc: "Cache the entire output directory as a unit" },
-        ],
+        fields: &[],
         omit_standard_fields: &["formats", "dep_auto", "output_dir"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["package.json"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "npm", ..crate::config::ProcessorDefaults::EMPTY }),

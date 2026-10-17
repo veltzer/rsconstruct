@@ -3,43 +3,32 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
-fn mdbook_valid_project() {
-    require_tool("mdbook");
+fn npm_valid_project() {
+    require_tool("npm");
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.mdbook]\nsrc_dirs = [\".\"]\n",
+        "[processor.mass_generator.npm]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
 
-    // Create a minimal mdbook project in a subdirectory
-    fs::create_dir_all(project_path.join("docs/src")).unwrap();
+    // Exclude node_modules from file index so npm's package.json isn't rediscovered
+    fs::write(project_path.join(".rsconstructignore"), "node_modules/\n").unwrap();
 
+    // Need at least one dependency so npm creates node_modules
     fs::write(
-        project_path.join("docs/book.toml"),
-        "[book]\ntitle = \"Test\"\n",
-    )
-    .unwrap();
-
-    fs::write(
-        project_path.join("docs/src/SUMMARY.md"),
-        "# Summary\n\n- [Chapter 1](./chapter1.md)\n",
-    )
-    .unwrap();
-
-    fs::write(
-        project_path.join("docs/src/chapter1.md"),
-        "# Chapter 1\n\nHello world.\n",
+        project_path.join("package.json"),
+        "{\"name\": \"test\", \"version\": \"1.0.0\", \"dependencies\": {\"is-number\": \"^7.0.0\"}}\n",
     )
     .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
-        "Build should succeed with valid mdbook project: stdout={}, stderr={}",
+        "Build should succeed with valid package.json: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
@@ -47,41 +36,34 @@ fn mdbook_valid_project() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Processing:"),
-        "Should process mdbook: {}",
+        "Should process npm: {}",
         stdout
     );
 }
 
 #[test]
-fn mdbook_incremental_skip() {
-    require_tool("mdbook");
+fn npm_incremental_skip() {
+    require_tool("npm");
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.mdbook]\nsrc_dirs = [\".\"]\n",
+        "[processor.mass_generator.npm]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
 
-    fs::create_dir_all(project_path.join("docs/src")).unwrap();
-
+    // Ignore node_modules and package-lock.json (created by npm install)
     fs::write(
-        project_path.join("docs/book.toml"),
-        "[book]\ntitle = \"Test\"\n",
-    )
-    .unwrap();
-
-    fs::write(
-        project_path.join("docs/src/SUMMARY.md"),
-        "# Summary\n\n- [Chapter 1](./chapter1.md)\n",
+        project_path.join(".rsconstructignore"),
+        "node_modules/\npackage-lock.json\n",
     )
     .unwrap();
 
     fs::write(
-        project_path.join("docs/src/chapter1.md"),
-        "# Chapter 1\n\nHello world.\n",
+        project_path.join("package.json"),
+        "{\"name\": \"test\", \"version\": \"1.0.0\", \"dependencies\": {\"is-number\": \"^7.0.0\"}}\n",
     )
     .unwrap();
 
@@ -95,20 +77,20 @@ fn mdbook_incremental_skip() {
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
-        stdout2.contains("[processor.creator.mdbook] Skipping (unchanged):"),
+        stdout2.contains("[processor.mass_generator.npm] Skipping (unchanged):"),
         "Second build should skip: {}",
         stdout2
     );
 }
 
 #[test]
-fn mdbook_no_project_discovered() {
+fn npm_no_project_discovered() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.mdbook]\nsrc_dirs = [\".\"]\n",
+        "[processor.mass_generator.npm]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
 

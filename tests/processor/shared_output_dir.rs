@@ -61,9 +61,9 @@ fn setup_shared_site_project() -> TempDir {
     fs::write(
         project_path.join("rsconstruct.toml"),
         concat!(
-            "[processor.creator.generic.mkdocs]\n",
+            "[processor.explicit.generic.mkdocs]\n",
             "command = \"./mkdocs.sh\"\n",
-            "src_extensions = [\"site.manifest\"]\n",
+            "inputs = [\"site.manifest\"]\n",
             "src_dirs = [\".\"]\n",
             "output_dirs = [\"_site\"]\n",
             "\n",
@@ -104,7 +104,7 @@ fn shared_dir_both_build_successfully() {
     assert!(
         project_path.join("_site/about.html").exists(),
         "pandoc (explicit) should have created _site/about.html; \
-         when the Creator runs after the Generator, it must NOT wipe the shared _site/ dir."
+         when the tree-output product runs after the file-output product, it must NOT wipe the shared _site/ dir."
     );
 
     assert_eq!(
@@ -174,18 +174,12 @@ fn shared_dir_clean_and_restore_preserves_ownership() {
             .unwrap()
             .trim(),
         "pandoc-about",
-        "about.html must still have pandoc's content — the Creator must not have claimed it"
+        "about.html must still have pandoc's content — the tree descriptor must not have claimed it"
     );
 }
 
-/// Regression test for the core invariant: a Creator's tree descriptor must
+/// Regression test for the core invariant: a product's tree descriptor must
 /// not include files declared as outputs of other products.
-///
-/// We simulate this by: running the build, then deleting the explicit (pandoc)
-/// output and blowing away pandoc's cache entry. Now `_site/about.html` is
-/// gone. We then do `clean outputs` + `build` — the Creator restore must
-/// NOT recreate about.html (because it's not in mkdocs's tree), and the
-/// explicit processor must re-run to produce it.
 #[test]
 fn creator_tree_does_not_include_foreign_outputs() {
     let temp_dir = setup_shared_site_project();
@@ -199,26 +193,15 @@ fn creator_tree_does_not_include_foreign_outputs() {
         String::from_utf8_lossy(&build.stderr)
     );
 
-    // Clean only the cache for the explicit processor's product by wiping
-    // .rsconstruct (simplest way — forces all processors to rebuild their work)
-    // and the _site directory. This is a round-trip through cache restore for mkdocs.
-    // More targeted: do "clean outputs" and then verify restore works.
     let clean = run_rsconstruct_with_env(project_path, &["clean", "outputs"], &[("NO_COLOR", "1")]);
     assert!(clean.status.success());
 
-    // Corrupt pandoc's about.html by making mkdocs restore happen WITHOUT pandoc
-    // ever running. We can't easily disable pandoc via CLI, so we rely on:
-    // if the creator tree wrongly included about.html, then restoring mkdocs's
-    // cache alone would recreate about.html. The actual test is:
-    //
-    //   1. restore mkdocs from cache (via a build that selects only mkdocs)
-    //   2. check that _site/about.html was NOT restored (because it belongs to pandoc)
     let restore_mkdocs_only = run_rsconstruct_with_env(
         project_path,
         &[
             "build",
             "-p",
-            "processor.creator.generic.mkdocs",
+            "processor.explicit.generic.mkdocs",
             "--verbose",
         ],
         &[("NO_COLOR", "1")],
@@ -244,9 +227,9 @@ fn creator_tree_does_not_include_foreign_outputs() {
     // must NOT have been restored when only mkdocs ran.
     assert!(
         !project_path.join("_site/about.html").exists(),
-        "_site/about.html must NOT be restored by the Creator alone \
+        "_site/about.html must NOT be restored by mkdocs alone \
          — it is owned by the explicit.pandoc processor and must not \
-         appear in the Creator's tree descriptor."
+         appear in mkdocs's tree descriptor."
     );
 }
 

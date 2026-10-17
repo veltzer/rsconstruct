@@ -418,9 +418,9 @@ mod tests {
     /// keeps them apart.
     #[test]
     fn short_names_are_scoped_by_type() {
-        let creator = find_plugin("processor.creator.generic").unwrap();
+        let mass_gen = find_plugin("processor.mass_generator.generic").unwrap();
         let explicit = find_plugin("processor.explicit.generic").unwrap();
-        assert_eq!(creator.processor_type, ProcessorType::Creator);
+        assert_eq!(mass_gen.processor_type, ProcessorType::MassGenerator);
         assert_eq!(explicit.processor_type, ProcessorType::Explicit);
         assert!(find_plugin("processor.checker.generic").is_none());
     }

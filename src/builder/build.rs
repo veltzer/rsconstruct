@@ -1092,7 +1092,7 @@ mod tests {
         let generic = expand("@generic", &procs);
         for pname in [
             "processor.checker.generic",
-            "processor.creator.generic",
+            "processor.mass_generator.generic",
             "processor.generator.generic",
             "processor.explicit.generic",
         ] {

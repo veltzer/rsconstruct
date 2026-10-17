@@ -56,10 +56,10 @@ fn install_fake_make(project: &Path) -> String {
 
 /// Regression test for the root-level manifest bug: when linux-module.yaml sits
 /// at the repo root, the module directory is the repo root, so the output dir
-/// (out/processor.creator.linux_module/) lives *inside* it. kbuild's `make clean` recursively
+/// (out/processor.mass_generator.linux_module/) lives *inside* it. kbuild's `make clean` recursively
 /// deletes .ko files under the module dir — which used to wipe the just-copied
 /// output, leaving the declared output missing ("Failed to read output:
-/// out/processor.creator.linux_module/<name>.ko"). The processor must capture the .ko before
+/// out/processor.mass_generator.linux_module/<name>.ko"). The processor must capture the .ko before
 /// cleaning and write it out afterwards, so a root-level module builds cleanly.
 #[test]
 fn linux_module_root_level_manifest_output_survives_clean() {
@@ -83,7 +83,7 @@ fn linux_module_root_level_manifest_output_survives_clean() {
     write_file(
         project,
         "rsconstruct.toml",
-        "[processor.creator.linux_module]\nsrc_dirs = [\".\"]\n",
+        "[processor.mass_generator.linux_module]\nsrc_dirs = [\".\"]\n",
     );
 
     let output = run_rsconstruct(project, &["build"]);
@@ -95,7 +95,7 @@ fn linux_module_root_level_manifest_output_survives_clean() {
     );
 
     // The declared output exists and holds the built module.
-    let ko = project.join("out/processor.creator.linux_module/mymod.ko");
+    let ko = project.join("out/processor.mass_generator.linux_module/mymod.ko");
     assert!(
         ko.exists(),
         "output module not produced at {}",
@@ -115,7 +115,7 @@ fn linux_module_root_level_manifest_output_survives_clean() {
 }
 
 /// A manifest in a subdirectory keeps working: the module dir is the subdir,
-/// the output lands under out/processor.creator.linux_module/<subdir>/, and clean over the subdir
+/// the output lands under out/processor.mass_generator.linux_module/<subdir>/, and clean over the subdir
 /// does not touch it. This guards the reordered clean/write against a
 /// regression in the common (subdir) layout.
 #[test]
@@ -136,7 +136,7 @@ fn linux_module_subdir_manifest_builds() {
     write_file(
         project,
         "rsconstruct.toml",
-        "[processor.creator.linux_module]\nsrc_dirs = [\"drivers\"]\n",
+        "[processor.mass_generator.linux_module]\nsrc_dirs = [\"drivers\"]\n",
     );
 
     let output = run_rsconstruct(project, &["build"]);
@@ -147,7 +147,7 @@ fn linux_module_subdir_manifest_builds() {
         String::from_utf8_lossy(&output.stderr),
     );
 
-    let ko = project.join("out/processor.creator.linux_module/drivers/hello/hello.ko");
+    let ko = project.join("out/processor.mass_generator.linux_module/drivers/hello/hello.ko");
     assert!(
         ko.exists(),
         "output module not produced at {}",

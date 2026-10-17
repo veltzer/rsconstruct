@@ -438,7 +438,7 @@ pub enum ProductAction {
 pub enum ProcessorAction {
     /// Add a processor to rsconstruct.toml with must-fill fields pre-populated and comments
     Add {
-        /// Processor name (pname) — the full name, processor.<type>.<name> (e.g., processor.checker.ruff, processor.creator.pip)
+        /// Processor name (pname) — the full name, processor.<type>.<name> (e.g., processor.checker.ruff, `processor.mass_generator.pip`)
         #[arg(value_parser = crate::registries::processor_name_parser())]
         pname: String,
         /// Print the generated TOML snippet to stdout instead of writing to rsconstruct.toml
@@ -457,7 +457,7 @@ pub enum ProcessorAction {
     },
     /// Show default configuration for a processor type by pname (no config needed)
     Defconfig {
-        /// Processor name (pname) — the full name, processor.<type>.<name> (e.g., processor.checker.ruff, processor.creator.pip)
+        /// Processor name (pname) — the full name, processor.<type>.<name> (e.g., processor.checker.ruff, `processor.mass_generator.pip`)
         #[arg(value_parser = crate::registries::processor_name_parser())]
         pname: String,
     },
@@ -498,7 +498,7 @@ pub enum ProcessorAction {
     },
     /// List all built-in processors with type and description (no config needed)
     List {
-        /// Filter by processor type (checker, generator, creator, explicit, `mass_generator`)
+        /// Filter by processor type (checker, generator, explicit, `mass_generator`)
         #[arg(long = "type", value_name = "TYPE")]
         processor_type: Option<String>,
     },

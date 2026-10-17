@@ -1,5 +1,4 @@
 mod checker;
-mod creator;
 mod explicit;
 pub mod generator;
 mod mass_generator;
@@ -30,7 +29,7 @@ pub mod names {
     pub const TERA: &str = "processor.generator.tera";
     pub const TAGS: &str = "processor.generator.tags";
     pub const CC_SINGLE_FILE: &str = "processor.generator.cc_single_file";
-    pub const CARGO: &str = "processor.creator.cargo";
+    pub const CARGO: &str = "processor.mass_generator.cargo";
     pub const CLIPPY: &str = "processor.checker.clippy";
     pub const SCRIPT: &str = "processor.checker.script";
     pub const TERMS: &str = "processor.checker.terms";
@@ -860,7 +859,7 @@ pub use generator::tags as tags_cmd;
 pub type ProcessorMap = HashMap<String, Box<dyn Processor>>;
 
 /// The type of processor - whether it generates new files, checks existing files,
-/// or produces a mass of output files in a directory.
+/// or produces a planned mass of output files.
 ///
 /// # Caching Behavior
 ///
@@ -876,12 +875,10 @@ pub type ProcessorMap = HashMap<String, Box<dyn Processor>>;
 ///   `rsconstruct build`, if the cache entry exists and inputs haven't changed, the check is skipped
 ///   entirely (instant).
 ///
-/// - **Creators** produce a mass of output files in a directory but don't enumerate
-///   those outputs individually (e.g., pip → site-packages, npm → `node_modules`, cargo → target).
-///   They use stamp files or empty outputs for cache tracking, similar to checkers.
+/// - **`MassGenerators`** plan their outputs in advance, creating one cached product per
+///   output file while running the underlying build tool at most once per build.
 ///
-/// This design ensures that `rsconstruct clean && rsconstruct build` is fast for all types - generators
-/// restore from cache, checkers skip entirely, creators re-run only when inputs change.
+/// This design ensures that `rsconstruct clean && rsconstruct build` is fast for all types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumIter)]
 pub enum ProcessorType {
     /// Generates new output files from input files (e.g., tera, `cc_single_file`).
@@ -890,16 +887,13 @@ pub enum ProcessorType {
     /// Checks/validates input files without producing output files (e.g., ruff, pylint, shellcheck).
     /// Products have empty `outputs`; the cache entry serves as the success marker.
     Checker,
-    /// Runs a command and caches declared output files and directories
-    /// (e.g., cargo, pip, npm, sphinx, mdbook, user-defined creators).
-    Creator,
     /// Many inputs aggregated into (possibly) many output files and/or directories.
     /// Unlike Generator (one product per input file), creates a single product.
     Explicit,
     /// Runs a tool that enumerates its outputs in advance (`predict_command`
     /// prints a manifest). Every predicted file is its own product with its
     /// own inputs and blob cache entry; the tool itself runs at most once per
-    /// build, when any of those products is dirty. The transparent Creator.
+    /// build, when any of those products is dirty.
     MassGenerator,
 }
 
@@ -916,7 +910,6 @@ impl ProcessorType {
         match self {
             Self::Generator => "generator",
             Self::Checker => "checker",
-            Self::Creator => "creator",
             Self::Explicit => "explicit",
             Self::MassGenerator => "mass_generator",
         }
@@ -929,7 +922,6 @@ impl ProcessorType {
                 "Generates output files from input files (1 input -> 1 output per format)"
             }
             Self::Checker => "Validates input files without producing outputs",
-            Self::Creator => "Runs a command and caches declared output files and directories",
             Self::Explicit => {
                 "Many inputs aggregated into (possibly) many output files and/or directories"
             }
@@ -940,7 +932,7 @@ impl ProcessorType {
     }
 }
 
-/// Helper namespace for processor boilerplate (`config_json`, clean, `clean_output_dir`).
+/// Helper namespace for processor boilerplate (`config_json`, clean).
 /// No state — description and `processor_type` now live on the plugin metadata.
 pub struct ProcessorBase;
 
@@ -951,10 +943,6 @@ impl ProcessorBase {
 
     pub fn clean(product: &Product, name: &str, verbose: bool) -> anyhow::Result<usize> {
         clean_outputs(product, name, verbose)
-    }
-
-    pub fn clean_output_dir(product: &Product, name: &str, verbose: bool) -> anyhow::Result<usize> {
-        clean_output_dir(product, name, verbose)
     }
 }
 
@@ -1496,8 +1484,10 @@ mod tests {
             let processor = fixture_processor(name, &fixture, scratch.path());
             // The smallest file each processor's discovery can parse.
             let content = match name.as_str() {
-                "processor.creator.cc" => "{}\n",
-                "processor.creator.linux_module" => "modules: []\n",
+                "processor.mass_generator.cc" => "programs:\n  - name: a\n    sources: [a.c]\n",
+                "processor.mass_generator.linux_module" => {
+                    "modules:\n  - name: a\n    sources: [a.c]\n"
+                }
                 _ => "",
             };
             let mut full: Vec<PathBuf> = vec![fixture.join("unrelated.zzz-none")];

@@ -1,6 +1,6 @@
 # Processor Types
 
-Every processor in RSConstruct has a type that determines how it discovers inputs, produces outputs, and interacts with the cache. There are five types.
+Every processor in RSConstruct has a type that determines how it discovers inputs, produces outputs, and interacts with the cache. There are four types.
 
 Run `rsconstruct processor types` to list them.
 
@@ -170,82 +170,6 @@ sass/styles.scss → out/processor.generator.sass/styles.css
 
 a2x, cc_single_file, chromium, drawio, generic, ijinja2, imarkdown2html, ipdfunite, iprotobuf, isass, jinja2, libreoffice, mako, markdown2html, marp, mermaid, objdump, pandoc, pdflatex, pdfunite, protobuf, requirements, rust_single_file, sass, tags, tera, yaml2json
 
-## Creator
-
-A creator runs a command and caches declared output files and directories. It scans for anchor files — files whose presence means "run this tool here." One product is created per anchor file found, and the command runs in the anchor file's directory.
-
-Unlike generators (where outputs are derived from input paths), creator outputs are declared explicitly in the config via `output_dirs` and `output_files`.
-
-### How it works
-
-1. Scans for anchor files matching `src_extensions` in `src_dirs`
-2. Creates one product per anchor file
-3. Runs the command in the anchor file's directory
-4. Walks all declared `output_dirs` and collects `output_files`
-5. Stores each file as a content-addressed blob
-6. Records a tree in the cache — a manifest listing every output file with its path, blob checksum, and Unix permissions
-
-### What gets cached
-
-A tree entry listing all output files. On restore, the directory tree is recreated from cached blobs with permissions preserved. Individual files within the tree that already exist with the correct checksum are skipped.
-
-### Examples
-
-**Install Python dependencies with pip:**
-
-```toml
-[processor.creator.generic.venv]
-command = "pip"
-args = ["install", "-r", "requirements.txt"]
-src_extensions = ["requirements.txt"]
-output_dirs = [".venv"]
-```
-
-Scans for `requirements.txt` files. For each one, runs `pip install` and caches the entire `.venv/` directory. After `rsconstruct clean`, the venv is restored from cache instead of reinstalling.
-
-**Build a Node.js project:**
-
-```toml
-[processor.creator.generic.npm_build]
-command = "npm"
-args = ["run", "build"]
-src_extensions = ["package.json"]
-output_dirs = ["dist"]
-```
-
-Scans for `package.json` files, runs `npm run build`, caches the `dist/` directory.
-
-**Build a Rust project with Cargo:**
-
-```toml
-[processor.creator.cargo]
-```
-
-Scans for `Cargo.toml` files, runs `cargo build`, optionally caches the `target/` directory.
-
-```text
-Cargo.toml → (creator)
-```
-
-**Run a custom build script:**
-
-```toml
-[processor.creator.generic.assets]
-command = "./build_assets.sh"
-src_extensions = [".manifest"]
-src_dirs = ["."]
-output_dirs = ["assets/compiled", "assets/sprites"]
-output_files = ["assets/manifest.json"]
-```
-
-Scans for `.manifest` files, runs the build script, caches two output directories and one output file.
-
-### Built-in creators
-
-cargo, cc, gem, generic, jekyll, linux_module, mdbook, npm, pip
-
-User-defined creators use the config-driven `generic` creator via `[processor.creator.generic.NAME]`.
-
 ## Explicit
 
 An explicit processor aggregates many inputs into (possibly) many output files and/or directories. Unlike other types which create one product per discovered file, explicit creates a single product with all declared inputs and outputs.
@@ -297,12 +221,12 @@ generic
 
 ## Mass Generator
 
-A mass generator runs a tool that produces many files in one invocation and can enumerate them in advance. It is the transparent creator: where a creator declares an opaque `output_dirs`, a mass generator asks the tool for a manifest first and turns every predicted file into a product of its own.
+A mass generator runs a tool that produces many files in one invocation and enumerates them in advance. Every planned file becomes a product of its own with its own inputs and blob cache entry, while the underlying build tool runs at most once per build.
 
 ### How it works
 
-1. At graph-build time, runs `predict_command` and parses the JSON manifest it prints
-2. Creates one product per manifest entry: `inputs` = the entry's `sources`, `outputs` = its `path`
+1. At graph-build time, computes the output plan (natively or via a planner command)
+2. Creates one product per planned file: `inputs` = the entry's `sources`, `outputs` = its `path`
 3. Classifies each product individually (skip, restore, or build)
 4. The first product that needs building runs `command`; the rest find the tool already run
 5. Compares the files the tool wrote against the plan — a missing predicted file or an off-plan write fails the build. Files another product declares, as `output_files` or under its `output_dirs`, are that product's and are not reported even when it writes them during the tool's run
@@ -347,18 +271,18 @@ sphinx/*, src/mypkg/**/*.py → docs/index.html, docs/mypkg.html, docs/_static/b
 
 ### Built-in mass generators
 
-generic, sphinx, zola
+cargo, cc, gem, generic, jekyll, linux_module, mdbook, npm, pip, sphinx, zola
 
 Any tool that honors the manifest contract plugs into the config-driven `generic` mass generator via `[processor.mass_generator.generic.NAME]`; see [Mass Generator](processor/mass_generator/generic.md).
 
 ## Comparison
 
-| | Checker | Generator | Creator | Explicit | Mass Generator |
-|---|---|---|---|---|---|
-| **Purpose** | Validate | Transform | Build/install | Aggregate | Transform, many at once |
-| **Inputs** | Scanned | Scanned | Scanned (anchor files) | Declared in config | Declared by the tool's plan |
-| **Products** | One per input | One per input (x format) | One per anchor | One total | One per predicted file |
-| **Outputs** | None | Derived from input path | Declared dirs + files | Declared files | Predicted files |
-| **Cache type** | Marker | Blob | Tree | Blob | Blob |
-| **Runs in** | Project root | Project root | Anchor file's directory | Project root | Project root |
-| **Command args** | Input files | Input + output | User-defined args | `--inputs` + `--outputs` | User-defined args |
+| | Checker | Generator | Explicit | Mass Generator |
+|---|---|---|---|---|
+| **Purpose** | Validate | Transform | Aggregate | Transform, many at once |
+| **Inputs** | Scanned | Scanned | Declared in config | Declared by the tool's plan |
+| **Products** | One per input | One per input (x format) | One total | One per predicted file |
+| **Outputs** | None | Derived from input path | Declared files | Predicted files |
+| **Cache type** | Marker | Blob | Blob | Blob |
+| **Runs in** | Project root | Project root | Project root | Project root / anchor dir |
+| **Command args** | Input files | Input + output | `--inputs` + `--outputs` | User-defined args |

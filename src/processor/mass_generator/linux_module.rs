@@ -1,11 +1,18 @@
 use anyhow::{Context, Result};
+use parking_lot::Mutex;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+use super::{
+    OnceTool, PlannedOutput, add_planned_products, fresh_state_dir, install_staged,
+    require_planned_output,
+};
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
@@ -62,11 +69,24 @@ pub struct LinuxModuleConfig {
 
 pub struct LinuxModuleProcessor {
     config: LinuxModuleConfig,
+    runs: Mutex<BTreeMap<PathBuf, Arc<OnceTool>>>,
 }
 
 impl LinuxModuleProcessor {
     pub const fn new(config: LinuxModuleConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            runs: Mutex::new(BTreeMap::new()),
+        }
+    }
+
+    fn run_guard(&self, yaml_path: &Path) -> Arc<OnceTool> {
+        let mut guard = self.runs.lock();
+        Arc::clone(
+            guard
+                .entry(yaml_path.to_path_buf())
+                .or_insert_with(|| Arc::new(OnceTool::new())),
+        )
     }
 
     /// Parse a linux-module.yaml file.
@@ -82,9 +102,9 @@ impl LinuxModuleProcessor {
     fn output_dir_for(yaml_path: &Path) -> PathBuf {
         let anchor_dir = crate::processor::parent_dir_or_empty(yaml_path);
         if anchor_dir.as_os_str().is_empty() {
-            PathBuf::from("out/processor.creator.linux_module")
+            PathBuf::from("out/processor.mass_generator.linux_module")
         } else {
-            Path::new("out/processor.creator.linux_module").join(anchor_dir)
+            Path::new("out/processor.mass_generator.linux_module").join(anchor_dir)
         }
     }
 
@@ -131,13 +151,13 @@ impl LinuxModuleProcessor {
         Ok(())
     }
 
-    /// Build a single kernel module. Runs make in the module's source directory.
+    /// Build a single kernel module into `staging`. Runs make in the module's source directory.
     fn build_module(
         ctx: &crate::build_context::BuildContext,
         manifest: &LinuxModuleManifest,
         anchor_dir: &Path,
         module: &LinuxModuleModuleDef,
-        output_dir: &Path,
+        staging: &Path,
     ) -> Result<()> {
         let cwd = std::env::current_dir()
             .context("Failed to get current directory for linux module build")?;
@@ -171,15 +191,8 @@ impl LinuxModuleProcessor {
         let output = run_command(ctx, &cmd)?;
         check_command_output(&output, format_args!("make modules for {}", module.name))?;
 
-        // Read the built .ko into memory. A successful make that produced no
-        // .ko (e.g. module name mismatch with obj-m) must fail here, not later
-        // as a missing declared output. We read the bytes now — before the
-        // `make clean` below — because kbuild's clean recursively deletes every
-        // .ko under `M=<module_dir>`. When the manifest sits at the repo root,
-        // module_dir is the repo root and the output directory (out/…) lives
-        // inside it, so cleaning after copying would wipe the copy we just made.
-        // Capturing the bytes first makes the output survive clean regardless of
-        // where output_dir sits relative to module_dir.
+        // Read the built .ko into memory before `make clean`: kbuild's clean
+        // recursively deletes every .ko under `M=<module_dir>`.
         let ko_name = format!("{}.ko", module.name);
         let ko_src = module_dir.join(&ko_name);
         let ko_bytes = fs::read(&ko_src).map_err(|e| anyhow::anyhow!(
@@ -190,10 +203,7 @@ impl LinuxModuleProcessor {
             .ok()
             .map(|m| crate::platform::get_mode(&m));
 
-        // Clean up build artifacts from the source directory. Failures leave
-        // the source tree polluted — report them. This may delete the source
-        // .ko (and any .ko already written under module_dir), which is why the
-        // output is written from the in-memory bytes afterwards.
+        // Clean up build artifacts from the source directory.
         let mut clean_cmd = Command::new(&manifest.make);
         clean_cmd.arg("-C").arg(&kdir);
         if let Some(ref arch) = manifest.arch {
@@ -219,15 +229,13 @@ impl LinuxModuleProcessor {
             )
         })?;
 
-        // Write the captured .ko to the output directory, after clean, so it
-        // cannot be swept away by the clean above.
         crate::errors::ctx(
-            fs::create_dir_all(output_dir),
-            &format!("Failed to create output dir: {}", output_dir.display()),
+            fs::create_dir_all(staging),
+            &format!("Failed to create staging dir: {}", staging.display()),
         )?;
-        let ko_dst = output_dir.join(&ko_name);
+        let ko_dst = staging.join(&ko_name);
         fs::write(&ko_dst, &ko_bytes)
-            .with_context(|| format!("Failed to write {ko_name} to output"))?;
+            .with_context(|| format!("Failed to write {ko_name} to staging"))?;
         if let Some(mode) = ko_mode {
             crate::platform::set_permissions_mode(&ko_dst, mode)
                 .with_context(|| format!("Failed to set mode on {}", ko_dst.display()))?;
@@ -236,21 +244,34 @@ impl LinuxModuleProcessor {
         Ok(())
     }
 
-    /// Execute a full linux-module.yaml build.
+    /// Execute a full linux-module.yaml build into staging, check against
+    /// the plan, and move the planned `.ko` files into `output_dir`.
     fn execute_build(
         &self,
         ctx: &crate::build_context::BuildContext,
         yaml_path: &Path,
+        instance_name: &str,
     ) -> Result<()> {
         let manifest = Self::parse_manifest(yaml_path)?;
         let anchor_dir = crate::processor::parent_dir_or_empty(yaml_path);
         let output_dir = Self::output_dir_for(yaml_path);
+        let flat = yaml_path.to_string_lossy().replace('/', "_");
+        let staging = fresh_state_dir(instance_name, &format!(".{flat}.staging"))?;
 
+        let mut planned_relative = BTreeSet::new();
         for module in &manifest.modules {
-            Self::build_module(ctx, &manifest, anchor_dir, module, &output_dir)?;
+            planned_relative.insert(format!("{}.ko", module.name));
+            Self::build_module(ctx, &manifest, anchor_dir, module, &staging)?;
         }
 
-        Ok(())
+        install_staged(
+            &staging,
+            &planned_relative,
+            &output_dir,
+            instance_name,
+            "linux_module",
+            false,
+        )
     }
 }
 
@@ -259,8 +280,8 @@ impl Processor for LinuxModuleProcessor {
         &self.config.standard
     }
 
-    /// One product per scanned manifest; the module sources it adds are
-    /// read from the manifest on disk, not from the index.
+    /// One product per module in each scanned manifest; the module sources
+    /// are read from the manifest on disk, not from the index.
     fn discovery(&self) -> crate::processor::Discovery {
         crate::processor::Discovery::PerFile
     }
@@ -273,11 +294,11 @@ impl Processor for LinuxModuleProcessor {
         crate::processor::ProcessorBase::clean(product, &product.processor, verbose)
     }
 
+    fn replaces_own_outputs(&self) -> bool {
+        true
+    }
+
     fn required_tools(&self) -> Vec<String> {
-        // uname is used to locate the running kernel's build directory when
-        // the manifest doesn't set `kdir`. It went undeclared for as long as
-        // it bypassed the central runner — exactly the drift the declared-
-        // tools check exists to catch.
         vec!["make".to_string(), "uname".to_string()]
     }
 
@@ -290,12 +311,13 @@ impl Processor for LinuxModuleProcessor {
         let Some(files) = crate::processor::scan_or_skip(&self.config.standard, file_index) else {
             return Ok(());
         };
-        let hash = Some(output_config_hash(
+        let config_hash = output_config_hash(
             &self.config,
             &crate::config::checksum_fields_of(instance_name),
-        ));
+        );
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
+        let mut planned = Vec::new();
         for yaml_path in files {
             let manifest = match Self::parse_manifest(&yaml_path) {
                 Ok(m) => m,
@@ -307,30 +329,30 @@ impl Processor for LinuxModuleProcessor {
             let anchor_dir = crate::processor::parent_dir_or_empty(&yaml_path);
             let output_dir = Self::output_dir_for(&yaml_path);
 
-            let mut inputs: Vec<PathBuf> = Vec::new();
-            inputs.push(yaml_path.clone());
-
-            let mut outputs: Vec<PathBuf> = Vec::new();
-
             for module in &manifest.modules {
+                let mut sources = vec![yaml_path.clone()];
                 for source in &module.sources {
-                    inputs.push(crate::processor::resolve_anchor_path(anchor_dir, source));
+                    sources.push(crate::processor::resolve_anchor_path(anchor_dir, source));
                 }
-                outputs.push(output_dir.join(format!("{}.ko", module.name)));
+                planned.push(PlannedOutput {
+                    path: output_dir.join(format!("{}.ko", module.name)),
+                    sources,
+                });
             }
-
-            inputs.extend_from_slice(&extra);
-
-            graph.add_product(inputs, outputs, instance_name, hash.clone())?;
         }
-        Ok(())
+        add_planned_products(graph, &planned, instance_name, &config_hash, &extra)
     }
 
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let yaml_path = product.primary_input();
         let display_dir = anchor_display_dir(yaml_path);
-        self.execute_build(ctx, yaml_path)
-            .with_context(|| format!("linux_module build failed in {display_dir}"))
+        let instance_name = &product.processor;
+        let guard = self.run_guard(yaml_path);
+        guard.run("linux_module", || {
+            self.execute_build(ctx, yaml_path, instance_name)
+                .with_context(|| format!("linux_module build failed in {display_dir}"))
+        })?;
+        require_planned_output(product, "linux_module")
     }
 }
 
@@ -339,9 +361,9 @@ fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
 }
 inventory::submit! {
     crate::registries::ProcessorPlugin {
-        version: 1,
+        version: 2,
         name: "linux_module",
-        processor_type: crate::processor::ProcessorType::Creator,
+        processor_type: crate::processor::ProcessorType::MassGenerator,
         create: plugin_create,
         fields: &[],
         omit_standard_fields: &[],

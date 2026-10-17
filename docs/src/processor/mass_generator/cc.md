@@ -15,9 +15,10 @@ are relative to the `cc.yaml` file's location and are automatically resolved
 to project-root-relative paths before compilation. All commands run from the
 project root.
 
-Output goes under `out/processor.creator.cc/<path-to-cc.yaml-dir>/`, so a manifest at
-`src/exercises/foo/cc.yaml` produces output in `out/processor.creator.cc/src/exercises/foo/`.
-A manifest at the project root produces output in `out/processor.creator.cc/`.
+Every file written under `out/processor.mass_generator.cc/<path-to-cc.yaml-dir>/`
+(`obj/<target>/*.o`, `lib/lib<name>.a`, `lib/lib<name>.so`, and `bin/<name>`)
+is planned in advance as its own cached product, built into a staging directory,
+and verified against the plan via `install_staged`.
 
 Source files are compiled to object files, then linked into the final targets:
 
@@ -27,11 +28,11 @@ src/exercises/foo/cc.yaml defines:
   program "main" from main.c, links mymath
 
 Build produces:
-  out/processor.creator.cc/src/exercises/foo/obj/mymath/math.o
-  out/processor.creator.cc/src/exercises/foo/obj/mymath/utils.o
-  out/processor.creator.cc/src/exercises/foo/lib/libmymath.a
-  out/processor.creator.cc/src/exercises/foo/obj/main/main.o
-  out/processor.creator.cc/src/exercises/foo/bin/main
+  out/processor.mass_generator.cc/src/exercises/foo/obj/mymath/math.o
+  out/processor.mass_generator.cc/src/exercises/foo/obj/mymath/utils.o
+  out/processor.mass_generator.cc/src/exercises/foo/lib/libmymath.a
+  out/processor.mass_generator.cc/src/exercises/foo/obj/main/main.o
+  out/processor.mass_generator.cc/src/exercises/foo/bin/main
 ```
 
 ## cc.yaml Format
@@ -40,7 +41,7 @@ All paths in the manifest are relative to the `cc.yaml` file's location.
 
 ```yaml
 # Global settings (all optional). A field left unset inherits its value
-# from [processor.creator.cc] in rsconstruct.toml; a field set explicitly — even
+# from [processor.mass_generator.cc] in rsconstruct.toml; a field set explicitly — even
 # to an empty list — overrides the config default for this manifest.
 cc: gcc               # C compiler (unset: inherit config, default gcc)
 cxx: g++              # C++ compiler (unset: inherit config, default g++)
@@ -96,10 +97,10 @@ Global `cflags` are used for C files and `cxxflags` for C++ files.
 
 ## Output Layout
 
-Output is placed under `out/processor.creator.cc/<cc.yaml-relative-dir>/`:
+Output is placed under `out/processor.mass_generator.cc/<cc.yaml-relative-dir>/`:
 
 ```text
-out/processor.creator.cc/<cc.yaml-dir>/
+out/processor.mass_generator.cc/<cc.yaml-dir>/
   obj/<target_name>/    # Object files per target
     file.o
   lib/                  # Libraries
@@ -125,7 +126,7 @@ compile+link since `ar` requires object files.
 ## Configuration
 
 ```toml
-[processor.creator.cc]
+[processor.mass_generator.cc]
 enabled = true            # Enable/disable (default: true)
 cc = "gcc"                # Default C compiler (default: "gcc")
 cxx = "g++"               # Default C++ compiler (default: "g++")
@@ -134,8 +135,8 @@ cxxflags = []             # Additional global C++ flags
 ldflags = []              # Additional global linker flags
 include_dirs = []         # Additional global -I paths
 single_invocation = false # Use single-invocation mode (default: false)
-dep_inputs = []         # Extra files that trigger rebuilds
-cache_output_dir = true   # Cache entire output directory (default: true)
+loose_manifest = false    # Warn instead of failing on plan mismatch (default: false)
+dep_inputs = []           # Extra files that trigger rebuilds
 ```
 
 The compiler and flag fields are project-wide **defaults** for every
@@ -156,14 +157,14 @@ checking during discovery.
 | `ldflags` | string[] | `[]` | Global linker flags |
 | `include_dirs` | string[] | `[]` | Global include directories |
 | `single_invocation` | bool | `false` | Build programs in single compiler invocation |
+| `loose_manifest` | bool | `false` | Warn instead of failing when staged outputs do not match the plan |
 | `dep_inputs` | string[] | `[]` | Extra files that trigger rebuilds when changed |
-| `cache_output_dir` | bool | `true` | Cache the entire output directory |
 | `src_dirs` | string[] | `[""]` | Directory to scan for cc.yaml files |
 | `src_extensions` | string[] | `["cc.yaml"]` | File patterns to scan for |
 
 ## Batch support
 
-Runs as a single whole-project operation (e.g., `cargo build`, `npm install`).
+Runs once per `cc.yaml` manifest when any of its planned output files is dirty.
 
 ## Example
 
@@ -200,12 +201,12 @@ programs:
 Running `rsconstruct build` produces:
 
 ```text
-out/processor.creator.cc/exercises/math/obj/math/math.o
-out/processor.creator.cc/exercises/math/lib/libmath.a
-out/processor.creator.cc/exercises/math/obj/main/main.o
-out/processor.creator.cc/exercises/math/bin/main
+out/processor.mass_generator.cc/exercises/math/obj/math/math.o
+out/processor.mass_generator.cc/exercises/math/lib/libmath.a
+out/processor.mass_generator.cc/exercises/math/obj/main/main.o
+out/processor.mass_generator.cc/exercises/math/bin/main
 ```
 
 ## Clean behavior
 
-This processor is a Creator — `rsconstruct clean outputs` removes its declared `output_dirs` recursively (the build tool produces an unknown set of files inside, so directory-level deletion is the only option). After all per-product cleans complete, the orchestrator removes any parent directories that are now empty. Pass `--no-empty-dirs` to keep them. See [Clean behavior](../../processors.md#clean-behavior) and [`rsconstruct clean`](../../commands.md#rsconstruct-clean).
+This processor is a Mass Generator — `rsconstruct clean outputs` removes each planned output file (`product.outputs`) and then sweeps any parent directories that are now empty. Pass `--no-empty-dirs` to keep them. See [Clean behavior](../../processors.md#clean-behavior) and [`rsconstruct clean`](../../commands.md#rsconstruct-clean).

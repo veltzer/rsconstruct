@@ -3,32 +3,31 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
-fn npm_valid_project() {
-    require_tool("npm");
+fn gem_valid_project() {
+    require_tool("bundle");
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.npm]\nsrc_dirs = [\".\"]\n",
+        "[processor.mass_generator.gem]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
 
-    // Exclude node_modules from file index so npm's package.json isn't rediscovered
-    fs::write(project_path.join(".rsconstructignore"), "node_modules/\n").unwrap();
+    // Exclude gems from file index
+    fs::write(project_path.join(".rsconstructignore"), "gems/\n").unwrap();
 
-    // Need at least one dependency so npm creates node_modules
     fs::write(
-        project_path.join("package.json"),
-        "{\"name\": \"test\", \"version\": \"1.0.0\", \"dependencies\": {\"is-number\": \"^7.0.0\"}}\n",
+        project_path.join("Gemfile"),
+        "source 'https://rubygems.org'\ngem 'rake'\n",
     )
     .unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
-        "Build should succeed with valid package.json: stdout={}, stderr={}",
+        "Build should succeed with valid Gemfile: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
@@ -36,34 +35,29 @@ fn npm_valid_project() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Processing:"),
-        "Should process npm: {}",
+        "Should process gem: {}",
         stdout
     );
 }
 
 #[test]
-fn npm_incremental_skip() {
-    require_tool("npm");
+fn gem_incremental_skip() {
+    require_tool("bundle");
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.npm]\nsrc_dirs = [\".\"]\n",
+        "[processor.mass_generator.gem]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
 
-    // Ignore node_modules and package-lock.json (created by npm install)
-    fs::write(
-        project_path.join(".rsconstructignore"),
-        "node_modules/\npackage-lock.json\n",
-    )
-    .unwrap();
+    fs::write(project_path.join(".rsconstructignore"), "gems/\n").unwrap();
 
     fs::write(
-        project_path.join("package.json"),
-        "{\"name\": \"test\", \"version\": \"1.0.0\", \"dependencies\": {\"is-number\": \"^7.0.0\"}}\n",
+        project_path.join("Gemfile"),
+        "source 'https://rubygems.org'\ngem 'rake'\n",
     )
     .unwrap();
 
@@ -77,20 +71,20 @@ fn npm_incremental_skip() {
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
-        stdout2.contains("[processor.creator.npm] Skipping (unchanged):"),
+        stdout2.contains("[processor.mass_generator.gem] Skipping (unchanged):"),
         "Second build should skip: {}",
         stdout2
     );
 }
 
 #[test]
-fn npm_no_project_discovered() {
+fn gem_no_project_discovered() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.npm]\nsrc_dirs = [\".\"]\n",
+        "[processor.mass_generator.gem]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
 

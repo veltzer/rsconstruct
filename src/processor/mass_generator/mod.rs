@@ -8,7 +8,15 @@
 //! caching a plan, building into staging and checking it against the plan —
 //! lives here.
 
+mod cargo;
+mod cc;
+pub mod gem;
 mod generic;
+mod jekyll;
+mod linux_module;
+mod mdbook;
+mod npm;
+mod pip;
 mod sphinx;
 mod zola;
 

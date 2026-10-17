@@ -6,35 +6,32 @@ Builds Linux kernel modules (`.ko` files) from source, driven by a
 `linux-module.yaml` manifest. The processor generates a temporary `Kbuild`
 file, invokes the kernel build system (`make -C <kdir> M=<src> modules`),
 captures the resulting `.ko`, cleans up build artifacts from the source tree,
-and writes the module to the output directory.
+and installs the staged `.ko` files into the output directory via `install_staged`.
 
 ## How It Works
 
 The processor scans for `linux-module.yaml` files. Each manifest lists one
-or more kernel modules to build. For each module the processor:
+or more kernel modules to build, and each `.ko` file is planned as its own
+cached product. When any module for a manifest is dirty, the processor:
 
 1. Generates a `Kbuild` file in the source directory (next to the yaml).
 2. Runs `make -C <kdir> M=<absolute-source-dir> modules` to compile.
-3. Reads the resulting `.ko` into memory.
+3. Reads the resulting `.ko` into a staging directory.
 4. Runs `make ... clean` and removes the generated `Kbuild` so the source
    directory stays clean.
-5. Writes the captured `.ko` to `out/linux-module/<yaml-relative-dir>/`.
+5. Verifies the staged `.ko` files against the plan and installs them to
+   `out/processor.mass_generator.linux_module/<yaml-relative-dir>/`.
 
 Steps 3–5 are ordered deliberately: kbuild's `make clean` recursively deletes
 every `.ko` under `M=<source-dir>`. When the manifest sits at the repo root the
 source directory *is* the repo root, so the output directory (`out/…`) lives
-inside the clean's scope. Capturing the module before cleaning and writing it
-out afterwards keeps the output intact regardless of where it lands relative to
+inside the clean's scope. Capturing the module before cleaning and installing it
+afterwards keeps the output intact regardless of where it lands relative to
 the source directory.
 
 Because the kernel build system requires `M=` to point at an absolute path
 containing the sources and `Kbuild`, the make command runs in the yaml
 file's directory — not the project root.
-
-The processor is a **generator**: it knows exactly which `.ko` files it
-produces. Outputs are tracked in the build graph, cached in the object
-store, and can be restored from cache after `rsconstruct clean` without
-recompiling.
 
 ## linux-module.yaml Format
 
@@ -71,10 +68,10 @@ modules:
 
 ## Output Layout
 
-Output is placed under `out/linux-module/<yaml-relative-dir>/`:
+Output is placed under `out/processor.mass_generator.linux_module/<yaml-relative-dir>/`:
 
 ```text
-out/linux-module/<yaml-dir>/
+out/processor.mass_generator.linux_module/<yaml-dir>/
   <module_name>.ko
 ```
 
@@ -82,7 +79,7 @@ For example, a manifest at `src/kernel/hello/linux-module.yaml` defining
 module `hello` produces:
 
 ```text
-out/linux-module/src/kernel/hello/hello.ko
+out/processor.mass_generator.linux_module/src/kernel/hello/hello.ko
 ```
 
 ## KDIR Detection
@@ -108,9 +105,10 @@ This file is removed after building (whether the build succeeds or fails).
 ## Configuration
 
 ```toml
-[processor.creator.linux_module]
+[processor.mass_generator.linux_module]
 enabled = true           # Enable/disable (default: true)
-dep_inputs = []        # Extra files that trigger rebuilds
+loose_manifest = false   # Warn instead of failing on plan mismatch (default: false)
+dep_inputs = []          # Extra files that trigger rebuilds
 ```
 
 ### Configuration Reference
@@ -118,6 +116,7 @@ dep_inputs = []        # Extra files that trigger rebuilds
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `enabled` | bool | `true` | Enable/disable the processor |
+| `loose_manifest` | bool | `false` | Warn instead of failing when staged outputs do not match the plan |
 | `dep_inputs` | string[] | `[]` | Extra files that trigger rebuilds when changed |
 | `src_dirs` | string[] | `[""]` | Directory to scan for linux-module.yaml files |
 | `src_extensions` | string[] | `["linux-module.yaml"]` | File patterns to scan for |
@@ -125,7 +124,7 @@ dep_inputs = []        # Extra files that trigger rebuilds
 
 ## Batch support
 
-Each input file is processed individually, producing its own output file.
+Runs once per `linux-module.yaml` manifest when any of its planned `.ko` products is dirty.
 
 ## Caching
 
@@ -187,11 +186,11 @@ module_exit(hello_exit);
 Running `rsconstruct build` produces:
 
 ```text
-out/linux-module/drivers/hello/hello.ko
+out/processor.mass_generator.linux_module/drivers/hello/hello.ko
 ```
 
-The module can then be loaded with `sudo insmod out/linux-module/drivers/hello/hello.ko`.
+The module can then be loaded with `sudo insmod out/processor.mass_generator.linux_module/drivers/hello/hello.ko`.
 
 ## Clean behavior
 
-This processor is a Creator — `rsconstruct clean outputs` removes its declared `output_dirs` recursively (the build tool produces an unknown set of files inside, so directory-level deletion is the only option). After all per-product cleans complete, the orchestrator removes any parent directories that are now empty. Pass `--no-empty-dirs` to keep them. See [Clean behavior](../../processors.md#clean-behavior) and [`rsconstruct clean`](../../commands.md#rsconstruct-clean).
+This processor is a Mass Generator — `rsconstruct clean outputs` removes each planned `.ko` output file (`product.outputs`) and sweeps any parent directories that are now empty. Pass `--no-empty-dirs` to keep them. See [Clean behavior](../../processors.md#clean-behavior) and [`rsconstruct clean`](../../commands.md#rsconstruct-clean).

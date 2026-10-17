@@ -924,7 +924,7 @@ fn init_project() -> Result<()> {
 # [processor.checker.make]
 # make = "make"
 
-# [processor.creator.cargo]
+# [processor.mass_generator.cargo]
 # cargo = "cargo"
 
 [graph]

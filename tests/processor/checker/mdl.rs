@@ -93,7 +93,7 @@ fn mdl_local_repo_depends_on_gem_install() {
     fs::write(project_path.join(".rsconstructignore"), "gems/\n").unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.gem]\nsrc_dirs = [\"\"]\n\n\
+        "[processor.mass_generator.gem]\nsrc_dirs = [\"\"]\n\n\
          [processor.checker.mdl]\nsrc_dirs = [\"\"]\nlocal_repo = true\n",
     )
     .unwrap();
@@ -116,9 +116,12 @@ fn mdl_local_repo_depends_on_gem_install() {
             .find(|p| p["processor"] == name)
             .unwrap_or_else(|| panic!("no {name} product: {graph}"))
     };
-    let gem = id_of("processor.creator.gem");
+    let gem = id_of("processor.mass_generator.gem");
     let mdl = id_of("processor.checker.mdl");
-    assert_eq!(gem["outputs"][0], "out/processor.creator.gem/root.stamp");
+    assert_eq!(
+        gem["outputs"][0],
+        "out/processor.mass_generator.gem/root.stamp"
+    );
     assert!(
         mdl["depends_on"].as_array().unwrap().contains(&gem["id"]),
         "mdl must depend on the gem install: {graph}"

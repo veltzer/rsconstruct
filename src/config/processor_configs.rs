@@ -196,7 +196,7 @@ impl KnownFields for CheckerConfig {
 /// Alias for `CheckerConfig` (used by `SimpleChecker`).
 pub type CheckerConfigWithCommand = CheckerConfig;
 
-// CreatorConfig lives in src/processor/creator/generic.rs.
+// MassGeneratorConfig lives in src/processor/mass_generator/generic.rs.
 
 // TeraConfig lives in src/processor/generator/tera.rs.
 
@@ -211,14 +211,14 @@ pub type MarpImagesConfig = CheckerConfig;
 // CcSingleFileConfig (and IncludeScanner/CompilerProfile) live in
 // src/processor/generator/cc_single_file.rs.
 
-// CcConfig (and the cc.yaml manifest types) live in src/processor/creator/cc.rs.
+// CcConfig (and the cc.yaml manifest types) live in src/processor/mass_generator/cc.rs.
 
 // LinuxModuleConfig (and the linux-module.yaml manifest types) live in
-// src/processor/creator/linux_module.rs.
+// src/processor/mass_generator/linux_module.rs.
 
 // ZspellConfig lives in src/processor/checker/zspell.rs.
 
-// CargoConfig lives in src/processor/creator/cargo.rs.
+// CargoConfig lives in src/processor/mass_generator/cargo.rs.
 
 // MakeConfig lives in src/processor/checker/make.rs.
 
@@ -232,13 +232,13 @@ pub type JsonSchemaConfig = CheckerConfig;
 
 // ExplicitConfig lives in src/processor/explicit/generic.rs.
 
-// PipConfig lives in src/processor/creator/pip.rs.
+// PipConfig lives in src/processor/mass_generator/pip.rs.
 
 // RequirementsConfig lives in src/processor/generator/requirements.rs.
 
-// MdbookConfig lives in src/processor/creator/mdbook.rs.
+// MdbookConfig lives in src/processor/mass_generator/mdbook.rs.
 
-// NpmConfig lives in src/processor/creator/npm.rs.
+// NpmConfig lives in src/processor/mass_generator/npm.rs.
 
 // MdlConfig lives in src/processor/checker/mdl.rs.
 
@@ -250,7 +250,7 @@ pub type AsciiConfig = CheckerConfig;
 
 // PdflatexConfig lives in src/processor/generator/pdflatex.rs.
 
-// GemConfig lives in src/processor/creator/gem.rs.
+// GemConfig lives in src/processor/mass_generator/gem.rs.
 
 pub type IjqConfig = CheckerConfig;
 
@@ -293,7 +293,7 @@ pub type ItaploConfig = CheckerConfig;
 // --- docker (Docker image build) ---
 
 // --- jekyll (Static site generator) ---
-pub type JekyllConfig = CheckerConfig;
+// JekyllConfig lives in src/processor/mass_generator/jekyll.rs.
 
 // --- slidev (Slidev presentations) ---
 

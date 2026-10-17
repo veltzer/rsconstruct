@@ -72,7 +72,7 @@ args = ["--", "-D", "warnings"]
 ### Use Both Cargo Build and Clippy
 
 ```toml
-[processor.creator.cargo]
+[processor.mass_generator.cargo]
 
 [processor.checker.clippy]
 ```

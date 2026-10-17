@@ -47,10 +47,9 @@ src_exclude_paths = ["docs/src/SUMMARY.md"]
 # target/ is not cached: it is many gigabytes and cargo already keeps its
 # own incremental state there, so copying it into the rsconstruct store
 # would cost far more than it could ever save.
-[processor.creator.cargo]
+[processor.mass_generator.cargo]
 src_files = ["Cargo.toml"]
 profiles = ["dev"]
-cache_output_dir = false
 
 # The clippy processor is "run `cargo <command> <args>` once per Cargo.toml,
 # re-run when any .rs or .toml under it changes". That is exactly the shape

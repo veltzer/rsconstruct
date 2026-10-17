@@ -3,31 +3,25 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
-fn gem_valid_project() {
-    require_tool("bundle");
+fn pip_valid_project() {
+    require_tool("pip");
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.gem]\nsrc_dirs = [\".\"]\n",
+        "[processor.mass_generator.pip]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
 
-    // Exclude gems from file index
-    fs::write(project_path.join(".rsconstructignore"), "gems/\n").unwrap();
-
-    fs::write(
-        project_path.join("Gemfile"),
-        "source 'https://rubygems.org'\ngem 'rake'\n",
-    )
-    .unwrap();
+    // Empty requirements file — pip install succeeds with nothing to install
+    fs::write(project_path.join("requirements.txt"), "# no dependencies\n").unwrap();
 
     let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(
         output.status.success(),
-        "Build should succeed with valid Gemfile: stdout={}, stderr={}",
+        "Build should succeed with empty requirements.txt: stdout={}, stderr={}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
@@ -35,31 +29,25 @@ fn gem_valid_project() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Processing:"),
-        "Should process gem: {}",
+        "Should process pip: {}",
         stdout
     );
 }
 
 #[test]
-fn gem_incremental_skip() {
-    require_tool("bundle");
+fn pip_incremental_skip() {
+    require_tool("pip");
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.gem]\nsrc_dirs = [\".\"]\n",
+        "[processor.mass_generator.pip]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
 
-    fs::write(project_path.join(".rsconstructignore"), "gems/\n").unwrap();
-
-    fs::write(
-        project_path.join("Gemfile"),
-        "source 'https://rubygems.org'\ngem 'rake'\n",
-    )
-    .unwrap();
+    fs::write(project_path.join("requirements.txt"), "# no dependencies\n").unwrap();
 
     // First build
     let output1 = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
@@ -71,20 +59,20 @@ fn gem_incremental_skip() {
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
-        stdout2.contains("[processor.creator.gem] Skipping (unchanged):"),
+        stdout2.contains("[processor.mass_generator.pip] Skipping (unchanged):"),
         "Second build should skip: {}",
         stdout2
     );
 }
 
 #[test]
-fn gem_no_project_discovered() {
+fn pip_no_project_discovered() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.gem]\nsrc_dirs = [\".\"]\n",
+        "[processor.mass_generator.pip]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
 

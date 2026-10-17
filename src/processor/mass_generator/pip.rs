@@ -4,10 +4,24 @@ use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 
+use super::{PlannedOutput, add_planned_products};
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processor::{Processor, anchor_display_dir, check_command_output, run_in_anchor_dir};
+use crate::processor::{
+    Processor, anchor_display_dir, check_command_output, ensure_output_dir, run_in_anchor_dir,
+};
+
+const STAMP_DIR: &str = "out/processor.mass_generator.pip";
+const ROOT_STAMP: &str = "out/processor.mass_generator.pip/root.stamp";
+
+fn stamp_path(anchor_dir: &Path) -> PathBuf {
+    if anchor_dir.as_os_str().is_empty() {
+        return PathBuf::from(ROOT_STAMP);
+    }
+    let flat = anchor_dir.to_string_lossy().replace('/', "_");
+    Path::new(STAMP_DIR).join(format!("{flat}.stamp"))
+}
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 /// Pip config. Custom: none (uses standard.command as the pip executable).
@@ -67,6 +81,10 @@ impl Processor for PipProcessor {
         serde_json::to_string(&self.config).ok()
     }
 
+    fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
+        crate::processor::ProcessorBase::clean(product, &product.processor, verbose)
+    }
+
     fn required_tools(&self) -> Vec<String> {
         vec![self.config.standard.command.clone(), "python3".to_string()]
     }
@@ -82,25 +100,33 @@ impl Processor for PipProcessor {
             return Ok(());
         }
 
-        let hash = Some(output_config_hash(
+        let config_hash = output_config_hash(
             &self.config,
             &crate::config::checksum_fields_of(instance_name),
-        ));
+        );
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
+        let mut planned = Vec::with_capacity(files.len());
         for anchor in files {
-            let mut inputs: Vec<PathBuf> = Vec::with_capacity(1 + extra.len());
-            inputs.push(anchor.clone());
-            inputs.extend_from_slice(&extra);
-
-            graph.add_product(inputs, vec![], instance_name, hash.clone())?;
+            let anchor_dir = anchor
+                .parent()
+                .map(std::path::Path::to_path_buf)
+                .unwrap_or_default();
+            planned.push(PlannedOutput {
+                path: stamp_path(&anchor_dir),
+                sources: vec![anchor],
+            });
         }
 
-        Ok(())
+        add_planned_products(graph, &planned, instance_name, &config_hash, &extra)
     }
 
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
-        self.execute_pip(ctx, product.primary_input())
+        self.execute_pip(ctx, product.primary_input())?;
+        let stamp = product.primary_output();
+        ensure_output_dir(stamp)?;
+        std::fs::write(stamp, "installed\n")
+            .with_context(|| format!("Failed to write pip install stamp {}", stamp.display()))
     }
 }
 
@@ -109,9 +135,9 @@ fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
 }
 inventory::submit! {
     crate::registries::ProcessorPlugin {
-        version: 1,
+        version: 2,
         name: "pip",
-        processor_type: crate::processor::ProcessorType::Creator,
+        processor_type: crate::processor::ProcessorType::MassGenerator,
         create: plugin_create,
         fields: &[],
         omit_standard_fields: &["formats", "dep_auto", "output_dir"],

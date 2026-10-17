@@ -4,6 +4,7 @@ use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 
+use super::{PlannedOutput, add_planned_products};
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
@@ -19,14 +20,12 @@ fn default_gem_home() -> String {
 /// Where the install stamps live: one file per `Gemfile`, written after a
 /// successful `bundle install`. The stamp is the product's declared output,
 /// so a processor that needs the gems installed first (mdl with
-/// `local_repo`) lists it as an input and the graph orders the two. A bare
-/// `gem_home` directory cannot carry that edge: dependencies connect
-/// declared output *files* to inputs.
-const STAMP_DIR: &str = "out/processor.creator.gem";
+/// `local_repo`) lists it as an input and the graph orders the two.
+const STAMP_DIR: &str = "out/processor.mass_generator.gem";
 
 /// The stamp of a `Gemfile` at the project root — the default `gem_stamp`
 /// of the mdl processor.
-pub const ROOT_STAMP: &str = "out/processor.creator.gem/root.stamp";
+pub const ROOT_STAMP: &str = "out/processor.mass_generator.gem/root.stamp";
 
 /// The install stamp for the `Gemfile` in `anchor_dir`: `root.stamp` for the
 /// project root, the directory path with `/` turned into `_` otherwise.
@@ -42,8 +41,6 @@ fn stamp_path(anchor_dir: &Path) -> PathBuf {
 pub struct GemConfig {
     #[serde(default = "default_gem_home")]
     pub gem_home: String,
-    #[serde(default = "crate::config::default_true")]
-    pub cache_output_dir: bool,
     #[serde(flatten)]
     pub standard: StandardConfig,
 }
@@ -52,7 +49,6 @@ impl Default for GemConfig {
     fn default() -> Self {
         Self {
             gem_home: "gems".into(),
-            cache_output_dir: true,
             standard: StandardConfig::default(),
         }
     }
@@ -90,20 +86,12 @@ impl Processor for GemProcessor {
         &self.config.standard
     }
 
-    // Serialize the FULL config (the trait default covers StandardConfig
-    // only), so the extra fields reach config-change detection.
     fn config_json(&self) -> Option<String> {
         crate::processor::ProcessorBase::config_json(&self.config)
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
-        let stamps = crate::processor::ProcessorBase::clean(product, &product.processor, verbose)?;
-        let dirs = crate::processor::ProcessorBase::clean_output_dir(
-            product,
-            &product.processor,
-            verbose,
-        )?;
-        Ok(stamps + dirs)
+        crate::processor::ProcessorBase::clean(product, &product.processor, verbose)
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -120,10 +108,10 @@ impl Processor for GemProcessor {
             return Ok(());
         };
 
-        let hash = Some(output_config_hash(
+        let config_hash = output_config_hash(
             &self.config,
             &crate::config::checksum_fields_of(instance_name),
-        ));
+        );
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
         let siblings = SiblingFilter {
@@ -131,6 +119,7 @@ impl Processor for GemProcessor {
             excludes: &["/.git/", "/out/", "/.rsconstruct/", "/gems/"],
         };
 
+        let mut planned = Vec::with_capacity(files.len());
         for anchor in files {
             let anchor_dir = anchor
                 .parent()
@@ -146,25 +135,14 @@ impl Processor for GemProcessor {
                 &[],
             );
 
-            let inputs = crate::processor::build_anchor_inputs(&anchor, &sibling_files, &extra);
-            let outputs = vec![stamp_path(&anchor_dir)];
-
-            let output_dirs = if self.config.cache_output_dir {
-                vec![anchor_dir.join(&self.config.gem_home)]
-            } else {
-                Vec::new()
-            };
-            graph.add_product_with(
-                inputs,
-                outputs,
-                instance_name,
-                hash.clone(),
-                None,
-                output_dirs,
-            )?;
+            let inputs = crate::processor::build_anchor_inputs(&anchor, &sibling_files, &[]);
+            planned.push(PlannedOutput {
+                path: stamp_path(&anchor_dir),
+                sources: inputs,
+            });
         }
 
-        Ok(())
+        add_planned_products(graph, &planned, instance_name, &config_hash, &extra)
     }
 
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
@@ -183,17 +161,14 @@ fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
 }
 inventory::submit! {
     crate::registries::ProcessorPlugin {
-        version: 2,
+        version: 3,
         name: "gem",
-        processor_type: crate::processor::ProcessorType::Creator,
+        processor_type: crate::processor::ProcessorType::MassGenerator,
         create: plugin_create,
         fields: &[
             crate::config::FieldSpec { name: "gem_home", ty: crate::config::FieldType::String,
                 affects_output: true, required: false,
                 doc: "Directory where gems are installed" },
-            crate::config::FieldSpec { name: "cache_output_dir", ty: crate::config::FieldType::Bool,
-                affects_output: false, required: false,
-                doc: "Cache the entire output directory as a unit" },
         ],
         omit_standard_fields: &["formats", "dep_auto", "output_dir"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["Gemfile"], src_exclude_dirs: &[] }),
@@ -217,7 +192,7 @@ mod tests {
         assert_eq!(stamp_path(Path::new("")), PathBuf::from(ROOT_STAMP));
         assert_eq!(
             stamp_path(Path::new("tools/lint")),
-            PathBuf::from("out/processor.creator.gem/tools_lint.stamp")
+            PathBuf::from("out/processor.mass_generator.gem/tools_lint.stamp")
         );
     }
 }

@@ -68,7 +68,7 @@ pub fn search_processors(query: &str) -> Result<()> {
     Ok(())
 }
 
-/// List all processor types (generator, checker, creator, explicit).
+/// List all processor types (generator, checker, explicit, `mass_generator`).
 pub fn list_processor_types(verbose: bool) -> Result<()> {
     use crate::processor::ProcessorType;
     use strum::IntoEnumIterator;
@@ -115,7 +115,7 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
         plugins.retain(|p| p.processor_type.as_str() == filter);
         if plugins.is_empty() {
             anyhow::bail!(
-                "No processors of type '{filter}'. Valid types: checker, generator, creator, explicit, mass_generator."
+                "No processors of type '{filter}'. Valid types: checker, generator, explicit, mass_generator."
             );
         }
     }
@@ -344,22 +344,22 @@ pub fn list_recommendations() {
         ("Makefile", "processor.checker.make", "run make to validate"),
         (
             "Cargo.toml",
-            "processor.creator.cargo",
+            "processor.mass_generator.cargo",
             "build and validate Rust project",
         ),
         (
             "book.toml",
-            "processor.creator.mdbook",
+            "processor.mass_generator.mdbook",
             "build mdBook documentation",
         ),
         (
             "package.json",
-            "processor.creator.npm",
+            "processor.mass_generator.npm",
             "run npm to validate Node project",
         ),
         (
             "Gemfile",
-            "processor.creator.gem",
+            "processor.mass_generator.gem",
             "run bundler to validate Ruby project",
         ),
         (
@@ -940,19 +940,8 @@ impl Builder {
                         .iter()
                         .map(|p| p.display().to_string())
                         .collect();
-                    let proc_type = if processors.contains_key(product.processor.as_str()) {
-                        Some(crate::registries::processor::processor_type_of(
-                            product.processor.as_str(),
-                        ))
-                    } else {
-                        None
-                    };
                     if product.outputs.is_empty() {
-                        let label = match proc_type {
-                            Some(crate::processor::ProcessorType::Creator) => "(creator)",
-                            _ => "(checker)",
-                        };
-                        println!("{} \u{2192} {}", inputs.join(", "), color::dim(label));
+                        println!("{} \u{2192} {}", inputs.join(", "), color::dim("(checker)"));
                     } else {
                         let outputs: Vec<String> = product
                             .outputs

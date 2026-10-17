@@ -1,10 +1,17 @@
 use anyhow::{Context, Result};
+use parking_lot::Mutex;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+use super::{
+    OnceTool, PlannedOutput, add_planned_products, fresh_state_dir, install_staged,
+    relative_slash_path, require_planned_output,
+};
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
@@ -48,7 +55,7 @@ pub struct CcProgramDef {
     pub ldflags: Vec<String>,
 }
 
-/// Parsed contents of a cc.yaml file, resolved against the `[processor.cc]`
+/// Parsed contents of a cc.yaml file, resolved against the `[processor.mass_generator.cc]`
 /// config: the six inheritable fields (`cc`, `cxx`, `cflags`, `cxxflags`,
 /// `ldflags`, `include_dirs`) default to the config's values, so
 /// `rsconstruct.toml` sets project-wide defaults and each cc.yaml overrides
@@ -68,7 +75,7 @@ pub struct CcManifest {
 }
 
 /// The raw serde shape of cc.yaml. Inheritable fields are optional; absent
-/// means "inherit the `[processor.cc]` config value".
+/// means "inherit the `[processor.mass_generator.cc]` config value".
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CcManifestRaw {
@@ -103,7 +110,7 @@ impl CcManifest {
     }
 }
 
-/// CC (full C/C++ project) config. Custom: cc, cxx, cflags, cxxflags, ldflags, `include_dirs`, `single_invocation`, `cache_output_dir`.
+/// CC (full C/C++ project) config. Custom: cc, cxx, cflags, cxxflags, ldflags, `include_dirs`, `single_invocation`.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CcConfig {
     #[serde(default = "crate::config::default_cc_compiler")]
@@ -120,8 +127,6 @@ pub struct CcConfig {
     pub include_dirs: Vec<String>,
     #[serde(default)]
     pub single_invocation: bool,
-    #[serde(default = "crate::config::default_true")]
-    pub cache_output_dir: bool,
     #[serde(flatten)]
     pub standard: StandardConfig,
 }
@@ -136,7 +141,6 @@ impl Default for CcConfig {
             ldflags: Vec::new(),
             include_dirs: Vec::new(),
             single_invocation: false,
-            cache_output_dir: true,
             standard: StandardConfig::default(),
         }
     }
@@ -149,6 +153,7 @@ pub struct CcProcessor {
     /// compilers by execution time (the debug declared-tools assertion
     /// checks against it), not just the config defaults.
     manifest_compilers: std::sync::Mutex<std::collections::BTreeSet<String>>,
+    runs: Mutex<BTreeMap<PathBuf, Arc<OnceTool>>>,
 }
 
 impl CcProcessor {
@@ -156,7 +161,17 @@ impl CcProcessor {
         Self {
             config,
             manifest_compilers: std::sync::Mutex::new(std::collections::BTreeSet::new()),
+            runs: Mutex::new(BTreeMap::new()),
         }
+    }
+
+    fn run_guard(&self, yaml_path: &Path) -> Arc<OnceTool> {
+        let mut guard = self.runs.lock();
+        Arc::clone(
+            guard
+                .entry(yaml_path.to_path_buf())
+                .or_insert_with(|| Arc::new(OnceTool::new())),
+        )
     }
 
     /// Determine whether a source file is C++ based on extension.
@@ -186,7 +201,7 @@ impl CcProcessor {
     }
 
     /// Parse a cc.yaml file, inheriting unset fields from the
-    /// `[processor.cc]` config (project-wide defaults, per-directory
+    /// `[processor.mass_generator.cc]` config (project-wide defaults, per-directory
     /// overrides).
     fn parse_manifest(&self, yaml_path: &Path) -> Result<CcManifest> {
         let content = fs::read_to_string(yaml_path)
@@ -287,10 +302,6 @@ impl CcProcessor {
 
     /// Link object files into an executable.
     /// `has_cxx` selects the C++ driver, which C++ objects need at link time.
-    ///
-    /// 8 arguments against clippy's limit of 7 — each is a distinct part of
-    /// a linker invocation, and the natural grouping (`CcManifest`) is
-    /// already one of them.
     #[allow(clippy::too_many_arguments)]
     fn link_program(
         ctx: &crate::build_context::BuildContext,
@@ -374,32 +385,123 @@ impl CcProcessor {
     }
 
     /// Compute the output directory for a cc.yaml file.
-    /// Output goes under out/cc/<relative-path-to-cc.yaml-dir>/.
+    /// Output goes under `out/processor.mass_generator.cc/<relative-path-to-cc.yaml-dir>/`.
     fn output_dir_for(yaml_path: &Path) -> PathBuf {
         let anchor_dir = crate::processor::parent_dir_or_empty(yaml_path);
         if anchor_dir.as_os_str().is_empty() {
-            PathBuf::from("out/processor.creator.cc")
+            PathBuf::from("out/processor.mass_generator.cc")
         } else {
-            Path::new("out/processor.creator.cc").join(anchor_dir)
+            Path::new("out/processor.mass_generator.cc").join(anchor_dir)
         }
     }
 
-    /// Execute a full cc.yaml build.
-    /// All commands run from the project root. Manifest paths are resolved
-    /// to project-root-relative paths using the cc.yaml's parent directory.
-    fn execute_build(
+    /// Plan all outputs for a single `cc.yaml`: every `.o` (when not
+    /// `single_invocation`), `.a`, `.so`, and program binary.
+    fn plan_manifest(
         &self,
-        ctx: &crate::build_context::BuildContext,
         yaml_path: &Path,
-    ) -> Result<()> {
-        let manifest = self.parse_manifest(yaml_path)?;
+        manifest: &CcManifest,
+    ) -> (PathBuf, Vec<PlannedOutput>, BTreeSet<String>) {
         let anchor_dir = crate::processor::parent_dir_or_empty(yaml_path);
         let output_dir = Self::output_dir_for(yaml_path);
         let obj_dir = output_dir.join("obj");
         let lib_dir = output_dir.join("lib");
         let bin_dir = output_dir.join("bin");
 
-        // include_dirs are relative to the project root (not the cc.yaml directory)
+        let mut outputs = Vec::new();
+        let mut relative = BTreeSet::new();
+        let mut lib_sources_by_name: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
+
+        for lib in &manifest.libraries {
+            let build_shared = matches!(lib.lib_type.as_str(), "shared" | "both");
+            let build_static = matches!(lib.lib_type.as_str(), "static" | "both");
+            let target_obj_dir = obj_dir.join(&lib.name);
+
+            let mut lib_sources = vec![yaml_path.to_path_buf()];
+            let mut resolved_only = Vec::new();
+            for source_str in &lib.sources {
+                let source = crate::processor::resolve_anchor_path(anchor_dir, source_str);
+                let obj = Self::object_path_for(&target_obj_dir, source_str);
+                relative.insert(relative_slash_path(&output_dir, &obj));
+                outputs.push(PlannedOutput {
+                    path: obj,
+                    sources: vec![yaml_path.to_path_buf(), source.clone()],
+                });
+                lib_sources.push(source.clone());
+                resolved_only.push(source);
+            }
+            lib_sources_by_name.insert(lib.name.clone(), resolved_only);
+
+            if build_static {
+                let lib_path = lib_dir.join(format!("lib{}.a", lib.name));
+                relative.insert(relative_slash_path(&output_dir, &lib_path));
+                outputs.push(PlannedOutput {
+                    path: lib_path,
+                    sources: lib_sources.clone(),
+                });
+            }
+            if build_shared {
+                let lib_path = lib_dir.join(format!("lib{}.so", lib.name));
+                relative.insert(relative_slash_path(&output_dir, &lib_path));
+                outputs.push(PlannedOutput {
+                    path: lib_path,
+                    sources: lib_sources,
+                });
+            }
+        }
+
+        for prog in &manifest.programs {
+            let target_obj_dir = obj_dir.join(&prog.name);
+            let mut prog_sources = vec![yaml_path.to_path_buf()];
+            for source_str in &prog.sources {
+                let source = crate::processor::resolve_anchor_path(anchor_dir, source_str);
+                if !self.config.single_invocation {
+                    let obj = Self::object_path_for(&target_obj_dir, source_str);
+                    relative.insert(relative_slash_path(&output_dir, &obj));
+                    outputs.push(PlannedOutput {
+                        path: obj,
+                        sources: vec![yaml_path.to_path_buf(), source.clone()],
+                    });
+                }
+                prog_sources.push(source);
+            }
+            for linked in &prog.link {
+                if let Some(extra_lib_sources) = lib_sources_by_name.get(linked) {
+                    for src in extra_lib_sources {
+                        if !prog_sources.contains(src) {
+                            prog_sources.push(src.clone());
+                        }
+                    }
+                }
+            }
+            let exe_path = bin_dir.join(&prog.name);
+            relative.insert(relative_slash_path(&output_dir, &exe_path));
+            outputs.push(PlannedOutput {
+                path: exe_path,
+                sources: prog_sources,
+            });
+        }
+
+        (output_dir, outputs, relative)
+    }
+
+    /// Execute a full cc.yaml build into a staging directory, check it against
+    /// the plan, and move the planned files into `output_dir`.
+    fn execute_build(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        yaml_path: &Path,
+        instance_name: &str,
+    ) -> Result<()> {
+        let manifest = self.parse_manifest(yaml_path)?;
+        let (output_dir, _outputs, planned_relative) = self.plan_manifest(yaml_path, &manifest);
+        let anchor_dir = crate::processor::parent_dir_or_empty(yaml_path);
+        let flat = yaml_path.to_string_lossy().replace('/', "_");
+        let staging = fresh_state_dir(instance_name, &format!(".{flat}.staging"))?;
+        let obj_dir = staging.join("obj");
+        let lib_dir = staging.join("lib");
+        let bin_dir = staging.join("bin");
+
         let resolved_include_flags: Vec<String> = manifest
             .include_dirs
             .iter()
@@ -444,7 +546,6 @@ impl CcProcessor {
         for prog in &manifest.programs {
             let exe_path = bin_dir.join(&prog.name);
 
-            // Resolve source paths
             let sources: Vec<PathBuf> = prog
                 .sources
                 .iter()
@@ -490,7 +591,14 @@ impl CcProcessor {
             }
         }
 
-        Ok(())
+        install_staged(
+            &staging,
+            &planned_relative,
+            &output_dir,
+            instance_name,
+            "cc",
+            false,
+        )
     }
 }
 
@@ -499,10 +607,10 @@ impl Processor for CcProcessor {
         &self.config.standard
     }
 
-    /// One product per scanned manifest; sources come from the manifest on
-    /// disk. `discover` also records each manifest's compilers in
-    /// `manifest_compilers`, but only ever adds to that set, so discovering
-    /// file by file builds the same set as one pass over everything.
+    /// Products come from each scanned manifest on disk. `discover` also
+    /// records each manifest's compilers in `manifest_compilers`, but only
+    /// ever adds to that set, so discovering file by file builds the same
+    /// set as one pass over everything.
     fn discovery(&self) -> crate::processor::Discovery {
         crate::processor::Discovery::PerFile
     }
@@ -512,14 +620,14 @@ impl Processor for CcProcessor {
     }
 
     fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
-        crate::processor::ProcessorBase::clean_output_dir(product, &product.processor, verbose)
+        crate::processor::ProcessorBase::clean(product, &product.processor, verbose)
+    }
+
+    fn replaces_own_outputs(&self) -> bool {
+        true
     }
 
     fn required_tools(&self) -> Vec<String> {
-        // The config values are project-wide defaults; each cc.yaml may
-        // override the compiler per directory. Discovery records what the
-        // manifests actually resolve to, so by execution time this names
-        // the real compilers, not just the defaults.
         let mut tools: Vec<String> = vec![
             self.config.cc.clone(),
             self.config.cxx.clone(),
@@ -542,12 +650,13 @@ impl Processor for CcProcessor {
         let Some(files) = crate::processor::scan_or_skip(&self.config.standard, file_index) else {
             return Ok(());
         };
-        let hash = Some(output_config_hash(
+        let config_hash = output_config_hash(
             &self.config,
             &crate::config::checksum_fields_of(instance_name),
-        ));
+        );
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
+        let mut all_planned = Vec::new();
         for yaml_path in files {
             let manifest = match self.parse_manifest(&yaml_path) {
                 Ok(m) => m,
@@ -556,56 +665,28 @@ impl Processor for CcProcessor {
                 }
             };
 
-            // Record the compilers this manifest resolves to, so
-            // required_tools() covers per-manifest overrides.
             {
                 let mut compilers = self.manifest_compilers.lock().unwrap();
                 compilers.insert(manifest.cc.clone());
                 compilers.insert(manifest.cxx.clone());
             }
 
-            // Source paths in the manifest are relative to the cc.yaml directory.
-            // Resolve to project-root-relative paths for the build graph.
-            let anchor_dir = crate::processor::parent_dir_or_empty(&yaml_path);
-
-            let mut inputs: Vec<PathBuf> = Vec::new();
-            inputs.push(yaml_path.clone());
-
-            for lib in &manifest.libraries {
-                for source in &lib.sources {
-                    inputs.push(crate::processor::resolve_anchor_path(anchor_dir, source));
-                }
-            }
-            for prog in &manifest.programs {
-                for source in &prog.sources {
-                    inputs.push(crate::processor::resolve_anchor_path(anchor_dir, source));
-                }
-            }
-
-            inputs.extend_from_slice(&extra);
-
-            let output_dirs = if self.config.cache_output_dir {
-                vec![Self::output_dir_for(&yaml_path)]
-            } else {
-                Vec::new()
-            };
-            graph.add_product_with(
-                inputs,
-                vec![],
-                instance_name,
-                hash.clone(),
-                None,
-                output_dirs,
-            )?;
+            let (_output_dir, outputs, _relative) = self.plan_manifest(&yaml_path, &manifest);
+            all_planned.extend(outputs);
         }
-        Ok(())
+        add_planned_products(graph, &all_planned, instance_name, &config_hash, &extra)
     }
 
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let yaml_path = product.primary_input();
         let display_dir = anchor_display_dir(yaml_path);
-        self.execute_build(ctx, yaml_path)
-            .with_context(|| format!("cc build failed in {display_dir}"))
+        let instance_name = &product.processor;
+        let guard = self.run_guard(yaml_path);
+        guard.run("cc", || {
+            self.execute_build(ctx, yaml_path, instance_name)
+                .with_context(|| format!("cc build failed in {display_dir}"))
+        })?;
+        require_planned_output(product, "cc")
     }
 }
 
@@ -614,9 +695,9 @@ fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
 }
 inventory::submit! {
     crate::registries::ProcessorPlugin {
-        version: 1,
+        version: 2,
         name: "cc",
-        processor_type: crate::processor::ProcessorType::Creator,
+        processor_type: crate::processor::ProcessorType::MassGenerator,
         create: plugin_create,
         fields: &[
             crate::config::FieldSpec { name: "cc", ty: crate::config::FieldType::String,
@@ -640,9 +721,6 @@ inventory::submit! {
             crate::config::FieldSpec { name: "single_invocation", ty: crate::config::FieldType::Bool,
                 affects_output: true, required: false,
                 doc: "Compile all sources in one compiler call" },
-            crate::config::FieldSpec { name: "cache_output_dir", ty: crate::config::FieldType::Bool,
-                affects_output: false, required: false,
-                doc: "Cache the entire output directory as a unit" },
         ],
         omit_standard_fields: &["command", "formats", "args", "dep_auto", "output_dir"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["cc.yaml"], src_exclude_dirs: &[] }),

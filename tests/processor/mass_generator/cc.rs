@@ -7,7 +7,7 @@ fn setup_cc_project(project_path: &std::path::Path, cc_yaml: &str) {
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.cc]\nsrc_dirs = [\".\"]\n",
+        "[processor.mass_generator.cc]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
     fs::write(project_path.join("cc.yaml"), cc_yaml).unwrap();
@@ -21,7 +21,7 @@ fn cc_no_project_discovered() {
     // Enable cc processor but don't create cc.yaml
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.cc]\nsrc_dirs = [\".\"]\n",
+        "[processor.mass_generator.cc]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
 
@@ -61,7 +61,7 @@ libraries:
 
     assert!(
         project_path
-            .join("out/processor.creator.cc/lib/libmymath.a")
+            .join("out/processor.mass_generator.cc/lib/libmymath.a")
             .exists(),
         "Static library should exist"
     );
@@ -98,7 +98,7 @@ libraries:
 
     assert!(
         project_path
-            .join("out/processor.creator.cc/lib/libmymath.so")
+            .join("out/processor.mass_generator.cc/lib/libmymath.so")
             .exists(),
         "Shared library should exist"
     );
@@ -148,20 +148,20 @@ int main() { return add(1, 2) - 3; }
 
     assert!(
         project_path
-            .join("out/processor.creator.cc/lib/libmymath.a")
+            .join("out/processor.mass_generator.cc/lib/libmymath.a")
             .exists(),
         "Static library should exist"
     );
     assert!(
         project_path
-            .join("out/processor.creator.cc/bin/main")
+            .join("out/processor.mass_generator.cc/bin/main")
             .exists(),
         "Executable should exist"
     );
 
     // Run the executable - should return 0 (add(1,2) - 3 == 0)
     let run_output =
-        std::process::Command::new(project_path.join("out/processor.creator.cc/bin/main"))
+        std::process::Command::new(project_path.join("out/processor.mass_generator.cc/bin/main"))
             .output()
             .expect("Failed to run executable");
     assert!(run_output.status.success(), "Executable should return 0");
@@ -203,7 +203,7 @@ programs:
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
-        stdout2.contains("[processor.creator.cc] Skipping (unchanged):"),
+        stdout2.contains("[processor.mass_generator.cc] Skipping (unchanged):"),
         "Second build should skip: {}",
         stdout2
     );
@@ -217,7 +217,7 @@ fn cc_single_invocation_mode() {
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.cc]\nsingle_invocation = true\nsrc_dirs = [\".\"]\n",
+        "[processor.mass_generator.cc]\nsingle_invocation = true\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
     fs::write(
@@ -245,7 +245,7 @@ programs:
 
     assert!(
         project_path
-            .join("out/processor.creator.cc/bin/hello")
+            .join("out/processor.mass_generator.cc/bin/hello")
             .exists(),
         "Executable should exist"
     );
@@ -282,13 +282,13 @@ libraries:
 
     assert!(
         project_path
-            .join("out/processor.creator.cc/lib/libmyutil.a")
+            .join("out/processor.mass_generator.cc/lib/libmyutil.a")
             .exists(),
         "Static library should exist"
     );
     assert!(
         project_path
-            .join("out/processor.creator.cc/lib/libmyutil.so")
+            .join("out/processor.mass_generator.cc/lib/libmyutil.so")
             .exists(),
         "Shared library should exist"
     );
@@ -319,7 +319,7 @@ programs:
     assert!(build_output.status.success());
     assert!(
         project_path
-            .join("out/processor.creator.cc/bin/hello")
+            .join("out/processor.mass_generator.cc/bin/hello")
             .exists()
     );
 
@@ -329,7 +329,7 @@ programs:
     assert!(clean_output.status.success());
     assert!(
         !project_path
-            .join("out/processor.creator.cc/bin/hello")
+            .join("out/processor.mass_generator.cc/bin/hello")
             .exists(),
         "Output should be removed after clean"
     );
@@ -379,13 +379,13 @@ programs:
     );
     assert!(
         project_path
-            .join("out/processor.creator.cc/bin/app")
+            .join("out/processor.mass_generator.cc/bin/app")
             .exists(),
         "Program should link"
     );
 }
 
-/// `[processor.creator.cc]` flags are project-wide defaults for every cc.yaml.
+/// `[processor.mass_generator.cc]` flags are project-wide defaults for every cc.yaml.
 ///
 /// Regression test: the config-level `cflags`/`cxxflags`/`ldflags`/
 /// `include_dirs` fields used to be fully dead — declared, documented, part
@@ -399,7 +399,7 @@ fn cc_config_flags_are_manifest_defaults() {
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.cc]\nsrc_dirs = [\".\"]\ncflags = [\"-DNEED_FLAG=0\"]\n",
+        "[processor.mass_generator.cc]\nsrc_dirs = [\".\"]\ncflags = [\"-DNEED_FLAG=0\"]\n",
     )
     .unwrap();
     fs::write(
@@ -438,7 +438,7 @@ fn cc_manifest_overrides_config_flags() {
     // the manifest's explicit empty cflags wins over the config value.
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.cc]\nsrc_dirs = [\".\"]\ncflags = [\"--definitely-not-a-flag\"]\n",
+        "[processor.mass_generator.cc]\nsrc_dirs = [\".\"]\ncflags = [\"--definitely-not-a-flag\"]\n",
     )
     .unwrap();
     fs::write(
@@ -489,7 +489,7 @@ fn cc_manifest_compiler_is_declared() {
     fs::create_dir_all(project_path.join("src")).unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.creator.cc]\nsrc_dirs = [\".\"]\n",
+        "[processor.mass_generator.cc]\nsrc_dirs = [\".\"]\n",
     )
     .unwrap();
     fs::write(
@@ -526,7 +526,7 @@ programs:
     );
     assert!(
         project_path
-            .join("out/processor.creator.cc/bin/app")
+            .join("out/processor.mass_generator.cc/bin/app")
             .exists(),
         "Program should link"
     );

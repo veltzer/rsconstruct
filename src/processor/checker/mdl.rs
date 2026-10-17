@@ -16,7 +16,7 @@ fn default_gem_home() -> String {
 /// The install stamp the gem processor writes for a root `Gemfile`; listing
 /// it as an input is what orders mdl after `bundle install`.
 fn default_gem_stamp() -> String {
-    crate::processor::creator::gem::ROOT_STAMP.into()
+    crate::processor::mass_generator::gem::ROOT_STAMP.into()
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
