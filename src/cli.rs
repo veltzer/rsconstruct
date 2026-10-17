@@ -196,7 +196,7 @@ pub enum Commands {
     /// Clean build artifacts
     Clean {
         #[command(subcommand)]
-        action: Option<CleanAction>,
+        action: CleanAction,
     },
     /// Generate shell completion scripts
     Complete {
@@ -387,7 +387,7 @@ pub enum CleanAction {
     All,
     /// Hard clean using git clean (requires config)
     Git,
-    /// Remove build output files, preserves cache (requires config) [default]
+    /// Remove build output files, preserves cache (requires config)
     Outputs {
         /// Only clean outputs of these processors; comma-separated. Same
         /// selectors as `build -p`: a name with or without the `processor.`

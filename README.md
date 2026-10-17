@@ -65,7 +65,7 @@ rsconstruct build -j4                # Build with 4 parallel jobs
 rsconstruct build --timings          # Show timing info
 rsconstruct status                   # Show what needs rebuilding
 rsconstruct watch                    # Watch for changes and rebuild
-rsconstruct clean                    # Remove build artifacts
+rsconstruct clean outputs            # Remove build artifacts
 rsconstruct graph --view             # Visualize dependency graph
 rsconstruct processor list           # List available processors
 ```

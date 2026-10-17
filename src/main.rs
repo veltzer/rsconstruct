@@ -281,56 +281,49 @@ fn run() -> (Result<()>, bool) {
             Commands::Cache { action } => {
                 builder::cache_cmd::handle(&ctx, action)?;
             }
-            Commands::Clean { action } => {
-                let action = action.ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Missing subcommand. Usage: rsconstruct clean <outputs|products|all|git|unknown>"
-                    )
-                })?;
-                match action {
-                    CleanAction::Outputs {
-                        processor,
-                        no_empty_dirs,
-                    } => {
-                        let builder = Builder::new(&ctx)?;
-                        let filter = if processor.is_empty() {
-                            None
-                        } else {
-                            Some(processor)
-                        };
-                        builder.clean(&ctx, cli.verbose, filter.as_deref(), !no_empty_dirs)?;
-                    }
-                    CleanAction::Products {
-                        processor,
-                        dry_run,
-                        no_empty_dirs,
-                    } => {
-                        let builder = Builder::new(&ctx)?;
-                        builder.clean_products(
-                            &ctx,
-                            cli.verbose,
-                            &processor,
-                            dry_run,
-                            !no_empty_dirs,
-                        )?;
-                    }
-                    CleanAction::All => {
-                        let builder = Builder::new(&ctx)?;
-                        builder.distclean()?;
-                    }
-                    CleanAction::Git => {
-                        let builder = Builder::new(&ctx)?;
-                        builder.hardclean(&ctx)?;
-                    }
-                    CleanAction::Unknown {
-                        dry_run,
-                        no_gitignore,
-                    } => {
-                        let builder = Builder::new(&ctx)?;
-                        builder.clean_unknown(&ctx, !dry_run, cli.verbose, !no_gitignore)?;
-                    }
+            Commands::Clean { action } => match action {
+                CleanAction::Outputs {
+                    processor,
+                    no_empty_dirs,
+                } => {
+                    let builder = Builder::new(&ctx)?;
+                    let filter = if processor.is_empty() {
+                        None
+                    } else {
+                        Some(processor)
+                    };
+                    builder.clean(&ctx, cli.verbose, filter.as_deref(), !no_empty_dirs)?;
                 }
-            }
+                CleanAction::Products {
+                    processor,
+                    dry_run,
+                    no_empty_dirs,
+                } => {
+                    let builder = Builder::new(&ctx)?;
+                    builder.clean_products(
+                        &ctx,
+                        cli.verbose,
+                        &processor,
+                        dry_run,
+                        !no_empty_dirs,
+                    )?;
+                }
+                CleanAction::All => {
+                    let builder = Builder::new(&ctx)?;
+                    builder.distclean()?;
+                }
+                CleanAction::Git => {
+                    let builder = Builder::new(&ctx)?;
+                    builder.hardclean(&ctx)?;
+                }
+                CleanAction::Unknown {
+                    dry_run,
+                    no_gitignore,
+                } => {
+                    let builder = Builder::new(&ctx)?;
+                    builder.clean_unknown(&ctx, !dry_run, cli.verbose, !no_gitignore)?;
+                }
+            },
             Commands::Complete { shells } => {
                 let shells_to_generate = if shells.is_empty() {
                     // Load from config file

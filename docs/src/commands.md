@@ -143,7 +143,7 @@ The `--stop-after` flag allows stopping the build at a specific phase:
 
 ## `rsconstruct clean`
 
-Clean build artifacts. When run without a subcommand, removes build output files (same as `rsconstruct clean outputs`).
+Clean build artifacts. A subcommand is required; run without one, `clean` lists them.
 
 | Subcommand | Config required? |
 |------------|-----------------|
@@ -160,7 +160,7 @@ their cache entries, so the next build runs those products again;
 `clean all` removes the output and cache directories outright.
 
 ```bash
-rsconstruct clean                # Remove build output files (preserves cache) [default]
+rsconstruct clean                # List the subcommands
 rsconstruct clean outputs        # Remove build output files (preserves cache)
 rsconstruct clean outputs -p generator.tera,generator.tags    # Only clean outputs of these processors
 rsconstruct clean outputs --no-empty-dirs # Skip the empty-directory sweep

@@ -94,3 +94,26 @@ fn unknown_processor_returns_config_error() {
         stderr
     );
 }
+
+/// A bare `clean` lists its subcommands, like every other command that takes
+/// one, instead of failing as a build error with a hand-written usage line.
+#[test]
+fn bare_clean_lists_its_subcommands() {
+    let temp_dir = setup_test_project();
+    let output = run_rsconstruct_with_env(temp_dir.path(), &["clean"], &[("NO_COLOR", "1")]);
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    for subcommand in ["all", "git", "outputs", "products", "unknown"] {
+        assert!(
+            text.contains(subcommand),
+            "bare clean must list '{subcommand}':\n{text}"
+        );
+    }
+    assert!(
+        !text.contains("EXIT_BUILD_ERROR"),
+        "a missing subcommand is not a build error:\n{text}"
+    );
+}
