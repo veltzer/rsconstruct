@@ -240,7 +240,7 @@ the remote.
 
 - `clean all` — removes `out/` and `.rsconstruct/` outright (cache included). Use when you want a full reset.
 - `clean git` — runs `git clean -qffxd`. Requires a git repository.
-- `clean unknown` — finds files in the working tree that are neither git-tracked nor declared as a build output. Defaults to dry-run unless you pass without `--dry-run`. `--no-gitignore` includes gitignored files in the search.
+- `clean unknown` — finds files in the working tree that are neither git-tracked nor declared as a build output, and deletes them. Pass `--dry-run` to only list them. `--no-gitignore` includes gitignored files in the search.
 
 ## `rsconstruct status`
 
