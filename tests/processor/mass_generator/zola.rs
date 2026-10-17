@@ -452,3 +452,24 @@ fn zola_refuses_unmodeled_features() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+/// A template the planner cannot read fails the plan by name. It used to be
+/// read as empty, which silently dropped its `load_data` sources from every
+/// product and skipped the `resize_image` refusal.
+#[test]
+fn zola_unreadable_template_fails_the_plan() {
+    require_tool("zola");
+    let temp_dir = setup_zola_site("");
+    let root = temp_dir.path();
+    fs::write(root.join("templates/broken.html"), [0xff, 0xfe, 0x00, 0x80]).unwrap();
+    let out = run_rsconstruct_with_env(root, &["graph", "show"], &[("NO_COLOR", "1")]);
+    assert!(
+        !out.status.success(),
+        "a non-UTF-8 template must fail the plan"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("Failed to read") && stderr.contains("broken.html"),
+        "{stderr}"
+    );
+}

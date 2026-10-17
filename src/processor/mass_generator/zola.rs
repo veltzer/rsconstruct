@@ -1308,7 +1308,10 @@ impl Site {
                 .extension()
                 .is_some_and(|e| e == "md" || e == "html" || e == "xml" || e == "txt")
             {
-                let text = std::fs::read_to_string(file).unwrap_or_default();
+                // An unreadable file must fail the plan: read as empty, its
+                // `load_data` sources would silently drop out of every edge.
+                let text = std::fs::read_to_string(file)
+                    .with_context(|| format!("Failed to read {}", file.display()))?;
                 for caps in LOAD_DATA.captures_iter(&text) {
                     sources.insert(self.resolve_load_data(&caps[1]));
                 }
@@ -1345,7 +1348,8 @@ impl Site {
             .chain(files_under(&self.content_dir())?);
         for file in files {
             if file.extension().is_some_and(|e| e == "md" || e == "html") {
-                let text = std::fs::read_to_string(&file).unwrap_or_default();
+                let text = std::fs::read_to_string(&file)
+                    .with_context(|| format!("Failed to read {}", file.display()))?;
                 if text.contains("resize_image(") {
                     anyhow::bail!(
                         "{} calls resize_image; the zola processor cannot predict processed \
