@@ -94,6 +94,8 @@ pub struct ExecutorOptions {
     pub keep_going: bool,
     /// Record per-product timings.
     pub timings: bool,
+    /// Stack size of each worker thread, in bytes (`[build] worker_stack_mib`).
+    pub worker_stack_bytes: usize,
 }
 
 /// Shared mutable state passed to product processing helpers.
@@ -236,6 +238,7 @@ pub struct Executor<'a> {
     force: bool,
     keep_going: bool,
     timings: bool,
+    worker_stack_bytes: usize,
 }
 
 impl<'a> Executor<'a> {
@@ -262,6 +265,7 @@ impl<'a> Executor<'a> {
             force: opts.force,
             keep_going: opts.keep_going,
             timings: opts.timings,
+            worker_stack_bytes: opts.worker_stack_bytes,
         }
     }
 

@@ -46,6 +46,28 @@ fn assert_fails_with(output: &std::process::Output, what: &str, needle: &str) {
     );
 }
 
+/// Thousands of nested parentheses recurse deep in the Lua parser. On the
+/// default 2 MiB thread stack that overflowed and aborted the whole process
+/// with SIGABRT; build workers now run on `[build] worker_stack_mib`, so the
+/// file is checked like any other and the real finding is reported.
+#[test]
+fn iluacheck_survives_deeply_nested_input() {
+    let depth = 20_000;
+    let source = format!(
+        "local x = {}1{}\nreturn x\n",
+        "(".repeat(depth),
+        ")".repeat(depth)
+    );
+    let temp_dir = setup_project(CONFIG, &[("src/deep.lua", &source)]);
+    let output = build(temp_dir.path());
+    assert!(
+        output.status.code().is_some(),
+        "the build must exit, not die on a signal: {}",
+        combined_output(&output)
+    );
+    assert_fails_with(&output, "a 40k-character line", "(W631) line is too long");
+}
+
 #[test]
 fn iluacheck_clean_file_passes() {
     let temp_dir = setup_project(CONFIG, &[("src/ok.lua", "local x = 1\nprint(x)\n")]);

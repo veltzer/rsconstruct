@@ -78,6 +78,7 @@ impl Builder {
                 force: false,
                 keep_going: false,
                 timings: false,
+                worker_stack_bytes: self.config.build.worker_stack_mib * 1024 * 1024,
             },
         );
         let stats = executor.clean(&graph, verbose)?;
@@ -225,6 +226,7 @@ impl Builder {
                 force: false,
                 keep_going: false,
                 timings: false,
+                worker_stack_bytes: self.config.build.worker_stack_mib * 1024 * 1024,
             },
         );
         let stats = executor.clean(&graph, verbose)?;

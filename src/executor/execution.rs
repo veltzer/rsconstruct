@@ -170,6 +170,23 @@ impl WorkQueue {
     }
 }
 
+/// Run one processor call, turning a panic into an error for its products.
+///
+/// The native checkers parse arbitrary user files; an "internal error"
+/// `panic!` in one of them used to unwind the worker, and the thread scope
+/// re-raised it on exit, so one bad file failed the whole build instead of
+/// its own product. `what` names the call in the error.
+fn guard_panic<T>(what: impl FnOnce() -> String, call: impl FnOnce() -> T) -> Result<T> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(call)).map_err(|payload| {
+        let message = payload
+            .downcast_ref::<&str>()
+            .map(|s| (*s).to_string())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "a panic with no message".to_string());
+        anyhow::anyhow!("{} panicked: {message}", what())
+    })
+}
+
 /// Reports a unit's products as finished to the coordinator when dropped —
 /// including when the unit panicked, so the coordinator is never left
 /// waiting for products that will not report.
@@ -467,20 +484,36 @@ impl Executor<'_> {
 
         let result = thread::scope(|s| -> Result<()> {
             let tx = tx;
-            for _ in 0..self.parallel.max(1) {
+            for n in 0..self.parallel.max(1) {
                 let tx = tx.clone();
                 let (queue, caps, lctx, counters) = (&queue, &caps, &lctx, &counters);
-                s.spawn(move || {
-                    while let Some(unit) = queue.pop(caps) {
-                        let _finished = FinishOnDrop {
-                            ids: unit.product_ids(),
-                            processor: unit.processor().to_string(),
-                            queue,
-                            tx: tx.clone(),
-                        };
-                        self.run_unit(unit, lctx, counters);
-                    }
-                });
+                // A large stack, so a deeply nested input file fails its
+                // product in a native parser instead of overflowing the
+                // stack, which aborts the process ([build] worker_stack_mib).
+                let spawned = thread::Builder::new()
+                    .name(format!("rsconstruct-worker-{n}"))
+                    .stack_size(self.worker_stack_bytes)
+                    .spawn_scoped(s, move || {
+                        while let Some(unit) = queue.pop(caps) {
+                            let _finished = FinishOnDrop {
+                                ids: unit.product_ids(),
+                                processor: unit.processor().to_string(),
+                                queue,
+                                tx: tx.clone(),
+                            };
+                            self.run_unit(unit, lctx, counters);
+                        }
+                    });
+                if let Err(e) = spawned {
+                    // Release the workers already started, or the scope
+                    // waits for them forever.
+                    queue.close();
+                    return Err(anyhow::Error::from(e).context(format!(
+                        "Failed to start build worker thread {n} with a {} MiB stack \
+                         ([build] worker_stack_mib)",
+                        self.worker_stack_bytes / (1024 * 1024)
+                    )));
+                }
             }
             // Only the workers hold senders now: if they all exit, the
             // coordinator's receive fails instead of waiting forever.
@@ -846,7 +879,13 @@ impl Executor<'_> {
             for attempt in 1..=max_attempts {
                 let refs: Vec<&crate::graph::Product> =
                     pending.iter().map(|&i| product_refs[i]).collect();
-                let results = processor.execute_batch(self.build_ctx, &refs);
+                let results = match guard_panic(
+                    || format!("[{proc_name}] batch of {} products", refs.len()),
+                    || processor.execute_batch(self.build_ctx, &refs),
+                ) {
+                    Ok(results) => results,
+                    Err(e) => refs.iter().map(|_| Err(anyhow::anyhow!("{e:#}"))).collect(),
+                };
 
                 // Validate batch returned correct number of results
                 assert_eq!(
@@ -1022,7 +1061,12 @@ impl Executor<'_> {
                 let max_attempts = 1 + self.retry;
                 crate::processor::set_declared_tools(Some(processor.required_tools()));
                 for attempt in 1..=max_attempts {
-                    match processor.execute(self.build_ctx, product) {
+                    let outcome = guard_panic(
+                        || format!("[{}] {}", product.processor, self.product_display(product)),
+                        || processor.execute(self.build_ctx, product),
+                    )
+                    .and_then(|r| r);
+                    match outcome {
                         Ok(()) => {
                             let duration = product_start.elapsed();
                             last_error = None; // Clear before handle_success to avoid double-failure if caching fails
@@ -1305,6 +1349,26 @@ impl Executor<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A panicking processor call becomes an error naming the call and the
+    /// panic message; a normal return passes through untouched.
+    #[test]
+    fn guard_panic_turns_a_panic_into_an_error() {
+        assert_eq!(guard_panic(|| "call".to_string(), || 7).unwrap(), 7);
+        let err = guard_panic(
+            || "[p] a.lua".to_string(),
+            || -> i32 { panic!("internal error: bad offset") },
+        )
+        .unwrap_err();
+        assert_eq!(
+            format!("{err:#}"),
+            "[p] a.lua panicked: internal error: bad offset"
+        );
+        let n = 3;
+        let err =
+            guard_panic(|| "x".to_string(), || -> i32 { panic!("failed at {n}") }).unwrap_err();
+        assert_eq!(format!("{err:#}"), "x panicked: failed at 3");
+    }
 
     /// `0` means the whole group in one chunk; an explicit size wins.
     #[test]

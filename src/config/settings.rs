@@ -128,6 +128,15 @@ pub struct BuildConfig {
     /// this default.
     #[serde(default)]
     pub command_timeout_secs: u64,
+    /// Stack size, in MiB, of each build worker thread. The native checkers
+    /// parse arbitrary user files with recursive-descent parsers, so a file
+    /// nested deeply enough (thousands of `(` in Lua, of `<div>` in HTML)
+    /// recurses past a small stack, and a stack overflow aborts the whole
+    /// process instead of failing one product. Only the pages a thread
+    /// touches are committed, so a large reservation costs address space,
+    /// not memory.
+    #[serde(default = "default_worker_stack_mib")]
+    pub worker_stack_mib: usize,
 }
 
 const fn default_parallel() -> usize {
@@ -166,6 +175,10 @@ const fn default_reject_dot_src_dirs() -> bool {
     false
 }
 
+const fn default_worker_stack_mib() -> usize {
+    256
+}
+
 impl Default for BuildConfig {
     fn default() -> Self {
         Self {
@@ -180,6 +193,7 @@ impl Default for BuildConfig {
             allow_missing_src_dirs: default_allow_missing_src_dirs(),
             reject_dot_src_dirs: default_reject_dot_src_dirs(),
             command_timeout_secs: 0,
+            worker_stack_mib: default_worker_stack_mib(),
         }
     }
 }

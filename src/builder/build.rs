@@ -495,6 +495,7 @@ impl Builder {
                 keep_going: opts.keep_going,
                 // Enable timings collection if trace output is requested
                 timings: opts.timings || opts.trace.is_some(),
+                worker_stack_bytes: self.config.build.worker_stack_mib * 1024 * 1024,
             },
         );
 

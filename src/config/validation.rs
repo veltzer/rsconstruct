@@ -203,6 +203,11 @@ pub(super) fn validate_build_config(build: &BuildConfig) -> Result<()> {
         return Err(crate::exit_code::config_error(
             "[build] max_arg_len must be at least 1 — 0 would split every batch into one file per tool invocation".to_string()));
     }
+    if build.worker_stack_mib == 0 {
+        return Err(crate::exit_code::config_error(
+            "[build] worker_stack_mib must be at least 1".to_string(),
+        ));
+    }
     Ok(())
 }
 
