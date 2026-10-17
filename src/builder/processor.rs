@@ -69,7 +69,7 @@ pub fn search_processors(query: &str) -> Result<()> {
 }
 
 /// List all processor types (generator, checker, explicit, `mass_generator`).
-pub fn list_processor_types(verbose: bool) -> Result<()> {
+pub fn list_processor_types() -> Result<()> {
     use crate::processor::ProcessorType;
     use strum::IntoEnumIterator;
 
@@ -89,17 +89,10 @@ pub fn list_processor_types(verbose: bool) -> Result<()> {
         return Ok(());
     }
 
-    if verbose {
-        let rows: Vec<Vec<String>> = ProcessorType::iter()
-            .map(|pt| vec![pt.as_str().to_string(), pt.description().to_string()])
-            .collect();
-        tables::print_table(&["Type", "Description"], &rows);
-    } else {
-        let rows: Vec<Vec<String>> = ProcessorType::iter()
-            .map(|pt| vec![pt.as_str().to_string()])
-            .collect();
-        tables::print_table(&["Type"], &rows);
-    }
+    let rows: Vec<Vec<String>> = ProcessorType::iter()
+        .map(|pt| vec![pt.as_str().to_string(), pt.description().to_string()])
+        .collect();
+    tables::print_table(&["Type", "Description"], &rows);
     Ok(())
 }
 

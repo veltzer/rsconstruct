@@ -556,7 +556,18 @@ impl Executor<'_> {
         } else {
             HashSet::new()
         };
-        let mut tracker = ReadyTracker::new(&graph.read(), &held);
+        // One tool run writes every product of a mass generator instance
+        // (see `ReadyTracker`).
+        let whole_run: HashSet<String> = self
+            .processors
+            .keys()
+            .filter(|name| {
+                crate::registries::processor::processor_type_of(name)
+                    == crate::processor::ProcessorType::MassGenerator
+            })
+            .cloned()
+            .collect();
+        let mut tracker = ReadyTracker::new(&graph.read(), &held, &whole_run);
         loop {
             let stopping =
                 self.is_interrupted() || (!self.keep_going && !shared.errors.lock().is_empty());

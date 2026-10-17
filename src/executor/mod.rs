@@ -7,7 +7,7 @@ pub use policy::{BuildPolicy, IncrementalPolicy, ProductAction};
 use anyhow::Result;
 use indicatif::ProgressBar;
 use parking_lot::Mutex;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -362,6 +362,16 @@ enum ProductState {
 /// executor turns into one batch. Only checkers are held: nothing depends
 /// on a checker's products, so holding them cannot hold up anything else,
 /// while a generator's products may feed each other.
+///
+/// A mass generator's products are tied the other way: one tool run writes
+/// the files of all of them, the clean ones too, so a clean product's file
+/// is unlinked and rewritten while the run is in progress. Its dependents
+/// therefore wait for every product of its instance, not just for it —
+/// otherwise a consumer of a clean file starts the moment that product is
+/// skipped, and reads the file while the run has it removed. An instance
+/// whose products depend on each other, directly or through other
+/// products, keeps per-product release, since waiting for the whole
+/// instance would then be a deadlock.
 struct ReadyTracker {
     unfinished_deps: Vec<usize>,
     state: Vec<ProductState>,
@@ -374,11 +384,18 @@ struct ReadyTracker {
     group: Vec<Option<usize>>,
     /// Per group, how many of its products still wait on a dependency.
     group_waiting: Vec<usize>,
+    /// For a product of a mass generator, the index of its instance's run.
+    run: Vec<Option<usize>>,
+    /// Per run, how many of its products have not finished.
+    run_left: Vec<usize>,
+    /// Per run, its products.
+    run_members: Vec<Vec<usize>>,
 }
 
 impl ReadyTracker {
-    /// `held` names the processors whose products go out together.
-    fn new(graph: &BuildGraph, held: &HashSet<String>) -> Self {
+    /// `held` names the processors whose products go out together, and
+    /// `whole_run` those whose products are released together.
+    fn new(graph: &BuildGraph, held: &HashSet<String>, whole_run: &HashSet<String>) -> Self {
         let count = graph.products().len();
         let mut group_of_processor: HashMap<&str, usize> = HashMap::new();
         let mut group: Vec<Option<usize>> = vec![None; count];
@@ -397,6 +414,27 @@ impl ReadyTracker {
                     .or_insert(next),
             );
         }
+        let mut members_of_processor: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
+        for id in 0..count {
+            let product = graph.get_product(id).expect(errors::INVALID_PRODUCT_ID);
+            if whole_run.contains(&product.processor) {
+                members_of_processor
+                    .entry(product.processor.as_str())
+                    .or_default()
+                    .push(id);
+            }
+        }
+        let mut run: Vec<Option<usize>> = vec![None; count];
+        let mut run_members: Vec<Vec<usize>> = Vec::new();
+        for members in members_of_processor.into_values() {
+            if Self::feeds_itself(graph, &members) {
+                continue;
+            }
+            for &id in &members {
+                run[id] = Some(run_members.len());
+            }
+            run_members.push(members);
+        }
         let mut tracker = Self {
             unfinished_deps: vec![0; count],
             state: vec![ProductState::Waiting; count],
@@ -404,9 +442,39 @@ impl ReadyTracker {
             in_flight: 0,
             group,
             group_waiting: vec![0; group_of_processor.len()],
+            run,
+            run_left: run_members.iter().map(Vec::len).collect(),
+            run_members,
         };
         tracker.recount(graph);
         tracker
+    }
+
+    /// Whether some product of `members` depends, directly or through
+    /// other products, on another of them.
+    fn feeds_itself(graph: &BuildGraph, members: &[usize]) -> bool {
+        let member: HashSet<usize> = members.iter().copied().collect();
+        let mut seen: HashSet<usize> = HashSet::new();
+        let mut stack: Vec<usize> = members
+            .iter()
+            .flat_map(|&id| graph.get_dependents(id).iter().copied())
+            .collect();
+        while let Some(id) = stack.pop() {
+            if member.contains(&id) {
+                return true;
+            }
+            if seen.insert(id) {
+                stack.extend(graph.get_dependents(id).iter().copied());
+            }
+        }
+        false
+    }
+
+    /// Whether a product's dependents may count it as finished: it is done,
+    /// and so is every product of its run.
+    fn released(&self, id: usize) -> bool {
+        self.state[id] == ProductState::Done
+            && self.run[id].is_none_or(|run| self.run_left[run] == 0)
     }
 
     /// Recompute every waiting product's count from the graph — after the
@@ -422,7 +490,7 @@ impl ReadyTracker {
             self.unfinished_deps[id] = graph
                 .get_dependencies(id)
                 .iter()
-                .filter(|&&dep| self.state[dep] != ProductState::Done)
+                .filter(|&&dep| !self.released(dep))
                 .count();
             if self.unfinished_deps[id] == 0 {
                 self.ready.insert(id);
@@ -447,11 +515,27 @@ impl ReadyTracker {
     }
 
     /// Record that a handed-out product finished; its dependents with no
-    /// unfinished dependency left become ready.
+    /// unfinished dependency left become ready. The dependents of a run's
+    /// product wait for the run's last product.
     fn finish(&mut self, graph: &BuildGraph, id: usize) {
         debug_assert_eq!(self.state[id], ProductState::Dispatched);
         self.state[id] = ProductState::Done;
         self.in_flight -= 1;
+        match self.run[id] {
+            None => self.release(graph, id),
+            Some(run) => {
+                self.run_left[run] -= 1;
+                if self.run_left[run] == 0 {
+                    for member in std::mem::take(&mut self.run_members[run]) {
+                        self.release(graph, member);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Count a finished product off its dependents.
+    fn release(&mut self, graph: &BuildGraph, id: usize) {
         for &dependent in graph.get_dependents(id) {
             if self.state[dependent] == ProductState::Waiting {
                 self.unfinished_deps[dependent] -= 1;
@@ -499,7 +583,7 @@ mod tests {
             .unwrap();
         g.resolve_dependencies();
 
-        let mut tracker = ReadyTracker::new(&g, &HashSet::new());
+        let mut tracker = ReadyTracker::new(&g, &HashSet::new(), &HashSet::new());
         assert_eq!(tracker.take_ready(), vec![top, slow]);
         tracker.finish(&g, top);
         assert_eq!(tracker.take_ready(), vec![left, right], "slow still runs");
@@ -535,7 +619,7 @@ mod tests {
         g.resolve_dependencies();
 
         // All three are ready while nothing links them.
-        let mut tracker = ReadyTracker::new(&g, &HashSet::new());
+        let mut tracker = ReadyTracker::new(&g, &HashSet::new(), &HashSet::new());
         assert_eq!(
             tracker.ready.iter().copied().collect::<Vec<_>>(),
             vec![producer, blocker, consumer]
@@ -626,7 +710,7 @@ mod tests {
             .unwrap();
         g.resolve_dependencies();
 
-        let mut tracker = ReadyTracker::new(&g, &HashSet::new());
+        let mut tracker = ReadyTracker::new(&g, &HashSet::new(), &HashSet::new());
         let mut handed_out: Vec<usize> = Vec::new();
         loop {
             let wave = tracker.take_ready();
@@ -664,7 +748,7 @@ mod tests {
         g.resolve_dependencies();
 
         let held: HashSet<String> = ["check".to_string()].into();
-        let mut tracker = ReadyTracker::new(&g, &held);
+        let mut tracker = ReadyTracker::new(&g, &held, &HashSet::new());
         tracker.recount(&g);
         assert_eq!(
             tracker.take_ready(),
@@ -681,6 +765,78 @@ mod tests {
         tracker.finish(&g, other);
         tracker.finish(&g, check_src);
         tracker.finish(&g, check_gen);
+        assert_eq!(tracker.in_flight, 0);
+    }
+
+    /// A mass generator's products are released together: the consumer of
+    /// `atom` (clean, skipped at once) waits for `page`, whose execution is
+    /// the tool run that rewrites `atom` too.
+    #[test]
+    fn ready_tracker_releases_a_mass_generator_run_together() {
+        let mut g = BuildGraph::new();
+        let info = g
+            .add_product(vec![".git/HEAD".into()], vec!["info.toml".into()], "info", None)
+            .unwrap();
+        let atom = g
+            .add_product(vec!["post.md".into()], vec!["_site/atom.xml".into()], "site", None)
+            .unwrap();
+        let page = g
+            .add_product(
+                vec!["info.toml".into(), "about.md".into()],
+                vec!["_site/about.html".into()],
+                "site",
+                None,
+            )
+            .unwrap();
+        let feed = g
+            .add_product(vec!["_site/atom.xml".into()], vec!["feed.xml".into()], "feed", None)
+            .unwrap();
+        g.resolve_dependencies();
+
+        let whole_run: HashSet<String> = ["site".to_string()].into();
+        let mut tracker = ReadyTracker::new(&g, &HashSet::new(), &whole_run);
+        assert_eq!(tracker.take_ready(), vec![info, atom]);
+        tracker.finish(&g, atom);
+        assert_eq!(
+            tracker.take_ready(),
+            Vec::<usize>::new(),
+            "feed waits for the rest of the run"
+        );
+        tracker.finish(&g, info);
+        assert_eq!(tracker.take_ready(), vec![page]);
+        tracker.recount(&g);
+        assert_eq!(tracker.take_ready(), Vec::<usize>::new(), "a recount keeps the wait");
+        tracker.finish(&g, page);
+        assert_eq!(tracker.take_ready(), vec![feed]);
+        tracker.finish(&g, feed);
+        assert_eq!(tracker.in_flight, 0);
+    }
+
+    /// An instance whose products feed each other through another product
+    /// is released product by product, or `mid` and `last` would wait on
+    /// each other forever.
+    #[test]
+    fn ready_tracker_does_not_tie_a_run_that_feeds_itself() {
+        let mut g = BuildGraph::new();
+        let first = g
+            .add_product(vec!["a.md".into()], vec!["_site/a.html".into()], "site", None)
+            .unwrap();
+        let mid = g
+            .add_product(vec!["_site/a.html".into()], vec!["index.toml".into()], "index", None)
+            .unwrap();
+        let last = g
+            .add_product(vec!["index.toml".into()], vec!["_site/b.html".into()], "site", None)
+            .unwrap();
+        g.resolve_dependencies();
+
+        let whole_run: HashSet<String> = ["site".to_string()].into();
+        let mut tracker = ReadyTracker::new(&g, &HashSet::new(), &whole_run);
+        assert_eq!(tracker.take_ready(), vec![first]);
+        tracker.finish(&g, first);
+        assert_eq!(tracker.take_ready(), vec![mid]);
+        tracker.finish(&g, mid);
+        assert_eq!(tracker.take_ready(), vec![last]);
+        tracker.finish(&g, last);
         assert_eq!(tracker.in_flight, 0);
     }
 

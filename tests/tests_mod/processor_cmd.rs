@@ -719,3 +719,36 @@ fn remove_no_file_processors_removes_enabled_stanza_with_no_files() {
         "Processor with files must be kept, got: {toml}"
     );
 }
+
+#[test]
+fn processor_types_shows_descriptions() {
+    let temp_dir = TempDir::new().unwrap();
+    let output = run_rsconstruct_with_env(
+        temp_dir.path(),
+        &["processor", "types"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(
+        output.status.success(),
+        "processor types failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Type"), "Expected Type header:\n{stdout}");
+    assert!(
+        stdout.contains("Description"),
+        "Expected Description header:\n{stdout}"
+    );
+    for (name, desc_snippet) in [
+        ("generator", "Generates output files from input files"),
+        ("checker", "Validates input files without producing outputs"),
+        ("explicit", "Many inputs aggregated into"),
+        ("mass_generator", "Runs a tool that enumerates its outputs"),
+    ] {
+        assert!(
+            stdout.contains(name) && stdout.contains(desc_snippet),
+            "Expected type '{name}' and description '{desc_snippet}' in:\n{stdout}"
+        );
+    }
+}

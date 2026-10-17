@@ -6,15 +6,15 @@ This page defines the terminology used throughout RSConstruct's code, configurat
 
 | Term | Definition |
 |---|---|
-| **pname** | Processor name: the processor's full path, `processor.<type>.<name>`, identical to its module path in the source tree (`processor.checker.ruff` is `src/processor/checker/ruff.rs`). Unique across all plugins because the type is part of it; the last segment alone is not (`processor.creator.generic` and `processor.explicit.generic` are different processors). Used as the `[processor.TYPE.NAME]` config section header and in `processor defconfig PNAME`. |
-| **iname** | Instance name. The name of a specific processor instance as declared in `rsconstruct.toml`. For a single instance, the iname equals the pname (`[processor.checker.ruff]` → `processor.checker.ruff`). For a named instance, the iname is the pname plus the sub-key (`[processor.creator.generic.venv]` → `processor.creator.generic.venv`). Used in `processor config INAME`, `-p`, `--iset`, build output and cache keys. |
+| **pname** | Processor name: the processor's full path, `processor.<type>.<name>`, identical to its module path in the source tree (`processor.checker.ruff` is `src/processor/checker/ruff.rs`). Unique across all plugins because the type is part of it; the last segment alone is not (`processor.mass_generator.generic` and `processor.explicit.generic` are different processors). Used as the `[processor.TYPE.NAME]` config section header and in `processor defconfig PNAME`. |
+| **iname** | Instance name. The name of a specific processor instance as declared in `rsconstruct.toml`. For a single instance, the iname equals the pname (`[processor.checker.ruff]` → `processor.checker.ruff`). For a named instance, the iname is the pname plus the sub-key (`[processor.explicit.generic.venv]` → `processor.explicit.generic.venv`). Used in `processor config INAME`, `-p`, `--iset`, build output and cache keys. |
 | **processor** | A configured instance that discovers products and executes builds. Created from a plugin + TOML config. Immutable after creation. |
 | **plugin** | A factory registered at compile time via `inventory::submit!`. Knows how to create processors from TOML config. Has a pname, a processor type, and config metadata. |
 | **native processor** | A processor implemented in pure Rust inside rsconstruct; it needs no external tool. Examples: `tera`, `ijsonlint`, `encoding`. Declared with `is_native: true` on the plugin. |
 | **external processor** | A processor that runs another program to do its work. Examples: `ruff`, `pylint`, `tidy`. |
 | **rust** (processor flag) | Whether the code that does the work is written in Rust: true for every native processor, and for an external one only when its tool is written in Rust (`ruff`, `taplo`, `rumdl`, `clippy`, `cargo`, `mdbook`, `pyrefly`, `rustc`). Declared with `is_rust` on the plugin; shown by `processor list` and `status`. Processors that run a user-supplied command report false. |
 | **product** | A single build unit with inputs, outputs, and a processor. The atomic unit of incremental building. |
-| **processor type** | One of five categories — `checker`, `generator`, `creator`, `explicit`, `mass_generator`. The second segment of every pname. Determines how inputs are discovered, how outputs are declared, and how results are cached. See [Processor Types](processor-types.md). |
+| **processor type** | One of four categories — `checker`, `generator`, `explicit`, `mass_generator`. The second segment of every pname. Determines how inputs are discovered, how outputs are declared, and how results are cached. See [Processor Types](processor-types.md). |
 | **analyzer** | A dependency scanner that runs after product discovery to add extra input edges to existing products (e.g., the `cpp` analyzer adds every `#include`d header as an extra input of a C/C++ product). Analyzers never create products of their own. Declared with `[analyzer.NAME]` sections in `rsconstruct.toml`. Unlike processors, only analyzers explicitly declared in config run — there is no "auto-enable" default. See [Dependency Analyzers](analyzers.md). |
 | **analyzer plugin** | A factory registered at compile time via `inventory::submit!` in the analyzer registry. Knows how to construct an analyzer from its `[analyzer.NAME]` TOML section. Each plugin declares its name, description, and whether it is `native` (pure Rust) or external (may invoke subprocesses). |
 | **native analyzer** | An analyzer whose default configuration runs entirely in-process (no subprocesses). Example: `icpp` uses a pure-Rust regex scanner for `#include` directives. Some native analyzers become external in non-default configurations (e.g., `icpp` with `pkg_config` set shells out to `pkg-config` for include paths). |
@@ -24,8 +24,8 @@ This page defines the terminology used throughout RSConstruct's code, configurat
 
 | Term | Definition |
 |---|---|
-| **output_files** | List of individual output files declared in creator/explicit config. Cached as blobs. |
-| **output_dirs** | List of output directories declared in creator/explicit config. All files inside are walked and cached as a tree. |
+| **output_files** | List of individual output files declared in explicit config. Cached as blobs. |
+| **output_dirs** | List of output directories declared in explicit config. All files inside are walked and cached as a tree. |
 | **src_dirs** | Directories to scan for input files. |
 | **src_extensions** | File extensions to match during scanning. |
 | **dep_inputs** | Extra files that trigger a rebuild when their content changes. |
