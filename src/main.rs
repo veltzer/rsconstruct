@@ -776,6 +776,17 @@ fn run() -> (Result<()>, bool) {
 
         Ok(())
     })(); // end closure
+    // Mtime entries staged by any command (status, dry-run, graph, ...) are
+    // written once it is done. A command's own error outranks a failed write.
+    let flushed = checksum::flush_mtime_cache(&ctx);
+    let result = match (result, flushed) {
+        (Ok(()), flushed) => flushed,
+        (Err(e), Ok(())) => Err(e),
+        (Err(e), Err(flush)) => {
+            output::warn(&format!("{flush:#}"));
+            Err(e)
+        }
+    };
     (result, show_status)
 }
 

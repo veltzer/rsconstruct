@@ -24,10 +24,22 @@ const MTIME_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("mtime_ca
 /// trusted while the file's whole stamp — mtime, ctime, size and inode
 /// (see `platform::FileStamp`) — is unchanged. An entry from before the
 /// stamp existed fails to deserialize and is re-hashed once.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct MtimeEntry {
     stamp: crate::platform::FileStamp,
     checksum: String,
+}
+
+/// Mtime entries computed this session and not yet written, by path key.
+///
+/// Writing each entry as it was computed cost one durable redb commit (an
+/// fdatasync) per checksummed file. Entries are staged here instead and
+/// written by `flush_mtime_cache` at a few points in a run: after classify,
+/// after execute, and when the command ends. Lookups see a staged entry at
+/// once. An entry lost to a crash only costs a re-hash on the next run.
+#[derive(Default)]
+pub struct PendingMtime {
+    entries: HashMap<String, MtimeEntry>,
 }
 
 /// Seconds within which a file counts as just changed: no entry is stored
@@ -162,9 +174,18 @@ fn fast_checksum(
 
     let path_str = path.display().to_string();
 
-    // Check mtime cache in DB
+    // Check the staged entries, then the mtime cache in DB
+    let staged = ctx
+        .mtime_pending
+        .lock()
+        .unwrap()
+        .entries
+        .get(&path_str)
+        .cloned();
     let db_guard = get_mtime_db(ctx)?;
-    let cached = if let Some(ref db) = *db_guard {
+    let cached = if staged.is_some() {
+        staged
+    } else if let Some(ref db) = *db_guard {
         let read_txn = crate::errors::ctx(
             db.begin_read(),
             "Failed to begin read transaction for mtime cache",
@@ -236,8 +257,20 @@ fn fast_checksum(
     ))
 }
 
-/// Flush a batch of dirty mtime entries in a single write transaction.
-fn flush_mtime_entries(ctx: &BuildContext, dirty: Vec<(String, MtimeEntry)>) -> Result<()> {
+/// Stage dirty mtime entries for the next `flush_mtime_cache`.
+fn stage_mtime_entries(ctx: &BuildContext, dirty: Vec<DirtyMtimeEntry>) {
+    if dirty.is_empty() {
+        return;
+    }
+    ctx.mtime_pending.lock().unwrap().entries.extend(dirty);
+}
+
+/// Write every staged mtime entry in a single write transaction.
+pub fn flush_mtime_cache(ctx: &BuildContext) -> Result<()> {
+    let dirty: Vec<DirtyMtimeEntry> =
+        std::mem::take(&mut ctx.mtime_pending.lock().unwrap().entries)
+            .into_iter()
+            .collect();
     if dirty.is_empty() {
         return Ok(());
     }
@@ -363,9 +396,7 @@ pub fn checksum_fast(ctx: &BuildContext, path: &Path) -> Result<(String, Checksu
         return Ok((file_checksum(ctx, path)?, ChecksumPath::FullRead));
     }
     let (checksum, path_taken, dirty) = fast_checksum(ctx, path)?;
-    if let Some(entry) = dirty {
-        flush_mtime_entries(ctx, vec![entry])?;
-    }
+    stage_mtime_entries(ctx, dirty.into_iter().collect());
     Ok((checksum, path_taken))
 }
 
@@ -381,9 +412,7 @@ pub fn checksum_output(ctx: &BuildContext, path: &Path) -> Result<(String, Check
         return Ok((stream_file_checksum(path)?, ChecksumPath::FullRead));
     }
     let (checksum, path_taken, dirty) = fast_checksum(ctx, path)?;
-    if let Some(entry) = dirty {
-        flush_mtime_entries(ctx, vec![entry])?;
-    }
+    stage_mtime_entries(ctx, dirty.into_iter().collect());
     Ok((checksum, path_taken))
 }
 
@@ -426,9 +455,7 @@ fn compute_combined_input_checksum(ctx: &BuildContext, inputs: &[PathBuf]) -> Re
         }
     }
 
-    if mtime_enabled {
-        flush_mtime_entries(ctx, dirty_entries)?;
-    }
+    stage_mtime_entries(ctx, dirty_entries);
 
     Ok(hash_checksums(&checksums))
 }
@@ -473,6 +500,47 @@ mod tests {
         assert_eq!(before.mtime_secs, after.mtime_secs, "mtime was restored");
         assert_eq!(before.size, after.size, "same length");
         assert_ne!(before, after, "ctime still records the rewrite");
+    }
+
+    /// A staged entry serves lookups before anything is written, and only
+    /// `flush_mtime_cache` puts it in the database, in one commit.
+    #[test]
+    fn staged_entries_are_visible_at_once_and_written_by_flush() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let ctx = BuildContext::new();
+        // A database of our own: the default one lives under the CWD.
+        *ctx.mtime_db.lock().unwrap() =
+            Some(redb::Database::create(tmp.path().join("mtime.redb")).unwrap());
+        let path = tmp.path().join("f.txt");
+        fs::write(&path, "content").unwrap();
+        let key = path.display().to_string();
+        let entry = MtimeEntry {
+            stamp: crate::platform::file_stamp(&fs::metadata(&path).unwrap()),
+            checksum: "staged".to_string(),
+        };
+        stage_mtime_entries(&ctx, vec![(key.clone(), entry)]);
+
+        assert_eq!(
+            checksum_fast(&ctx, &path).unwrap(),
+            ("staged".to_string(), ChecksumPath::MtimeShortcut),
+            "the staged entry is used before the flush"
+        );
+        let stored = |ctx: &BuildContext| -> Option<String> {
+            let guard = ctx.mtime_db.lock().unwrap();
+            let txn = guard.as_ref().unwrap().begin_read().unwrap();
+            let table = txn.open_table(MTIME_TABLE).ok()?;
+            let data = table.get(key.as_str()).unwrap()?;
+            Some(
+                serde_json::from_slice::<MtimeEntry>(data.value())
+                    .unwrap()
+                    .checksum,
+            )
+        };
+        assert_eq!(stored(&ctx), None, "nothing is written before the flush");
+
+        flush_mtime_cache(&ctx).unwrap();
+        assert_eq!(stored(&ctx), Some("staged".to_string()));
+        assert!(ctx.mtime_pending.lock().unwrap().entries.is_empty());
     }
 
     /// A file whose ctime is recent counts as just changed even when its

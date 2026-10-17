@@ -23,6 +23,9 @@ pub struct BuildContext {
     pub(crate) checksum_cache: Mutex<Option<HashMap<PathBuf, String>>>,
     /// Persistent mtime database — maps (path, mtime) → checksum across builds.
     pub(crate) mtime_db: Mutex<Option<Database>>,
+    /// Mtime entries computed this session and not yet written to `mtime_db`.
+    /// See `checksum::flush_mtime_cache`.
+    pub(crate) mtime_pending: Mutex<crate::checksum::PendingMtime>,
     /// Whether mtime pre-check is enabled. Set to false by `--no-mtime-cache`.
     pub(crate) mtime_enabled: AtomicBool,
     /// Max-arg-length threshold for `run_checker` (sourced from `build.max_arg_len`).
@@ -61,6 +64,7 @@ impl BuildContext {
             interrupt_rx,
             checksum_cache: Mutex::new(None),
             mtime_db: Mutex::new(None),
+            mtime_pending: Mutex::new(crate::checksum::PendingMtime::default()),
             mtime_enabled: AtomicBool::new(true),
             max_arg_len: std::sync::atomic::AtomicUsize::new(1_000_000),
             webcache_ttl_secs: std::sync::atomic::AtomicU64::new(7 * 24 * 60 * 60),

@@ -441,6 +441,9 @@ impl Builder {
             &self.object_store,
             opts.force,
         );
+        // Classify checksummed every input; write those entries before the
+        // long phase starts, so an interrupted build keeps them.
+        crate::checksum::flush_mtime_cache(ctx)?;
         phase_timings.push(("classify".to_string(), t.elapsed()));
         if crate::json_output::human_output_enabled() {
             println!(
@@ -514,6 +517,9 @@ impl Builder {
         // Execute the build
         let t = Instant::now();
         let result = executor.execute(&mut graph, &self.object_store, &classification, refresh);
+        // Written even when the build failed: its products were still
+        // hashed. Reported after the build's own outcome, which matters more.
+        let flushed = crate::checksum::flush_mtime_cache(ctx);
         let build_dur = t.elapsed();
         print_graph_stats(GraphSnapshot::AfterExecute, &graph);
 
@@ -527,6 +533,7 @@ impl Builder {
         }
 
         let mut stats = result?;
+        flushed?;
 
         // Add phase timings to stats
         phase_timings.push(("build".to_string(), build_dur));
