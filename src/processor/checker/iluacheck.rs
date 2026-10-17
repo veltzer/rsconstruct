@@ -357,7 +357,6 @@ inventory::submit! {
         description: "Lint Lua files with luacheck's analysis (in-process)",
         is_native: true,
         is_rust: true,
-        can_fix: false,
         supports_batch: false,
         max_jobs_cap: None,
     }

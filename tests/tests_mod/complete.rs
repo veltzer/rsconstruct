@@ -30,7 +30,6 @@ fn complete_bash_generates_output() {
     for helper_call in [
         "compgen -W \"$(_rsconstruct_inames)\"",
         "compgen -W \"$(_rsconstruct_analyzer_inames)\"",
-        "compgen -W \"$(_rsconstruct_fixer_inames)\"",
     ] {
         assert!(
             stdout.contains(helper_call),

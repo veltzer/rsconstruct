@@ -12,9 +12,6 @@ fn create_doctest(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor
                 subcommand: None,
                 prepend_args: &["-m", "doctest"],
                 extra_tools: &[],
-                fix_subcommand: None,
-                fix_prepend_args: &[],
-                fix_batch: None,
             },
         ))
     })
@@ -31,7 +28,6 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     description: "Run Python doctests",
     is_native: false,
     is_rust: false,
-    can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,
 } }

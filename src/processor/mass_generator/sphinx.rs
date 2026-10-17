@@ -514,7 +514,6 @@ inventory::submit! {
         description: "Build Sphinx HTML documentation; one cached product per file Sphinx writes, planned by Sphinx itself",
         is_native: false,
         is_rust: false,
-        can_fix: false,
         supports_batch: false,
         max_jobs_cap: Some(1),
     }

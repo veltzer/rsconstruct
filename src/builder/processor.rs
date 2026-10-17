@@ -135,7 +135,6 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
                     .into_iter()
                     .map(str::to_string)
                     .collect(),
-                fix: p.can_fix,
                 description: p.description.to_string(),
             })
             .collect();
@@ -153,7 +152,6 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
                 native_tag.to_string(),
                 tables::yes_no(p.is_rust).to_string(),
                 crate::registries::rust_alternatives(&p.pname()).join(", "),
-                tables::yes_no(p.can_fix).to_string(),
             ];
             if verbose {
                 row.push(p.description.to_string());
@@ -161,7 +159,7 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
             row
         })
         .collect();
-    let mut headers = vec!["Name", "Type", "Native", "Rust", "Rust alternative", "Fix"];
+    let mut headers = vec!["Name", "Type", "Native", "Rust", "Rust alternative"];
     if verbose {
         headers.push("Description");
     }
@@ -611,7 +609,6 @@ pub fn processor_info(pname: Option<&str>) -> Result<()> {
                     "version": p.version,
                     "native": p.is_native,
                     "rust": p.is_rust,
-                    "can_fix": p.can_fix,
                     "supports_batch": p.supports_batch,
                     "max_jobs_cap": p.max_jobs_cap,
                     "fields": processor_fields(name),
@@ -632,10 +629,9 @@ pub fn processor_info(pname: Option<&str>) -> Result<()> {
             println!("  Keywords: {}", p.keywords.join(", "));
         }
         println!(
-            "  Native: {}  Rust: {}  Fix: {}  Batch: {}  Max jobs: {}  Version: {}",
+            "  Native: {}  Rust: {}  Batch: {}  Max jobs: {}  Version: {}",
             tables::yes_no(p.is_native),
             tables::yes_no(p.is_rust),
-            tables::yes_no(p.can_fix),
             tables::yes_no(p.supports_batch),
             p.max_jobs_cap
                 .map_or_else(|| "unlimited".to_string(), |n| n.to_string()),

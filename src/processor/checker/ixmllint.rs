@@ -192,7 +192,6 @@ inventory::submit! {
         description: "Check XML well-formedness and validate against an XSD schema (in-process)",
         is_native: true,
         is_rust: true,
-        can_fix: false,
         supports_batch: true,
         max_jobs_cap: None,
     }

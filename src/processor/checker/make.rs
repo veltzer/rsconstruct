@@ -115,7 +115,6 @@ inventory::submit! {
         description: "Run make in directories containing Makefiles",
         is_native: false,
         is_rust: false,
-        can_fix: false,
         supports_batch: false,
         max_jobs_cap: None,
     }

@@ -42,31 +42,6 @@ src_dirs = ["marp"]
 | `src_dirs` | string[] | `[""]` | Directory to scan (empty = project root) |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `dep_auto` | string[] | `[]` | Auto-detected input files |
-| `fix_command` | string | `""` | Command `rsconstruct fix` runs on the files; empty means the instance cannot fix |
-| `fix_args` | string[] | `[]` | Arguments passed to `fix_command` before the file paths |
-| `fix_batch` | bool | same as `batch` | Whether `fix_command` accepts several files per invocation |
-
-## Fix mode
-
-A script instance with a `fix_command` is fix-capable: `rsconstruct fix run`
-runs `fix_command fix_args... <files>` on the same files the check covers,
-and the fixer is expected to modify them in place. This is currently the only
-way to make a processor fix-capable — no built-in processor declares a fixer.
-
-```toml
-[processor.checker.script.trailing]
-command = "sh"
-args = ["-c", "! grep -n -E ' +$' \"$@\"", "sh"]   # fails when a line ends in spaces
-src_extensions = [".txt"]
-src_dirs = ["src"]
-fix_command = "sed"
-fix_args = ["-i", "-E", "s/ +$//"]
-```
-
-```bash
-rsconstruct fix list                                     # shows processor.checker.script.trailing
-rsconstruct fix run processor.checker.script.trailing    # strips trailing spaces in place
-```
 
 ## Batch support
 

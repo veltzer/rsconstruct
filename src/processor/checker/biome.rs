@@ -21,9 +21,6 @@ fn create_biome(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::
                 subcommand: Some("lint"),
                 prepend_args: &[],
                 extra_tools: &[],
-                fix_subcommand: None,
-                fix_prepend_args: &["--write"],
-                fix_batch: None,
             },
         ))
     })
@@ -43,7 +40,6 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     description: "Lint CSS/JavaScript/TypeScript/JSON files using biome",
     is_native: false,
     is_rust: true,
-    can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,
 } }

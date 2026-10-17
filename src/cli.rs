@@ -196,11 +196,6 @@ pub enum Commands {
     Doctor,
     /// List all exit codes and their meanings (no config needed)
     Error,
-    /// Run fixers on source files (auto-format, auto-fix lint issues)
-    Fix {
-        #[command(subcommand)]
-        action: FixAction,
-    },
     /// Inspect built-in template functions exposed to Tera templates (no config needed)
     Function {
         #[command(subcommand)]
@@ -371,18 +366,6 @@ pub enum GraphAction {
         /// Viewer to use
         #[arg(long, value_enum, default_value = "svg")]
         viewer: GraphViewer,
-    },
-}
-
-#[derive(Subcommand)]
-pub enum FixAction {
-    /// List all fix-capable processors declared in this project (requires config)
-    List,
-    /// Run a fixer on source files (requires config)
-    Run {
-        /// Processor instance name (iname); comma-separated for several
-        #[arg(value_delimiter = ',')]
-        processor: Vec<String>,
     },
 }
 
@@ -1003,16 +986,6 @@ fn generate_completion_script(shell: Shell) -> Result<String> {
 /// generated script, so a format change fails `cargo test` before it can
 /// reach a user.
 fn inject_bash_processor_completions(script: &str) -> Result<String> {
-    // The fixer alternation is generated from the plugin registry so it can
-    // never drift from `can_fix` (it used to be a hand-maintained copy that
-    // had to be updated whenever a plugin's flag changed). Sorted for
-    // deterministic output; may be empty when no plugin declares can_fix.
-    let mut fixer_types: Vec<String> = crate::registries::all_plugins()
-        .filter(|p| p.can_fix)
-        .map(crate::registries::ProcessorPlugin::pname)
-        .collect();
-    fixer_types.sort_unstable();
-
     // Bash helpers: extract instance names from rsconstruct.toml. An instance
     // name is the whole section header: [processor.checker.ruff] or
     // [processor.checker.ruff.core]. Sub-tables that are config fields
@@ -1031,33 +1004,7 @@ _rsconstruct_analyzer_inames() {
     # Match [analyzer.NAME] -> NAME; [analyzer.NAME.SUB] -> NAME.SUB
     grep -E '^\[analyzer\.' "$toml" | sed -E 's/^\[analyzer\.([^]]+)\].*/\1/'
 }
-_rsconstruct_fixer_inames() {
-    # Filter inames to only processors with fix capability.
-    # The alternation below is generated from the plugin registry (can_fix)
-    # when the completion script is emitted; it may be empty.
-    # For script processors: check if fix_command is set in the toml section.
-    local toml="rsconstruct.toml"
-    [[ -f "$toml" ]] || return
-    local fixers="__RSCONSTRUCT_FIXER_TYPES__"
-    for iname in $(_rsconstruct_inames); do
-        # processor.<type>.<name>: the first three segments name the processor
-        local pname
-        pname=$(echo "$iname" | cut -d. -f1-3)
-        if [ -n "$fixers" ] && echo "$pname" | grep -qE "^($fixers)$"; then
-            echo "$iname"
-        elif [ "$pname" = "processor.checker.script" ]; then
-            # Check if fix_command is set in this script section
-            if sed -n "/^\[$iname\]/,/^\[/p" "$toml" | grep -q 'fix_command'; then
-                echo "$iname"
-            fi
-        fi
-    done
-}
-"#
-    .replace(
-        "__RSCONSTRUCT_FIXER_TYPES__",
-        &fixer_types.join("|").replace('.', "\\."),
-    );
+"#;
 
     // Replace instance-name targets to call _rsconstruct_inames at tab time.
     // For each target section, replace the early-return COMPREPLY with a call to our helper.
@@ -1153,37 +1100,11 @@ _rsconstruct_fixer_inames() {
             missed.push(format!("{label} flag completion"));
         }
     }
-    let mut result = result
+    let result = result
         .replace(old_processor, &new_processor)
         .replace(old_p, &new_p)
         .replace(old_exclude, &new_exclude)
         .replace(old_x, &new_x);
-
-    // Inject completion for `fix run <processor>`: only fixer inames.
-    // The `fix run` subcommand takes positional processor names — inject
-    // our fixer helper so tab-completing shows only fix-capable processors
-    // declared in the project.
-    let iname_targets_fix = ["rsconstruct__subcmd__fix__subcmd__run)"];
-    for target in &iname_targets_fix {
-        if let Some(section_start) = result.find(target) {
-            let after_start = section_start + target.len();
-            let section_len = result[after_start..]
-                .find("\n        rsconstruct__")
-                .unwrap_or(result.len() - after_start);
-            let section_end = after_start + section_len;
-            let section_slice = &result[section_start..section_end];
-            let needle = "COMPREPLY=( $(compgen -W \"${opts}\" -- \"${cur}\") )";
-            if let Some(rel_pos) = section_slice.find(needle) {
-                let abs_pos = section_start + rel_pos;
-                let replacement = "if [[ ${cur} != -* ]] ; then\n                    COMPREPLY=( $(compgen -W \"$(_rsconstruct_fixer_inames)\" -- \"${cur}\") )\n                else\n                    COMPREPLY=( $(compgen -W \"${opts}\" -- \"${cur}\") )\n                fi";
-                result.replace_range(abs_pos..abs_pos + needle.len(), replacement);
-            } else {
-                missed.push(format!("COMPREPLY line in section {target}"));
-            }
-        } else {
-            missed.push(format!("section {target}"));
-        }
-    }
 
     if !missed.is_empty() {
         bail!(
@@ -1215,7 +1136,6 @@ mod tests {
         for helper_call in [
             "compgen -W \"$(_rsconstruct_inames)\"",
             "compgen -W \"$(_rsconstruct_analyzer_inames)\"",
-            "compgen -W \"$(_rsconstruct_fixer_inames)\"",
         ] {
             assert!(
                 script.contains(helper_call),

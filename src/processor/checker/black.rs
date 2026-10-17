@@ -4,11 +4,6 @@ use crate::config::SimpleCheckerParams;
 use crate::processor::SimpleChecker;
 
 fn create_black(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::Processor>> {
-    // Black's fix is its bare invocation (reformat in place); --quiet is the
-    // explicit fix marker — without any fix param, has_fix() would be false
-    // and batch fixing silently disabled. Fix capability is currently off
-    // registry-wide (every plugin has can_fix: false); the marker keeps the
-    // fix path coherent if it is ever re-enabled.
     crate::registries::deserialize_and_create(toml, |cfg| {
         Box::new(SimpleChecker::new(
             cfg,
@@ -17,9 +12,6 @@ fn create_black(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::
                 subcommand: None,
                 prepend_args: &["--check"],
                 extra_tools: &["python3"],
-                fix_subcommand: None,
-                fix_prepend_args: &["--quiet"],
-                fix_batch: None,
             },
         ))
     })
@@ -36,7 +28,6 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     description: "Check Python code formatting using black",
     is_native: false,
     is_rust: false,
-    can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,
 } }

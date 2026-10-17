@@ -190,7 +190,6 @@ inventory::submit! {
         description: "Run a user-configured script as a generator",
         is_native: false,
         is_rust: false,
-        can_fix: false,
         supports_batch: true,
         max_jobs_cap: None,
     }

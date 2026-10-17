@@ -12,9 +12,6 @@ fn create_checkpatch(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::proces
                 subcommand: None,
                 prepend_args: &["--no-tree", "-f"],
                 extra_tools: &["perl"],
-                fix_subcommand: None,
-                fix_prepend_args: &[],
-                fix_batch: None,
             },
         ))
     })
@@ -31,7 +28,6 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     description: "Check kernel patches using checkpatch.pl",
     is_native: false,
     is_rust: false,
-    can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,
 } }

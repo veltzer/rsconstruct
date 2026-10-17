@@ -231,10 +231,7 @@ fn run() -> (Result<()>, bool) {
 
     let show_status = matches!(
         cli.command,
-        Commands::Build { .. }
-            | Commands::Watch { .. }
-            | Commands::Clean { .. }
-            | Commands::Fix { .. }
+        Commands::Build { .. } | Commands::Watch { .. } | Commands::Clean { .. }
     );
 
     // Wrap the body in a closure so `?` works naturally inside, then pair the
@@ -365,22 +362,6 @@ fn run() -> (Result<()>, bool) {
             }
             Commands::Error => {
                 list_exit_codes(cli.verbose)?;
-            }
-            Commands::Fix { action } => {
-                let builder = Builder::new(&ctx)?;
-                match action {
-                    cli::FixAction::Run { processor } => {
-                        if processor.is_empty() {
-                            bail!(
-                                "No processors specified. Usage: rsconstruct fix run <processor1,processor2,...>"
-                            );
-                        }
-                        builder.fix(&ctx, Some(&processor))?;
-                    }
-                    cli::FixAction::List => {
-                        builder.fix_list()?;
-                    }
-                }
             }
             Commands::Graph { action } => {
                 let builder = Builder::new(&ctx)?;

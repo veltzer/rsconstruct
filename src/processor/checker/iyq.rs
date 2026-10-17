@@ -180,7 +180,6 @@ inventory::submit! {
         description: "Check YAML files with a jq filter (in-process)",
         is_native: true,
         is_rust: true,
-        can_fix: false,
         supports_batch: true,
         max_jobs_cap: None,
     }

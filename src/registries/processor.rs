@@ -70,8 +70,6 @@ pub struct ProcessorPlugin {
     /// Shown by `processor list` and `status` so the language of the toolchain
     /// can be read off the table.
     pub is_rust: bool,
-    /// Whether this processor has fix capability (`rsconstruct fix`).
-    pub can_fix: bool,
     /// Whether this processor can execute multiple products in one invocation.
     /// Static capability — if false, the `batch` config field has no effect at runtime.
     pub supports_batch: bool,
@@ -216,11 +214,6 @@ pub fn is_native(name: &str) -> bool {
 /// name. See [`ProcessorPlugin::is_rust`].
 pub fn is_rust(name: &str) -> bool {
     find_plugin(name).is_some_and(|p| p.is_rust)
-}
-
-/// Return whether a processor can fix by instance name.
-pub fn can_fix(name: &str) -> bool {
-    find_plugin(name).is_some_and(|p| p.can_fix)
 }
 
 /// Look up a processor's implementation version by instance name.
@@ -372,11 +365,6 @@ mod tests {
                 is_rust(&instance),
                 is_rust(&pname),
                 "is_rust must strip the instance suffix for '{instance}'"
-            );
-            assert_eq!(
-                can_fix(&instance),
-                can_fix(&pname),
-                "can_fix must strip the instance suffix for '{instance}'"
             );
             assert_eq!(
                 description_of(&instance),

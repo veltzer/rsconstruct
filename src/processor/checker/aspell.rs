@@ -214,7 +214,6 @@ inventory::submit! {
         description: "Check spelling using aspell",
         is_native: false,
         is_rust: false,
-        can_fix: false,
         supports_batch: true,
         max_jobs_cap: None,
     }

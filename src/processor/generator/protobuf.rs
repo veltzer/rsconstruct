@@ -59,7 +59,6 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     description: "Compile Protocol Buffer definitions",
     is_native: false,
     is_rust: false,
-    can_fix: false,
     supports_batch: false,
     max_jobs_cap: None,
 } }

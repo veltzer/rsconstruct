@@ -108,7 +108,6 @@ inventory::submit! {
         description: "Validate that text files are valid UTF-8 without BOM",
         is_native: true,
         is_rust: true,
-        can_fix: false,
         supports_batch: true,
         max_jobs_cap: None,
     }

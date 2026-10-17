@@ -445,14 +445,12 @@ rsconstruct processor graph --format mermaid # Mermaid format
 rsconstruct processor files --headers   # Show files with processor headers
 ```
 
-`list` prints one row per processor with its type and three flags: `Native`
-(pure Rust inside rsconstruct, or `external` when it runs another program),
-`Rust` (whether the code that does the work is written in Rust — every native
-processor, plus external ones whose tool is Rust: ruff, taplo, rumdl, clippy,
-cargo, mdbook, pyrefly, rustc) and `Fix` (has a built-in fixer for
-`rsconstruct fix`; currently `false` for every processor, see
-[`rsconstruct fix`](#rsconstruct-fix)). The JSON
-form carries the same as `native`, `rust` and `fix` booleans. `rust` is what to
+`list` prints one row per processor with its type and two flags: `Native`
+(pure Rust inside rsconstruct, or `external` when it runs another program)
+and `Rust` (whether the code that does the work is written in Rust — every
+native processor, plus external ones whose tool is Rust: ruff, taplo, rumdl,
+clippy, cargo, mdbook, pyrefly, rustc). The JSON
+form carries the same as `native` and `rust` booleans. `rust` is what to
 read when the question is "how much of this project's toolchain is Rust";
 `native` is what to read when the question is "which processors need no tool
 installed".
@@ -715,23 +713,6 @@ rsconstruct error
 | 4 | `EXIT_GRAPH_ERROR` |
 | 5 | `EXIT_IO_ERROR` |
 | 130 | `EXIT_INTERRUPTED` |
-
-## `rsconstruct fix`
-
-Run fixers (auto-format, auto-fix) on source files, modifying them in place.
-
-| Subcommand | Config required? |
-|------------|-----------------|
-| `list` | Yes |
-| `run` | Yes |
-
-```bash
-rsconstruct fix list                    # List the fix-capable processors declared in this project
-rsconstruct fix run processor.checker.script.format    # Run one fixer (by full iname)
-rsconstruct fix run processor.checker.script.a,processor.checker.script.b  # Run several, comma-separated
-```
-
-`fix run` requires at least one processor name. Today the only fix-capable processors are [`script`](processor/checker/script.md) instances that set `fix_command` (and optionally `fix_args`); no built-in processor declares a fixer, so the `Fix` column of `rsconstruct processor list` is `false` for all of them.
 
 ## `rsconstruct function`
 

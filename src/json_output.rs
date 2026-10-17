@@ -116,7 +116,6 @@ pub struct ProcessorListEntry {
     /// The Rust processors that can replace this one (empty when it is
     /// Rust already, or when none can).
     pub rust_alternatives: Vec<String>,
-    pub fix: bool,
     pub description: String,
 }
 

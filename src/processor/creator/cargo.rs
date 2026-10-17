@@ -191,7 +191,6 @@ inventory::submit! {
         description: "Build Rust projects using Cargo",
         is_native: false,
         is_rust: true,
-        can_fix: false,
         supports_batch: false,
         max_jobs_cap: Some(1),
     }

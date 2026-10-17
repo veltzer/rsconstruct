@@ -12,9 +12,6 @@ fn create_php_lint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processo
                 subcommand: Some("-l"),
                 prepend_args: &[],
                 extra_tools: &[],
-                fix_subcommand: None,
-                fix_prepend_args: &[],
-                fix_batch: None,
             },
         ))
     })
@@ -31,7 +28,6 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     description: "Check PHP syntax using php -l",
     is_native: false,
     is_rust: false,
-    can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,
 } }

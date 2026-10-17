@@ -15,7 +15,7 @@ Runs `prettier --check <files>`. Prettier exits non-zero when a file is not form
 
 Prettier's own config file is read as usual, and any of `.prettierrc`, `.prettierrc.json`, `.prettierrc.js`, `.prettierrc.yml`, `.prettierrc.yaml`, `.prettierrc.toml`, `.prettierrc.cjs`, `.prettierrc.mjs`, `prettier.config.js`, `prettier.config.cjs` and `prettier.config.mjs` that exists is an input (`dep_auto`), so editing it re-checks every file.
 
-This processor checks only; it is not fix-capable through `rsconstruct fix`. To reformat, run `prettier --write` yourself, or wrap it in a [`script`](script.md) instance with a `fix_command`.
+This processor checks only. To reformat, run `prettier --write` yourself.
 
 ## Source Files
 

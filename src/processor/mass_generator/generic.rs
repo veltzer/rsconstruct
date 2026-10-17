@@ -526,7 +526,6 @@ inventory::submit! {
         description: "Run a tool that enumerates its outputs in advance; one cached product per predicted file",
         is_native: false,
         is_rust: false,
-        can_fix: false,
         supports_batch: false,
         // Products of one instance execute one at a time: the first runs the
         // tool, the rest find it done. Letting them run in parallel would

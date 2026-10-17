@@ -122,7 +122,6 @@ inventory::submit! {
         description: "Install Python dependencies using pip",
         is_native: false,
         is_rust: false,
-        can_fix: false,
         supports_batch: false,
         max_jobs_cap: Some(1),
     }

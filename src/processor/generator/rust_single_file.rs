@@ -155,7 +155,6 @@ inventory::submit! {
         description: "Compile single-file Rust programs into executables",
         is_native: false,
         is_rust: true,
-        can_fix: false,
         supports_batch: false,
         max_jobs_cap: None,
     }

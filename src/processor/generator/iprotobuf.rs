@@ -245,7 +245,6 @@ inventory::submit! {
         description: "Compile Protocol Buffer definitions to Rust (in-process)",
         is_native: true,
         is_rust: true,
-        can_fix: false,
         supports_batch: false,
         max_jobs_cap: None,
     }

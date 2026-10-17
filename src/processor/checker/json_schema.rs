@@ -129,7 +129,6 @@ inventory::submit! {
         description: "Validate propertyOrdering in JSON schema files",
         is_native: true,
         is_rust: true,
-        can_fix: false,
         supports_batch: false,
         max_jobs_cap: None,
     }

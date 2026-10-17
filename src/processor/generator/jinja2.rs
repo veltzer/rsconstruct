@@ -152,7 +152,6 @@ inventory::submit! {
         description: "Render Jinja2 templates into output files",
         is_native: false,
         is_rust: false,
-        can_fix: false,
         supports_batch: false,
         max_jobs_cap: None,
     }

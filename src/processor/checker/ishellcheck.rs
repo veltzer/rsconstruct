@@ -260,7 +260,6 @@ inventory::submit! {
         description: "Lint shell scripts with ShellCheck's analysis (in-process)",
         is_native: true,
         is_rust: true,
-        can_fix: false,
         // In-process, a batch has no startup cost to share and would only
         // check its files one after another: products run in parallel instead.
         supports_batch: false,

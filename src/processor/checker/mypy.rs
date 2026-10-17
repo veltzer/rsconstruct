@@ -12,9 +12,6 @@ fn create_mypy(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::P
                 subcommand: None,
                 prepend_args: &[],
                 extra_tools: &["python3"],
-                fix_subcommand: None,
-                fix_prepend_args: &[],
-                fix_batch: None,
             },
         ))
     })
@@ -34,7 +31,6 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     description: "Type-check Python files using mypy",
     is_native: false,
     is_rust: false,
-    can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,
 } }

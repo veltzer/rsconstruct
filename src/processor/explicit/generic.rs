@@ -210,7 +210,6 @@ inventory::submit! {
         description: "Run a command with explicitly declared inputs and outputs",
         is_native: false,
         is_rust: false,
-        can_fix: false,
         supports_batch: false,
         max_jobs_cap: Some(1),
     }

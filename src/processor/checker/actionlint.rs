@@ -12,9 +12,6 @@ fn create_actionlint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::proces
                 subcommand: None,
                 prepend_args: &[],
                 extra_tools: &[],
-                fix_subcommand: None,
-                fix_prepend_args: &[],
-                fix_batch: None,
             },
         ))
     })
@@ -33,7 +30,6 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     description: "Lint GitHub Actions workflow files using actionlint",
     is_native: false,
     is_rust: false,
-    can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,
 } }

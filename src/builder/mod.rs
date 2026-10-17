@@ -4,7 +4,6 @@ mod build;
 pub mod cache_cmd;
 mod clean;
 mod doctor;
-mod fix;
 mod graph;
 pub mod processor;
 mod product;

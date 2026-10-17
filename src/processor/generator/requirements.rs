@@ -773,7 +773,6 @@ inventory::submit! {
         description: "Generate requirements.txt from Python import statements",
         is_native: true,
         is_rust: true,
-        can_fix: false,
         supports_batch: false,
         max_jobs_cap: Some(1),
     }

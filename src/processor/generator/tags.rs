@@ -2310,7 +2310,6 @@ inventory::submit! {
         description: "Extract YAML frontmatter tags from markdown files into a searchable database",
         is_native: true,
         is_rust: true,
-        can_fix: false,
         supports_batch: false,
         max_jobs_cap: Some(1),
     }

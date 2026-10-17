@@ -17,9 +17,6 @@ fn create_svgo(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::P
                 subcommand: None,
                 prepend_args: &["--quiet", "-o", "-", "-i"],
                 extra_tools: &[],
-                fix_subcommand: None,
-                fix_prepend_args: &[],
-                fix_batch: None,
             },
         ))
     })
@@ -36,7 +33,6 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     description: "Validate SVG files using svgo (stdout discarded; non-zero exit = malformed SVG)",
     is_native: false,
     is_rust: false,
-    can_fix: false,
     supports_batch: false,
     max_jobs_cap: None,
 } }

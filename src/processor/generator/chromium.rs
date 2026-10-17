@@ -62,7 +62,6 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     description: "Convert files to PDF using Chromium",
     is_native: false,
     is_rust: false,
-    can_fix: false,
     supports_batch: false,
     max_jobs_cap: None,
 } }

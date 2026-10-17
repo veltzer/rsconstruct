@@ -12,9 +12,6 @@ fn create_stylelint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::process
                 subcommand: None,
                 prepend_args: &[],
                 extra_tools: &["node"],
-                fix_subcommand: None,
-                fix_prepend_args: &["--fix"],
-                fix_batch: None,
             },
         ))
     })
@@ -31,7 +28,6 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     description: "Lint CSS/SCSS files using stylelint",
     is_native: false,
     is_rust: false,
-    can_fix: false,
     supports_batch: true,
     max_jobs_cap: None,
 } }

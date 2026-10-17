@@ -92,7 +92,6 @@ inventory::submit! {
         description: "Lint Markdown files using markdownlint",
         is_native: false,
         is_rust: false,
-        can_fix: false,
         supports_batch: false,
         max_jobs_cap: None,
     }
