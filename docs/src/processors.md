@@ -63,7 +63,7 @@ Use `rsconstruct processor files` to see which files each processor discovers.
 
 ## Output Directory Caching
 
-Creator processors (cargo, sphinx, mdbook, pip, npm, gem, and user-defined creators) produce output in directories rather than individual files. RSConstruct caches these entire directories so that after `rsconstruct clean && rsconstruct build`, the output is restored from cache instead of being regenerated.
+Creator processors (cargo, mdbook, pip, npm, gem, and user-defined creators) produce output in directories rather than individual files. RSConstruct caches these entire directories so that after `rsconstruct clean && rsconstruct build`, the output is restored from cache instead of being regenerated.
 
 After a successful build, RSConstruct walks the output directories, stores every file as a content-addressed blob, and records a tree (manifest of paths, checksums, and Unix permissions). On restore, the entire directory tree is recreated from cached blobs with permissions preserved. See [Cache System](internal/cache.md) for details.
 

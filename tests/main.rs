@@ -125,7 +125,6 @@ mod processor {
         pub mod mdbook;
         pub mod npm;
         pub mod pip;
-        pub mod sphinx;
     }
     pub mod generator {
         pub mod a2x;

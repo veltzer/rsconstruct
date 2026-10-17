@@ -352,8 +352,8 @@ scanned file, and store nothing taken from the index:
 | `generator.requirements`, `generator.tags`, `checker.duplicate_files` | one product over the whole set of scanned files |
 | `generator.pdfunite`, `generator.ipdfunite` | files grouped by directory |
 | `explicit.generic` | globs resolved against the index |
-| `creator.mdbook`, `creator.jekyll`, `checker.clippy`, `checker.make`, `creator.cargo`, `creator.npm`, `creator.gem`, `creator.sphinx` | sibling files collected around an anchor |
-| `mass_generator.generic`, `mass_generator.zola` | a predicted plan over the source set |
+| `creator.mdbook`, `creator.jekyll`, `checker.clippy`, `checker.make`, `creator.cargo`, `creator.npm`, `creator.gem` | sibling files collected around an anchor |
+| `mass_generator.generic`, `mass_generator.sphinx`, `mass_generator.zola` | a predicted plan over the source set |
 
 **Guard.** `per_file_discovery_over_a_subset_matches_the_full_index`
 (in `src/processor/mod.rs`) configures every `PerFile` processor — 80 of

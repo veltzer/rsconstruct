@@ -7,4 +7,3 @@ mod linux_module;
 mod mdbook;
 mod npm;
 mod pip;
-mod sphinx;

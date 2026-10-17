@@ -313,7 +313,7 @@ src/processor/
 ├── generator/      # One file per generator (generator.rs, marp.rs, sass.rs, tags.rs, …)
 │   └── mod.rs      # Shared helpers: find_templates, output_path, discover_single_format, …
 ├── creator/        # One file per creator (cargo.rs, cc.rs, gem.rs, jekyll.rs,
-│   │               # mdbook.rs, npm.rs, pip.rs, sphinx.rs)
+│   │               # mdbook.rs, npm.rs, pip.rs)
 │   ├── mod.rs      # mod declarations
 │   └── creator.rs  # Generic creator processor
 ├── explicit/       # Explicit processor (user-defined command with declared outputs)

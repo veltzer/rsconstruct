@@ -755,7 +755,10 @@ fn defconfig_applies_defaults_for_every_plugin() {
         field("processor.generator.marp", "output_dir"),
         "out/processor.generator.marp"
     );
-    assert_eq!(field("processor.creator.sphinx", "command"), "sphinx-build");
+    assert_eq!(
+        field("processor.mass_generator.sphinx", "command"),
+        "sphinx-build"
+    );
 }
 
 /// A processor is one file — but three touch-points necessarily live

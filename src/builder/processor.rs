@@ -366,7 +366,7 @@ pub fn list_recommendations() {
         ),
         (
             "conf.py",
-            "processor.creator.sphinx",
+            "processor.mass_generator.sphinx",
             "build Sphinx documentation",
         ),
     ];

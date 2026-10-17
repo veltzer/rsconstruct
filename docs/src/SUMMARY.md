@@ -130,7 +130,6 @@
         - [Mdbook](processor/creator/mdbook.md)
         - [NPM](processor/creator/npm.md)
         - [Pip](processor/creator/pip.md)
-        - [Sphinx](processor/creator/sphinx.md)
     - [Explicit](processor/explicit/README.md)
         - [Explicit](processor/explicit/generic.md)
     - [Mass Generators](processor/mass_generator/README.md)

@@ -236,8 +236,6 @@ pub type JsonSchemaConfig = CheckerConfig;
 
 // RequirementsConfig lives in src/processor/generator/requirements.rs.
 
-// SphinxConfig lives in src/processor/creator/sphinx.rs.
-
 // MdbookConfig lives in src/processor/creator/mdbook.rs.
 
 // NpmConfig lives in src/processor/creator/npm.rs.

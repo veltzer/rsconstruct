@@ -323,7 +323,7 @@ impractical to reimplement:
 - **eslint, jshint, stylelint** — JavaScript/CSS linters with plugin ecosystems
 - **clippy, cargo** — Rust toolchain components
 - **marp** — Presentation framework (spawns Chromium)
-- **sphinx, mdbook, jekyll** — Full documentation/site generators
+- **mdbook, jekyll** — Full documentation/site generators
 - **shellcheck** — Shell script analyzer with extensive rule set
 - **aspell** — Spell checker with language dictionaries
 - **chromium, libreoffice, drawio** — GUI applications used for rendering

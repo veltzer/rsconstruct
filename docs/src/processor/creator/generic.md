@@ -34,7 +34,7 @@ Typical uses:
   well-known file
 
 The dedicated creators (`cargo`, `cc`, `gem`, `jekyll`, `mdbook`, `npm`,
-`pip`, `sphinx`) are purpose-built versions of this shape with their own
+`pip`) are purpose-built versions of this shape with their own
 discovery rules. The generic `creator` processor is what you configure when
 your tool is not one of those.
 

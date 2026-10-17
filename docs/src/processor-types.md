@@ -215,18 +215,6 @@ output_dirs = ["dist"]
 
 Scans for `package.json` files, runs `npm run build`, caches the `dist/` directory.
 
-**Build documentation with Sphinx:**
-
-```toml
-[processor.creator.sphinx]
-```
-
-Scans for `conf.py` files, runs `sphinx-build`, caches the output directory.
-
-```text
-docs/conf.py → (creator)
-```
-
 **Build a Rust project with Cargo:**
 
 ```toml
@@ -254,7 +242,7 @@ Scans for `.manifest` files, runs the build script, caches two output directorie
 
 ### Built-in creators
 
-cargo, cc, gem, generic, jekyll, linux_module, mdbook, npm, pip, sphinx
+cargo, cc, gem, generic, jekyll, linux_module, mdbook, npm, pip
 
 User-defined creators use the config-driven `generic` creator via `[processor.creator.generic.NAME]`.
 
