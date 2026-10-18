@@ -106,12 +106,18 @@ fn bare_clean_lists_its_subcommands() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    for subcommand in ["all", "git", "outputs", "products", "unknown"] {
-        assert!(
-            text.contains(subcommand),
-            "bare clean must list '{subcommand}':\n{text}"
-        );
-    }
+    // A subcommand is a line's first word: a bare `contains` would also
+    // match the name inside another subcommand's description.
+    let listed: Vec<&str> = text
+        .lines()
+        .filter(|line| line.starts_with("  "))
+        .filter_map(|line| line.split_whitespace().next())
+        .collect();
+    assert_eq!(
+        listed,
+        ["all", "git", "outputs", "unknown"],
+        "bare clean must list exactly its subcommands:\n{text}"
+    );
     assert!(
         !text.contains("EXIT_BUILD_ERROR"),
         "a missing subcommand is not a build error:\n{text}"
