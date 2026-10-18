@@ -116,4 +116,9 @@ fn bare_clean_lists_its_subcommands() {
         !text.contains("EXIT_BUILD_ERROR"),
         "a missing subcommand is not a build error:\n{text}"
     );
+    assert!(
+        !text.contains("Options:"),
+        "the subcommand list leaves the flags to --help:\n{text}"
+    );
+    assert_eq!(output.status.code(), Some(2), "{text}");
 }

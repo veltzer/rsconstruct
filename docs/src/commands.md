@@ -1,5 +1,9 @@
 # Command Reference
 
+A command that takes a subcommand (`clean`, `cache`, `processor`, ...) lists
+its subcommands, each with a one-line description, when run without one, and
+exits with status 2. The listing leaves the flags out; `--help` shows them.
+
 ## Global Flags
 
 These flags can be used with any command:

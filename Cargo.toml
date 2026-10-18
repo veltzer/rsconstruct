@@ -10,6 +10,7 @@ repository = "https://github.com/veltzer/rsconstruct"
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
 clap_complete = "4.5"
+anstream = "1"
 tera = "1.20"
 sha2 = "0.10"
 hex = "0.4"

@@ -968,10 +968,118 @@ fn hide_all_flags(cmd: clap::Command) -> clap::Command {
 
 /// Parse CLI arguments with all flags hidden from short help (`-h`).
 /// Use `--help` to see all flags.
+///
+/// A command group invoked without its subcommand (`rsconstruct clean`, or
+/// `rsconstruct clean --verbose`) prints its subcommands via
+/// `operations_help_for` instead of clap's short help, which would bury them
+/// under the flags. Exit status 2 on stderr, as clap would.
 pub fn parse_cli() -> Cli {
     let cmd = hide_all_flags(Cli::command());
-    let matches = cmd.get_matches();
-    Cli::from_arg_matches(&matches).expect("failed to parse CLI arguments")
+    match cmd.try_get_matches() {
+        Ok(matches) => Cli::from_arg_matches(&matches).expect("failed to parse CLI arguments"),
+        Err(err) if is_missing_subcommand(&err) => {
+            let args: Vec<String> = std::env::args().collect();
+            anstream::eprint!("{}", operations_help_for(&args).ansi());
+            std::process::exit(2);
+        }
+        Err(err) => err.exit(),
+    }
+}
+
+/// Whether `err` says a command group was given no subcommand: either nothing
+/// at all followed it, or only options did.
+fn is_missing_subcommand(err: &clap::Error) -> bool {
+    matches!(
+        err.kind(),
+        clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+            | clap::error::ErrorKind::MissingSubcommand
+    )
+}
+
+/// Help template for a command group invoked without its subcommand: about
+/// and usage, then the subcommand list and the `--help` trailer, both passed
+/// in as `after-help` (see `subcommands_list`). Options stay out; the trailer
+/// points at `--help`, where they remain.
+const SUBCOMMANDS_HELP_TEMPLATE: &str =
+    "{before-help}{about-with-newline}\n{usage-heading} {usage}{after-help}";
+
+/// The subcommands of `cmd`, each with its description. Hidden ones are left
+/// out, as clap leaves them out of its own help, and so is clap's generated
+/// `help` subcommand: it is not an operation of the group, and `--help` is
+/// named in the trailer anyway.
+fn subcommands_of(cmd: &clap::Command) -> Vec<(String, String)> {
+    cmd.get_subcommands()
+        .filter(|sub| !sub.is_hide_set() && sub.get_name() != "help")
+        .map(|sub| {
+            let about = sub.get_about().map(ToString::to_string).unwrap_or_default();
+            (sub.get_name().to_string(), about)
+        })
+        .collect()
+}
+
+/// The `Commands:` section listing `subcommands`, laid out the way clap lays
+/// out its own: names styled as literals in a column as wide as the longest
+/// one, two spaces, then the description.
+fn subcommands_list(subcommands: &[(String, String)]) -> String {
+    let h = STYLES.get_header();
+    let l = STYLES.get_literal();
+    let width = subcommands
+        .iter()
+        .map(|(name, _)| name.len())
+        .max()
+        .unwrap_or(0);
+    let indent = " ".repeat(2 + width + 2);
+    let mut out = format!("{h}Commands:{h:#}\n");
+    for (name, help) in subcommands {
+        let pad = " ".repeat(width - name.len());
+        let help = help.trim().replace('\n', &format!("\n{indent}"));
+        out.push_str(format!("  {l}{name}{l:#}{pad}  {help}").trim_end());
+        out.push('\n');
+    }
+    out
+}
+
+/// The help of the command group that `args` (argv, program name included)
+/// names, for printing when it is invoked without a subcommand: its about and
+/// usage, its subcommands each with a description, and no flags. The deepest
+/// subcommand named in `args` is the one shown; with none named, the
+/// top-level command keeps its normal long help.
+pub fn operations_help_for<I, S>(args: I) -> clap::builder::StyledStr
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let mut cmd = Cli::command();
+    cmd.build();
+    let mut path: Vec<String> = Vec::new();
+    {
+        // Words that are not a subcommand of where we are (global flags and
+        // their values, as in `rsconstruct -v clean`) are stepped over.
+        let mut cur = &cmd;
+        for arg in args.into_iter().skip(1) {
+            if let Some(sub) = cur.find_subcommand(arg.as_ref()) {
+                path.push(sub.get_name().to_string());
+                cur = sub;
+            }
+        }
+    }
+    if path.is_empty() {
+        return cmd.render_long_help();
+    }
+    let full_name = format!("{} {}", cmd.get_name(), path.join(" "));
+    let mut cur = &mut cmd;
+    for name in &path {
+        cur = cur
+            .find_subcommand_mut(name)
+            .expect("subcommand path was taken from this very Command");
+    }
+    let subcommands = subcommands_list(&subcommands_of(cur));
+    cur.clone()
+        .help_template(SUBCOMMANDS_HELP_TEMPLATE)
+        .after_help(format!(
+            "{subcommands}\nRun `{full_name} --help` for the options."
+        ))
+        .render_long_help()
 }
 
 /// Generate shell completions and print to stdout.
@@ -1173,6 +1281,77 @@ mod tests {
                 "injected helper call missing from bash completion script: {helper_call}"
             );
         }
+    }
+
+    /// Every command group, as the argv that names it.
+    fn command_groups(cmd: &clap::Command, path: &mut Vec<String>, out: &mut Vec<Vec<String>>) {
+        for sub in cmd.get_subcommands() {
+            if sub.get_name() == "help" || !sub.has_subcommands() {
+                continue;
+            }
+            path.push(sub.get_name().to_string());
+            out.push(path.clone());
+            command_groups(sub, path, out);
+            path.pop();
+        }
+    }
+
+    /// Every command group invoked without its subcommand lists its
+    /// subcommands, each with its description, and nothing else: no flags, no
+    /// `help` entry, and a trailer pointing at `--help`.
+    #[test]
+    fn every_group_lists_only_its_subcommands() {
+        let mut cmd = Cli::command();
+        cmd.build();
+        let mut groups = Vec::new();
+        command_groups(&cmd, &mut Vec::new(), &mut groups);
+        assert!(!groups.is_empty(), "no command groups found");
+        for group in &groups {
+            let mut argv = vec!["rsconstruct".to_string()];
+            argv.extend(group.iter().cloned());
+            let text = operations_help_for(&argv).to_string();
+            let mut sub_cmd = &cmd;
+            for name in group {
+                sub_cmd = sub_cmd.find_subcommand(name).unwrap();
+            }
+            for (name, _) in subcommands_of(sub_cmd) {
+                assert!(
+                    text.lines().any(|l| l.trim_start().starts_with(&name)),
+                    "`{}` does not list `{name}`:\n{text}",
+                    group.join(" ")
+                );
+            }
+            assert!(
+                !text.contains("Options:"),
+                "`{}` lists options:\n{text}",
+                group.join(" ")
+            );
+            assert!(
+                !text.lines().any(|l| l.trim_start().starts_with('-')),
+                "`{}` lists a flag:\n{text}",
+                group.join(" ")
+            );
+            assert!(
+                !text.lines().any(|l| l.trim_start().starts_with("help ")),
+                "`{}` lists the help subcommand:\n{text}",
+                group.join(" ")
+            );
+            assert!(
+                text.contains(&format!(
+                    "Run `rsconstruct {} --help` for the options.",
+                    group.join(" ")
+                )),
+                "`{}` has no --help trailer:\n{text}",
+                group.join(" ")
+            );
+        }
+    }
+
+    /// Global flags before the group do not hide which group was meant.
+    #[test]
+    fn operations_help_steps_over_global_flags() {
+        let text = operations_help_for(["rsconstruct", "-v", "clean"]).to_string();
+        assert!(text.contains("Run `rsconstruct clean --help`"), "{text}");
     }
 
     /// Non-bash shells must still generate without error.
