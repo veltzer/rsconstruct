@@ -113,6 +113,8 @@ pub struct ProcessorListEntry {
     /// it). A user's `batch = false` can switch batching off for an instance,
     /// but never on for a processor that reports `false` here.
     pub supports_batch: bool,
+    /// Whether a cache hit stands in for a run (see `ProcessorPlugin::caches_outputs`).
+    pub caches_outputs: bool,
     pub native: bool,
     /// Whether the implementation (rsconstruct itself for a native processor,
     /// the external tool otherwise) is written in Rust.

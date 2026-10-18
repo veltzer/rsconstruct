@@ -527,6 +527,7 @@ inventory::submit! {
         is_native: false,
         is_rust: false,
         supports_batch: false,
+        caches_outputs: true,
         // Products of one instance execute one at a time: the first runs the
         // tool, the rest find it done. Letting them run in parallel would
         // only park threads on the tool_run lock.

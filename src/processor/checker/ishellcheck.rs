@@ -263,6 +263,7 @@ inventory::submit! {
         // In-process, a batch has no startup cost to share and would only
         // check its files one after another: products run in parallel instead.
         supports_batch: false,
+        caches_outputs: true,
         max_jobs_cap: None,
     }
 }

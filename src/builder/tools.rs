@@ -530,7 +530,12 @@ fn run_tools_command(
                         } else {
                             color::red("\u{2717}")
                         };
-                        let procs = stat.processor.join(", ");
+                        let procs = stat
+                            .processor
+                            .iter()
+                            .map(|n| tables::short_processor_name(n))
+                            .collect::<Vec<_>>()
+                            .join(", ");
                         let install = stat.install_command.as_deref().unwrap_or("").to_string();
                         vec![stat.name.clone(), status.to_string(), procs, install]
                     })

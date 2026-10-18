@@ -54,7 +54,7 @@ pub fn search_processors(query: &str) -> Result<()> {
         .iter()
         .map(|(name, keywords)| {
             vec![
-                name.clone(),
+                tables::short_processor_name(name).to_string(),
                 crate::registries::processor::processor_type_of(name)
                     .as_str()
                     .to_string(),
@@ -135,6 +135,7 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
                 enabled: false,
                 detected: false,
                 supports_batch: p.supports_batch,
+                caches_outputs: p.caches_outputs,
                 native: p.is_native,
                 rust: p.is_rust,
                 rust_alternatives: crate::registries::rust_alternatives(&p.pname())
@@ -153,12 +154,17 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
         .map(|p| {
             let native_tag = if p.is_native { "native" } else { "external" };
             vec![
-                p.pname(),
+                tables::short_processor_name(&p.pname()).to_string(),
                 p.processor_type.as_str().to_string(),
                 native_tag.to_string(),
                 tables::yes_no(p.is_rust).to_string(),
                 tables::yes_no(p.supports_batch).to_string(),
-                crate::registries::rust_alternatives(&p.pname()).join(", "),
+                tables::yes_no(p.caches_outputs).to_string(),
+                crate::registries::rust_alternatives(&p.pname())
+                    .iter()
+                    .map(|n| tables::short_processor_name(n))
+                    .collect::<Vec<_>>()
+                    .join(", "),
                 p.description.to_string(),
             ]
         })
@@ -404,10 +410,17 @@ pub fn list_recommendations() {
         let rows: Vec<Vec<String>> = resolved
             .iter()
             .map(|(ext, procs, also, reason)| {
+                let short = |names: &[&str]| {
+                    names
+                        .iter()
+                        .map(|n| tables::short_processor_name(n))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                };
                 vec![
                     ext.to_string(),
-                    procs.join(", "),
-                    also.join(", "),
+                    short(procs),
+                    short(also),
                     reason.to_string(),
                 ]
             })
@@ -592,6 +605,7 @@ pub fn processor_info(pname: Option<&str>) -> Result<()> {
                     "native": p.is_native,
                     "rust": p.is_rust,
                     "supports_batch": p.supports_batch,
+                    "caches_outputs": p.caches_outputs,
                     "max_jobs_cap": p.max_jobs_cap,
                     "fields": processor_fields(name),
                 })
@@ -611,10 +625,11 @@ pub fn processor_info(pname: Option<&str>) -> Result<()> {
             println!("  Keywords: {}", p.keywords.join(", "));
         }
         println!(
-            "  Native: {}  Rust: {}  Batch: {}  Max jobs: {}  Version: {}",
+            "  Native: {}  Rust: {}  Batch: {}  Cache: {}  Max jobs: {}  Version: {}",
             tables::yes_no(p.is_native),
             tables::yes_no(p.is_rust),
             tables::yes_no(p.supports_batch),
+            tables::yes_no(p.caches_outputs),
             p.max_jobs_cap
                 .map_or_else(|| "unlimited".to_string(), |n| n.to_string()),
             p.version,
@@ -668,7 +683,7 @@ impl Builder {
                             let proc = &processors[name.as_str()];
                             let detected_str = tables::yes_no(proc.auto_detect(&self.file_index));
                             vec![
-                                (*name).clone(),
+                                tables::short_processor_name(name).to_string(),
                                 crate::registries::processor::processor_type_of(name.as_str())
                                     .as_str()
                                     .to_string(),

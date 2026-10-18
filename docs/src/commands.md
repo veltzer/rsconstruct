@@ -472,20 +472,30 @@ rsconstruct processor graph --format mermaid # Mermaid format
 rsconstruct processor files --headers   # Show files with processor headers
 ```
 
-`list` prints one row per processor with its type and three flags: `Native`
+`list` prints one row per processor with its type and four flags: `Native`
 (pure Rust inside rsconstruct, or `external` when it runs another program),
 `Rust` (whether the code that does the work is written in Rust — every
 native processor, plus external ones whose tool is Rust: ruff, taplo, rumdl,
-clippy, cargo, mdbook, pyrefly, rustc) and `Batch` (whether the processor can
+clippy, cargo, mdbook, pyrefly, rustc), `Batch` (whether the processor can
 take several input files in one tool invocation — a linter that accepts a
 file list can, a converter that writes one output per input such as pandoc
-or marp cannot). The JSON form carries the same as `native`, `rust` and
-`supports_batch` booleans. `rust` is what to read when the question is "how
-much of this project's toolchain is Rust"; `native` is what to read when the
-question is "which processors need no tool installed"; `supports_batch` is
-what decides whether a stanza's `batch` field and the build's `--batch-size`
-have any effect on it (a processor that cannot batch runs one file per
-invocation whatever they say).
+or marp cannot) and `Cache` (whether a cache hit stands in for a run: it
+restores a generator's outputs or proves a checker's pass, so nothing is
+lost by skipping the run; `No` for pip, npm and gem, which install into an
+environment and write only a stamp — the stamp is cached while the installed
+packages may be gone). The JSON form carries the same as `native`, `rust`,
+`supports_batch` and `caches_outputs` booleans. `rust` is what to read when
+the question is "how much of this project's toolchain is Rust"; `native` is
+what to read when the question is "which processors need no tool
+installed"; `supports_batch` is what decides whether a stanza's `batch` field
+and the build's `--batch-size` have any effect on it (a processor that
+cannot batch runs one file per invocation whatever they say).
+
+In every table, processor names drop the `processor.` prefix that all of
+them carry (`checker.ruff`, not `processor.checker.ruff`): it says nothing
+in a column of processors and costs a word of width on every row. JSON
+output, error messages and `processor info` keep the full name, which is
+what `rsconstruct.toml` and scripts use.
 
 A fifth column, `Rust alternative`, names the Rust processors that can
 replace a non-Rust one (`ishellcheck` for `shellcheck`, `iluacheck` and

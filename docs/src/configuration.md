@@ -284,7 +284,7 @@ is hidden by default:
 | `info_source` | `rsconstruct info source` | `Extension`, `Count` |
 | `processor_config` | `rsconstruct processor config` | `Field`, `Value` |
 | `processor_fields` | `rsconstruct processor defconfig, processor info` | `Field`, `Type`, `Default`, `Required`, `Checksum`, `Description` *(verbose)* |
-| `processor_list` | `rsconstruct processor list` | `Name`, `Type`, `Native`, `Rust`, `Batch`, `Rust alternative`, `Description` *(verbose)* |
+| `processor_list` | `rsconstruct processor list` | `Name`, `Type`, `Native`, `Rust`, `Batch`, `Cache`, `Rust alternative`, `Description` *(verbose)* |
 | `processor_recommend` | `rsconstruct processor recommend` | `Extension / File`, `Processor`, `Also`, `Reason` |
 | `processor_search` | `rsconstruct processor search` | `Name`, `Type`, `Description`, `Keywords` |
 | `processor_types` | `rsconstruct processor types` | `Type`, `Batch`, `Description`, `Batching` *(verbose)* |

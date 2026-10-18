@@ -137,6 +137,7 @@ inventory::submit! {
         is_native: false,
         is_rust: false,
         supports_batch: true,
+        caches_outputs: true,
         max_jobs_cap: None,
     }
 }

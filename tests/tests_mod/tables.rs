@@ -55,6 +55,7 @@ fn all_shows_every_column() {
             "Native",
             "Rust",
             "Batch",
+            "Cache",
             "Rust alternative"
         ]
     );
@@ -67,6 +68,7 @@ fn all_shows_every_column() {
             "Native",
             "Rust",
             "Batch",
+            "Cache",
             "Rust alternative",
             "Description"
         ]
@@ -93,6 +95,7 @@ fn fields_prints_names_only() {
             "Native",
             "Rust",
             "Batch",
+            "Cache",
             "Rust alternative",
             "Description"
         ]
@@ -117,7 +120,7 @@ fn user_config_chooses_columns() {
     assert_eq!(chosen, ["Type", "Name", "Description"]);
 
     let all = header_cells(&processor_list(dir.path(), &["--all"], &env));
-    assert_eq!(all.len(), 7, "{all:?}");
+    assert_eq!(all.len(), 8, "{all:?}");
 
     let output = run_rsconstruct_with_env(dir.path(), &["processor", "types"], &env);
     assert!(output.status.success());
@@ -228,4 +231,73 @@ fn total_row_follows_the_chosen_columns() {
         .filter(|c| !c.is_empty())
         .collect();
     assert_eq!(cells, ["1", "Total"], "{stdout}");
+}
+
+/// Tables print processor names without the `processor.` prefix; JSON keeps
+/// the full name, which is what config files and scripts use.
+#[test]
+fn tables_drop_the_processor_prefix() {
+    let dir = TempDir::new().unwrap();
+    let stdout = processor_list(dir.path(), &[], &[]);
+    assert!(stdout.contains("│ checker.ruff "), "{stdout}");
+    assert!(
+        !stdout.lines().any(|l| l.contains("│ processor.")),
+        "no cell starts with the prefix:\n{stdout}"
+    );
+    let output = run_rsconstruct_with_env(
+        dir.path(),
+        &["--json", "processor", "list"],
+        &[("NO_COLOR", "1")],
+    );
+    let entries: Vec<serde_json::Value> =
+        serde_json::from_str(&String::from_utf8_lossy(&output.stdout)).unwrap();
+    assert!(
+        entries
+            .iter()
+            .any(|e| e["name"] == "processor.checker.ruff")
+    );
+}
+
+/// The Cache column says whether a cache hit stands in for a run: yes for a
+/// generator whose files are restored and a checker whose pass is recorded,
+/// no for the package installers, whose stamp outlives the environment they
+/// installed into.
+#[test]
+fn cache_column_marks_the_installers() {
+    let dir = TempDir::new().unwrap();
+    let output = run_rsconstruct_with_env(
+        dir.path(),
+        &["--json", "processor", "list"],
+        &[("NO_COLOR", "1")],
+    );
+    let entries: Vec<serde_json::Value> =
+        serde_json::from_str(&String::from_utf8_lossy(&output.stdout)).unwrap();
+    let caches = |name: &str| -> bool {
+        entries
+            .iter()
+            .find(|e| e["name"] == name)
+            .unwrap_or_else(|| panic!("no {name}"))["caches_outputs"]
+            .as_bool()
+            .unwrap()
+    };
+    assert!(caches("processor.generator.tera"));
+    assert!(caches("processor.checker.ruff"));
+    assert!(caches("processor.mass_generator.cargo"));
+    for installer in ["pip", "npm", "gem"] {
+        assert!(
+            !caches(&format!("processor.mass_generator.{installer}")),
+            "{installer} installs into an environment the cache cannot restore"
+        );
+    }
+    let stdout = processor_list(dir.path(), &[], &[]);
+    let pip = stdout
+        .lines()
+        .find(|l| l.contains("│ mass_generator.pip "))
+        .unwrap_or_else(|| panic!("no pip row:\n{stdout}"));
+    let cells: Vec<&str> = pip
+        .split('│')
+        .map(str::trim)
+        .filter(|c| !c.is_empty())
+        .collect();
+    assert_eq!(cells[5], "No", "{pip}");
 }

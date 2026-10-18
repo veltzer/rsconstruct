@@ -713,7 +713,7 @@ impl Builder {
                             .join(", ")
                     };
                     vec![
-                        proc_name.to_string(),
+                        tables::short_processor_name(proc_name).to_string(),
                         format!("{} files", total),
                         breakdown_str,
                     ]
@@ -890,7 +890,7 @@ impl Builder {
                 let native = crate::tables::yes_no(opts.native_processors.contains(name));
                 let rust = crate::tables::yes_no(opts.rust_processors.contains(name));
                 vec![
-                    name.to_string(),
+                    crate::tables::short_processor_name(name).to_string(),
                     pc[0].to_string(),
                     pc[1].to_string(),
                     pc[2].to_string(),

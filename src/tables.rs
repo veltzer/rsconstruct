@@ -148,6 +148,7 @@ pub mod defs {
             "Native",
             "Rust",
             "Batch",
+            "Cache",
             "Rust alternative",
             "Description",
         ],
@@ -438,6 +439,15 @@ pub fn print_dynamic_with_total(
 ) {
     debug_assert!(def.dynamic.is_some(), "{} has fixed columns", def.name);
     render(def, headers, true, rows, Some(total));
+}
+
+/// A processor name as tables print it: without the `processor.` prefix
+/// every name carries (`checker.ruff`, `mass_generator.cargo.fmt`), which
+/// says nothing in a column of processors and costs the width of a word on
+/// every row. Only for table cells: JSON, errors and `processor info` keep
+/// the full name, which is what config files and scripts use.
+pub fn short_processor_name(name: &str) -> &str {
+    name.strip_prefix("processor.").unwrap_or(name)
 }
 
 /// Render a boolean as "Yes" or "No" — the canonical formatting used in tables.

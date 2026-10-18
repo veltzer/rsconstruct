@@ -73,6 +73,13 @@ pub struct ProcessorPlugin {
     /// Whether this processor can execute multiple products in one invocation.
     /// Static capability — if false, the `batch` config field has no effect at runtime.
     pub supports_batch: bool,
+    /// Whether the cache stands in for a run: a hit restores the outputs (a
+    /// generator's files) or proves the result (a checker's pass), so nothing
+    /// is lost by not running. `false` for a processor whose effect lands
+    /// outside its outputs — pip, npm and gem install into an environment and
+    /// write only a stamp, which the cache keeps while the installed packages
+    /// may be gone. Shown by `processor list` as `Cache`.
+    pub caches_outputs: bool,
     /// Hard cap on parallel jobs for this processor. `None` means no cap.
     /// `Some(1)` means the processor must run one product at a time (e.g. package
     /// managers, whole-project aggregators). The effective `max_jobs` is
