@@ -813,3 +813,70 @@ fn processor_types_shows_descriptions() {
         );
     }
 }
+
+/// `processor types` states each type's batching contract: whether one tool
+/// invocation may take more than one input. Checkers and generators leave
+/// it to the processor (`optional`); explicit processors and mass
+/// generators take every input in one invocation by construction
+/// (`always`). The JSON carries the same as `batch`, with the one-line
+/// contract as `batching`.
+#[test]
+fn processor_types_shows_batching_contract() {
+    let temp_dir = TempDir::new().unwrap();
+    let output = run_rsconstruct_with_env(
+        temp_dir.path(),
+        &["--json", "processor", "types"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(output.status.success());
+    let entries: Vec<serde_json::Value> =
+        serde_json::from_str(&String::from_utf8_lossy(&output.stdout)).unwrap();
+    let batch_of = |name: &str| -> String {
+        entries
+            .iter()
+            .find(|e| e["name"] == name)
+            .unwrap_or_else(|| panic!("no type {name}"))["batch"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    assert_eq!(batch_of("checker"), "optional");
+    assert_eq!(batch_of("generator"), "optional");
+    assert_eq!(batch_of("explicit"), "always");
+    assert_eq!(batch_of("mass_generator"), "always");
+    for entry in &entries {
+        assert!(
+            entry["batching"].as_str().is_some_and(|s| !s.is_empty()),
+            "every type explains its contract: {entry}"
+        );
+    }
+
+    let table = run_rsconstruct_with_env(
+        temp_dir.path(),
+        &["processor", "types"],
+        &[("NO_COLOR", "1")],
+    );
+    let stdout = String::from_utf8_lossy(&table.stdout);
+    assert!(stdout.contains("Batch"), "Batch column:\n{stdout}");
+    let explicit_row = stdout
+        .lines()
+        .find(|l| l.contains("explicit"))
+        .unwrap_or_else(|| panic!("no explicit row:\n{stdout}"));
+    assert!(explicit_row.contains("always"), "{explicit_row}");
+    let checker_row = stdout.lines().find(|l| l.contains("checker")).unwrap();
+    assert!(checker_row.contains("optional"), "{checker_row}");
+    assert!(
+        !stdout.contains("Batching"),
+        "the contract text needs --verbose:\n{stdout}"
+    );
+    let verbose = run_rsconstruct_with_env(
+        temp_dir.path(),
+        &["--verbose", "processor", "types"],
+        &[("NO_COLOR", "1")],
+    );
+    let stdout = String::from_utf8_lossy(&verbose.stdout);
+    assert!(
+        stdout.contains("Batching") && stdout.contains("runs once per build"),
+        "{stdout}"
+    );
+}

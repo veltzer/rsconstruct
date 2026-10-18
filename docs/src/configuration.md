@@ -287,7 +287,7 @@ is hidden by default:
 | `processor_list` | `rsconstruct processor list` | `Name`, `Type`, `Native`, `Rust`, `Batch`, `Rust alternative`, `Description` *(verbose)* |
 | `processor_recommend` | `rsconstruct processor recommend` | `Extension / File`, `Processor`, `Also`, `Reason` |
 | `processor_search` | `rsconstruct processor search` | `Name`, `Type`, `Description`, `Keywords` |
-| `processor_types` | `rsconstruct processor types` | `Type`, `Description` |
+| `processor_types` | `rsconstruct processor types` | `Type`, `Batch`, `Description`, `Batching` *(verbose)* |
 | `processor_used` | `rsconstruct processor used` | `Name`, `Type`, `Detected`, `Description` *(verbose)* |
 | `product_status` | `rsconstruct status, build --dry-run` | `Processor`, one column per product state (`up-to-date`, `restorable`, `stale`, `new` for `status`; `skip`, `restore`, `build`, `build-new` for `build --dry-run`), `native`, `rust` |
 | `sloc` | `rsconstruct sloc` | `Language`, `Files`, `Blank`, `Comment`, `Code` |

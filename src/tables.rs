@@ -168,8 +168,8 @@ pub mod defs {
     pub const PROCESSOR_TYPES: TableDef = def(
         "processor_types",
         "processor types",
-        &["Type", "Description"],
-        &[],
+        &["Type", "Batch", "Description", "Batching"],
+        &["Batching"],
     );
     pub const PROCESSOR_USED: TableDef = def(
         "processor_used",

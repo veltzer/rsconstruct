@@ -2,7 +2,12 @@
 
 Every processor in RSConstruct has a type that determines how it discovers inputs, produces outputs, and interacts with the cache. There are four types.
 
-Run `rsconstruct processor types` to list them.
+Run `rsconstruct processor types` to list them. Its `Batch` column is the
+type's contract on taking more than one input in one tool invocation:
+`optional` for checkers and generators, where each processor decides
+(`processor list` shows which do), and `always` for explicit processors and
+mass generators, which take every input in one invocation by construction.
+`--verbose` adds the one-line contract behind each value.
 
 ## Checker
 
@@ -286,3 +291,4 @@ Any tool that honors the manifest contract plugs into the config-driven `generic
 | **Cache type** | Marker | Blob | Blob | Blob |
 | **Runs in** | Project root | Project root | Project root | Project root / anchor dir |
 | **Command args** | Input files | Input + output | `--inputs` + `--outputs` | User-defined args |
+| **Batching** | Optional: a processor that supports it runs once over all its files | Optional: a processor that supports it runs once over the ready inputs | Always: one invocation, every input | Always: the tool runs once per build |

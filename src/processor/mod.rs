@@ -930,6 +930,33 @@ impl ProcessorType {
             }
         }
     }
+
+    /// Whether the type's contract lets one tool invocation take more than
+    /// one input: `optional` when it is up to the processor (its plugin's
+    /// `supports_batch`, which `processor list` shows), `always` when the
+    /// type works that way by construction and no processor can do
+    /// otherwise. See `batching` for the one-line contract.
+    pub const fn batch(self) -> &'static str {
+        match self {
+            Self::Generator | Self::Checker => "optional",
+            Self::Explicit | Self::MassGenerator => "always",
+        }
+    }
+
+    /// The batching contract of the type, as `processor types --verbose`
+    /// prints it.
+    pub const fn batching(self) -> &'static str {
+        match self {
+            Self::Generator => {
+                "A processor that supports it runs once over the inputs that are ready; the others run once per input"
+            }
+            Self::Checker => {
+                "A processor that supports it waits for every file and runs once over all of them; the others run once per file"
+            }
+            Self::Explicit => "One product and one invocation take every declared input",
+            Self::MassGenerator => "The tool runs once per build and writes every product",
+        }
+    }
 }
 
 /// Helper namespace for processor boilerplate (`config_json`, clean).

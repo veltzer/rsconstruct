@@ -122,7 +122,7 @@ fn user_config_chooses_columns() {
     let output = run_rsconstruct_with_env(dir.path(), &["processor", "types"], &env);
     assert!(output.status.success());
     let other = header_cells(&String::from_utf8_lossy(&output.stdout));
-    assert_eq!(other, ["Type", "Description"]);
+    assert_eq!(other, ["Type", "Batch", "Description"]);
 }
 
 /// A `[tables]` entry sits beside `[build]` in the same file, and the file

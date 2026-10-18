@@ -419,7 +419,7 @@ fn run() -> (Result<()>, bool) {
                         )?;
                     }
                     cli::ProcessorAction::Types => {
-                        builder::processor::list_processor_types()?;
+                        builder::processor::list_processor_types(cli.verbose)?;
                     }
                     cli::ProcessorAction::Recommend => {
                         builder::processor::list_recommendations();

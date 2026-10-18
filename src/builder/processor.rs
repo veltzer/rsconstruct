@@ -69,7 +69,7 @@ pub fn search_processors(query: &str) -> Result<()> {
 }
 
 /// List all processor types (generator, checker, explicit, `mass_generator`).
-pub fn list_processor_types() -> Result<()> {
+pub fn list_processor_types(verbose: bool) -> Result<()> {
     use crate::processor::ProcessorType;
     use strum::IntoEnumIterator;
 
@@ -78,11 +78,17 @@ pub fn list_processor_types() -> Result<()> {
         struct TypeEntry {
             name: &'static str,
             description: &'static str,
+            /// `optional` (the processor decides) or `always` (the type
+            /// takes every input in one invocation by construction).
+            batch: &'static str,
+            batching: &'static str,
         }
         let entries: Vec<TypeEntry> = ProcessorType::iter()
             .map(|pt| TypeEntry {
                 name: pt.as_str(),
                 description: pt.description(),
+                batch: pt.batch(),
+                batching: pt.batching(),
             })
             .collect();
         println!("{}", serde_json::to_string_pretty(&entries)?);
@@ -90,9 +96,16 @@ pub fn list_processor_types() -> Result<()> {
     }
 
     let rows: Vec<Vec<String>> = ProcessorType::iter()
-        .map(|pt| vec![pt.as_str().to_string(), pt.description().to_string()])
+        .map(|pt| {
+            vec![
+                pt.as_str().to_string(),
+                pt.batch().to_string(),
+                pt.description().to_string(),
+                pt.batching().to_string(),
+            ]
+        })
         .collect();
-    tables::print(&tables::defs::PROCESSOR_TYPES, false, &rows);
+    tables::print(&tables::defs::PROCESSOR_TYPES, verbose, &rows);
     Ok(())
 }
 
