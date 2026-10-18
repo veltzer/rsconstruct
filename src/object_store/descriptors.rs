@@ -71,6 +71,11 @@ impl ObjectStore {
         Ok(())
     }
 
+    /// Whether the local store holds a descriptor under `cache_key`.
+    pub fn has_descriptor(&self, cache_key: &str) -> bool {
+        self.descriptor_path(cache_key).is_file()
+    }
+
     /// Read a cache descriptor for a cache key from the local store.
     /// Returns None if not found. Read paths that can legitimately consult
     /// the remote cache should use `get_descriptor_pulling` instead.

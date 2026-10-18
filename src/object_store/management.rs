@@ -112,6 +112,32 @@ impl ObjectStore {
         Ok((removed_bytes, removed_count))
     }
 
+    /// Remove the descriptor stored under `descriptor_key`, if there is one,
+    /// so the product it describes builds again instead of restoring. The
+    /// blobs it pointed at stay for `trim`. Returns whether one was removed.
+    pub fn remove_descriptor(&self, descriptor_key: &str) -> Result<bool> {
+        let path = self.descriptor_path(descriptor_key);
+        if !path.is_file() {
+            return Ok(false);
+        }
+        // Descriptors are read-only (see `store_descriptor`); make this one
+        // writable for the unlink that follows, as `trim` does.
+        #[allow(clippy::permissions_set_readonly_false)]
+        if let Ok(mut perms) = fs::metadata(&path).map(|m| m.permissions()) {
+            perms.set_readonly(false);
+            fs::set_permissions(&path, perms).with_context(|| {
+                format!("Failed to make descriptor writable: {}", path.display())
+            })?;
+        }
+        fs::remove_file(&path)
+            .with_context(|| format!("Failed to remove descriptor: {}", path.display()))?;
+        if let Some(parent) = path.parent() {
+            // Best-effort: remove empty parent dir (fails silently if not empty)
+            let _ = fs::remove_dir(parent);
+        }
+        Ok(true)
+    }
+
     /// Remove stale descriptor entries whose cache keys are not in the valid set.
     /// Returns the number of entries removed.
     pub fn remove_stale(

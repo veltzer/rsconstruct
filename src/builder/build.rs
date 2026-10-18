@@ -35,7 +35,14 @@ fn expand_aliases(filter: &[String], processors: &ProcessorMap) -> Vec<String> {
     let mut expanded = Vec::new();
     for name in filter {
         let Some(alias) = name.strip_prefix('@') else {
-            expanded.push(name.clone());
+            // The tables print names without the `processor.` prefix
+            // (`checker.ruff`), so a name pasted back from one resolves too.
+            let prefixed = format!("processor.{name}");
+            if !processors.contains_key(name) && processors.contains_key(&prefixed) {
+                expanded.push(prefixed);
+            } else {
+                expanded.push(name.clone());
+            }
             continue;
         };
         if let Some(processor_type) = ProcessorType::parse(alias) {
@@ -132,7 +139,7 @@ fn check_required_tools(
 /// is directly testable without standing up a `Builder`.
 ///
 /// Returns `None` when neither filter is given, meaning "run everything".
-fn resolve_processor_filter(
+pub(super) fn resolve_processor_filter(
     include: Option<&[String]>,
     exclude: Option<&[String]>,
     processors: &ProcessorMap,

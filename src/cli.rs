@@ -389,9 +389,28 @@ pub enum CleanAction {
     Git,
     /// Remove build output files, preserves cache (requires config) [default]
     Outputs {
-        /// Only clean outputs from this processor instance (iname); comma-separated for several
+        /// Only clean outputs of these processors; comma-separated. Same
+        /// selectors as `build -p`: a name with or without the `processor.`
+        /// prefix, an instance, `@checker` (a type), `@python3` (a tool),
+        /// `@tera` (a short name)
         #[arg(short, long, value_delimiter = ',')]
         processor: Vec<String>,
+        /// Skip the post-clean sweep that removes directories left empty
+        #[arg(long)]
+        no_empty_dirs: bool,
+    },
+    /// Remove the selected processors' products in full, output files and
+    /// cache entries, so the next build runs them again (requires config)
+    Products {
+        /// The processors whose products to remove; comma-separated, required.
+        /// Same selectors as `build -p`: a name with or without the
+        /// `processor.` prefix, an instance, `@checker` (a type), `@python3`
+        /// (a tool), `@tera` (a short name)
+        #[arg(short, long, value_delimiter = ',', required = true)]
+        processor: Vec<String>,
+        /// Show what would be removed without removing anything
+        #[arg(long)]
+        dry_run: bool,
         /// Skip the post-clean sweep that removes directories left empty
         #[arg(long)]
         no_empty_dirs: bool,

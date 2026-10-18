@@ -284,7 +284,7 @@ fn run() -> (Result<()>, bool) {
             Commands::Clean { action } => {
                 let action = action.ok_or_else(|| {
                     anyhow::anyhow!(
-                        "Missing subcommand. Usage: rsconstruct clean <outputs|all|git|unknown>"
+                        "Missing subcommand. Usage: rsconstruct clean <outputs|products|all|git|unknown>"
                     )
                 })?;
                 match action {
@@ -299,6 +299,20 @@ fn run() -> (Result<()>, bool) {
                             Some(processor)
                         };
                         builder.clean(&ctx, cli.verbose, filter.as_deref(), !no_empty_dirs)?;
+                    }
+                    CleanAction::Products {
+                        processor,
+                        dry_run,
+                        no_empty_dirs,
+                    } => {
+                        let builder = Builder::new(&ctx)?;
+                        builder.clean_products(
+                            &ctx,
+                            cli.verbose,
+                            &processor,
+                            dry_run,
+                            !no_empty_dirs,
+                        )?;
                     }
                     CleanAction::All => {
                         let builder = Builder::new(&ctx)?;

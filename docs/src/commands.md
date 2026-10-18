@@ -148,15 +148,25 @@ Clean build artifacts. When run without a subcommand, removes build output files
 | Subcommand | Config required? |
 |------------|-----------------|
 | `outputs` | Yes |
+| `products` | Yes |
 | `all` | Yes |
 | `git` | Yes |
 | `unknown` | Yes |
 
+Three levels of clean, from lightest to heaviest: `clean outputs` removes
+output files and keeps the cache, so the next build restores them;
+`clean products -p …` removes the selected processors' output files *and*
+their cache entries, so the next build runs those products again;
+`clean all` removes the output and cache directories outright.
+
 ```bash
 rsconstruct clean                # Remove build output files (preserves cache) [default]
 rsconstruct clean outputs        # Remove build output files (preserves cache)
-rsconstruct clean outputs -p processor.generator.tera,processor.generator.tags    # Only clean outputs from named processors
+rsconstruct clean outputs -p generator.tera,generator.tags    # Only clean outputs of these processors
 rsconstruct clean outputs --no-empty-dirs # Skip the empty-directory sweep
+rsconstruct clean products -p generator.tera   # tera's files and cache entries; re-rendered next build
+rsconstruct clean products -p @checker         # Forget every check; all lint runs again
+rsconstruct clean products -p mass_generator.linux_module --dry-run   # Show what would go
 rsconstruct clean all            # Remove out/ and .rsconstruct/ directories
 rsconstruct clean git            # Hard clean using git clean -qffxd (requires git repository)
 rsconstruct clean unknown        # Remove files not tracked by git and not known as build outputs
@@ -189,7 +199,42 @@ Pass `--no-empty-dirs` to skip the sweep entirely. Files still get cleaned; empt
 
 #### Filtering by processor
 
-`-p` / `--processor` accepts a comma-separated list of processor instance names (inames), e.g. `-p processor.generator.tera,processor.creator.cargo`. Only products of exactly those instances are cleaned: a named instance is its own iname, so cleaning both `[processor.generator.marp.slides]` and `[processor.generator.marp.docs]` takes `-p processor.generator.marp.slides,processor.generator.marp.docs`.
+`-p` / `--processor` takes a comma-separated list of the same selectors as
+[`build -p`](#rsconstruct-build): a processor name with or without the
+`processor.` prefix (`generator.tera`, as the tables print it), an instance
+name (`generator.marp.slides`), `@checker` for a type, `@python3` for every
+processor that needs a tool, `@tera` for a short name with all its
+instances. A selector that matches nothing is an error listing the
+processors in the config. Only the selected processors' products are
+cleaned.
+
+### `rsconstruct clean products`
+
+Removes the selected processors' products in full: their output files, as
+`clean outputs` does, and the cache entries for those products, so the next
+build runs them again instead of restoring them. Use it to force one
+processor to redo its work without touching the rest of the cache:
+
+```bash
+rsconstruct clean products -p generator.tera
+rsconstruct clean products -p @checker --dry-run
+```
+
+- `-p` is required and takes the selectors described under
+  [Filtering by processor](#filtering-by-processor). Cleaning every
+  processor's products is `clean all`.
+- `--dry-run` prints how many files, output directories and cache entries
+  would go (with `--verbose`, which files) and removes nothing.
+- `--no-empty-dirs` skips the empty-directory sweep, as for `clean outputs`.
+
+The cache entry removed is the one for each product's current inputs, the
+key the next build would look up. Entries left over from earlier inputs are
+what `cache remove-stale` removes, and the blobs they point at are what
+`cache trim` removes; `clean products` touches neither. Products downstream
+of a cleaned one are not cleaned: they run again on the next build if the
+regenerated output differs, and are rightly skipped if it is byte-identical.
+With a remote cache and pull enabled, the next build may still restore from
+the remote.
 
 #### Other clean variants
 

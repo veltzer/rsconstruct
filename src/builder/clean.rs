@@ -10,7 +10,9 @@ use std::path::PathBuf;
 
 impl Builder {
     /// Clean build artifacts using the dependency graph.
-    /// If `processor_filter` is `Some`, only clean outputs from the listed processors.
+    /// If `processor_filter` is `Some`, only clean outputs from the selected
+    /// processors; the selectors are the ones `build -p` takes (names with or
+    /// without the `processor.` prefix, instances, `@type`, `@tool`, `@short`).
     /// When `sweep_empty_dirs` is true (default), directories left empty after
     /// per-product cleanup are removed bottom-up.
     pub fn clean(
@@ -20,7 +22,10 @@ impl Builder {
         processor_filter: Option<&[String]>,
         sweep_empty_dirs: bool,
     ) -> Result<()> {
-        if let Some(names) = processor_filter {
+        // Create processors and build graph (fast path: skip dependency scanning)
+        let processors = self.create_processors()?;
+        let allowed = super::build::resolve_processor_filter(processor_filter, None, &processors)?;
+        if let Some(names) = &allowed {
             crate::output::info(&color::bold(&format!(
                 "Cleaning outputs for: {}",
                 names.join(", ")
@@ -28,13 +33,10 @@ impl Builder {
         } else {
             crate::output::info(&color::bold("Cleaning build artifacts..."));
         }
-
-        // Create processors and build graph (fast path: skip dependency scanning)
-        let processors = self.create_processors()?;
         let mut graph = self.build_graph_for_clean_with_processors(ctx, &processors)?;
 
-        // Filter the graph to only include products from the specified processors
-        if let Some(names) = processor_filter {
+        // Filter the graph to only include products from the selected processors
+        if let Some(names) = &allowed {
             let filter_set: HashSet<&str> = names.iter().map(std::string::String::as_str).collect();
             graph.retain_products(|p| filter_set.contains(p.processor.as_str()));
         }
@@ -107,6 +109,163 @@ impl Builder {
                 "Total: {total_files} file(s) removed",
             )));
         }
+        Ok(())
+    }
+
+    /// `clean products`: remove the selected processors' products in full,
+    /// output files and cache entries both, so the next build runs them
+    /// again instead of restoring them. `selectors` is the `build -p`
+    /// language and must select at least one processor. With `dry_run`,
+    /// print what would go and remove nothing.
+    ///
+    /// The cache entry removed is the one for each product's current inputs
+    /// (the key the next build would look up); entries for earlier inputs are
+    /// `cache remove-stale`'s business, and the blobs are `cache trim`'s. A
+    /// remote cache, when pull is on, may still satisfy the next build.
+    pub fn clean_products(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        verbose: bool,
+        selectors: &[String],
+        dry_run: bool,
+        sweep_empty_dirs: bool,
+    ) -> Result<()> {
+        let processors = self.create_processors()?;
+        let allowed = super::build::resolve_processor_filter(Some(selectors), None, &processors)?
+            .unwrap_or_default();
+        if allowed.is_empty() {
+            bail!(
+                "clean products needs -p with at least one processor; `clean outputs` cleans every processor's outputs"
+            );
+        }
+        crate::output::info(&color::bold(&format!(
+            "{} products of: {}",
+            if dry_run { "Would clean" } else { "Cleaning" },
+            allowed.join(", ")
+        )));
+
+        // The full graph, dependencies included: the cache key of a product
+        // mixes in its input checksums, and generated inputs are only known
+        // once dependencies are resolved.
+        let mut graph = self.build_graph_with_processors(ctx, &processors)?;
+        let filter_set: HashSet<&str> = allowed.iter().map(String::as_str).collect();
+        graph.retain_products(|p| filter_set.contains(p.processor.as_str()));
+
+        let mut cache_keys: Vec<(String, String)> = Vec::new();
+        for product in graph.products() {
+            let input_checksum = crate::checksum::combined_input_checksum(ctx, &product.inputs)?;
+            cache_keys.push((
+                product.processor.clone(),
+                product.descriptor_key(&input_checksum),
+            ));
+        }
+
+        if dry_run {
+            let mut files = 0usize;
+            let mut dirs = 0usize;
+            for product in graph.products() {
+                for output in &product.outputs {
+                    if output.exists() {
+                        files += 1;
+                        if verbose {
+                            crate::output::info(&format!("  would remove {}", output.display()));
+                        }
+                    }
+                }
+                for dir in &product.output_dirs {
+                    if dir.exists() {
+                        dirs += 1;
+                        if verbose {
+                            crate::output::info(&format!("  would remove {}/", dir.display()));
+                        }
+                    }
+                }
+            }
+            let entries = cache_keys
+                .iter()
+                .filter(|(_, key)| self.object_store.has_descriptor(key))
+                .count();
+            crate::output::info(&format!(
+                "Would remove {files} output file(s), {dirs} output dir(s) and {entries} cache entr{} for {} product(s); nothing removed (--dry-run)",
+                if entries == 1 { "y" } else { "ies" },
+                graph.products().len()
+            ));
+            return Ok(());
+        }
+
+        let mut candidate_dirs: HashSet<PathBuf> = HashSet::new();
+        for product in graph.products() {
+            for output in &product.outputs {
+                if let Some(parent) = output.parent()
+                    && !parent.as_os_str().is_empty()
+                {
+                    candidate_dirs.insert(parent.to_path_buf());
+                }
+            }
+            for dir in &product.output_dirs {
+                if let Some(parent) = dir.parent()
+                    && !parent.as_os_str().is_empty()
+                {
+                    candidate_dirs.insert(parent.to_path_buf());
+                }
+            }
+        }
+        let policy = crate::executor::IncrementalPolicy;
+        let executor = Executor::new(
+            &processors,
+            ctx,
+            &policy,
+            ExecutorOptions {
+                parallel: 1,
+                verbose: false,
+                display_opts: DisplayOptions::minimal(),
+                batch_size: None,
+                explain: false,
+                retry: 0,
+                force: false,
+                keep_going: false,
+                timings: false,
+            },
+        );
+        let stats = executor.clean(&graph, verbose)?;
+
+        let mut entries: std::collections::BTreeMap<&str, usize> =
+            std::collections::BTreeMap::new();
+        for (processor, key) in &cache_keys {
+            if self.object_store.remove_descriptor(key)? {
+                *entries.entry(processor.as_str()).or_default() += 1;
+            }
+        }
+
+        let dirs_removed = if sweep_empty_dirs {
+            remove_empty_ancestors(&candidate_dirs, verbose)
+        } else {
+            0
+        };
+
+        let total_files: usize = stats.values().sum();
+        let total_entries: usize = entries.values().sum();
+        if total_files == 0 && total_entries == 0 && dirs_removed == 0 {
+            crate::output::info(&color::dim("Clean summary: nothing to clean"));
+            return Ok(());
+        }
+        crate::output::info(&color::bold("Clean summary:"));
+        for name in &allowed {
+            let files = stats.get(name).copied().unwrap_or(0);
+            let cached = entries.get(name.as_str()).copied().unwrap_or(0);
+            crate::output::info(&format!(
+                "  {}: {files} file(s), {cached} cache entr{}",
+                crate::tables::short_processor_name(name),
+                if cached == 1 { "y" } else { "ies" }
+            ));
+        }
+        if dirs_removed > 0 {
+            crate::output::info(&format!("  {dirs_removed} empty dir(s) removed"));
+        }
+        crate::output::info(&color::green(&format!(
+            "Total: {total_files} file(s) and {total_entries} cache entr{} removed; the next build runs these products again",
+            if total_entries == 1 { "y" } else { "ies" }
+        )));
         Ok(())
     }
 

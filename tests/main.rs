@@ -7,6 +7,8 @@ mod analyzers;
 mod build;
 #[path = "tests_mod/cache.rs"]
 mod cache;
+#[path = "tests_mod/clean_products.rs"]
+mod clean_products;
 #[path = "tests_mod/complete.rs"]
 mod complete;
 #[path = "tests_mod/doctor.rs"]
