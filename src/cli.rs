@@ -383,8 +383,23 @@ pub enum GraphAction {
 
 #[derive(Subcommand)]
 pub enum CleanAction {
-    /// Remove all build outputs and cache directories (requires config)
-    All,
+    /// Remove outputs and cache entries: of everything (the out/ and
+    /// .rsconstruct/ directories), or with -p of the selected processors
+    /// only, so the next build runs their products again (requires config)
+    All {
+        /// Only these processors; comma-separated. Same selectors as
+        /// `build -p`: a name with or without the `processor.` prefix, an
+        /// instance, `@checker` (a type), `@python3` (a tool), `@tera` (a
+        /// short name). Without it, everything goes
+        #[arg(short, long, value_delimiter = ',')]
+        processor: Vec<String>,
+        /// Show what would be removed without removing anything
+        #[arg(long)]
+        dry_run: bool,
+        /// With -p: skip the post-clean sweep that removes directories left empty
+        #[arg(long)]
+        no_empty_dirs: bool,
+    },
     /// Hard clean using git clean (requires config)
     Git,
     /// Remove build output files, preserves cache (requires config)
@@ -395,22 +410,6 @@ pub enum CleanAction {
         /// `@tera` (a short name)
         #[arg(short, long, value_delimiter = ',')]
         processor: Vec<String>,
-        /// Skip the post-clean sweep that removes directories left empty
-        #[arg(long)]
-        no_empty_dirs: bool,
-    },
-    /// Remove the selected processors' products in full, output files and
-    /// cache entries, so the next build runs them again (requires config)
-    Products {
-        /// The processors whose products to remove; comma-separated, required.
-        /// Same selectors as `build -p`: a name with or without the
-        /// `processor.` prefix, an instance, `@checker` (a type), `@python3`
-        /// (a tool), `@tera` (a short name)
-        #[arg(short, long, value_delimiter = ',', required = true)]
-        processor: Vec<String>,
-        /// Show what would be removed without removing anything
-        #[arg(long)]
-        dry_run: bool,
         /// Skip the post-clean sweep that removes directories left empty
         #[arg(long)]
         no_empty_dirs: bool,

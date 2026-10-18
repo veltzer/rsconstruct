@@ -294,23 +294,23 @@ fn run() -> (Result<()>, bool) {
                     };
                     builder.clean(&ctx, cli.verbose, filter.as_deref(), !no_empty_dirs)?;
                 }
-                CleanAction::Products {
+                CleanAction::All {
                     processor,
                     dry_run,
                     no_empty_dirs,
                 } => {
                     let builder = Builder::new(&ctx)?;
-                    builder.clean_products(
-                        &ctx,
-                        cli.verbose,
-                        &processor,
-                        dry_run,
-                        !no_empty_dirs,
-                    )?;
-                }
-                CleanAction::All => {
-                    let builder = Builder::new(&ctx)?;
-                    builder.distclean()?;
+                    if processor.is_empty() {
+                        builder.distclean(dry_run)?;
+                    } else {
+                        builder.clean_all_of(
+                            &ctx,
+                            cli.verbose,
+                            &processor,
+                            dry_run,
+                            !no_empty_dirs,
+                        )?;
+                    }
                 }
                 CleanAction::Git => {
                     let builder = Builder::new(&ctx)?;

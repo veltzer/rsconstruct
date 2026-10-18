@@ -152,26 +152,25 @@ Clean build artifacts. A subcommand is required; run without one, `clean` lists 
 | Subcommand | Config required? |
 |------------|-----------------|
 | `outputs` | Yes |
-| `products` | Yes |
 | `all` | Yes |
 | `git` | Yes |
 | `unknown` | Yes |
 
-Three levels of clean, from lightest to heaviest: `clean outputs` removes
-output files and keeps the cache, so the next build restores them;
-`clean products -p …` removes the selected processors' output files *and*
-their cache entries, so the next build runs those products again;
-`clean all` removes the output and cache directories outright.
+Two nouns, two depths: `clean outputs` removes output files and keeps the
+cache, so the next build restores them; `clean all` removes outputs *and*
+cache. Both take `-p` to limit themselves to some processors, so
+`clean all -p generator.tera` removes everything of tera, files and cache
+entries, and the next build runs its products again.
 
 ```bash
 rsconstruct clean                # List the subcommands
 rsconstruct clean outputs        # Remove build output files (preserves cache)
 rsconstruct clean outputs -p generator.tera,generator.tags    # Only clean outputs of these processors
 rsconstruct clean outputs --no-empty-dirs # Skip the empty-directory sweep
-rsconstruct clean products -p generator.tera   # tera's files and cache entries; re-rendered next build
-rsconstruct clean products -p @checker         # Forget every check; all lint runs again
-rsconstruct clean products -p mass_generator.linux_module --dry-run   # Show what would go
 rsconstruct clean all            # Remove out/ and .rsconstruct/ directories
+rsconstruct clean all -p generator.tera   # tera's files and cache entries; re-rendered next build
+rsconstruct clean all -p @checker         # Forget every check; all lint runs again
+rsconstruct clean all -p mass_generator.linux_module --dry-run   # Show what would go
 rsconstruct clean git            # Hard clean using git clean -qffxd (requires git repository)
 rsconstruct clean unknown        # Remove files not tracked by git and not known as build outputs
 rsconstruct clean unknown --dry-run      # Show what would be removed without deleting
@@ -212,33 +211,39 @@ instances. A selector that matches nothing is an error listing the
 processors in the config. Only the selected processors' products are
 cleaned.
 
-### `rsconstruct clean products`
+### `rsconstruct clean all`
 
-Removes the selected processors' products in full: their output files, as
-`clean outputs` does, and the cache entries for those products, so the next
-build runs them again instead of restoring them. Use it to force one
-processor to redo its work without touching the rest of the cache:
+Without `-p`, removes the output directory (`out/` by default) and
+`.rsconstruct/` outright: every output and the whole cache. With `-p`,
+removes everything of the selected processors only: their output files, as
+`clean outputs` does, and the cache entries for their products, so the next
+build runs them again instead of restoring them. Use the `-p` form to make
+one processor redo its work without touching the rest of the cache:
 
 ```bash
-rsconstruct clean products -p generator.tera
-rsconstruct clean products -p @checker --dry-run
+rsconstruct clean all                              # everything
+rsconstruct clean all -p generator.tera            # everything of tera
+rsconstruct clean all -p @checker --dry-run        # what would go
 ```
 
-- `-p` is required and takes the selectors described under
-  [Filtering by processor](#filtering-by-processor). Cleaning every
-  processor's products is `clean all`.
-- `--dry-run` prints how many files, output directories and cache entries
-  would go (with `--verbose`, which files) and removes nothing.
-- `--no-empty-dirs` skips the empty-directory sweep, as for `clean outputs`.
+- `-p` takes the selectors described under
+  [Filtering by processor](#filtering-by-processor).
+- `--dry-run` names the directories (without `-p`) or counts the files,
+  output directories and cache entries (with `-p`; `--verbose` lists the
+  files) that would go, and removes nothing.
+- `--no-empty-dirs` skips the empty-directory sweep of the `-p` form, as for
+  `clean outputs`.
 
-The cache entry removed is the one for each product's current inputs, the
-key the next build would look up. Entries left over from earlier inputs are
-what `cache remove-stale` removes, and the blobs they point at are what
-`cache trim` removes; `clean products` touches neither. Products downstream
-of a cleaned one are not cleaned: they run again on the next build if the
-regenerated output differs, and are rightly skipped if it is byte-identical.
-With a remote cache and pull enabled, the next build may still restore from
-the remote.
+With `-p`, the cache entry removed is the one for each product's current
+inputs, the key the next build would look up. Entries left over from earlier
+inputs are what `cache remove-stale` removes, and the blobs they point at
+are what `cache trim` removes; `clean all -p` touches neither. Products
+downstream of a cleaned one are not cleaned: they run again on the next
+build if the regenerated output differs, and are rightly skipped if it is
+byte-identical. With a remote cache and pull enabled, the next build may
+still restore from the remote.
+
+`clean all -p` replaced the `clean products` subcommand of 0.9.133.
 
 #### Other clean variants
 

@@ -1,4 +1,4 @@
-//! `clean products`: a processor's outputs and cache entries go together, so
+//! `clean all -p`: a processor's outputs and cache entries go together, so
 //! the next build runs its products again; `clean outputs` keeps the cache
 //! and the next build restores. Both take the `build -p` selectors.
 
@@ -22,9 +22,9 @@ fn project() -> TempDir {
 /// restores. The selector may drop the `processor.` prefix, as the tables
 /// print names.
 #[test]
-fn clean_products_forces_a_rebuild() {
+fn clean_all_of_a_processor_forces_a_rebuild() {
     let dir = project();
-    let out = run_rsconstruct(dir.path(), &["clean", "products", "-p", "generator.tera"]);
+    let out = run_rsconstruct(dir.path(), &["clean", "all", "-p", "generator.tera"]);
     assert!(
         out.status.success(),
         "{}",
@@ -65,11 +65,11 @@ fn clean_outputs_keeps_the_cache() {
 
 /// `--dry-run` reports what would go and removes nothing.
 #[test]
-fn clean_products_dry_run_removes_nothing() {
+fn clean_all_dry_run_removes_nothing() {
     let dir = project();
     let out = run_rsconstruct(
         dir.path(),
-        &["clean", "products", "-p", "@generator", "--dry-run"],
+        &["clean", "all", "-p", "@generator", "--dry-run"],
     );
     assert!(
         out.status.success(),
@@ -86,20 +86,12 @@ fn clean_products_dry_run_removes_nothing() {
     assert_eq!(result.skipped, 1, "still cached and present: {result:?}");
 }
 
-/// `-p` is required, and an unknown selector is a config error that lists
-/// the processors, as in `build -p`.
+/// An unknown selector is a config error that lists the processors, as in
+/// `build -p`, and removes nothing.
 #[test]
-fn clean_products_requires_known_processors() {
+fn clean_all_rejects_unknown_processors() {
     let dir = project();
-    let out = run_rsconstruct(dir.path(), &["clean", "products"]);
-    assert!(!out.status.success());
-    assert!(
-        String::from_utf8_lossy(&out.stderr).contains("--processor"),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-
-    let out = run_rsconstruct(dir.path(), &["clean", "products", "-p", "nope"]);
+    let out = run_rsconstruct(dir.path(), &["clean", "all", "-p", "nope"]);
     assert_eq!(out.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
@@ -117,4 +109,28 @@ fn build_accepts_prefixless_processor_names() {
     let result = run_rsconstruct_json(dir.path(), &["build", "-p", "generator.tera"]);
     assert!(result.exit_success, "{result:?}");
     assert_eq!(result.total_products, 1, "{result:?}");
+}
+
+/// Without `-p`, `clean all` is the whole reset: the output and cache
+/// directories go; `--dry-run` names them and keeps them.
+#[test]
+fn clean_all_without_processors_removes_the_directories() {
+    let dir = project();
+    let out = run_rsconstruct(dir.path(), &["clean", "all", "--dry-run"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("Would remove .rsconstruct/"), "{stdout}");
+    assert!(dir.path().join(".rsconstruct").exists());
+
+    let out = run_rsconstruct(dir.path(), &["clean", "all"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!dir.path().join(".rsconstruct").exists());
 }

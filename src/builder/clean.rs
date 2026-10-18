@@ -113,17 +113,18 @@ impl Builder {
         Ok(())
     }
 
-    /// `clean products`: remove the selected processors' products in full,
-    /// output files and cache entries both, so the next build runs them
+    /// `clean all -p`: remove everything of the selected processors, output
+    /// files and cache entries both, so the next build runs their products
     /// again instead of restoring them. `selectors` is the `build -p`
-    /// language and must select at least one processor. With `dry_run`,
-    /// print what would go and remove nothing.
+    /// language and must select at least one processor (without `-p`,
+    /// `clean all` is `distclean`). With `dry_run`, print what would go and
+    /// remove nothing.
     ///
     /// The cache entry removed is the one for each product's current inputs
     /// (the key the next build would look up); entries for earlier inputs are
     /// `cache remove-stale`'s business, and the blobs are `cache trim`'s. A
     /// remote cache, when pull is on, may still satisfy the next build.
-    pub fn clean_products(
+    pub fn clean_all_of(
         &self,
         ctx: &crate::build_context::BuildContext,
         verbose: bool,
@@ -135,12 +136,10 @@ impl Builder {
         let allowed = super::build::resolve_processor_filter(Some(selectors), None, &processors)?
             .unwrap_or_default();
         if allowed.is_empty() {
-            bail!(
-                "clean products needs -p with at least one processor; `clean outputs` cleans every processor's outputs"
-            );
+            bail!("clean all -p selected no processor");
         }
         crate::output::info(&color::bold(&format!(
-            "{} products of: {}",
+            "{} everything of: {}",
             if dry_run { "Would clean" } else { "Cleaning" },
             allowed.join(", ")
         )));
@@ -271,26 +270,36 @@ impl Builder {
         Ok(())
     }
 
-    /// Remove all build outputs and cache directories (.rsconstruct/ and out/)
-    pub fn distclean(&self) -> Result<()> {
-        crate::output::info(&color::bold("Removing build directories..."));
-
-        let rsconstruct_dir = std::path::Path::new(".rsconstruct");
-        if rsconstruct_dir.exists() {
-            fs::remove_dir_all(rsconstruct_dir)
-                .context("Failed to remove .rsconstruct/ directory")?;
-            crate::output::info(&format!("Removed {}", rsconstruct_dir.display()));
-        }
+    /// `clean all` without `-p`: remove the build output and cache
+    /// directories (.rsconstruct/ and out/) outright. With `dry_run`, name
+    /// them and remove nothing.
+    pub fn distclean(&self, dry_run: bool) -> Result<()> {
+        crate::output::info(&color::bold(if dry_run {
+            "Would remove build directories..."
+        } else {
+            "Removing build directories..."
+        }));
 
         // The configured output root, not a hardcoded "out".
-        let out_dir = std::path::Path::new(&self.config.build.output_dir);
-        if out_dir.exists() {
-            fs::remove_dir_all(out_dir)
-                .with_context(|| format!("Failed to remove {}/ directory", out_dir.display()))?;
-            crate::output::info(&format!("Removed {}", out_dir.display()));
+        let out_dir = std::path::PathBuf::from(&self.config.build.output_dir);
+        for dir in [std::path::PathBuf::from(".rsconstruct"), out_dir] {
+            if !dir.exists() {
+                continue;
+            }
+            if dry_run {
+                crate::output::info(&format!("Would remove {}/", dir.display()));
+                continue;
+            }
+            fs::remove_dir_all(&dir)
+                .with_context(|| format!("Failed to remove {}/ directory", dir.display()))?;
+            crate::output::info(&format!("Removed {}", dir.display()));
         }
 
-        crate::output::info(&color::green("Distclean completed!"));
+        if dry_run {
+            crate::output::info(&color::dim("Nothing removed (--dry-run)"));
+        } else {
+            crate::output::info(&color::green("Distclean completed!"));
+        }
         Ok(())
     }
 
