@@ -876,7 +876,7 @@ fn processor_types_shows_batching_contract() {
     );
     let stdout = String::from_utf8_lossy(&verbose.stdout);
     assert!(
-        stdout.contains("Batching") && stdout.contains("runs once per build"),
+        stdout.contains("Batching") && stdout.contains("runs once per manifest"),
         "{stdout}"
     );
 }

@@ -876,7 +876,7 @@ pub type ProcessorMap = HashMap<String, Box<dyn Processor>>;
 ///   entirely (instant).
 ///
 /// - **`MassGenerators`** plan their outputs in advance, creating one cached product per
-///   output file while running the underlying build tool at most once per build.
+///   output file while running the underlying build tool at most once per manifest per build.
 ///
 /// This design ensures that `rsconstruct clean && rsconstruct build` is fast for all types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumIter)]
@@ -893,7 +893,7 @@ pub enum ProcessorType {
     /// Runs a tool that enumerates its outputs in advance (`predict_command`
     /// prints a manifest). Every predicted file is its own product with its
     /// own inputs and blob cache entry; the tool itself runs at most once per
-    /// build, when any of those products is dirty.
+    /// manifest per build, when any of that manifest's products is dirty.
     MassGenerator,
 }
 
@@ -954,7 +954,9 @@ impl ProcessorType {
                 "A processor that supports it waits for every file and runs once over all of them; the others run once per file"
             }
             Self::Explicit => "One product and one invocation take every declared input",
-            Self::MassGenerator => "The tool runs once per build and writes every product",
+            Self::MassGenerator => {
+                "The tool runs once per manifest it finds (a Cargo.toml, a linux-module.yaml), and that run writes every product of the manifest"
+            }
         }
     }
 }

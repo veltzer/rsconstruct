@@ -226,7 +226,7 @@ generic
 
 ## Mass Generator
 
-A mass generator runs a tool that produces many files in one invocation and enumerates them in advance. Every planned file becomes a product of its own with its own inputs and blob cache entry, while the underlying build tool runs at most once per build.
+A mass generator runs a tool that produces many files in one invocation and enumerates them in advance. Every planned file becomes a product of its own with its own inputs and blob cache entry, while the underlying build tool runs at most once per manifest per build: once for the whole instance when the tool has a single plan (`generic`), once per manifest file when the processor scans for them (one `make` per `linux-module.yaml`, one `cargo build` per `Cargo.toml`).
 
 ### How it works
 
@@ -291,4 +291,4 @@ Any tool that honors the manifest contract plugs into the config-driven `generic
 | **Cache type** | Marker | Blob | Blob | Blob |
 | **Runs in** | Project root | Project root | Project root | Project root / anchor dir |
 | **Command args** | Input files | Input + output | `--inputs` + `--outputs` | User-defined args |
-| **Batching** | Optional: a processor that supports it runs once over all its files | Optional: a processor that supports it runs once over the ready inputs | Always: one invocation, every input | Always: the tool runs once per build |
+| **Batching** | Optional: a processor that supports it runs once over all its files | Optional: a processor that supports it runs once over the ready inputs | Always: one invocation, every input | Always: the tool runs once per manifest and writes every product of it |
