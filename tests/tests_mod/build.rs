@@ -2239,20 +2239,21 @@ fn reject_dot_src_dirs_is_opt_in() {
 /// A processor's default `dep_auto` list stays skip-if-absent.
 ///
 /// The defaults name the well-known config files a tool honours when
-/// present (`.yamllint`, `.pylintrc`, ...); a project without them is the
-/// normal case, not a misconfiguration, so the existence check applies only
-/// to lists the user wrote.
+/// present (`.shellcheckrc`, `.pylintrc`, ...); a project without them is
+/// the normal case, not a misconfiguration, so the existence check applies
+/// only to lists the user wrote. `ishellcheck` runs in-process, so the test
+/// needs no external tool.
 #[test]
 fn default_dep_auto_stays_optional() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
-    fs::write(project_path.join("ok.yaml"), "key: value\n").unwrap();
+    fs::write(project_path.join("ok.sh"), "#!/bin/sh\necho ok\n").unwrap();
     fs::write(
         project_path.join("rsconstruct.toml"),
-        "[processor.checker.yamllint]\nsrc_dirs = [\"\"]\n",
+        "[processor.checker.ishellcheck]\nsrc_dirs = [\"\"]\n",
     )
     .unwrap();
-    assert!(!project_path.join(".yamllint").exists());
+    assert!(!project_path.join(".shellcheckrc").exists());
 
     let out = run_rsconstruct(project_path, &["build"]);
     assert!(
