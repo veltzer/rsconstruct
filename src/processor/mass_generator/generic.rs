@@ -385,13 +385,24 @@ fn snapshot_mtimes(dirs: &[PathBuf]) -> Result<BTreeMap<PathBuf, SystemTime>> {
     let mut snapshot = BTreeMap::new();
     for dir in dirs {
         for path in crate::object_store::walk_files(dir) {
-            let mtime = std::fs::metadata(&path)
-                .and_then(|m| m.modified())
-                .with_context(|| format!("Failed to stat {}", path.display()))?;
-            snapshot.insert(path, mtime);
+            if let Some(mtime) = mtime_if_present(&path)? {
+                snapshot.insert(path, mtime);
+            }
         }
     }
     Ok(snapshot)
+}
+
+/// Modification time of `path`, or `None` when it is gone. The output
+/// directories are shared: a sibling processor running in parallel may
+/// replace or delete a file between the walk listing it and the stat, and
+/// a file that no longer exists is simply not part of the snapshot.
+fn mtime_if_present(path: &Path) -> Result<Option<SystemTime>> {
+    match std::fs::metadata(path).and_then(|m| m.modified()) {
+        Ok(mtime) => Ok(Some(mtime)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("Failed to stat {}", path.display())),
+    }
 }
 
 /// Compare what the tool wrote against what it predicted. A predicted file
@@ -557,6 +568,17 @@ mod tests {
             .collect();
         assert_eq!(paths, vec!["_site/a.html", "_site/b.html"]);
         assert_eq!(entries[0].sources, dirs(&["docs/a.md", "templates/t.html"]));
+    }
+
+    /// A file a parallel sibling removed between walk and stat is skipped,
+    /// not a build failure.
+    #[test]
+    fn mtime_of_a_vanished_file_is_none() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("gone.html");
+        assert_eq!(mtime_if_present(&path).unwrap(), None);
+        std::fs::write(&path, "x").unwrap();
+        assert!(mtime_if_present(&path).unwrap().is_some());
     }
 
     #[test]
