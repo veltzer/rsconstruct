@@ -4,7 +4,8 @@
 //! `eslint`: biome lints CSS, JavaScript, TypeScript and JSON from one
 //! static binary, with no node runtime and no `node_modules/`. It does not
 //! parse SCSS, Sass or Less. Which languages it actually checks is decided
-//! by the repo's `biome.json`/`biome.jsonc` (each language has its own
+//! by the repo's biome config (`biome.json(c)` or the hidden
+//! `.biome.json(c)`, all four read by biome itself; each language has its own
 //! `linter.enabled`), so a repo that lints JavaScript with `oxlint` turns
 //! biome's JavaScript linter off there and narrows `src_extensions` to
 //! `.css`.
@@ -34,7 +35,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     fields: &[],
     omit_standard_fields: &[],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".css", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".json", ".jsonc"], src_exclude_dirs: &[] }),
-    defaults: Some(crate::config::ProcessorDefaults { command: "biome", dep_auto: &["biome.json", "biome.jsonc"], ..crate::config::ProcessorDefaults::EMPTY }),
+    defaults: Some(crate::config::ProcessorDefaults { command: "biome", dep_auto: &["biome.json", "biome.jsonc", ".biome.json", ".biome.jsonc"], ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["css", "javascript", "typescript", "json", "linter", "stylelint", "eslint", "web", "frontend", "rust"],
     description: "Lint CSS/JavaScript/TypeScript/JSON files using biome",

@@ -20,7 +20,8 @@ code from biome fails the product.
 This processor supports batch mode, allowing multiple files to be checked in a
 single biome invocation for better performance.
 
-If a biome config file exists (`biome.json` or `biome.jsonc`), it is
+If a biome config file exists (`biome.json`, `biome.jsonc`, `.biome.json` or
+`.biome.jsonc`), it is
 automatically added as an extra input so that configuration changes trigger
 rebuilds.
 
@@ -28,7 +29,7 @@ rebuilds.
 
 biome has one linter switch per language in its config
 (`javascript.linter.enabled`, `json.linter.enabled`, ...). A repo that lints
-JavaScript with oxlint turns biome's JavaScript linter off in `biome.jsonc`
+JavaScript with oxlint turns biome's JavaScript linter off in `.biome.jsonc`
 and narrows this processor to stylesheets:
 
 ```toml
@@ -71,7 +72,7 @@ dep_inputs = []
 | `command` | string | `"biome"` | The biome executable to run |
 | `args` | string[] | `[]` | Extra arguments passed after `lint` and before the file paths |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
-| `dep_auto` | string[] | `biome.json`, `biome.jsonc` | Config files auto-detected as inputs |
+| `dep_auto` | string[] | `biome.json`, `biome.jsonc`, `.biome.json`, `.biome.jsonc` | Config files auto-detected as inputs |
 
 ## Installation
 
