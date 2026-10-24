@@ -449,13 +449,14 @@ fn resolve_into(
 /// project.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LockMode {
-    /// The lock must exist, cover the project exactly, and name the running
-    /// rsconstruct; anything else is an error. CI.
+    /// The lock must exist, cover the project exactly, and carry an
+    /// `[rsconstruct]` pin; anything else is an error. CI.
     Locked,
     /// Resolve and add what is missing, drop what nothing needs; never move
     /// an entry that is already locked. Outside CI.
     Fill,
-    /// Resolve every entry afresh. `tool lock --upgrade`.
+    /// Resolve every entry afresh. `tool lock --upgrade`; the named form
+    /// is [`upgrade_named`].
     Upgrade,
 }
 
@@ -512,7 +513,6 @@ fn entry_label(lock: &ToolLock, method: &str, name: &str) -> String {
 pub fn sync(ctx: &BuildContext, wanted: &Wanted, mode: LockMode, verbose: bool) -> Result<Synced> {
     reject_legacy_lock()?;
     let existing = read_lock_file()?;
-    let running = env!("CARGO_PKG_VERSION");
 
     if mode == LockMode::Locked {
         let Some(lock) = existing else {
@@ -532,13 +532,14 @@ pub fn sync(ctx: &BuildContext, wanted: &Wanted, mode: LockMode, verbose: bool) 
                 .iter()
                 .map(|(m, n)| format!("{m} {n} — locked but no longer needed")),
         );
-        match &lock.rsconstruct {
-            None => problems.push("rsconstruct — no [rsconstruct] version".to_string()),
-            Some(pin) if pin.version != running => problems.push(format!(
-                "rsconstruct — locked {}, running {running}",
-                pin.version
-            )),
-            Some(_) => {}
+        // The pin must exist, because the CI workflows download the version
+        // it names. Whether the *running* binary is that version is not
+        // checked: the download step already guarantees it in every repo
+        // that installs the release, and rsconstruct's own CI deliberately
+        // runs a binary built from the commit under test, whose version a
+        // release commit bumps past any pin (CI run 40113271551).
+        if lock.rsconstruct.is_none() {
+            problems.push("rsconstruct — no [rsconstruct] version".to_string());
         }
         if !problems.is_empty() {
             return Err(lock_error(format!(
@@ -554,13 +555,95 @@ pub fn sync(ctx: &BuildContext, wanted: &Wanted, mode: LockMode, verbose: bool) 
         });
     }
 
+    let upgrade_all = mode == LockMode::Upgrade;
+    rewrite(
+        ctx,
+        wanted,
+        existing,
+        upgrade_all,
+        &[],
+        upgrade_all,
+        verbose,
+    )
+}
+
+/// `tool lock --upgrade <name>...`: everything `tool lock` does, plus
+/// re-resolve the entries `names` select to their latest release. A name
+/// selects that tool under every install method the project locks it for;
+/// `rsconstruct` selects the `[rsconstruct]` pin, which moves to the running
+/// rsconstruct. A name the project does not lock is an error, not a no-op:
+/// a typo must not look like "already the latest".
+pub fn upgrade_named(
+    ctx: &BuildContext,
+    wanted: &Wanted,
+    names: &[String],
+    verbose: bool,
+) -> Result<Synced> {
+    reject_legacy_lock()?;
+    let (targets, bump_self) = select_entries(wanted, names)?;
+    let existing = read_lock_file()?;
+    rewrite(ctx, wanted, existing, false, &targets, bump_self, verbose)
+}
+
+/// The `(method, name)` entries `names` select from `wanted`, and whether
+/// `rsconstruct` itself was named.
+fn select_entries(wanted: &Wanted, names: &[String]) -> Result<(Entries, bool)> {
+    let mut targets = Vec::new();
+    let mut bump_self = false;
+    let mut unknown = Vec::new();
+    for name in names {
+        if name == "rsconstruct" {
+            bump_self = true;
+            continue;
+        }
+        let before = targets.len();
+        for method in VERSIONED_METHODS.iter().copied().chain(["binary"]) {
+            let key = lock_key(method, name);
+            if wanted.names(method).contains(&key) {
+                targets.push((method.to_string(), key));
+            }
+        }
+        if targets.len() == before {
+            unknown.push(name.as_str());
+        }
+    }
+    if !unknown.is_empty() {
+        return Err(crate::exit_code::config_error(format!(
+            "not a tool this project locks: {} (see the entries in {LOCK_FILE})",
+            unknown.join(", ")
+        )));
+    }
+    Ok((targets, bump_self))
+}
+
+/// Write the lock for `wanted`, starting from `existing`: drop unused
+/// entries, resolve missing ones, and re-resolve `reresolve` (or, with
+/// `fresh`, every entry). `bump_self` moves `[rsconstruct]` to the running
+/// version; otherwise it is only set when absent.
+fn rewrite(
+    ctx: &BuildContext,
+    wanted: &Wanted,
+    existing: Option<ToolLock>,
+    fresh: bool,
+    reresolve: &[(String, String)],
+    bump_self: bool,
+    verbose: bool,
+) -> Result<Synced> {
+    let running = env!("CARGO_PKG_VERSION");
     let created = existing.is_none();
     let before = existing.unwrap_or_else(ToolLock::empty);
-    let mut lock = if mode == LockMode::Upgrade {
+    let mut lock = if fresh {
         ToolLock::empty()
     } else {
         before.clone()
     };
+    for (method, name) in reresolve {
+        if method == "binary" {
+            lock.binary.remove(name);
+        } else {
+            lock.versions_mut(method).remove(name);
+        }
+    }
     let (missing, stale) = diff(&lock, wanted);
     for (method, name) in &stale {
         if method == "binary" {
@@ -572,7 +655,7 @@ pub fn sync(ctx: &BuildContext, wanted: &Wanted, mode: LockMode, verbose: bool) 
     for (method, name) in &missing {
         resolve_into(ctx, &mut lock, method, name, verbose)?;
     }
-    if mode == LockMode::Upgrade || lock.rsconstruct.is_none() {
+    if bump_self || lock.rsconstruct.is_none() {
         lock.rsconstruct = Some(SelfPin {
             version: running.to_string(),
         });
@@ -1079,6 +1162,34 @@ mod tests {
                 "pip ruff"
             ]
         );
+    }
+
+    /// A name selects its tool under every method the project locks it for
+    /// (Python names compared normalized); `rsconstruct` selects the self
+    /// pin; an unknown name is an error.
+    #[test]
+    fn select_entries_matches_names_across_methods() {
+        let mut wanted = Wanted::default();
+        wanted.add("cargo", "oxlint");
+        wanted.add("binary", "oxlint");
+        wanted.add("pip", "types-PyYAML");
+        let names = |list: &[&str]| list.iter().map(ToString::to_string).collect::<Vec<_>>();
+
+        let (targets, bump_self) =
+            select_entries(&wanted, &names(&["oxlint", "Types_PyYAML"])).unwrap();
+        let targets: Vec<String> = targets.iter().map(|(m, n)| format!("{m} {n}")).collect();
+        assert_eq!(
+            targets,
+            vec!["cargo oxlint", "binary oxlint", "pip types-pyyaml"]
+        );
+        assert!(!bump_self);
+
+        let (targets, bump_self) = select_entries(&wanted, &names(&["rsconstruct"])).unwrap();
+        assert_eq!(targets, Vec::new());
+        assert!(bump_self);
+
+        let err = select_entries(&wanted, &names(&["oxlint", "nosuch"])).unwrap_err();
+        assert!(err.to_string().contains("nosuch"), "{err}");
     }
 
     #[test]

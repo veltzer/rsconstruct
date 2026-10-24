@@ -444,12 +444,13 @@ fn run_tools_command(
                 anyhow::anyhow!("tool lock requires a project with rsconstruct.toml")
             })?;
             let wanted = project_wanted(builder, processors, is_enabled)?;
-            let mode = if upgrade {
-                tool_lock::LockMode::Upgrade
-            } else {
-                tool_lock::LockMode::Fill
+            let synced = match upgrade {
+                None => tool_lock::sync(ctx, &wanted, tool_lock::LockMode::Fill, verbose)?,
+                Some(names) if names.is_empty() => {
+                    tool_lock::sync(ctx, &wanted, tool_lock::LockMode::Upgrade, verbose)?
+                }
+                Some(names) => tool_lock::upgrade_named(ctx, &wanted, &names, verbose)?,
             };
-            let synced = tool_lock::sync(ctx, &wanted, mode, verbose)?;
             if crate::json_output::is_json_mode() {
                 let out = serde_json::json!({
                     "lock_file": tool_lock::LOCK_FILE,

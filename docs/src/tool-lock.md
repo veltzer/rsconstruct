@@ -53,12 +53,16 @@ rsconstruct's source (zola, checkpatch.pl, …) are recorded at that URL.
 |---------|------------|-------------------|
 | `tool lock` | add missing entries, drop unused ones, keep the rest | same (but run it outside CI) |
 | `tool lock --upgrade` | re-resolve every entry to its latest release; pin the running rsconstruct | same |
+| `tool lock --upgrade <name>...` | like `tool lock`, plus re-resolve only the named tools (`rsconstruct` names the rsconstruct pin); an unknown name is an error | same |
 | `tool install`, `tool install-deps` | fill in missing entries, then install missing tools at their locked versions | the lock must match exactly; a tool installed at a different version is reinstalled at the locked one |
 | `tool check` | the lock must match and every locked tool must be installed at its version | same |
 | `build` | not consulted (`--verify-tool-versions` runs the `tool check` test) | runs the `tool check` test before building |
 
 "Match" means: every entry the project needs is present, no entry is unused,
-and `[rsconstruct]` names the running rsconstruct.
+and there is an `[rsconstruct]` pin. The running rsconstruct is not compared
+with the pin: in the fleet the workflow downloads exactly the pinned release,
+and rsconstruct's own CI deliberately runs a binary built from the commit under
+test, whose version a release commit bumps past any pin.
 
 **Outside CI, rsconstruct never replaces a tool you already have.** It installs
 what is missing at the locked version, and `tool check` reports drift, but a
@@ -71,7 +75,9 @@ not match and tells you to run `rsconstruct tool lock` outside CI and commit the
 result.
 
 Moving entries to newer releases is `rsconstruct tool lock --upgrade` and
-nothing else. A normal build, install or `tool lock` never moves an entry
+nothing else; give it names (`--upgrade ruff cargo-deny`) to move only those,
+the way `cargo update -p` does. A name selects the tool under every install
+method the project locks it for. A normal build, install or `tool lock` never moves an entry
 that is already locked.
 
 ## `[rsconstruct]`

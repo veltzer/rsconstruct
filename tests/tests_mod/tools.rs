@@ -215,9 +215,35 @@ fn ci_build_requires_the_lock() {
     );
 }
 
+/// The `[rsconstruct]` pin names the release CI downloads, not the binary
+/// that must be running. rsconstruct's own CI runs a binary built from the
+/// commit under test, and a release commit bumps its version past the pin;
+/// requiring the two to match failed the 0.9.139 release (CI run
+/// 40113271551).
+#[test]
+fn ci_accepts_a_pin_other_than_the_running_rsconstruct() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+    let lock = "version = 1\n\n[rsconstruct]\nversion = \"0.0.1\"\n";
+    std::fs::write(project_path.join("rsconstruct.lock"), lock).unwrap();
+
+    for args in [
+        &["tool", "install-deps"][..],
+        &["tool", "check"],
+        &["build"],
+    ] {
+        let output =
+            run_rsconstruct_with_env(project_path, args, &[("NO_COLOR", "1"), ("CI", "true")]);
+        assert!(
+            output.status.success(),
+            "{args:?} failed in CI: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
 /// In CI a lock that does not match the project is an error, never
-/// silently rewritten: here it pins a crate nothing needs and an
-/// rsconstruct other than the running one.
+/// silently rewritten: here it pins a crate nothing needs.
 #[test]
 fn ci_rejects_a_lock_that_does_not_match() {
     let temp_dir = setup_test_project();
@@ -237,7 +263,6 @@ fn ci_rejects_a_lock_that_does_not_match() {
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("cargo cargo-unused"), "{stderr}");
-    assert!(stderr.contains("locked 0.0.1"), "{stderr}");
     let after = std::fs::read_to_string(project_path.join("rsconstruct.lock")).unwrap();
     assert_eq!(after, stale, "CI must not rewrite the lock");
 
@@ -260,6 +285,44 @@ fn ci_rejects_a_lock_that_does_not_match() {
         upgraded.contains(&format!("version = \"{}\"", env!("CARGO_PKG_VERSION"))),
         "{upgraded}"
     );
+}
+
+/// `--upgrade <name>` moves only the named entry: here the rsconstruct pin.
+/// A name the project does not lock is an error and leaves the lock alone.
+#[test]
+fn tool_lock_upgrade_named_moves_only_that_entry() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+    let old = "version = 1\n\n[rsconstruct]\nversion = \"0.0.1\"\n";
+    std::fs::write(project_path.join("rsconstruct.lock"), old).unwrap();
+
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["tool", "lock", "--upgrade", "nosuch"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(!output.status.success(), "an unknown name was accepted");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("not a tool this project locks: nosuch"),
+        "{stderr}"
+    );
+    let unchanged = std::fs::read_to_string(project_path.join("rsconstruct.lock")).unwrap();
+    assert_eq!(unchanged, old);
+
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["tool", "lock", "--upgrade", "rsconstruct"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let expected = format!("~ rsconstruct 0.0.1 -> {}", env!("CARGO_PKG_VERSION"));
+    assert!(stdout.contains(&expected), "{stdout}");
 }
 
 /// A leftover .tools.versions is an error that says what to do.

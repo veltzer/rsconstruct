@@ -592,6 +592,7 @@ rsconstruct tool list-configured -a   # Include tools from disabled processors
 rsconstruct tool check             # Verify rsconstruct.lock covers the project and installed tools match it
 rsconstruct tool lock              # Write rsconstruct.lock: add missing entries, drop unused ones, keep the rest
 rsconstruct tool lock --upgrade    # Re-resolve every rsconstruct.lock entry to its latest release
+rsconstruct tool lock --upgrade ruff cargo-deny   # Re-resolve only these entries (`rsconstruct` names the rsconstruct pin)
 rsconstruct tool install           # Install missing external tools for enabled processors
 rsconstruct tool install ruff      # Install a specific tool by name
 rsconstruct tool install --all     # Install every tool in the registry, ignoring the config (no config needed)

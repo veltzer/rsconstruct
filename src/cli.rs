@@ -629,10 +629,11 @@ pub enum ToolAction {
     },
     /// Write rsconstruct.lock: add what is missing and drop what is unused, keeping existing pins (requires config)
     Lock {
-        /// Re-resolve every entry to its latest release, and pin the
-        /// running rsconstruct
-        #[arg(long)]
-        upgrade: bool,
+        /// Re-resolve entries to their latest release: all of them (and pin
+        /// the running rsconstruct) when no NAME is given, otherwise only the
+        /// named tools (`rsconstruct` names the rsconstruct pin)
+        #[arg(long, value_name = "NAME", num_args = 0..)]
+        upgrade: Option<Vec<String>>,
     },
     /// Show tool availability statistics (uses config if available)
     Stats,
