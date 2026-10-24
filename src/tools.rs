@@ -30,6 +30,10 @@ pub struct InstallCtx {
     /// (apt/dnf/pacman) for faster installs. No-op when eatmydata isn't
     /// on PATH.
     pub use_eatmydata: bool,
+    /// The project's rsconstruct.lock entries for `binary` installs, by
+    /// recipe name: a pinned recipe downloads the locked URL and must match
+    /// the locked SHA-256. Empty outside a project.
+    pub binary_pins: std::collections::BTreeMap<String, crate::tool_lock::BinaryPin>,
 }
 
 impl InstallMethod {
@@ -299,7 +303,7 @@ fn cargo_install_argv() -> Vec<String> {
 /// listing and so does not count.
 pub fn installed_cargo_crates(
     ctx: &crate::build_context::BuildContext,
-) -> anyhow::Result<std::collections::BTreeSet<String>> {
+) -> anyhow::Result<std::collections::BTreeMap<String, String>> {
     use anyhow::Context as _;
     let mut cmd = std::process::Command::new("cargo");
     cmd.args(["install", "--list"]);
@@ -316,16 +320,24 @@ pub fn installed_cargo_crates(
     )))
 }
 
-/// Parse `cargo install --list` output into the set of installed crate
-/// names. The listing has one unindented `name vX.Y.Z[ (source)]:` line per
-/// crate, each followed by indented lines naming the binaries it ships;
+/// Parse `cargo install --list` output into the installed crates and their
+/// versions. The listing has one unindented `name vX.Y.Z[ (source)]:` line
+/// per crate, each followed by indented lines naming the binaries it ships;
 /// only the unindented lines carry crate names.
-pub fn parse_cargo_install_list(listing: &str) -> std::collections::BTreeSet<String> {
+pub fn parse_cargo_install_list(listing: &str) -> std::collections::BTreeMap<String, String> {
     listing
         .lines()
         .filter(|line| !line.is_empty() && !line.starts_with(char::is_whitespace))
-        .filter_map(|line| line.split_whitespace().next())
-        .map(str::to_string)
+        .filter_map(|line| {
+            let mut words = line.split_whitespace();
+            let name = words.next()?;
+            let version = words
+                .next()
+                .map(|v| v.trim_end_matches(':'))
+                .map(|v| v.strip_prefix('v').unwrap_or(v))
+                .unwrap_or_default();
+            Some((name.to_string(), version.to_string()))
+        })
         .collect()
 }
 
@@ -688,11 +700,37 @@ fn describe_binary(pkg: &str) -> Vec<Vec<String>> {
     }
 }
 
-/// The GitHub API token to authenticate release lookups with, if one is set.
-/// Which variable it comes from is decided by
-/// [`crate::download::github_token_var`], shared with authenticated downloads.
-fn github_token() -> Option<String> {
-    crate::download::github_token_var().and_then(|name| std::env::var(name).ok())
+/// The GitHub API's description of `repo`'s latest release.
+fn latest_github_release(repo: &str) -> anyhow::Result<serde_json::Value> {
+    crate::download::get_json(&format!(
+        "https://api.github.com/repos/{repo}/releases/latest"
+    ))
+}
+
+/// The `releases/latest/download/` infix of a GitHub URL that always serves
+/// the newest release's asset of that name.
+const GITHUB_LATEST_DOWNLOAD: &str = "/releases/latest/download/";
+
+/// Rewrite a `https://github.com/<owner>/<repo>/releases/latest/download/<asset>`
+/// URL to the same asset of release `tag`, or None when `url` is not one.
+fn pin_github_latest_url(url: &str, tag: &str) -> Option<String> {
+    let rest = url.strip_prefix("https://github.com/")?;
+    let at = rest.find(GITHUB_LATEST_DOWNLOAD)?;
+    let repo = &rest[..at];
+    let asset = &rest[at + GITHUB_LATEST_DOWNLOAD.len()..];
+    Some(format!(
+        "https://github.com/{repo}/releases/download/{tag}/{asset}"
+    ))
+}
+
+/// The `<owner>/<repo>` of a `https://github.com/<owner>/<repo>/...` URL.
+fn github_repo_of(url: &str) -> Option<&str> {
+    let rest = url.strip_prefix("https://github.com/")?;
+    let owner_end = rest.find('/')?;
+    let repo_end = rest[owner_end + 1..]
+        .find('/')
+        .map_or(rest.len(), |i| owner_end + 1 + i);
+    Some(&rest[..repo_end])
 }
 
 /// Resolve the browser-download URL of the newest release asset in `repo`
@@ -701,35 +739,8 @@ fn github_token() -> Option<String> {
 /// recipe from breaking every time upstream cuts a release.
 fn resolve_latest_deb_asset(repo: &str, asset_pattern: &str) -> anyhow::Result<String> {
     use anyhow::Context as _;
-    let api = format!("https://api.github.com/repos/{repo}/releases/latest");
-    // Authenticate when a token is available. Unauthenticated api.github.com
-    // allows 60 requests/hour *per source IP*, and GitHub-hosted runners
-    // share egress IPs — so a busy runner pool exhausts the budget and this
-    // call fails instantly with 403 (CI run 33967438754). A token raises the
-    // limit to 5000/hour for the account it belongs to. Absent locally, where
-    // one machine never approaches 60/hour, so this stays optional.
-    //
-    // Read once, outside the retry closure: the environment cannot change
-    // between attempts, and re-reading it per attempt would only repeat work.
-    let token = github_token();
-    // Retried via download::with_retry for the same reason downloads are:
-    // a connection reset here fails the whole install. See
-    // docs/src/internal/download-policy.md.
-    let body = crate::download::with_retry(|| {
-        let mut req = ureq::get(&api)
-            // GitHub rejects API requests without a User-Agent.
-            .header("User-Agent", "rsconstruct");
-        if let Some(token) = &token {
-            req = req.header("Authorization", &format!("Bearer {token}"));
-        }
-        req.call()
-            .with_context(|| format!("Failed to query GitHub releases API for {repo}"))?
-            .body_mut()
-            .read_to_string()
-            .with_context(|| format!("Failed to read GitHub releases response for {repo}"))
-    })?;
-    let release: serde_json::Value = serde_json::from_str(&body)
-        .with_context(|| format!("Failed to parse GitHub releases JSON for {repo}"))?;
+    // Authenticated and retried by download::get_json; see there for why.
+    let release = latest_github_release(repo)?;
     release["assets"]
         .as_array()
         .with_context(|| format!("GitHub release for {repo} has no 'assets' array"))?
@@ -748,64 +759,101 @@ fn resolve_latest_deb_asset(repo: &str, asset_pattern: &str) -> anyhow::Result<S
         })
 }
 
-fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
+/// Run `argv` with the terminal inherited, failing on a non-zero exit.
+///
+/// Same exception as `run()` above: the binary installer shells out to
+/// `sudo mv` / `sudo apt-get`, which need the terminal for a password
+/// prompt, so these steps cannot go through the capturing central runner.
+fn exec_inherited(argv: &[&str], verbose: bool) -> anyhow::Result<()> {
     use anyhow::Context as _;
-    use std::process::Command;
-    let recipe = binary_recipe(pkg)
-        .ok_or_else(|| anyhow::anyhow!("no binary install recipe for '{pkg}'"))?;
-    let download = format!("/tmp/{}.dl", recipe.dest);
-    let final_tmp = format!("/tmp/{}", recipe.dest);
-    let final_path = format!("/usr/local/bin/{}", recipe.dest);
-    let exec = |argv: &[&str]| -> anyhow::Result<()> {
-        if ctx.verbose {
-            println!("Running: {}", argv.join(" "));
-        }
-        // Same exception as `run()` above: the binary installer shells out to
-        // `sudo install`, which needs the terminal for its password prompt.
-        let status = Command::new(argv[0])
-            .args(&argv[1..])
-            .status()
-            .with_context(|| format!("failed to spawn: {}", argv.join(" ")))?;
-        if !status.success() {
-            anyhow::bail!(
-                "{} exited with code {}",
-                argv.join(" "),
-                status
-                    .code()
-                    .map_or_else(|| "unknown".to_string(), |c| c.to_string())
-            );
-        }
-        Ok(())
-    };
-    // A .deb is installed by apt, so it skips the download/chmod/mv shape
-    // entirely: apt pulls the dependency tree the bare binary would be
-    // missing, and the payload is not a single executable.
-    if let ArchiveKind::Deb { source } = recipe.archive {
-        let deb = format!("/tmp/{}.deb", recipe.dest);
-        let asset_url = match source {
-            DebSource::GithubRelease {
-                repo,
-                asset_pattern,
-            } => resolve_latest_deb_asset(repo, asset_pattern)?,
-            DebSource::Url(url) => url.to_string(),
-        };
-        let dl = crate::download::curl_argv(&asset_url, &deb);
-        exec(&dl.iter().map(String::as_str).collect::<Vec<_>>())?;
-        let sudo = sudo_argv();
-        let mut install: Vec<&str> = sudo.to_vec();
-        install.extend(["apt-get", "install", "-y", &deb]);
-        let result = exec(&install);
-        std::fs::remove_file(&deb).ok();
-        return result;
+    if verbose {
+        println!("Running: {}", argv.join(" "));
     }
-    let dl = crate::download::curl_argv(recipe.url, &download);
-    exec(&dl.iter().map(String::as_str).collect::<Vec<_>>())?;
+    let status = std::process::Command::new(argv[0])
+        .args(&argv[1..])
+        .status()
+        .with_context(|| format!("failed to spawn: {}", argv.join(" ")))?;
+    if !status.success() {
+        anyhow::bail!(
+            "{} exited with code {}",
+            argv.join(" "),
+            status
+                .code()
+                .map_or_else(|| "unknown".to_string(), |c| c.to_string())
+        );
+    }
+    Ok(())
+}
+
+/// SHA-256 of a file's bytes, hex-encoded, streamed rather than read whole
+/// (a `.deb` payload runs to hundreds of megabytes).
+pub fn file_sha256(path: &std::path::Path) -> anyhow::Result<String> {
+    use anyhow::Context as _;
+    use sha2::Digest as _;
+    let mut file = std::fs::File::open(path)
+        .with_context(|| format!("Failed to open {} for hashing", path.display()))?;
+    let mut hasher = sha2::Sha256::new();
+    std::io::copy(&mut file, &mut hasher)
+        .with_context(|| format!("Failed to read {} for hashing", path.display()))?;
+    Ok(hex::encode(hasher.finalize()))
+}
+
+/// A binary recipe's payload, downloaded and unpacked into a work directory
+/// but not yet installed.
+struct FetchedBinary {
+    /// SHA-256 of the file as downloaded (the archive, for an archive).
+    download_sha256: String,
+    /// The executable ready to move into place, or the `.deb` for apt.
+    payload: String,
+}
+
+/// Download `url` into `base` and unpack `recipe`'s executable from it.
+/// With `expected_sha256`, a download whose hash differs is an error: the
+/// lock said which bytes to install, and these are not they.
+///
+/// Shared by `run_binary` (base `/tmp`, the paths `describe_binary` shows)
+/// and `tool lock` (a private directory), so a locked hash is always the
+/// hash of exactly what an install downloads.
+fn fetch_binary(
+    recipe: &BinaryRecipe,
+    url: &str,
+    expected_sha256: Option<&str>,
+    base: &str,
+    verbose: bool,
+) -> anyhow::Result<FetchedBinary> {
+    use anyhow::Context as _;
+    let is_deb = matches!(recipe.archive, ArchiveKind::Deb { .. });
+    let download = if is_deb {
+        format!("{base}/{}.deb", recipe.dest)
+    } else {
+        format!("{base}/{}.dl", recipe.dest)
+    };
+    let final_tmp = format!("{base}/{}", recipe.dest);
+    let dl = crate::download::curl_argv(url, &download);
+    exec_inherited(&dl.iter().map(String::as_str).collect::<Vec<_>>(), verbose)?;
+    let download_sha256 = file_sha256(std::path::Path::new(&download))?;
+    if let Some(expected) = expected_sha256
+        && expected != download_sha256
+    {
+        std::fs::remove_file(&download).ok();
+        anyhow::bail!(
+            "{url} does not match rsconstruct.lock: sha256 {download_sha256}, locked {expected}"
+        );
+    }
     match recipe.archive {
-        ArchiveKind::Deb { .. } => unreachable!("returned early by the Deb branch above"),
+        // A .deb is installed by apt as is: apt pulls the dependency tree
+        // a bare binary would be missing, and the payload is not a single
+        // executable.
+        ArchiveKind::Deb { .. } => {
+            return Ok(FetchedBinary {
+                download_sha256,
+                payload: download,
+            });
+        }
         ArchiveKind::TarGz { inner } => {
-            exec(&["tar", "-xzf", &download, "-C", "/tmp", inner])?;
-            // After tar, the inner file is at /tmp/<inner>; rename to final_tmp.
-            let inner_path = format!("/tmp/{inner}");
+            exec_inherited(&["tar", "-xzf", &download, "-C", base, inner], verbose)?;
+            // After tar, the inner file is at <base>/<inner>; rename to final_tmp.
+            let inner_path = format!("{base}/{inner}");
             if inner_path != final_tmp {
                 std::fs::rename(&inner_path, &final_tmp)
                     .with_context(|| format!("rename {inner_path} -> {final_tmp}"))?;
@@ -813,9 +861,9 @@ fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
             std::fs::remove_file(&download).ok();
         }
         ArchiveKind::Zip { inner } => {
-            exec(&["unzip", "-o", &download, inner, "-d", "/tmp"])?;
-            // After unzip, the member is at /tmp/<inner>; rename to final_tmp.
-            let inner_path = format!("/tmp/{inner}");
+            exec_inherited(&["unzip", "-o", &download, inner, "-d", base], verbose)?;
+            // After unzip, the member is at <base>/<inner>; rename to final_tmp.
+            let inner_path = format!("{base}/{inner}");
             if inner_path != final_tmp {
                 std::fs::rename(&inner_path, &final_tmp)
                     .with_context(|| format!("rename {inner_path} -> {final_tmp}"))?;
@@ -824,12 +872,12 @@ fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
         }
         ArchiveKind::Gunzip => {
             // gunzip strips the .gz extension. Our download path ends in
-            // .dl; rename to .dl.gz so gunzip leaves /tmp/<dest>.dl, then
+            // .dl; rename to .dl.gz so gunzip leaves <base>/<dest>.dl, then
             // move to final_tmp.
             let gz = format!("{download}.gz");
             std::fs::rename(&download, &gz)
                 .with_context(|| format!("rename {download} -> {gz}"))?;
-            exec(&["gunzip", "-f", &gz])?;
+            exec_inherited(&["gunzip", "-f", &gz], verbose)?;
             std::fs::rename(&download, &final_tmp)
                 .with_context(|| format!("rename {download} -> {final_tmp}"))?;
         }
@@ -840,10 +888,152 @@ fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
     }
     crate::platform::set_permissions_mode(std::path::Path::new(&final_tmp), 0o755)
         .with_context(|| format!("chmod +x {final_tmp}"))?;
+    Ok(FetchedBinary {
+        download_sha256,
+        payload: final_tmp,
+    })
+}
+
+/// The URL `pkg`'s recipe downloads when no lock entry says otherwise: a
+/// GitHub-release `.deb` resolved to today's latest asset, a vendor URL as
+/// is, and anything else straight from the recipe.
+fn unpinned_binary_url(recipe: &BinaryRecipe) -> anyhow::Result<String> {
+    match recipe.archive {
+        ArchiveKind::Deb {
+            source:
+                DebSource::GithubRelease {
+                    repo,
+                    asset_pattern,
+                },
+        } => resolve_latest_deb_asset(repo, asset_pattern),
+        ArchiveKind::Deb {
+            source: DebSource::Url(url),
+        } => Ok(url.to_string()),
+        _ => Ok(recipe.url.to_string()),
+    }
+}
+
+fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
+    let recipe = binary_recipe(pkg)
+        .ok_or_else(|| anyhow::anyhow!("no binary install recipe for '{pkg}'"))?;
+    // A lock entry decides the exact asset and its bytes; without one (no
+    // project, or a recipe that cannot be pinned) the recipe decides.
+    let pin = ctx.binary_pins.get(pkg);
+    let url = match pin {
+        Some(pin) => pin.url.clone(),
+        None => unpinned_binary_url(&recipe)?,
+    };
+    let fetched = fetch_binary(
+        &recipe,
+        &url,
+        pin.map(|p| p.sha256.as_str()),
+        "/tmp",
+        ctx.verbose,
+    )?;
     let sudo = sudo_argv();
-    let mut mv: Vec<&str> = sudo.to_vec();
-    mv.extend(["mv", &final_tmp, &final_path]);
-    exec(&mv)
+    let mut argv: Vec<&str> = sudo.to_vec();
+    if matches!(recipe.archive, ArchiveKind::Deb { .. }) {
+        argv.extend(["apt-get", "install", "-y", &fetched.payload]);
+        let result = exec_inherited(&argv, ctx.verbose);
+        std::fs::remove_file(&fetched.payload).ok();
+        return result;
+    }
+    let final_path = format!("/usr/local/bin/{}", recipe.dest);
+    argv.extend(["mv", &fetched.payload, &final_path]);
+    exec_inherited(&argv, ctx.verbose)
+}
+
+/// Whether `pkg`'s binary recipe can be recorded in rsconstruct.lock. A
+/// vendor `.deb` URL that always serves the current build (Chrome's) names
+/// no release that could be installed again later, so it cannot.
+pub fn binary_is_pinnable(pkg: &str) -> bool {
+    binary_recipe(pkg).is_some_and(|r| {
+        !matches!(
+            r.archive,
+            ArchiveKind::Deb {
+                source: DebSource::Url(_)
+            }
+        )
+    })
+}
+
+/// The name a binary recipe installs as (`/usr/local/bin/<dest>`, or the
+/// command a `.deb` provides), for probing what is installed.
+pub fn binary_dest(pkg: &str) -> Option<&'static str> {
+    binary_recipe(pkg).map(|r| r.dest)
+}
+
+/// Resolve `pkg`'s binary to the exact asset of today's latest release and
+/// record what installing it puts on disk: the download's SHA-256, plus the
+/// executable's SHA-256 (or, for a `.deb`, its package name and version) so
+/// an installed copy can later be checked against the lock.
+pub fn lock_binary(
+    ctx: &crate::build_context::BuildContext,
+    pkg: &str,
+    verbose: bool,
+) -> anyhow::Result<crate::tool_lock::BinaryPin> {
+    use anyhow::Context as _;
+    let recipe = binary_recipe(pkg)
+        .ok_or_else(|| anyhow::anyhow!("no binary install recipe for '{pkg}'"))?;
+    if !binary_is_pinnable(pkg) {
+        anyhow::bail!("the '{pkg}' binary is a vendor URL with no versioned release to lock");
+    }
+    let url = if recipe.url.contains(GITHUB_LATEST_DOWNLOAD) {
+        let repo = github_repo_of(recipe.url)
+            .with_context(|| format!("cannot tell the GitHub repo of {}", recipe.url))?;
+        let release = latest_github_release(repo)?;
+        let tag = release["tag_name"]
+            .as_str()
+            .with_context(|| format!("the latest {repo} release has no tag_name"))?;
+        pin_github_latest_url(recipe.url, tag)
+            .with_context(|| format!("cannot pin {} to release {tag}", recipe.url))?
+    } else {
+        unpinned_binary_url(&recipe)?
+    };
+    let base = std::env::temp_dir().join(format!("rsconstruct-lock-{}-{pkg}", std::process::id()));
+    std::fs::create_dir_all(&base)
+        .with_context(|| format!("Failed to create {}", base.display()))?;
+    let result = (|| {
+        let fetched = fetch_binary(&recipe, &url, None, &base.to_string_lossy(), verbose)?;
+        let mut pin = crate::tool_lock::BinaryPin {
+            url: url.clone(),
+            sha256: fetched.download_sha256,
+            executable_sha256: None,
+            deb_package: None,
+            deb_version: None,
+        };
+        if matches!(recipe.archive, ArchiveKind::Deb { .. }) {
+            let mut cmd = std::process::Command::new("dpkg-deb");
+            cmd.args(["-f", &fetched.payload, "Package", "Version"]);
+            let out = crate::processor::run_command_capture(ctx, &cmd)
+                .with_context(|| format!("failed to run `dpkg-deb -f {}`", fetched.payload))?;
+            if !out.status.success() {
+                anyhow::bail!(
+                    "`dpkg-deb -f {}` failed: {}",
+                    fetched.payload,
+                    String::from_utf8_lossy(&out.stderr).trim()
+                );
+            }
+            let fields = String::from_utf8_lossy(&out.stdout).into_owned();
+            let field = |name: &str| {
+                fields.lines().find_map(|l| {
+                    l.strip_prefix(name)
+                        .and_then(|v| v.strip_prefix(':'))
+                        .map(|v| v.trim().to_string())
+                })
+            };
+            pin.deb_package = field("Package");
+            pin.deb_version = field("Version");
+            if pin.deb_package.is_none() || pin.deb_version.is_none() {
+                anyhow::bail!("{url}: the .deb names no Package/Version");
+            }
+        } else {
+            pin.executable_sha256 = Some(file_sha256(std::path::Path::new(&fetched.payload))?);
+        }
+        Ok(pin)
+    })();
+    std::fs::remove_dir_all(&base).ok();
+    result
 }
 
 struct BinaryRecipe {
@@ -2029,16 +2219,54 @@ mod tests {
     /// its binaries on indented ones; only the crate names come out, with
     /// the version and any source suffix dropped.
     #[test]
-    fn parse_cargo_install_list_takes_crate_names_only() {
+    fn parse_cargo_install_list_takes_crate_names_and_versions() {
         let listing = "cargo-deny v0.20.2:\n    cargo-deny\n\
                        ripgrep v14.1.0:\n    rg\n\
                        uv v0.9.0 (https://github.com/astral-sh/uv#abcdef12):\n    uv\n    uvx\n";
         let crates = parse_cargo_install_list(listing);
         assert_eq!(
-            crates.iter().map(String::as_str).collect::<Vec<_>>(),
-            vec!["cargo-deny", "ripgrep", "uv"]
+            crates
+                .iter()
+                .map(|(n, v)| (n.as_str(), v.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("cargo-deny", "0.20.2"),
+                ("ripgrep", "14.1.0"),
+                ("uv", "0.9.0")
+            ]
         );
         assert!(parse_cargo_install_list("").is_empty());
+    }
+
+    #[test]
+    fn github_latest_urls_pin_to_a_tag() {
+        assert_eq!(
+            pin_github_latest_url(
+                "https://github.com/tamasfe/taplo/releases/latest/download/taplo-linux-x86_64.gz",
+                "0.10.0"
+            )
+            .as_deref(),
+            Some("https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-linux-x86_64.gz")
+        );
+        assert_eq!(
+            pin_github_latest_url("https://dl.google.com/x.deb", "1"),
+            None
+        );
+        assert_eq!(
+            github_repo_of("https://github.com/hadolint/hadolint/releases/latest/download/h"),
+            Some("hadolint/hadolint")
+        );
+    }
+
+    /// Chrome's vendor URL always serves the current build, so it is the
+    /// one recipe the lock cannot record; GitHub-release recipes can be.
+    #[test]
+    fn only_versioned_binary_recipes_are_pinnable() {
+        assert!(!binary_is_pinnable("google-chrome-stable"));
+        for pkg in ["rumdl", "taplo", "hadolint", "drawio", "checkpatch.pl"] {
+            assert!(binary_is_pinnable(pkg), "{pkg}");
+        }
+        assert!(!binary_is_pinnable("no-such-recipe"));
     }
 
     /// `pip` describe never uses sudo, regardless of runtime state.

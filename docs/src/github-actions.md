@@ -139,4 +139,4 @@ environment.
 - **Don't use `--timings` in CI** unless you need the data. It adds overhead.
 - **Use `--json`** instead of `-q` if you want machine-readable output for downstream processing.
 - **Use `-k` (keep-going)** to see all failures at once instead of stopping at the first one.
-- **Use `--verify-tool-versions`** to catch tool version drift between local and CI environments.
+- **Commit `rsconstruct.lock`.** With `CI=true` (set by GitHub Actions) the build checks the installed tools against it, so tool version drift between runners fails the build. See [Tool Lock](tool-lock.md).

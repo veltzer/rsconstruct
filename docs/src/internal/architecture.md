@@ -30,8 +30,8 @@ by the processor's `StandardConfig`. The main methods:
 | `execute(&BuildContext, &Product)` | Build a single product |
 | `clean(&Product, verbose) -> Result<usize>` | Remove a product's outputs, returning how many files were removed |
 
-Batch execution (`execute_batch`) and tool declaration (`required_tools`,
-`tool_version_commands`) round out the trait.
+Batch execution (`execute_batch`) and tool declaration (`required_tools`)
+round out the trait.
 
 Both `auto_detect` and `discover` receive a `&FileIndex` — a pre-built index of all non-ignored files in the project (see [File indexing](#file-indexing) below).
 
@@ -193,10 +193,11 @@ cached in `deps.redb` for incremental builds.
 
 ### Phase 4: Tool version hashing
 
-For each processor with a tool lock entry (`rsconstruct tool lock`), the
-locked tool version hash is appended to the product's config hash. This
-ensures that upgrading a tool (e.g., `ruff` 0.4 → 0.5) triggers rebuilds
-even if source files haven't changed.
+For each processor, the identity of its required tools (each resolved
+binary's path, size and mtime) is hashed into the product's config hash.
+This ensures that upgrading a tool (e.g., `ruff` 0.4 → 0.5) triggers
+rebuilds even if source files haven't changed. Which release gets installed
+is decided separately, by `rsconstruct.lock` (see `docs/src/tool-lock.md`).
 
 ## Tool detection
 
@@ -204,7 +205,7 @@ The `TOOLS` registry in `src/tools.rs` lists every external tool
 rsconstruct knows about. Each entry's `name` is the **detection key**: it is
 passed directly to `which::which` by `builder/tools.rs` and `tool_lock.rs`, so
 it decides whether `rsconstruct tool list` reports `installed` or `missing`,
-and which binary `rsconstruct tool lock` records a version for.
+and which binary the build's tool hashing identifies.
 
 **Registry names must be bare binary names, never paths.** `which` switches
 behaviour on the presence of a path separator:

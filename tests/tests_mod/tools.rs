@@ -153,6 +153,128 @@ fn tools_check_succeeds() {
     );
 }
 
+/// `tool lock` writes rsconstruct.lock pinning the running rsconstruct, and
+/// a second run changes nothing.
+#[test]
+fn tool_lock_writes_rsconstruct_lock_once() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    let first = run_rsconstruct_with_env(project_path, &["tool", "lock"], &[("NO_COLOR", "1")]);
+    assert!(
+        first.status.success(),
+        "tool lock failed: {}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&first.stdout);
+    assert!(stdout.contains("Created rsconstruct.lock"), "{stdout}");
+    let lock = std::fs::read_to_string(project_path.join("rsconstruct.lock")).unwrap();
+    let expected = format!(
+        "[rsconstruct]\nversion = \"{}\"\n",
+        env!("CARGO_PKG_VERSION")
+    );
+    assert!(lock.contains(&expected), "{lock}");
+
+    let second = run_rsconstruct_with_env(project_path, &["tool", "lock"], &[("NO_COLOR", "1")]);
+    assert!(second.status.success());
+    let stdout = String::from_utf8_lossy(&second.stdout);
+    assert!(stdout.contains("up to date"), "{stdout}");
+    let again = std::fs::read_to_string(project_path.join("rsconstruct.lock")).unwrap();
+    assert_eq!(lock, again);
+}
+
+/// In CI a build without rsconstruct.lock fails; with one it proceeds.
+#[test]
+fn ci_build_requires_the_lock() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["build"],
+        &[("NO_COLOR", "1"), ("CI", "true")],
+    );
+    assert!(
+        !output.status.success(),
+        "build without a lock passed in CI"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("No rsconstruct.lock found"), "{stderr}");
+
+    let lock = run_rsconstruct_with_env(project_path, &["tool", "lock"], &[("NO_COLOR", "1")]);
+    assert!(lock.status.success());
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["build"],
+        &[("NO_COLOR", "1"), ("CI", "true")],
+    );
+    assert!(
+        output.status.success(),
+        "CI build with a lock failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// In CI a lock that does not match the project is an error, never
+/// silently rewritten: here it pins a crate nothing needs and an
+/// rsconstruct other than the running one.
+#[test]
+fn ci_rejects_a_lock_that_does_not_match() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+    let stale =
+        "version = 1\n\n[rsconstruct]\nversion = \"0.0.1\"\n\n[cargo]\ncargo-unused = \"1.0.0\"\n";
+    std::fs::write(project_path.join("rsconstruct.lock"), stale).unwrap();
+
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["tool", "install-deps"],
+        &[("NO_COLOR", "1"), ("CI", "true")],
+    );
+    assert!(
+        !output.status.success(),
+        "install-deps accepted a stale lock in CI"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("cargo cargo-unused"), "{stderr}");
+    assert!(stderr.contains("locked 0.0.1"), "{stderr}");
+    let after = std::fs::read_to_string(project_path.join("rsconstruct.lock")).unwrap();
+    assert_eq!(after, stale, "CI must not rewrite the lock");
+
+    // Outside CI the same lock is repaired: the unused entry goes, the
+    // rsconstruct pin stays (only --upgrade moves it).
+    let output = run_rsconstruct_with_env(project_path, &["tool", "lock"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success());
+    let repaired = std::fs::read_to_string(project_path.join("rsconstruct.lock")).unwrap();
+    assert!(!repaired.contains("cargo-unused"), "{repaired}");
+    assert!(repaired.contains("version = \"0.0.1\""), "{repaired}");
+
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["tool", "lock", "--upgrade"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(output.status.success());
+    let upgraded = std::fs::read_to_string(project_path.join("rsconstruct.lock")).unwrap();
+    assert!(
+        upgraded.contains(&format!("version = \"{}\"", env!("CARGO_PKG_VERSION"))),
+        "{upgraded}"
+    );
+}
+
+/// A leftover .tools.versions is an error that says what to do.
+#[test]
+fn legacy_tools_versions_is_rejected() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+    std::fs::write(project_path.join(".tools.versions"), "{}").unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["tool", "lock"], &[("NO_COLOR", "1")]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Delete .tools.versions"), "{stderr}");
+}
+
 #[test]
 fn tools_stats_shows_summary() {
     let temp_dir = setup_test_project();

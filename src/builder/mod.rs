@@ -889,10 +889,9 @@ impl Builder {
         let t = Instant::now();
         if self.config.build.hash_tool_versions {
             let tool_hashes = tool_lock::processor_tool_hashes(
-                ctx,
                 processors,
                 &|_name| true, // All declared processors are active
-            )?;
+            );
             if !tool_hashes.is_empty() {
                 graph.apply_tool_version_hashes(&tool_hashes);
             }

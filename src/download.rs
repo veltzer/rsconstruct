@@ -124,6 +124,40 @@ pub fn apply_retry_args(cmd: &mut Command) {
     cmd.args(retry_args());
 }
 
+/// GET `url` and parse the body as JSON, retried like every other fetch.
+///
+/// The one in-process HTTP path for the registry and release APIs that
+/// `tool lock` and the `.deb` resolver query (crates.io, `PyPI`, npm,
+/// rubygems.org, api.github.com). Requests to api.github.com carry the
+/// GitHub token when one is set: unauthenticated, the API allows 60
+/// requests/hour per source IP, and GitHub-hosted runners share egress IPs,
+/// so a busy runner pool exhausts the budget and the call fails instantly
+/// with 403 (CI run 33967438754). No other host ever sees the token.
+pub fn get_json(url: &str) -> anyhow::Result<serde_json::Value> {
+    use anyhow::Context as _;
+    // Read once, outside the retry closure: the environment cannot change
+    // between attempts.
+    let token = if url.starts_with("https://api.github.com/") {
+        github_token_var().and_then(|name| std::env::var(name).ok())
+    } else {
+        None
+    };
+    let body = with_retry(|| {
+        // GitHub rejects API requests without a User-Agent, and crates.io's
+        // crawler policy asks every client to identify itself.
+        let mut req = ureq::get(url).header("User-Agent", "rsconstruct");
+        if let Some(token) = &token {
+            req = req.header("Authorization", &format!("Bearer {token}"));
+        }
+        req.call()
+            .with_context(|| format!("Failed to fetch {url}"))?
+            .body_mut()
+            .read_to_string()
+            .with_context(|| format!("Failed to read the response from {url}"))
+    })?;
+    serde_json::from_str(&body).with_context(|| format!("Failed to parse the JSON from {url}"))
+}
+
 /// Run `attempt` up to `RETRY_ATTEMPTS` times, sleeping `RETRY_DELAY_SECS`
 /// between tries, and return the last error if all of them fail.
 ///

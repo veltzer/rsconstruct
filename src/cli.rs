@@ -177,7 +177,8 @@ pub enum Commands {
         #[arg(short = 'n', long, conflicts_with = "stop_after")]
         dry_run: bool,
 
-        /// Verify tool versions against .tools.versions before building
+        /// Verify the installed tools against rsconstruct.lock before
+        /// building (always on in CI, when CI=true)
         #[arg(long)]
         verify_tool_versions: bool,
 
@@ -571,7 +572,7 @@ pub enum FunctionAction {
 
 #[derive(Subcommand)]
 pub enum ToolAction {
-    /// Verify tool versions against .tools.versions lock file (uses config if available)
+    /// Verify that rsconstruct.lock covers the project and the installed tools are the locked ones (requires config)
     Check,
     /// Show tool-to-processor dependency graph (uses config if available)
     Graph {
@@ -626,8 +627,13 @@ pub enum ToolAction {
         #[arg(short = 'M', long)]
         methods: bool,
     },
-    /// Lock tool versions to .tools.versions (uses config if available)
-    Lock,
+    /// Write rsconstruct.lock: add what is missing and drop what is unused, keeping existing pins (requires config)
+    Lock {
+        /// Re-resolve every entry to its latest release, and pin the
+        /// running rsconstruct
+        #[arg(long)]
+        upgrade: bool,
+    },
     /// Show tool availability statistics (uses config if available)
     Stats,
 }

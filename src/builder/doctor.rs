@@ -312,7 +312,7 @@ impl Builder {
             if !deps.cargo.is_empty() {
                 let installed = crate::tools::installed_cargo_crates(ctx)?;
                 for pkg in &deps.cargo {
-                    if installed.contains(pkg) {
+                    if installed.contains_key(pkg) {
                         record(
                             format!("{pkg} (cargo)"),
                             "ok",

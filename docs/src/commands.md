@@ -84,7 +84,7 @@ rsconstruct build --retry 3                    # Retry failed products up to 3 t
 rsconstruct build --no-mtime                   # Disable mtime pre-check, always compute checksums
 rsconstruct build --no-summary                 # Suppress the build summary
 rsconstruct build --batch-size 10              # Limit batch size for batch-capable processors
-rsconstruct build --verify-tool-versions       # Verify tool versions against .tools.versions
+rsconstruct build --verify-tool-versions       # Verify installed tools against rsconstruct.lock (always on in CI)
 rsconstruct build -t "src/*.c"                 # Only build products matching this glob pattern
 rsconstruct build -d src                       # Only build products under this directory
 rsconstruct build --show-all-config-changes    # Show all config changes, not just output-affecting
@@ -577,8 +577,8 @@ List or check external tools required by declared processors. All subcommands us
 | Subcommand | Config required? |
 |------------|-----------------|
 | `list` | Uses config if available |
-| `check` | Uses config if available |
-| `lock` | Uses config if available |
+| `check` | Yes |
+| `lock` | Yes |
 | `install` | Uses config if available |
 | `install-deps` | Uses config if available |
 | `stats` | Uses config if available |
@@ -589,8 +589,9 @@ rsconstruct tool list              # List all tools known to rsconstruct (from t
 rsconstruct tool list -M           # ...with every install method for each tool
 rsconstruct tool list-configured   # List tools this project's processors require, and which needs them
 rsconstruct tool list-configured -a   # Include tools from disabled processors
-rsconstruct tool check             # Verify tool versions against .tools.versions lock file
-rsconstruct tool lock              # Lock tool versions to .tools.versions
+rsconstruct tool check             # Verify rsconstruct.lock covers the project and installed tools match it
+rsconstruct tool lock              # Write rsconstruct.lock: add missing entries, drop unused ones, keep the rest
+rsconstruct tool lock --upgrade    # Re-resolve every rsconstruct.lock entry to its latest release
 rsconstruct tool install           # Install missing external tools for enabled processors
 rsconstruct tool install ruff      # Install a specific tool by name
 rsconstruct tool install --all     # Install every tool in the registry, ignoring the config (no config needed)
@@ -605,6 +606,11 @@ rsconstruct tool graph             # Show tool-to-processor dependency graph (DO
 rsconstruct tool graph --format mermaid  # Mermaid format
 rsconstruct tool graph --view      # Open tool graph in browser
 ```
+
+In a project, `install`, `install-deps`, `check` and `lock` work from
+`rsconstruct.lock`: installs request each tool at its locked version, and in CI
+a lock that does not match the project is an error. See
+[Tool Lock](tool-lock.md).
 
 `install --all` walks the central registry instead of the project config, so it
 needs no `rsconstruct.toml`. It never skips: a tool with no automatable install
@@ -784,7 +790,7 @@ rsconstruct toml files   # list every config file rsconstruct may read and wheth
 first — the user config (`$XDG_CONFIG_HOME/rsconstruct/config.toml`, see
 [User config](configuration.md#user-config-configrsconstructconfigtoml)),
 `rsconstruct.toml` and `rsconstruct.local.toml` — followed by the other
-project files rsconstruct reads (`.rsconstructignore`, `.tools.versions`),
+project files rsconstruct reads (`.rsconstructignore`, `rsconstruct.lock`),
 each with its resolved path and whether it is present. Use it to find out
 which file a setting is coming from, or where the user config lives on a
 given machine. With `--json` the same list is emitted as an array of

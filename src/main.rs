@@ -264,7 +264,10 @@ fn run() -> (Result<()>, bool) {
                         Builder::new_with_overrides(&ctx, &shared.iset, &shared.pset)?;
                     let builder_new_dur = t.elapsed();
                     let t = Instant::now();
-                    if verify_tool_versions {
+                    // In CI the lock is enforced, not opt-in: a runner whose
+                    // tools differ from the committed lock fails here rather
+                    // than producing a result no other runner reproduces.
+                    if verify_tool_versions || crate::config::running_in_ci() {
                         builder.verify_tool_versions(&ctx)?;
                     }
                     let verify_tools_dur = t.elapsed();

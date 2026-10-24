@@ -27,7 +27,7 @@ RSConstruct does **not** use environment variables from the user's environment t
 
 1. **`rsconstruct.toml`** — all processor configuration (compiler flags, linter args, scan dirs, etc.)
 2. **Source file directives** — per-file flags embedded in comments (e.g., `// EXTRA_COMPILE_FLAGS_BEFORE=-pthread`)
-3. **Tool lock file** — `.tools.versions` locks tool versions so changes are detected
+3. **Tool lock file** — [`rsconstruct.lock`](tool-lock.md) pins the release of every tool rsconstruct installs, enforced in CI
 
 This means:
 
@@ -43,7 +43,7 @@ When implementing a processor:
 
 2. **Never call `cmd.env()`** to pass environment variables to external tools, unless the variable is derived from explicit config (not from `std::env`). The user's environment is inherited by default — the goal is to avoid *adding* env-based configuration on top.
 
-3. **Tool paths come from `PATH`** — RSConstruct does inherit the user's `PATH` to find tools like `gcc`, `ruff`, etc. This is acceptable because each tool's identity is part of the cache key of everything it produces: resolving a different binary, or the same binary with different content, invalidates that processor's cached results. See [`hash_tool_versions`](configuration.md#build). `rsconstruct tool lock` additionally pins exact versions and makes drift a hard error.
+3. **Tool paths come from `PATH`** — RSConstruct does inherit the user's `PATH` to find tools like `gcc`, `ruff`, etc. This is acceptable because each tool's identity is part of the cache key of everything it produces: resolving a different binary, or the same binary with different content, invalidates that processor's cached results. See [`hash_tool_versions`](configuration.md#build). `rsconstruct tool lock` additionally pins exact versions, and `tool check` (always run by a CI build) makes drift a hard error.
 
 4. **Config values, not env vars** — if a tool needs a flag that varies per project, put it in `rsconstruct.toml` under the processor's config section. Config values are hashed into cache keys automatically.
 

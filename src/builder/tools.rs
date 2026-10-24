@@ -152,16 +152,68 @@ pub fn tools_no_config(
     run_tools_command(ctx, &processors, &|_name| true, action, verbose, None)
 }
 
+/// What the project's rsconstruct.lock must hold, for the processors
+/// `is_enabled` selects.
+fn project_wanted(
+    builder: &Builder,
+    processors: &crate::processor::ProcessorMap,
+    is_enabled: &dyn Fn(&str) -> bool,
+) -> Result<tool_lock::Wanted> {
+    tool_lock::collect_wanted(
+        processors,
+        is_enabled,
+        &builder.config.dependencies,
+        std::path::Path::new("."),
+    )
+}
+
+/// The project's lock, synced for an install: filled in outside CI, required
+/// to match in CI. Also returns the locked tools whose installed copy is not
+/// the locked one — in CI those are reinstalled, so a runner image's
+/// preinstalled version never stands in for the locked one. Outside CI
+/// that set is empty: a tool already on the machine is left alone.
+fn lock_for_install(
+    ctx: &crate::build_context::BuildContext,
+    wanted: &tool_lock::Wanted,
+    verbose: bool,
+) -> Result<(
+    tool_lock::ToolLock,
+    std::collections::BTreeSet<(String, String)>,
+)> {
+    let mode = tool_lock::LockMode::for_environment();
+    let synced = tool_lock::sync(ctx, wanted, mode, verbose)?;
+    synced.report();
+    let drift = if mode == tool_lock::LockMode::Locked {
+        tool_lock::mismatches(ctx, &synced.lock, wanted)
+            .into_iter()
+            .map(|m| (m.method, m.name))
+            .collect()
+    } else {
+        std::collections::BTreeSet::new()
+    };
+    Ok((synced.lock, drift))
+}
+
+/// The key a `(method, package)` install has in a mismatch set: Python
+/// names are normalized there, like in the lock.
+fn drift_key(method: &str, package: &str) -> (String, String) {
+    match method {
+        "pip" | "uv" => (
+            "pip".to_string(),
+            crate::config::normalized_distribution_name(package),
+        ),
+        _ => (method.to_string(), package.to_string()),
+    }
+}
+
 impl Builder {
-    /// Verify tool versions against .tools.versions lock file.
-    /// Called at the start of build unless --ignore-tool-versions is passed.
+    /// Check that rsconstruct.lock covers the project and that the installed
+    /// tools are the locked ones. Run by `build` in CI and with
+    /// `--verify-tool-versions`.
     pub fn verify_tool_versions(&self, ctx: &crate::build_context::BuildContext) -> Result<()> {
         let processors = self.create_processors()?;
-        let tool_commands = tool_lock::collect_tool_commands(&processors, &|_name| true);
-        if tool_commands.is_empty() {
-            return Ok(());
-        }
-        tool_lock::verify_lock_file(ctx, &tool_commands)
+        let wanted = project_wanted(self, &processors, &|_name| true)?;
+        tool_lock::verify(ctx, &wanted).map(|_| ())
     }
 
     /// Handle `rsconstruct tool` subcommands
@@ -369,77 +421,46 @@ fn run_tools_command(
             }
         }
         ToolAction::Check => {
-            let tool_commands = tool_lock::collect_tool_commands(processors, is_enabled);
-            tool_lock::verify_lock_file(ctx, &tool_commands)?;
-            let lock = tool_lock::read_lock_file()?;
+            let builder = builder.ok_or_else(|| {
+                anyhow::anyhow!("tool check requires a project with rsconstruct.toml")
+            })?;
+            let wanted = project_wanted(builder, processors, is_enabled)?;
+            tool_lock::verify(ctx, &wanted)?;
             if crate::json_output::is_json_mode() {
-                let entries: Vec<serde_json::Value> = lock
-                    .as_ref()
-                    .map(|l| {
-                        l.tools
-                            .iter()
-                            .map(|(name, info)| {
-                                let version =
-                                    tool_lock::extract_semver(&info.version_output).unwrap_or("?");
-                                serde_json::json!({
-                                    "tool": name,
-                                    "status": "ok",
-                                    "version": version,
-                                })
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default();
                 let out = serde_json::json!({
+                    "lock_file": tool_lock::LOCK_FILE,
                     "match": true,
-                    "tools": entries,
                 });
                 println!("{}", serde_json::to_string_pretty(&out)?);
             } else {
-                if verbose && let Some(lock) = &lock {
-                    for (name, info) in &lock.tools {
-                        let version =
-                            tool_lock::extract_semver(&info.version_output).unwrap_or("?");
-                        println!("{} {} {}", name, color::green("ok"), color::dim(version));
-                    }
-                }
-                println!("{}", color::green("Tool versions match lock file."));
+                println!(
+                    "{}",
+                    color::green(&format!("Installed tools match {}.", tool_lock::LOCK_FILE))
+                );
             }
         }
-        ToolAction::Lock => {
-            let tool_commands = tool_lock::collect_tool_commands(processors, is_enabled);
-            let lock = tool_lock::create_lock(ctx, &tool_commands)?;
-            tool_lock::write_lock_file(&lock)?;
+        ToolAction::Lock { upgrade } => {
+            let builder = builder.ok_or_else(|| {
+                anyhow::anyhow!("tool lock requires a project with rsconstruct.toml")
+            })?;
+            let wanted = project_wanted(builder, processors, is_enabled)?;
+            let mode = if upgrade {
+                tool_lock::LockMode::Upgrade
+            } else {
+                tool_lock::LockMode::Fill
+            };
+            let synced = tool_lock::sync(ctx, &wanted, mode, verbose)?;
             if crate::json_output::is_json_mode() {
-                let entries: Vec<serde_json::Value> = lock
-                    .tools
-                    .iter()
-                    .map(|(name, info)| {
-                        let version =
-                            tool_lock::extract_semver(&info.version_output).unwrap_or("?");
-                        serde_json::json!({
-                            "tool": name,
-                            "status": "locked",
-                            "version": version,
-                        })
-                    })
-                    .collect();
                 let out = serde_json::json!({
-                    "lock_file": ".tools.versions",
-                    "tools": entries,
+                    "lock_file": tool_lock::LOCK_FILE,
+                    "created": synced.created,
+                    "changes": synced.changes,
                 });
                 println!("{}", serde_json::to_string_pretty(&out)?);
+            } else if synced.changes.is_empty() {
+                println!("{} is up to date.", color::bold(tool_lock::LOCK_FILE));
             } else {
-                for (name, info) in &lock.tools {
-                    let version = tool_lock::extract_semver(&info.version_output).unwrap_or("?");
-                    println!(
-                        "{} {} {}",
-                        name,
-                        color::green("locked"),
-                        color::dim(version)
-                    );
-                }
-                println!("Wrote {}", color::bold(".tools.versions"));
+                synced.report();
             }
         }
         ToolAction::Graph { format, view } => {
@@ -579,6 +600,16 @@ fn run_tools_command(
             }
         }
         ToolAction::Install { name, all, .. } => {
+            // In a project, installs follow rsconstruct.lock. `--all` is the
+            // config-independent registry sweep and has no lock to follow.
+            let (lock, drift) = match builder {
+                Some(b) if !all => {
+                    let wanted = project_wanted(b, processors, is_enabled)?;
+                    let (lock, drift) = lock_for_install(ctx, &wanted, verbose)?;
+                    (Some(lock), drift)
+                }
+                _ => (None, std::collections::BTreeSet::new()),
+            };
             // Collect missing tools with their install info
             let missing_tools: Vec<(&str, &crate::tools::InstallMethod)> = if all {
                 // Registry-wide: every tool rsconstruct knows how to install,
@@ -685,7 +716,12 @@ fn run_tools_command(
                     if !is_installable_tool_name(tool_name) {
                         continue;
                     }
-                    if which::which(tool_name).is_ok() {
+                    // Present on PATH counts as installed, unless CI found
+                    // it at a version other than the locked one.
+                    let drifted = crate::tools::tool_info(tool_name)
+                        .and_then(|info| info.install_methods.first())
+                        .is_some_and(|m| drift.contains(&drift_key(m.method, m.package)));
+                    if which::which(tool_name).is_ok() && !drifted {
                         continue;
                     }
                     match crate::tools::tool_info(tool_name) {
@@ -718,12 +754,15 @@ fn run_tools_command(
 
             // Group by install method for batch installation. Methods
             // that don't batch (binary, manual) keep one entry per package.
-            let mut by_method: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+            // Each package is requested at its locked version when the
+            // project's lock has one.
+            let mut by_method: BTreeMap<&str, Vec<String>> = BTreeMap::new();
             for (_tool_name, method) in &missing_tools {
-                by_method
-                    .entry(method.method)
-                    .or_default()
-                    .push(method.package);
+                let package = lock.as_ref().map_or_else(
+                    || method.package.to_string(),
+                    |l| l.pinned(method.method, method.package),
+                );
+                by_method.entry(method.method).or_default().push(package);
             }
 
             // Display the install plan
@@ -739,18 +778,20 @@ fn run_tools_command(
             let ctx = crate::tools::InstallCtx {
                 verbose,
                 use_eatmydata: install_use_eatmydata,
+                binary_pins: lock.as_ref().map(|l| l.binary.clone()).unwrap_or_default(),
             };
             let mut any_failed = false;
             for method in method_order {
                 let Some(packages) = by_method.get(method) else {
                     continue;
                 };
+                let packages: Vec<&str> = packages.iter().map(String::as_str).collect();
                 println!(
                     "  {} {}",
                     color::bold(&format!("[{method}]")),
                     packages.join(", ")
                 );
-                for argv in crate::tools::describe(method, packages) {
+                for argv in crate::tools::describe(method, &packages) {
                     println!("       {}", color::dim(&argv.join(" ")));
                 }
             }
@@ -780,7 +821,8 @@ fn run_tools_command(
                 let Some(packages) = by_method.get(method) else {
                     continue;
                 };
-                match crate::tools::run(method, packages, &ctx) {
+                let packages: Vec<&str> = packages.iter().map(String::as_str).collect();
+                match crate::tools::run(method, &packages, &ctx) {
                     Ok(()) => println!(
                         "{} [{}] {}",
                         color::green("OK"),
@@ -818,9 +860,14 @@ fn run_tools_command(
             interactive,
             no_eatmydata,
         } => {
-            let config = builder.map(|b| &b.config.dependencies).ok_or_else(|| {
+            let builder = builder.ok_or_else(|| {
                 anyhow::anyhow!("install-deps requires a project with rsconstruct.toml")
             })?;
+            let config = &builder.config.dependencies;
+            // Every package below is requested at its rsconstruct.lock
+            // version; in CI one installed at another version is reinstalled.
+            let wanted = project_wanted(builder, processors, is_enabled)?;
+            let (lock, drift) = lock_for_install(ctx, &wanted, verbose)?;
             // eatmydata: off by default; turned on by the post-config
             // phase hook when CI=true. CLI --no-eatmydata overrides.
             // Wrap also requires eatmydata to be on PATH.
@@ -855,6 +902,7 @@ fn run_tools_command(
                             &crate::tools::InstallCtx {
                                 verbose,
                                 use_eatmydata: false,
+                                binary_pins: BTreeMap::new(),
                             },
                         )
                         .context(
@@ -868,6 +916,9 @@ fn run_tools_command(
                     config.effective_pip(std::path::Path::new("."))?
                 }
             };
+            // uv.lock's pins already carry `==`, so only the bare
+            // `[dependencies].pip` names pick up a version here.
+            let pip_deps: Vec<String> = pip_deps.iter().map(|r| lock.pinned("pip", r)).collect();
 
             // The Node set comes from package.json (and, by default, the
             // closure package-lock.json pins); [dependencies].npm entries
@@ -944,7 +995,8 @@ fn run_tools_command(
                             }
                             let name = crate::config::normalized_distribution_name(pkg);
                             let installed =
-                                package_probe_succeeds(ctx, "pip", &["show", name.as_str()]);
+                                package_probe_succeeds(ctx, "pip", &["show", name.as_str()])
+                                    && !drift.contains(&drift_key("pip", pkg));
                             if installed {
                                 skipped.push(format!("[pip] {pkg}"));
                             }
@@ -962,13 +1014,14 @@ fn run_tools_command(
                 .npm
                 .iter()
                 .filter(|pkg| {
-                    let installed = package_probe_succeeds(ctx, "npm", &["ls", "-g", pkg]);
+                    let installed = package_probe_succeeds(ctx, "npm", &["ls", "-g", pkg])
+                        && !drift.contains(&drift_key("npm", pkg));
                     if installed {
                         skipped.push(format!("[npm] {pkg}"));
                     }
                     !installed
                 })
-                .cloned()
+                .map(|pkg| lock.pinned("npm", pkg))
                 .collect();
             if !npm_missing.is_empty() {
                 groups.push(("npm", npm_missing));
@@ -1014,13 +1067,14 @@ fn run_tools_command(
                 .gem
                 .iter()
                 .filter(|pkg| {
-                    let installed = package_probe_succeeds(ctx, "gem", &["list", "-i", pkg]);
+                    let installed = package_probe_succeeds(ctx, "gem", &["list", "-i", pkg])
+                        && !drift.contains(&drift_key("gem", pkg));
                     if installed {
                         skipped.push(format!("[gem] {pkg}"));
                     }
                     !installed
                 })
-                .cloned()
+                .map(|pkg| lock.pinned("gem", pkg))
                 .collect();
             if !gem_missing.is_empty() {
                 groups.push(("gem", gem_missing));
@@ -1035,13 +1089,14 @@ fn run_tools_command(
                     .cargo
                     .iter()
                     .filter(|pkg| {
-                        let present = installed.contains(pkg.as_str());
+                        let present = installed.contains_key(pkg.as_str())
+                            && !drift.contains(&drift_key("cargo", pkg));
                         if present {
                             skipped.push(format!("[cargo] {pkg}"));
                         }
                         !present
                     })
-                    .cloned()
+                    .map(|pkg| lock.pinned("cargo", pkg))
                     .collect();
                 if !cargo_missing.is_empty() {
                     groups.push(("cargo", cargo_missing));
@@ -1094,6 +1149,7 @@ fn run_tools_command(
             let ctx = crate::tools::InstallCtx {
                 verbose,
                 use_eatmydata,
+                binary_pins: lock.binary,
             };
             let mut any_failed = false;
             for (method, packages) in &groups {

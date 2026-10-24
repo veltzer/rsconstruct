@@ -8,6 +8,7 @@
 - [Commands](commands.md)
 - [Shell Completions](completions.md)
 - [Configuration](configuration.md)
+- [Tool Lock](tool-lock.md)
 - [Remote Caching](remote-caching.md)
 - [Project Structure](project-structure.md)
 - [Dependency Analyzers](analyzers.md)

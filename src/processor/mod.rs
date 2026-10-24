@@ -1124,14 +1124,6 @@ pub trait Processor: Sync + Send {
         Vec::new()
     }
 
-    /// Return tool version commands: Vec of (`tool_name`, `args_to_get_version`).
-    fn tool_version_commands(&self) -> Vec<(String, Vec<String>)> {
-        self.required_tools()
-            .into_iter()
-            .map(|tool| (tool, vec!["--version".to_string()]))
-            .collect()
-    }
-
     /// Execute multiple products in one invocation.
     /// Only called when the plugin's `supports_batch` flag is true AND the
     /// user config has `batch = true`.

@@ -140,7 +140,7 @@ pub fn config_files() -> Vec<ConfigFile> {
             None,
             "tool lock",
             Some(in_project(crate::tool_lock::LOCK_FILE)),
-            "pinned tool versions, verified on request during build",
+            "pinned tool versions: written by `tool lock`, installed from, enforced in CI",
         ),
     ]
 }

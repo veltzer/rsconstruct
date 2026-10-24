@@ -56,10 +56,16 @@ pub fn setup_test_project() -> TempDir {
 /// (`reject_dot_src_dirs = true`, say) would otherwise change what the
 /// binary under test accepts. A test that wants a user config sets
 /// XDG_CONFIG_HOME itself, which overrides this because later env() calls win.
+///
+/// `CI` is removed for the same reason: in CI the binary enforces
+/// rsconstruct.lock, which no fixture project carries, so a suite running on
+/// a runner would otherwise test different behavior than the same suite run
+/// locally. A test about CI behavior sets `CI` itself.
 pub fn rsconstruct_command(dir: &Path) -> Command {
     let rsconstruct_path = env!("CARGO_BIN_EXE_rsconstruct");
     let mut cmd = Command::new(rsconstruct_path);
     cmd.env("XDG_CONFIG_HOME", no_user_config_dir());
+    cmd.env_remove("CI");
     cmd.current_dir(dir);
     cmd
 }

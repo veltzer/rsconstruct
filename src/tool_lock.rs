@@ -1,169 +1,853 @@
+//! `rsconstruct.lock`: the exact versions of the external tools a project
+//! builds with, the way `Cargo.lock` and `uv.lock` record its libraries.
+//!
+//! `rsconstruct.toml` names tools by bare name — a processor's tools, the
+//! `[dependencies]` lists — and a bare name alone would let every CI runner
+//! install whatever release was newest that day. This file records which
+//! release the project builds with. It is written by `rsconstruct tool
+//! lock`, read by `tool install`, `tool install-deps` and `tool check`, and
+//! checked by `build` in CI. The CI workflows also read its `[rsconstruct]`
+//! table to download the rsconstruct release it names.
+//!
+//! What is locked is what rsconstruct itself installs from a registry:
+//! crates (`cargo`), `PyPI` packages (`pip`), global npm packages, gems, and
+//! the release assets of the `binary` install method (by URL and SHA-256).
+//! Packages a project lockfile already pins (uv.lock, package-lock.json)
+//! belong to that file; system packages (apt and friends) come with the OS
+//! image and are not locked.
+//!
+//! Outside CI a missing or incomplete lock is filled in (only the missing
+//! entries are resolved; nothing already locked moves). In CI (`CI=true`)
+//! it is an error: a lock written on a runner is never committed, so each
+//! runner would resolve its own versions. Moving locked entries to newer
+//! releases is `rsconstruct tool lock --upgrade` and nothing else.
+
 use anyhow::{Context, Result};
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 use crate::build_context::BuildContext;
 use crate::processor::ProcessorMap;
 
-pub const LOCK_FILE: &str = ".tools.versions";
+pub const LOCK_FILE: &str = "rsconstruct.lock";
+/// The file `rsconstruct tool lock` wrote before rsconstruct.lock existed.
+/// It recorded machine-local tool paths, so it cannot be converted; finding
+/// one is an error that says to delete it.
+pub const LEGACY_LOCK_FILE: &str = ".tools.versions";
 const LOCK_VERSION: u32 = 1;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ToolLockFile {
+const LOCK_HEADER: &str = "\
+# rsconstruct.lock: the exact tool versions this project builds with.
+# Written by `rsconstruct tool lock`; move to newer releases with
+# `rsconstruct tool lock --upgrade`. Commit this file; do not edit it by hand.
+";
+
+/// The registry-backed install methods whose versions the lock records,
+/// besides `binary`.
+const VERSIONED_METHODS: [&str; 4] = ["cargo", "gem", "npm", "pip"];
+
+/// The parsed contents of rsconstruct.lock.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ToolLock {
     pub version: u32,
-    pub locked_at: String,
-    pub tools: BTreeMap<String, LockedTool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rsconstruct: Option<SelfPin>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub cargo: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub gem: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub npm: BTreeMap<String, String>,
+    /// Keyed by PEP 503-normalized distribution name.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub pip: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub binary: BTreeMap<String, BinaryPin>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct LockedTool {
-    pub path: String,
-    pub version: Option<String>,
-    pub version_output: String,
-    pub version_args: Vec<String>,
+/// The rsconstruct release the project builds with: what CI downloads, and
+/// what `rsconstruct tool lock` was run with.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SelfPin {
+    pub version: String,
 }
 
-/// Extract the first version string from version output.
-/// Matches `X.Y.Z`, `X.Y`, or bare `X` (in that priority order).
-pub fn extract_semver(version_output: &str) -> Option<&str> {
-    let re = regex::Regex::new(r"\d+\.\d+\.\d+|\d+\.\d+|\d+").unwrap();
-    re.find(version_output).map(|m| m.as_str())
+/// One `binary` recipe, pinned: the exact asset to download, the hash it
+/// must have, and how to recognize the installed result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BinaryPin {
+    pub url: String,
+    /// SHA-256 of the downloaded file (the archive, for an archive).
+    pub sha256: String,
+    /// SHA-256 of the installed executable, for every recipe but a `.deb`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub executable_sha256: Option<String>,
+    /// A `.deb`'s package name and version, as dpkg will report them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deb_package: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deb_version: Option<String>,
 }
 
-/// Query a single tool for its version information.
-pub fn query_tool_version(
-    ctx: &BuildContext,
-    tool_name: &str,
-    version_args: &[String],
-) -> Result<LockedTool> {
-    let path =
-        which::which(tool_name).with_context(|| format!("Tool not found on PATH: {tool_name}"))?;
-
-    let mut cmd = Command::new(&path);
-    for arg in version_args {
-        cmd.arg(arg);
+impl ToolLock {
+    fn empty() -> Self {
+        Self {
+            version: LOCK_VERSION,
+            ..Self::default()
+        }
     }
 
-    let output = crate::processor::run_command_capture(ctx, &cmd).with_context(|| {
-        format!(
-            "Failed to run: {} {}",
-            path.display(),
-            version_args.join(" ")
-        )
-    })?;
-
-    // Some tools write version to stdout, others to stderr; capture both
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-    let version_output = if stdout.is_empty() {
-        stderr
-    } else if stderr.is_empty() {
-        stdout
-    } else {
-        format!("{stdout}\n{stderr}")
-    };
-
-    if version_output.is_empty() {
-        anyhow::bail!(
-            "Tool '{}' produced no version output with args: {}",
-            tool_name,
-            version_args.join(" ")
-        );
+    fn versions(&self, method: &str) -> &BTreeMap<String, String> {
+        match method {
+            "cargo" => &self.cargo,
+            "gem" => &self.gem,
+            "npm" => &self.npm,
+            "pip" | "uv" => &self.pip,
+            other => unreachable!("not a versioned lock method: {other}"),
+        }
     }
 
-    let version = extract_semver(&version_output).map(String::from);
+    fn versions_mut(&mut self, method: &str) -> &mut BTreeMap<String, String> {
+        match method {
+            "cargo" => &mut self.cargo,
+            "gem" => &mut self.gem,
+            "npm" => &mut self.npm,
+            "pip" | "uv" => &mut self.pip,
+            other => unreachable!("not a versioned lock method: {other}"),
+        }
+    }
 
-    Ok(LockedTool {
-        path: path.display().to_string(),
-        version,
-        version_output,
-        version_args: version_args.to_vec(),
-    })
+    /// `package` as an install request for `method`, pinned to its locked
+    /// version: `name@1.2.3` for cargo and npm, `name==1.2.3` for pip/uv
+    /// (extras kept), `name:1.2.3` for gem. Returned unchanged when the
+    /// lock has no entry for it, or when the entry already carries its own
+    /// version constraint, which then stands as written.
+    pub fn pinned(&self, method: &str, package: &str) -> String {
+        if !VERSIONED_METHODS.contains(&method) && method != "uv" {
+            return package.to_string();
+        }
+        if !is_bare(method, package) {
+            return package.to_string();
+        }
+        let Some(version) = self.versions(method).get(&lock_key(method, package)) else {
+            return package.to_string();
+        };
+        match method {
+            "pip" | "uv" => format!("{package}=={version}"),
+            "gem" => format!("{package}:{version}"),
+            _ => format!("{package}@{version}"),
+        }
+    }
 }
 
-/// Collect tool version commands from all enabled processors, deduplicated.
-pub fn collect_tool_commands(
+/// The key `package` is locked under: the PEP 503-normalized name for a
+/// Python package (extras dropped), the name itself otherwise.
+fn lock_key(method: &str, package: &str) -> String {
+    match method {
+        "pip" | "uv" => crate::config::normalized_distribution_name(package),
+        _ => package.to_string(),
+    }
+}
+
+/// Whether `package` is a bare name the lock can pin, rather than a request
+/// that already says which version it wants (`ruff>=0.5`, `pkg@1.0`,
+/// `rake:13.0`).
+fn is_bare(method: &str, package: &str) -> bool {
+    match method {
+        "pip" | "uv" => !package.contains(['<', '>', '=', '!', '~', ';', '@', ' ']),
+        // A scoped package starts with '@'; only a later '@' is a version.
+        "npm" => package.rfind('@').is_none_or(|i| i == 0),
+        "gem" => !package.contains(':'),
+        "cargo" => !package.contains('@'),
+        _ => false,
+    }
+}
+
+/// Everything a project's lock must hold: the tools its configured
+/// processors install from a registry and its `[dependencies]` packages,
+/// by install method.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Wanted {
+    pub cargo: BTreeSet<String>,
+    pub gem: BTreeSet<String>,
+    pub npm: BTreeSet<String>,
+    /// PEP 503-normalized distribution names.
+    pub pip: BTreeSet<String>,
+    pub binary: BTreeSet<String>,
+}
+
+impl Wanted {
+    fn names(&self, method: &str) -> &BTreeSet<String> {
+        match method {
+            "cargo" => &self.cargo,
+            "gem" => &self.gem,
+            "npm" => &self.npm,
+            "pip" => &self.pip,
+            "binary" => &self.binary,
+            other => unreachable!("not a lock method: {other}"),
+        }
+    }
+
+    /// Record `package` under `method` when the lock can pin it. Returns
+    /// whether it was recorded.
+    fn add(&mut self, method: &str, package: &str) -> bool {
+        let set = match method {
+            "cargo" => &mut self.cargo,
+            "gem" => &mut self.gem,
+            "npm" => &mut self.npm,
+            "pip" | "uv" => &mut self.pip,
+            "binary" => {
+                if !crate::tools::binary_is_pinnable(package) {
+                    return false;
+                }
+                self.binary.insert(package.to_string());
+                return true;
+            }
+            _ => return false,
+        };
+        if !is_bare(method, package) {
+            return false;
+        }
+        set.insert(lock_key(method, package));
+        true
+    }
+}
+
+/// Collect what the project's lock must hold.
+///
+/// Processor tools are taken by the install method `tool install` uses for
+/// them (the registry's first). A processor tool that a project lockfile
+/// already pins — a Python package in uv.lock, a Node package in
+/// package-lock.json — is left to that file: install-deps installs it from
+/// there, and a second pin here could only disagree with it.
+/// `[dependencies]` entries are always included; install-deps installs them
+/// with these pins.
+pub fn collect_wanted(
     processors: &ProcessorMap,
     enabled: &dyn Fn(&str) -> bool,
-) -> Vec<(String, Vec<String>)> {
-    let mut seen = std::collections::HashSet::new();
-    let mut result = Vec::new();
+    deps: &crate::config::DependenciesConfig,
+    root: &Path,
+) -> Result<Wanted> {
+    let uv_owned: BTreeSet<String> = {
+        let uv_lock = root.join("uv.lock");
+        if deps.pip_source == crate::config::PipSource::UvLock && uv_lock.exists() {
+            crate::config::uv_lock_pinned_deps(&uv_lock)?
+                .iter()
+                .map(|req| crate::config::normalized_distribution_name(req))
+                .collect()
+        } else {
+            BTreeSet::new()
+        }
+    };
+    let npm_owned: BTreeSet<String> = {
+        let package_lock = root.join("package-lock.json");
+        if package_lock.exists() {
+            crate::config::package_lock_pins(&package_lock)?
+                .into_keys()
+                .collect()
+        } else {
+            BTreeSet::new()
+        }
+    };
 
+    let mut wanted = Wanted::default();
     let mut names: Vec<&String> = processors.keys().collect();
     names.sort();
-
     for name in names {
         if !enabled(name) {
             continue;
         }
-        for (tool, args) in processors[name].tool_version_commands() {
-            if seen.insert(tool.clone()) {
-                result.push((tool, args));
+        for tool in processors[name].required_tools() {
+            // A repo-local script (`scripts/check.py`) is not installed.
+            if tool.contains('/') {
+                continue;
+            }
+            let Some(method) =
+                crate::tools::tool_info(&tool).and_then(|info| info.install_methods.first())
+            else {
+                continue;
+            };
+            let key = lock_key(method.method, method.package);
+            let owned = match method.method {
+                "pip" => uv_owned.contains(&key),
+                "npm" => npm_owned.contains(&key),
+                _ => false,
+            };
+            if !owned {
+                wanted.add(method.method, method.package);
             }
         }
     }
-
-    result.sort_by(|a, b| a.0.cmp(&b.0));
-    result
-}
-
-/// Query all tools and build a lock file structure.
-pub fn create_lock(
-    ctx: &BuildContext,
-    tool_commands: &[(String, Vec<String>)],
-) -> Result<ToolLockFile> {
-    let mut tools = BTreeMap::new();
-
-    for (tool_name, version_args) in tool_commands {
-        let locked = query_tool_version(ctx, tool_name, version_args)?;
-        tools.insert(tool_name.clone(), locked);
+    for (method, list) in [
+        ("cargo", &deps.cargo),
+        ("gem", &deps.gem),
+        ("npm", &deps.npm),
+        ("pip", &deps.pip),
+    ] {
+        for package in list {
+            wanted.add(method, package);
+        }
     }
-
-    let locked_at = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
-
-    Ok(ToolLockFile {
-        version: LOCK_VERSION,
-        locked_at,
-        tools,
-    })
+    Ok(wanted)
 }
 
-/// Write the lock file to disk atomically (temp file + rename), so a crash or
-/// concurrent reader never observes a truncated lock file.
-pub fn write_lock_file(lock: &ToolLockFile) -> Result<()> {
-    let path = Path::new(LOCK_FILE);
-    let json = serde_json::to_string_pretty(lock).context("Failed to serialize lock file")?;
-    let tmp = format!("{LOCK_FILE}.tmp-{}", std::process::id());
-    fs::write(&tmp, format!("{json}\n")).with_context(|| format!("Failed to write {tmp}"))?;
-    fs::rename(&tmp, path)
-        .with_context(|| format!("Failed to move {tmp} into place as {}", path.display()))?;
+/// Fail when the pre-rsconstruct.lock file is still around.
+fn reject_legacy_lock() -> Result<()> {
+    if Path::new(LEGACY_LOCK_FILE).exists() {
+        return Err(crate::exit_code::config_error(format!(
+            "{LEGACY_LOCK_FILE} is no longer read: rsconstruct.lock replaced it, and its \
+             machine-local tool paths cannot be converted. Delete {LEGACY_LOCK_FILE} and run \
+             `rsconstruct tool lock`."
+        )));
+    }
     Ok(())
 }
 
-/// Read the lock file from disk. Returns None if it doesn't exist.
-pub fn read_lock_file() -> Result<Option<ToolLockFile>> {
+/// Read rsconstruct.lock. Returns None if it doesn't exist.
+pub fn read_lock_file() -> Result<Option<ToolLock>> {
     let path = Path::new(LOCK_FILE);
     if !path.exists() {
         return Ok(None);
     }
     let content =
         fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
-    let lock: ToolLockFile = serde_json::from_str(&content)
-        .with_context(|| format!("Failed to parse {}", path.display()))?;
-    Ok(Some(lock))
+    parse_lock(&content).map(Some)
 }
 
-/// Identify a single tool for cache-keying purposes.
-///
-/// Prefers the locked `version_output` when a lock file pins the tool: that
-/// is the user's declared identity for it, and it stays stable across
-/// reinstalls of the same version. Otherwise identifies the resolved binary
-/// by `(path, size, mtime)` — no `--version` subprocess and, critically, no
-/// read of the file's bytes.
+fn parse_lock(content: &str) -> Result<ToolLock> {
+    let lock: ToolLock = toml::from_str(content)
+        .map_err(|e| crate::exit_code::config_error(format!("Failed to parse {LOCK_FILE}: {e}")))?;
+    if lock.version != LOCK_VERSION {
+        return Err(crate::exit_code::config_error(format!(
+            "{LOCK_FILE} has format version {}, but this rsconstruct reads version \
+             {LOCK_VERSION}",
+            lock.version
+        )));
+    }
+    Ok(lock)
+}
+
+fn render_lock(lock: &ToolLock) -> Result<String> {
+    let body = toml::to_string(lock).context("Failed to serialize rsconstruct.lock")?;
+    Ok(format!("{LOCK_HEADER}\n{body}"))
+}
+
+/// Write rsconstruct.lock atomically (temp file + rename), so a crash or
+/// concurrent reader never observes a truncated lock.
+fn write_lock_file(lock: &ToolLock) -> Result<()> {
+    let path = Path::new(LOCK_FILE);
+    let text = render_lock(lock)?;
+    let tmp = format!("{LOCK_FILE}.tmp-{}", std::process::id());
+    fs::write(&tmp, text).with_context(|| format!("Failed to write {tmp}"))?;
+    fs::rename(&tmp, path)
+        .with_context(|| format!("Failed to move {tmp} into place as {}", path.display()))?;
+    Ok(())
+}
+
+/// Lock entries as `(method, name)` pairs.
+type Entries = Vec<(String, String)>;
+
+/// The entries `wanted` needs that `lock` lacks, and the ones `lock` holds
+/// that nothing needs any more.
+fn diff(lock: &ToolLock, wanted: &Wanted) -> (Entries, Entries) {
+    let mut missing = Vec::new();
+    let mut stale = Vec::new();
+    for method in VERSIONED_METHODS {
+        let locked = lock.versions(method);
+        let names = wanted.names(method);
+        missing.extend(
+            names
+                .iter()
+                .filter(|n| !locked.contains_key(*n))
+                .map(|n| (method.to_string(), n.clone())),
+        );
+        stale.extend(
+            locked
+                .keys()
+                .filter(|n| !names.contains(*n))
+                .map(|n| (method.to_string(), n.clone())),
+        );
+    }
+    missing.extend(
+        wanted
+            .binary
+            .iter()
+            .filter(|n| !lock.binary.contains_key(*n))
+            .map(|n| ("binary".to_string(), n.clone())),
+    );
+    stale.extend(
+        lock.binary
+            .keys()
+            .filter(|n| !wanted.binary.contains(*n))
+            .map(|n| ("binary".to_string(), n.clone())),
+    );
+    (missing, stale)
+}
+
+/// The latest release of `name` in `method`'s registry.
+fn resolve_version(method: &str, name: &str) -> Result<String> {
+    let (url, pointer) = match method {
+        "cargo" => (
+            format!("https://crates.io/api/v1/crates/{name}"),
+            "/crate/max_stable_version",
+        ),
+        "gem" => (
+            format!("https://rubygems.org/api/v1/versions/{name}/latest.json"),
+            "/version",
+        ),
+        // A scoped name's '/' is part of the package, not a path step.
+        "npm" => (
+            format!(
+                "https://registry.npmjs.org/{}/latest",
+                name.replace('/', "%2F")
+            ),
+            "/version",
+        ),
+        "pip" => (
+            format!("https://pypi.org/pypi/{name}/json"),
+            "/info/version",
+        ),
+        other => unreachable!("not a versioned lock method: {other}"),
+    };
+    let json = crate::download::get_json(&url)?;
+    json.pointer(pointer)
+        .and_then(serde_json::Value::as_str)
+        .filter(|v| !v.is_empty() && *v != "unknown")
+        .map(str::to_string)
+        .with_context(|| format!("{url} names no released version of {method} package {name}"))
+}
+
+/// Fill `lock`'s entry for `(method, name)` from the registry.
+fn resolve_into(
+    ctx: &BuildContext,
+    lock: &mut ToolLock,
+    method: &str,
+    name: &str,
+    verbose: bool,
+) -> Result<()> {
+    if verbose {
+        println!("Resolving {method} {name}");
+    }
+    if method == "binary" {
+        let pin = crate::tools::lock_binary(ctx, name, verbose)
+            .with_context(|| format!("Failed to lock binary {name}"))?;
+        lock.binary.insert(name.to_string(), pin);
+    } else {
+        let version = resolve_version(method, name)
+            .with_context(|| format!("Failed to lock {method} package {name}"))?;
+        lock.versions_mut(method).insert(name.to_string(), version);
+    }
+    Ok(())
+}
+
+/// How a command treats a lock that is missing or does not cover the
+/// project.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LockMode {
+    /// The lock must exist, cover the project exactly, and name the running
+    /// rsconstruct; anything else is an error. CI.
+    Locked,
+    /// Resolve and add what is missing, drop what nothing needs; never move
+    /// an entry that is already locked. Outside CI.
+    Fill,
+    /// Resolve every entry afresh. `tool lock --upgrade`.
+    Upgrade,
+}
+
+impl LockMode {
+    /// The mode for installs and builds: Locked in CI, Fill elsewhere.
+    pub fn for_environment() -> Self {
+        if crate::config::running_in_ci() {
+            Self::Locked
+        } else {
+            Self::Fill
+        }
+    }
+}
+
+/// The lock after `sync`, and what syncing changed in it.
+pub struct Synced {
+    pub lock: ToolLock,
+    /// No lock existed before; this one was just written.
+    pub created: bool,
+    /// One `+ method name version`, `- method name` or
+    /// `~ method name old -> new` line per change.
+    pub changes: Vec<String>,
+}
+
+impl Synced {
+    /// Print what changed, unless nothing did.
+    pub fn report(&self) {
+        if self.changes.is_empty() {
+            return;
+        }
+        for line in &self.changes {
+            println!("  {line}");
+        }
+        if self.created {
+            println!("Created {LOCK_FILE}; commit it.");
+        } else {
+            println!("Updated {LOCK_FILE}; commit it.");
+        }
+    }
+}
+
+fn entry_label(lock: &ToolLock, method: &str, name: &str) -> String {
+    if method == "binary" {
+        lock.binary
+            .get(name)
+            .map_or_else(String::new, |p| p.url.clone())
+    } else {
+        lock.versions(method).get(name).cloned().unwrap_or_default()
+    }
+}
+
+/// Bring rsconstruct.lock in line with `wanted` according to `mode`, and
+/// return it.
+pub fn sync(ctx: &BuildContext, wanted: &Wanted, mode: LockMode, verbose: bool) -> Result<Synced> {
+    reject_legacy_lock()?;
+    let existing = read_lock_file()?;
+    let running = env!("CARGO_PKG_VERSION");
+
+    if mode == LockMode::Locked {
+        let Some(lock) = existing else {
+            return Err(lock_error(format!(
+                "No {LOCK_FILE} found. Run `rsconstruct tool lock` outside CI and commit it."
+            )));
+        };
+        let (missing, stale) = diff(&lock, wanted);
+        let mut problems: Vec<String> = Vec::new();
+        problems.extend(
+            missing
+                .iter()
+                .map(|(m, n)| format!("{m} {n} — needed but not locked")),
+        );
+        problems.extend(
+            stale
+                .iter()
+                .map(|(m, n)| format!("{m} {n} — locked but no longer needed")),
+        );
+        match &lock.rsconstruct {
+            None => problems.push("rsconstruct — no [rsconstruct] version".to_string()),
+            Some(pin) if pin.version != running => problems.push(format!(
+                "rsconstruct — locked {}, running {running}",
+                pin.version
+            )),
+            Some(_) => {}
+        }
+        if !problems.is_empty() {
+            return Err(lock_error(format!(
+                "{LOCK_FILE} does not match this project (run `rsconstruct tool lock` \
+                 outside CI and commit the result):\n{}",
+                problems.join("\n")
+            )));
+        }
+        return Ok(Synced {
+            lock,
+            created: false,
+            changes: Vec::new(),
+        });
+    }
+
+    let created = existing.is_none();
+    let before = existing.unwrap_or_else(ToolLock::empty);
+    let mut lock = if mode == LockMode::Upgrade {
+        ToolLock::empty()
+    } else {
+        before.clone()
+    };
+    let (missing, stale) = diff(&lock, wanted);
+    for (method, name) in &stale {
+        if method == "binary" {
+            lock.binary.remove(name);
+        } else {
+            lock.versions_mut(method).remove(name);
+        }
+    }
+    for (method, name) in &missing {
+        resolve_into(ctx, &mut lock, method, name, verbose)?;
+    }
+    if mode == LockMode::Upgrade || lock.rsconstruct.is_none() {
+        lock.rsconstruct = Some(SelfPin {
+            version: running.to_string(),
+        });
+    }
+
+    let changes = describe_changes(&before, &lock);
+    if created || lock != before {
+        write_lock_file(&lock)?;
+    }
+    Ok(Synced {
+        lock,
+        created,
+        changes,
+    })
+}
+
+/// One line per entry that differs between `before` and `after`.
+fn describe_changes(before: &ToolLock, after: &ToolLock) -> Vec<String> {
+    let mut changes = Vec::new();
+    let self_version = |l: &ToolLock| l.rsconstruct.as_ref().map(|p| p.version.clone());
+    match (self_version(before), self_version(after)) {
+        (None, Some(new)) => changes.push(format!("+ rsconstruct {new}")),
+        (Some(old), Some(new)) if old != new => {
+            changes.push(format!("~ rsconstruct {old} -> {new}"));
+        }
+        _ => {}
+    }
+    let methods = VERSIONED_METHODS.iter().copied().chain(["binary"]);
+    for method in methods {
+        let keys = |l: &ToolLock| -> BTreeSet<String> {
+            if method == "binary" {
+                l.binary.keys().cloned().collect()
+            } else {
+                l.versions(method).keys().cloned().collect()
+            }
+        };
+        let all: BTreeSet<String> = keys(before).union(&keys(after)).cloned().collect();
+        for name in all {
+            let old = entry_label(before, method, &name);
+            let new = entry_label(after, method, &name);
+            match (old.is_empty(), new.is_empty()) {
+                (true, false) => changes.push(format!("+ {method} {name} {new}")),
+                (false, true) => changes.push(format!("- {method} {name}")),
+                (false, false) if old != new => {
+                    changes.push(format!("~ {method} {name} {old} -> {new}"));
+                }
+                _ => {}
+            }
+        }
+    }
+    changes
+}
+
+fn lock_error(msg: String) -> anyhow::Error {
+    crate::exit_code::RsconstructError::new(crate::exit_code::RsconstructExitCode::ToolError, msg)
+        .into()
+}
+
+/// A locked tool whose installed copy is not the locked one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Mismatch {
+    pub method: String,
+    pub name: String,
+    pub locked: String,
+    /// What is installed instead, or None when nothing is.
+    pub installed: Option<String>,
+}
+
+impl std::fmt::Display for Mismatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.installed {
+            Some(found) => write!(
+                f,
+                "{} {} — locked {}, installed {found}",
+                self.method, self.name, self.locked
+            ),
+            None => write!(
+                f,
+                "{} {} — locked {}, not installed",
+                self.method, self.name, self.locked
+            ),
+        }
+    }
+}
+
+/// The Python packages installed in the environment `python3` on PATH
+/// belongs to (the one install-deps and `tool install` install into),
+/// with their versions, among `names`.
+fn installed_pip_versions(ctx: &BuildContext, names: &[&str]) -> BTreeMap<String, String> {
+    const SCRIPT: &str = "\
+import sys, importlib.metadata as m
+for n in sys.argv[1:]:
+    try:
+        print(n, m.version(n))
+    except m.PackageNotFoundError:
+        pass
+";
+    let mut cmd = std::process::Command::new("python3");
+    cmd.arg("-c").arg(SCRIPT).args(names);
+    let Ok(out) = crate::processor::run_command_capture(ctx, &cmd) else {
+        return BTreeMap::new();
+    };
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|l| l.split_once(' '))
+        .map(|(n, v)| (n.to_string(), v.trim().to_string()))
+        .collect()
+}
+
+/// Globally installed npm packages and their versions.
+fn installed_npm_globals(ctx: &BuildContext) -> BTreeMap<String, String> {
+    let mut cmd = std::process::Command::new("npm");
+    cmd.args(["ls", "-g", "--depth=0", "--json"]);
+    // npm ls exits non-zero on any problem in the global tree while still
+    // printing it, so the exit status is not consulted.
+    let Ok(out) = crate::processor::run_command_capture(ctx, &cmd) else {
+        return BTreeMap::new();
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&out.stdout) else {
+        return BTreeMap::new();
+    };
+    json.get("dependencies")
+        .and_then(serde_json::Value::as_object)
+        .map(|deps| {
+            deps.iter()
+                .filter_map(|(name, entry)| {
+                    entry
+                        .get("version")
+                        .and_then(serde_json::Value::as_str)
+                        .map(|v| (name.clone(), v.to_string()))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The installed versions of gem `name` (several can coexist).
+fn installed_gem_versions(ctx: &BuildContext, name: &str) -> Vec<String> {
+    let mut cmd = std::process::Command::new("gem");
+    cmd.args(["list", "--local", "--exact", name]);
+    let Ok(out) = crate::processor::run_command_capture(ctx, &cmd) else {
+        return Vec::new();
+    };
+    parse_gem_list(&String::from_utf8_lossy(&out.stdout), name)
+}
+
+/// Parse `gem list` output (`name (1.2.0, default: 1.1.0)`) into the
+/// versions installed of `name`.
+fn parse_gem_list(listing: &str, name: &str) -> Vec<String> {
+    listing
+        .lines()
+        .find_map(|line| line.strip_prefix(name)?.trim().strip_prefix('('))
+        .and_then(|rest| rest.strip_suffix(')'))
+        .map(|versions| {
+            versions
+                .split(',')
+                .map(|v| v.trim().trim_start_matches("default:").trim().to_string())
+                .filter(|v| !v.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// What is installed for a pinned binary: the executable's SHA-256, or a
+/// `.deb`'s installed package version.
+fn installed_binary_identity(ctx: &BuildContext, name: &str, pin: &BinaryPin) -> Option<String> {
+    if let Some(package) = &pin.deb_package {
+        let mut cmd = std::process::Command::new("dpkg-query");
+        cmd.args(["-W", "-f", "${Version}", package]);
+        let out = crate::processor::run_command_capture(ctx, &cmd).ok()?;
+        let version = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        return (out.status.success() && !version.is_empty()).then_some(version);
+    }
+    let path = which::which(crate::tools::binary_dest(name)?).ok()?;
+    crate::tools::file_sha256(&path).ok()
+}
+
+/// The locked tools among `wanted` whose installed copy is not the locked
+/// one.
+pub fn mismatches(ctx: &BuildContext, lock: &ToolLock, wanted: &Wanted) -> Vec<Mismatch> {
+    let mut found = Vec::new();
+    let mut push = |method: &str, name: &str, locked: &str, installed: Option<String>| {
+        found.push(Mismatch {
+            method: method.to_string(),
+            name: name.to_string(),
+            locked: locked.to_string(),
+            installed,
+        });
+    };
+
+    if !wanted.cargo.is_empty() {
+        let installed = crate::tools::installed_cargo_crates(ctx).unwrap_or_default();
+        for name in &wanted.cargo {
+            if let Some(locked) = lock.cargo.get(name) {
+                let have = installed.get(name);
+                if have != Some(locked) {
+                    push("cargo", name, locked, have.cloned());
+                }
+            }
+        }
+    }
+    if !wanted.pip.is_empty() {
+        let names: Vec<&str> = wanted.pip.iter().map(String::as_str).collect();
+        let installed = installed_pip_versions(ctx, &names);
+        for name in &wanted.pip {
+            if let Some(locked) = lock.pip.get(name) {
+                let have = installed.get(name);
+                if have != Some(locked) {
+                    push("pip", name, locked, have.cloned());
+                }
+            }
+        }
+    }
+    if !wanted.npm.is_empty() {
+        let installed = installed_npm_globals(ctx);
+        for name in &wanted.npm {
+            if let Some(locked) = lock.npm.get(name) {
+                let have = installed.get(name);
+                if have != Some(locked) {
+                    push("npm", name, locked, have.cloned());
+                }
+            }
+        }
+    }
+    for name in &wanted.gem {
+        if let Some(locked) = lock.gem.get(name) {
+            let have = installed_gem_versions(ctx, name);
+            if !have.contains(locked) {
+                push(
+                    "gem",
+                    name,
+                    locked,
+                    (!have.is_empty()).then(|| have.join(", ")),
+                );
+            }
+        }
+    }
+    for name in &wanted.binary {
+        if let Some(pin) = lock.binary.get(name) {
+            let (locked, have) = match (&pin.deb_version, &pin.executable_sha256) {
+                (Some(version), _) => (version.clone(), installed_binary_identity(ctx, name, pin)),
+                (None, Some(sha)) => (
+                    format!("sha256 {sha}"),
+                    installed_binary_identity(ctx, name, pin).map(|s| format!("sha256 {s}")),
+                ),
+                (None, None) => continue,
+            };
+            if have.as_ref() != Some(&locked) {
+                push("binary", name, &locked, have);
+            }
+        }
+    }
+    found
+}
+
+/// Check that rsconstruct.lock covers the project exactly and that every
+/// locked tool is installed at its locked version. The `build` check in CI,
+/// `build --verify-tool-versions`, and `tool check`.
+pub fn verify(ctx: &BuildContext, wanted: &Wanted) -> Result<ToolLock> {
+    let lock = sync(ctx, wanted, LockMode::Locked, false)?.lock;
+    let found = mismatches(ctx, &lock, wanted);
+    if !found.is_empty() {
+        let lines: Vec<String> = found.iter().map(ToString::to_string).collect();
+        return Err(lock_error(format!(
+            "Installed tools do not match {LOCK_FILE} (run `rsconstruct tool install-deps` \
+             and `rsconstruct tool install`):\n{}",
+            lines.join("\n")
+        )));
+    }
+    Ok(lock)
+}
+
+/// Identify a single tool for cache-keying purposes, by the resolved
+/// binary's `(path, size, mtime)` — no `--version` subprocess and,
+/// critically, no read of the file's bytes.
 ///
 /// Content-hashing the binary was the obvious choice and measured terribly:
 /// tool binaries are big (pandoc is ~200 MB here) and there are dozens of
@@ -178,10 +862,7 @@ pub fn read_lock_file() -> Result<Option<ToolLockFile>> {
 /// Returns None for a tool that is not on PATH: a missing tool is the tool
 /// preflight's problem, not the cache key's, and failing here would break
 /// builds whose products don't need that processor at all.
-fn tool_identity(_ctx: &BuildContext, tool: &str, lock: Option<&ToolLockFile>) -> Option<String> {
-    if let Some(locked) = lock.and_then(|l| l.tools.get(tool)) {
-        return Some(format!("{}={}", tool, locked.version_output));
-    }
+fn tool_identity(tool: &str) -> Option<String> {
     let path = which::which(tool).ok()?;
     let meta = match fs::metadata(&path) {
         Ok(m) => m,
@@ -209,21 +890,12 @@ fn tool_identity(_ctx: &BuildContext, tool: &str, lock: Option<&ToolLockFile>) -
 ///
 /// Returns a map from processor name to a hash of its tools' identities, for
 /// mixing into every product that processor builds — so upgrading a tool
-/// invalidates what that tool produced.
-///
-/// This is unconditional as of the finding-3 fix. It was previously gated on
-/// a `.tools.versions` lock file existing, which meant the overwhelmingly
-/// common case (no lock file) mixed in nothing at all and a tool upgrade
-/// silently left every cached PASS valid. The lock file now only *refines*
-/// the identity; its absence no longer disables the mechanism. Set
-/// `[build] hash_tool_versions = false` to opt out.
+/// invalidates what that tool produced. Set `[build] hash_tool_versions =
+/// false` to opt out.
 pub fn processor_tool_hashes(
-    ctx: &BuildContext,
     processors: &ProcessorMap,
     enabled: &dyn Fn(&str) -> bool,
-) -> Result<std::collections::HashMap<String, String>> {
-    let lock = read_lock_file()?;
-
+) -> std::collections::HashMap<String, String> {
     let mut result = std::collections::HashMap::new();
 
     let mut names: Vec<&String> = processors.keys().collect();
@@ -243,13 +915,7 @@ pub fn processor_tool_hashes(
         }
         wanted.insert((*name).clone(), tools);
     }
-    let distinct: Vec<String> = {
-        let mut d: BTreeSet<String> = BTreeSet::new();
-        for tools in wanted.values() {
-            d.extend(tools.iter().cloned());
-        }
-        d.into_iter().collect()
-    };
+    let distinct: BTreeSet<String> = wanted.values().flatten().cloned().collect();
 
     // Resolve each distinct tool once. This is a `which` plus a stat per
     // tool, so it stays serial deliberately: an earlier attempt to thread
@@ -258,7 +924,7 @@ pub fn processor_tool_hashes(
     // cheap beat making it concurrent — see `tool_identity`.
     let identity_cache: BTreeMap<String, Option<String>> = distinct
         .iter()
-        .map(|t| (t.clone(), tool_identity(ctx, t, lock.as_ref())))
+        .map(|t| (t.clone(), tool_identity(t)))
         .collect();
 
     for name in names {
@@ -282,67 +948,167 @@ pub fn processor_tool_hashes(
         }
     }
 
-    Ok(result)
+    result
 }
 
-/// Verify that the current tool versions match the lock file.
-/// Returns Ok(()) if everything matches, or an error describing mismatches.
-/// Errors if the lock file does not exist — callers must run `rsconstruct
-/// tools lock` to create one.
-pub fn verify_lock_file(ctx: &BuildContext, tool_commands: &[(String, Vec<String>)]) -> Result<()> {
-    let Some(lock) = read_lock_file()? else {
-        anyhow::bail!("No {LOCK_FILE} found. Run `rsconstruct tool lock` to create one.");
-    };
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let mut mismatches = Vec::new();
-
-    for (tool_name, version_args) in tool_commands {
-        let Some(locked) = lock.tools.get(tool_name) else {
-            mismatches.push(format!("{tool_name} — not in lock file (new tool?)"));
-            continue;
-        };
-
-        // Query current version
-        let current = match query_tool_version(ctx, tool_name, version_args) {
-            Ok(c) => c,
-            Err(e) => {
-                mismatches.push(format!("{tool_name} — {e}"));
-                continue;
-            }
-        };
-
-        if current.version_output != locked.version_output {
-            mismatches.push(format!(
-                "{} — version changed (locked: {}, current: {})",
-                tool_name,
-                extract_semver(&locked.version_output).unwrap_or("?"),
-                extract_semver(&current.version_output).unwrap_or("?"),
-            ));
-        } else if current.path != locked.path {
-            mismatches.push(format!(
-                "{} — path changed (locked: {}, current: {})",
-                tool_name, locked.path, current.path,
-            ));
-        }
+    fn sample_lock() -> ToolLock {
+        let mut lock = ToolLock::empty();
+        lock.rsconstruct = Some(SelfPin {
+            version: "0.9.138".to_string(),
+        });
+        lock.cargo
+            .insert("cargo-deny".to_string(), "0.18.3".to_string());
+        lock.pip.insert("ruff".to_string(), "0.14.0".to_string());
+        lock.pip
+            .insert("manim-voiceover".to_string(), "0.3.7".to_string());
+        lock.npm
+            .insert("@scope/tool".to_string(), "2.0.0".to_string());
+        lock.gem.insert("mdl".to_string(), "0.13.0".to_string());
+        lock.binary.insert(
+            "rumdl".to_string(),
+            BinaryPin {
+                url: "https://example.com/rumdl.tar.gz".to_string(),
+                sha256: "aa".to_string(),
+                executable_sha256: Some("bb".to_string()),
+                deb_package: None,
+                deb_version: None,
+            },
+        );
+        lock
     }
 
-    // Check for tools in lock file that are no longer required
-    for tool_name in lock.tools.keys() {
-        if !tool_commands.iter().any(|(name, _)| name == tool_name) {
-            mismatches.push(format!("{tool_name} — in lock file but no longer required"));
-        }
+    #[test]
+    fn lock_round_trips_through_toml_with_header() {
+        let lock = sample_lock();
+        let text = render_lock(&lock).unwrap();
+        assert!(text.starts_with("# rsconstruct.lock"), "{text}");
+        assert!(
+            text.contains("[rsconstruct]\nversion = \"0.9.138\""),
+            "{text}"
+        );
+        assert_eq!(parse_lock(&text).unwrap(), lock);
     }
 
-    if !mismatches.is_empty() {
-        return Err(crate::exit_code::RsconstructError::new(
-            crate::exit_code::RsconstructExitCode::ToolError,
-            format!(
-                "Tool version mismatch (run 'rsconstruct tool lock' to update):\n{}",
-                mismatches.join("\n")
-            ),
-        )
-        .into());
+    /// The CI workflows read `[rsconstruct]`'s version with a line-based
+    /// match, so it must render as exactly that table and line.
+    #[test]
+    fn self_pin_renders_as_a_plain_table_line() {
+        let text = render_lock(&sample_lock()).unwrap();
+        let after = text.split("[rsconstruct]\n").nth(1).unwrap();
+        assert_eq!(after.lines().next(), Some("version = \"0.9.138\""));
     }
 
-    Ok(())
+    #[test]
+    fn empty_sections_are_left_out() {
+        let text = render_lock(&ToolLock::empty()).unwrap();
+        assert!(!text.contains("[cargo]"), "{text}");
+        assert!(!text.contains("[binary"), "{text}");
+    }
+
+    #[test]
+    fn other_format_versions_and_unknown_keys_are_errors() {
+        assert!(parse_lock("version = 2\n").is_err());
+        assert!(parse_lock("version = 1\n[surprise]\n").is_err());
+        assert!(parse_lock("version = 1\n").is_ok());
+    }
+
+    #[test]
+    fn pinned_formats_each_package_manager() {
+        let lock = sample_lock();
+        assert_eq!(lock.pinned("cargo", "cargo-deny"), "cargo-deny@0.18.3");
+        assert_eq!(lock.pinned("pip", "ruff"), "ruff==0.14.0");
+        assert_eq!(lock.pinned("uv", "Ruff"), "Ruff==0.14.0");
+        assert_eq!(
+            lock.pinned("pip", "manim_voiceover[gtts]"),
+            "manim_voiceover[gtts]==0.3.7"
+        );
+        assert_eq!(lock.pinned("npm", "@scope/tool"), "@scope/tool@2.0.0");
+        assert_eq!(lock.pinned("gem", "mdl"), "mdl:0.13.0");
+    }
+
+    /// Unlocked names, explicit constraints and unversioned methods pass
+    /// through untouched.
+    #[test]
+    fn pinned_leaves_other_requests_alone() {
+        let lock = sample_lock();
+        assert_eq!(lock.pinned("pip", "black"), "black");
+        assert_eq!(lock.pinned("pip", "ruff>=0.5"), "ruff>=0.5");
+        assert_eq!(lock.pinned("pip", "ruff==0.1.0"), "ruff==0.1.0");
+        assert_eq!(lock.pinned("cargo", "cargo-deny@0.1.0"), "cargo-deny@0.1.0");
+        assert_eq!(lock.pinned("apt", "ruff"), "ruff");
+    }
+
+    #[test]
+    fn wanted_skips_constrained_entries_and_normalizes_pip_names() {
+        let mut wanted = Wanted::default();
+        assert!(wanted.add("pip", "Types_PyYAML"));
+        assert!(!wanted.add("pip", "ruff>=0.5"));
+        assert!(wanted.add("npm", "@scope/tool"));
+        assert!(!wanted.add("npm", "@scope/tool@1.0.0"));
+        assert!(!wanted.add("apt", "aspell"));
+        assert!(!wanted.add("binary", "google-chrome-stable"));
+        assert!(wanted.add("binary", "rumdl"));
+        assert_eq!(wanted.pip.iter().collect::<Vec<_>>(), vec!["types-pyyaml"]);
+        assert_eq!(wanted.npm.len(), 1);
+        assert_eq!(wanted.binary.len(), 1);
+    }
+
+    #[test]
+    fn diff_reports_missing_and_stale_entries() {
+        let lock = sample_lock();
+        let mut wanted = Wanted::default();
+        wanted.add("cargo", "cargo-deny");
+        wanted.add("cargo", "cargo-nextest");
+        wanted.add("binary", "rumdl");
+        let (missing, stale) = diff(&lock, &wanted);
+        assert_eq!(
+            missing,
+            vec![("cargo".to_string(), "cargo-nextest".to_string())]
+        );
+        let stale: Vec<String> = stale.iter().map(|(m, n)| format!("{m} {n}")).collect();
+        assert_eq!(
+            stale,
+            vec![
+                "gem mdl",
+                "npm @scope/tool",
+                "pip manim-voiceover",
+                "pip ruff"
+            ]
+        );
+    }
+
+    #[test]
+    fn describe_changes_lists_additions_removals_and_moves() {
+        let before = sample_lock();
+        let mut after = before.clone();
+        after
+            .cargo
+            .insert("cargo-deny".to_string(), "0.19.0".to_string());
+        after.gem.remove("mdl");
+        after
+            .cargo
+            .insert("mdbook".to_string(), "0.4.40".to_string());
+        assert_eq!(
+            describe_changes(&before, &after),
+            vec![
+                "~ cargo cargo-deny 0.18.3 -> 0.19.0",
+                "+ cargo mdbook 0.4.40",
+                "- gem mdl",
+            ]
+        );
+    }
+
+    #[test]
+    fn gem_list_parses_plain_and_default_versions() {
+        assert_eq!(
+            parse_gem_list("mdl (0.13.0, default: 0.12.0)\n", "mdl"),
+            vec!["0.13.0", "0.12.0"]
+        );
+        assert_eq!(parse_gem_list("", "mdl"), Vec::<String>::new());
+        assert_eq!(parse_gem_list("mdlx (1.0)\n", "mdl"), Vec::<String>::new());
+    }
 }
