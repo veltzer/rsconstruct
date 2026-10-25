@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Checks that TOML files parse. Native (in-process, using the `toml` crate; no external tools required). An in-process alternative to [taplo](taplo.md).
+Checks that TOML files parse. Builtin (in-process, using the `toml` crate; no external tools required). An in-process alternative to [taplo](taplo.md).
 
 ## How It Works
 

@@ -26,7 +26,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["json", "linter", "validator", "node", "npm"],
     description: "Lint JSON files using jsonlint",
-    is_native: false,
+    is_builtin: false,
     is_rust: false,
     supports_batch: true,
     caches_outputs: true,

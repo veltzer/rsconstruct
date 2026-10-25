@@ -110,4 +110,4 @@ neither rebuilt nor cleaned; delete it by hand.
 ## See also
 
 - [Mass Generator](generic.md) — the generic, `predict_command`-driven form of the same contract
-- [Zola](zola.md) — the other native mass generator, with its plan computed in Rust
+- [Zola](zola.md) — the other builtin mass generator, with its plan computed in Rust

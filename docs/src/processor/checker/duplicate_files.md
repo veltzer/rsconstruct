@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Finds files with identical content. Native (in-process, SHA-256; no external tools required).
+Finds files with identical content. Builtin (in-process, SHA-256; no external tools required).
 
 ## How It Works
 

@@ -28,7 +28,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["github", "actions", "workflow", "ci", "linter", "yaml"],
     description: "Lint GitHub Actions workflow files using actionlint",
-    is_native: false,
+    is_builtin: false,
     is_rust: false,
     supports_batch: true,
     caches_outputs: true,

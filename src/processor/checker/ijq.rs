@@ -82,7 +82,7 @@ inventory::submit! {
         defaults: None,
         keywords: &["json", "checker", "jq", "validator"],
         description: "Validate JSON files (in-process)",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: true,
         caches_outputs: true,

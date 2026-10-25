@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Checks that JSON files parse. Native (in-process, using `serde_json`; no external tools required). It is the in-process counterpart of [jq](jq.md), but it only parses: no jq filter is evaluated.
+Checks that JSON files parse. Builtin (in-process, using `serde_json`; no external tools required). It is the in-process counterpart of [jq](jq.md), but it only parses: no jq filter is evaluated.
 
 ## How It Works
 

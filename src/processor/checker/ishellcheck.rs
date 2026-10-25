@@ -258,7 +258,7 @@ inventory::submit! {
         defaults: Some(crate::config::ProcessorDefaults { dep_auto: &[".shellcheckrc"], ..crate::config::ProcessorDefaults::EMPTY }),
         keywords: &["shell", "bash", "sh", "linter", "script", "shellcheck", "rust"],
         description: "Lint shell scripts with ShellCheck's analysis (in-process)",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         // In-process, a batch has no startup cost to share and would only
         // check its files one after another: products run in parallel instead.

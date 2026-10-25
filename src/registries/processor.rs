@@ -60,9 +60,9 @@ pub struct ProcessorPlugin {
     pub keywords: &'static [&'static str],
     /// Human-readable description (static, no instantiation needed).
     pub description: &'static str,
-    /// Whether this is a native (pure Rust) processor.
-    pub is_native: bool,
-    /// Whether the code that does the work is written in Rust. Every native
+    /// Whether this is a builtin (pure Rust) processor.
+    pub is_builtin: bool,
+    /// Whether the code that does the work is written in Rust. Every builtin
     /// processor is (it is rsconstruct itself); an external processor is only
     /// when the tool it runs is (ruff, taplo, rumdl, clippy, cargo, mdbook,
     /// pyrefly, rustc). Processors that run a user-supplied command (script,
@@ -212,9 +212,9 @@ pub fn processor_type_of(name: &str) -> crate::processor::ProcessorType {
     })
 }
 
-/// Return whether a processor is native (pure Rust) by instance name.
-pub fn is_native(name: &str) -> bool {
-    find_plugin(name).is_some_and(|p| p.is_native)
+/// Return whether a processor is builtin (pure Rust) by instance name.
+pub fn is_builtin(name: &str) -> bool {
+    find_plugin(name).is_some_and(|p| p.is_builtin)
 }
 
 /// Return whether a processor's implementation is written in Rust, by instance
@@ -364,9 +364,9 @@ mod tests {
             );
             assert_eq!(processor_version(&pname), Some(plugin.version));
             assert_eq!(
-                is_native(&instance),
-                is_native(&pname),
-                "is_native must strip the instance suffix for '{instance}'"
+                is_builtin(&instance),
+                is_builtin(&pname),
+                "is_builtin must strip the instance suffix for '{instance}'"
             );
             assert_eq!(
                 is_rust(&instance),
@@ -432,17 +432,17 @@ mod tests {
         assert!(find_plugin("processor.checker.generic").is_none());
     }
 
-    /// A native processor is rsconstruct's own Rust code, so `is_rust` cannot
+    /// A builtin processor is rsconstruct's own Rust code, so `is_rust` cannot
     /// be false for it. The two flags are declared separately because the
     /// reverse does not hold (ruff is external and Rust), and a plugin entry
-    /// that says native but not Rust is a copy-paste mistake.
+    /// that says builtin but not Rust is a copy-paste mistake.
     #[test]
-    fn native_processors_are_rust() {
+    fn builtin_processors_are_rust() {
         for plugin in all_plugins() {
-            if plugin.is_native {
+            if plugin.is_builtin {
                 assert!(
                     plugin.is_rust,
-                    "Processor '{}' is native (pure Rust) but declares is_rust: false",
+                    "Processor '{}' is builtin (pure Rust) but declares is_rust: false",
                     plugin.name
                 );
             }

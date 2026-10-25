@@ -771,7 +771,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<RequirementsConfig>,
         keywords: &["python", "pip", "requirements", "dependencies", "generator", "py"],
         description: "Generate requirements.txt from Python import statements",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: false,
         caches_outputs: true,

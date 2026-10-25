@@ -41,7 +41,7 @@ fn create_yaml2json(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::process
                 source_filter: None,
                 discover_mode: DiscoverMode::SingleFormat("json"),
                 execute_fn: execute_yaml2json,
-                is_native: true,
+                is_builtin: true,
             },
         ))
     })
@@ -56,7 +56,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["yaml", "json", "converter", "yml", "generator"],
     description: "Convert YAML files to JSON (in-process)",
-    is_native: true,
+    is_builtin: true,
     is_rust: true,
     supports_batch: false,
     caches_outputs: true,

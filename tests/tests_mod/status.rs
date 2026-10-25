@@ -63,8 +63,8 @@ fn status_empty_project() {
 }
 
 /// The per-processor status table and its JSON form carry a `rust` flag next
-/// to `native`, so the language of the toolchain can be read off `status`.
-/// The test project's only processor is tera, which is native and therefore
+/// to `builtin`, so the language of the toolchain can be read off `status`.
+/// The test project's only processor is tera, which is builtin and therefore
 /// Rust.
 #[test]
 fn status_reports_rust() {
@@ -91,7 +91,7 @@ fn status_reports_rust() {
         .iter()
         .find(|p| p["name"] == "processor.generator.tera")
         .expect("tera processor missing from status --json");
-    assert_eq!(tera["native"], true);
+    assert_eq!(tera["builtin"], true);
     assert_eq!(tera["rust"], true);
 
     let table = run_rsconstruct_with_env(project_path, &["status"], &[("NO_COLOR", "1")]);

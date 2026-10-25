@@ -136,7 +136,7 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
                 detected: false,
                 supports_batch: p.supports_batch,
                 caches_outputs: p.caches_outputs,
-                native: p.is_native,
+                builtin: p.is_builtin,
                 rust: p.is_rust,
                 rust_alternatives: crate::registries::rust_alternatives(&p.pname())
                     .into_iter()
@@ -152,11 +152,11 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
     let rows: Vec<Vec<String>> = plugins
         .iter()
         .map(|p| {
-            let native_tag = if p.is_native { "native" } else { "external" };
+            let builtin_tag = if p.is_builtin { "builtin" } else { "external" };
             vec![
                 tables::short_processor_name(&p.pname()).to_string(),
                 p.processor_type.as_str().to_string(),
-                native_tag.to_string(),
+                builtin_tag.to_string(),
                 tables::yes_no(p.is_rust).to_string(),
                 tables::yes_no(p.supports_batch).to_string(),
                 tables::yes_no(p.caches_outputs).to_string(),
@@ -602,7 +602,7 @@ pub fn processor_info(pname: Option<&str>) -> Result<()> {
                     "description": p.description,
                     "keywords": p.keywords,
                     "version": p.version,
-                    "native": p.is_native,
+                    "builtin": p.is_builtin,
                     "rust": p.is_rust,
                     "supports_batch": p.supports_batch,
                     "caches_outputs": p.caches_outputs,
@@ -625,8 +625,8 @@ pub fn processor_info(pname: Option<&str>) -> Result<()> {
             println!("  Keywords: {}", p.keywords.join(", "));
         }
         println!(
-            "  Native: {}  Rust: {}  Batch: {}  Cache: {}  Max jobs: {}  Version: {}",
-            tables::yes_no(p.is_native),
+            "  Builtin: {}  Rust: {}  Batch: {}  Cache: {}  Max jobs: {}  Version: {}",
+            tables::yes_no(p.is_builtin),
             tables::yes_no(p.is_rust),
             tables::yes_no(p.supports_batch),
             tables::yes_no(p.caches_outputs),

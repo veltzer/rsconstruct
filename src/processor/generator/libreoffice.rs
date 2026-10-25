@@ -63,7 +63,7 @@ fn create_libreoffice(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::proce
                 source_filter: None,
                 discover_mode: DiscoverMode::MultiFormat,
                 execute_fn: execute_libreoffice,
-                is_native: false,
+                is_builtin: false,
             },
         ))
     })
@@ -78,7 +78,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["document", "converter", "pdf", "docx", "odt", "generator"],
     description: "Convert documents using LibreOffice",
-    is_native: false,
+    is_builtin: false,
     is_rust: false,
     supports_batch: false,
     caches_outputs: true,

@@ -2,7 +2,7 @@
 
 Scans Tera template files for `{% include %}`, `{% import %}`, and `{% extends %}` directives and adds referenced template files as dependencies.
 
-**Native**: Yes.
+**Builtin**: Yes.
 
 **Auto-detects**: Projects with `.tera` files.
 

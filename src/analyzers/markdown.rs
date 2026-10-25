@@ -137,7 +137,7 @@ inventory::submit! {
     crate::registries::AnalyzerPlugin {
         name: "markdown",
         description: "Scan Markdown files for local file dependencies",
-        is_native: true,
+        is_builtin: true,
         create: |toml_value, _| {
             let cfg: MarkdownAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
             Ok(Box::new(MarkdownDepAnalyzer::new(cfg)))

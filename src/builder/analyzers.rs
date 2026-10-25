@@ -17,14 +17,14 @@ pub fn list_analyzers(verbose: bool) {
         #[derive(serde::Serialize)]
         struct Entry {
             name: &'static str,
-            native: bool,
+            builtin: bool,
             description: &'static str,
         }
         let entries: Vec<Entry> = plugins
             .iter()
             .map(|p| Entry {
                 name: p.name,
-                native: p.is_native,
+                builtin: p.is_builtin,
                 description: p.description,
             })
             .collect();
@@ -38,14 +38,14 @@ pub fn list_analyzers(verbose: bool) {
     let rows: Vec<Vec<String>> = plugins
         .iter()
         .map(|plugin| {
-            let native_tag = if plugin.is_native {
-                "native"
+            let builtin_tag = if plugin.is_builtin {
+                "builtin"
             } else {
                 "external"
             };
             vec![
                 plugin.name.to_string(),
-                native_tag.to_string(),
+                builtin_tag.to_string(),
                 plugin.description.to_string(),
             ]
         })

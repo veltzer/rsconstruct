@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Checks HTML files the way `tidy -errors` does: structure, missing and misplaced tags, unknown elements, attributes and attribute values, entities, and the repairs tidy would make. Native (in-process; no `tidy` binary). The Rust alternative to the [tidy](tidy.md) processor: a port of HTML Tidy 5.8.0's lexer, parser, attribute checks and clean-up passes, so it reports what tidy reports, at the same line and column, with the same warning and error totals. The pretty-printer is not ported: itidy never writes HTML.
+Checks HTML files the way `tidy -errors` does: structure, missing and misplaced tags, unknown elements, attributes and attribute values, entities, and the repairs tidy would make. Builtin (in-process; no `tidy` binary). The Rust alternative to the [tidy](tidy.md) processor: a port of HTML Tidy 5.8.0's lexer, parser, attribute checks and clean-up passes, so it reports what tidy reports, at the same line and column, with the same warning and error totals. The pretty-printer is not ported: itidy never writes HTML.
 
 ## How It Works
 

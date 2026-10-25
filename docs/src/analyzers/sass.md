@@ -2,7 +2,7 @@
 
 Scans Sass and SCSS files for `@use`, `@forward` and `@import` rules and adds every local file they load as a dependency, following imports transitively. Declare it whenever a project compiles Sass with [isass](../processor/generator/isass.md) or [sass](../processor/generator/sass.md): without it, a stylesheet's only input is its own file, so editing a partial it `@use`s does not rebuild it and the old CSS stays in `out/`.
 
-**Native**: Yes.
+**Builtin**: Yes.
 
 **Auto-detects**: Projects with `.scss` or `.sass` files.
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Checks that every local image referenced from a Markdown file exists. Built for [Marp](../generator/marp.md) slide decks, but works on any Markdown. Native (in-process; no external tools required).
+Checks that every local image referenced from a Markdown file exists. Built for [Marp](../generator/marp.md) slide decks, but works on any Markdown. Builtin (in-process; no external tools required).
 
 ## How It Works
 

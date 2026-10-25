@@ -208,7 +208,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<ExplicitConfig>,
         keywords: &["explicit", "command", "custom", "script"],
         description: "Run a command with explicitly declared inputs and outputs",
-        is_native: false,
+        is_builtin: false,
         is_rust: false,
         supports_batch: false,
         caches_outputs: true,

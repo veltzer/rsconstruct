@@ -80,7 +80,7 @@ fn create_isass(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::
                 source_filter: Some(keep_source),
                 discover_mode: DiscoverMode::SingleFormat("css"),
                 execute_fn: execute_isass,
-                is_native: true,
+                is_builtin: true,
             },
         ))
     })
@@ -103,7 +103,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<IsassConfig>,
     keywords: &["sass", "scss", "css", "converter", "web", "frontend"],
     description: "Compile Sass/SCSS to CSS (in-process)",
-    is_native: true,
+    is_builtin: true,
     is_rust: true,
     supports_batch: false,
     caches_outputs: true,

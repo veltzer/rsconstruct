@@ -113,7 +113,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<MakeConfig>,
         keywords: &["make", "makefile", "builder", "checker"],
         description: "Run make in directories containing Makefiles",
-        is_native: false,
+        is_builtin: false,
         is_rust: false,
         supports_batch: false,
         caches_outputs: true,

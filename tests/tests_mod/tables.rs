@@ -52,7 +52,7 @@ fn all_shows_every_column() {
         [
             "Name",
             "Type",
-            "Native",
+            "Builtin",
             "Rust",
             "Batch",
             "Cache",
@@ -65,7 +65,7 @@ fn all_shows_every_column() {
         [
             "Name",
             "Type",
-            "Native",
+            "Builtin",
             "Rust",
             "Batch",
             "Cache",
@@ -92,7 +92,7 @@ fn fields_prints_names_only() {
         [
             "Name",
             "Type",
-            "Native",
+            "Builtin",
             "Rust",
             "Batch",
             "Cache",

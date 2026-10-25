@@ -334,7 +334,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<ZspellConfig>,
         keywords: &["spellcheck", "spelling", "markdown", "md", "english"],
         description: "Check documentation files for spelling errors",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: true,
         caches_outputs: true,

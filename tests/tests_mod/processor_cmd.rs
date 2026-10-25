@@ -426,7 +426,7 @@ fn processors_list_reports_batch() {
 }
 
 /// `processor list` reports whether each processor's implementation is
-/// written in Rust: every native one is, and an external one is only when
+/// written in Rust: every builtin one is, and an external one is only when
 /// its tool is (ruff yes, pylint no). Checked through the JSON form, which
 /// is what scripts read, and the table header, which is what people read.
 #[test]
@@ -453,11 +453,11 @@ fn processors_list_reports_rust() {
             .find(|e| e["name"] == name)
             .unwrap_or_else(|| panic!("no '{name}' entry in processor list --json"))
     };
-    assert_eq!(by_name("processor.generator.tera")["native"], true);
+    assert_eq!(by_name("processor.generator.tera")["builtin"], true);
     assert_eq!(by_name("processor.generator.tera")["rust"], true);
-    assert_eq!(by_name("processor.checker.ruff")["native"], false);
+    assert_eq!(by_name("processor.checker.ruff")["builtin"], false);
     assert_eq!(by_name("processor.checker.ruff")["rust"], true);
-    assert_eq!(by_name("processor.checker.pylint")["native"], false);
+    assert_eq!(by_name("processor.checker.pylint")["builtin"], false);
     assert_eq!(by_name("processor.checker.pylint")["rust"], false);
 
     for entry in &entries {
@@ -465,10 +465,10 @@ fn processors_list_reports_rust() {
             entry["rust"].is_boolean(),
             "'rust' must be a boolean on every entry, got {entry}"
         );
-        if entry["native"] == true {
+        if entry["builtin"] == true {
             assert_eq!(
                 entry["rust"], true,
-                "native processor '{}' must report rust: true",
+                "builtin processor '{}' must report rust: true",
                 entry["name"]
             );
         }

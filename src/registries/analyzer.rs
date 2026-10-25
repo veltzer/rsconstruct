@@ -13,7 +13,7 @@ use crate::analyzers::DepAnalyzer;
 pub struct AnalyzerPlugin {
     pub name: &'static str,
     pub description: &'static str,
-    pub is_native: bool,
+    pub is_builtin: bool,
     /// Create an analyzer from its TOML config section.
     /// Receives the raw `[analyzer.IN]` table value and a verbose flag. The
     /// instance name is not passed: tagging deps-cache entries with it is

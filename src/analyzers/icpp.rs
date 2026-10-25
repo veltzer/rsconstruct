@@ -265,7 +265,7 @@ inventory::submit! {
     crate::registries::AnalyzerPlugin {
         name: "icpp",
         description: "Scan C/C++ source files for #include dependencies (in-process, regex-based)",
-        is_native: true,
+        is_builtin: true,
         create: |toml_value, verbose| {
             let cfg: IcppAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
             Ok(Box::new(IcppDepAnalyzer::new(cfg, verbose)))

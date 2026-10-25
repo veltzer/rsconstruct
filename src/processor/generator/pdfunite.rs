@@ -221,7 +221,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<PdfuniteConfig>,
         keywords: &["pdf", "merger", "generator"],
         description: "Merge PDFs from subdirectories into course bundles",
-        is_native: false,
+        is_builtin: false,
         is_rust: false,
         supports_batch: false,
         caches_outputs: true,

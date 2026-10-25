@@ -355,7 +355,7 @@ inventory::submit! {
     crate::registries::AnalyzerPlugin {
         name: "sass",
         description: "Scan Sass/SCSS files for @use, @forward and @import dependencies",
-        is_native: true,
+        is_builtin: true,
         create: |toml_value, _| {
             let cfg: SassAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
             Ok(Box::new(SassDepAnalyzer::new(cfg)))

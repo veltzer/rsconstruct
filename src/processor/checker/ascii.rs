@@ -103,7 +103,7 @@ inventory::submit! {
         defaults: None,
         keywords: &["checker", "encoding", "ascii", "text", "validator"],
         description: "Check files for non-ASCII characters",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: true,
         caches_outputs: true,

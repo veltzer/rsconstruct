@@ -150,7 +150,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<Jinja2Config>,
         keywords: &["python", "template", "generator", "jinja", "pip"],
         description: "Render Jinja2 templates into output files",
-        is_native: false,
+        is_builtin: false,
         is_rust: false,
         supports_batch: false,
         caches_outputs: true,

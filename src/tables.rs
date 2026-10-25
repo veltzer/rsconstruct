@@ -79,7 +79,7 @@ pub mod defs {
     pub const ANALYZER_LIST: TableDef = def(
         "analyzer_list",
         "analyzer list",
-        &["Name", "Native", "Description"],
+        &["Name", "Builtin", "Description"],
         &["Description"],
     );
     pub const ANALYZER_DEFCONFIG: TableDef = def(
@@ -145,7 +145,7 @@ pub mod defs {
         &[
             "Name",
             "Type",
-            "Native",
+            "Builtin",
             "Rust",
             "Batch",
             "Cache",
@@ -182,7 +182,7 @@ pub mod defs {
         "product_status",
         "status, build --dry-run",
         "Processor, one column per product state (up-to-date, restorable, stale, new for \
-         `status`; skip, restore, build, build-new for `build --dry-run`), native, rust",
+         `status`; skip, restore, build, build-new for `build --dry-run`), builtin, rust",
     );
     pub const SLOC: TableDef = def(
         "sloc",

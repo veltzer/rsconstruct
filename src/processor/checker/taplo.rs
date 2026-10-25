@@ -26,7 +26,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["toml", "formatter", "linter", "validator"],
     description: "Check TOML files using taplo",
-    is_native: false,
+    is_builtin: false,
     is_rust: true,
     supports_batch: true,
     caches_outputs: true,

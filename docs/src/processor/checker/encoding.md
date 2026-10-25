@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Checks that text files are valid UTF-8 without a byte order mark. Native (in-process; no external tools required).
+Checks that text files are valid UTF-8 without a byte order mark. Builtin (in-process; no external tools required).
 
 ## How It Works
 

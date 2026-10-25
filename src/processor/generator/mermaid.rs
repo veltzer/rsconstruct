@@ -38,7 +38,7 @@ fn create_mermaid(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor
                 source_filter: None,
                 discover_mode: DiscoverMode::MultiFormat,
                 execute_fn: execute_mermaid,
-                is_native: false,
+                is_builtin: false,
             },
         ))
     })
@@ -53,7 +53,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["diagram", "mermaid", "svg", "png", "generator", "node", "npm"],
     description: "Render Mermaid diagrams to images",
-    is_native: false,
+    is_builtin: false,
     is_rust: false,
     supports_batch: false,
     caches_outputs: true,

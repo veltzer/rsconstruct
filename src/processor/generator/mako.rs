@@ -158,7 +158,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<MakoConfig>,
         keywords: &["python", "template", "generator", "pip"],
         description: "Render Mako templates into output files",
-        is_native: false,
+        is_builtin: false,
         is_rust: false,
         supports_batch: false,
         caches_outputs: true,

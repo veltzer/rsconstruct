@@ -176,7 +176,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<GemConfig>,
         keywords: &["ruby", "gem", "package-manager", "rb"],
         description: "Install Ruby dependencies using Bundler",
-        is_native: false,
+        is_builtin: false,
         is_rust: false,
         supports_batch: false,
         caches_outputs: false,

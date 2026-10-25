@@ -146,7 +146,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<PipConfig>,
         keywords: &["python", "pip", "package-manager", "py"],
         description: "Install Python dependencies using pip",
-        is_native: false,
+        is_builtin: false,
         is_rust: false,
         supports_batch: false,
         caches_outputs: false,

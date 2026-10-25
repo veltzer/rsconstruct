@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Checks that XML files are well-formed and, with `schema`, that they validate against an XSD schema. Native (in-process; no libxml2, no external tools). The Rust alternative to the [xmllint](xmllint.md) processor: it reports what `xmllint --noout` and `xmllint --noout --schema x.xsd` report, at the same line, with the same verdict.
+Checks that XML files are well-formed and, with `schema`, that they validate against an XSD schema. Builtin (in-process; no libxml2, no external tools). The Rust alternative to the [xmllint](xmllint.md) processor: it reports what `xmllint --noout` and `xmllint --noout --schema x.xsd` report, at the same line, with the same verdict.
 
 ## How It Works
 

@@ -409,7 +409,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<JekyllConfig>,
         keywords: &["ruby", "jekyll", "static-site", "html", "markdown", "web", "gem"],
         description: "Build Jekyll sites",
-        is_native: false,
+        is_builtin: false,
         is_rust: false,
         supports_batch: false,
         caches_outputs: true,

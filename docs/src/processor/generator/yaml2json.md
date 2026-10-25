@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Converts YAML files to JSON. Native (in-process, no external tools required).
+Converts YAML files to JSON. Builtin (in-process, no external tools required).
 
 ## How It Works
 

@@ -8,7 +8,7 @@ Items from `suggestions.md` that have been implemented.
 - **Lua plugin system** — built, then removed on 2026-10-17: no repository ever declared a `[processor.lua.*]` stanza, and the host could not take part in cache versioning or field validation. Custom commands go through the config-driven processors (`script`, `generic`) instead.
 - **Tool version locking** — `rsconstruct tool lock` locks and verifies external tool versions. Tool versions are included in cache keys.
 - **JSON output mode** — `--json` flag for machine-readable JSON Lines output (build_start, product_start, product_complete, build_summary events).
-- **Native C/C++ include scanner** — Default `include_scanner = "native"` uses regex-based scanning. Falls back to `include_scanner = "compiler"` (gcc -MM).
+- **Builtin C/C++ include scanner** — Default `include_scanner = "builtin"` uses regex-based scanning. Falls back to `include_scanner = "compiler"` (gcc -MM).
 - **`--processor` flag** — `rsconstruct build -p processor.generator.tera,processor.checker.ruff` and `rsconstruct watch -p processor.generator.tera` filter which processors run.
 - **Colored diff on config changes** — When processor config changes trigger rebuilds, rsconstruct shows what changed with colored diff output.
 - **Batch processing** — ruff, pylint, shellcheck, zspell, mypy, and rumdl all support batch execution via `execute_batch()`.
@@ -100,7 +100,7 @@ Items from `suggestions.md` that have been implemented.
 
 ## Completed Features (latest)
 
-- **`rsconstruct status --json`** — JSON output with per-processor counts (`up_to_date`, `restorable`, `stale`, `new`, `total`, `native`) and totals. Activated by `--json` flag.
+- **`rsconstruct status --json`** — JSON output with per-processor counts (`up_to_date`, `restorable`, `stale`, `new`, `total`, `builtin`) and totals. Activated by `--json` flag.
 - **Selective processor cleaning** — `rsconstruct clean outputs -p processor.checker.ruff,processor.checker.pylint` cleans only those processors' outputs. Without `-p`, cleans everything.
 - **Prettier processor** — Checker using `prettier --check`. Batch-capable. Scans `.js/.jsx/.ts/.tsx/.mjs/.cjs/.css/.scss/.less/.html/.json/.md/.yaml/.yml`. `src/processor/checker/prettier.rs`.
 - **Bare `clean` requires subcommand** — `rsconstruct clean` now errors with usage hint instead of silently defaulting to `clean outputs`.

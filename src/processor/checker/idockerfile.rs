@@ -223,7 +223,7 @@ inventory::submit! {
         defaults: Some(crate::config::ProcessorDefaults { dep_auto: &[".hadolint.yaml", ".hadolint.yml"], ..crate::config::ProcessorDefaults::EMPTY }),
         keywords: &["docker", "dockerfile", "linter", "hadolint", "rust"],
         description: "Lint Dockerfiles with hadolint's rules (in-process)",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: true,
         caches_outputs: true,

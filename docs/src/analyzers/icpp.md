@@ -1,8 +1,8 @@
 # icpp
 
-Native C/C++ dependency analyzer. Scans `#include` directives by parsing source files directly in Rust, without invoking `gcc`. It runs no subprocess unless `pkg_config` or `include_path_commands` is set; those run once, at setup, to find extra include directories.
+Builtin C/C++ dependency analyzer. Scans `#include` directives by parsing source files directly in Rust, without invoking `gcc`. It runs no subprocess unless `pkg_config` or `include_path_commands` is set; those run once, at setup, to find extra include directories.
 
-**Native**: Yes.
+**Builtin**: Yes.
 
 **Auto-detects**: Projects with `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, `.hpp`, or `.hxx` files.
 

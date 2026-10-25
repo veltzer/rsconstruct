@@ -157,7 +157,7 @@ inventory::submit! {
         defaults: Some(crate::config::ProcessorDefaults { dep_auto: CONFIG_FILES, ..crate::config::ProcessorDefaults::EMPTY }),
         keywords: &["github", "actions", "workflow", "ci", "linter", "yaml", "actionlint", "rust"],
         description: "Lint GitHub Actions workflow files with actionlint's rules (in-process)",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: true,
         caches_outputs: true,

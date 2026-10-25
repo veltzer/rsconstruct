@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Checks that JSON files parse. Native (in-process, using `serde_json`; no external tools required). A Rust alternative to [jsonlint](jsonlint.md).
+Checks that JSON files parse. Builtin (in-process, using `serde_json`; no external tools required). A Rust alternative to [jsonlint](jsonlint.md).
 
 ## How It Works
 

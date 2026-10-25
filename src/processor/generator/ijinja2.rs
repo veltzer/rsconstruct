@@ -388,7 +388,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<Ijinja2Config>,
         keywords: &["template", "generator", "jinja", "jinja2", "rust"],
         description: "Render Jinja2 templates into output files (in-process)",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: false,
         caches_outputs: true,

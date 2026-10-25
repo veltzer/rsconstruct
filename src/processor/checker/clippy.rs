@@ -128,7 +128,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<ClippyConfig>,
         keywords: &["rust", "linter", "cargo", "rs"],
         description: "Lint Rust projects using Cargo Clippy",
-        is_native: false,
+        is_builtin: false,
         is_rust: true,
         supports_batch: false,
         caches_outputs: true,

@@ -189,7 +189,7 @@ inventory::submit! {
         defaults: None,
         keywords: &["html", "validator", "web", "tidy", "rust"],
         description: "Check HTML the way tidy -errors does (in-process)",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: true,
         caches_outputs: true,

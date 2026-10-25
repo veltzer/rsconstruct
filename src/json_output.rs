@@ -115,8 +115,8 @@ pub struct ProcessorListEntry {
     pub supports_batch: bool,
     /// Whether a cache hit stands in for a run (see `ProcessorPlugin::caches_outputs`).
     pub caches_outputs: bool,
-    pub native: bool,
-    /// Whether the implementation (rsconstruct itself for a native processor,
+    pub builtin: bool,
+    /// Whether the implementation (rsconstruct itself for a builtin processor,
     /// the external tool otherwise) is written in Rust.
     pub rust: bool,
     /// The Rust processors that can replace this one (empty when it is

@@ -1,7 +1,7 @@
 # Plan: a Rust implementation for every capability
 
 Goal: everything rsconstruct can do can be done with a Rust-based processor,
-either native inside rsconstruct or an external executable written in Rust.
+either builtin inside rsconstruct or an external executable written in Rust.
 The measure is the `rust` flag on each processor (`is_rust` on the plugin,
 shown by `rsconstruct processor list` and `rsconstruct status`, added
 2026-09-21): the plan is done when every capability has at least one
@@ -30,7 +30,7 @@ Measured with the script under *Measuring* below, over the 203 repos under
 | Measure | Value |
 |---|---|
 | Processors in the registry | 93 |
-| Reporting `rust: true` | 28 (20 native + ruff, taplo, rumdl, clippy, cargo, mdbook, pyrefly, rustc) |
+| Reporting `rust: true` | 28 (20 builtin + ruff, taplo, rumdl, clippy, cargo, mdbook, pyrefly, rustc) |
 | Reporting `rust: false` | 65 |
 | Processor declarations across the fleet | 1610 |
 | ...served by a Rust processor | 708 (44 %) |
@@ -42,22 +42,22 @@ concentrated in a handful of processors, which is what orders the stages:
 
 | Non-Rust processor | Repos | Route |
 |---|---|---|
-| actionlint | 199 | Stage 3: native `iactionlint` (done, fleet switched 2026-10-09) |
+| actionlint | 199 | Stage 3: builtin `iactionlint` (done, fleet switched 2026-10-09) |
 | mypy | 127 | Stage 1: pyrefly (done, fleet switched; no repo runs mypy) |
-| luacheck | 109 | Stage 3: native `iluacheck` (done, fleet switched 2026-10-09) |
-| shellcheck | 80 | Stage 3: native `ishellcheck` (done, fleet switched 2026-10-11) |
+| luacheck | 109 | Stage 3: builtin `iluacheck` (done, fleet switched 2026-10-09) |
+| shellcheck | 80 | Stage 3: builtin `ishellcheck` (done, fleet switched 2026-10-11) |
 | pytest | 62 | Inherent: runs Python |
 | sphinx | 51 | Covered: mdbook (Rust) builds documentation; a sphinx repo that wants Rust rewrites its sources for mdbook, which is a per-repo choice, not this plan |
 | htmlhint | 0 | Was 29 at the first count; the fleet's HTML checking is all `tidy` now (0 htmlhint, 0 htmllint) |
-| xmllint | 28 | Stage 3: native `ixmllint` (done, fleet switched 2026-10-08) |
+| xmllint | 28 | Stage 3: builtin `ixmllint` (done, fleet switched 2026-10-08) |
 | yamllint | 27 | Stage 1: iyamllint (done, fleet switched 2026-10-08) |
 | cppcheck | 23 | Inherent for now (no Rust C++ analyser) |
 | eslint | 21 | Stage 2: oxlint (done, fleet switched; no repo runs eslint) |
 | stylelint | 16 | Stage 2: biome (done, fleet switched; no repo runs stylelint) |
-| checkstyle | 15 | Stage 3: native `icheckstyle` (done, fleet switched 2026-10-11) |
-| hadolint | 15 | Stage 3: native `idockerfile` (done, fleet switched 2026-10-09) |
-| tidy | 29 | Stage 3: native `itidy` (done, fleet switched 2026-10-09) |
-| perlcritic | 7 | Stage 3: native `iperlcritic` (done, fleet switched 2026-10-11) |
+| checkstyle | 15 | Stage 3: builtin `icheckstyle` (done, fleet switched 2026-10-11) |
+| hadolint | 15 | Stage 3: builtin `idockerfile` (done, fleet switched 2026-10-09) |
+| tidy | 29 | Stage 3: builtin `itidy` (done, fleet switched 2026-10-09) |
+| perlcritic | 7 | Stage 3: builtin `iperlcritic` (done, fleet switched 2026-10-11) |
 
 Everything with fewer than ten repos is in the per-stage tables below.
 
@@ -69,13 +69,13 @@ Everything with fewer than ten repos is in the per-stage tables below.
   `docs/src/internal/licensing.md` (recorded 2026-10-11, undecided). New
   engines are not ported from GPL or LGPL source; where the original is
   copyleft, write from its documented and observed behaviour instead.
-- **Native first, wrapper second.** When a Rust crate implements the
+- **Builtin first, wrapper second.** When a Rust crate implements the
   capability (html5ever, roxmltree, minijinja, protox, usvg, lightningcss,
-  grass), write a native processor: zero tools to install, one fewer thing
+  grass), write a builtin processor: zero tools to install, one fewer thing
   `tool install` can fail on, and it runs in-process. When the capability is
   a whole Rust program (oxlint, selene, tectonic, uv, oxvg, biome, dprint,
   ty), wrap it as an external processor with a tool-registry entry. Both
-  count as Rust; native is preferred when the crate is mature.
+  count as Rust; builtin is preferred when the crate is mature.
 - **Additions only.** A new Rust processor lands beside the existing one and
   both stay. Nothing is retired, deprecated or marked superseded; the docs
   page of the existing processor gains one line, "a Rust alternative is X",
@@ -114,7 +114,7 @@ the existing processor's docs page. Ordered by repos using the non-Rust one.
 | Capability (non-Rust processor) | Repos | Rust processor | Status | Notes |
 |---|---|---|---|---|
 | Python type checking (mypy) | 127 | pyrefly | done | The fleet runs pyrefly in all 127 repos and mypy in none; the unused `mypy` dev dependency was dropped from the 7 repos still declaring it (2026-10-11). demos-lang-python keeps mypy as a dependency: it is the subject of an example there |
-| YAML lint (yamllint) | 27 | iyamllint | done | Native. All 23 yamllint rules with every option, `.yamllint.yaml` read as yamllint reads it (`extends`, levels, `ignore`, directives), verified identical to yamllint 1.38.0 over the fleet's 362 YAML files (`src/engines/yamllint/`). Not supported: the `locale` key (key-ordering collates by code point) and the user-level `~/.config/yamllint/config`. Switching a repo is `yamllint` → `iyamllint` in rsconstruct.toml; the fleet switched on 2026-10-08 (26 repos, `yamllint` dropped from their pyproject dev groups) |
+| YAML lint (yamllint) | 27 | iyamllint | done | Builtin. All 23 yamllint rules with every option, `.yamllint.yaml` read as yamllint reads it (`extends`, levels, `ignore`, directives), verified identical to yamllint 1.38.0 over the fleet's 362 YAML files (`src/engines/yamllint/`). Not supported: the `locale` key (key-ordering collates by code point) and the user-level `~/.config/yamllint/config`. Switching a repo is `yamllint` → `iyamllint` in rsconstruct.toml; the fleet switched on 2026-10-08 (26 repos, `yamllint` dropped from their pyproject dev groups) |
 | Spelling (aspell) | 1 | zspell | in progress | zspell reads Hunspell dictionaries; the one aspell user (veltzer.github.io) checks Hebrew with a compiled aspell dictionary, so the Hebrew Hunspell dictionary must be tried against its allowlist |
 | Python lint (pylint) | 0 | ruff | in progress | ruff's `PL` rule set; confirm the pylint rules the fleet's `.pylintrc` enables all have ruff equivalents |
 
@@ -131,9 +131,9 @@ New processor file + `ToolInfo` entry each. Ordered by repos affected.
 | SVG optimise (svgo) | 0 | oxvg | `oxvg` | todo | Rust port of svgo; check maturity at implementation time |
 | Workflow security (part of actionlint) | 199 | zizmor | `zizmor` | todo | Covers the security half of what actionlint does (untrusted inputs, permissions); the syntax half is Stage 3 `iactionlint`. Optional add-on, not a replacement on its own |
 
-## Stage 3: new native processors from Rust crates
+## Stage 3: new builtin processors from Rust crates
 
-Each is a `SimpleChecker`/`SimpleGenerator` over a crate, `is_native: true`,
+Each is a `SimpleChecker`/`SimpleGenerator` over a crate, `is_builtin: true`,
 `is_rust: true`. Ordered by repos affected.
 
 | Capability (old) | Repos | Crate(s) | New processor | Status | Notes |
@@ -194,8 +194,8 @@ easy to find and easy to choose.
    into the row and into the new processor's docs page.
 2. For a wrapper: `ToolInfo` in `src/tools.rs` (bare binary name, runtime,
    install methods), then the processor file, `is_rust: true`.
-   For a native: the processor file over the crate, `is_native: true`,
-   `is_rust: true`; the `native_processors_are_rust` test enforces the pair.
+   For a builtin: the processor file over the crate, `is_builtin: true`,
+   `is_rust: true`; the `builtin_processors_are_rust` test enforces the pair.
 3. Docs page under `docs/src/processor/<type>/`, test file under
    `tests/processor/`; `cargo nextest run` must be green with the tool
    installed (tests never skip).

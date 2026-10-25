@@ -2,7 +2,7 @@
 
 Scans Python source files for `import` and `from ... import` statements and adds dependencies on local Python modules.
 
-**Native**: Yes.
+**Builtin**: Yes.
 
 **Auto-detects**: Projects with `.py` files.
 

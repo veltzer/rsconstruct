@@ -26,7 +26,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["javascript", "typescript", "css", "html", "json", "markdown", "yaml", "formatter", "web", "frontend", "node", "npm"],
     description: "Check formatting with prettier",
-    is_native: false,
+    is_builtin: false,
     is_rust: false,
     supports_batch: true,
     caches_outputs: true,

@@ -128,7 +128,7 @@ pub struct BuildConfig {
     /// this default.
     #[serde(default)]
     pub command_timeout_secs: u64,
-    /// Stack size, in MiB, of each build worker thread. The native checkers
+    /// Stack size, in MiB, of each build worker thread. The builtin checkers
     /// parse arbitrary user files with recursive-descent parsers, so a file
     /// nested deeply enough (thousands of `(` in Lua, of `<div>` in HTML)
     /// recurses past a small stack, and a stack overflow aborts the whole

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Merges PDFs from subdirectories into one PDF per subdirectory. Native (in-process, using [lopdf](https://github.com/J-F-Liu/lopdf); no external tools required). An in-process alternative to [pdfunite](pdfunite.md), with the same configuration apart from `command` and `args`.
+Merges PDFs from subdirectories into one PDF per subdirectory. Builtin (in-process, using [lopdf](https://github.com/J-F-Liu/lopdf); no external tools required). An in-process alternative to [pdfunite](pdfunite.md), with the same configuration apart from `command` and `args`.
 
 ## How It Works
 

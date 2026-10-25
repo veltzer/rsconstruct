@@ -1498,7 +1498,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<ZolaConfig>,
         keywords: &["zola", "static-site", "site", "html", "blog", "mass", "rust"],
         description: "Build a zola site; one cached product per file zola writes, planned natively",
-        is_native: false,
+        is_builtin: false,
         is_rust: true,
         supports_batch: false,
         caches_outputs: true,

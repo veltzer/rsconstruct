@@ -178,7 +178,7 @@ inventory::submit! {
         defaults: None,
         keywords: &["yaml", "yml", "jq", "checker", "validator", "rust"],
         description: "Check YAML files with a jq filter (in-process)",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: true,
         caches_outputs: true,

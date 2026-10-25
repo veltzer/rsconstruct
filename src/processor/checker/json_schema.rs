@@ -127,7 +127,7 @@ inventory::submit! {
         defaults: None,
         keywords: &["json", "schema", "validator", "checker"],
         description: "Validate propertyOrdering in JSON schema files",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: false,
         caches_outputs: true,

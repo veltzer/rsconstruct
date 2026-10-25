@@ -355,7 +355,7 @@ inventory::submit! {
         defaults: Some(crate::config::ProcessorDefaults { dep_auto: &[".luacheckrc"], output_depends_on_input_name: true, ..crate::config::ProcessorDefaults::EMPTY }),
         keywords: &["lua", "linter", "checker", "luacheck", "rust"],
         description: "Lint Lua files with luacheck's analysis (in-process)",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: false,
         caches_outputs: true,

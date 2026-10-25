@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Compiles Sass and SCSS files to CSS. Native (in-process, using the [grass](https://github.com/connorskees/grass) compiler; no external tools required). An in-process alternative to [sass](sass.md).
+Compiles Sass and SCSS files to CSS. Builtin (in-process, using the [grass](https://github.com/connorskees/grass) compiler; no external tools required). An in-process alternative to [sass](sass.md).
 
 ## How It Works
 

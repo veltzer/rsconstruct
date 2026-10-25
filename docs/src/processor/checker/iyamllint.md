@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Lints YAML files with [yamllint](https://github.com/adrienverge/yamllint)'s rules. Native (in-process; no Python, no external tools). The Rust alternative to the [yamllint](yamllint.md) processor: it reads the same `.yamllint.yaml`, runs the same 23 rules with the same options, and reports the same problems at the same positions.
+Lints YAML files with [yamllint](https://github.com/adrienverge/yamllint)'s rules. Builtin (in-process; no Python, no external tools). The Rust alternative to the [yamllint](yamllint.md) processor: it reads the same `.yamllint.yaml`, runs the same 23 rules with the same options, and reports the same problems at the same positions.
 
 ## How It Works
 

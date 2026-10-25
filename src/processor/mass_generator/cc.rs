@@ -728,7 +728,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<CcConfig>,
         keywords: &["c", "cpp", "builder", "compiler", "gcc", "clang", "cc", "h", "hpp"],
         description: "Build C/C++ projects from cc.yaml manifests",
-        is_native: false,
+        is_builtin: false,
         is_rust: false,
         supports_batch: false,
         caches_outputs: true,

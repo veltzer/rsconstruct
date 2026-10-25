@@ -591,7 +591,7 @@ fn python_analyzer_handles_import_cycles() {
     );
 }
 
-/// A project with one `.c` source checked by `encoding` (a native checker
+/// A project with one `.c` source checked by `encoding` (a builtin checker
 /// standing in for a compiler) and an icpp analyzer with `analyzer_extra`
 /// appended to its stanza.
 fn icpp_project(analyzer_extra: &str) -> TempDir {

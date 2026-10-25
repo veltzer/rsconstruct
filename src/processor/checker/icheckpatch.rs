@@ -95,7 +95,7 @@ inventory::submit! {
         defaults: None,
         keywords: &["c", "linux", "kernel", "checker", "patch", "checkpatch", "rust"],
         description: "Check C source files with the Linux kernel's checkpatch.pl rules (in-process)",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: true,
         caches_outputs: true,

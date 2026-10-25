@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Lints GitHub Actions workflow files with [actionlint](https://github.com/rhysd/actionlint)'s rules. Native (in-process; no Go binary, no network). The Rust alternative to the [actionlint](actionlint.md) processor: it reads the same `.github/actionlint.yaml`, runs the same checks, and reports the same problems at the same positions, in actionlint's own words.
+Lints GitHub Actions workflow files with [actionlint](https://github.com/rhysd/actionlint)'s rules. Builtin (in-process; no Go binary, no network). The Rust alternative to the [actionlint](actionlint.md) processor: it reads the same `.github/actionlint.yaml`, runs the same checks, and reports the same problems at the same positions, in actionlint's own words.
 
 ## How It Works
 

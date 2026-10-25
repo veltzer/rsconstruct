@@ -2308,7 +2308,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<TagsConfig>,
         keywords: &["ctags", "tags", "generator", "code-navigation"],
         description: "Extract YAML frontmatter tags from markdown files into a searchable database",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: false,
         caches_outputs: true,

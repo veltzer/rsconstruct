@@ -149,7 +149,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<NpmConfig>,
         keywords: &["javascript", "typescript", "node", "npm", "package-manager", "web", "frontend"],
         description: "Install Node.js dependencies using npm",
-        is_native: false,
+        is_builtin: false,
         is_rust: false,
         supports_batch: false,
         caches_outputs: false,

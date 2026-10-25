@@ -190,7 +190,7 @@ inventory::submit! {
         defaults: None,
         keywords: &["xml", "svg", "linter", "validator", "xsd", "xmllint", "rust"],
         description: "Check XML well-formedness and validate against an XSD schema (in-process)",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: true,
         caches_outputs: true,

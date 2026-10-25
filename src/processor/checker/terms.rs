@@ -1083,7 +1083,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<TermsConfig>,
         keywords: &["checker", "terminology", "text", "words"],
         description: "Check that technical terms are backtick-quoted in markdown files",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: true,
         caches_outputs: true,

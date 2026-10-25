@@ -351,9 +351,9 @@ use crate::processor::{Processor, format_command, run_command};
 #[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum IncludeScanner {
-    /// Native regex-based scanner (fast, no external process)
+    /// Builtin regex-based scanner (fast, no external process)
     #[default]
-    Native,
+    Builtin,
     /// Use gcc/g++ -MM (accurate but slower, spawns external process)
     Compiler,
 }
@@ -404,7 +404,7 @@ pub struct CcSingleFileConfig {
     /// Shared settings across all compilers
     #[serde(default)]
     pub include_paths: Vec<String>,
-    /// Method for scanning header dependencies (native or compiler)
+    /// Method for scanning header dependencies (builtin or compiler)
     #[serde(default)]
     pub include_scanner: IncludeScanner,
     #[serde(flatten)]
@@ -780,7 +780,7 @@ inventory::submit! {
                 doc: "Additional header search directories" },
             crate::config::FieldSpec { name: "include_scanner", ty: crate::config::FieldType::String,
                 affects_output: true, required: false,
-                doc: "Header dependency scanner: native (fast) or compiler (accurate)" },
+                doc: "Header dependency scanner: builtin (fast) or compiler (accurate)" },
         ],
         omit_standard_fields: &["command", "formats", "args"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".c", ".cc"], src_exclude_dirs: &[] }),
@@ -788,7 +788,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<CcSingleFileConfig>,
         keywords: &["c", "cpp", "compiler", "gcc", "clang", "binary", "executable"],
         description: "Compile C/C++ source files into executables (single-file)",
-        is_native: false,
+        is_builtin: false,
         is_rust: false,
         supports_batch: false,
         caches_outputs: true,

@@ -37,7 +37,7 @@ fn create_sass(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::P
                 source_filter: None,
                 discover_mode: DiscoverMode::SingleFormat("css"),
                 execute_fn: execute_sass,
-                is_native: false,
+                is_builtin: false,
             },
         ))
     })
@@ -52,7 +52,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["sass", "scss", "css", "converter", "web", "frontend"],
     description: "Compile Sass/SCSS to CSS",
-    is_native: false,
+    is_builtin: false,
     is_rust: false,
     supports_batch: false,
     caches_outputs: true,

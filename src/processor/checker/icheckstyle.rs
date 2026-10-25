@@ -159,7 +159,7 @@ inventory::submit! {
         defaults: Some(crate::config::ProcessorDefaults { dep_auto: &["checkstyle.xml"], ..crate::config::ProcessorDefaults::EMPTY }),
         keywords: &["java", "linter", "checker", "style", "checkstyle", "rust"],
         description: "Check Java code with checkstyle's checks (in-process)",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: true,
         caches_outputs: true,

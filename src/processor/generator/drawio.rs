@@ -44,7 +44,7 @@ fn create_drawio(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
                 source_filter: None,
                 discover_mode: DiscoverMode::MultiFormat,
                 execute_fn: execute_drawio,
-                is_native: false,
+                is_builtin: false,
             },
         ))
     })
@@ -59,7 +59,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["diagram", "drawio", "converter", "svg", "png", "generator"],
     description: "Export draw.io diagrams to images",
-    is_native: false,
+    is_builtin: false,
     is_rust: false,
     supports_batch: false,
     caches_outputs: true,

@@ -153,7 +153,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<RustSingleFileConfig>,
         keywords: &["rust", "compiler", "rs", "cargo", "binary", "executable"],
         description: "Compile single-file Rust programs into executables",
-        is_native: false,
+        is_builtin: false,
         is_rust: true,
         supports_batch: false,
         caches_outputs: true,

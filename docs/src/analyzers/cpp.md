@@ -2,7 +2,7 @@
 
 Scans C/C++ source files for `#include` directives and adds header file dependencies to the build graph.
 
-**Native**: No (may invoke `gcc`, `pkg-config`).
+**Builtin**: No (may invoke `gcc`, `pkg-config`).
 
 **Auto-detects**: Projects with `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, `.hpp`, or `.hxx` files.
 
@@ -11,7 +11,7 @@ Scans C/C++ source files for `#include` directives and adds header file dependen
 - Recursive header scanning (follows includes in header files)
 - Queries compiler for system include paths (only tracks project-local headers)
 - Handles both `#include "file"` (relative to source) and `#include <file>` (searches include paths)
-- Supports native regex scanning and compiler-based scanning (`gcc -MM`)
+- Supports builtin regex scanning and compiler-based scanning (`gcc -MM`)
 - Uses the dependency cache for incremental builds
 
 ## System header detection
@@ -22,7 +22,7 @@ The cpp analyzer queries the compiler for its include search paths using `gcc -E
 
 ```toml
 [analyzer.cpp]
-include_scanner       = "native"          # or "compiler" for gcc -MM
+include_scanner       = "builtin"         # or "compiler" for gcc -MM
 include_paths         = ["include", "src"]
 pkg_config            = ["gtk+-3.0", "libcurl"]
 include_path_commands = ["gcc -print-file-name=plugin"]
@@ -70,4 +70,4 @@ error: its headers live in a default directory.
 
 ## See also
 
-- [icpp](icpp.md) — native (no-subprocess) C/C++ dependency analyzer
+- [icpp](icpp.md) — builtin (no-subprocess) C/C++ dependency analyzer

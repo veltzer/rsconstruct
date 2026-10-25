@@ -371,7 +371,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<MdbookConfig>,
         keywords: &["markdown", "md", "rust", "documentation", "book", "html"],
         description: "Build mdbook documentation",
-        is_native: false,
+        is_builtin: false,
         is_rust: true,
         supports_batch: false,
         caches_outputs: true,

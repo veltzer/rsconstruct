@@ -172,7 +172,7 @@ impl WorkQueue {
 
 /// Run one processor call, turning a panic into an error for its products.
 ///
-/// The native checkers parse arbitrary user files; an "internal error"
+/// The builtin checkers parse arbitrary user files; an "internal error"
 /// `panic!` in one of them used to unwind the worker, and the thread scope
 /// re-raised it on exit, so one bad file failed the whole build instead of
 /// its own product. `what` names the call in the error.
@@ -488,7 +488,7 @@ impl Executor<'_> {
                 let tx = tx.clone();
                 let (queue, caps, lctx, counters) = (&queue, &caps, &lctx, &counters);
                 // A large stack, so a deeply nested input file fails its
-                // product in a native parser instead of overflowing the
+                // product in a builtin parser instead of overflowing the
                 // stack, which aborts the process ([build] worker_stack_mib).
                 let spawned = thread::Builder::new()
                     .name(format!("rsconstruct-worker-{n}"))

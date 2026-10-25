@@ -1284,7 +1284,7 @@ pub struct SimpleGeneratorParams<C> {
     pub source_filter: Option<fn(&C, &Path) -> bool>,
     pub discover_mode: DiscoverMode,
     pub execute_fn: fn(&crate::build_context::BuildContext, &C, &Product) -> Result<()>,
-    pub is_native: bool,
+    pub is_builtin: bool,
 }
 
 // Manual Copy/Clone: `#[derive]` would demand `C: Copy`/`C: Clone`, but every
@@ -1331,7 +1331,7 @@ where
     }
 
     fn required_tools(&self) -> Vec<String> {
-        let mut tools = if self.params.is_native {
+        let mut tools = if self.params.is_builtin {
             Vec::new()
         } else {
             vec![self.config.as_ref().command.clone()]
@@ -1585,18 +1585,11 @@ mod tests {
         }
     }
 
-    /// `is_native` is declared twice for every `SimpleGenerator`: once in
-    /// `SimpleGeneratorParams` (where it decides whether `config.command`
-    /// counts as a required tool) and once in the plugin registration (where
-    /// it drives `processor list`). Nothing linked them, so the two could
-    /// silently disagree — a processor could be listed as native while still
-    /// demanding an external tool, or vice versa.
-    ///
-    /// `SimpleGenerator` declares `is_native` twice — once in
+    /// `SimpleGenerator` declares `is_builtin` twice — once in
     /// `SimpleGeneratorParams` (where it makes `required_tools()` drop
     /// `config.command`) and once in the plugin registration (where it
     /// drives `processor list`). Nothing linked them, so flipping one alone
-    /// left a processor listed as native while still demanding a binary, or
+    /// left a processor listed as builtin while still demanding a binary, or
     /// the reverse.
     ///
     /// The two are reconciled here through observable behavior: for a
@@ -1605,12 +1598,12 @@ mod tests {
     /// comparing that against the registry flag pins them together.
     ///
     /// Scoped to `SimpleGenerator` deliberately. Hand-written processors have
-    /// legitimate reasons to be native yet name tools (tera renders
+    /// legitimate reasons to be builtin yet name tools (tera renders
     /// in-process but its template functions can shell out to `git`), and
-    /// non-native ones may run something other than their configured command
+    /// non-builtin ones may run something other than their configured command
     /// (clippy runs `cargo`).
     #[test]
-    fn simple_generator_is_native_declarations_agree() {
+    fn simple_generator_is_builtin_declarations_agree() {
         // Each entry: (processor name, the params flag it was constructed
         // with). Kept next to the assertion rather than derived, because
         // SimpleGenerator does not know its own name at runtime — which is
@@ -1648,16 +1641,16 @@ mod tests {
             simple_generators.len(),
             param_sites,
             "SimpleGenerator construction sites and this list disagree — a \
-             new SimpleGenerator must be added here so its is_native \
+             new SimpleGenerator must be added here so its is_builtin \
              declarations stay pinned"
         );
 
-        for (name, params_native) in simple_generators {
-            let registry_native = crate::registries::is_native(name);
+        for (name, params_builtin) in simple_generators {
+            let registry_builtin = crate::registries::is_builtin(name);
             assert_eq!(
-                *params_native, registry_native,
-                "Processor '{name}': SimpleGeneratorParams says is_native={params_native} \
-                 but the plugin registration says is_native={registry_native}. These are \
+                *params_builtin, registry_builtin,
+                "Processor '{name}': SimpleGeneratorParams says is_builtin={params_builtin} \
+                 but the plugin registration says is_builtin={registry_builtin}. These are \
                  two hand-maintained copies of one fact; update both.",
             );
         }

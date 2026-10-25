@@ -44,7 +44,7 @@ Use `rsconstruct processor files` to see which files each processor discovers.
 - [Rumdl](processor/checker/rumdl.md) — lints Markdown files with rumdl
 - [Oxlint](processor/checker/oxlint.md) — lints JavaScript/TypeScript files with oxlint
 - [Selene](processor/checker/selene.md) — lints Lua files with selene
-- [Iluacheck](processor/checker/iluacheck.md) — lints Lua files with luacheck's analysis (native)
+- [Iluacheck](processor/checker/iluacheck.md) — lints Lua files with luacheck's analysis (builtin)
 - [Biome](processor/checker/biome.md) — lints CSS/JavaScript/TypeScript/JSON files with biome
 - [Make](processor/checker/make.md) — runs make in directories containing Makefiles
 - [Cargo](processor/mass_generator/cargo.md) — builds Rust projects using Cargo
@@ -54,10 +54,10 @@ Use `rsconstruct processor files` to see which files each processor discovers.
 - [Taplo](processor/checker/taplo.md) — checks TOML files with taplo
 - [Terms](processor/checker/terms.md) — checks that technical terms are backtick-quoted in Markdown files
 - [Json Schema](processor/checker/json_schema.md) — validates JSON schema propertyOrdering
-- [Iyamlschema](processor/checker/iyamlschema.md) — validates YAML files against JSON schemas (native)
-- [Yaml2json](processor/generator/yaml2json.md) — converts YAML files to JSON (native)
+- [Iyamlschema](processor/checker/iyamlschema.md) — validates YAML files against JSON schemas (builtin)
+- [Yaml2json](processor/generator/yaml2json.md) — converts YAML files to JSON (builtin)
 - [Markdown2html](processor/generator/markdown2html.md) — converts Markdown to HTML using markdown CLI
-- [Imarkdown2html](processor/generator/imarkdown2html.md) — converts Markdown to HTML (native)
+- [Imarkdown2html](processor/generator/imarkdown2html.md) — converts Markdown to HTML (builtin)
 - [Mass Generator](processor/mass_generator/generic.md) — runs a tool that enumerates its outputs in advance, one cached product per predicted file
 - [Zola](processor/mass_generator/zola.md) — builds a zola site, one cached product per file zola writes, planned natively
 

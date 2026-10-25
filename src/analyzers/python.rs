@@ -254,7 +254,7 @@ inventory::submit! {
     crate::registries::AnalyzerPlugin {
         name: "python",
         description: "Scan Python files for local import dependencies",
-        is_native: true,
+        is_builtin: true,
         create: |toml_value, _| {
             let cfg: PythonAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
             Ok(Box::new(PythonDepAnalyzer::new(cfg)))

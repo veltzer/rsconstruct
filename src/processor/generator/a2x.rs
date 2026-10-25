@@ -59,7 +59,7 @@ fn create_a2x(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::Pr
                 source_filter: None,
                 discover_mode: DiscoverMode::SingleFormat("pdf"),
                 execute_fn: execute_a2x,
-                is_native: false,
+                is_builtin: false,
             },
         ))
     })
@@ -74,7 +74,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["asciidoc", "converter", "generator", "documentation", "html", "pdf"],
     description: "Convert AsciiDoc files to PDF",
-    is_native: false,
+    is_builtin: false,
     is_rust: false,
     supports_batch: false,
     caches_outputs: true,

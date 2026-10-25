@@ -26,7 +26,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["docker", "dockerfile", "linter", "container"],
     description: "Lint Dockerfiles using hadolint",
-    is_native: false,
+    is_builtin: false,
     is_rust: false,
     supports_batch: true,
     caches_outputs: true,

@@ -109,7 +109,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<crate::config::MarpImagesConfig>,
         keywords: &["markdown", "marp", "images", "checker", "presentation"],
         description: "Validate image references in Marp markdown presentations",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: true,
         caches_outputs: true,

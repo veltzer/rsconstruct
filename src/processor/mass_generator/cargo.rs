@@ -402,7 +402,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<CargoConfig>,
         keywords: &["rust", "builder", "cargo", "rs", "package-manager"],
         description: "Build Rust projects using Cargo",
-        is_native: false,
+        is_builtin: false,
         is_rust: true,
         supports_batch: false,
         caches_outputs: true,

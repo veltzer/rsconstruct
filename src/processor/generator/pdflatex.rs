@@ -223,7 +223,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<PdflatexConfig>,
         keywords: &["latex", "tex", "pdf", "generator", "typesetting"],
         description: "Compile LaTeX documents using pdflatex",
-        is_native: false,
+        is_builtin: false,
         is_rust: false,
         supports_batch: false,
         caches_outputs: true,

@@ -512,7 +512,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<SphinxConfig>,
         keywords: &["python", "sphinx", "documentation", "rst", "html", "mass", "pip"],
         description: "Build Sphinx HTML documentation; one cached product per file Sphinx writes, planned by Sphinx itself",
-        is_native: false,
+        is_builtin: false,
         is_rust: false,
         supports_batch: false,
         caches_outputs: true,

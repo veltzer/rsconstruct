@@ -26,7 +26,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["perl", "linter", "pl", "pm"],
     description: "Analyze Perl code using perlcritic",
-    is_native: false,
+    is_builtin: false,
     is_rust: false,
     supports_batch: true,
     caches_outputs: true,

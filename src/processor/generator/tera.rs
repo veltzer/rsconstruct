@@ -1011,7 +1011,7 @@ inventory::submit! {
         defconfig_json: registry::default_config_json::<TeraConfig>,
         keywords: &["template", "generator", "jinja", "html", "rust"],
         description: "Render Tera templates into output files",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: false,
         caches_outputs: true,

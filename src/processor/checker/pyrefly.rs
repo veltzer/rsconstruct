@@ -29,7 +29,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["python", "type-checker", "types", "py", "pip"],
     description: "Type-check Python files using pyrefly",
-    is_native: false,
+    is_builtin: false,
     is_rust: true,
     supports_batch: true,
     caches_outputs: true,

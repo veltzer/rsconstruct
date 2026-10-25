@@ -372,7 +372,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<LinuxModuleConfig>,
         keywords: &["c", "linux", "kernel", "module", "builder"],
         description: "Build Linux kernel modules from linux-module.yaml manifests",
-        is_native: false,
+        is_builtin: false,
         is_rust: false,
         supports_batch: false,
         caches_outputs: true,

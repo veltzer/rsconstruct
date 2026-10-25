@@ -154,7 +154,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<MdlConfig>,
         keywords: &["markdown", "md", "linter", "ruby", "gem"],
         description: "Lint Markdown files using mdl (markdownlint)",
-        is_native: false,
+        is_builtin: false,
         is_rust: false,
         supports_batch: false,
         caches_outputs: true,

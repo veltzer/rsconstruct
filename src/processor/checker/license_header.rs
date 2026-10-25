@@ -222,7 +222,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<LicenseHeaderConfig>,
         keywords: &["checker", "license", "header", "copyright"],
         description: "Verify source files contain required license headers",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: true,
         caches_outputs: true,

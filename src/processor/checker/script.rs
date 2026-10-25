@@ -134,7 +134,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<ScriptConfig>,
         keywords: &["shell", "script", "checker", "sh", "bash"],
         description: "Run a user-configured script as a checker",
-        is_native: false,
+        is_builtin: false,
         is_rust: false,
         supports_batch: true,
         caches_outputs: true,

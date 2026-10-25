@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Checks that source files carry a license header. Native (in-process; no external tools required).
+Checks that source files carry a license header. Builtin (in-process; no external tools required).
 
 ## How It Works
 

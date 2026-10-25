@@ -42,7 +42,7 @@ fn create_protobuf(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processo
                 source_filter: None,
                 discover_mode: DiscoverMode::SingleFormat("pb.cc"),
                 execute_fn: execute_protobuf,
-                is_native: false,
+                is_builtin: false,
             },
         ))
     })
@@ -57,7 +57,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["protobuf", "proto", "generator", "grpc", "serialization"],
     description: "Compile Protocol Buffer definitions",
-    is_native: false,
+    is_builtin: false,
     is_rust: false,
     supports_batch: false,
     caches_outputs: true,

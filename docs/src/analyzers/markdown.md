@@ -2,7 +2,7 @@
 
 Scans Markdown source files for image and link references (`![alt](path)`, `[text](path)`) and adds referenced local files as dependencies.
 
-**Native**: Yes.
+**Builtin**: Yes.
 
 **Auto-detects**: Projects with `.md` files.
 

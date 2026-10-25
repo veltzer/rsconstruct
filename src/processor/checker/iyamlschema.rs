@@ -280,7 +280,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<IyamlschemaConfig>,
         keywords: &["yaml", "yml", "schema", "validator"],
         description: "Validate YAML files against JSON schemas (in-process)",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: true,
         caches_outputs: true,

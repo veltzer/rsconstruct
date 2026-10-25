@@ -212,7 +212,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<AspellConfig>,
         keywords: &["spellcheck", "spelling", "english", "checker"],
         description: "Check spelling using aspell",
-        is_native: false,
+        is_builtin: false,
         is_rust: false,
         supports_batch: true,
         caches_outputs: true,

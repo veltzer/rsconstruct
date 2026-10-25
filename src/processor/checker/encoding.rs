@@ -106,7 +106,7 @@ inventory::submit! {
         defaults: None,
         keywords: &["checker", "encoding", "utf8", "text", "validator"],
         description: "Validate that text files are valid UTF-8 without BOM",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: true,
         caches_outputs: true,

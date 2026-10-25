@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Converts Markdown files to HTML using the `pulldown-cmark` Rust crate. Native (in-process, no external tools required).
+Converts Markdown files to HTML using the `pulldown-cmark` Rust crate. Builtin (in-process, no external tools required).
 
-This is the native equivalent of [markdown2html](markdown2html.md), which uses the external `markdown` Perl script.
+This is the builtin equivalent of [markdown2html](markdown2html.md), which uses the external `markdown` Perl script.
 
 ## Source Files
 

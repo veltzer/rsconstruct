@@ -43,7 +43,7 @@ fn create_markdown2html(
                 source_filter: None,
                 discover_mode: DiscoverMode::SingleFormat("html"),
                 execute_fn: execute_markdown2html,
-                is_native: false,
+                is_builtin: false,
             },
         ))
     })
@@ -58,7 +58,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["markdown", "md", "html", "converter", "generator"],
     description: "Convert Markdown files to HTML",
-    is_native: false,
+    is_builtin: false,
     is_rust: false,
     supports_batch: false,
     caches_outputs: true,

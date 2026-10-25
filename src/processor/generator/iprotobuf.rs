@@ -243,7 +243,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<IprotobufConfig>,
         keywords: &["protobuf", "proto", "generator", "grpc", "serialization", "rust"],
         description: "Compile Protocol Buffer definitions to Rust (in-process)",
-        is_native: true,
+        is_builtin: true,
         is_rust: true,
         supports_batch: false,
         caches_outputs: true,

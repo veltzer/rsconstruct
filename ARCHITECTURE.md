@@ -242,7 +242,7 @@ already `Ord`); a single `ProductState` consumed by classify, executor,
 
 ## 3. Capabilities live on the link-time registry entry, so config-dependent capabilities have no home
 
-`supports_batch`, `can_fix`, `max_jobs_cap`, `version`, `is_native`, and
+`supports_batch`, `can_fix`, `max_jobs_cap`, `version`, `is_builtin`, and
 all four field-metadata accessors are `&'static` fields on
 `ProcessorPlugin`, registered via `inventory::submit!` at link time.
 Anything not compiled into the binary therefore **cannot have
@@ -251,7 +251,7 @@ got the execution trait and none of the metadata registry — no cache
 versioning, no field validation, no multi-instance sections, no
 completion — and whose scripting runtime downgraded real errors to
 warnings. The Lua processor type was removed on 2026-10-17: nothing in the
-fleet used it. What remains is the native half of the problem.)
+fleet used it. What remains is the builtin half of the problem.)
 
 The `script` processor declares `can_fix: false` beside a working `fix()`
 implementation, reconciled by

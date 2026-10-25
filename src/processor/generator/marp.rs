@@ -220,7 +220,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<MarpConfig>,
     keywords: &["markdown", "presentation", "slides", "pdf", "html"],
     description: "Convert Marp Markdown presentations to PDF/HTML",
-    is_native: false,
+    is_builtin: false,
     is_rust: false,
     supports_batch: false,
     caches_outputs: true,

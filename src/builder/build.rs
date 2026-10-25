@@ -623,7 +623,7 @@ impl Builder {
                 display_opts: DisplayOptions::default(),
                 verbose: true,
                 all_processor_names: &[],
-                native_processors: &std::collections::HashSet::new(),
+                builtin_processors: &std::collections::HashSet::new(),
                 rust_processors: &std::collections::HashSet::new(),
             },
         );
@@ -658,9 +658,9 @@ impl Builder {
             .into_iter()
             .map(std::string::String::as_str)
             .collect();
-        let native_set: std::collections::HashSet<&str> = processors
+        let builtin_set: std::collections::HashSet<&str> = processors
             .iter()
-            .filter(|(name, _)| crate::registries::processor::is_native(name.as_str()))
+            .filter(|(name, _)| crate::registries::processor::is_builtin(name.as_str()))
             .map(|(name, _)| name.as_str())
             .collect();
         let rust_set: std::collections::HashSet<&str> = processors
@@ -680,7 +680,7 @@ impl Builder {
                 display_opts: DisplayOptions::default(),
                 verbose,
                 all_processor_names: &all_proc_names,
-                native_processors: &native_set,
+                builtin_processors: &builtin_set,
                 rust_processors: &rust_set,
             },
         );
@@ -869,7 +869,7 @@ impl Builder {
                         "stale": pc[2],
                         "new": pc[3],
                         "total": pc[0] + pc[1] + pc[2] + pc[3],
-                        "native": opts.native_processors.contains(name),
+                        "builtin": opts.builtin_processors.contains(name),
                         "rust": opts.rust_processors.contains(name),
                     })
                 })
@@ -902,7 +902,7 @@ impl Builder {
         let rows: Vec<Vec<String>> = per_processor
             .iter()
             .map(|(name, pc)| {
-                let native = crate::tables::yes_no(opts.native_processors.contains(name));
+                let builtin = crate::tables::yes_no(opts.builtin_processors.contains(name));
                 let rust = crate::tables::yes_no(opts.rust_processors.contains(name));
                 vec![
                     crate::tables::short_processor_name(name).to_string(),
@@ -910,7 +910,7 @@ impl Builder {
                     pc[1].to_string(),
                     pc[2].to_string(),
                     pc[3].to_string(),
-                    native.to_string(),
+                    builtin.to_string(),
                     rust.to_string(),
                 ]
             })
@@ -932,7 +932,7 @@ impl Builder {
                 col_labels[1],
                 col_labels[2],
                 col_labels[3],
-                "native",
+                "builtin",
                 "rust",
             ],
             &rows,

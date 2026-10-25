@@ -502,7 +502,7 @@ inventory::submit! {
     crate::registries::AnalyzerPlugin {
         name: "tera",
         description: "Scan Tera templates for include/import/extends dependencies",
-        is_native: true,
+        is_builtin: true,
         create: |toml_value, _| {
             let cfg: TeraAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
             Ok(Box::new(TeraDepAnalyzer::new(cfg)))

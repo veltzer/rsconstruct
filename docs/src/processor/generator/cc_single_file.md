@@ -210,7 +210,7 @@ include_paths = []        # Additional -I paths (relative to project root)
 src_dirs = ["src"]          # Source directory (required; no default)
 output_suffix = ".elf"    # Suffix for output executables (default: ".elf")
 dep_inputs = []         # Additional files that trigger rebuilds when changed
-include_scanner = "native" # Method for scanning header dependencies (default: "native")
+include_scanner = "builtin" # Method for scanning header dependencies (default: "builtin")
 ```
 
 ### Multiple Compilers
@@ -266,7 +266,7 @@ Each source file is compiled once per compiler profile, allowing you to:
 | `src_dirs` | string[] | `[]` | Directories to scan for source files. No default — an unset `src_dirs` scans nothing. |
 | `output_suffix` | string | `".elf"` | Suffix appended to output executables |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
-| `include_scanner` | string | `"native"` | Method for scanning header dependencies |
+| `include_scanner` | string | `"builtin"` | Method for scanning header dependencies |
 | `compilers` | array | `[]` | Multiple compiler profiles (overrides single-compiler fields) |
 
 ### Compiler Profile Fields
@@ -293,12 +293,12 @@ The `include_scanner` option controls how header dependencies are discovered:
 
 | Value | Description |
 |-------|-------------|
-| `native` | Fast regex-based scanner (default). Parses `#include` directives directly without spawning external processes. Handles `#include "file"` and `#include <file>` forms. |
+| `builtin` | Fast regex-based scanner (default). Parses `#include` directives directly without spawning external processes. Handles `#include "file"` and `#include <file>` forms. |
 | `compiler` | Uses `gcc -MM` / `g++ -MM` to scan dependencies. More accurate for complex cases (computed includes, conditional compilation) but slower as it spawns a compiler process per source file. |
 
-### Native scanner behavior
+### Builtin scanner behavior
 
-The native scanner:
+The builtin scanner:
 - Recursively follows `#include` directives
 - Searches include paths in order: source file directory, configured `include_paths`, project root
 - Skips system headers (`/usr/...`, `/lib/...`)
@@ -309,9 +309,9 @@ The native scanner:
 Use `include_scanner = "compiler"` if you have:
 - Computed includes: `#include MACRO_THAT_EXPANDS_TO_FILENAME`
 - Complex conditional compilation affecting which headers are included
-- Headers outside the standard search paths that the native scanner misses
+- Headers outside the standard search paths that the builtin scanner misses
 
-The native scanner may occasionally report extra dependencies (false positives), which is safe—it just means some files might rebuild unnecessarily. It will not miss dependencies (false negatives) for standard `#include` patterns.
+The builtin scanner may occasionally report extra dependencies (false positives), which is safe—it just means some files might rebuild unnecessarily. It will not miss dependencies (false negatives) for standard `#include` patterns.
 
 ## Clean behavior
 

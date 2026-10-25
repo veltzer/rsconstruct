@@ -535,7 +535,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<MassGeneratorConfig>,
         keywords: &["mass", "generator", "predict", "manifest", "site", "transparent", "creator"],
         description: "Run a tool that enumerates its outputs in advance; one cached product per predicted file",
-        is_native: false,
+        is_builtin: false,
         is_rust: false,
         supports_batch: false,
         caches_outputs: true,

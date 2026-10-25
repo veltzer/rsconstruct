@@ -112,7 +112,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<ClangTidyConfig>,
         keywords: &["c", "cpp", "linter", "clang", "checker", "cc", "h", "hpp"],
         description: "Run clang-tidy static analysis on C/C++ source files",
-        is_native: false,
+        is_builtin: false,
         is_rust: false,
         supports_batch: false,
         caches_outputs: true,

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Validates YAML files against JSON schemas referenced by a `$schema` URL field in each file. Checks both schema conformance and property ordering. Native (in-process, no external tools required).
+Validates YAML files against JSON schemas referenced by a `$schema` URL field in each file. Checks both schema conformance and property ordering. Builtin (in-process, no external tools required).
 
 ## How It Works
 

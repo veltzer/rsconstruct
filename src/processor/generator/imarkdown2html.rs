@@ -39,7 +39,7 @@ fn create_imarkdown2html(
                 source_filter: None,
                 discover_mode: DiscoverMode::SingleFormat("html"),
                 execute_fn: execute_imarkdown2html,
-                is_native: true,
+                is_builtin: true,
             },
         ))
     })
@@ -57,7 +57,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["markdown", "md", "html", "converter", "generator"],
     description: "Convert Markdown to HTML (in-process)",
-    is_native: true,
+    is_builtin: true,
     is_rust: true,
     supports_batch: false,
     caches_outputs: true,

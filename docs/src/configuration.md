@@ -275,7 +275,7 @@ is hidden by default:
 | Table | Command | Columns |
 |---|---|---|
 | `analyzer_defconfig` | `rsconstruct analyzer defconfig` | `Field`, `Type`, `Default` |
-| `analyzer_list` | `rsconstruct analyzer list` | `Name`, `Native`, `Description` *(verbose)* |
+| `analyzer_list` | `rsconstruct analyzer list` | `Name`, `Builtin`, `Description` *(verbose)* |
 | `analyzer_stats` | `rsconstruct analyzer stats, analyzer build` | `Analyzer`, `Files`, `Dependencies` |
 | `analyzer_used` | `rsconstruct analyzer used` | `Name`, `Detected`, `Description` *(verbose)* |
 | `build_timings` | `rsconstruct build --timings` | `Phase`, `Duration` |
@@ -284,12 +284,12 @@ is hidden by default:
 | `info_source` | `rsconstruct info source` | `Extension`, `Count` |
 | `processor_config` | `rsconstruct processor config` | `Field`, `Value` |
 | `processor_fields` | `rsconstruct processor defconfig, processor info` | `Field`, `Type`, `Default`, `Required`, `Checksum`, `Description` *(verbose)* |
-| `processor_list` | `rsconstruct processor list` | `Name`, `Type`, `Native`, `Rust`, `Batch`, `Cache`, `Rust alternative`, `Description` *(verbose)* |
+| `processor_list` | `rsconstruct processor list` | `Name`, `Type`, `Builtin`, `Rust`, `Batch`, `Cache`, `Rust alternative`, `Description` *(verbose)* |
 | `processor_recommend` | `rsconstruct processor recommend` | `Extension / File`, `Processor`, `Also`, `Reason` |
 | `processor_search` | `rsconstruct processor search` | `Name`, `Type`, `Description`, `Keywords` |
 | `processor_types` | `rsconstruct processor types` | `Type`, `Batch`, `Description`, `Batching` *(verbose)* |
 | `processor_used` | `rsconstruct processor used` | `Name`, `Type`, `Detected`, `Description` *(verbose)* |
-| `product_status` | `rsconstruct status, build --dry-run` | `Processor`, one column per product state (`up-to-date`, `restorable`, `stale`, `new` for `status`; `skip`, `restore`, `build`, `build-new` for `build --dry-run`), `native`, `rust` |
+| `product_status` | `rsconstruct status, build --dry-run` | `Processor`, one column per product state (`up-to-date`, `restorable`, `stale`, `new` for `status`; `skip`, `restore`, `build`, `build-new` for `build --dry-run`), `builtin`, `rust` |
 | `sloc` | `rsconstruct sloc` | `Language`, `Files`, `Blank`, `Comment`, `Code` |
 | `status_breakdown` | `rsconstruct status --breakdown` | `Processor`, `Files`, `Breakdown` |
 | `tag_count` | `rsconstruct tag count` | `Count`, `Tag` |
@@ -317,7 +317,7 @@ is hidden by default:
 | `allow_missing_dep_auto` | boolean | `false` | Skip a `dep_auto` entry you listed when the file does not exist, as every entry used to be skipped. By default such an entry is a config error naming the processor, the file and the config line: a listed file that is missing is a typo or a stale copy of a shared config, and either way a dependency that silently tracks nothing. Processor defaults (`.pylintrc`, `ruff.toml`, ...) are optional by nature and are never checked. |
 | `allow_missing_src_dirs` | boolean | `false` | Skip a `src_dirs` entry that names a directory which does not exist, as every entry used to be skipped. By default such an entry is a config error naming the processor and the entry: a directory listed in the config that is not there is a typo, a stanza left behind when the directory moved, or a copy of another repo's config, and in every case a processor that checks nothing while the build stays green. A directory an upstream processor declares as its output is never reported, whatever this is set to. This switch covers directories only: a missing `src_files` entry is always an error. |
 | `reject_dot_src_dirs` | boolean | `false` | Make a `src_dirs` entry of `"."` a config error. `"."` and `""` both mean the whole project tree, recursively; written as `"."` it reads like "the root directory" and hides that the stanza sweeps every subdirectory too. Turn this on in a project whose stanzas are meant to name the directories they cover: the error names the stanza and the config line, and the fix is to list the real directories, or to write `""` if sweeping the tree is intended. Off by default because `"."` is not wrong, only easy to misread. Disabled stanzas are not checked. |
-| `worker_stack_mib` | integer | `256` | Stack size, in MiB, of each build worker thread. The native checkers parse arbitrary files with recursive parsers; on a small stack a deeply nested file (thousands of `(` in Lua, of `<div>` in HTML) overflows it, which aborts the whole process. Only touched pages are committed, so the reservation costs address space, not memory. A panic inside a processor fails that product only. |
+| `worker_stack_mib` | integer | `256` | Stack size, in MiB, of each build worker thread. The builtin checkers parse arbitrary files with recursive parsers; on a small stack a deeply nested file (thousands of `(` in Lua, of `<div>` in HTML) overflows it, which aborts the whole process. Only touched pages are committed, so the reservation costs address space, not memory. A panic inside a processor fails that product only. |
 
 The `output_dir` prefix is purely a layout choice — `rsconstruct clean outputs` does not special-case it. Cleanup is driven by per-product `outputs` and `output_dirs` declarations, then a generic empty-directory sweep walks parents bottom-up. See [Clean behavior](processors.md#clean-behavior) and [`rsconstruct clean`](commands.md#rsconstruct-clean) for details.
 

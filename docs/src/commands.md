@@ -265,9 +265,9 @@ rsconstruct --json status              # Same summary as JSON
 ```
 
 The per-processor table (and each entry of `--json`'s `processor` array) carries
-two flags after the counts: `native`, whether the processor is pure Rust inside
+two flags after the counts: `builtin`, whether the processor is pure Rust inside
 rsconstruct, and `rust`, whether the code that does the work is written in Rust at
-all — always so for a native processor, and for an external one only when the tool
+all — always so for a builtin processor, and for an external one only when the tool
 it runs is (ruff, taplo, rumdl, clippy, cargo, mdbook, pyrefly, rustc). Processors
 that run a user-supplied command (`script`, `explicit`, `generator`, `creator`,
 `mass_generator`) report `rust: false`, since the language is unknown.
@@ -526,10 +526,10 @@ rsconstruct processor graph --format mermaid # Mermaid format
 rsconstruct processor files --headers   # Show files with processor headers
 ```
 
-`list` prints one row per processor with its type and four flags: `Native`
+`list` prints one row per processor with its type and four flags: `Builtin`
 (pure Rust inside rsconstruct, or `external` when it runs another program),
 `Rust` (whether the code that does the work is written in Rust — every
-native processor, plus external ones whose tool is Rust: ruff, taplo, rumdl,
+builtin processor, plus external ones whose tool is Rust: ruff, taplo, rumdl,
 clippy, cargo, mdbook, pyrefly, rustc), `Batch` (whether the processor can
 take several input files in one tool invocation — a linter that accepts a
 file list can, a converter that writes one output per input such as pandoc
@@ -537,9 +537,9 @@ or marp cannot) and `Cache` (whether a cache hit stands in for a run: it
 restores a generator's outputs or proves a checker's pass, so nothing is
 lost by skipping the run; `No` for pip, npm and gem, which install into an
 environment and write only a stamp — the stamp is cached while the installed
-packages may be gone). The JSON form carries the same as `native`, `rust`,
+packages may be gone). The JSON form carries the same as `builtin`, `rust`,
 `supports_batch` and `caches_outputs` booleans. `rust` is what to read when
-the question is "how much of this project's toolchain is Rust"; `native` is
+the question is "how much of this project's toolchain is Rust"; `builtin` is
 what to read when the question is "which processors need no tool
 installed"; `supports_batch` is what decides whether a stanza's `batch` field
 and the build's `--batch-size` have any effect on it (a processor that
