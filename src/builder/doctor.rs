@@ -114,11 +114,16 @@ impl Builder {
             );
         }
 
-        // Check tools for enabled processors
+        // Check tools for enabled processors. A stanza with `enabled = false`
+        // is kept precisely so its tool need not be installed, so its
+        // absence is not a finding.
         let processors = self.create_processors()?;
         let mut checked_tools = std::collections::HashSet::new();
 
         for name in sorted_keys(&processors) {
+            if !super::tools::instance_enabled(&processors, name) {
+                continue;
+            }
             let processor = &processors[name];
             for tool in processor.required_tools() {
                 if !checked_tools.insert(tool.clone()) {

@@ -283,3 +283,50 @@ fn icheckstyle_matches_checkstyle() {
         "icheckstyle (left) and checkstyle (right)"
     );
 }
+
+const CONFIG_FILE_CONFIG: &str =
+    "[processor.checker.icheckstyle]\nsrc_dirs = [\"src\"]\nconfig_file = \"conf/checks.xml\"\n";
+
+/// A configuration with one check that `long x = 1l;` passes.
+const ARRAY_TYPE_STYLE_XML: &str = "<?xml version=\"1.0\"?>\n<module name=\"Checker\">\n  <module name=\"TreeWalker\">\n    <module name=\"ArrayTypeStyle\"/>\n  </module>\n</module>\n";
+
+/// A configuration with one check that `long x = 1l;` fails.
+const UPPER_ELL_XML: &str = "<?xml version=\"1.0\"?>\n<module name=\"Checker\">\n  <module name=\"TreeWalker\">\n    <module name=\"UpperEll\"/>\n  </module>\n</module>\n";
+
+/// A `config_file` other than `checkstyle.xml` is an input of every
+/// product: editing it re-checks a file that passed, without a `dep_inputs`
+/// entry naming it.
+#[test]
+fn icheckstyle_config_file_edit_rechecks() {
+    let temp_dir = setup_project(
+        CONFIG_FILE_CONFIG,
+        &[
+            ("conf/checks.xml", ARRAY_TYPE_STYLE_XML),
+            ("src/Ell.java", "class Ell {\n  long x = 1l;\n}\n"),
+        ],
+    );
+    assert_passes(
+        &build(temp_dir.path()),
+        "a lowercase ell while the named config leaves UpperEll off",
+    );
+    fs::write(temp_dir.path().join("conf/checks.xml"), UPPER_ELL_XML).unwrap();
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "the same file once the config enables UpperEll",
+        "Should use uppercase 'L'. [UpperEll]",
+    );
+}
+
+/// A `config_file` that does not exist fails the build naming it.
+#[test]
+fn icheckstyle_missing_config_file_fails() {
+    let temp_dir = setup_project(
+        CONFIG_FILE_CONFIG,
+        &[("src/Ell.java", "class Ell {\n  long x = 1L;\n}\n")],
+    );
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "a missing configuration",
+        "icheckstyle config_file not found: conf/checks.xml",
+    );
+}

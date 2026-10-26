@@ -173,3 +173,51 @@ fn doctor_system_dependency_is_probed_as_package_not_tool() {
         "the fix for a missing system dependency is install-deps, not a tool install",
     );
 }
+
+/// `doctor` checks the tools of the enabled processors. A stanza with
+/// `enabled = false` is kept precisely so its tool need not be installed, so
+/// its absence is not a finding; the same stanza enabled is.
+#[test]
+fn doctor_skips_tools_of_disabled_processors() {
+    let config = |enabled: &str| {
+        format!(
+            "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[processor.checker.script]\ncommand = \"definitely-not-a-real-tool-xyz\"\nsrc_dirs = [\"src\"]\nenabled = {enabled}\n"
+        )
+    };
+    let temp_dir = setup_project_with_config(&config("false"));
+    let project_path = temp_dir.path();
+    fs::create_dir_all(project_path.join("tera.templates")).unwrap();
+
+    let tool_checks = |output: std::process::Output| -> Vec<Value> {
+        let parsed: Value =
+            serde_json::from_slice(&output.stdout).expect("doctor --json should emit valid JSON");
+        parsed["checks"]
+            .as_array()
+            .expect("doctor --json should have a checks array")
+            .iter()
+            .filter(|c| {
+                c["name"]
+                    .as_str()
+                    .is_some_and(|n| n.starts_with("definitely-not-a-real-tool-xyz"))
+            })
+            .cloned()
+            .collect()
+    };
+
+    let output =
+        run_rsconstruct_with_env(project_path, &["--json", "doctor"], &[("NO_COLOR", "1")]);
+    let checks = tool_checks(output);
+    assert!(
+        checks.is_empty(),
+        "doctor probed a disabled processor's tool: {checks:?}"
+    );
+
+    // Control: enabled, the missing tool is a failed check.
+    fs::write(project_path.join("rsconstruct.toml"), config("true")).unwrap();
+    let output =
+        run_rsconstruct_with_env(project_path, &["--json", "doctor"], &[("NO_COLOR", "1")]);
+    let checks = tool_checks(output);
+    assert_eq!(checks.len(), 1, "{checks:?}");
+    assert_eq!(checks[0]["status"], "fail");
+    assert_eq!(checks[0]["category"], "tool");
+}

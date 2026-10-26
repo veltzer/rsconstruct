@@ -816,6 +816,12 @@ pub fn lint_file(filename: &str, options: &Options) -> Result<Outcome> {
         findings: Vec::new(),
     };
     process_file_data(&mut lint, file_extension, lines);
+    // A match that fancy-regex gave up on (its backtrack limit; Python's
+    // `re` has none) reported no match where cpplint would have gone on:
+    // the findings are not cpplint's, so the file fails instead.
+    if let Some(failure) = regex::take_failure() {
+        bail!("checking {filename}: {failure}");
+    }
     Ok(Outcome::Linted(lint.findings))
 }
 

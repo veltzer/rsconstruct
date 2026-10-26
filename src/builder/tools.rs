@@ -140,6 +140,18 @@ fn tool_runtime(tool: &str) -> &'static str {
     })
 }
 
+/// Whether the instance `name` takes part in builds: its stanza does not
+/// say `enabled = false`.
+///
+/// `create_processors` instantiates every declared stanza, disabled ones
+/// included, so each command that walks the map decides for itself. The
+/// tool commands, `doctor` and the build-time lock check all go through
+/// this one predicate: a disabled stanza exists precisely to keep its
+/// config while its tool is absent, so none of them may demand that tool.
+pub(super) fn instance_enabled(processors: &crate::processor::ProcessorMap, name: &str) -> bool {
+    processors[name].scan_config().enabled
+}
+
 /// Handle `rsconstruct tool` subcommands without a project config.
 /// Uses default processor configs so List, Stats, Install, and Graph work
 /// even outside a project directory.
@@ -149,7 +161,14 @@ pub fn tools_no_config(
     verbose: bool,
 ) -> Result<()> {
     let processors = super::create_all_default_processors()?;
-    run_tools_command(ctx, &processors, &|_name| true, action, verbose, None)
+    run_tools_command(
+        ctx,
+        &processors,
+        &|name| instance_enabled(&processors, name),
+        action,
+        verbose,
+        None,
+    )
 }
 
 /// What the project's rsconstruct.lock must hold, for the processors
@@ -207,13 +226,21 @@ fn drift_key(method: &str, package: &str) -> (String, String) {
 }
 
 impl Builder {
-    /// Check that rsconstruct.lock covers the project and that the installed
-    /// tools are the locked ones. Run by `build` in CI and with
-    /// `--verify-tool-versions`.
-    pub fn verify_tool_versions(&self, ctx: &crate::build_context::BuildContext) -> Result<()> {
-        let processors = self.create_processors()?;
-        let wanted = project_wanted(self, &processors, &|_name| true)?;
-        tool_lock::verify(ctx, &wanted).map(|_| ())
+    /// Check that rsconstruct.lock covers the processors `is_active` selects
+    /// and that their tools are installed at the locked versions. Run by
+    /// `build` in CI and with `--verify-tool-versions`, after discovery and
+    /// the `-p`/`-x` selection, over the processors with products in the
+    /// graph — the same set the missing-tool preflight checks. Entries the
+    /// lock holds for other processors are not judged here; `tool check` is
+    /// the exact, whole-project test.
+    pub(super) fn verify_tool_versions(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        processors: &crate::processor::ProcessorMap,
+        is_active: &dyn Fn(&str) -> bool,
+    ) -> Result<()> {
+        let wanted = project_wanted(self, processors, is_active)?;
+        tool_lock::verify(ctx, &wanted, tool_lock::Coverage::AtLeast).map(|_| ())
     }
 
     /// Handle `rsconstruct tool` subcommands
@@ -224,12 +251,21 @@ impl Builder {
         verbose: bool,
     ) -> Result<()> {
         let processors = self.create_processors()?;
-        run_tools_command(ctx, &processors, &|_name| true, action, verbose, Some(self))
+        run_tools_command(
+            ctx,
+            &processors,
+            &|name| instance_enabled(&processors, name),
+            action,
+            verbose,
+            Some(self),
+        )
     }
 }
 
 /// Core implementation for `tools` subcommands, shared by `Builder::tools()` and `tools_no_config()`.
 /// `builder` is `Some` when running with a project config (needed for `open_file`, `Check`, `Lock`).
+/// `is_enabled` selects the processors whose tools count: `list-configured
+/// --all` is the one action that looks past it.
 fn run_tools_command(
     ctx: &crate::build_context::BuildContext,
     processors: &crate::processor::ProcessorMap,
@@ -425,7 +461,7 @@ fn run_tools_command(
                 anyhow::anyhow!("tool check requires a project with rsconstruct.toml")
             })?;
             let wanted = project_wanted(builder, processors, is_enabled)?;
-            tool_lock::verify(ctx, &wanted)?;
+            tool_lock::verify(ctx, &wanted, tool_lock::Coverage::Exact)?;
             if crate::json_output::is_json_mode() {
                 let out = serde_json::json!({
                     "lock_file": tool_lock::LOCK_FILE,
@@ -458,7 +494,7 @@ fn run_tools_command(
                     "changes": synced.changes,
                 });
                 println!("{}", serde_json::to_string_pretty(&out)?);
-            } else if synced.changes.is_empty() {
+            } else if synced.changes.is_empty() && !synced.created {
                 println!("{} is up to date.", color::bold(tool_lock::LOCK_FILE));
             } else {
                 synced.report();
@@ -693,10 +729,11 @@ fn run_tools_command(
                     .into());
                 }
             } else {
-                // Build tool list from all enabled processors.
-                // Every processor in the config gets its tools installed —
-                // auto_detect is not checked because the tool itself may need
-                // to be installed before detection can succeed.
+                // Build tool list from the enabled processors. A stanza with
+                // `enabled = false` is skipped: it is kept precisely so its
+                // tool need not be installed. auto_detect is not checked
+                // because the tool itself may need to be installed before
+                // detection can succeed.
                 let mut install_tools: BTreeMap<String, Vec<String>> = BTreeMap::new();
                 for name in sorted_keys(processors) {
                     if !is_enabled(name) {

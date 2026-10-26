@@ -650,7 +650,17 @@ impl Builder {
     ) -> Result<()> {
         let processors = self.create_processors()?;
 
+        // Every declared stanza, for `config`, which shows a disabled
+        // instance's configuration like any other.
         let proc_names = sorted_keys(&processors);
+        // The stanzas that take part in builds, for `used`, `names` and
+        // `allowlist`: a stanza with `enabled = false` is declared but not
+        // used, and listing it under `enabled = [...]` would be a lie.
+        let enabled_names: Vec<&String> = proc_names
+            .iter()
+            .filter(|name| super::tools::instance_enabled(&processors, name))
+            .copied()
+            .collect();
 
         match action {
             ProcessorAction::List { .. }
@@ -666,7 +676,7 @@ impl Builder {
             }
             ProcessorAction::Used => {
                 if crate::json_output::is_json_mode() {
-                    let entries: Vec<serde_json::Value> = proc_names.iter().map(|name| {
+                    let entries: Vec<serde_json::Value> = enabled_names.iter().map(|name| {
                         let proc = &processors[name.as_str()];
                         serde_json::json!({
                             "name": name,
@@ -677,7 +687,7 @@ impl Builder {
                     }).collect();
                     println!("{}", serde_json::to_string_pretty(&entries)?);
                 } else {
-                    let rows: Vec<Vec<String>> = proc_names
+                    let rows: Vec<Vec<String>> = enabled_names
                         .iter()
                         .map(|name| {
                             let proc = &processors[name.as_str()];
@@ -756,7 +766,7 @@ impl Builder {
                 processor_defconfig(pname, verbose)?;
             }
             ProcessorAction::Allowlist => {
-                let enabled: Vec<&str> = proc_names.iter().map(|s| s.as_str()).collect();
+                let enabled: Vec<&str> = enabled_names.iter().map(|s| s.as_str()).collect();
                 if crate::json_output::is_json_mode() {
                     println!("{}", serde_json::to_string_pretty(&enabled)?);
                 } else {
@@ -772,9 +782,9 @@ impl Builder {
             }
             ProcessorAction::Names => {
                 if crate::json_output::is_json_mode() {
-                    println!("{}", serde_json::to_string_pretty(&proc_names)?);
+                    println!("{}", serde_json::to_string_pretty(&enabled_names)?);
                 } else {
-                    for name in &proc_names {
+                    for name in &enabled_names {
                         println!("{name}");
                     }
                 }

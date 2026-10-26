@@ -192,6 +192,25 @@ build after it rebuilds. Tests: `renamed_input_restores_by_default` and
 
 If the cache entry exists AND all output files are present on disk, no work is needed.
 
+### Inspection is read-only
+
+`status`, `product show`, `build --dry-run` and `--explain` report what the
+build would do without doing any of it, and that includes the cache: they
+must not populate `.rsconstruct/`. Their lookup (`explain_descriptor`) reads
+the local descriptor, or — with `remote_pull` on — downloads and validates
+the remote one without writing it locally (`get_descriptor_peeking`), and
+checks objects with `object_available`, which asks the remote whether the
+object exists rather than fetching it. The build path
+(`needs_rebuild_descriptor`, `can_restore_descriptor`,
+`restore_from_descriptor`) uses `get_descriptor_pulling` and `ensure_object`,
+which persist what they pull because the restore that follows needs it.
+
+The verdict is the same on both paths: a tree descriptor is checked against
+the product's *declared* outputs as well as its recorded entries, so an
+output the product declares but the last run never produced reads as
+"restore" (or "rebuild", if an object is missing) in `status` exactly as it
+does in the build.
+
 ## Rebuild classification
 
 | Classification | Condition | Action |

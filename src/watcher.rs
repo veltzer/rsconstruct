@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use notify::{Event, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -8,16 +8,70 @@ use crate::builder::Builder;
 use crate::cli::BuildOptions;
 use crate::color;
 
-/// Check if a path should be ignored (editor temp files, build artifacts).
-/// `output_dir` is the configured global output directory.
-fn should_ignore(path: &Path, output_dir: &str) -> bool {
-    // Ignore .rsconstruct cache directory (match as a path component, not substring)
-    if path.components().any(|c| c.as_os_str() == ".rsconstruct") {
-        return true;
+/// The directories whose events never trigger a rebuild: the cache
+/// directory and the configured `[build] output_dir`, both resolved once
+/// against the project root and matched as path prefixes.
+///
+/// The previous rule matched the output directory as a single path
+/// *component*, which never matched a multi-segment `output_dir` such as
+/// `build/out` (so every output write re-triggered the build) and did match
+/// any directory that merely shared the name (`src/out/foo.rs` was never
+/// watched when `output_dir = "out"`).
+struct IgnoredDirs {
+    prefixes: Vec<PathBuf>,
+    root: PathBuf,
+}
+
+impl IgnoredDirs {
+    fn new(root: &Path, output_dir: &str) -> Self {
+        let mut prefixes = vec![lexical_join(root, Path::new(".rsconstruct"))];
+        let out = lexical_join(root, Path::new(output_dir));
+        // An output directory that is the project root itself (`"."`) would
+        // ignore every event; the output tree cannot be told from the sources
+        // then, so nothing is ignored for it.
+        if out != root {
+            prefixes.push(out);
+        }
+        Self {
+            prefixes,
+            root: root.to_path_buf(),
+        }
     }
 
-    // Ignore the configured output directory (match as a path component, not substring)
-    if path.components().any(|c| c.as_os_str() == output_dir) {
+    /// Whether `path` (absolute, or relative to the project root — the
+    /// watcher reports whichever form the watched path had) lies under one
+    /// of the ignored directories.
+    fn contains(&self, path: &Path) -> bool {
+        let absolute = lexical_join(&self.root, path);
+        self.prefixes.iter().any(|p| absolute.starts_with(p))
+    }
+}
+
+/// `root.join(path)` with `.` and `..` components folded away, so that
+/// `./out`, `out/../out` and `out` all name the same prefix. Purely lexical:
+/// no symlink resolution, no filesystem access.
+fn lexical_join(root: &Path, path: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut result = if path.is_absolute() {
+        PathBuf::new()
+    } else {
+        root.to_path_buf()
+    };
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                result.pop();
+            }
+            other => result.push(other),
+        }
+    }
+    result
+}
+
+/// Check if a path should be ignored (editor temp files, build artifacts).
+fn should_ignore(path: &Path, ignored: &IgnoredDirs) -> bool {
+    if ignored.contains(path) {
         return true;
     }
 
@@ -62,9 +116,10 @@ fn register_watches(watcher: &mut impl Watcher, paths: &[PathBuf]) {
 }
 
 pub fn watch(ctx: &crate::build_context::BuildContext, opts: &BuildOptions) -> Result<()> {
+    let root = std::env::current_dir().context("Failed to read the current directory")?;
     let mut builder = Builder::new_with_overrides(ctx, &opts.iset, &opts.pset)?;
     let mut watch_paths = builder.watch_paths();
-    let mut output_dir = builder.output_dir().to_string();
+    let mut ignored = IgnoredDirs::new(&root, builder.output_dir());
 
     // Register watches BEFORE the initial build: edits made while the (possibly
     // long) initial build runs must queue up as events, not vanish.
@@ -96,7 +151,7 @@ pub fn watch(ctx: &crate::build_context::BuildContext, opts: &BuildOptions) -> R
             }
             match rx.recv_timeout(poll_interval) {
                 Ok(Ok(event)) => {
-                    let all_ignored = event.paths.iter().all(|p| should_ignore(p, &output_dir));
+                    let all_ignored = event.paths.iter().all(|p| should_ignore(p, &ignored));
                     if all_ignored {
                         continue;
                     }
@@ -134,13 +189,19 @@ pub fn watch(ctx: &crate::build_context::BuildContext, opts: &BuildOptions) -> R
         // and keep watching — the next save triggers another attempt.
         println!();
         println!("{}", color::bold("Change detected, rebuilding..."));
+        // One context serves every rebuild, and its in-session caches
+        // (checksums by path, the combined-input memo) are only valid for
+        // one build run: they are consulted before any stat, and the
+        // executor evicts only the files the build itself writes. The edit
+        // that got us here is exactly what they would hide.
+        ctx.clear_session_caches();
         match Builder::new_with_overrides(ctx, &opts.iset, &opts.pset) {
             Err(e) => {
                 println!("{}", color::red(&format!("Config error: {e}")));
             }
             Ok(mut builder) => {
                 let new_paths = builder.watch_paths();
-                output_dir = builder.output_dir().to_string();
+                ignored = IgnoredDirs::new(&root, builder.output_dir());
                 if let Err(e) = builder.build(ctx, opts, Vec::new()) {
                     println!("{}", color::red(&format!("Build error: {e}")));
                 }
@@ -168,4 +229,107 @@ pub fn watch(ctx: &crate::build_context::BuildContext, opts: &BuildOptions) -> R
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn root() -> PathBuf {
+        PathBuf::from("/proj")
+    }
+
+    /// The output directory is matched as a path prefix under the project
+    /// root, whether the event path is absolute or root-relative, and in
+    /// whatever spelling the config used.
+    #[test]
+    fn output_dir_is_ignored_as_a_prefix() {
+        let ignored = IgnoredDirs::new(&root(), "out");
+        assert!(should_ignore(Path::new("/proj/out/x"), &ignored));
+        assert!(should_ignore(
+            Path::new("/proj/out/deep/er/x.html"),
+            &ignored
+        ));
+        assert!(
+            should_ignore(Path::new("out/x"), &ignored),
+            "root-relative event path"
+        );
+        assert!(should_ignore(
+            Path::new("/proj/.rsconstruct/mtime.redb"),
+            &ignored
+        ));
+        assert!(!should_ignore(Path::new("/proj/src/main.rs"), &ignored));
+        assert!(
+            !should_ignore(Path::new("/proj/output/x"), &ignored),
+            "a prefix match is on components, not characters"
+        );
+
+        let spelled = IgnoredDirs::new(&root(), "./out/");
+        assert!(should_ignore(Path::new("/proj/out/x"), &spelled));
+    }
+
+    /// A multi-segment `[build] output_dir` such as `build/out` never matched
+    /// the old single-component rule, so every output write re-triggered
+    /// the build.
+    #[test]
+    fn multi_segment_output_dir_is_ignored() {
+        let ignored = IgnoredDirs::new(&root(), "build/out");
+        assert!(should_ignore(Path::new("/proj/build/out/x"), &ignored));
+        assert!(should_ignore(Path::new("build/out/x"), &ignored));
+        assert!(
+            !should_ignore(Path::new("/proj/build/src/x.c"), &ignored),
+            "a sibling of the output dir under the same parent is a source"
+        );
+        assert!(
+            !should_ignore(Path::new("/proj/out/x"), &ignored),
+            "the last segment alone is not the output dir"
+        );
+    }
+
+    /// A source directory that merely shares the output directory's name
+    /// (`src/out/foo.rs` with `output_dir = "out"`) was silently never
+    /// watched under the old component rule.
+    #[test]
+    fn a_source_dir_named_like_the_output_dir_is_not_ignored() {
+        let ignored = IgnoredDirs::new(&root(), "out");
+        assert!(!should_ignore(Path::new("/proj/src/out/foo.rs"), &ignored));
+        assert!(!should_ignore(Path::new("src/out/foo.rs"), &ignored));
+        assert!(!should_ignore(
+            Path::new("/proj/lib/.rsconstruct-notes.md"),
+            &ignored
+        ));
+    }
+
+    /// `output_dir = "."` names the project root: ignoring it would ignore
+    /// every event, so the output rule is dropped and only `.rsconstruct`
+    /// stays ignored.
+    #[test]
+    fn output_dir_equal_to_root_ignores_nothing_extra() {
+        let ignored = IgnoredDirs::new(&root(), ".");
+        assert!(!should_ignore(Path::new("/proj/src/main.rs"), &ignored));
+        assert!(should_ignore(Path::new("/proj/.rsconstruct/x"), &ignored));
+    }
+
+    #[test]
+    fn editor_temp_files_are_still_ignored() {
+        let ignored = IgnoredDirs::new(&root(), "out");
+        assert!(should_ignore(Path::new("/proj/src/.main.rs.swp"), &ignored));
+        assert!(should_ignore(Path::new("/proj/src/main.rs~"), &ignored));
+        assert!(should_ignore(Path::new("/proj/src/#main.rs#"), &ignored));
+        assert!(should_ignore(Path::new("/proj/src/main.tmp"), &ignored));
+        assert!(!should_ignore(Path::new("/proj/src/main.rs"), &ignored));
+    }
+
+    #[test]
+    fn lexical_join_folds_dot_and_dotdot() {
+        assert_eq!(
+            lexical_join(Path::new("/proj"), Path::new("./a/../b/./c")),
+            PathBuf::from("/proj/b/c")
+        );
+        assert_eq!(
+            lexical_join(Path::new("/proj"), Path::new("/abs/x")),
+            PathBuf::from("/abs/x"),
+            "an absolute path is kept, folded"
+        );
+    }
 }

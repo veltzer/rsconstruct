@@ -191,7 +191,16 @@ impl crate::processor::Processor for IshellcheckProcessor {
         crate::processor::ProcessorBase::config_json(&self.config)
     }
 
-    /// One product per scanned file (the default `discover`).
+    /// A named `rcfile` is an input of every product (it must exist); the
+    /// default `.shellcheckrc` is a `dep_auto` input.
+    fn extra_dep_inputs(&self) -> Result<Vec<String>> {
+        let named =
+            crate::processor::named_config_file("ishellcheck", "rcfile", &self.config.rcfile, "")?;
+        Ok(named.into_iter().collect())
+    }
+
+    /// One product per scanned file (the default `discover`), plus the
+    /// rcfile read from disk.
     fn discovery(&self) -> crate::processor::Discovery {
         crate::processor::Discovery::PerFile
     }

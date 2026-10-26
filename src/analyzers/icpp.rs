@@ -16,9 +16,7 @@ use crate::errors;
 use crate::file_index::FileIndex;
 use crate::graph::Product;
 
-use super::{DepAnalyzer, ScanResult};
-
-const CPP_MATCH_EXTENSIONS: &[&str] = &["c", "cc", "cpp", "cxx"];
+use super::{DepAnalyzer, ScanResult, is_cpp_source};
 
 /// In-process C/C++ dependency analyzer using a pure-Rust regex scanner.
 pub struct IcppDepAnalyzer {
@@ -223,19 +221,19 @@ impl DepAnalyzer for IcppDepAnalyzer {
     }
 
     fn match_product(&self, p: &Product) -> Option<PathBuf> {
-        if p.inputs.is_empty() {
-            return None;
-        }
-        let source = &p.inputs[0];
-        if self.is_excluded(source) {
-            return None;
-        }
-        let ext = source.extension().and_then(|s| s.to_str()).unwrap_or("");
-        if CPP_MATCH_EXTENSIONS.contains(&ext) {
-            Some(source.clone())
-        } else {
-            None
-        }
+        self.match_sources(p).into_iter().next()
+    }
+
+    /// Every C/C++ source among the product's inputs, wherever it sits: a
+    /// compiler product has its source first, but a `cc.yaml` or
+    /// `linux-module.yaml` product has the manifest first and the sources
+    /// it lists after it.
+    fn match_sources(&self, p: &Product) -> Vec<PathBuf> {
+        p.inputs
+            .iter()
+            .filter(|input| is_cpp_source(input) && !self.is_excluded(input))
+            .cloned()
+            .collect()
     }
 
     fn scan(
@@ -258,6 +256,62 @@ impl DepAnalyzer for IcppDepAnalyzer {
                 .map(|p| p.display().to_string()),
         );
         Ok(parts)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn product(inputs: &[&str]) -> Product {
+        Product::new(
+            inputs.iter().map(PathBuf::from).collect(),
+            vec![],
+            "x",
+            0,
+            None,
+        )
+    }
+
+    /// A `cc.yaml` product carries the manifest first and the sources it
+    /// lists after it; every one of those sources is scanned, and the
+    /// manifest and headers are not. A plain compiler product still scans
+    /// exactly its primary input.
+    #[test]
+    fn icpp_match_sources_finds_every_source_behind_a_manifest() {
+        let analyzer = IcppDepAnalyzer::new(IcppAnalyzerConfig::default(), false);
+        let manifest = product(&["linux-module.yaml", "mod.c", "mod.h", "util.cc"]);
+        assert_eq!(
+            analyzer.match_sources(&manifest),
+            vec![PathBuf::from("mod.c"), PathBuf::from("util.cc")]
+        );
+        assert_eq!(
+            analyzer.match_product(&manifest),
+            Some(PathBuf::from("mod.c"))
+        );
+
+        let single = product(&["src/main.cpp"]);
+        assert_eq!(
+            analyzer.match_sources(&single),
+            vec![PathBuf::from("src/main.cpp")]
+        );
+        assert_eq!(
+            analyzer.match_sources(&product(&["linux-module.yaml"])),
+            Vec::<PathBuf>::new()
+        );
+        assert_eq!(analyzer.match_product(&product(&["doc.md"])), None);
+    }
+
+    /// `src_exclude_dirs` applies per source, not per product.
+    #[test]
+    fn icpp_match_sources_excludes_per_source() {
+        let config = IcppAnalyzerConfig {
+            src_exclude_dirs: vec!["/vendor/".to_string()],
+            ..IcppAnalyzerConfig::default()
+        };
+        let analyzer = IcppDepAnalyzer::new(config, false);
+        let p = product(&["cc.yaml", "src/vendor/v.c", "src/a.c"]);
+        assert_eq!(analyzer.match_sources(&p), vec![PathBuf::from("src/a.c")]);
     }
 }
 

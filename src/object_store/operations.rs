@@ -167,6 +167,25 @@ impl ObjectStore {
         ctx: &crate::build_context::BuildContext,
         descriptor_key: &str,
     ) -> Result<Option<super::CacheDescriptor>> {
+        let Some(descriptor) = self.peek_descriptor_from_remote(ctx, descriptor_key)? else {
+            return Ok(None);
+        };
+        // Reuse store_descriptor rather than fs::write so the remote path
+        // gets the same temp-then-rename atomicity as the local one.
+        self.store_descriptor(descriptor_key, &descriptor)?;
+        Ok(Some(descriptor))
+    }
+
+    /// Download and validate a descriptor from the remote cache without
+    /// writing anything locally. The read-only inspection commands
+    /// (`status`, `product show`, `build --dry-run`, `--explain`) go through
+    /// this so that looking at the cache never changes it; the build path
+    /// uses `try_fetch_descriptor_from_remote`, which persists the result.
+    pub(super) fn peek_descriptor_from_remote(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        descriptor_key: &str,
+    ) -> Result<Option<super::CacheDescriptor>> {
         let Some(remote) = &self.remote else {
             return Ok(None);
         };
@@ -196,9 +215,6 @@ impl ObjectStore {
             }
         }
 
-        // Reuse store_descriptor rather than fs::write so the remote path
-        // gets the same temp-then-rename atomicity as the local one.
-        self.store_descriptor(descriptor_key, &descriptor)?;
         Ok(Some(descriptor))
     }
 }

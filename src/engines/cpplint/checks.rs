@@ -1667,9 +1667,14 @@ pub fn check_redundant_virtual(lint: &mut Lint<'_>, cl: &CleansedLines, linenum:
     let mut start_col = g(&virtual_match, 2).len();
     let stop = (linenum + 3).min(cl.num_lines);
     for start_line in linenum..stop {
-        let rest = from(&cl.elided[start_line], start_col);
+        let line = &cl.elided[start_line];
+        let rest = from(line, start_col);
         if let Some(params) = pmatch(r"([^(]*)\(", rest) {
-            let (_, l, c) = close_expression(cl, start_line, start_col + g(&params, 1).len());
+            // `rest` starts at a character boundary, which may be before
+            // `start_col` when a multi-byte character straddles it; the
+            // opener's offset is measured from where `rest` really starts.
+            let base = line.len() - rest.len();
+            let (_, l, c) = close_expression(cl, start_line, base + g(&params, 1).len());
             end_line = l;
             end_col = c;
             break;

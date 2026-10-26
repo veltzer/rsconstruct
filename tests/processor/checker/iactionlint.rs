@@ -166,3 +166,48 @@ fn iactionlint_checks_local_actions() {
         combined_output(&output)
     );
 }
+
+/// A named `config_file` is an input of every product: editing it
+/// re-checks a workflow that passed, without a `dep_inputs` entry naming it.
+#[test]
+fn iactionlint_config_file_edit_rechecks() {
+    let temp_dir = setup_project_with(
+        "[processor.checker.iactionlint]\nsrc_dirs = [\".github/workflows\"]\nconfig_file = \"lint/actionlint.yaml\"\n",
+        "on: push\njobs:\n  test:\n    runs-on: my-runner\n    steps:\n      - run: echo\n",
+    );
+    fs::create_dir_all(temp_dir.path().join("lint")).unwrap();
+    fs::write(
+        temp_dir.path().join("lint/actionlint.yaml"),
+        "self-hosted-runner:\n  labels: [my-runner]\n",
+    )
+    .unwrap();
+    assert_passes(
+        &build(temp_dir.path()),
+        "a self-hosted label the named config lists",
+    );
+    fs::write(
+        temp_dir.path().join("lint/actionlint.yaml"),
+        "self-hosted-runner:\n  labels: []\n",
+    )
+    .unwrap();
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "the same workflow once the config lists no labels",
+        "label \"my-runner\" is unknown",
+    );
+}
+
+/// A `config_file` that does not exist fails the build naming it, rather
+/// than checking with no configuration.
+#[test]
+fn iactionlint_missing_config_file_fails() {
+    let temp_dir = setup_project_with(
+        "[processor.checker.iactionlint]\nsrc_dirs = [\".github/workflows\"]\nconfig_file = \"lint/actionlint.yaml\"\n",
+        VALID,
+    );
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "a missing config file",
+        "iactionlint config_file not found: lint/actionlint.yaml",
+    );
+}

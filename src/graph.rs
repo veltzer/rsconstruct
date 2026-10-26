@@ -313,6 +313,12 @@ pub struct BuildGraph {
     /// (processor, `primary_input_id`, variant) → product id. Replaces an O(N)
     /// linear scan that dominated `status` wall time on large projects.
     checker_dedup: HashMap<(String, PathId, Option<String>), usize>,
+    /// Dedup index for whole-stanza products (`add_instance_product`):
+    /// processor instance name → product id. An explicit stanza is one
+    /// product whatever its inputs resolve to, so neither the checker key
+    /// (primary input) nor the output key identifies it across discovery
+    /// rounds — see `add_instance_product`.
+    instance_dedup: HashMap<String, usize>,
     /// Adjacency list: product id -> list of product ids that depend on it
     dependents: Vec<Vec<usize>>,
     /// Reverse: product id -> list of product ids it depends on
@@ -400,6 +406,74 @@ impl BuildGraph {
         if !output_dirs.is_empty() {
             self.products[id].output_dirs = output_dirs.into_iter().map(Arc::new).collect();
         }
+        Ok(id)
+    }
+
+    /// Add the one product of a whole-stanza processor instance (the
+    /// explicit processor), or update it if the instance already declared
+    /// it in an earlier discovery round.
+    ///
+    /// Such a product's identity is its instance: not its primary input
+    /// (which `checker_dedup` keys on — and which changes between rounds
+    /// when an upstream-generated file is the first `inputs` entry), and
+    /// not its outputs (which the output dedup keys on — and which a stanza
+    /// with `output_dirs` only does not have). Either miss let a later
+    /// round add a second copy of the stanza: two products built, or a
+    /// product with no inputs that panicked in `primary_input`.
+    ///
+    /// A re-declaration may only add inputs (the file index only grows
+    /// across rounds) and must keep the same outputs and output
+    /// directories; anything else is a graph error.
+    pub fn add_instance_product(
+        &mut self,
+        inputs: Vec<PathBuf>,
+        outputs: Vec<PathBuf>,
+        processor: &str,
+        config_hash: Option<String>,
+        output_dirs: Vec<PathBuf>,
+    ) -> Result<usize> {
+        if let Some(&existing_id) = self.instance_dedup.get(processor) {
+            let inputs = without_own_outputs(inputs, &outputs);
+            let existing = self
+                .products
+                .get(existing_id)
+                .expect(crate::errors::INVALID_PRODUCT_ID);
+            let same_outputs = existing.outputs == outputs
+                && existing
+                    .output_dirs
+                    .iter()
+                    .map(|d| d.as_path())
+                    .eq(output_dirs.iter().map(PathBuf::as_path));
+            if !same_outputs {
+                return Err(crate::exit_code::RsconstructError::new(
+                    crate::exit_code::RsconstructExitCode::GraphError,
+                    format!(
+                        "Output conflict: [{processor}] declared its product twice with different \
+                         outputs ({:?} / {:?} then {outputs:?} / {output_dirs:?})",
+                        existing.outputs, existing.output_dirs,
+                    ),
+                )
+                .into());
+            }
+            let attempted = inputs.clone();
+            if !self.try_update_inputs(existing_id, inputs) {
+                let existing = &self.products[existing_id];
+                return Err(crate::exit_code::RsconstructError::new(
+                    crate::exit_code::RsconstructExitCode::GraphError,
+                    format!(
+                        "Input conflict: [{processor}] declared its product twice with \
+                         incompatible inputs ({:?} then {attempted:?}). A re-declaration may \
+                         only add inputs, not change them.",
+                        existing.inputs,
+                    ),
+                )
+                .into());
+            }
+            return Ok(existing_id);
+        }
+        let id =
+            self.add_product_with(inputs, outputs, processor, config_hash, None, output_dirs)?;
+        self.instance_dedup.insert(processor.to_string(), id);
         Ok(id)
     }
 
@@ -772,6 +846,7 @@ impl BuildGraph {
     /// previously each open-coded it (and only one of them did it correctly).
     fn rebuild_retaining(&mut self, keep: &HashSet<usize>) {
         let old_products = std::mem::take(&mut self.products);
+        let old_instances = std::mem::take(&mut self.instance_dedup);
         self.interner.clear();
         self.output_to_product.clear();
         self.input_to_products.clear();
@@ -779,12 +854,24 @@ impl BuildGraph {
         self.dependents.clear();
         self.dependencies.clear();
 
+        // `register_product` rebuilds every index it can derive from the
+        // product itself; the instance index is the one it cannot (nothing
+        // on a product says it is a whole-stanza one), so it is carried
+        // over by old id → new id.
+        let mut new_ids: HashMap<usize, usize> = HashMap::new();
         for product in old_products {
             if keep.contains(&product.id) {
                 // Same registration path as add_product — including the id
                 // reassignment, which register_product derives from the
                 // vector length rather than trusting the caller.
+                let old_id = product.id;
                 self.register_product(product);
+                new_ids.insert(old_id, self.products.len() - 1);
+            }
+        }
+        for (instance, old_id) in old_instances {
+            if let Some(&new_id) = new_ids.get(&old_id) {
+                self.instance_dedup.insert(instance, new_id);
             }
         }
 
@@ -1388,6 +1475,129 @@ mod tests {
         assert_eq!(g.products()[owner].primary_input(), Path::new("b.md"));
         // The dropped product's output must no longer be owned.
         assert!(g.path_owner(Path::new("a.py")).is_none());
+    }
+
+    /// A whole-stanza product is one product per instance across discovery
+    /// rounds. Round 0 sees only the files on disk; round 1 sees the
+    /// upstream-generated `gen.txt` as well and puts it first. The checker
+    /// dedup keyed on the primary input missed that, and a stanza with
+    /// `output_dirs` only has no outputs for the output dedup to catch —
+    /// so a second product appeared ("3 built" for two stanzas).
+    #[test]
+    fn instance_product_is_updated_not_duplicated_across_rounds() {
+        let mut g = BuildGraph::new();
+        let explicit = "processor.explicit.generic.collect";
+        let outdirs = || vec![PathBuf::from("outdir")];
+
+        // Round 0: gen.txt is not on disk yet, only a.txt resolved.
+        let id0 = g
+            .add_instance_product(vec!["a.txt".into()], vec![], explicit, None, outdirs())
+            .unwrap();
+        // The upstream generator, discovered in the same round.
+        g.add_product(
+            vec!["gen.txt.tera".into()],
+            vec!["gen.txt".into()],
+            "tera",
+            None,
+        )
+        .unwrap();
+        // Round 1: gen.txt is a virtual file now and comes first.
+        let id1 = g
+            .add_instance_product(
+                vec!["gen.txt".into(), "a.txt".into()],
+                vec![],
+                explicit,
+                None,
+                outdirs(),
+            )
+            .unwrap();
+        assert_eq!(id0, id1, "the re-declaration updates the same product");
+        assert_eq!(g.products().len(), 2, "one explicit product, one generator");
+        assert_eq!(
+            g.products()[id0].inputs,
+            vec![PathBuf::from("gen.txt"), PathBuf::from("a.txt")]
+        );
+        g.resolve_dependencies();
+        assert_eq!(
+            g.get_dependencies(id0),
+            &[1],
+            "the updated input set links the explicit product to its producer"
+        );
+
+        // The instance index survives a rebuild of the graph.
+        g.retain_products(|_| true);
+        let again = g
+            .add_instance_product(
+                vec!["gen.txt".into(), "a.txt".into()],
+                vec![],
+                explicit,
+                None,
+                outdirs(),
+            )
+            .unwrap();
+        assert_eq!(g.products().len(), 2);
+        assert_eq!(g.products()[again].processor, explicit);
+    }
+
+    /// `[graph] validate_empty_inputs` is documented "default: true", and
+    /// that must hold for a project with no `[graph]` table at all —
+    /// `GraphConfig::default()` used to derive every bool as `false`, so
+    /// an input-less product slipped past validation into the executor.
+    #[test]
+    fn default_graph_config_rejects_empty_inputs() {
+        let mut g = BuildGraph::new();
+        g.add_product(
+            vec![],
+            vec!["out/x".into()],
+            "processor.explicit.generic.x",
+            None,
+        )
+        .unwrap();
+        let errors = g.validate(&crate::config::GraphConfig::default());
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(errors[0].contains("has no input files"), "{errors:?}");
+    }
+
+    /// A re-declaration that drops an input or changes the outputs is a
+    /// disagreement about what the stanza is, not a later round's growth.
+    #[test]
+    fn instance_product_rejects_shrunk_inputs_and_changed_outputs() {
+        let mut g = BuildGraph::new();
+        let explicit = "processor.explicit.generic.collect";
+        g.add_instance_product(
+            vec!["a.txt".into(), "b.txt".into()],
+            vec!["out/all.txt".into()],
+            explicit,
+            None,
+            vec![],
+        )
+        .unwrap();
+        let shrunk = g.add_instance_product(
+            vec!["a.txt".into()],
+            vec!["out/all.txt".into()],
+            explicit,
+            None,
+            vec![],
+        );
+        assert!(
+            shrunk.unwrap_err().to_string().contains("Input conflict"),
+            "fewer inputs is a conflict"
+        );
+        let other_outputs = g.add_instance_product(
+            vec!["a.txt".into(), "b.txt".into()],
+            vec!["out/other.txt".into()],
+            explicit,
+            None,
+            vec![],
+        );
+        assert!(
+            other_outputs
+                .unwrap_err()
+                .to_string()
+                .contains("Output conflict"),
+            "different outputs is a conflict"
+        );
+        assert_eq!(g.products().len(), 1);
     }
 
     /// Target filtering must keep a kept consumer's upstream producer, so the

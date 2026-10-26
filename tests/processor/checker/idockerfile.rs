@@ -123,3 +123,45 @@ fn idockerfile_rejects_bad_threshold() {
         "Invalid severity: loud",
     );
 }
+
+const CONFIG_FILE_CONFIG: &str = "[processor.checker.idockerfile]\nsrc_files = [\"Dockerfile\"]\nconfig_file = \"conf/hadolint.yaml\"\n";
+
+/// A named `config_file` is an input of every product: editing it
+/// re-checks a Dockerfile that passed, without a `dep_inputs` entry naming
+/// it.
+#[test]
+fn idockerfile_config_file_edit_rechecks() {
+    let temp_dir = setup_project_with(CONFIG_FILE_CONFIG, "FROM ubuntu\nCMD [\"true\"]\n");
+    fs::create_dir_all(temp_dir.path().join("conf")).unwrap();
+    fs::write(
+        temp_dir.path().join("conf/hadolint.yaml"),
+        "ignored:\n  - DL3006\n",
+    )
+    .unwrap();
+    assert_passes(
+        &build(temp_dir.path()),
+        "an untagged image while the named config ignores DL3006",
+    );
+    fs::write(
+        temp_dir.path().join("conf/hadolint.yaml"),
+        "ignored:\n  - DL3008\n",
+    )
+    .unwrap();
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "the same Dockerfile once the config no longer ignores DL3006",
+        "Dockerfile:1 DL3006 warning: Always tag the version of an image explicitly",
+    );
+}
+
+/// A `config_file` that does not exist fails the build naming it, rather
+/// than checking with hadolint's defaults.
+#[test]
+fn idockerfile_missing_config_file_fails() {
+    let temp_dir = setup_project_with(CONFIG_FILE_CONFIG, VALID);
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "a missing configuration file",
+        "idockerfile config_file not found: conf/hadolint.yaml",
+    );
+}

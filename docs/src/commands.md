@@ -84,13 +84,21 @@ rsconstruct build --retry 3                    # Retry failed products up to 3 t
 rsconstruct build --no-mtime                   # Disable mtime pre-check, always compute checksums
 rsconstruct build --no-summary                 # Suppress the build summary
 rsconstruct build --batch-size 10              # Limit batch size for batch-capable processors
-rsconstruct build --verify-tool-versions       # Verify installed tools against rsconstruct.lock (always on in CI)
+rsconstruct build --verify-tool-versions       # Verify the tools of the processors that build against rsconstruct.lock (always on in CI)
 rsconstruct build -t "src/*.c"                 # Only build products matching this glob pattern
 rsconstruct build -d src                       # Only build products under this directory
 rsconstruct build --show-all-config-changes    # Show all config changes, not just output-affecting
 ```
 
 By default, tool output (compiler messages, linter output) is only shown when a command fails. Use `--show-output` to see all output.
+
+`--verify-tool-versions` (always on when `CI=true`) checks `rsconstruct.lock`
+inside the build, after discovery and the `-p`/`-x` selection: the processors
+with products in the build graph must have their tools locked and installed at
+the locked versions. A
+disabled stanza, a processor excluded with `-x`, or one that matched no file is
+not checked, exactly like the missing-tool preflight. The whole-project, exact
+test is `rsconstruct tool check`; see [Tool Lock](tool-lock.md).
 
 ### Selecting processors (`-p`, `-x`)
 
@@ -311,6 +319,22 @@ rsconstruct watch -p processor.checker.ruff                      # Watch and onl
 
 The watch command accepts the same build flags as `rsconstruct build` (e.g., `--jobs`, `--keep-going`, `--timings`, `--processor`, `--batch-size`, `--explain`, `--retry`, `--no-mtime`, `--no-summary`).
 
+Each rebuild is a fresh incremental build:
+
+- The in-session caches (per-file checksums, the combined-input memo for
+  large input lists) are cleared before every rebuild. They assume file
+  content is stable for one build run, and the edit that triggered the
+  rebuild is exactly what they would otherwise hide — a product with many
+  inputs was never rebuilt in watch mode before this.
+- `rsconstruct.toml` is re-read before every rebuild, including
+  `[cache] mtime_check`. The CLI `--no-mtime-cache` flag stays authoritative:
+  it keeps the mtime pre-check off whatever the config says.
+- Events under `.rsconstruct/` and under `[build] output_dir` are ignored,
+  matched as path prefixes relative to the project root. A multi-segment
+  `output_dir = "build/out"` is honored, and a source directory that merely
+  shares the output directory's name (`src/out/foo.rs` with
+  `output_dir = "out"`) is watched like any other.
+
 ## `rsconstruct graph`
 
 Display the build dependency graph.
@@ -507,7 +531,7 @@ rsconstruct --json processor info       # Same as JSON
 rsconstruct processor types             # List the processor types
 rsconstruct processor search yaml       # Search processors by name, description or keywords
 rsconstruct processor recommend         # Show the recommended processor for each file extension
-rsconstruct processor used              # Show which processors are enabled and detected
+rsconstruct processor used              # Show the enabled processors and whether each is detected
 rsconstruct processor names             # Print the iname of every enabled processor, one per line
 rsconstruct processor files             # Show source and target files for each declared processor
 rsconstruct processor files processor.checker.ruff        # Show files for a specific processor
@@ -519,7 +543,7 @@ rsconstruct processor add processor.checker.ruff --dry-run  # Preview the snippe
 rsconstruct processor enable processor.checker.ruff       # Set enabled = true on the stanza
 rsconstruct processor disable processor.checker.ruff      # Set enabled = false on the stanza
 rsconstruct processor delete processor.checker.ruff       # Remove the stanza entirely
-rsconstruct processor allowlist         # Show the current processor allowlist
+rsconstruct processor allowlist         # Show the enabled processors as an `enabled = [...]` line
 rsconstruct processor graph             # Show inter-processor dependencies
 rsconstruct processor graph --format dot    # Graphviz DOT format
 rsconstruct processor graph --format mermaid # Mermaid format
@@ -550,6 +574,12 @@ them carry (`checker.ruff`, not `processor.checker.ruff`): it says nothing
 in a column of processors and costs a word of width on every row. JSON
 output, error messages and `processor info` keep the full name, which is
 what `rsconstruct.toml` and scripts use.
+
+`used`, `names` and `allowlist` list the processors that take part in builds:
+every declared stanza except those with `enabled = false`. A disabled stanza
+is declared but not used, so it is left out rather than shown under an
+`enabled = [...]` heading. `config` still shows every stanza, disabled ones
+included — their configuration is what `enable` will bring back.
 
 A fifth column, `Rust alternative`, names the Rust processors that can
 replace a non-Rust one (`ishellcheck` for `shellcheck`, `iluacheck` and
@@ -592,7 +622,7 @@ rsconstruct tool list-configured -a   # Include tools from disabled processors
 rsconstruct tool check             # Verify rsconstruct.lock covers the project and installed tools match it
 rsconstruct tool lock              # Write rsconstruct.lock: add missing entries, drop unused ones, keep the rest
 rsconstruct tool lock --upgrade    # Re-resolve every rsconstruct.lock entry to its latest release
-rsconstruct tool lock --upgrade ruff cargo-deny   # Re-resolve only these entries (`rsconstruct` names the rsconstruct pin)
+rsconstruct tool lock --upgrade ruff cargo-deny   # Re-resolve only these entries
 rsconstruct tool install           # Install missing external tools for enabled processors
 rsconstruct tool install ruff      # Install a specific tool by name
 rsconstruct tool install --all     # Install every tool in the registry, ignoring the config (no config needed)
@@ -612,6 +642,11 @@ In a project, `install`, `install-deps`, `check` and `lock` work from
 `rsconstruct.lock`: installs request each tool at its locked version, and in CI
 a lock that does not match the project is an error. See
 [Tool Lock](tool-lock.md).
+
+The project's tools are those of its enabled processors. A stanza with
+`enabled = false` is kept precisely so its tool need not be installed, so
+`list-configured`, `install`, `lock`, `check`, `stats` and `graph` leave its
+tools out; `list-configured --all` is the one way to see them.
 
 `install --all` walks the central registry instead of the project config, so it
 needs no `rsconstruct.toml`. It never skips: a tool with no automatable install
@@ -729,10 +764,11 @@ rsconstruct term merge ../other-project/terms
 
 **Requires config.** (no subcommands)
 
-Diagnose build environment — checks config, tools, versions, and declared
-`[dependencies]` (Python deps declared in `pyproject.toml` are checked too;
-see the `[dependencies]` section in Configuration). Tools are probed by
-running them; `system` dependencies are
+Diagnose build environment — checks config, the tools of the enabled
+processors (a stanza with `enabled = false` is not asked for its tool),
+versions, and declared `[dependencies]` (Python deps declared in
+`pyproject.toml` are checked too; see the `[dependencies]` section in
+Configuration). Tools are probed by running them; `system` dependencies are
 packages, not tools, so they are probed through the platform's package manager
 (dpkg-query/rpm/pacman/brew) — a binary-less package like `aspell-en` counts
 as installed even though no binary carries its name.

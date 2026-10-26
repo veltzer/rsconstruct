@@ -22,10 +22,10 @@ fi
 
 # This repo is rsconstruct, so the binary ci.yml's Build step runs is the
 # one under test: built here from the checkout (the Build step's cargo
-# creator reuses the same artifacts) and copied over the release binary the
-# shared script just downloaded into cargo's bin dir. Building every commit
-# with the previous release instead would leave a change this repo's own
-# rsconstruct.toml needs failing CI until released.
+# processor reuses the same target/ artifacts) and copied over the release
+# binary the shared script just downloaded into cargo's bin dir. Building
+# every commit with the latest release instead would leave a change this
+# repo's own rsconstruct.toml needs failing CI until released.
 cargo build
 cp target/debug/rsconstruct "${CARGO_HOME:-${HOME}/.cargo}/bin/rsconstruct"
 

@@ -177,6 +177,15 @@ impl ObjectStore {
     }
 
     /// Explain what action will be taken based on descriptor state.
+    ///
+    /// Read-only: this backs `status`, `product show`, `build --dry-run` and
+    /// `--explain`, none of which may change the cache. The descriptor is
+    /// looked up with `get_descriptor_peeking`, which consults the remote
+    /// but does not write what it finds to `.rsconstruct/descriptors/`;
+    /// objects are checked with `object_available`, which likewise never
+    /// downloads. The verdict must match `needs_rebuild_descriptor` and
+    /// `can_restore_descriptor` — a "Skip" here where the build would
+    /// restore is a lie to the user.
     pub fn explain_descriptor(
         &self,
         ctx: &crate::build_context::BuildContext,
@@ -187,7 +196,7 @@ impl ObjectStore {
         if force {
             return ExplainAction::Rebuild(RebuildReason::Force);
         }
-        let Some(descriptor) = self.get_descriptor_pulling(ctx, descriptor_key) else {
+        let Some(descriptor) = self.get_descriptor_peeking(ctx, descriptor_key) else {
             return ExplainAction::Rebuild(RebuildReason::NoCacheEntry);
         };
         match descriptor {
@@ -214,6 +223,23 @@ impl ObjectStore {
                 ExplainAction::Skip
             }
             CacheDescriptor::Tree { entries } => {
+                // Declared outputs are existence-checked exactly as in
+                // needs_rebuild_descriptor: a tree records only what the
+                // previous run produced, so an output the product declares
+                // but the descriptor never saw is otherwise invisible here —
+                // and `status` would say "up-to-date" where the build acts.
+                // The build then restores when every recorded object can be
+                // had (can_restore_descriptor), and rebuilds otherwise.
+                if let Some(missing) = output_paths.iter().find(|p| !p.exists()) {
+                    let display = missing.display().to_string();
+                    if entries
+                        .iter()
+                        .all(|e| self.object_available(ctx, &e.checksum))
+                    {
+                        return ExplainAction::Restore(RebuildReason::OutputMissing(display));
+                    }
+                    return ExplainAction::Rebuild(RebuildReason::OutputMissing(display));
+                }
                 for entry in &entries {
                     let p = Path::new(&entry.path);
                     let needs_restore = !p.exists()
@@ -369,5 +395,113 @@ mod tests {
         assert!(store.restore_from_descriptor(&ctx, key, &[]).unwrap());
         assert_eq!(fs::read(outdir.join("b.txt")).unwrap(), b"beta");
         assert!(!store.needs_rebuild_descriptor(&ctx, key, &[]));
+    }
+
+    /// `explain_descriptor` must agree with `needs_rebuild_descriptor` on a
+    /// tree whose *declared* output is gone from disk. The Tree arm used to
+    /// check only the recorded entries, so `status`, `product show` and
+    /// `build --dry-run` reported "up-to-date" where the build would act.
+    #[test]
+    fn explain_tree_sees_a_missing_declared_output() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let store = ObjectStore::new_in(tmp.path());
+        let ctx = BuildContext::new();
+        // The mtime cache is CWD-relative (.rsconstruct/mtime.redb); disable it
+        // so parallel unit tests do not share persistent state.
+        ctx.set_mtime_check(false);
+        let key = "ace00011";
+
+        let outdir = tmp.path().join("outdir");
+        fs::create_dir_all(&outdir).unwrap();
+        fs::write(outdir.join("a.txt"), b"alpha").unwrap();
+        let dirs = [std::sync::Arc::new(outdir.clone())];
+        store
+            .store_tree_descriptor(&ctx, key, &dirs, &[], &|_| false)
+            .unwrap();
+
+        // A file the product declares now but the recorded tree never saw.
+        let declared = tmp.path().join("declared.txt");
+        let outputs = vec![declared.clone()];
+        assert!(
+            store.needs_rebuild_descriptor(&ctx, key, &outputs),
+            "the build acts on the missing declared output"
+        );
+        assert!(
+            matches!(
+                store.explain_descriptor(&ctx, key, &outputs, false),
+                ExplainAction::Restore(RebuildReason::OutputMissing(ref p)) if p == &declared.display().to_string()
+            ),
+            "explain must report the missing declared output, not Skip"
+        );
+
+        fs::write(&declared, b"present").unwrap();
+        assert!(!store.needs_rebuild_descriptor(&ctx, key, &outputs));
+        assert!(matches!(
+            store.explain_descriptor(&ctx, key, &outputs, false),
+            ExplainAction::Skip
+        ));
+
+        // A recorded entry gone from disk is reported the same way.
+        fs::remove_file(outdir.join("a.txt")).unwrap();
+        assert!(matches!(
+            store.explain_descriptor(&ctx, key, &outputs, false),
+            ExplainAction::Restore(RebuildReason::OutputMissing(_))
+        ));
+    }
+
+    /// Explaining is read-only: a descriptor that only the remote holds is
+    /// consulted (so the verdict is "restore", as the build would) but not
+    /// written into the local `descriptors/` store. The build path's
+    /// `get_descriptor_pulling` does persist it — `status`, `product show`
+    /// and `build --dry-run` went through that and populated the cache.
+    #[test]
+    fn explain_does_not_write_a_pulled_descriptor_locally() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let remote_dir = tmp.path().join("remote");
+        let ctx = BuildContext::new();
+        ctx.set_mtime_check(false);
+        let key = "0dde5678";
+
+        let out = tmp.path().join("out.txt");
+        fs::write(&out, b"produced bytes").unwrap();
+        {
+            let producer =
+                ObjectStore::new_with_remote(&tmp.path().join("a"), "a.redb", &remote_dir);
+            producer.store_blob_descriptor(&ctx, key, &out).unwrap();
+        }
+        fs::remove_file(&out).unwrap();
+
+        let consumer_dir = tmp.path().join("b");
+        let consumer = ObjectStore::new_with_remote(&consumer_dir, "b.redb", &remote_dir);
+        assert!(consumer.get_descriptor(key).is_none(), "cold local cache");
+
+        let verdict = consumer.explain_descriptor(&ctx, key, std::slice::from_ref(&out), false);
+        assert!(
+            matches!(
+                verdict,
+                ExplainAction::Restore(RebuildReason::OutputMissing(_))
+            ),
+            "the remote descriptor and object make this a restore: {verdict:?}"
+        );
+        assert!(
+            !consumer.has_descriptor(key),
+            "explaining must not populate the local descriptor store"
+        );
+        assert!(
+            !consumer.descriptors_dir.exists()
+                || fs::read_dir(&consumer.descriptors_dir)
+                    .unwrap()
+                    .next()
+                    .is_none(),
+            "no descriptor shard was created by the read-only lookup"
+        );
+        assert!(
+            !consumer.has_object(&ObjectStore::calculate_checksum_bytes(b"produced bytes")),
+            "nor was the object downloaded"
+        );
+
+        // The build path is the one that warms the local store.
+        assert!(consumer.can_restore_descriptor(&ctx, key));
+        assert!(consumer.has_descriptor(key));
     }
 }

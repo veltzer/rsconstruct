@@ -222,3 +222,111 @@ fn iyamllint_config_ignore_patterns() {
     .unwrap();
     assert_passes(&build(temp_dir.path()), "an ignored file");
 }
+
+/// A config named by `config_file`, outside the scanned `.yaml` files.
+const CONFIG_FILE_CONFIG: &str =
+    "[processor.checker.iyamllint]\nsrc_dirs = [\"\"]\nconfig_file = \"lint/yamllint.conf\"\n";
+
+/// Over 80 characters, under 200: a verdict `line-length` decides.
+const LONG_LINE: &str = "key: value value value value value value value value value value value value value value value value value value\n";
+
+fn line_length_config(max: u32) -> String {
+    format!("extends: default\nrules:\n  document-start: disable\n  line-length:\n    max: {max}\n")
+}
+
+/// A named `config_file` is an input of every product: editing it
+/// re-checks a file that passed, without a `dep_inputs` entry naming it.
+#[test]
+fn iyamllint_config_file_edit_rechecks() {
+    let temp_dir = setup_project_with(CONFIG_FILE_CONFIG, LONG_LINE);
+    fs::create_dir_all(temp_dir.path().join("lint")).unwrap();
+    fs::write(
+        temp_dir.path().join("lint/yamllint.conf"),
+        line_length_config(200),
+    )
+    .unwrap();
+    assert_passes(
+        &build(temp_dir.path()),
+        "a long line while the named config allows 200",
+    );
+    fs::write(
+        temp_dir.path().join("lint/yamllint.conf"),
+        line_length_config(40),
+    )
+    .unwrap();
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "the same file once the config allows 40",
+        "line too long (",
+    );
+}
+
+/// A config file the named one `extends` is an input too: the verdict
+/// comes from it just as much.
+#[test]
+fn iyamllint_extended_config_edit_rechecks() {
+    let temp_dir = setup_project_with(CONFIG_FILE_CONFIG, LONG_LINE);
+    fs::create_dir_all(temp_dir.path().join("lint")).unwrap();
+    fs::write(
+        temp_dir.path().join("lint/yamllint.conf"),
+        "extends: base.conf\n",
+    )
+    .unwrap();
+    fs::write(
+        temp_dir.path().join("lint/base.conf"),
+        line_length_config(200),
+    )
+    .unwrap();
+    assert_passes(
+        &build(temp_dir.path()),
+        "a long line while the extended config allows 200",
+    );
+    fs::write(
+        temp_dir.path().join("lint/base.conf"),
+        line_length_config(40),
+    )
+    .unwrap();
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "the same file once the extended config allows 40",
+        "line too long (",
+    );
+}
+
+/// An `ignore-from-file` list is an input too: a file it stops listing is
+/// checked again.
+#[test]
+fn iyamllint_ignore_from_file_edit_rechecks() {
+    let temp_dir = setup_project_with(
+        "[processor.checker.iyamllint]\nsrc_dirs = [\"\"]\nconfig_file = \"yamllint.conf\"\n",
+        LONG_LINE,
+    );
+    fs::write(
+        temp_dir.path().join("yamllint.conf"),
+        "extends: default\nignore-from-file: ignored.txt\n",
+    )
+    .unwrap();
+    fs::write(temp_dir.path().join("ignored.txt"), "test.yaml\n").unwrap();
+    assert_passes(
+        &build(temp_dir.path()),
+        "a long line in a file the ignore list names",
+    );
+    fs::write(temp_dir.path().join("ignored.txt"), "# nothing\n").unwrap();
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "the same file once the ignore list drops it",
+        "line too long (",
+    );
+}
+
+/// A `config_file` that does not exist fails the build naming it, rather
+/// than linting with yamllint's default configuration.
+#[test]
+fn iyamllint_missing_config_file_fails() {
+    let temp_dir = setup_project_with(CONFIG_FILE_CONFIG, "---\nname: test\n");
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "a missing config file",
+        "iyamllint config_file not found: lint/yamllint.conf",
+    );
+}

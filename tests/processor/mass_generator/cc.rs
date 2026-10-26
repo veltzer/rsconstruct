@@ -531,3 +531,237 @@ programs:
         "Program should link"
     );
 }
+
+/// Write `content` to `rel` under the project, creating parent dirs.
+fn write_project_file(project_path: &std::path::Path, rel: &str, content: &str) {
+    let path = project_path.join(rel);
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(path, content).unwrap();
+}
+
+/// Run `rsconstruct build` with JSON output, asserting it succeeded.
+fn build_json(project_path: &std::path::Path) -> crate::common::BuildResult {
+    let result = run_rsconstruct_json(project_path, &["build"]);
+    assert!(
+        result.exit_success,
+        "build failed: {:?} {:?}",
+        result.errors, result.products
+    );
+    result
+}
+
+/// A cc.yaml product lists the manifest first and its sources after it,
+/// so the C/C++ analyzers used to look at `inputs[0]`, see a `.yaml`, and
+/// match nothing: editing a header included by a listed source rebuilt
+/// nothing. With `[analyzer.cpp]` every listed source is scanned, a header
+/// one of them includes rebuilds the targets built from it, and a header
+/// nothing includes does not.
+#[test]
+fn cc_header_edit_rebuilds_with_cpp_analyzer() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    write_project_file(
+        project_path,
+        "rsconstruct.toml",
+        "[processor.mass_generator.cc]\nsrc_dirs = [\".\"]\n\n[analyzer.cpp]\ninclude_paths = [\"include\"]\n",
+    );
+    write_project_file(
+        project_path,
+        "cc.yaml",
+        r#"
+include_dirs: [include]
+
+libraries:
+  - name: mymath
+    lib_type: static
+    sources: [src/math.c]
+
+programs:
+  - name: main
+    sources: [src/main.c]
+    link: [mymath]
+"#,
+    );
+    write_project_file(project_path, "include/mymath.h", "int add(int a, int b);\n");
+    write_project_file(project_path, "include/unrelated.h", "#define UNUSED 1\n");
+    write_project_file(
+        project_path,
+        "src/math.c",
+        "#include \"mymath.h\"\nint add(int a, int b) { return a + b; }\n",
+    );
+    write_project_file(
+        project_path,
+        "src/main.c",
+        "#include \"mymath.h\"\nint main(void) { return add(1, 2) - 3; }\n",
+    );
+
+    let first = build_json(project_path);
+    assert!(first.total_products > 0, "the manifest must plan products");
+    assert_eq!(
+        first.success, first.total_products,
+        "first build builds everything: {:?}",
+        first.products
+    );
+
+    let second = build_json(project_path);
+    assert_eq!(
+        second.skipped, second.total_products,
+        "unchanged project must skip everything: {:?}",
+        second.products
+    );
+
+    // Every target compiles a source that includes mymath.h, so all of them
+    // are dirty once it changes.
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    write_project_file(
+        project_path,
+        "include/mymath.h",
+        "/* edited */\nint add(int a, int b);\n",
+    );
+    let third = build_json(project_path);
+    assert_eq!(
+        third.success, third.total_products,
+        "editing an included header must rebuild the targets that include it: {:?}",
+        third.products
+    );
+
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    write_project_file(project_path, "include/unrelated.h", "#define UNUSED 2\n");
+    let fourth = build_json(project_path);
+    assert_eq!(
+        fourth.skipped, fourth.total_products,
+        "editing a header nothing includes must rebuild nothing: {:?}",
+        fourth.products
+    );
+}
+
+/// Each object gets the flags of its own language at both levels: a
+/// target's `cxxflags` reach its C++ objects and its `cflags` its C
+/// objects, never the other way round. The sources `#error` on a flag from
+/// the wrong language, so the build is green only when the split is exact.
+/// Regression test: per-target `cxxflags` were parsed and never used, and
+/// per-target `cflags` went to every object.
+#[test]
+fn cc_target_flags_follow_the_source_language() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    setup_cc_project(
+        project_path,
+        r#"
+libraries:
+  - name: helper
+    lib_type: static
+    sources: [src/helper.cpp]
+    cflags: [-DLIB_C=1]
+    cxxflags: [-DLIB_CXX=1]
+
+programs:
+  - name: app
+    sources: [src/main.cpp, src/util.c]
+    link: [helper]
+    cflags: [-DPROG_C=1]
+    cxxflags: [-DPROG_CXX=1]
+"#,
+    );
+    write_project_file(
+        project_path,
+        "src/helper.cpp",
+        "#ifndef LIB_CXX\n#error library cxxflags did not reach a C++ object\n#endif\n\
+         #ifdef LIB_C\n#error library cflags leaked into a C++ object\n#endif\n\
+         extern \"C\" int helper(void) { return 1; }\n",
+    );
+    write_project_file(
+        project_path,
+        "src/main.cpp",
+        "#ifndef PROG_CXX\n#error program cxxflags did not reach a C++ object\n#endif\n\
+         #ifdef PROG_C\n#error program cflags leaked into a C++ object\n#endif\n\
+         extern \"C\" int helper(void);\nextern \"C\" int util(void);\n\
+         int main() { return helper() + util() - 2; }\n",
+    );
+    write_project_file(
+        project_path,
+        "src/util.c",
+        "#ifndef PROG_C\n#error program cflags did not reach a C object\n#endif\n\
+         #ifdef PROG_CXX\n#error program cxxflags leaked into a C object\n#endif\n\
+         int util(void) { return 1; }\n",
+    );
+
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "per-target flags must follow the source language: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let run_output =
+        std::process::Command::new(project_path.join("out/processor.mass_generator.cc/bin/app"))
+            .output()
+            .expect("Failed to run executable");
+    assert!(run_output.status.success(), "Executable should return 0");
+}
+
+/// Single-invocation mode used to pass only the global language flags:
+/// the manifest's and the program's `include_dirs` and the program's own
+/// flags were dropped. Both programs here compile only with them: the C
+/// one needs headers from both include-dir levels and a program `cflags`
+/// define; the C++ one needs a program `cxxflags` define and would fail on
+/// the program's (invalid) `cflags` if they reached a C++ command.
+#[test]
+fn cc_single_invocation_honours_include_dirs_and_program_flags() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    write_project_file(
+        project_path,
+        "rsconstruct.toml",
+        "[processor.mass_generator.cc]\nsingle_invocation = true\nsrc_dirs = [\".\"]\n",
+    );
+    write_project_file(
+        project_path,
+        "cc.yaml",
+        r#"
+include_dirs: [include]
+
+programs:
+  - name: app
+    sources: [src/main.c]
+    include_dirs: [extra]
+    cflags: [-DNEED_FLAG=0]
+
+  - name: appxx
+    sources: [src/main.cpp]
+    cflags: [--definitely-not-a-flag]
+    cxxflags: [-DNEED_CXX=0]
+"#,
+    );
+    write_project_file(project_path, "include/a.h", "#define A 0\n");
+    write_project_file(project_path, "extra/b.h", "#define B 0\n");
+    write_project_file(
+        project_path,
+        "src/main.c",
+        "#include \"a.h\"\n#include \"b.h\"\nint main(void) { return A + B + NEED_FLAG; }\n",
+    );
+    write_project_file(
+        project_path,
+        "src/main.cpp",
+        "int main() { return NEED_CXX; }\n",
+    );
+
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "single invocation must pass include dirs and the program's language flags: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    for exe in ["app", "appxx"] {
+        let path = project_path.join(format!("out/processor.mass_generator.cc/bin/{exe}"));
+        assert!(path.exists(), "{exe} should link");
+        let run_output = std::process::Command::new(&path)
+            .output()
+            .expect("Failed to run executable");
+        assert!(run_output.status.success(), "{exe} should return 0");
+    }
+}

@@ -193,3 +193,55 @@ fn ixmllint_rejects_an_unsupported_schema() {
         "xsd/a.xsd:2: unsupported XSD construct: xs:attributeGroup",
     );
 }
+
+const INCLUDING_SCHEMA_CONFIG: &str = "[processor.checker.ixmllint]\nsrc_dirs = [\"\"]\nsrc_extensions = [\".xml\"]\nschema = \"xsd/main.xsd\"\n";
+
+/// A schema that takes its one type from `types.xsd` beside it.
+const MAIN_XSD: &str = "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">\n  <xs:include schemaLocation=\"types.xsd\"/>\n  <xs:element name=\"n\" type=\"Small\"/>\n</xs:schema>\n";
+
+fn types_xsd(max: u32) -> String {
+    format!(
+        "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">\n  <xs:simpleType name=\"Small\">\n    <xs:restriction base=\"xs:int\"><xs:maxInclusive value=\"{max}\"/></xs:restriction>\n  </xs:simpleType>\n</xs:schema>\n"
+    )
+}
+
+/// A schema the named one `include`s is an input of every product too:
+/// editing it re-checks a file that passed.
+#[test]
+fn ixmllint_included_schema_edit_rechecks() {
+    let temp_dir = setup_project_with(INCLUDING_SCHEMA_CONFIG, "<n>70</n>\n");
+    fs::create_dir_all(temp_dir.path().join("xsd")).unwrap();
+    fs::write(temp_dir.path().join("xsd/main.xsd"), MAIN_XSD).unwrap();
+    fs::write(temp_dir.path().join("xsd/types.xsd"), types_xsd(99)).unwrap();
+    assert_passes(&build(temp_dir.path()), "a value the included type allows");
+    fs::write(temp_dir.path().join("xsd/types.xsd"), types_xsd(9)).unwrap();
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "the same value once the included type caps it at 9",
+        "[facet 'maxInclusive'] The value '70' is greater than the maximum value allowed ('9').",
+    );
+}
+
+/// A missing included schema fails the build naming it.
+#[test]
+fn ixmllint_missing_included_schema_fails() {
+    let temp_dir = setup_project_with(INCLUDING_SCHEMA_CONFIG, "<n>7</n>\n");
+    fs::create_dir_all(temp_dir.path().join("xsd")).unwrap();
+    fs::write(temp_dir.path().join("xsd/main.xsd"), MAIN_XSD).unwrap();
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "a schema whose include is missing",
+        "Failed to read XSD schema xsd/types.xsd",
+    );
+}
+
+/// A `schema` that does not exist fails the build naming it.
+#[test]
+fn ixmllint_missing_schema_fails() {
+    let temp_dir = setup_project_with(INCLUDING_SCHEMA_CONFIG, "<n>7</n>\n");
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "a missing schema",
+        "ixmllint schema not found: xsd/main.xsd",
+    );
+}

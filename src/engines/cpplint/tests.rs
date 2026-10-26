@@ -6,7 +6,7 @@ use std::fs;
 use super::lines::{
     CleansedLines, cleanse_comments, close_expression, collapse_strings, get_line_width,
 };
-use super::regex::rx;
+use super::regex::{rx, search, take_failure};
 use super::{Finding, Options, Outcome, lint_file};
 
 #[test]
@@ -116,4 +116,61 @@ fn filters_and_nolint_apply() {
         lint_source("main.cc", source, &options),
         vec!["main.cc:3:  Tab found; better to use spaces  [whitespace/tab] [1]"]
     );
+}
+
+/// `CheckRedundantVirtual` searches from byte 7 of the line (cpplint's
+/// `len("virtual")`); a multi-byte character straddling that byte moves
+/// the slice back to its boundary, and the opener's offset must follow.
+/// The findings are cpplint 2.0.2's on this file.
+#[test]
+fn redundant_virtual_survives_a_multibyte_character_before_it() {
+    let source = "// Copyright 2024 Example\n#ifndef V_H_\n#define V_H_\nclass A {\n public:\n  int ab\u{e9}; virtual void f() override;\n  int ab; virtual void g() override;\n};\n#endif  // V_H_\n";
+    assert_eq!(
+        lint_source("v.h", source, &Options::default()),
+        vec![
+            "v.h:6:  \"virtual\" is redundant since function is already declared as \"override\"  [readability/inheritance] [4]",
+            "v.h:7:  \"virtual\" is redundant since function is already declared as \"override\"  [readability/inheritance] [4]",
+        ]
+    );
+}
+
+/// A match fancy-regex gives up on (its backtrack limit; Python's `re` has
+/// none) is not a non-match: it is recorded, and `lint_file` fails the
+/// file with it instead of reporting cpplint-unlike findings.
+#[test]
+fn a_match_over_the_backtrack_limit_fails_the_file() {
+    assert!(take_failure().is_none());
+    // Nested quantifiers around a lookahead keep the match in the
+    // backtracking engine, where it fails after exponentially many steps.
+    let pattern = r"(?:(?=a)a+)+b";
+    let text = "a".repeat(40);
+    assert!(search(pattern, &text).is_none());
+    let dir = tempfile::tempdir().expect("tempdir");
+    fs::create_dir(dir.path().join(".git")).expect(".git");
+    let path = dir.path().join("main.cc");
+    fs::write(
+        &path,
+        "// Copyright 2024 Example\nint main() { return 0; }\n",
+    )
+    .expect("write");
+    let result = {
+        let _guard = CWD_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let cwd = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(dir.path()).expect("chdir");
+        let result = lint_file("main.cc", &Options::default());
+        std::env::set_current_dir(cwd).expect("chdir back");
+        result
+    };
+    let err = result.expect_err("the recorded failure fails the file");
+    let message = err.to_string();
+    assert!(
+        message.contains("checking main.cc: regular expression")
+            && message.contains(pattern)
+            && message.contains("backtracking count exceeded"),
+        "{message}"
+    );
+    // Collected: the next file on this thread starts clean.
+    assert!(take_failure().is_none());
 }

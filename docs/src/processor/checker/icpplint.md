@@ -33,7 +33,11 @@ A file an `exclude_files` pattern matches is skipped, as cpplint skips it. A con
 
 ### Fidelity
 
-Checked against cpplint 2.0.2 over its own sample corpus (`samples/*/*.def`: seven projects under twelve option sets, including `CPPLINT.cfg`, `--filter`, `--includeorder=standardcfirst`, `--headers`, `--recursive --exclude`), the 1245 snippets its unit tests lint, demos-os-linux's 1231 C/C++ files with and without the repo's `.cpplint`, and 3000 mutated copies of those files (tabs, casts, missing spaces, `using namespace`, VLAs, `sprintf`, `NOLINT` variants, header-guard and include edits, CRLF line endings, no final newline): the same findings, file for file. Two things cpplint does are deliberately not reproduced: its "Unexpected \r (^M)" warning, which cpplint itself can never emit because Python's text mode translates line endings before it looks; and the way a `linelength`, `root`, `headers` or `extensions` setting read from one directory's `CPPLINT.cfg` stays in force for every file cpplint processes afterwards in the same run (here every file starts from the configured options).
+Checked against cpplint 2.0.2 over its own sample corpus (`samples/*/*.def`: seven projects under twelve option sets, including `CPPLINT.cfg`, `--filter`, `--includeorder=standardcfirst`, `--headers`, `--recursive --exclude`), the 1245 snippets its unit tests lint, demos-os-linux's 1231 C/C++ files with and without the repo's `.cpplint`, and 3000 mutated copies of those files (tabs, casts, missing spaces, `using namespace`, VLAs, `sprintf`, `NOLINT` variants, header-guard and include edits, CRLF line endings, no final newline): the same findings, file for file.
+
+Two things cpplint does are deliberately not reproduced: its "Unexpected \r (^M)" warning, which cpplint itself can never emit because Python's text mode translates line endings before it looks; and the way a `linelength`, `root`, `headers` or `extensions` setting read from one directory's `CPPLINT.cfg` stays in force for every file cpplint processes afterwards in the same run (here every file starts from the configured options).
+
+One difference comes from the regular-expression engine: a pattern that backtracks past the engine's limit on a line (Python's `re` has no limit and keeps going) fails the file with the pattern and the text that tripped it, never a finding cpplint would not have made.
 
 ## Source Files
 

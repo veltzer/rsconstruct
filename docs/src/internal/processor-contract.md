@@ -45,6 +45,22 @@ Processors must not rely on undeclared side inputs for correctness
 are acceptable only when changes to those files can never cause a
 previously-passing product to fail).
 
+A config file the processor's own TOML names (`config_file`, `profile`,
+`rcfile`, `schema`) is such an input, and so is whatever that file reads
+in turn (a yamllint `extends`, an `<xs:include>`). A processor on the
+default `discover()` declares them through `extra_dep_inputs()`; a named
+file that does not exist is an error there (`named_config_file`), never a
+silent fall back to the tool's defaults. Default files found by `dep_auto`
+may be absent.
+
+The default `discover()` hashes the processor's whole `config_json()`
+over the checksum fields its plugin declares (the standard ones plus every
+`FieldSpec` with `affects_output: true`), so changing such a field changes
+every product's cache key. A processor with its own `discover()` must do
+the same (`output_config_hash(&self.config,
+&checksum_fields_of(instance_name))`): hashing `StandardConfig` alone
+prints the `Config changed` notice and restores the stale verdicts anyway.
+
 ## Execution isolation
 
 A processor's `execute()` must only write to the declared output paths

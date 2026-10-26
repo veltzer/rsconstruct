@@ -381,15 +381,49 @@ struct Parser<'a> {
     names: Vec<(String, usize)>,
     /// Group numbers by nesting, for `(?-1)`: the groups opened so far.
     opened: Vec<usize>,
+    /// Every numbered group reference (`(?N)`, `\N`, `\g{N}`, relative forms
+    /// resolved) with the offset it was parsed at. A reference may name a
+    /// group that opens later in the pattern, so Perl checks them against
+    /// the final group count, after the whole pattern is parsed.
+    refs: Vec<(usize, usize)>,
 }
 
 impl Parser<'_> {
     fn err<T>(&self, msg: &str) -> Result<T, Error> {
+        self.err_at(msg, self.i)
+    }
+
+    fn err_at<T>(&self, msg: &str, at: usize) -> Result<T, Error> {
         Err(Error(format!(
-            "{msg} at offset {} in /{}/",
-            self.i,
+            "{msg} at offset {at} in /{}/",
             String::from_utf8_lossy(self.p)
         )))
+    }
+
+    /// The group `(?-n)` or `\g{-n}` means: the n-th group opened before
+    /// this point; Perl refuses a count that reaches past the first one.
+    fn relative_group(&self, n: usize, msg: &str) -> Result<usize, Error> {
+        match (self.ngroups + 1).checked_sub(n) {
+            Some(target) if n > 0 && target > 0 => Ok(target),
+            _ => self.err(msg),
+        }
+    }
+
+    /// Record a numbered reference for the check after parsing.
+    fn reference(&mut self, n: usize) -> usize {
+        self.refs.push((n, self.i));
+        n
+    }
+
+    /// Perl's "Reference to nonexistent group": a numbered reference past
+    /// the last group of the whole pattern.
+    fn check_references(&self) -> Result<(), Error> {
+        for &(n, at) in &self.refs {
+            if n > self.ngroups {
+                return self.err_at("Reference to nonexistent group", at);
+            }
+        }
+        Ok(())
     }
 
     fn peek(&self) -> Option<u8> {
@@ -760,19 +794,22 @@ impl Parser<'_> {
                         return self.err("bad recursion");
                     }
                     let target = if sign {
-                        // The n-th group opened before this point.
-                        self.ngroups + 1 - n
+                        self.relative_group(n, "Reference to nonexistent group")?
+                    } else if n == 0 {
+                        return self.err("Illegal pattern");
                     } else {
-                        self.ngroups + n
+                        // The n-th group opened after this point; a count
+                        // past the last group fails `check_references`.
+                        self.ngroups.saturating_add(n)
                     };
-                    return Ok(Node::Recurse(target));
+                    return Ok(Node::Recurse(self.reference(target)));
                 }
                 Some(d) if d.is_ascii_digit() => {
                     let n = self.digits();
                     if !self.eat(b')') {
                         return self.err("bad recursion");
                     }
-                    return Ok(Node::Recurse(n));
+                    return Ok(Node::Recurse(self.reference(n)));
                 }
                 _ => {
                     let Some(new_flags) = self.flag_spec(flags) else {
@@ -899,7 +936,7 @@ impl Parser<'_> {
                 let st = self.i;
                 let n = self.digits();
                 if n < 10 || n <= self.ngroups {
-                    return Ok(Node::Backref(n, flags.i));
+                    return Ok(Node::Backref(self.reference(n), flags.i));
                 }
                 self.i = st;
                 let mut v = 0u32;
@@ -916,8 +953,14 @@ impl Parser<'_> {
                 if braced {
                     self.eat(b'}');
                 }
-                let n = if neg { self.ngroups + 1 - n } else { n };
-                Ok(Node::Backref(n, flags.i))
+                let n = if neg {
+                    self.relative_group(n, "Reference to nonexistent or unclosed group")?
+                } else if n == 0 {
+                    return self.err("Reference to invalid group 0");
+                } else {
+                    n
+                };
+                Ok(Node::Backref(self.reference(n), flags.i))
             }
             b'k' => {
                 let close = match self.peek() {
@@ -1152,12 +1195,14 @@ impl Regex {
             ngroups: 0,
             names: Vec::new(),
             opened: Vec::new(),
+            refs: Vec::new(),
         };
         let mut f = flags;
         let mut node = parser.parse_alt(&mut f)?;
         if parser.i < pattern.len() {
             return parser.err("unmatched )");
         }
+        parser.check_references()?;
         resolve_names(&mut node, &parser.names)?;
         let mut groups = vec![Node::Empty];
         collect_groups(&node, &mut groups);
@@ -1524,8 +1569,9 @@ impl Regex {
                 self.m(if set { yes } else { no }, pos, st, k)
             }
             Node::Recurse(n) => {
-                let group = &self.groups[*n];
-                let Node::Group(_, inner) = group else {
+                // `check_references` keeps every target within `groups`;
+                // an unknown one matches nothing rather than panicking.
+                let Some(Node::Group(_, inner)) = self.groups.get(*n) else {
                     return false;
                 };
                 // Captures set inside a recursion are undone when it returns.

@@ -272,3 +272,56 @@ fn iperlcritic_matches_perlcritic() {
         "iperlcritic (left) and perlcritic (right)"
     );
 }
+
+const PROFILE_CONFIG: &str =
+    "[processor.checker.iperlcritic]\nsrc_dirs = [\"src\"]\nprofile = \"conf/perlcriticrc\"\n";
+
+/// A `profile` other than `.perlcriticrc` is an input of every product:
+/// editing it re-checks a file that passed, without a `dep_inputs` entry
+/// naming it.
+#[test]
+fn iperlcritic_profile_edit_rechecks() {
+    let temp_dir = setup_project(
+        PROFILE_CONFIG,
+        &[
+            (
+                "conf/perlcriticrc",
+                "severity = 5\nverbose = %f:%l:%c: [%p] %m\\n\n[-TestingAndDebugging::RequireUseStrict]\n",
+            ),
+            ("src/loose.pl", "#!/usr/bin/perl\nprint \"hi\\n\";\n"),
+        ],
+    );
+    assert_passes(
+        &build(temp_dir.path()),
+        "a file without strictures while the named profile disables RequireUseStrict",
+    );
+    fs::write(
+        temp_dir.path().join("conf/perlcriticrc"),
+        "severity = 5\nverbose = %f:%l:%c: [%p] %m\\n\n",
+    )
+    .unwrap();
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "the same file once the profile enables RequireUseStrict again",
+        "[TestingAndDebugging::RequireUseStrict] Code before strictures are enabled",
+    );
+}
+
+/// A `profile` that does not exist fails the build naming it, rather than
+/// checking with Perl::Critic's defaults (only the default `.perlcriticrc`
+/// may be absent).
+#[test]
+fn iperlcritic_missing_profile_fails() {
+    let temp_dir = setup_project(
+        PROFILE_CONFIG,
+        &[(
+            "src/ok.pl",
+            "#!/usr/bin/perl\nuse strict;\nprint \"hi\\n\";\n",
+        )],
+    );
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "a missing profile",
+        "iperlcritic profile not found: conf/perlcriticrc",
+    );
+}

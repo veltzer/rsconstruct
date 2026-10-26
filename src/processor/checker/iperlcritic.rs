@@ -56,14 +56,20 @@ impl IperlcriticProcessor {
         }
     }
 
+    /// The profile's text. Only the default `.perlcriticrc` may be absent
+    /// (then `Perl::Critic`'s defaults apply, as for `perlcritic` without
+    /// one); a profile the user named must exist — discovery checks that
+    /// first, so this is the error for a file that vanished mid-build.
     fn load_profile(&self) -> Result<Profile> {
         let path = Path::new(&self.config.profile);
-        let text = if path.exists() {
+        let text = if path.is_file() {
             std::fs::read_to_string(path).with_context(|| {
                 format!("Failed to read Perl::Critic profile {}", path.display())
             })?
-        } else {
+        } else if self.config.profile == default_profile() {
             String::new()
+        } else {
+            bail!("iperlcritic profile not found: {}", self.config.profile);
         };
         crate::engines::perlcritic::profile::load(&text)
             .with_context(|| format!("iperlcritic: {}", path.display()))
@@ -108,7 +114,20 @@ impl crate::processor::Processor for IperlcriticProcessor {
         crate::processor::ProcessorBase::config_json(&self.config)
     }
 
-    /// One product per scanned file (the default `discover`).
+    /// A `profile` other than the default is an input of every product (it
+    /// must exist); the default `.perlcriticrc` is a `dep_auto` input.
+    fn extra_dep_inputs(&self) -> Result<Vec<String>> {
+        let named = crate::processor::named_config_file(
+            "iperlcritic",
+            "profile",
+            &self.config.profile,
+            &default_profile(),
+        )?;
+        Ok(named.into_iter().collect())
+    }
+
+    /// One product per scanned file (the default `discover`), plus the
+    /// profile read from disk.
     fn discovery(&self) -> crate::processor::Discovery {
         crate::processor::Discovery::PerFile
     }

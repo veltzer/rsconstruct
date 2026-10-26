@@ -9,7 +9,7 @@
 //! compares code points only.
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
@@ -318,20 +318,87 @@ fn gitignore_from_value(base_dir: &Path, value: &Value) -> Result<Gitignore> {
     }
 }
 
-/// `ignore-from-file`: one file name or a list of them, each holding
-/// patterns one per line, resolved relative to `base_dir`.
-fn gitignore_from_files(base_dir: &Path, value: &Value, what: &str) -> Result<Gitignore> {
-    let names: Vec<&str> = match value {
-        Value::String(s) => vec![s.as_str()],
+/// The file names an `ignore-from-file` value lists: one string, or a list
+/// of them.
+fn ignore_file_names<'v>(value: &'v Value, what: &str) -> Result<Vec<&'v str>> {
+    match value {
+        Value::String(s) => Ok(vec![s.as_str()]),
         Value::Sequence(items) if items.iter().all(Value::is_string) => {
-            items.iter().filter_map(Value::as_str).collect()
+            Ok(items.iter().filter_map(Value::as_str).collect())
         }
         _ => bail!(
             "invalid config: ignore-from-file should contain {what}, either as a list or string"
         ),
+    }
+}
+
+/// The files a config file makes yamllint read: itself, the config it
+/// `extends` when that names a file rather than `default` or `relaxed`
+/// (and what that one reads in turn), and every `ignore-from-file`, at the
+/// top level and per rule. These are the inputs of every product the
+/// config governs: an edit to any of them changes the verdicts. Relative
+/// paths resolve against the config file's directory, as in [`Config::parse`].
+/// A file that is missing is an error naming it, as loading would report.
+pub fn files_read(path: &Path) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    collect_files_read(path, &mut files)?;
+    Ok(files)
+}
+
+fn collect_files_read(path: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
+    let text = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read yamllint config {}", path.display()))?;
+    files.push(path.to_path_buf());
+    let base_dir = path.parent().unwrap_or_else(|| Path::new(""));
+    let conf: Value = serde_norway::from_str(&text).map_err(|e| {
+        anyhow::anyhow!("in yamllint config {}: invalid config: {e}", path.display())
+    })?;
+    let Value::Mapping(conf) = &conf else {
+        bail!(
+            "in yamllint config {}: invalid config: not a mapping",
+            path.display()
+        )
     };
+    if let Some(Value::String(name)) = conf.get("extends")
+        && name != "default"
+        && name != "relaxed"
+    {
+        collect_files_read(&base_dir.join(name), files)?;
+    }
+    let mut ignore_values = Vec::new();
+    if let Some(value) = conf.get("ignore-from-file") {
+        ignore_values.push(value);
+    }
+    if let Some(Value::Mapping(rules)) = conf.get("rules") {
+        for rule in rules.values() {
+            if let Value::Mapping(settings) = rule
+                && let Some(value) = settings.get("ignore-from-file")
+            {
+                ignore_values.push(value);
+            }
+        }
+    }
+    for value in ignore_values {
+        for name in ignore_file_names(value, "filename(s)")? {
+            let ignore_path = base_dir.join(name);
+            if !ignore_path.is_file() {
+                bail!(
+                    "in yamllint config {}: ignore-from-file {} not found",
+                    path.display(),
+                    ignore_path.display()
+                );
+            }
+            files.push(ignore_path);
+        }
+    }
+    Ok(())
+}
+
+/// `ignore-from-file`: one file name or a list of them, each holding
+/// patterns one per line, resolved relative to `base_dir`.
+fn gitignore_from_files(base_dir: &Path, value: &Value, what: &str) -> Result<Gitignore> {
     let mut lines = Vec::new();
-    for name in names {
+    for name in ignore_file_names(value, what)? {
         let path = base_dir.join(name);
         let text = std::fs::read_to_string(&path)
             .with_context(|| format!("Failed to read ignore-from-file {}", path.display()))?;

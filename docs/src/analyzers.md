@@ -124,6 +124,9 @@ pub trait DepAnalyzer: Sync + Send {
     fn description(&self) -> &str;
     fn auto_detect(&self, file_index: &FileIndex) -> bool;
     fn match_product(&self, product: &Product) -> Option<PathBuf>;
+    fn match_sources(&self, product: &Product) -> Vec<PathBuf> {
+        self.match_product(product).into_iter().collect()
+    }
     fn scan(&self, ctx: &BuildContext, source: &Path, file_index: &FileIndex)
         -> Result<ScanResult>;
     fn fingerprint_parts(&self, ctx: &BuildContext) -> Result<Vec<String>>;
@@ -137,6 +140,15 @@ dependencies come from (`match_product`), and what one source depends on
 cache, adding inputs to the graph, re-analysis of generated sources — is
 done by the framework (`analyzers::Analysis`), the same way for every
 analyzer.
+
+Most products have one scannable source, their primary input, and
+`match_product` is all an analyzer implements. A product can carry
+several: a `cc.yaml` or `linux-module.yaml` product has the manifest at
+`inputs[0]` and every C/C++ source it lists after it. The C/C++ analyzers
+override `match_sources` to return all of them; the framework scans each
+source once (each keeps its own deps-cache entry) and the product gets the
+union of their dependencies, so editing a header included by any listed
+source rebuilds the library or program.
 
 `scan` returns a `ScanResult`:
 

@@ -67,6 +67,8 @@ The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` c
 | `max_cyclomatic_complexity` | integer | unset | `--max-cyclomatic-complexity`; 0 for no limit |
 | `dep_auto` | string[] | `[".luacheckrc"]` | Config files that are inputs when they exist |
 
+The configuration file luacheck reads is an input of the product, wherever the lookup finds it (the project root, or an ancestor directory, as for `--config`): a change to it re-checks every file, with no `dep_inputs` entry needed. The default `.luacheckrc` may be absent; a `config_file` other than the default must exist, and a missing one fails the build naming it, as `luacheck --config` does.
+
 Switching a repo from luacheck: `[processor.checker.luacheck]` → `[processor.checker.iluacheck]`; the `.luacheckrc` stays as it is, and options in `args` become the fields of the same name (`args = ["--globals", "vim", "--"]` becomes `globals = ["vim"]`).
 
 ## Batch support

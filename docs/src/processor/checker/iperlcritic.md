@@ -52,10 +52,10 @@ The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` c
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `profile` | string | `".perlcriticrc"` | The Perl::Critic profile, as `perlcritic --profile`; relative to the project root. A missing file means Perl::Critic's defaults |
+| `profile` | string | `".perlcriticrc"` | The Perl::Critic profile, as `perlcritic --profile`; relative to the project root. The default may be absent (then Perl::Critic's defaults apply); any other must exist |
 | `dep_auto` | string[] | `[".perlcriticrc"]` | Config files that are inputs when they exist |
 
-A `profile` other than `.perlcriticrc` should also be listed in `dep_inputs`, so that changing it rebuilds.
+The profile is an input of every product, whether it is the default `.perlcriticrc` (a `dep_auto` input, tracked when it exists) or a file named by `profile`: a change to it re-checks every file, with no `dep_inputs` entry needed. A `profile` other than the default must exist; a missing one fails the build naming it rather than checking with Perl::Critic's defaults.
 
 Switching a repo from perlcritic: `[processor.checker.perlcritic]` → `[processor.checker.iperlcritic]`; the fleet's `.perlcriticrc` needs no change.
 

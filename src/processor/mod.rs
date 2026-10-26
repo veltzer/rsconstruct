@@ -428,6 +428,27 @@ pub fn flush_words(
     Ok(())
 }
 
+/// The config file a processor's TOML field names, for
+/// [`Processor::extra_dep_inputs`]. `None` when the field is empty or
+/// still holds `default`: that file is `dep_auto`'s business and may be
+/// absent. `Some(path)` when the user named one, which must then exist —
+/// a missing file the user asked for is an error naming the field, never
+/// a silent fall back to the tool's defaults.
+pub fn named_config_file(
+    processor: &str,
+    field: &str,
+    path: &str,
+    default: &str,
+) -> Result<Option<String>> {
+    if path.is_empty() || path == default {
+        return Ok(None);
+    }
+    if !Path::new(path).is_file() {
+        anyhow::bail!("{processor} {field} not found: {path}");
+    }
+    Ok(Some(path.to_string()))
+}
+
 /// Check if a config file exists and return it as extra inputs for discover.
 /// Used by processors that auto-detect config files (e.g. mypy.ini, .pylintrc).
 pub fn config_file_inputs(path: &str) -> Vec<String> {
@@ -649,9 +670,17 @@ pub fn discover_checker_products(
     if files.is_empty() {
         return Ok(());
     }
-    let mut all_dep_inputs = dep_inputs.to_vec();
-    for ai in dep_auto {
-        all_dep_inputs.extend(config_file_inputs(ai));
+    // A file named twice (a `config_file` that is also a `dep_auto` entry)
+    // is one input, not two.
+    let mut all_dep_inputs: Vec<String> = Vec::new();
+    for dep in dep_inputs
+        .iter()
+        .cloned()
+        .chain(dep_auto.iter().flat_map(|ai| config_file_inputs(ai)))
+    {
+        if !all_dep_inputs.contains(&dep) {
+            all_dep_inputs.push(dep);
+        }
     }
     let hash = Some(output_config_hash(cfg_hash, checksum_fields));
     let extra = resolve_extra_inputs(&all_dep_inputs)?;
@@ -1050,8 +1079,30 @@ pub trait Processor: Sync + Send {
     /// other.
     fn scan_config(&self) -> &crate::config::StandardConfig;
 
+    /// Files every product of this processor reads besides its own input
+    /// and the `dep_inputs`/`dep_auto` of `scan_config`: the config files
+    /// the processor's own fields name (`config_file`, `profile`,
+    /// `rcfile`, `schema`) and whatever those read in turn (a yamllint
+    /// `extends`, an `<xs:include>`). The default `discover` adds them to
+    /// every product's inputs, so an edit to one re-checks what passed.
+    /// A file the user named that does not exist is an error, never a
+    /// silent fall back to defaults ([`named_config_file`]); a default
+    /// looked up by `dep_auto` is tracked only when it exists.
+    fn extra_dep_inputs(&self) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
+
     /// Discover all products this processor can produce.
-    /// Default: standard checker discover using `dep_inputs/dep_auto` from `scan_config`.
+    ///
+    /// Default: one product per scanned file, with `dep_inputs`/`dep_auto`
+    /// from `scan_config` and [`Processor::extra_dep_inputs`] as the
+    /// shared inputs. The config hash covers the processor's whole config
+    /// ([`Processor::config_json`]), filtered to the checksum fields its
+    /// plugin declares: a custom field with `affects_output: true` then
+    /// changes every product's cache key, as the `Config changed` notice
+    /// (which reads the same JSON) promises. It used to hash the standard
+    /// fields only, so editing such a field printed the notice and
+    /// restored the stale verdicts anyway.
     fn discover(
         &self,
         graph: &mut BuildGraph,
@@ -1059,14 +1110,21 @@ pub trait Processor: Sync + Send {
         instance_name: &str,
     ) -> Result<()> {
         let cfg = self.scan_config();
+        let mut dep_inputs = cfg.dep_inputs.clone();
+        dep_inputs.extend(self.extra_dep_inputs()?);
+        let json = self.config_json().ok_or_else(|| {
+            anyhow::anyhow!("{instance_name}: {}", crate::errors::CONFIG_SERIALIZE)
+        })?;
+        let config: serde_json::Value = serde_json::from_str(&json)
+            .with_context(|| format!("{instance_name}: config JSON is not valid: {json}"))?;
         discover_checker_products(
             graph,
             cfg,
             file_index,
-            &cfg.dep_inputs,
+            &dep_inputs,
             &cfg.dep_auto,
-            cfg,
-            <crate::config::StandardConfig as crate::config::KnownFields>::checksum_fields(),
+            &config,
+            &crate::config::checksum_fields_of(instance_name),
             instance_name,
         )
     }

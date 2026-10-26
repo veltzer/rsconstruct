@@ -29,7 +29,7 @@ src_dirs = ["src"]
 
 ### Implemented modules
 
-`Checker` (with `severity`, `tabWidth`, `fileExtensions`, `charset` UTF-8), `TreeWalker`, `NewlineAtEndOfFile`, `ArrayTypeStyle`, `CovariantEquals`, `DefaultComesLast`, `EmptyStatement`, `EqualsHashCode`, `FallThrough`, `ModifiedControlVariable`, `OneStatementPerLine`, `RedundantImport`, `SimplifyBooleanExpression`, `SimplifyBooleanReturn`, `StringLiteralEquality`, `UnusedImports` and `UpperEll`, each with all its properties, `severity`, `id`, `tabWidth` and `<message>` overrides. These are the checks of the fleet's shared `checkstyle.xml`. Any other module, or a property this port does not reproduce, is a configuration error that names it, so a configuration either runs as checkstyle runs it or does not run.
+`Checker` (with `severity`, `tabWidth`, `fileExtensions`, `charset` UTF-8), `TreeWalker`, `NewlineAtEndOfFile`, `ArrayTypeStyle`, `CovariantEquals`, `DefaultComesLast`, `EmptyStatement`, `EqualsHashCode`, `FallThrough`, `ModifiedControlVariable`, `OneStatementPerLine`, `RedundantImport`, `SimplifyBooleanExpression`, `SimplifyBooleanReturn`, `StringLiteralEquality`, `UnusedImports` and `UpperEll`, each with all its properties, `severity`, `id`, `tabWidth` and `<message>` overrides. These are the checks of the fleet's shared `checkstyle.xml`. Any other module, or a property this port does not reproduce, is a configuration error that names it, so a configuration either runs as checkstyle runs it or does not run. One property is checked more strictly than checkstyle checks it: a `tabWidth` of zero or less is a configuration error here, where checkstyle accepts it and then throws `ArithmeticException` on the first tab it meets.
 
 ### Fidelity
 
@@ -55,7 +55,7 @@ The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` c
 | `config_file` | string | `"checkstyle.xml"` | The checkstyle configuration, as `checkstyle -c`; relative to the project root |
 | `dep_auto` | string[] | `["checkstyle.xml"]` | Config files that are inputs when they exist |
 
-A `config_file` other than `checkstyle.xml` should also be listed in `dep_inputs`, so that changing it rebuilds.
+The configuration is an input of every product, whether it is the default `checkstyle.xml` (a `dep_auto` input, tracked when it exists) or a file named by `config_file`: a change to it re-checks every file, with no `dep_inputs` entry needed. A `config_file` other than the default must exist; a missing one fails the build naming it.
 
 Switching a repo from checkstyle: `[processor.checker.checkstyle]` → `[processor.checker.icheckstyle]`, and `args = ["-c", "checkstyle.xml"]` is dropped (or becomes `config_file` for another file name).
 

@@ -369,6 +369,9 @@ impl SystemInterface for IoInterface {
             if cache.0 == "/" {
                 return cache.1.clone();
             }
+            // `check_files` has already refused a missing or unreadable
+            // rcfile, so this is a file that vanished mid-run; shellcheck
+            // would warn and go on, and so does this.
             let result = Self::read_config(file);
             if result.is_none() {
                 eprintln!("Warning: unable to read --rcfile {file}");
@@ -478,6 +481,18 @@ pub fn format_gcc(comments: &[PositionedComment], read: &dyn Fn(&str) -> String)
 
 /// Checks files as `shellcheck FILE...` does, returning gcc-format lines.
 pub fn check_files(files: &[String], io: IoOptions, template: &CheckSpec) -> Vec<String> {
+    // shellcheck prints "Warning: unable to read --rcfile" and checks with
+    // the defaults; here a named rcfile that cannot be read fails every
+    // file instead — the user asked for that configuration, and a verdict
+    // reached without it is not the one they configured.
+    if let Some(rc) = &io.rcfile
+        && let Err(e) = read_input_file(rc)
+    {
+        return files
+            .iter()
+            .map(|file| format!("{file}: --rcfile {e}"))
+            .collect();
+    }
     let interface = Rc::new(IoInterface::new(io, files));
     let sys: Rc<dyn SystemInterface> = interface.clone();
     let mut out = Vec::new();

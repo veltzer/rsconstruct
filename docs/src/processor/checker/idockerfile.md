@@ -57,6 +57,8 @@ The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` c
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `dep_auto` | string[] | `[".hadolint.yaml", ".hadolint.yml"]` | Config files that are inputs when they exist |
 
+A file named by `config_file` is an input of every product, like the default files `dep_auto` tracks: a change to it re-checks every Dockerfile, with no `dep_inputs` entry needed. It must exist: a missing one fails the build naming it.
+
 Switching a repo from hadolint: `[processor.checker.hadolint]` → `[processor.checker.idockerfile]`; the `.hadolint.yaml` stays as it is. A repo whose findings include `SC` codes it wants to keep stays on hadolint.
 
 ## Batch support

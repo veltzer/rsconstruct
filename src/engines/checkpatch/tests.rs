@@ -665,3 +665,58 @@ fn regexes_match_perl() {
     ];
     assert_regexes_match_perl(cases);
 }
+
+/// Perl refuses a numbered reference to a group the pattern never opens
+/// ("Reference to nonexistent group"), checking it only once the whole
+/// pattern is parsed, so a reference to a group that opens later is legal.
+#[test]
+fn references_to_nonexistent_groups_are_compile_errors() {
+    let nonexistent: &[&[u8]] = &[
+        b"(a)(?-9)",
+        b"(a)(?-2)",
+        b"(a)(?+5)",
+        b"(a)(b)(?7)",
+        b"(a)(b)\\5",
+        b"(a)\\g{5}",
+        b"(?2)(ab)",
+    ];
+    for p in nonexistent {
+        let err = Regex::new(p, Flags::parse(""))
+            .err()
+            .unwrap_or_else(|| panic!("/{}/ must not compile", String::from_utf8_lossy(p)));
+        assert!(
+            err.to_string()
+                .starts_with("Reference to nonexistent group at offset "),
+            "/{}/: {err}",
+            String::from_utf8_lossy(p)
+        );
+    }
+    let err = Regex::new(b"(a)\\g{-9}", Flags::parse("")).expect_err("past the first group");
+    assert!(
+        err.to_string()
+            .starts_with("Reference to nonexistent or unclosed group at offset "),
+        "{err}"
+    );
+    let err = Regex::new(b"(a)\\g{0}", Flags::parse("")).expect_err("group 0");
+    assert!(
+        err.to_string()
+            .starts_with("Reference to invalid group 0 at offset "),
+        "{err}"
+    );
+    // Forward references, as Perl allows them: they compile, and the
+    // recursions match as Perl matches them.
+    for p in [
+        &b"(?+1)(ab)"[..],
+        b"(?2)(a)(b)",
+        b"(a|(?2))(b)",
+        b"\\2(a)(b)",
+    ] {
+        Regex::new(p, Flags::parse(""))
+            .unwrap_or_else(|e| panic!("/{}/ compiles: {e}", String::from_utf8_lossy(p)));
+    }
+    assert_regexes_match_perl(&[
+        (b"(?+1)(ab)", "", b"abab", false),
+        (b"(?2)(a)(b)", "", b"abab", false),
+        (b"(a|(?2))(b)", "", b"abab", false),
+    ]);
+}

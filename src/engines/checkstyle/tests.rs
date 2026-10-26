@@ -453,3 +453,48 @@ fn fixtures_exercise_every_check_and_failure() {
         assert!(all.contains(failure), "no fixture fails with {failure:?}");
     }
 }
+
+/// `tabWidth` is divided by on every tab: checkstyle itself accepts `0`
+/// and throws `ArithmeticException` later, so the configuration refuses a
+/// non-positive width up front instead.
+#[test]
+fn non_positive_tab_width_is_a_configuration_error() {
+    for value in ["0", "-1"] {
+        for (module, checker_properties, body) in [
+            (
+                "Checker",
+                format!(r#"<property name="tabWidth" value="{value}"/>"#),
+                "<module name=\"TreeWalker\"><module name=\"UpperEll\"/></module>".to_string(),
+            ),
+            (
+                "TreeWalker",
+                String::new(),
+                format!(
+                    r#"<module name="TreeWalker"><property name="tabWidth" value="{value}"/><module name="UpperEll"/></module>"#
+                ),
+            ),
+            (
+                "UpperEll",
+                String::new(),
+                format!(
+                    r#"<module name="TreeWalker"><module name="UpperEll"><property name="tabWidth" value="{value}"/></module></module>"#
+                ),
+            ),
+        ] {
+            let err = config::parse(&checker(&checker_properties, &body))
+                .err()
+                .unwrap_or_else(|| panic!("tabWidth {value} on {module} must not load"));
+            assert_eq!(
+                err.to_string(),
+                format!(
+                    "cannot initialize module {module} - Cannot set property 'tabWidth' to '{value}': the tab width must be a positive number"
+                )
+            );
+        }
+    }
+    config::parse(&checker(
+        r#"<property name="tabWidth" value="1"/>"#,
+        "<module name=\"TreeWalker\"><module name=\"UpperEll\"/></module>",
+    ))
+    .expect("a positive tabWidth loads");
+}

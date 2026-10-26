@@ -667,3 +667,50 @@ fn icpp_include_path_command_directory_is_searched() {
     write_project_file(temp_dir.path(), "vendor/v.h", "#define V 1\n");
     build_ok(temp_dir.path());
 }
+
+/// Relative imports resolve from the importing file's directory: `from .
+/// import sib` is the package's `__init__.py` plus `sib.py`, `.sub.mod`
+/// is below it, and `..top` is one directory up. They used to be silently
+/// dropped (the leading dot made an empty name part), so editing `sib.py`
+/// rebuilt nothing.
+#[test]
+fn python_analyzer_resolves_relative_imports() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    write_project_file(
+        project_path,
+        "rsconstruct.toml",
+        ENCODING_WITH_PYTHON_ANALYZER,
+    );
+    write_project_file(project_path, "src/top.py", "g = 1\n");
+    write_project_file(project_path, "src/pkg/__init__.py", "");
+    write_project_file(
+        project_path,
+        "src/pkg/main.py",
+        "from . import sib\nfrom .sub.mod import f\nfrom ..top import g\n",
+    );
+    write_project_file(project_path, "src/pkg/sib.py", "x = 1\n");
+    write_project_file(project_path, "src/pkg/sub/__init__.py", "");
+    write_project_file(project_path, "src/pkg/sub/mod.py", "def f(): pass\n");
+    build_ok(project_path);
+
+    let files = analyzer_files(project_path, "src/pkg/main.py");
+    for dep in [
+        "src/pkg/__init__.py",
+        "src/pkg/sib.py",
+        "src/pkg/sub/__init__.py",
+        "src/pkg/sub/mod.py",
+        "src/top.py",
+    ] {
+        assert!(files.contains(dep), "missing {dep}: {files}");
+    }
+
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    write_project_file(project_path, "src/pkg/sib.py", "x = 2\n");
+    let out = run_rsconstruct_with_env(project_path, &["build", "--dry-run"], &[("NO_COLOR", "1")]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("BUILD [processor.checker.encoding] src/pkg/main.py"),
+        "main.py must rebuild when a relatively imported module changes: {stdout}"
+    );
+}

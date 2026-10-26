@@ -153,3 +153,49 @@ fn iluacheck_honours_inline_options() {
     );
     assert_passes(&build(temp_dir.path()), "findings silenced inline");
 }
+
+const CONFIG_FILE_CONFIG: &str =
+    "[processor.checker.iluacheck]\nsrc_dirs = [\"src\"]\nconfig_file = \"conf/luacheckrc.lua\"\n";
+
+/// A `config_file` other than `.luacheckrc` is an input of the product:
+/// editing it re-checks files that passed, without a `dep_inputs` entry
+/// naming it.
+#[test]
+fn iluacheck_config_file_edit_rechecks() {
+    let temp_dir = setup_project(
+        CONFIG_FILE_CONFIG,
+        &[
+            ("conf/luacheckrc.lua", "globals = {\"vim\"}\n"),
+            ("src/a.lua", "vim = 1\n"),
+        ],
+    );
+    assert_passes(
+        &build(temp_dir.path()),
+        "a global the named config declares",
+    );
+    fs::write(
+        temp_dir.path().join("conf/luacheckrc.lua"),
+        "globals = {}\n",
+    )
+    .unwrap();
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "the same file once the config declares no globals",
+        "src/a.lua:1:1: (W111) setting non-standard global variable 'vim'",
+    );
+}
+
+/// A `config_file` that does not exist fails the build naming it, as
+/// `luacheck --config` does; only the default `.luacheckrc` may be absent.
+#[test]
+fn iluacheck_missing_config_file_fails() {
+    let temp_dir = setup_project(
+        CONFIG_FILE_CONFIG,
+        &[("src/a.lua", "local x = 1\nreturn x\n")],
+    );
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "a missing configuration file",
+        "iluacheck config_file not found: conf/luacheckrc.lua",
+    );
+}

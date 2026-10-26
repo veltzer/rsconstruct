@@ -131,10 +131,7 @@ impl PythonDepAnalyzer {
                 // `from pkg import name` imports the submodule `pkg.name`
                 // when there is one; a name that is not a module resolves
                 // nowhere and adds only its probes.
-                let submodules = import
-                    .names
-                    .iter()
-                    .map(|n| format!("{}.{n}", import.module));
+                let submodules = import.names.iter().map(|n| submodule(&import.module, n));
                 for module in std::iter::once(import.module.clone()).chain(submodules) {
                     // Each module resolves relative to the file that imports it.
                     let (found, probed) = self.resolve_module(&file, &module, file_index);
@@ -161,52 +158,116 @@ impl PythonDepAnalyzer {
     /// stdlib/external modules, whose candidates are all absent, so a local
     /// module of that name appearing later is noticed.
     ///
-    /// Roots are tried in order: the importing file's directory, the project
-    /// root, then `search_paths`. The first root holding `module.py` or
-    /// `module/__init__.py` wins.
+    /// An absolute name tries the roots in order: the importing file's
+    /// directory, the project root, then `search_paths`. The first root
+    /// holding `module.py` or `module/__init__.py` wins. A relative name
+    /// (`.mod`, `..pkg.mod`, or a bare `.`) has exactly one root: the
+    /// importing file's directory, one level up per extra leading dot.
     fn resolve_module(
         &self,
         importer: &Path,
         module: &str,
         file_index: &FileIndex,
     ) -> (Vec<PathBuf>, Vec<PathBuf>) {
-        let parts: Vec<&str> = module.split('.').collect();
-        if parts.iter().any(|p| p.is_empty()) {
+        let dots = module.len() - module.trim_start_matches('.').len();
+        let name = &module[dots..];
+        let parts: Vec<&str> = if name.is_empty() {
+            Vec::new()
+        } else {
+            name.split('.').collect()
+        };
+        if (dots == 0 && parts.is_empty()) || parts.iter().any(|p| p.is_empty()) {
             return (Vec::new(), Vec::new());
         }
-        let module_path = parts.join("/");
         // In the file index, or on disk (cwd is project root).
         let exists = |p: &Path| file_index.contains(p) || p.is_file();
 
+        if dots > 0 {
+            // A relative import that climbs out of the project names
+            // nothing a build can depend on.
+            return match relative_base(importer, dots) {
+                Some(base) => Self::resolve_under(&base, &parts, &exists),
+                None => (Vec::new(), Vec::new()),
+            };
+        }
         let roots = std::iter::once(crate::processor::parent_dir(importer).to_path_buf())
             .chain(std::iter::once(PathBuf::new()))
             .chain(self.config.search_paths.iter().map(PathBuf::from));
         let mut probed = Vec::new();
         for root in roots {
-            for candidate in [
-                root.join(format!("{module_path}.py")),
-                root.join(&module_path).join("__init__.py"),
-            ] {
-                if !exists(&candidate) {
-                    probed.push(candidate);
-                    continue;
-                }
-                // Importing `a.b.c` first runs `a/__init__.py` and
-                // `a/b/__init__.py`.
-                let mut found = vec![candidate];
-                for depth in 1..parts.len() {
-                    let init = root.join(parts[..depth].join("/")).join("__init__.py");
-                    if exists(&init) {
-                        found.push(init);
-                    } else {
-                        probed.push(init);
-                    }
-                }
+            let (found, missing) = Self::resolve_under(&root, &parts, &exists);
+            probed.extend(missing);
+            if !found.is_empty() {
                 return (found, probed);
             }
         }
         (Vec::new(), probed)
     }
+
+    /// Resolve the dotted module `parts` under one `root`: `a/b.py`, else
+    /// `a/b/__init__.py`, plus the `__init__.py` of each package above it.
+    /// Empty `parts` name the package `root` itself (`from . import x`),
+    /// which is its `__init__.py`. Returns the files found (none when the
+    /// module is not under this root) and the paths probed and found
+    /// missing.
+    fn resolve_under(
+        root: &Path,
+        parts: &[&str],
+        exists: &impl Fn(&Path) -> bool,
+    ) -> (Vec<PathBuf>, Vec<PathBuf>) {
+        let candidates = if parts.is_empty() {
+            vec![root.join("__init__.py")]
+        } else {
+            let module_path = parts.join("/");
+            vec![
+                root.join(format!("{module_path}.py")),
+                root.join(&module_path).join("__init__.py"),
+            ]
+        };
+        let mut probed = Vec::new();
+        for candidate in candidates {
+            if !exists(&candidate) {
+                probed.push(candidate);
+                continue;
+            }
+            // Importing `a.b.c` first runs `a/__init__.py` and
+            // `a/b/__init__.py`.
+            let mut found = vec![candidate];
+            for depth in 1..parts.len() {
+                let init = root.join(parts[..depth].join("/")).join("__init__.py");
+                if exists(&init) {
+                    found.push(init);
+                } else {
+                    probed.push(init);
+                }
+            }
+            return (found, probed);
+        }
+        (Vec::new(), probed)
+    }
+}
+
+/// The module `from module import name` reaches when `name` is a
+/// submodule: `pkg.name`, or `.name` after the bare `.` of a relative
+/// import (whose own module is the package, not a dot-terminated name).
+fn submodule(module: &str, name: &str) -> String {
+    if module.ends_with('.') {
+        format!("{module}{name}")
+    } else {
+        format!("{module}.{name}")
+    }
+}
+
+/// The directory a relative import with `dots` leading dots resolves
+/// under: the importer's own directory for one dot, one level up for each
+/// further dot. None when that climbs out of the project, which a build
+/// cannot depend on.
+fn relative_base(importer: &Path, dots: usize) -> Option<PathBuf> {
+    let mut base = importer.parent()?;
+    for _ in 1..dots {
+        base = base.parent()?;
+    }
+    Some(base.to_path_buf())
 }
 
 impl DepAnalyzer for PythonDepAnalyzer {
@@ -295,6 +356,9 @@ from multi import (
     two,  # comment
 )
 from inline import (p, q)
+from . import sibling
+from .bar import baz
+from ..pkg import qux
 ";
         assert_eq!(
             parsed(src),
@@ -307,7 +371,125 @@ from inline import (p, q)
                 ("pkg".to_string(), vec![]),
                 ("multi".to_string(), owned(&["one", "two"])),
                 ("inline".to_string(), owned(&["p", "q"])),
+                (".".to_string(), owned(&["sibling"])),
+                (".bar".to_string(), owned(&["baz"])),
+                ("..pkg".to_string(), owned(&["qux"])),
             ]
         );
+    }
+
+    #[test]
+    fn submodule_joins_after_a_bare_dot_without_a_second_dot() {
+        assert_eq!(submodule("pkg", "a"), "pkg.a");
+        assert_eq!(submodule(".bar", "baz"), ".bar.baz");
+        assert_eq!(submodule(".", "a"), ".a");
+        assert_eq!(submodule("..", "a"), "..a");
+    }
+
+    #[test]
+    fn relative_base_climbs_one_level_per_extra_dot() {
+        let importer = Path::new("pkg/sub/mod.py");
+        assert_eq!(relative_base(importer, 1), Some(PathBuf::from("pkg/sub")));
+        assert_eq!(relative_base(importer, 2), Some(PathBuf::from("pkg")));
+        assert_eq!(relative_base(importer, 3), Some(PathBuf::from("")));
+        assert_eq!(relative_base(importer, 4), None);
+    }
+
+    /// A project tree as the file index sees it; nothing is on disk, so
+    /// resolution goes through the index alone.
+    fn tree() -> FileIndex {
+        FileIndex::from_paths(
+            [
+                "top.py",
+                "pkg/__init__.py",
+                "pkg/bar.py",
+                "pkg/sub/__init__.py",
+                "pkg/sub/mod.py",
+                "pkg/sub/sibling.py",
+                "pkg/sub/deep/__init__.py",
+                "pkg/sub/deep/leaf.py",
+            ]
+            .iter()
+            .map(PathBuf::from)
+            .collect(),
+        )
+    }
+
+    fn paths(names: &[&str]) -> Vec<PathBuf> {
+        names.iter().map(PathBuf::from).collect()
+    }
+
+    /// `from . import sibling` resolves `.` to the importer's package and
+    /// `.sibling` to the module beside it; `.bar` is looked up in the
+    /// importer's directory only, never in the project root or
+    /// `search_paths`.
+    #[test]
+    fn python_resolves_single_dot_relative_imports() {
+        let analyzer = PythonDepAnalyzer::new(PythonAnalyzerConfig::default());
+        let index = tree();
+        let importer = Path::new("pkg/sub/mod.py");
+
+        let (found, probed) = analyzer.resolve_module(importer, ".", &index);
+        assert_eq!(found, paths(&["pkg/sub/__init__.py"]));
+        assert_eq!(probed, paths(&[]));
+
+        let (found, _) = analyzer.resolve_module(importer, ".sibling", &index);
+        assert_eq!(found, paths(&["pkg/sub/sibling.py"]));
+
+        let (found, _) = analyzer.resolve_module(importer, ".deep.leaf", &index);
+        assert_eq!(
+            found,
+            paths(&["pkg/sub/deep/leaf.py", "pkg/sub/deep/__init__.py"])
+        );
+
+        // `bar.py` lives one level up: a single dot does not reach it, and
+        // the miss is recorded so a `pkg/sub/bar.py` appearing later counts.
+        let (found, probed) = analyzer.resolve_module(importer, ".bar", &index);
+        assert_eq!(found, paths(&[]));
+        assert_eq!(
+            probed,
+            paths(&["pkg/sub/bar.py", "pkg/sub/bar/__init__.py"])
+        );
+    }
+
+    /// Each extra dot climbs one directory; climbing out of the project
+    /// resolves nothing.
+    #[test]
+    fn python_resolves_multi_dot_relative_imports() {
+        let analyzer = PythonDepAnalyzer::new(PythonAnalyzerConfig::default());
+        let index = tree();
+        let importer = Path::new("pkg/sub/mod.py");
+
+        let (found, _) = analyzer.resolve_module(importer, "..bar", &index);
+        assert_eq!(found, paths(&["pkg/bar.py"]));
+
+        let (found, _) = analyzer.resolve_module(importer, "..", &index);
+        assert_eq!(found, paths(&["pkg/__init__.py"]));
+
+        let (found, _) = analyzer.resolve_module(importer, "...top", &index);
+        assert_eq!(found, paths(&["top.py"]));
+
+        let (found, probed) = analyzer.resolve_module(importer, "....top", &index);
+        assert_eq!(found, paths(&[]));
+        assert_eq!(probed, paths(&[]));
+    }
+
+    /// Absolute resolution is unchanged: the importer's directory, then the
+    /// project root, then `search_paths`, with every miss on the way probed.
+    #[test]
+    fn python_resolves_absolute_imports_through_the_roots() {
+        let analyzer = PythonDepAnalyzer::new(PythonAnalyzerConfig::default());
+        let index = tree();
+        let importer = Path::new("pkg/sub/mod.py");
+
+        let (found, probed) = analyzer.resolve_module(importer, "top", &index);
+        assert_eq!(found, paths(&["top.py"]));
+        assert_eq!(
+            probed,
+            paths(&["pkg/sub/top.py", "pkg/sub/top/__init__.py"])
+        );
+
+        let (found, _) = analyzer.resolve_module(importer, "pkg.bar", &index);
+        assert_eq!(found, paths(&["pkg/bar.py", "pkg/__init__.py"]));
     }
 }

@@ -97,3 +97,26 @@ fn iyq_rejects_a_bad_filter() {
         "iyq filter \".[ \"",
     );
 }
+
+/// `filter` carries `affects_output`: changing it changes every product's
+/// cache key, so a pass cached under the old filter is not restored. The
+/// default `discover` used to hash the standard fields only, so a filter
+/// that now errors printed "Config changed" and restored the stale pass.
+#[test]
+fn iyq_filter_change_rechecks_cached_pass() {
+    let temp_dir = setup_project_with(CONFIG, "name: test\n");
+    assert_passes(
+        &build(temp_dir.path()),
+        "a valid file under the default filter",
+    );
+    fs::write(
+        temp_dir.path().join("rsconstruct.toml"),
+        "[processor.checker.iyq]\nsrc_dirs = [\"data\"]\nfilter = \"error(\\\"boom\\\")\"\n",
+    )
+    .unwrap();
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "the same file under a filter that errors",
+        "boom",
+    );
+}

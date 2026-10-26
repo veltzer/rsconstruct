@@ -42,31 +42,43 @@ pub trait DepAnalyzer: Sync + Send {
     fn auto_detect(&self, file_index: &FileIndex) -> bool;
 
     /// Return the source path this analyzer would scan for the given product,
-    /// or None if the product is not relevant. Used by the shared progress bar
-    /// in `run_analyzers` to compute an accurate total before scanning starts,
-    /// and by `analyze_with_scanner` to filter products inside the analyze loop.
+    /// or None if the product is not relevant. For most analyzers that is the
+    /// product's primary input when it has the right extension; the default
+    /// [`match_sources`](Self::match_sources) scans exactly this one source.
     fn match_product(&self, product: &Product) -> Option<PathBuf>;
 
-    /// Count how many products in the graph this analyzer would scan.
-    /// Default impl iterates over products and calls `match_product`; override
-    /// only if a cheaper count is available.
+    /// Every source this analyzer scans for the product, in input order.
+    /// The default is the one source `match_product` returns. An analyzer
+    /// whose products can carry several scannable inputs (a `cc.yaml`
+    /// manifest at `inputs[0]` with the C sources it lists after it)
+    /// overrides this to scan each of them: every source keeps its own
+    /// deps-cache entry, and the product gets the union of what they
+    /// depend on. The framework (`Analysis`) only ever calls this one.
+    fn match_sources(&self, product: &Product) -> Vec<PathBuf> {
+        self.match_product(product).into_iter().collect()
+    }
+
+    /// Count how many (product, source) pairs this analyzer would scan:
+    /// the progress-bar total, which ticks once per product per source.
+    /// Default impl sums `match_sources` over the products; override only
+    /// if a cheaper count is available.
     fn count_matches(&self, graph: &BuildGraph) -> usize {
         graph
             .products()
             .iter()
-            .filter(|p| self.match_product(p).is_some())
-            .count()
+            .map(|p| self.match_sources(p).len())
+            .sum()
     }
 
-    /// Return the set of source paths this analyzer would scan. Used by the
-    /// pre-scan classify pass to predict cache-hit / rescan counts before any
-    /// work runs. Default impl iterates over products and collects each
-    /// `match_product` result.
+    /// Return the source paths this analyzer would scan, one entry per
+    /// (product, source) pair. Used by the pre-scan classify pass to predict
+    /// cache-hit / rescan counts before any work runs. Default impl iterates
+    /// over products and collects each `match_sources` result.
     fn matching_sources(&self, graph: &BuildGraph) -> Vec<PathBuf> {
         graph
             .products()
             .iter()
-            .filter_map(|p| self.match_product(p))
+            .flat_map(|p| self.match_sources(p))
             .collect()
     }
 
@@ -431,7 +443,8 @@ impl Analysis {
 
     /// Analyze every product of the graph: each analyzer in turn scans each
     /// distinct source it matches once and fans the result out to every
-    /// product that matched it. Ticks `progress` once per product.
+    /// product that matched it. Ticks `progress` once per product per
+    /// matched source.
     ///
     /// A source that does not exist yet is the output of a product that has
     /// not run (a clean checkout, which is what CI builds every run). It
@@ -448,7 +461,7 @@ impl Analysis {
             // once, then fan the result out to every product that matched.
             let mut by_source: BTreeMap<PathBuf, Vec<usize>> = BTreeMap::new();
             for p in graph.products() {
-                if let Some(source) = self.analyzers[index].analyzer.match_product(p) {
+                for source in self.analyzers[index].analyzer.match_sources(p) {
                     by_source.entry(source).or_default().push(p.id);
                 }
             }
@@ -509,8 +522,9 @@ impl Analysis {
                 p.analyzer_inputs().iter().any(|i| rewritten.contains(i))
                     || self.analyzers.iter().any(|a| {
                         a.analyzer
-                            .match_product(p)
-                            .is_some_and(|source| rewritten.contains(&source))
+                            .match_sources(p)
+                            .iter()
+                            .any(|source| rewritten.contains(source))
                     })
             })
             .map(|p| p.id)
@@ -527,15 +541,14 @@ impl Analysis {
                 let product = graph
                     .get_product(id)
                     .expect(crate::errors::INVALID_PRODUCT_ID);
-                let Some(source) = self.analyzers[index].analyzer.match_product(product) else {
-                    continue;
-                };
-                if !source.exists() {
-                    continue;
+                for source in self.analyzers[index].analyzer.match_sources(product) {
+                    if !source.exists() {
+                        continue;
+                    }
+                    let result = self.scan_source(ctx, index, &source)?;
+                    graph.add_inputs(id, &result.deps);
+                    pieces.extend(joined_hash_pieces(&result));
                 }
-                let result = self.scan_source(ctx, index, &source)?;
-                graph.add_inputs(id, &result.deps);
-                pieces.extend(joined_hash_pieces(&result));
             }
             graph.set_analyzer_pieces(id, pieces);
             let after = graph
@@ -628,6 +641,16 @@ impl ActiveAnalyzer {
             fingerprint: &self.fingerprint,
         }
     }
+}
+
+/// Extensions of the translation units the C/C++ analyzers scan. Headers
+/// are reached through the includes of these, never scanned on their own.
+const CPP_SOURCE_EXTENSIONS: &[&str] = &["c", "cc", "cpp", "cxx"];
+
+/// Whether `path` is a C/C++ translation unit (see `CPP_SOURCE_EXTENSIONS`).
+pub fn is_cpp_source(path: &Path) -> bool {
+    let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+    CPP_SOURCE_EXTENSIONS.contains(&ext)
 }
 
 /// The paths a search probed before `found`: every candidate up to (not

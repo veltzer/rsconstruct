@@ -372,6 +372,12 @@ Processor-specific fields are documented on each processor's page under [Process
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `viewer` | string | platform-specific | Command to open graph files |
+| `validate_empty_inputs` | boolean | `true` | Reject products with no input files |
+| `validate_dep_references` | boolean | `true` | Check the graph's internal consistency (ids, dependency table) after it is built |
+| `validate_duplicate_inputs` | boolean | `false` | Report an input file that appears in several products of one processor |
+| `validate_early_cycles` | boolean | `false` | Check for dependency cycles right after resolving dependencies, not at scheduling time |
+
+The defaults hold whether or not the `[graph]` table is present.
 
 ### `[completions]`
 

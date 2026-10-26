@@ -206,13 +206,13 @@ impl Builder {
     /// Apply config-derived settings to the `BuildContext`. Called by the
     /// constructors so every path gets it — watch mode used to miss this
     /// when it was a separate "remember to call after `new()`" step, silently
-    /// ignoring `cache.mtime_check` under `rsconstruct watch`. Only ever
-    /// *disables* mtime checking, so it cannot override the CLI
-    /// `--no-mtime-cache` flag regardless of ordering.
+    /// ignoring `cache.mtime_check` under `rsconstruct watch`. The config
+    /// value is applied in both directions on every call, so flipping
+    /// `cache.mtime_check` while `rsconstruct watch` runs takes effect on
+    /// the next rebuild; the context keeps the CLI `--no-mtime-cache`
+    /// override separately, so it wins regardless of ordering.
     fn apply_config_to_context(&self, ctx: &crate::build_context::BuildContext) {
-        if !self.config.cache.mtime_check {
-            ctx.set_mtime_check(false);
-        }
+        ctx.set_mtime_check_from_config(self.config.cache.mtime_check);
         ctx.set_webcache_ttl_secs(self.config.cache.webcache_ttl_secs);
     }
 
@@ -606,9 +606,10 @@ impl Builder {
     }
 
     /// Check whether a processor should run. In the instance-based model,
-    /// all declared processors are active (existence in config = enabled).
-    fn is_processor_active(&self, _name: &str, _processor: &dyn Processor) -> bool {
-        true
+    /// every declared processor is active unless its stanza says
+    /// `enabled = false` — the one way to keep a stanza out of the build.
+    fn is_processor_active(&self, _name: &str, processor: &dyn Processor) -> bool {
+        processor.scan_config().enabled
     }
 
     /// Product discovery, routing generated files to the processors that
@@ -787,16 +788,46 @@ impl Builder {
             }
             missing_files.clear();
         }
-        if missing_dirs.is_empty() && missing_files.is_empty() {
+        // The explicit processor's literal `inputs` are the same kind of
+        // claim as src_files, with the same proviso: an entry may name a
+        // file an upstream processor only produces during the build, so it
+        // cannot be checked round by round — only here, against the settled
+        // index. The products carry every literal entry as declared
+        // (`processor.explicit.generic` resolves nothing away), so a product
+        // input that is neither on disk nor a declared output is a typo or
+        // a stale stanza, and the command would run against a file that is
+        // not there.
+        let mut missing_inputs: Vec<String> = Vec::new();
+        if !tolerant {
+            let explicit_prefix = format!("{}.", crate::processor::names::EXPLICIT);
+            for product in graph.products() {
+                if !product.processor.starts_with(&explicit_prefix) {
+                    continue;
+                }
+                for input in &product.inputs {
+                    if input.is_file() || file_index.contains(input) {
+                        continue;
+                    }
+                    missing_inputs.push(format!(
+                        "  [{}] inputs entry '{}' does not exist and no processor declares it as an output",
+                        product.processor,
+                        input.display()
+                    ));
+                }
+            }
+        }
+        if missing_dirs.is_empty() && missing_files.is_empty() && missing_inputs.is_empty() {
             return Ok(file_index);
         }
         let mut missing = missing_dirs;
         missing.extend(missing_files);
+        missing.extend(missing_inputs);
         Err(crate::exit_code::config_error(format!(
-            "Invalid config:\n{}\nEvery src_dirs entry must name a directory that exists and every \
-             src_files entry a file that exists (or a path an upstream processor declares as its \
-             output) — fix the path or remove the entry; [build] allow_missing_src_dirs = true \
-             skips absent directories as before, never absent files",
+            "Invalid config:\n{}\nEvery src_dirs entry must name a directory that exists, and every \
+             src_files entry and every explicit inputs entry a file that exists (or a path an \
+             upstream processor declares as its output) — fix the path or remove the entry; \
+             [build] allow_missing_src_dirs = true skips absent directories as before, never \
+             absent files",
             missing.join("\n")
         )))
     }
@@ -888,10 +919,9 @@ impl Builder {
         }
         let t = Instant::now();
         if self.config.build.hash_tool_versions {
-            let tool_hashes = tool_lock::processor_tool_hashes(
-                processors,
-                &|_name| true, // All declared processors are active
-            );
+            let tool_hashes = tool_lock::processor_tool_hashes(processors, &|name| {
+                tools::instance_enabled(processors, name)
+            });
             if !tool_hashes.is_empty() {
                 graph.apply_tool_version_hashes(&tool_hashes);
             }

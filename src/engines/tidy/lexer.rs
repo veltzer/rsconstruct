@@ -1039,6 +1039,26 @@ impl Doc {
 
     // ---- CDATA content (script, style) ------------------------------------
 
+    /// `GetCDATA`'s `for (i = lexer->lexsize - 1; i >= start; --i)
+    /// TY_(UngetChar)((uint)lexer->lexbuf[i], doc->docIn)`: push the bytes
+    /// from `start` to the end of the buffer back into the input, last byte
+    /// first. `lexbuf` is a `char` in C, signed where tidy is built, so a
+    /// byte of a multi-byte sequence goes back sign-extended (`0xFFFFFFxx`),
+    /// not as the Latin-1 code point its value spells; reading it again,
+    /// `AddCharToLexer` rejects it and stores U+FFFD, and so does
+    /// `add_char_to_lexer` here.
+    fn unget_lexbuf_from(&mut self, start: usize) {
+        let mut i = self.lexer.lexsize() - 1;
+        loop {
+            let byte = self.lexer.lexbuf[i];
+            self.unget_char(i32::from(byte as i8) as u32);
+            if i == start {
+                break;
+            }
+            i -= 1;
+        }
+    }
+
     /// `GetCDATA`: the text of a script or style element, up to its end
     /// tag.
     fn get_cdata(&mut self, container: NodeId) -> Option<NodeId> {
@@ -1144,14 +1164,7 @@ impl Doc {
                     }
                     let matches = self.cdata_name_matches(&container_name, start);
                     if is_empty && !matches {
-                        let mut i = self.lexer.lexsize() - 1;
-                        loop {
-                            self.unget_char(u32::from(self.lexer.lexbuf[i]));
-                            if i == start {
-                                break;
-                            }
-                            i -= 1;
-                        }
+                        self.unget_lexbuf_from(start);
                         self.unget_char(u32::from(b'/'));
                         self.unget_char(u32::from(b'<'));
                         break;
@@ -1161,14 +1174,7 @@ impl Doc {
                         nested -= 1;
                     }
                     if matches && was_nested <= 0 {
-                        let mut i = self.lexer.lexsize() - 1;
-                        loop {
-                            self.unget_char(u32::from(self.lexer.lexbuf[i]));
-                            if i == start {
-                                break;
-                            }
-                            i -= 1;
-                        }
+                        self.unget_lexbuf_from(start);
                         self.unget_char(u32::from(b'/'));
                         self.unget_char(u32::from(b'<'));
                         let new_size = self.lexer.lexsize() - ((self.lexer.lexsize() - start) + 2);

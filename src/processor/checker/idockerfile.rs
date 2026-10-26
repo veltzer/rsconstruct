@@ -160,7 +160,20 @@ impl crate::processor::Processor for IdockerfileProcessor {
         crate::processor::ProcessorBase::config_json(&self.config)
     }
 
-    /// One product per scanned file (the default `discover`).
+    /// A named `config_file` is an input of every product (it must exist);
+    /// the default `.hadolint.yaml`/`.hadolint.yml` are `dep_auto` inputs.
+    fn extra_dep_inputs(&self) -> Result<Vec<String>> {
+        let named = crate::processor::named_config_file(
+            "idockerfile",
+            "config_file",
+            &self.config.config_file,
+            "",
+        )?;
+        Ok(named.into_iter().collect())
+    }
+
+    /// One product per scanned file (the default `discover`), plus the
+    /// configuration file read from disk.
     fn discovery(&self) -> crate::processor::Discovery {
         crate::processor::Discovery::PerFile
     }

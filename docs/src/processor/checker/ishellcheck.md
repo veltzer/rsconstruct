@@ -56,6 +56,8 @@ The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` c
 | `extended_analysis` | string | `""` | Dataflow analysis, as `--extended-analysis`: `true`, `false`, or empty for the default (directives decide) |
 | `dep_auto` | string[] | `[".shellcheckrc"]` | Config files that are inputs when they exist |
 
+A file named by `rcfile` is an input of every product, like the `.shellcheckrc` `dep_auto` tracks: a change to it re-checks every script, with no `dep_inputs` entry needed. It must exist: a missing one fails the build naming it, where `shellcheck --rcfile` warns and checks with the defaults.
+
 Switching a repo from shellcheck: `[processor.checker.shellcheck]` → `[processor.checker.ishellcheck]`; a `.shellcheckrc` stays as it is, and options in `args` become the fields of the same name (`args = ["-e", "SC1091", "-S", "warning"]` becomes `exclude = ["SC1091"]`, `severity = "warning"`).
 
 ## Batch support

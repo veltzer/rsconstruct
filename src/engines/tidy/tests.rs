@@ -145,3 +145,36 @@ fn utf16_input_is_refused() {
         .expect_err("UTF-16 is not supported");
     assert!(err.contains("UTF-16"), "{err}");
 }
+
+/// An unmatched `</name` in an empty script is pushed back into the input
+/// byte by byte, as tidy does, and tidy's `char` is signed: a non-ASCII
+/// terminator goes back as sign-extended bytes, not as Latin-1 code points.
+/// The expected lines are what `tidy -errors -q` 5.8.0 prints.
+#[test]
+fn non_ascii_byte_after_unmatched_cdata_end_tag_matches_tidy() {
+    let (lines, warnings, errors) = run(
+        "<!DOCTYPE html>\n<html><head><title>t</title><script></fo\u{f6}</script></head>\n<body><p>x</p></body></html>\n",
+    );
+    assert_eq!(
+        lines,
+        vec![
+            "line 2 column 29 - Warning: missing </script>",
+            "line 2 column 36 - Warning: discarding unexpected </fo>",
+            "line 2 column 29 - Warning: trimming empty <script>",
+        ]
+    );
+    assert_eq!((warnings, errors), (3, 0));
+    let (lines, warnings, errors) = run(
+        "<!DOCTYPE html>\n<html><head><title>t</title></head>\n<body><p>x</p><script></fo\u{f6}>y</script></body></html>\n",
+    );
+    assert_eq!(
+        lines,
+        vec![
+            "line 3 column 15 - Warning: missing </script>",
+            "line 3 column 22 - Warning: discarding unexpected </fo>",
+            "line 3 column 30 - Warning: discarding unexpected </script>",
+            "line 3 column 15 - Warning: trimming empty <script>",
+        ]
+    );
+    assert_eq!((warnings, errors), (4, 0));
+}

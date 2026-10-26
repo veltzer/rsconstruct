@@ -257,27 +257,28 @@ fn run() -> (Result<()>, bool) {
                 if dry_run {
                     let mut builder =
                         Builder::new_with_overrides(&ctx, &shared.iset, &shared.pset)?;
-                    builder.dry_run(&ctx, &shared.to_build_options(&cli, force, stop_after))?;
+                    // A preview never consults the lock.
+                    builder.dry_run(
+                        &ctx,
+                        &shared.to_build_options(&cli, force, stop_after, false),
+                    )?;
                 } else {
                     let t = Instant::now();
                     let mut builder =
                         Builder::new_with_overrides(&ctx, &shared.iset, &shared.pset)?;
                     let builder_new_dur = t.elapsed();
-                    let t = Instant::now();
-                    // In CI the lock is enforced, not opt-in: a runner whose
-                    // tools differ from the committed lock fails here rather
-                    // than producing a result no other runner reproduces.
-                    if verify_tool_versions || crate::config::running_in_ci() {
-                        builder.verify_tool_versions(&ctx)?;
-                    }
-                    let verify_tools_dur = t.elapsed();
                     let init_timings = vec![
                         ("cli_parse".to_string(), cli_parse_dur),
                         ("init".to_string(), init_dur),
                         ("builder_new".to_string(), builder_new_dur),
-                        ("verify_tools".to_string(), verify_tools_dur),
                     ];
-                    let opts = shared.to_build_options(&cli, force, stop_after);
+                    // In CI the lock is enforced, not opt-in: a runner whose
+                    // tools differ from the committed lock fails rather than
+                    // producing a result no other runner reproduces. The
+                    // check itself runs inside the build, once discovery has
+                    // settled which processors (and so which tools) it needs.
+                    let verify = verify_tool_versions || crate::config::running_in_ci();
+                    let opts = shared.to_build_options(&cli, force, stop_after, verify);
                     builder.build(&ctx, &opts, init_timings)?;
                 }
             }
@@ -772,7 +773,7 @@ fn run() -> (Result<()>, bool) {
                 }
             },
             Commands::Watch { ref shared } => {
-                let opts = shared.to_build_options(&cli, false, BuildPhase::Build);
+                let opts = shared.to_build_options(&cli, false, BuildPhase::Build, false);
                 watcher::watch(&ctx, &opts)?;
             }
         }

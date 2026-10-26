@@ -93,7 +93,28 @@ The compiler is chosen per source file based on extension:
 | `.c` | C compiler (`cc` field) |
 | `.cc`, `.cpp`, `.cxx`, `.C` | C++ compiler (`cxx` field) |
 
-Global `cflags` are used for C files and `cxxflags` for C++ files.
+## Compile Flags
+
+Each source is compiled with the flags of its own language, at both
+levels: a C file gets the global `cflags` then the target's `cflags`, a C++
+file gets the global `cxxflags` then the target's `cxxflags`. A target's
+`cflags` never reach its C++ objects and vice versa. After the language
+flags come `-fPIC` (objects of a shared library only), then `-I` for the
+target's `include_dirs` and after them the global `include_dirs`:
+
+```text
+<global cflags|cxxflags> <target cflags|cxxflags> [-fPIC] -I<target dirs> -I<global dirs>
+```
+
+## Header Dependencies
+
+The manifest is the product's first input and the sources it lists follow
+it. With the [cpp](../../analyzers/cpp.md) or
+[icpp](../../analyzers/icpp.md) analyzer enabled, every listed source is
+scanned for `#include`s and its headers become inputs of the objects,
+libraries and programs built from it, so editing a header rebuilds what
+includes it. The analyzer resolves includes with its own `include_paths`,
+not the manifest's `include_dirs`; list the same directories there.
 
 ## Output Layout
 
@@ -122,6 +143,11 @@ This provides incremental rebuilds — only changed sources are recompiled.
 When `single_invocation = true` in `rsconstruct.toml`, programs are built by passing
 all sources directly to the compiler in one command. Libraries still use
 compile+link since `ar` requires object files.
+
+One command has one language: when any source is C++ the C++ driver
+compiles every file as C++ and the command carries the `cxxflags` (global,
+then the program's); otherwise the `cflags`. Include directories and the
+program's `ldflags` are passed as in compile+link mode.
 
 ## Configuration
 

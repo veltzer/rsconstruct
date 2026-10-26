@@ -114,7 +114,24 @@ impl crate::processor::Processor for IcheckstyleProcessor {
         crate::processor::ProcessorBase::config_json(&self.config)
     }
 
-    /// One product per scanned file (the default `discover`).
+    /// A `config_file` other than the default is an input of every product
+    /// (it must exist); the default `checkstyle.xml` is a `dep_auto` input.
+    /// The configuration names no other file: the engine implements no
+    /// `SuppressionFilter` (any module under `Checker` but `TreeWalker` and
+    /// `NewlineAtEndOfFile` is a configuration error), so there is no
+    /// suppressions file to track.
+    fn extra_dep_inputs(&self) -> Result<Vec<String>> {
+        let named = crate::processor::named_config_file(
+            "icheckstyle",
+            "config_file",
+            &self.config.config_file,
+            &default_config_file(),
+        )?;
+        Ok(named.into_iter().collect())
+    }
+
+    /// One product per scanned file (the default `discover`), plus the
+    /// configuration read from disk.
     fn discovery(&self) -> crate::processor::Discovery {
         crate::processor::Discovery::PerFile
     }

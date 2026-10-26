@@ -1,4 +1,4 @@
-use crate::common::{run_rsconstruct_with_env, setup_test_project};
+use crate::common::{run_rsconstruct_with_env, setup_project_with_config, setup_test_project};
 use serde_json::Value;
 
 #[test]
@@ -60,10 +60,19 @@ fn tools_list_shows_configured_tools() {
     );
 }
 
+/// A tera stanza plus a ruff stanza with `enabled = false`. ruff is a
+/// pip-installed registry tool, so it is exactly what a disabled stanza
+/// must keep out of the lock, the install set and the tool listings.
+const TERA_AND_DISABLED_RUFF: &str = "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[processor.checker.ruff]\nsrc_dirs = [\"src\"]\nenabled = false\n";
+
+/// `list-configured` shows the tools of the enabled processors; `--all` is
+/// the one way to see a disabled stanza's tool. Before the enabled filter
+/// was real, both forms listed everything and `--all` was a no-op.
 #[test]
-fn tools_list_configured_all_includes_disabled() {
-    let temp_dir = setup_test_project();
+fn tools_list_configured_hides_disabled_processors_unless_all() {
+    let temp_dir = setup_project_with_config(TERA_AND_DISABLED_RUFF);
     let project_path = temp_dir.path();
+    std::fs::create_dir_all(project_path.join("tera.templates")).unwrap();
 
     let output_default = run_rsconstruct_with_env(
         project_path,
@@ -75,22 +84,127 @@ fn tools_list_configured_all_includes_disabled() {
         &["tool", "list-configured", "-a"],
         &[("NO_COLOR", "1")],
     );
-
     assert!(output_default.status.success());
     assert!(output_all.status.success());
 
     let stdout_default = String::from_utf8_lossy(&output_default.stdout);
     let stdout_all = String::from_utf8_lossy(&output_all.stdout);
-
-    // -a should show at least as many tool entries as the default
-    let count_default = stdout_default.lines().count();
-    let count_all = stdout_all.lines().count();
     assert!(
-        count_all >= count_default,
-        "tool list-configured -a should include at least as many tools as default ({} vs {})",
-        count_all,
-        count_default
+        !stdout_default.contains("ruff"),
+        "a disabled processor's tool was listed without --all: {stdout_default}"
     );
+    assert!(
+        stdout_all.contains("ruff") && stdout_all.contains("processor.checker.ruff"),
+        "--all must list the disabled processor's tool: {stdout_all}"
+    );
+
+    // The JSON form follows the same rule.
+    let json_default = run_rsconstruct_with_env(
+        project_path,
+        &["--json", "tool", "list-configured"],
+        &[("NO_COLOR", "1")],
+    );
+    let entries: Vec<Value> = serde_json::from_slice(&json_default.stdout).unwrap();
+    assert!(!entries.iter().any(|e| e["tool"] == "ruff"), "{entries:?}");
+    let json_all = run_rsconstruct_with_env(
+        project_path,
+        &["--json", "tool", "list-configured", "--all"],
+        &[("NO_COLOR", "1")],
+    );
+    let entries: Vec<Value> = serde_json::from_slice(&json_all.stdout).unwrap();
+    assert!(entries.iter().any(|e| e["tool"] == "ruff"), "{entries:?}");
+}
+
+/// `tool lock` and `tool check` consider the enabled processors only: the
+/// lock never gains an entry for a disabled stanza's tool, and the exact
+/// check in CI does not ask for one. (With the filter broken, `tool lock`
+/// would resolve ruff on PyPI and write a `[pip] ruff` entry.)
+#[test]
+fn tool_lock_and_check_skip_disabled_processors() {
+    let temp_dir = setup_project_with_config(TERA_AND_DISABLED_RUFF);
+    let project_path = temp_dir.path();
+    std::fs::create_dir_all(project_path.join("tera.templates")).unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["tool", "lock"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "tool lock failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let lock = std::fs::read_to_string(project_path.join("rsconstruct.lock")).unwrap();
+    assert!(
+        !lock.contains("ruff"),
+        "the lock gained an entry for a disabled processor's tool:\n{lock}"
+    );
+
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["tool", "check"],
+        &[("NO_COLOR", "1"), ("CI", "true")],
+    );
+    assert!(
+        output.status.success(),
+        "tool check asked for a disabled processor's tool: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// The lock check a CI build runs sees what the missing-tool preflight
+/// sees: the processors with products in the graph. A disabled stanza whose
+/// tool is neither locked nor installed, a processor that matched no file,
+/// and one excluded with `-x` must not fail the build; the same stanza,
+/// enabled and with a file to check, must.
+#[test]
+fn ci_build_checks_the_lock_for_the_processors_that_build_only() {
+    let temp_dir = setup_project_with_config(TERA_AND_DISABLED_RUFF);
+    let project_path = temp_dir.path();
+    std::fs::create_dir_all(project_path.join("tera.templates")).unwrap();
+    std::fs::create_dir_all(project_path.join("src")).unwrap();
+    std::fs::write(project_path.join("src/a.py"), "x = 1\n").unwrap();
+    // An empty lock: ruff is not in it.
+    let lock = "version = 1\n";
+    std::fs::write(project_path.join("rsconstruct.lock"), lock).unwrap();
+    let ci = &[("NO_COLOR", "1"), ("CI", "true")];
+
+    let output = run_rsconstruct_with_env(project_path, &["build"], ci);
+    assert!(
+        output.status.success(),
+        "CI build asked for a disabled processor's tool: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // Control: enabled and with a .py file to check, ruff is needed, and
+    // the build fails on it — on the preflight when ruff is not installed,
+    // on the lock when it is (no `[pip] ruff` entry).
+    let enabled = TERA_AND_DISABLED_RUFF.replace("enabled = false", "enabled = true");
+    std::fs::write(project_path.join("rsconstruct.toml"), &enabled).unwrap();
+    let output = run_rsconstruct_with_env(project_path, &["build"], ci);
+    assert!(
+        !output.status.success(),
+        "an enabled processor with an unlocked tool passed the CI build"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("ruff"), "{stderr}");
+
+    // Excluded with -x, ruff has no products in the graph and is not asked for.
+    let output =
+        run_rsconstruct_with_env(project_path, &["build", "-x", "processor.checker.ruff"], ci);
+    assert!(
+        output.status.success(),
+        "CI build asked for an excluded processor's tool: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // Matching no file, the enabled stanza needs no tool either.
+    std::fs::remove_file(project_path.join("src/a.py")).unwrap();
+    let output = run_rsconstruct_with_env(project_path, &["build"], ci);
+    assert!(
+        output.status.success(),
+        "CI build asked for the tool of a processor with no products: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let after = std::fs::read_to_string(project_path.join("rsconstruct.lock")).unwrap();
+    assert_eq!(after, lock, "CI must not rewrite the lock");
 }
 
 #[test]
@@ -153,8 +267,9 @@ fn tools_check_succeeds() {
     );
 }
 
-/// `tool lock` writes rsconstruct.lock pinning the running rsconstruct, and
-/// a second run changes nothing.
+/// `tool lock` writes rsconstruct.lock (here with no entries: the tera
+/// processor's tools are apt packages, which are not locked), and a second
+/// run changes nothing. rsconstruct itself is not recorded.
 #[test]
 fn tool_lock_writes_rsconstruct_lock_once() {
     let temp_dir = setup_test_project();
@@ -169,11 +284,8 @@ fn tool_lock_writes_rsconstruct_lock_once() {
     let stdout = String::from_utf8_lossy(&first.stdout);
     assert!(stdout.contains("Created rsconstruct.lock"), "{stdout}");
     let lock = std::fs::read_to_string(project_path.join("rsconstruct.lock")).unwrap();
-    let expected = format!(
-        "[rsconstruct]\nversion = \"{}\"\n",
-        env!("CARGO_PKG_VERSION")
-    );
-    assert!(lock.contains(&expected), "{lock}");
+    assert!(lock.contains("version = 1\n"), "{lock}");
+    assert!(!lock.contains("[rsconstruct]"), "{lock}");
 
     let second = run_rsconstruct_with_env(project_path, &["tool", "lock"], &[("NO_COLOR", "1")]);
     assert!(second.status.success());
@@ -215,13 +327,13 @@ fn ci_build_requires_the_lock() {
     );
 }
 
-/// The `[rsconstruct]` pin names the release CI downloads, not the binary
-/// that must be running. rsconstruct's own CI runs a binary built from the
-/// commit under test, and a release commit bumps its version past the pin;
-/// requiring the two to match failed the 0.9.139 release (CI run
-/// 40113271551).
+/// A lock written before 2026-10-26 carries an `[rsconstruct]` table (the
+/// release `tool lock` ran as, back when CI downloaded that release). It is
+/// accepted and ignored: in CI such a lock passes untouched, whatever
+/// version it names, and outside CI the next `tool lock` drops the table
+/// and reports doing so.
 #[test]
-fn ci_accepts_a_pin_other_than_the_running_rsconstruct() {
+fn legacy_rsconstruct_table_is_accepted_and_dropped_on_rewrite() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
     let lock = "version = 1\n\n[rsconstruct]\nversion = \"0.0.1\"\n";
@@ -240,6 +352,20 @@ fn ci_accepts_a_pin_other_than_the_running_rsconstruct() {
             String::from_utf8_lossy(&output.stderr)
         );
     }
+    let after = std::fs::read_to_string(project_path.join("rsconstruct.lock")).unwrap();
+    assert_eq!(after, lock, "CI must not rewrite the lock");
+
+    let output = run_rsconstruct_with_env(project_path, &["tool", "lock"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("- rsconstruct 0.0.1"), "{stdout}");
+    assert!(stdout.contains("Updated rsconstruct.lock"), "{stdout}");
+    let rewritten = std::fs::read_to_string(project_path.join("rsconstruct.lock")).unwrap();
+    assert!(!rewritten.contains("[rsconstruct]"), "{rewritten}");
 }
 
 /// In CI a lock that does not match the project is an error, never
@@ -248,8 +374,7 @@ fn ci_accepts_a_pin_other_than_the_running_rsconstruct() {
 fn ci_rejects_a_lock_that_does_not_match() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
-    let stale =
-        "version = 1\n\n[rsconstruct]\nversion = \"0.0.1\"\n\n[cargo]\ncargo-unused = \"1.0.0\"\n";
+    let stale = "version = 1\n\n[cargo]\ncargo-unused = \"1.0.0\"\n";
     std::fs::write(project_path.join("rsconstruct.lock"), stale).unwrap();
 
     let output = run_rsconstruct_with_env(
@@ -266,63 +391,38 @@ fn ci_rejects_a_lock_that_does_not_match() {
     let after = std::fs::read_to_string(project_path.join("rsconstruct.lock")).unwrap();
     assert_eq!(after, stale, "CI must not rewrite the lock");
 
-    // Outside CI the same lock is repaired: the unused entry goes, the
-    // rsconstruct pin stays (only --upgrade moves it).
+    // Outside CI the same lock is repaired: the unused entry goes.
     let output = run_rsconstruct_with_env(project_path, &["tool", "lock"], &[("NO_COLOR", "1")]);
     assert!(output.status.success());
     let repaired = std::fs::read_to_string(project_path.join("rsconstruct.lock")).unwrap();
     assert!(!repaired.contains("cargo-unused"), "{repaired}");
-    assert!(repaired.contains("version = \"0.0.1\""), "{repaired}");
-
-    let output = run_rsconstruct_with_env(
-        project_path,
-        &["tool", "lock", "--upgrade"],
-        &[("NO_COLOR", "1")],
-    );
-    assert!(output.status.success());
-    let upgraded = std::fs::read_to_string(project_path.join("rsconstruct.lock")).unwrap();
-    assert!(
-        upgraded.contains(&format!("version = \"{}\"", env!("CARGO_PKG_VERSION"))),
-        "{upgraded}"
-    );
 }
 
-/// `--upgrade <name>` moves only the named entry: here the rsconstruct pin.
-/// A name the project does not lock is an error and leaves the lock alone.
+/// `--upgrade <name>` takes only names the project locks. An unknown name
+/// is an error that leaves the lock alone, and `rsconstruct` is one:
+/// rsconstruct itself is not locked (CI downloads the latest release).
 #[test]
-fn tool_lock_upgrade_named_moves_only_that_entry() {
+fn tool_lock_upgrade_named_rejects_names_the_project_does_not_lock() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
-    let old = "version = 1\n\n[rsconstruct]\nversion = \"0.0.1\"\n";
+    let old = "version = 1\n";
     std::fs::write(project_path.join("rsconstruct.lock"), old).unwrap();
 
-    let output = run_rsconstruct_with_env(
-        project_path,
-        &["tool", "lock", "--upgrade", "nosuch"],
-        &[("NO_COLOR", "1")],
-    );
-    assert!(!output.status.success(), "an unknown name was accepted");
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("not a tool this project locks: nosuch"),
-        "{stderr}"
-    );
-    let unchanged = std::fs::read_to_string(project_path.join("rsconstruct.lock")).unwrap();
-    assert_eq!(unchanged, old);
-
-    let output = run_rsconstruct_with_env(
-        project_path,
-        &["tool", "lock", "--upgrade", "rsconstruct"],
-        &[("NO_COLOR", "1")],
-    );
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let expected = format!("~ rsconstruct 0.0.1 -> {}", env!("CARGO_PKG_VERSION"));
-    assert!(stdout.contains(&expected), "{stdout}");
+    for name in ["nosuch", "rsconstruct"] {
+        let output = run_rsconstruct_with_env(
+            project_path,
+            &["tool", "lock", "--upgrade", name],
+            &[("NO_COLOR", "1")],
+        );
+        assert!(!output.status.success(), "{name} was accepted");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains(&format!("not a tool this project locks: {name}")),
+            "{stderr}"
+        );
+        let unchanged = std::fs::read_to_string(project_path.join("rsconstruct.lock")).unwrap();
+        assert_eq!(unchanged, old);
+    }
 }
 
 /// A leftover .tools.versions is an error that says what to do.

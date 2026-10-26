@@ -126,6 +126,12 @@ impl Ctx<'_> {
                 ));
             };
             if c == 0x09 {
+                // The configuration refuses a non-positive `tabWidth`, so
+                // this is unreachable; it stays the exception Java throws
+                // rather than a Rust panic.
+                if tab_width == 0 {
+                    return Err("java.lang.ArithmeticException: / by zero".to_string());
+                }
                 len = (len / tab_width + 1) * tab_width;
             } else {
                 len += 1;

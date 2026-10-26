@@ -12,7 +12,9 @@ use fancy_regex::Regex;
 
 use super::lines::{CleansedLines, close_expression, from, reverse_close_expression, upto};
 use super::nesting::{HeaderType, IncludeState, Kind, NestingState};
-use super::regex::{end, g, group, is_match, is_search, pmatch, rx, search, split, start, sub};
+use super::regex::{
+    end, find_start, g, group, is_match, is_search, pmatch, rx, search, split, start, sub,
+};
 use super::tables::{
     C_HEADERS, C_STANDARD_HEADER_FOLDERS_PATTERN, CPP_HEADERS, HEADERS_CONTAINING_TEMPLATES,
     HEADERS_FUNCTIONS, HEADERS_MAYBE_TEMPLATES, HEADERS_TYPES_OR_OBJS, TEST_FILE_SUFFIX,
@@ -829,16 +831,7 @@ static IWYU_TEMPLATES: LazyLock<Vec<IwyuPattern>> = LazyLock::new(|| {
 });
 
 fn iwyu_match(pattern: &IwyuPattern, line: &str) -> Option<usize> {
-    pattern
-        .regex
-        .find(line)
-        .unwrap_or_else(|e| {
-            panic!(
-                "cpplint: regular expression {:?} failed: {e}",
-                pattern.regex.as_str()
-            )
-        })
-        .map(|m| m.start())
+    find_start(pattern.regex, line)
 }
 
 /// `CheckForIncludeWhatYouUse`: STL headers the file uses but does not

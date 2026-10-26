@@ -7,7 +7,17 @@
 //! their Python shapes. Every pattern is compiled once and cached for the
 //! life of the process; the patterns are constants in this module's code,
 //! so a pattern that does not compile is a bug, not an input error.
+//!
+//! Matching can still fail at run time: fancy-regex gives up on a match
+//! that backtracks more than its limit allows, where Python's `re` would
+//! keep going. The checks call these helpers from hundreds of places that
+//! return a bare match, so the failure is not threaded back through them:
+//! the first one on the thread is recorded (and the call reports no match),
+//! and `lint_file` collects it with `take_failure` once the file is
+//! checked, failing the file with the pattern and text that tripped it. No
+//! finding from a file whose matching failed is ever reported.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex, PoisonError};
 
@@ -18,6 +28,31 @@ pub type Captures<'t> = fancy_regex::Captures<'t, str>;
 
 static CACHE: LazyLock<Mutex<HashMap<String, &'static Regex>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+
+thread_local! {
+    /// The first match that failed at run time on this thread, until
+    /// `take_failure` collects it.
+    static FAILURE: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
+/// Record a match that failed at run time; the first one is kept, since
+/// everything matched after it ran on a file already known to fail.
+fn record_failure(re: &Regex, text: &str, e: &fancy_regex::Error) {
+    FAILURE.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if slot.is_none() {
+            *slot = Some(format!(
+                "regular expression {:?} failed on {text:?}: {e}",
+                re.as_str()
+            ));
+        }
+    });
+}
+
+/// The failure recorded on this thread since the last call, if any.
+pub fn take_failure() -> Option<String> {
+    FAILURE.with(|slot| slot.borrow_mut().take())
+}
 
 /// The compiled form of `pattern`, compiled on first use.
 pub fn rx(pattern: &str) -> &'static Regex {
@@ -34,12 +69,24 @@ pub fn rx(pattern: &str) -> &'static Regex {
 }
 
 fn run<'t>(re: &Regex, text: &'t str) -> Option<Captures<'t>> {
-    re.captures(text).unwrap_or_else(|e| {
-        panic!(
-            "cpplint: regular expression {:?} failed on {text:?}: {e}",
-            re.as_str()
-        )
-    })
+    match re.captures(text) {
+        Ok(caps) => caps,
+        Err(e) => {
+            record_failure(re, text, &e);
+            None
+        }
+    }
+}
+
+/// `re.search(...).start()` for an already compiled pattern.
+pub fn find_start(re: &Regex, text: &str) -> Option<usize> {
+    match re.find(text) {
+        Ok(found) => found.map(|m| m.start()),
+        Err(e) => {
+            record_failure(re, text, &e);
+            None
+        }
+    }
 }
 
 /// `re.search(pattern, text)`: the first match anywhere in `text`.
@@ -95,9 +142,13 @@ pub fn split<'t>(pattern: &str, text: &'t str) -> Vec<&'t str> {
     let mut parts = Vec::new();
     let mut last = 0;
     for found in re.find_iter(text) {
-        let m = found.unwrap_or_else(|e| {
-            panic!("cpplint: regular expression {pattern:?} failed on {text:?}: {e}")
-        });
+        let m = match found {
+            Ok(m) => m,
+            Err(e) => {
+                record_failure(re, text, &e);
+                break;
+            }
+        };
         parts.push(&text[last..m.start()]);
         last = m.end();
     }
@@ -107,14 +158,18 @@ pub fn split<'t>(pattern: &str, text: &'t str) -> Vec<&'t str> {
 
 /// `re.finditer(pattern, text)`, collected.
 pub fn find_all<'t>(pattern: &str, text: &'t str) -> Vec<Captures<'t>> {
-    rx(pattern)
-        .captures_iter(text)
-        .map(|c| {
-            c.unwrap_or_else(|e| {
-                panic!("cpplint: regular expression {pattern:?} failed on {text:?}: {e}")
-            })
-        })
-        .collect()
+    let re = rx(pattern);
+    let mut all = Vec::new();
+    for found in re.captures_iter(text) {
+        match found {
+            Ok(caps) => all.push(caps),
+            Err(e) => {
+                record_failure(re, text, &e);
+                break;
+            }
+        }
+    }
+    all
 }
 
 /// `re.escape(text)`.

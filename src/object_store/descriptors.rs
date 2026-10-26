@@ -142,6 +142,38 @@ impl ObjectStore {
         }
     }
 
+    /// Read a cache descriptor for inspection: the local store first, then
+    /// the remote cache when pull is enabled — without writing the pulled
+    /// descriptor to the local store.
+    ///
+    /// `get_descriptor_pulling` persists what it pulls, which is right for
+    /// a build (the restore that follows needs it) and wrong for the
+    /// read-only commands (`status`, `product show`, `build --dry-run`,
+    /// `--explain`): inspecting the cache must not populate
+    /// `.rsconstruct/descriptors/`. The remote is still consulted, so the
+    /// explanation "would restore from the remote cache" stays truthful —
+    /// the same read-without-side-effect that `object_available` does for
+    /// objects.
+    pub(super) fn get_descriptor_peeking(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        cache_key: &str,
+    ) -> Option<CacheDescriptor> {
+        if let Some(descriptor) = self.get_descriptor(cache_key) {
+            return Some(descriptor);
+        }
+        if !self.remote_pull {
+            return None;
+        }
+        match self.peek_descriptor_from_remote(ctx, cache_key) {
+            Ok(descriptor) => descriptor,
+            Err(e) => {
+                crate::output::warn(&format!("failed to read descriptor from remote cache: {e}"));
+                None
+            }
+        }
+    }
+
     /// Return the list of file paths recorded in the product's last tree descriptor.
     pub fn previous_tree_paths(&self, cache_key: &str) -> Vec<PathBuf> {
         match self.get_descriptor(cache_key) {

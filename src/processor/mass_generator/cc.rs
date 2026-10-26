@@ -55,6 +55,39 @@ pub struct CcProgramDef {
     pub ldflags: Vec<String>,
 }
 
+/// What one target (library or program) adds to the compilation of each of
+/// its sources, on top of the manifest's own settings.
+struct TargetFlags<'a> {
+    include_dirs: &'a [String],
+    cflags: &'a [String],
+    cxxflags: &'a [String],
+    /// Compile position-independent code: the objects of a shared library.
+    pic: bool,
+}
+
+impl CcLibraryDef {
+    /// The library's flags; `pic` when any of its objects go into a `.so`.
+    fn target_flags(&self, pic: bool) -> TargetFlags<'_> {
+        TargetFlags {
+            include_dirs: &self.include_dirs,
+            cflags: &self.cflags,
+            cxxflags: &self.cxxflags,
+            pic,
+        }
+    }
+}
+
+impl CcProgramDef {
+    fn target_flags(&self) -> TargetFlags<'_> {
+        TargetFlags {
+            include_dirs: &self.include_dirs,
+            cflags: &self.cflags,
+            cxxflags: &self.cxxflags,
+            pic: false,
+        }
+    }
+}
+
 /// Parsed contents of a cc.yaml file, resolved against the `[processor.mass_generator.cc]`
 /// config: the six inheritable fields (`cc`, `cxx`, `cflags`, `cxxflags`,
 /// `ldflags`, `include_dirs`) default to the config's values, so
@@ -191,13 +224,34 @@ impl CcProcessor {
         }
     }
 
-    /// Choose cflags or cxxflags for a source file.
-    fn lang_flags_for<'a>(manifest: &'a CcManifest, source: &Path) -> &'a [String] {
-        if Self::is_cxx(source) {
+    /// The manifest's `cflags` (C) or `cxxflags` (C++).
+    fn lang_flags(manifest: &CcManifest, is_cxx: bool) -> &[String] {
+        if is_cxx {
             &manifest.cxxflags
         } else {
             &manifest.cflags
         }
+    }
+
+    /// The compile flags for one language in one target, in order: the
+    /// manifest's `cflags`/`cxxflags`, the target's `cflags`/`cxxflags`,
+    /// `-fPIC` for a shared library's objects, then `-I` for the target's
+    /// `include_dirs` and after them the manifest's. A C source gets only
+    /// the `cflags` at both levels, a C++ source only the `cxxflags`.
+    fn compile_flags(manifest: &CcManifest, is_cxx: bool, target: &TargetFlags) -> Vec<String> {
+        let mut flags: Vec<String> = Self::lang_flags(manifest, is_cxx).to_vec();
+        flags.extend_from_slice(if is_cxx {
+            target.cxxflags
+        } else {
+            target.cflags
+        });
+        if target.pic {
+            flags.push("-fPIC".into());
+        }
+        for dir in target.include_dirs.iter().chain(&manifest.include_dirs) {
+            flags.push(format!("-I{dir}"));
+        }
+        flags
     }
 
     /// Parse a cc.yaml file, inheriting unset fields from the
@@ -211,25 +265,21 @@ impl CcProcessor {
         Ok(manifest)
     }
 
-    /// Compile a single source file to an object file.
+    /// Compile a single source file to an object file of `target`, with the
+    /// flags of the source's language (see `compile_flags`).
     /// All paths are relative to the project root.
     fn compile_object(
         ctx: &crate::build_context::BuildContext,
         manifest: &CcManifest,
         source: &Path,
         obj: &Path,
-        extra_cflags: &[String],
+        target: &TargetFlags,
     ) -> Result<()> {
         crate::processor::ensure_output_dir(obj)?;
         let compiler = Self::compiler_for(manifest, source);
         let mut cmd = Command::new(&compiler);
         cmd.arg("-c");
-        for flag in Self::lang_flags_for(manifest, source) {
-            cmd.arg(flag);
-        }
-        for flag in extra_cflags {
-            cmd.arg(flag);
-        }
+        cmd.args(Self::compile_flags(manifest, Self::is_cxx(source), target));
         cmd.arg("-o").arg(obj).arg(source);
         let output = run_command(ctx, &cmd)?;
         check_command_output(
@@ -340,41 +390,37 @@ impl CcProcessor {
     }
 
     /// Single-invocation build for a program (all sources in one command).
+    /// One command has one language: C++ when any source is C++, which is
+    /// what the C++ driver compiles every file as, so the command carries
+    /// the `cxxflags` (manifest's, then the program's); otherwise the
+    /// `cflags`. Include dirs follow as for a separate compile.
     fn single_invocation_program(
         ctx: &crate::build_context::BuildContext,
         manifest: &CcManifest,
         exe_path: &Path,
         sources: &[PathBuf],
         lib_dir: &Path,
-        link_libs: &[String],
-        ldflags: &[String],
+        prog: &CcProgramDef,
     ) -> Result<()> {
         crate::processor::ensure_output_dir(exe_path)?;
         let has_cxx = sources.iter().any(|s| Self::is_cxx(s));
         let compiler = if has_cxx { &manifest.cxx } else { &manifest.cc };
         let mut cmd = Command::new(compiler);
-        let global_flags = if has_cxx {
-            &manifest.cxxflags
-        } else {
-            &manifest.cflags
-        };
-        for flag in global_flags {
-            cmd.arg(flag);
-        }
+        cmd.args(Self::compile_flags(manifest, has_cxx, &prog.target_flags()));
         cmd.arg("-o").arg(exe_path);
         for source in sources {
             cmd.arg(source);
         }
-        if !link_libs.is_empty() {
+        if !prog.link.is_empty() {
             cmd.arg(format!("-L{}", lib_dir.display()));
-            for lib in link_libs {
+            for lib in &prog.link {
                 cmd.arg(format!("-l{lib}"));
             }
         }
         for flag in &manifest.ldflags {
             cmd.arg(flag);
         }
-        for flag in ldflags {
+        for flag in &prog.ldflags {
             cmd.arg(flag);
         }
         let output = run_command(ctx, &cmd)?;
@@ -502,32 +548,18 @@ impl CcProcessor {
         let lib_dir = staging.join("lib");
         let bin_dir = staging.join("bin");
 
-        let resolved_include_flags: Vec<String> = manifest
-            .include_dirs
-            .iter()
-            .map(|dir| format!("-I{dir}"))
-            .collect();
-
         // Build libraries
         for lib in &manifest.libraries {
             let build_shared = matches!(lib.lib_type.as_str(), "shared" | "both");
             let build_static = matches!(lib.lib_type.as_str(), "static" | "both");
-
-            let mut extra_cflags: Vec<String> = lib.cflags.clone();
-            if build_shared {
-                extra_cflags.push("-fPIC".into());
-            }
-            for dir in &lib.include_dirs {
-                extra_cflags.push(format!("-I{dir}"));
-            }
-            extra_cflags.extend_from_slice(&resolved_include_flags);
+            let target = lib.target_flags(build_shared);
 
             let target_obj_dir = obj_dir.join(&lib.name);
             let mut objects = Vec::new();
             for source_str in &lib.sources {
                 let source = crate::processor::resolve_anchor_path(anchor_dir, source_str);
                 let obj = Self::object_path_for(&target_obj_dir, source_str);
-                Self::compile_object(ctx, &manifest, &source, &obj, &extra_cflags)?;
+                Self::compile_object(ctx, &manifest, &source, &obj, &target)?;
                 objects.push(obj);
             }
             let has_cxx = lib.sources.iter().any(|s| Self::is_cxx(Path::new(s)));
@@ -554,27 +586,16 @@ impl CcProcessor {
 
             if self.config.single_invocation {
                 Self::single_invocation_program(
-                    ctx,
-                    &manifest,
-                    &exe_path,
-                    &sources,
-                    &lib_dir,
-                    &prog.link,
-                    &prog.ldflags,
+                    ctx, &manifest, &exe_path, &sources, &lib_dir, prog,
                 )?;
             } else {
                 let target_obj_dir = obj_dir.join(&prog.name);
                 let mut objects = Vec::new();
-
-                let mut extra_cflags: Vec<String> = prog.cflags.clone();
-                for dir in &prog.include_dirs {
-                    extra_cflags.push(format!("-I{dir}"));
-                }
-                extra_cflags.extend_from_slice(&resolved_include_flags);
+                let target = prog.target_flags();
 
                 for (source_str, source) in prog.sources.iter().zip(&sources) {
                     let obj = Self::object_path_for(&target_obj_dir, source_str);
-                    Self::compile_object(ctx, &manifest, source, &obj, &extra_cflags)?;
+                    Self::compile_object(ctx, &manifest, source, &obj, &target)?;
                     objects.push(obj);
                 }
                 let has_cxx = sources.iter().any(|s| Self::is_cxx(s));

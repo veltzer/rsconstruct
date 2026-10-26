@@ -112,7 +112,20 @@ impl crate::processor::Processor for IactionlintProcessor {
         crate::processor::ProcessorBase::config_json(&self.config)
     }
 
-    /// One product per scanned file (the default `discover`).
+    /// A named `config_file` is an input of every product (it must exist);
+    /// the default files are `dep_auto` inputs.
+    fn extra_dep_inputs(&self) -> Result<Vec<String>> {
+        let named = crate::processor::named_config_file(
+            "iactionlint",
+            "config_file",
+            &self.config.config_file,
+            "",
+        )?;
+        Ok(named.into_iter().collect())
+    }
+
+    /// One product per scanned file (the default `discover`), plus the
+    /// config file read from disk.
     fn discovery(&self) -> crate::processor::Discovery {
         crate::processor::Discovery::PerFile
     }

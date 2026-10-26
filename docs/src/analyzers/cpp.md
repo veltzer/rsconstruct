@@ -13,6 +13,11 @@ Scans C/C++ source files for `#include` directives and adds header file dependen
 - Handles both `#include "file"` (relative to source) and `#include <file>` (searches include paths)
 - Supports builtin regex scanning and compiler-based scanning (`gcc -MM`)
 - Uses the dependency cache for incremental builds
+- Scans every `.c`/`.cc`/`.cpp`/`.cxx` input of a product, not only the
+  first: a [cc](../processor/mass_generator/cc.md) or
+  [linux_module](../processor/mass_generator/linux_module.md) product lists
+  its manifest first and its sources after it, and each source's headers
+  become inputs of the library, program or module built from it
 
 ## System header detection
 

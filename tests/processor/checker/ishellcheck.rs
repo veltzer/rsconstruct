@@ -242,3 +242,45 @@ fn ishellcheck_fields_match_shellcheck_options() {
         );
     }
 }
+
+const RCFILE_CONFIG: &str =
+    "[processor.checker.ishellcheck]\nsrc_dirs = [\"src\"]\nrcfile = \"conf/shellcheckrc\"\n";
+
+/// A named `rcfile` is an input of every product: editing it re-checks a
+/// script that passed, without a `dep_inputs` entry naming it.
+#[test]
+fn ishellcheck_rcfile_edit_rechecks() {
+    let temp_dir = setup_project(
+        RCFILE_CONFIG,
+        &[
+            ("conf/shellcheckrc", "disable=SC2086\n"),
+            ("src/bad.sh", "#!/bin/bash\necho $1\n"),
+        ],
+    );
+    assert_passes(
+        &build(temp_dir.path()),
+        "an unquoted expansion while the named rcfile disables SC2086",
+    );
+    fs::write(
+        temp_dir.path().join("conf/shellcheckrc"),
+        "# nothing disabled\n",
+    )
+    .unwrap();
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "the same script once the rcfile disables nothing",
+        "src/bad.sh:2:6: note: Double quote to prevent globbing and word splitting. [SC2086]",
+    );
+}
+
+/// An `rcfile` that does not exist fails the build naming it, rather than
+/// warning and checking with the defaults as `shellcheck --rcfile` does.
+#[test]
+fn ishellcheck_missing_rcfile_fails() {
+    let temp_dir = setup_project(RCFILE_CONFIG, &[("src/ok.sh", "#!/bin/sh\necho \"ok\"\n")]);
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "a missing rcfile",
+        "ishellcheck rcfile not found: conf/shellcheckrc",
+    );
+}

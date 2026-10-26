@@ -112,7 +112,9 @@ const MEMO_MIN_INPUTS: usize = 32;
 /// lookup apiece), twice per build — over a million of each for a build
 /// that changes nothing. The memo is valid while none of the files it covers
 /// is rewritten; `forget_in_session` (called on every write and restore)
-/// drops it the moment one is.
+/// drops it the moment one is, and `BuildContext::clear_session_caches`
+/// drops it wholesale between watch-mode rebuilds, where the files that
+/// changed are the user's sources rather than anything the build wrote.
 #[derive(Default)]
 pub struct CombinedMemo {
     by_inputs: HashMap<Vec<PathBuf>, String>,
@@ -392,7 +394,7 @@ pub fn prune_mtime_cache(ctx: &BuildContext) -> Result<usize> {
 
 /// Compute a file's checksum, consulting the persistent mtime cache first.
 pub fn checksum_fast(ctx: &BuildContext, path: &Path) -> Result<(String, ChecksumPath)> {
-    if !ctx.mtime_enabled.load(std::sync::atomic::Ordering::Relaxed) {
+    if !ctx.mtime_check_enabled() {
         return Ok((file_checksum(ctx, path)?, ChecksumPath::FullRead));
     }
     let (checksum, path_taken, dirty) = fast_checksum(ctx, path)?;
@@ -408,7 +410,7 @@ pub fn checksum_fast(ctx: &BuildContext, path: &Path) -> Result<(String, Checksu
 /// the very build doing the checking. Output verification therefore takes
 /// the mtime shortcut when available and otherwise re-hashes from disk.
 pub fn checksum_output(ctx: &BuildContext, path: &Path) -> Result<(String, ChecksumPath)> {
-    if !ctx.mtime_enabled.load(std::sync::atomic::Ordering::Relaxed) {
+    if !ctx.mtime_check_enabled() {
         return Ok((stream_file_checksum(path)?, ChecksumPath::FullRead));
     }
     let (checksum, path_taken, dirty) = fast_checksum(ctx, path)?;
@@ -434,7 +436,7 @@ pub fn combined_input_checksum(ctx: &BuildContext, inputs: &[PathBuf]) -> Result
 }
 
 fn compute_combined_input_checksum(ctx: &BuildContext, inputs: &[PathBuf]) -> Result<String> {
-    let mtime_enabled = ctx.mtime_enabled.load(std::sync::atomic::Ordering::Relaxed);
+    let mtime_enabled = ctx.mtime_check_enabled();
 
     let mut checksums = Vec::with_capacity(inputs.len());
     let mut dirty_entries = Vec::new();
@@ -655,6 +657,61 @@ mod tests {
             file_checksum(&fresh_ctx, &path).unwrap(),
             second,
             "post-eviction value must match a fresh context's view"
+        );
+    }
+
+    /// Watch mode reuses one context across rebuilds. The combined-input
+    /// memo is consulted before any stat, and `forget_in_session` only ever
+    /// evicts product outputs — so an edit to a *source* file in a large
+    /// input list was invisible to every later rebuild. Clearing the
+    /// session caches between rebuilds is what makes the edit count.
+    #[test]
+    fn clear_session_caches_drops_memo_and_checksum_cache() {
+        let ctx = BuildContext::new();
+        ctx.set_mtime_check(false);
+        let tmp = tempfile::TempDir::new().unwrap();
+
+        let inputs: Vec<PathBuf> = (0..MEMO_MIN_INPUTS)
+            .map(|i| {
+                let p = tmp.path().join(format!("in{i}.txt"));
+                fs::write(&p, format!("v1-{i}")).unwrap();
+                p
+            })
+            .collect();
+        let first = combined_input_checksum(&ctx, &inputs).unwrap();
+        assert!(
+            ctx.combined_memo.lock().unwrap().get(&inputs).is_some(),
+            "a list of MEMO_MIN_INPUTS files is memoized"
+        );
+
+        // A source edit: nothing calls forget_in_session for it.
+        fs::write(&inputs[3], "v2-3").unwrap();
+        assert_eq!(
+            combined_input_checksum(&ctx, &inputs).unwrap(),
+            first,
+            "without a clear the memo hides the edit (the bug being fixed)"
+        );
+
+        ctx.clear_session_caches();
+        assert!(
+            ctx.combined_memo.lock().unwrap().get(&inputs).is_none(),
+            "the memo is empty after a clear"
+        );
+        assert!(
+            ctx.checksum_cache.lock().unwrap().is_none(),
+            "the in-session checksum cache is empty after a clear"
+        );
+        let second = combined_input_checksum(&ctx, &inputs).unwrap();
+        assert_ne!(second, first, "after a clear the edit is seen");
+        // No mtime cache on the fresh context either: with it on, this would
+        // open the project's .rsconstruct/mtime.redb (relative to the test's
+        // cwd), which a concurrent build may hold.
+        let fresh_ctx = BuildContext::new();
+        fresh_ctx.set_mtime_check(false);
+        assert_eq!(
+            combined_input_checksum(&fresh_ctx, &inputs).unwrap(),
+            second,
+            "and agrees with a fresh context"
         );
     }
 }

@@ -6,8 +6,13 @@
 //! install whatever release was newest that day. This file records which
 //! release the project builds with. It is written by `rsconstruct tool
 //! lock`, read by `tool install`, `tool install-deps` and `tool check`, and
-//! checked by `build` in CI. The CI workflows also read its `[rsconstruct]`
-//! table to download the rsconstruct release it names.
+//! checked by `build` in CI (for the processors that build; see
+//! [`Coverage`]). rsconstruct itself is not locked: the fleet's
+//! `scripts/ci-install-tools.sh` downloads the latest release (only the last
+//! few releases stay published, so a pinned one would vanish from under CI,
+//! and every release would have meant a fleet-wide lock bump). Locks written
+//! before 2026-10-26 carry an `[rsconstruct]` table; it is accepted so they
+//! keep parsing, ignored, and left out of the next rewrite.
 //!
 //! What is locked is what rsconstruct itself installs from a registry:
 //! crates (`cargo`), `PyPI` packages (`pip`), global npm packages, gems, and
@@ -53,8 +58,13 @@ const VERSIONED_METHODS: [&str; 4] = ["cargo", "gem", "npm", "pip"];
 #[serde(deny_unknown_fields)]
 pub struct ToolLock {
     pub version: u32,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub rsconstruct: Option<SelfPin>,
+    /// The `[rsconstruct]` table of a lock written before 2026-10-26, when
+    /// `tool lock` recorded the release it ran as for CI to download. Read
+    /// so a committed lock keeps parsing under `deny_unknown_fields`, never
+    /// consulted, and never written: a rewrite drops it (see
+    /// [`describe_changes`]).
+    #[serde(default, skip_serializing)]
+    pub rsconstruct: Option<LegacySelfPin>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub cargo: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -68,11 +78,11 @@ pub struct ToolLock {
     pub binary: BTreeMap<String, BinaryPin>,
 }
 
-/// The rsconstruct release the project builds with: what CI downloads, and
-/// what `rsconstruct tool lock` was run with.
+/// The body of the legacy `[rsconstruct]` table: the release `tool lock` ran
+/// as. Only ever parsed, see [`ToolLock::rsconstruct`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct SelfPin {
+pub struct LegacySelfPin {
     pub version: String,
 }
 
@@ -445,12 +455,59 @@ fn resolve_into(
     Ok(())
 }
 
+/// How much of the lock a check against it judges.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Coverage {
+    /// The lock holds exactly what is wanted: nothing missing, nothing
+    /// unused. `tool check` and the installs in CI, which see the whole
+    /// project.
+    Exact,
+    /// The lock holds at least what is wanted; what else it holds is not
+    /// judged. The `build` check, which sees only the processors with
+    /// products in the graph (after `-p`/`-x`): an entry that selection does
+    /// not need may still be needed by a processor outside it.
+    AtLeast,
+}
+
+/// The committed lock, as CI reads it: it must exist and cover `wanted` to
+/// the degree `coverage` asks.
+fn read_locked(wanted: &Wanted, coverage: Coverage) -> Result<ToolLock> {
+    reject_legacy_lock()?;
+    let Some(lock) = read_lock_file()? else {
+        return Err(lock_error(format!(
+            "No {LOCK_FILE} found. Run `rsconstruct tool lock` outside CI and commit it."
+        )));
+    };
+    let (missing, stale) = diff(&lock, wanted);
+    let mut problems: Vec<String> = Vec::new();
+    problems.extend(
+        missing
+            .iter()
+            .map(|(m, n)| format!("{m} {n} — needed but not locked")),
+    );
+    if coverage == Coverage::Exact {
+        problems.extend(
+            stale
+                .iter()
+                .map(|(m, n)| format!("{m} {n} — locked but no longer needed")),
+        );
+    }
+    if !problems.is_empty() {
+        return Err(lock_error(format!(
+            "{LOCK_FILE} does not match this project (run `rsconstruct tool lock` \
+             outside CI and commit the result):\n{}",
+            problems.join("\n")
+        )));
+    }
+    Ok(lock)
+}
+
 /// How a command treats a lock that is missing or does not cover the
 /// project.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LockMode {
-    /// The lock must exist, cover the project exactly, and carry an
-    /// `[rsconstruct]` pin; anything else is an error. CI.
+    /// The lock must exist and cover the project exactly; anything else is
+    /// an error. CI.
     Locked,
     /// Resolve and add what is missing, drop what nothing needs; never move
     /// an entry that is already locked. Outside CI.
@@ -482,9 +539,11 @@ pub struct Synced {
 }
 
 impl Synced {
-    /// Print what changed, unless nothing did.
+    /// Print what changed, unless nothing did. A lock that was just created
+    /// is always announced, even one with no entries (a project whose tools
+    /// are all apt packages): the file is new and must be committed.
     pub fn report(&self) {
-        if self.changes.is_empty() {
+        if self.changes.is_empty() && !self.created {
             return;
         }
         for line in &self.changes {
@@ -511,43 +570,8 @@ fn entry_label(lock: &ToolLock, method: &str, name: &str) -> String {
 /// Bring rsconstruct.lock in line with `wanted` according to `mode`, and
 /// return it.
 pub fn sync(ctx: &BuildContext, wanted: &Wanted, mode: LockMode, verbose: bool) -> Result<Synced> {
-    reject_legacy_lock()?;
-    let existing = read_lock_file()?;
-
     if mode == LockMode::Locked {
-        let Some(lock) = existing else {
-            return Err(lock_error(format!(
-                "No {LOCK_FILE} found. Run `rsconstruct tool lock` outside CI and commit it."
-            )));
-        };
-        let (missing, stale) = diff(&lock, wanted);
-        let mut problems: Vec<String> = Vec::new();
-        problems.extend(
-            missing
-                .iter()
-                .map(|(m, n)| format!("{m} {n} — needed but not locked")),
-        );
-        problems.extend(
-            stale
-                .iter()
-                .map(|(m, n)| format!("{m} {n} — locked but no longer needed")),
-        );
-        // The pin must exist, because the CI workflows download the version
-        // it names. Whether the *running* binary is that version is not
-        // checked: the download step already guarantees it in every repo
-        // that installs the release, and rsconstruct's own CI deliberately
-        // runs a binary built from the commit under test, whose version a
-        // release commit bumps past any pin (CI run 40113271551).
-        if lock.rsconstruct.is_none() {
-            problems.push("rsconstruct — no [rsconstruct] version".to_string());
-        }
-        if !problems.is_empty() {
-            return Err(lock_error(format!(
-                "{LOCK_FILE} does not match this project (run `rsconstruct tool lock` \
-                 outside CI and commit the result):\n{}",
-                problems.join("\n")
-            )));
-        }
+        let lock = read_locked(wanted, Coverage::Exact)?;
         return Ok(Synced {
             lock,
             created: false,
@@ -555,24 +579,18 @@ pub fn sync(ctx: &BuildContext, wanted: &Wanted, mode: LockMode, verbose: bool) 
         });
     }
 
+    reject_legacy_lock()?;
+    let existing = read_lock_file()?;
     let upgrade_all = mode == LockMode::Upgrade;
-    rewrite(
-        ctx,
-        wanted,
-        existing,
-        upgrade_all,
-        &[],
-        upgrade_all,
-        verbose,
-    )
+    rewrite(ctx, wanted, existing, upgrade_all, &[], verbose)
 }
 
 /// `tool lock --upgrade <name>...`: everything `tool lock` does, plus
 /// re-resolve the entries `names` select to their latest release. A name
-/// selects that tool under every install method the project locks it for;
-/// `rsconstruct` selects the `[rsconstruct]` pin, which moves to the running
-/// rsconstruct. A name the project does not lock is an error, not a no-op:
-/// a typo must not look like "already the latest".
+/// selects that tool under every install method the project locks it for.
+/// A name the project does not lock is an error, not a no-op: a typo must
+/// not look like "already the latest" (and `rsconstruct` is such a name —
+/// rsconstruct itself is not locked).
 pub fn upgrade_named(
     ctx: &BuildContext,
     wanted: &Wanted,
@@ -580,22 +598,16 @@ pub fn upgrade_named(
     verbose: bool,
 ) -> Result<Synced> {
     reject_legacy_lock()?;
-    let (targets, bump_self) = select_entries(wanted, names)?;
+    let targets = select_entries(wanted, names)?;
     let existing = read_lock_file()?;
-    rewrite(ctx, wanted, existing, false, &targets, bump_self, verbose)
+    rewrite(ctx, wanted, existing, false, &targets, verbose)
 }
 
-/// The `(method, name)` entries `names` select from `wanted`, and whether
-/// `rsconstruct` itself was named.
-fn select_entries(wanted: &Wanted, names: &[String]) -> Result<(Entries, bool)> {
+/// The `(method, name)` entries `names` select from `wanted`.
+fn select_entries(wanted: &Wanted, names: &[String]) -> Result<Entries> {
     let mut targets = Vec::new();
-    let mut bump_self = false;
     let mut unknown = Vec::new();
     for name in names {
-        if name == "rsconstruct" {
-            bump_self = true;
-            continue;
-        }
         let before = targets.len();
         for method in VERSIONED_METHODS.iter().copied().chain(["binary"]) {
             let key = lock_key(method, name);
@@ -613,23 +625,20 @@ fn select_entries(wanted: &Wanted, names: &[String]) -> Result<(Entries, bool)> 
             unknown.join(", ")
         )));
     }
-    Ok((targets, bump_self))
+    Ok(targets)
 }
 
 /// Write the lock for `wanted`, starting from `existing`: drop unused
 /// entries, resolve missing ones, and re-resolve `reresolve` (or, with
-/// `fresh`, every entry). `bump_self` moves `[rsconstruct]` to the running
-/// version; otherwise it is only set when absent.
+/// `fresh`, every entry). A legacy `[rsconstruct]` table is dropped.
 fn rewrite(
     ctx: &BuildContext,
     wanted: &Wanted,
     existing: Option<ToolLock>,
     fresh: bool,
     reresolve: &[(String, String)],
-    bump_self: bool,
     verbose: bool,
 ) -> Result<Synced> {
-    let running = env!("CARGO_PKG_VERSION");
     let created = existing.is_none();
     let before = existing.unwrap_or_else(ToolLock::empty);
     let mut lock = if fresh {
@@ -655,11 +664,7 @@ fn rewrite(
     for (method, name) in &missing {
         resolve_into(ctx, &mut lock, method, name, verbose)?;
     }
-    if bump_self || lock.rsconstruct.is_none() {
-        lock.rsconstruct = Some(SelfPin {
-            version: running.to_string(),
-        });
-    }
+    lock.rsconstruct = None;
 
     let changes = describe_changes(&before, &lock);
     if created || lock != before {
@@ -675,13 +680,14 @@ fn rewrite(
 /// One line per entry that differs between `before` and `after`.
 fn describe_changes(before: &ToolLock, after: &ToolLock) -> Vec<String> {
     let mut changes = Vec::new();
-    let self_version = |l: &ToolLock| l.rsconstruct.as_ref().map(|p| p.version.clone());
-    match (self_version(before), self_version(after)) {
-        (None, Some(new)) => changes.push(format!("+ rsconstruct {new}")),
-        (Some(old), Some(new)) if old != new => {
-            changes.push(format!("~ rsconstruct {old} -> {new}"));
-        }
-        _ => {}
+    // Dropping the legacy table is a change the user must see: without this
+    // line a rewrite that did nothing else would be reported as "up to
+    // date" while the file on disk changed.
+    if let (Some(old), None) = (&before.rsconstruct, &after.rsconstruct) {
+        changes.push(format!(
+            "- rsconstruct {} (rsconstruct itself is no longer locked; CI downloads the latest release)",
+            old.version
+        ));
     }
     let methods = VERSIONED_METHODS.iter().copied().chain(["binary"]);
     for method in methods {
@@ -911,11 +917,13 @@ pub fn mismatches(ctx: &BuildContext, lock: &ToolLock, wanted: &Wanted) -> Vec<M
     found
 }
 
-/// Check that rsconstruct.lock covers the project exactly and that every
-/// locked tool is installed at its locked version. The `build` check in CI,
-/// `build --verify-tool-versions`, and `tool check`.
-pub fn verify(ctx: &BuildContext, wanted: &Wanted) -> Result<ToolLock> {
-    let lock = sync(ctx, wanted, LockMode::Locked, false)?.lock;
+/// Check that rsconstruct.lock covers `wanted` (exactly, or at least — see
+/// [`Coverage`]) and that every wanted tool is installed at its locked
+/// version. `tool check` asks for the whole project exactly; the `build`
+/// check in CI and with `--verify-tool-versions` asks for the processors
+/// that build.
+pub fn verify(ctx: &BuildContext, wanted: &Wanted, coverage: Coverage) -> Result<ToolLock> {
+    let lock = read_locked(wanted, coverage)?;
     let found = mismatches(ctx, &lock, wanted);
     if !found.is_empty() {
         let lines: Vec<String> = found.iter().map(ToString::to_string).collect();
@@ -1040,9 +1048,6 @@ mod tests {
 
     fn sample_lock() -> ToolLock {
         let mut lock = ToolLock::empty();
-        lock.rsconstruct = Some(SelfPin {
-            version: "0.9.138".to_string(),
-        });
         lock.cargo
             .insert("cargo-deny".to_string(), "0.18.3".to_string());
         lock.pip.insert("ruff".to_string(), "0.14.0".to_string());
@@ -1069,20 +1074,35 @@ mod tests {
         let lock = sample_lock();
         let text = render_lock(&lock).unwrap();
         assert!(text.starts_with("# rsconstruct.lock"), "{text}");
-        assert!(
-            text.contains("[rsconstruct]\nversion = \"0.9.138\""),
-            "{text}"
-        );
         assert_eq!(parse_lock(&text).unwrap(), lock);
     }
 
-    /// The CI workflows read `[rsconstruct]`'s version with a line-based
-    /// match, so it must render as exactly that table and line.
+    /// A lock written before 2026-10-26 carries an `[rsconstruct]` table.
+    /// It must still parse (the fleet's committed locks have it), and a
+    /// rewrite leaves it out and says so.
     #[test]
-    fn self_pin_renders_as_a_plain_table_line() {
-        let text = render_lock(&sample_lock()).unwrap();
-        let after = text.split("[rsconstruct]\n").nth(1).unwrap();
-        assert_eq!(after.lines().next(), Some("version = \"0.9.138\""));
+    fn legacy_rsconstruct_table_parses_and_is_dropped_on_rewrite() {
+        let old = "version = 1\n\n[rsconstruct]\nversion = \"0.9.140\"\n\n[cargo]\ncargo-deny = \"0.20.2\"\n";
+        let before = parse_lock(old).unwrap();
+        assert_eq!(
+            before.rsconstruct.as_ref().map(|p| p.version.as_str()),
+            Some("0.9.140")
+        );
+
+        let mut after = before.clone();
+        after.rsconstruct = None;
+        let text = render_lock(&after).unwrap();
+        assert!(!text.contains("[rsconstruct]"), "{text}");
+        assert!(text.contains("[cargo]\ncargo-deny = \"0.20.2\""), "{text}");
+        // Rendering never writes the table, whatever the struct holds.
+        assert!(!render_lock(&before).unwrap().contains("[rsconstruct]"));
+
+        let changes = describe_changes(&before, &after);
+        assert_eq!(changes.len(), 1, "{changes:?}");
+        assert!(
+            changes[0].starts_with("- rsconstruct 0.9.140"),
+            "{changes:?}"
+        );
     }
 
     #[test]
@@ -1165,8 +1185,8 @@ mod tests {
     }
 
     /// A name selects its tool under every method the project locks it for
-    /// (Python names compared normalized); `rsconstruct` selects the self
-    /// pin; an unknown name is an error.
+    /// (Python names compared normalized); an unknown name is an error, and
+    /// `rsconstruct` is one (rsconstruct itself is not locked).
     #[test]
     fn select_entries_matches_names_across_methods() {
         let mut wanted = Wanted::default();
@@ -1175,18 +1195,15 @@ mod tests {
         wanted.add("pip", "types-PyYAML");
         let names = |list: &[&str]| list.iter().map(ToString::to_string).collect::<Vec<_>>();
 
-        let (targets, bump_self) =
-            select_entries(&wanted, &names(&["oxlint", "Types_PyYAML"])).unwrap();
+        let targets = select_entries(&wanted, &names(&["oxlint", "Types_PyYAML"])).unwrap();
         let targets: Vec<String> = targets.iter().map(|(m, n)| format!("{m} {n}")).collect();
         assert_eq!(
             targets,
             vec!["cargo oxlint", "binary oxlint", "pip types-pyyaml"]
         );
-        assert!(!bump_self);
 
-        let (targets, bump_self) = select_entries(&wanted, &names(&["rsconstruct"])).unwrap();
-        assert_eq!(targets, Vec::new());
-        assert!(bump_self);
+        let err = select_entries(&wanted, &names(&["rsconstruct"])).unwrap_err();
+        assert!(err.to_string().contains("rsconstruct"), "{err}");
 
         let err = select_entries(&wanted, &names(&["oxlint", "nosuch"])).unwrap_err();
         assert!(err.to_string().contains("nosuch"), "{err}");

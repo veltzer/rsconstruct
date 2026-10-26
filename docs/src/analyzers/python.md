@@ -25,11 +25,16 @@ Scans Python source files for `import` and `from ... import` statements and adds
 - Parses `import a, b`, `import a.b as c`, `from x import (` … `)` across
   lines, and imports indented inside functions or `try` blocks. Comments
   are skipped.
+- Resolves relative imports against the importing file's directory: `from
+  .bar import baz` is `bar.py` (or `bar/__init__.py`) beside the importer,
+  each further leading dot climbs one directory (`from ..pkg import qux`
+  looks in the parent), and a bare `from . import a` depends on the
+  package's own `__init__.py` plus `a.py` when `a` is a module. Relative
+  names are looked up there only — never in the project root or
+  `search_paths` — and one that climbs out of the project resolves nothing.
 - Every path probed and found missing is recorded, so a local module that
   appears later, or one that would now win in an earlier root, triggers a
   rescan.
-
-Relative imports (`from . import x`) are not resolved.
 
 ## Configuration
 

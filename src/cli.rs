@@ -629,9 +629,8 @@ pub enum ToolAction {
     },
     /// Write rsconstruct.lock: add what is missing and drop what is unused, keeping existing pins (requires config)
     Lock {
-        /// Re-resolve entries to their latest release: all of them (and pin
-        /// the running rsconstruct) when no NAME is given, otherwise only the
-        /// named tools (`rsconstruct` names the rsconstruct pin)
+        /// Re-resolve entries to their latest release: all of them when no
+        /// NAME is given, otherwise only the named tools
         #[arg(long, value_name = "NAME", num_args = 0..)]
         upgrade: Option<Vec<String>>,
     },
@@ -886,7 +885,13 @@ pub struct SharedBuildArgs {
 
 impl SharedBuildArgs {
     /// Convert to `BuildOptions` with the given overrides for build-only fields.
-    pub fn to_build_options(&self, cli: &Cli, force: bool, stop_after: BuildPhase) -> BuildOptions {
+    pub fn to_build_options(
+        &self,
+        cli: &Cli,
+        force: bool,
+        stop_after: BuildPhase,
+        verify_tool_versions: bool,
+    ) -> BuildOptions {
         // Merge --dir values into targets as glob patterns
         let targets = match (&self.targets, &self.dirs) {
             (None, None) => None,
@@ -910,6 +915,7 @@ impl SharedBuildArgs {
                 .batch_size
                 .map(|n| if n < 0 { None } else { Some(n as usize) }),
             stop_after,
+            verify_tool_versions,
             processor_filter: self.processor.clone(),
             exclude_filter: self.exclude_processor.clone(),
             auto_add_words: self.auto_add_words,
@@ -942,6 +948,10 @@ pub struct BuildOptions {
     #[allow(clippy::option_option)]
     pub batch_size: Option<Option<usize>>,
     pub stop_after: BuildPhase,
+    /// Check rsconstruct.lock for the processors that build, after
+    /// discovery and the `-p`/`-x` selection (`--verify-tool-versions`, or
+    /// `CI=true`).
+    pub verify_tool_versions: bool,
     pub processor_filter: Option<Vec<String>>,
     pub exclude_filter: Option<Vec<String>>,
     pub auto_add_words: bool,

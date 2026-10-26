@@ -880,3 +880,50 @@ fn processor_types_shows_batching_contract() {
         "{stdout}"
     );
 }
+
+/// `used`, `names` and `allowlist` list the processors that take part in
+/// builds. A stanza with `enabled = false` is declared but not used, so it
+/// is left out of all three (and out of their JSON forms); `config` still
+/// shows it, since its configuration is what `enable` brings back.
+#[test]
+fn processor_used_names_allowlist_skip_disabled_stanzas() {
+    let temp_dir = setup_project_with_config(
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[processor.checker.shellcheck]\nsrc_dirs = [\"src\"]\nenabled = false\n",
+    );
+    let project_path = temp_dir.path();
+    fs::create_dir_all(project_path.join("tera.templates")).unwrap();
+
+    for args in [
+        &["processor", "used"][..],
+        &["processor", "names"],
+        &["processor", "allowlist"],
+        &["--json", "processor", "used"],
+        &["--json", "processor", "names"],
+        &["--json", "processor", "allowlist"],
+    ] {
+        let output = run_rsconstruct_with_env(project_path, args, &[("NO_COLOR", "1")]);
+        assert!(
+            output.status.success(),
+            "{args:?} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains("tera"),
+            "{args:?} lost the enabled processor: {stdout}"
+        );
+        assert!(
+            !stdout.contains("shellcheck"),
+            "{args:?} listed a disabled processor: {stdout}"
+        );
+    }
+
+    let output =
+        run_rsconstruct_with_env(project_path, &["processor", "config"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("processor.checker.shellcheck"),
+        "config must still show a disabled stanza: {stdout}"
+    );
+}

@@ -36,7 +36,7 @@ outputs, such as:
 
 The processor resolves all `inputs` (literal paths) and `input_globs` (glob
 patterns) into a flat file list. It creates a single product with these files
-as inputs and the `outputs` list as outputs.
+as inputs and the declared `output_files` and `output_dirs` as outputs.
 
 Rsconstruct uses this information for:
 - **Rebuild detection**: if any input changes, the product is rebuilt
@@ -44,12 +44,40 @@ Rsconstruct uses this information for:
   that processor runs first (automatic via `resolve_dependencies()`)
 - **Caching**: outputs are cached and restored on cache hit
 
+A stanza is exactly one product, however many rounds of fixed-point discovery
+it takes for its inputs to appear (see [Cross-Processor
+Dependencies](#cross-processor-dependencies)). The product's identity is the
+stanza, not its first input or its outputs: a later round that resolves more
+inputs updates the product rather than adding a second one — which matters
+for a stanza with `output_dirs` only, whose product has no output files to be
+recognised by.
+
+### Missing inputs
+
+Every literal `inputs` entry must name a file that exists, or a path some
+processor declares as its output. An entry that is neither is a config error
+(exit code 2), reported once discovery has settled so that files an upstream
+generator only produces during the build are not falsely flagged:
+
+```text
+Invalid config:
+  [processor.explicit.generic.site] inputs entry 'tags/levels.txt' does not exist and no processor declares it as an output
+```
+
+Such entries used to be dropped silently, and the command ran without them. A
+glob in `input_globs` that matches nothing is not an error (see [Glob
+patterns](#glob-patterns)); a stanza whose inputs resolve to nothing at all
+creates no product.
+
+`rsconstruct clean` tolerates a missing input, so the outputs of a build whose
+sources have since gone can still be removed.
+
 ## Invocation
 
 The command is invoked as:
 
 ```text
-command [args...] --inputs <input1> <input2> ... --outputs <output1> <output2> ...
+command [args...] --inputs <input1> <input2> ... [--output-files <file>...] [--output-dirs <dir>...]
 ```
 
 ### Input ordering
@@ -60,6 +88,11 @@ Inputs are passed in a deterministic order:
    files within each glob sorted alphabetically
 
 This ordering is stable across builds (assuming the same set of files exists).
+
+Because the resolved list is what the command receives, `inputs` and
+`input_globs` are part of the product's cache key (`affects_output`): the same
+files listed in another order, or reached through another pattern, are a
+config change and rerun the command.
 
 ## Configuration
 
@@ -79,7 +112,7 @@ input_globs = [
     "docs/courses/**/*.html",
     "docs/tracks/*.html",
 ]
-outputs = [
+output_files = [
     "docs/index.html",
 ]
 ```
@@ -90,11 +123,13 @@ outputs = [
 |---|---|---|---|
 | `command` | string | yes | Script or binary to execute |
 | `args` | array of strings | no | Extra arguments passed before `--inputs` |
-| `inputs` | array of strings | no | Literal input file paths |
+| `inputs` | array of strings | no | Literal input file paths; each must exist or be an upstream processor's declared output |
 | `input_globs` | array of strings | no | Glob patterns resolved to input files |
-| `outputs` | array of strings | yes | Output file paths produced by the command |
+| `output_files` | array of strings | no | Output file paths produced by the command |
+| `output_dirs` | array of strings | no | Output directories produced by the command (cached as a tree) |
 
-At least one of `inputs` or `input_globs` must be specified.
+At least one of `inputs` or `input_globs` must be specified, and at least one
+of `output_files` or `output_dirs`.
 
 ### Glob patterns
 

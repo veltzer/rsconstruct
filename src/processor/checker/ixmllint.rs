@@ -114,35 +114,23 @@ impl crate::processor::Processor for IxmllintProcessor {
         crate::processor::ProcessorBase::config_json(&self.config)
     }
 
-    /// One product per scanned file. The schema decides pass/fail just as
-    /// much as the file itself, so it is an input of every product: an edit
-    /// to it invalidates cached passes without a `dep_inputs` entry.
-    fn discover(
-        &self,
-        graph: &mut crate::graph::BuildGraph,
-        file_index: &crate::file_index::FileIndex,
-        instance_name: &str,
-    ) -> Result<()> {
-        let mut dep_inputs = self.config.standard.dep_inputs.clone();
-        if !self.config.schema.is_empty() {
-            if !Path::new(&self.config.schema).is_file() {
-                bail!("ixmllint schema not found: {}", self.config.schema);
-            }
-            dep_inputs.push(self.config.schema.clone());
-        }
-        crate::processor::discover_checker_products(
-            graph,
-            &self.config.standard,
-            file_index,
-            &dep_inputs,
-            &self.config.standard.dep_auto,
-            &self.config,
-            &crate::config::checksum_fields_of(instance_name),
-            instance_name,
-        )
+    /// The schema decides pass/fail just as much as the file itself, so it
+    /// and every schema it `include`s are inputs of every product: an edit
+    /// to any of them invalidates cached passes without a `dep_inputs`
+    /// entry. A named schema must exist.
+    fn extra_dep_inputs(&self) -> Result<Vec<String>> {
+        let Some(schema) =
+            crate::processor::named_config_file("ixmllint", "schema", &self.config.schema, "")?
+        else {
+            return Ok(Vec::new());
+        };
+        let mut files = Vec::new();
+        collect_schema_files(Path::new(&schema), &mut files)?;
+        Ok(files)
     }
 
-    /// One product per scanned file, plus the schema read from disk.
+    /// One product per scanned file (the default `discover`), plus the
+    /// schema files read from disk.
     fn discovery(&self) -> crate::processor::Discovery {
         crate::processor::Discovery::PerFile
     }
@@ -162,6 +150,44 @@ impl crate::processor::Processor for IxmllintProcessor {
     ) -> Vec<Result<()>> {
         crate::processor::execute_checker_batch_per_file(products, |file| self.check_files(&[file]))
     }
+}
+
+/// The XML Schema namespace, in which `xs:include` lives.
+const XSD_NS: &str = "http://www.w3.org/2001/XMLSchema";
+
+/// `path` and the schemas it `include`s, transitively, each once, in the
+/// order the validator's loader reads them: a `schemaLocation` is relative
+/// to the including file's directory. An `xs:import` is not followed, as
+/// the loader rejects it. A schema that cannot be read is an error naming
+/// it; what is wrong inside one is the loader's to report.
+fn collect_schema_files(path: &Path, files: &mut Vec<String>) -> Result<()> {
+    let name = path.display().to_string();
+    if files.contains(&name) {
+        return Ok(());
+    }
+    let bytes = std::fs::read(path)
+        .with_context(|| format!("Failed to read XSD schema {}", path.display()))?;
+    files.push(name);
+    let Some(root) = xmllint::parse(&bytes).root else {
+        return Ok(());
+    };
+    for child in &root.children {
+        let xmllint::Child::Element(element) = child else {
+            continue;
+        };
+        if element.namespace.as_deref() != Some(XSD_NS) || element.local != "include" {
+            continue;
+        }
+        let Some(location) = element.attribute(None, "schemaLocation") else {
+            continue;
+        };
+        let include_path = path.parent().map_or_else(
+            || Path::new(&location.value).to_path_buf(),
+            |dir| dir.join(&location.value),
+        );
+        collect_schema_files(&include_path, files)?;
+    }
+    Ok(())
 }
 
 fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::Processor>> {

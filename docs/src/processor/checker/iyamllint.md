@@ -45,7 +45,7 @@ The port follows yamllint's source file by file (`src/engines/yamllint/` mirrors
 
 The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` checks nothing: name the directories (`[""]` for the whole project) or files to check.
 
-The config files (`.yamllint`, `.yamllint.yaml`, `.yamllint.yml`) are `dep_auto` inputs: a change to one re-checks every file. A file named by `config_file` is not tracked automatically; add it to `dep_inputs` if it lives elsewhere.
+The config files (`.yamllint`, `.yamllint.yaml`, `.yamllint.yml`) are `dep_auto` inputs: a change to one re-checks every file. A file named by `config_file` is an input of every product just the same, with no `dep_inputs` entry needed, and it must exist: a missing one fails the build naming it rather than linting with the default configuration. So is everything the config in effect reads: a file it `extends` (and what that one reads in turn) and every `ignore-from-file`, at the top level or under a rule — an edit to any of them re-checks every file.
 
 ## Configuration
 

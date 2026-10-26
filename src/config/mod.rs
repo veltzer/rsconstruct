@@ -665,7 +665,7 @@ impl AnalyzerConfig {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct GraphConfig {
     #[serde(default)]
@@ -682,6 +682,23 @@ pub struct GraphConfig {
     /// Check for cycles immediately after resolving dependencies (rather than at topological sort time). Default: false.
     #[serde(default)]
     pub validate_early_cycles: bool,
+}
+
+/// Hand-written so an absent `[graph]` table gets the same defaults as an
+/// empty one. `#[derive(Default)]` gave `false` for every bool, so the two
+/// "default: true" checks only ran for projects that happened to write a
+/// `[graph]` header — a product with no inputs then reached the executor
+/// and panicked instead of failing validation.
+impl Default for GraphConfig {
+    fn default() -> Self {
+        Self {
+            viewer: None,
+            validate_empty_inputs: true,
+            validate_dep_references: true,
+            validate_duplicate_inputs: false,
+            validate_early_cycles: false,
+        }
+    }
 }
 
 /// Read a config file and apply `[vars]` substitution to its content.

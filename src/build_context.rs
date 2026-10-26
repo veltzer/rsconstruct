@@ -26,8 +26,15 @@ pub struct BuildContext {
     /// Mtime entries computed this session and not yet written to `mtime_db`.
     /// See `checksum::flush_mtime_cache`.
     pub(crate) mtime_pending: Mutex<crate::checksum::PendingMtime>,
-    /// Whether mtime pre-check is enabled. Set to false by `--no-mtime-cache`.
-    pub(crate) mtime_enabled: AtomicBool,
+    /// Whether mtime pre-check is enabled by configuration (`[cache]
+    /// mtime_check`). Re-applied from the config on every builder
+    /// construction, so a config edit under `rsconstruct watch` takes effect
+    /// on the next rebuild.
+    mtime_config_enabled: AtomicBool,
+    /// Whether the mtime pre-check was forced off (`--no-mtime-cache`, or a
+    /// caller that must not touch the CWD-relative mtime database). Wins
+    /// over the config value whatever order the two are set in.
+    mtime_forced_off: AtomicBool,
     /// Max-arg-length threshold for `run_checker` (sourced from `build.max_arg_len`).
     /// Stored on the context so any processor can read it without having to be
     /// handed the full `Config`.
@@ -65,7 +72,8 @@ impl BuildContext {
             checksum_cache: Mutex::new(None),
             mtime_db: Mutex::new(None),
             mtime_pending: Mutex::new(crate::checksum::PendingMtime::default()),
-            mtime_enabled: AtomicBool::new(true),
+            mtime_config_enabled: AtomicBool::new(true),
+            mtime_forced_off: AtomicBool::new(false),
             max_arg_len: std::sync::atomic::AtomicUsize::new(1_000_000),
             webcache_ttl_secs: std::sync::atomic::AtomicU64::new(7 * 24 * 60 * 60),
             command_timeout_secs: std::sync::atomic::AtomicU64::new(0),
@@ -113,8 +121,42 @@ impl BuildContext {
         }
     }
 
+    /// Force the mtime pre-check off (`false`) or lift that override
+    /// (`true`). This is the CLI's `--no-mtime-cache` and the handle unit
+    /// tests use to stay away from the CWD-relative mtime database; it is
+    /// authoritative over [`set_mtime_check_from_config`](Self::set_mtime_check_from_config).
     pub(crate) fn set_mtime_check(&self, enabled: bool) {
-        self.mtime_enabled.store(enabled, Ordering::Relaxed);
+        self.mtime_forced_off.store(!enabled, Ordering::Relaxed);
+    }
+
+    /// Apply `[cache] mtime_check` from the project config. Called on every
+    /// builder construction, so the value tracks the config across watch
+    /// rebuilds; a forced-off override still wins.
+    pub(crate) fn set_mtime_check_from_config(&self, enabled: bool) {
+        self.mtime_config_enabled.store(enabled, Ordering::Relaxed);
+    }
+
+    /// Whether the mtime pre-check runs: enabled by config and not forced off.
+    pub(crate) fn mtime_check_enabled(&self) -> bool {
+        self.mtime_config_enabled.load(Ordering::Relaxed)
+            && !self.mtime_forced_off.load(Ordering::Relaxed)
+    }
+
+    /// Drop every cache that assumes file content is stable for one build
+    /// run: the in-session checksum cache and the combined-input memo.
+    ///
+    /// Both are keyed by path alone and consulted before any stat, so they
+    /// are only valid while no source file changes underneath them. One
+    /// build run satisfies that; `rsconstruct watch`, which reuses one
+    /// context across rebuilds triggered by exactly such changes, does not —
+    /// it calls this before every rebuild. The executor's `forget_in_session`
+    /// covers the files a build writes itself (product outputs); this covers
+    /// the files the user edits. The persistent mtime database and its staged
+    /// entries stay: they are validated against the file stamp on every
+    /// lookup, so an edited file misses them and is re-hashed.
+    pub(crate) fn clear_session_caches(&self) {
+        *self.checksum_cache.lock().unwrap() = None;
+        *self.combined_memo.lock().unwrap() = crate::checksum::CombinedMemo::default();
     }
 
     pub(crate) fn set_max_arg_len(&self, n: usize) {
@@ -168,5 +210,48 @@ mod declared_output_tests {
         assert!(ctx.is_declared_output(Path::new("_site/logos/deep/er.svg")));
         assert!(!ctx.is_declared_output(Path::new("_site/logos-old/x.svg")));
         assert!(!ctx.is_declared_output(Path::new("_site/en/index.html")));
+    }
+}
+
+#[cfg(test)]
+mod mtime_precedence_tests {
+    use super::*;
+
+    /// `--no-mtime-cache` must win over `[cache] mtime_check = true`
+    /// whichever is applied first, and the config value must be able to
+    /// flip both ways while no override is in force (watch mode re-applies
+    /// it on every rebuild).
+    #[test]
+    fn cli_override_beats_config_in_either_order() {
+        let ctx = BuildContext::new();
+        assert!(ctx.mtime_check_enabled(), "on by default");
+
+        ctx.set_mtime_check_from_config(false);
+        assert!(!ctx.mtime_check_enabled(), "config turns it off");
+        ctx.set_mtime_check_from_config(true);
+        assert!(ctx.mtime_check_enabled(), "config turns it back on");
+
+        // CLI first, config after: the config must not re-enable it.
+        ctx.set_mtime_check(false);
+        ctx.set_mtime_check_from_config(true);
+        assert!(
+            !ctx.mtime_check_enabled(),
+            "forced off beats a later config=true"
+        );
+
+        // Config first, CLI after.
+        let ctx = BuildContext::new();
+        ctx.set_mtime_check_from_config(true);
+        ctx.set_mtime_check(false);
+        assert!(
+            !ctx.mtime_check_enabled(),
+            "forced off beats an earlier config=true"
+        );
+
+        ctx.set_mtime_check(true);
+        assert!(
+            ctx.mtime_check_enabled(),
+            "lifting the override restores the config value"
+        );
     }
 }

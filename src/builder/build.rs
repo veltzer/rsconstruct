@@ -366,6 +366,20 @@ impl Builder {
             .collect();
         check_required_tools(&processors, None, Some(&with_products))?;
 
+        // The lock check (CI, or --verify-tool-versions) judges the same
+        // set: the tools of the processors that build here must be locked
+        // and installed at the locked versions. Checking every declared
+        // stanza instead would demand the tool of a disabled instance, of
+        // one excluded with -x, or of one that matched no file — exactly
+        // what the preflight above was written not to do.
+        if opts.verify_tool_versions {
+            let t = Instant::now();
+            self.verify_tool_versions(ctx, &processors, &|name| {
+                with_products.contains(name) && processors[name].scan_config().enabled
+            })?;
+            phase_timings.push(("verify_tools".to_string(), t.elapsed()));
+        }
+
         // Filter by target patterns if specified
         if let Some(ref targets) = opts.targets {
             graph.filter_by_targets(targets)?;

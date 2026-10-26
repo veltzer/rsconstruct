@@ -393,6 +393,11 @@ fn common(
         tab_width: inherited.tab_width,
         messages,
     };
+    // Checkstyle's `setTabWidth` takes any int and `lengthExpandedTabs`
+    // divides by it: a width of 0 is an `ArithmeticException` on the first
+    // tab, a negative one produces nonsense columns. Neither is a
+    // configuration anyone means, so both are refused here.
+    let mut non_positive_tab_width = None;
     props.retain(|(name, value)| match name.as_str() {
         "severity" => {
             common.severity = match parse_severity(module, value) {
@@ -406,14 +411,23 @@ fn common(
             false
         }
         "tabWidth" => match parse_int(module, name, value) {
-            Ok(w) => {
+            Ok(w) if w > 0 => {
                 common.tab_width = w;
                 false
+            }
+            Ok(_) => {
+                non_positive_tab_width = Some(value.clone());
+                true
             }
             Err(_) => true,
         },
         _ => true,
     });
+    if let Some(value) = non_positive_tab_width {
+        bail!(
+            "cannot initialize module {module} - Cannot set property 'tabWidth' to '{value}': the tab width must be a positive number"
+        );
+    }
     if let Some((name, value)) = props
         .iter()
         .find(|(n, _)| n == "severity" || n == "tabWidth")

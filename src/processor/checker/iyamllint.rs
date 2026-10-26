@@ -4,7 +4,7 @@
 //! configuration and 23 rules. This file is the processor around it: which
 //! config file is read, what fails a product, how problems are reported.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use anyhow::{Context, Result, bail};
@@ -116,7 +116,33 @@ impl crate::processor::Processor for IyamllintProcessor {
         crate::processor::ProcessorBase::config_json(&self.config)
     }
 
-    /// One product per scanned file (the default `discover`).
+    /// The config file in effect and everything it reads — a file it
+    /// `extends`, its `ignore-from-file` lists — are inputs of every
+    /// product. A named `config_file` must exist; the default files are
+    /// found as `read_lint_config` finds them (and are `dep_auto` inputs
+    /// too, which is the same input once).
+    fn extra_dep_inputs(&self) -> Result<Vec<String>> {
+        let named = crate::processor::named_config_file(
+            "iyamllint",
+            "config_file",
+            &self.config.config_file,
+            "",
+        )?;
+        let path = match named {
+            Some(named) => PathBuf::from(named),
+            None => match CONFIG_FILES.iter().map(Path::new).find(|p| p.is_file()) {
+                Some(found) => found.to_path_buf(),
+                None => return Ok(Vec::new()),
+            },
+        };
+        Ok(yamllint::config::files_read(&path)?
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect())
+    }
+
+    /// One product per scanned file (the default `discover`), plus the
+    /// config files read from disk.
     fn discovery(&self) -> crate::processor::Discovery {
         crate::processor::Discovery::PerFile
     }

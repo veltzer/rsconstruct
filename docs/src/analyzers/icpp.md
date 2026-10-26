@@ -14,6 +14,10 @@ Builtin C/C++ dependency analyzer. Scans `#include` directives by parsing source
 
 Prefer [cpp](cpp.md) if you need the compiler's own include resolution (macros, conditional includes, built-in system paths).
 
+Like `cpp`, it scans every `.c`/`.cc`/`.cpp`/`.cxx` input of a product, so
+the sources a `cc.yaml` or `linux-module.yaml` lists (which sit after the
+manifest in the product's inputs) get their headers tracked too.
+
 ## Configuration
 
 ```toml

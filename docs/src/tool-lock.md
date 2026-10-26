@@ -15,7 +15,6 @@ hand.
 
 | Section | Installed by | Pinned as |
 |---------|--------------|-----------|
-| `[rsconstruct]` | the CI workflows | the rsconstruct release CI downloads |
 | `[cargo]` | `cargo install --locked` | `name@version` |
 | `[pip]` | `pip` / `uv pip install` | `name==version` (PEP 503-normalized keys) |
 | `[npm]` | `npm install -g` | `name@version` |
@@ -24,8 +23,11 @@ hand.
 
 Entries come from two places:
 
-- **Processor tools**, by the install method `tool install` uses for them (the
-  first one in the tool registry).
+- **Processor tools** of the enabled processors, by the install method `tool
+  install` uses for them (the first one in the tool registry). A stanza with
+  `enabled = false` contributes nothing: it exists to keep its config while
+  its tool is absent, so `tool lock` drops its tool from the lock and `tool
+  install`, `tool check` and `doctor` do not ask for it.
 - **`[dependencies]`** entries for `cargo`, `pip`, `npm` and `gem`. An entry
   that already carries its own constraint (`ruff>=0.5`, `pkg@1.0`) is left as
   written and not locked.
@@ -52,17 +54,26 @@ rsconstruct's source (zola, checkpatch.pl, …) are recorded at that URL.
 | Command | Outside CI | In CI (`CI=true`) |
 |---------|------------|-------------------|
 | `tool lock` | add missing entries, drop unused ones, keep the rest | same (but run it outside CI) |
-| `tool lock --upgrade` | re-resolve every entry to its latest release; pin the running rsconstruct | same |
-| `tool lock --upgrade <name>...` | like `tool lock`, plus re-resolve only the named tools (`rsconstruct` names the rsconstruct pin); an unknown name is an error | same |
+| `tool lock --upgrade` | re-resolve every entry to its latest release | same |
+| `tool lock --upgrade <name>...` | like `tool lock`, plus re-resolve only the named tools; an unknown name is an error | same |
 | `tool install`, `tool install-deps` | fill in missing entries, then install missing tools at their locked versions | the lock must match exactly; a tool installed at a different version is reinstalled at the locked one |
 | `tool check` | the lock must match and every locked tool must be installed at its version | same |
-| `build` | not consulted (`--verify-tool-versions` runs the `tool check` test) | runs the `tool check` test before building |
+| `build` | not consulted (`--verify-tool-versions` runs the build check) | runs the build check before building |
 
-"Match" means: every entry the project needs is present, no entry is unused,
-and there is an `[rsconstruct]` pin. The running rsconstruct is not compared
-with the pin: in the fleet the workflow downloads exactly the pinned release,
-and rsconstruct's own CI deliberately runs a binary built from the commit under
-test, whose version a release commit bumps past any pin.
+"Match" means: every entry the project needs is present and no entry is
+unused.
+
+**The build check** is narrower than `tool check`. It runs after discovery and
+the `-p`/`-x` selection, over the processors that have products in the build
+graph — the same set whose tools the missing-tool preflight demands. For those
+processors (and the `[dependencies]` packages) the lock must have an entry and
+the installed tool must be the locked version; the lock must also exist.
+Entries for other tools are not judged: a
+disabled stanza, a processor excluded with `-x`, or one that matched no file in
+this repo needs no tool installed, and an entry the selection does not need may
+still be needed by a processor outside it. `tool check` is the exact,
+whole-project test — a lock entry nothing needs any more fails it, not the
+build.
 
 **Outside CI, rsconstruct never replaces a tool you already have.** It installs
 what is missing at the locked version, and `tool check` reports drift, but a
@@ -80,16 +91,15 @@ the way `cargo update -p` does. A name selects the tool under every install
 method the project locks it for. A normal build, install or `tool lock` never moves an entry
 that is already locked.
 
-## `[rsconstruct]`
+## rsconstruct itself is not locked
 
-`tool lock` pins the rsconstruct that runs it, and keeps that pin until
-`--upgrade`. The CI workflows read this table and download that release, so CI
-builds with the rsconstruct you locked with:
-
-```toml
-[rsconstruct]
-version = "0.9.138"
-```
+The fleet's `scripts/ci-install-tools.sh` (run by `ci.yml`) downloads the
+latest rsconstruct release. Only the last few releases stay published, so a
+pinned release would vanish from under CI, and pinning would also mean a
+fleet-wide lock bump for every release. Locks written before 2026-10-26 carry
+an `[rsconstruct]` table naming the release `tool lock` ran as; it is still
+accepted, so those locks keep parsing, but it is ignored, and the next `tool
+lock` drops it (and says so).
 
 ## Migrating from `.tools.versions`
 

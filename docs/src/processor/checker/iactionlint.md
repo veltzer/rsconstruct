@@ -39,7 +39,7 @@ The port follows actionlint v1.7.12 file by file (`src/engines/actionlint/` mirr
 
 The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` checks nothing: name `.github/workflows`.
 
-The config files (`.github/actionlint.yaml`, `.github/actionlint.yml`) are `dep_auto` inputs: a change to one re-checks every file. A file named by `config_file` is not tracked automatically; add it to `dep_inputs` if it lives elsewhere. Local actions and reusable workflows a workflow refers to are read when the workflow is checked; list them in `dep_inputs` to re-check on their changes.
+The config files (`.github/actionlint.yaml`, `.github/actionlint.yml`) are `dep_auto` inputs: a change to one re-checks every file. A file named by `config_file` is an input of every product just the same, with no `dep_inputs` entry needed, and it must exist: a missing one fails the build naming it rather than checking with no configuration. Local actions and reusable workflows a workflow refers to are read when the workflow is checked; list them in `dep_inputs` to re-check on their changes.
 
 ## Configuration
 

@@ -36,19 +36,19 @@ impl ExplicitProcessor {
         Self { config }
     }
 
-    /// Resolve literal inputs. Unlike `dep_inputs`, missing files are silently
-    /// skipped — they may be virtual files from upstream generators that only
-    /// appear after fixed-point discovery injects them into the `FileIndex`.
+    /// Resolve the input list: every literal `inputs` entry, then the
+    /// `input_globs` matches.
+    ///
+    /// A literal entry is taken as declared whether or not the file exists
+    /// yet: it may be a file an upstream generator only produces during the
+    /// build, absent from disk and from the `FileIndex` on the first
+    /// discovery round. Dropping it here (as this used to do, silently)
+    /// changed the product's primary input between rounds and let a stale
+    /// path go unnoticed for good. Instead the builder checks every
+    /// explicit input once discovery has converged — against disk and the
+    /// settled index of declared outputs — and fails naming the file.
     fn resolve_inputs(&self, file_index: &FileIndex) -> Result<Vec<PathBuf>> {
-        let mut resolved = Vec::new();
-        // Literal inputs (in config order), only include files that exist
-        // or are known to the file index (virtual files from upstream generators)
-        for p in &self.config.inputs {
-            let path = PathBuf::from(p);
-            if path.exists() || file_index.contains(&path) {
-                resolved.push(path);
-            }
-        }
+        let mut resolved: Vec<PathBuf> = self.config.inputs.iter().map(PathBuf::from).collect();
         // Glob inputs (one glob at a time in config order, sorted within each
         // glob). A bad pattern is an error — silently resolving to zero
         // inputs would hide a config typo behind missing dependencies.
@@ -108,9 +108,12 @@ impl Processor for ExplicitProcessor {
             return Ok(());
         }
 
+        // No inputs yet: the globs matched nothing on this round. The
+        // stanza waits — a later round of fixed-point discovery may inject
+        // the upstream outputs it is after. A product with no inputs has no
+        // primary input, and adding one here used to panic the build.
         let inputs = self.resolve_inputs(file_index)?;
-        if inputs.is_empty() && self.config.inputs.is_empty() && self.config.input_globs.is_empty()
-        {
+        if inputs.is_empty() {
             return Ok(());
         }
 
@@ -122,7 +125,10 @@ impl Processor for ExplicitProcessor {
             &crate::config::checksum_fields_of(instance_name),
         ));
 
-        graph.add_product_with(inputs, output_files, instance_name, hash, None, output_dirs)?;
+        // One product per stanza: a later round re-declares it with the
+        // inputs the round resolved, and the graph updates the product
+        // rather than adding a second one.
+        graph.add_instance_product(inputs, output_files, instance_name, hash, output_dirs)?;
 
         Ok(())
     }
@@ -190,11 +196,11 @@ inventory::submit! {
                 affects_output: true, required: true,
                 doc: "Command to run to produce the outputs" },
             crate::config::FieldSpec { name: "inputs", ty: crate::config::FieldType::StringArray,
-                affects_output: false, required: false,
-                doc: "Explicit list of input files" },
+                affects_output: true, required: false,
+                doc: "Explicit list of input files. Affects the output: the resolved list is passed to the command as --inputs, so the same files listed in another order or under another name produce a different run" },
             crate::config::FieldSpec { name: "input_globs", ty: crate::config::FieldType::StringArray,
-                affects_output: false, required: false,
-                doc: "Glob patterns for input files" },
+                affects_output: true, required: false,
+                doc: "Glob patterns for input files. Affects the output for the same reason as inputs: what they match is passed to the command as --inputs" },
             crate::config::FieldSpec { name: "output_files", ty: crate::config::FieldType::StringArray,
                 affects_output: true, required: false,
                 doc: "Output files produced by the command" },

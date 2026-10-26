@@ -13,7 +13,7 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
@@ -174,11 +174,49 @@ impl IluacheckConfig {
         }
     }
 
+    /// Where luacheck finds `config_file`: in the project root, else in the
+    /// nearest ancestor directory, as `--config` looks a relative path up
+    /// (`locate_config`), written the way luacheck then opens it
+    /// (`../.luacheckrc`). The default `.luacheckrc` may be nowhere (then
+    /// luacheck's fallback configuration applies); a file the user named
+    /// must exist, as luacheck itself fails on "Couldn't find configuration
+    /// file".
+    fn locate_config_file(&self) -> Result<Option<String>> {
+        let name = &self.config_file;
+        if name.is_empty() {
+            return Ok(None);
+        }
+        if Path::new(name).is_absolute() {
+            return crate::processor::named_config_file("iluacheck", "config_file", name, "");
+        }
+        let root = std::env::current_dir().context("Failed to get the current directory")?;
+        let mut prefix = String::new();
+        for dir in root.ancestors() {
+            if dir.join(name).is_file() {
+                return Ok(Some(format!("{prefix}{name}")));
+            }
+            prefix.push_str("../");
+        }
+        if *name == default_config_file() {
+            return Ok(None);
+        }
+        bail!("iluacheck config_file not found: {name}")
+    }
+
+    /// The inputs every product shares: `dep_inputs`, the `dep_auto` files
+    /// that exist, and the configuration file luacheck reads (once, when it
+    /// is also a `dep_auto` entry). An edit to the configuration re-checks
+    /// every file.
     fn dep_inputs(&self) -> Result<Vec<PathBuf>> {
         let scan = &self.standard;
         let mut all_dep_inputs = scan.dep_inputs.clone();
         for ai in &scan.dep_auto {
             all_dep_inputs.extend(crate::processor::config_file_inputs(ai));
+        }
+        if let Some(config_file) = self.locate_config_file()?
+            && !all_dep_inputs.contains(&config_file)
+        {
+            all_dep_inputs.push(config_file);
         }
         resolve_extra_inputs(&all_dep_inputs)
     }

@@ -119,6 +119,9 @@ mod processor {
         pub mod yq;
         pub mod zspell;
     }
+    pub mod explicit {
+        pub mod generic;
+    }
     pub mod generator {
         pub mod a2x;
         pub mod cc_single_file;

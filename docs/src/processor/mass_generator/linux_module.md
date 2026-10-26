@@ -66,6 +66,15 @@ modules:
     sources: [main.c]
 ```
 
+## Header Dependencies
+
+Each `.ko` product lists the manifest as its first input and the module's
+sources after it. With the [cpp](../../analyzers/cpp.md) or
+[icpp](../../analyzers/icpp.md) analyzer enabled, every listed source is
+scanned for `#include`s and its project-local headers become inputs of the
+module, so editing a header rebuilds the modules that include it. Kernel
+headers are system headers to the analyzer and are not tracked.
+
 ## Output Layout
 
 Output is placed under `out/processor.mass_generator.linux_module/<yaml-relative-dir>/`:
