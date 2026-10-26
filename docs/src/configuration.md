@@ -107,9 +107,9 @@ You cannot mix single-instance and multi-instance formats for the same processor
 
 #### Processor names
 
-A processor is named by its full path, `processor.<type>.<name>`, the same path its source file has (`src/processor/checker/ruff.rs` is `processor.checker.ruff`). The type is one of `checker`, `generator`, `creator`, `explicit`, `mass_generator` and `lua`; the name is unique only within its type, which is why the config-driven processors share one name: `processor.creator.generic`, `processor.generator.generic`, `processor.explicit.generic`, `processor.mass_generator.generic`. The section header is the name: `[processor.checker.ruff]`.
+A processor is named by its full path, `processor.<type>.<name>`, the same path its source file has (`src/processor/checker/ruff.rs` is `processor.checker.ruff`). The type is one of `checker`, `generator`, `explicit` and `mass_generator`; the name is unique only within its type, which is why the config-driven processors share one name: `processor.generator.generic`, `processor.explicit.generic`, `processor.mass_generator.generic`. The section header is the name: `[processor.checker.ruff]`.
 
-`rsconstruct processor list` prints every processor's full name; `rsconstruct processor list --type creator` narrows it to one type.
+`rsconstruct processor list` prints every processor's full name; `rsconstruct processor list --type mass_generator` narrows it to one type.
 
 #### Instance naming
 
@@ -127,20 +127,7 @@ The instance name is used everywhere a processor is identified:
 
 #### Migrating from short names
 
-Until rsconstruct 0.9.x a processor was named by its bare name (`[processor.ruff]`, `-p ruff`, `out/tera`). The full-name scheme is a one-shot, mechanical rewrite of every `rsconstruct.toml`:
-
-| Before | After |
-|---|---|
-| `[processor.ruff]` | `[processor.checker.ruff]` |
-| `[processor.pylint.core]` | `[processor.checker.pylint.core]` |
-| `[processor.creator.venv]` | `[processor.creator.generic.venv]` |
-| `[processor.explicit]` | `[processor.explicit.generic]` |
-| `src_dirs = ["out/tera"]` | `src_dirs = ["out/processor.generator.tera"]` |
-| `rsconstruct build -p ruff` | `rsconstruct build -p processor.checker.ruff` |
-
-`scripts/migrate_processor_names.py` in the rsconstruct repository performs the rewrite for one or more repositories (`python3 scripts/migrate_processor_names.py ~/git/*/rsconstruct.toml`): it renames every section header, rewrites `out/<name>` references to processors whose default output directory moved, and reports any other file in the repository that still mentions an old `out/<name>` path, so Makefiles and CI that point into `out/` can be fixed by hand. It asks the installed `rsconstruct processor list --json` which type each name has, so it needs a rsconstruct that already speaks full names. An old-style header is a config error with a hint (`[processor.ruff]: unknown processor type 'ruff' … did you mean [processor.checker.ruff]?`), so a missed file fails loudly rather than silently building nothing.
-
-Every cache entry is keyed by the processor name, so the first build after migrating rebuilds everything once.
+Until rsconstruct 0.9.x a processor was named by its bare name (`[processor.ruff]`, `-p ruff`, `out/tera`). Those names are gone: an old-style header is a config error with a hint (`[processor.ruff]: unknown processor type 'ruff' … did you mean [processor.checker.ruff]?`), so a config that was missed fails loudly rather than silently building nothing. Every cache entry is keyed by the processor name, so the first build after renaming a section rebuilds that processor once.
 
 ### Auto-detection
 
@@ -323,7 +310,7 @@ The `output_dir` prefix is purely a layout choice — `rsconstruct clean outputs
 
 ### `[processor.TYPE.NAME]`
 
-Each `[processor.TYPE.NAME]` section declares a processor instance. The header is the processor's full name: `TYPE` is its type (`checker`, `generator`, `creator`, `explicit`, or `mass_generator`) and `NAME` the processor within that type (`[processor.checker.ruff]`, `[processor.generator.cc_single_file]`). A fourth segment names an instance (`[processor.checker.pylint.core]`).
+Each `[processor.TYPE.NAME]` section declares a processor instance. The header is the processor's full name: `TYPE` is its type (`checker`, `generator`, `explicit`, or `mass_generator`) and `NAME` the processor within that type (`[processor.checker.ruff]`, `[processor.generator.cc_single_file]`). A fourth segment names an instance (`[processor.checker.pylint.core]`).
 
 Common fields available to all processors:
 

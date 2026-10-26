@@ -654,12 +654,8 @@ impl Processor for CcProcessor {
             self.config.cxx.clone(),
             "ar".to_string(),
         ];
-        for compiler in self.manifest_compilers.lock().unwrap().iter() {
-            if !tools.contains(compiler) {
-                tools.push(compiler.clone());
-            }
-        }
-        tools
+        tools.extend(self.manifest_compilers.lock().unwrap().iter().cloned());
+        crate::processor::with_declared_tools(tools, &self.config.standard)
     }
 
     fn discover(
@@ -749,7 +745,6 @@ inventory::submit! {
         "args",
         "dep_auto",
         "output_dir",
-        "required_tools",
         "batch",
     ],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["cc.yaml"], src_exclude_dirs: &[] }),

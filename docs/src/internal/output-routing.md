@@ -3,7 +3,8 @@
 **Status: routing implemented (2026-10-06). Making whole-index processors
 wait was set aside (see [Why whole-index processors do not
 wait](#why-whole-index-processors-do-not-wait)); `inputs_from` and the
-creator tiers are deferred until a config needs them.** See
+tiers for undeclared output directories are deferred until a config needs
+them.** See
 [Implementation status](#implementation-status) at the end.
 
 This chapter proposes replacing the fixed-point discovery loop with
@@ -42,9 +43,9 @@ What is wrong with it:
   convergence check and its limit.
 - **The resulting wiring is invisible.** Which processor feeds which is a
   side effect of path matching; nothing shows it.
-- **Producers that don't know their outputs are invisible.** A creator
-  declares only an output directory, so nothing it writes ever becomes a
-  virtual file. A processor whose `src_dirs` points into that directory
+- **Producers that don't know their outputs are invisible.** An explicit
+  stanza with `output_dirs` declares only the directory, so nothing written
+  inside it ever becomes a virtual file. A processor whose `src_dirs` points into that directory
   finds nothing on a clean build, and the build stays green.
 
 ## Proposal: route each new file to the processors that accept it
@@ -92,7 +93,7 @@ most checkers). Handing them one file at a time is natural.
 Some build **one product from a whole set of files**: `tags` (one index over
 all sources), `duplicate_files` (a whole-set comparison), `pdfunite` and
 `ipdfunite` (many PDFs into one), explicit processors (inputs given as
-globs), and creators whose product depends on a glob of files. These are
+globs), and mass generators whose plan covers a whole source set. These are
 **aggregate** processors. Handing them one file at a time produces a product
 over a partial set, which today's code repairs by growing the product's
 inputs on later passes.
@@ -128,7 +129,7 @@ cycle report.
 
 ```toml
 [processor.checker.linkcheck]
-inputs_from = ["processor.creator.mdbook"]
+inputs_from = ["processor.explicit.generic.site"]
 ```
 
 `inputs_from` names processors by instance name — the name in the config
@@ -137,8 +138,9 @@ header and the `-p` argument (`processor.generator.generic.derive_metadata`;
 name). A type name with named instances is an error listing them. Most
 configs never need it. It exists for three cases:
 
-1. **Connect what cannot be inferred.** A creator declares an output
-   directory and learns what is in it only by running, so its files cannot
+1. **Connect what cannot be inferred.** An explicit stanza with
+   `output_dirs` declares a directory and learns what is in it only by
+   running, so its files cannot
    be routed in advance. Naming it in `inputs_from` is the only way to
    consume it; see the next section.
 2. **Restrict.** With `inputs_from` set, B accepts generated files only from
@@ -159,9 +161,10 @@ one variant filters with its existing `src_dirs`.
 
 ## Producers that don't know their outputs
 
-A creator (sphinx, mdbook, jekyll, cargo, pip, npm, generic creators)
-declares an output directory and learns what is in it only by running.
-Three tiers:
+Every built-in processor that fills a directory (sphinx, mdbook, jekyll,
+zola, cargo, ...) is a mass generator and predicts its files, which is tier 1
+below. The one producer left that learns what is in its output only by
+running is an explicit stanza with `output_dirs`. Three tiers:
 
 ### Tier 1 — make it predictable
 
@@ -172,32 +175,32 @@ that can say in advance what it will produce should be wired this way.
 
 ### Tier 2 — hand over the directory as one input
 
-Many consumers of a creator's output want the whole tree: a link checker
-over `_site`, an HTML validator run once, an archive, a deploy. Naming a
-creator in `inputs_from` gives B **one product** whose input is the
-creator's output tree.
+Many consumers of such a directory want the whole tree: a link checker
+over `_site`, an HTML validator run once, an archive, a deploy. Naming the
+stanza in `inputs_from` would give B **one product** whose input is the
+stanza's output tree.
 
 - **Order** is known before anything runs: the connection is declared.
-- **The input checksum** is taken at dispatch, after the creator ran (the
+- **The input checksum** is taken at dispatch, after the producer ran (the
   executor decides every product at dispatch — R1). It is computed from the
-  creator's tree descriptor, which the object store records on every build
+  producer's tree descriptor, which the object store records on every build
   or restore (`ObjectStore::record_last_tree`). That list is exact: it
   excludes files other processors contribute to a shared directory, which a
   directory walk would not (see [Shared Output Directory](shared-output-directory.md)).
 - This needs a new kind of product input — a producer's tree rather than a
   path — in the graph, the checksum code and `product show`.
 
-### Tier 3 — one product per file, discovered after the creator runs
+### Tier 3 — one product per file, discovered after the producer runs
 
-Per-file checking of a creator's output (one bad page fails one product, an
+Per-file checking of such a directory (one bad page fails one product, an
 unchanged page is skipped) needs products that can only be created once the
-creator has run. The executor's `GraphRefresh` hook, added for mid-build
-re-analysis (R5), is where it would happen: after the creator's level, its
+producer has run. The executor's `GraphRefresh` hook, added for mid-build
+re-analysis (R5), is where it would happen: after the producer's level, its
 actual files are routed like declared outputs, products join the graph, and
 the remaining levels are re-planned.
 
 Costs: `status`, `--dry-run` and the predicted counts cannot see these
-products before the creator runs (they could show the last recorded tree,
+products before the producer runs (they could show the last recorded tree,
 marked provisional); it is the only place products are created during
 execution; clean and stale-output removal must learn these products from
 the recorded tree.
@@ -207,11 +210,11 @@ is built only when a real config needs it.
 
 ### Reporting the gap
 
-Today a processor whose `src_dirs` points into a creator's output directory
-silently finds nothing on a clean build. Under routing that becomes a
-config error: a search setting reaches into a directory owned by a creator
-that is not named in `inputs_from`. The message names the creator and the
-tiers above. This is the one place routing asks the user for anything, and
+Today a processor whose `src_dirs` points into an explicit stanza's
+`output_dirs` silently finds nothing on a clean build. Under routing that
+becomes a config error: a search setting reaches into a declared output
+directory whose stanza is not named in `inputs_from`. The message names the
+stanza and the tiers above. This is the one place routing asks the user for anything, and
 only where inference is impossible.
 
 ## Analyzers are unchanged
@@ -238,8 +241,9 @@ output directories; approximate):
 
 Every producer found is a generator or mass generator with known outputs,
 so every one of these connections is inferred by routing exactly as it is
-by the loop today. **No config changes are needed**, and no config consumes
-a creator's output directory, so the new error above fires nowhere today.
+by the loop today. **No config changes are needed**, and no config consumed
+an undeclared output directory, so the new error above would have fired
+nowhere at the time of the census.
 
 These repos are the regression suite for the change: each must discover the
 same products before and after (`rsconstruct graph` output compared), with
@@ -266,8 +270,8 @@ the aggregate waiting.
 5. Delete the loop, virtual files as a discovery mechanism, and the
    re-declaration handling in `add_product`. **Set aside** with step 3's
    waiting, which it depends on.
-6. `inputs_from` (restrict and assert), and the creator-output config error.
-7. Tier 2 (tree inputs from creators). Tier 3 only when a config needs it.
+6. `inputs_from` (restrict and assert), and the `output_dirs` config error.
+7. Tier 2 (tree inputs from `output_dirs`). Tier 3 only when a config needs it.
 
 ## Why whole-index processors do not wait
 
@@ -289,7 +293,7 @@ Dependencies](cross-processor-dependencies.md), set aside there because it
 duplicates each processor's output-path logic. Without it, a whole-index
 processor that ran "too early" would miss files and nothing would notice.
 
-What exists is correct and cheap: per-file processors (80 of 97) are routed
+What exists is correct and cheap: per-file processors are routed
 only the new files; whole-index processors rescan the index in each round
 that declared new files, exactly as before, and their re-declarations are
 merged by `add_product`. Discovery was never the expensive phase. This is
@@ -310,7 +314,7 @@ what makes discovering over a subset exact.
 **Departures from the plan above:**
 
 - **A trait method, not a plugin-entry field.** A field would have to be
-  added to all ~100 plugin entries, and a field cannot default safely: the
+  added to every plugin entry, and a field cannot default safely: the
   wrong value for a processor whose `discover` looks at more than one file
   would silently lose products. The trait method defaults to `WholeIndex`,
   which is correct for every processor; `PerFile` is an opt-in
@@ -340,7 +344,7 @@ scanned file, and store nothing taken from the index:
   `license_header`, `markdownlint`, `mdl`, `script`, `terms`, `zspell`;
 - custom generators: `cc_single_file`, `generic`, `ijinja2`, `jinja2`,
   `mako`, `marp`, `pdflatex`, `rust_single_file`;
-- creators: `cc`, `generic`, `linux_module`, `pip`. (`cc` and
+- mass generators: `cc`, `linux_module`, `pip`. (`cc` and
   `linux_module` read their manifest from disk, which both index views
   share; `cc` also collects compiler names, but only adds to that set.)
 
@@ -352,12 +356,11 @@ scanned file, and store nothing taken from the index:
 | `generator.requirements`, `generator.tags`, `checker.duplicate_files` | one product over the whole set of scanned files |
 | `generator.pdfunite`, `generator.ipdfunite` | files grouped by directory |
 | `explicit.generic` | globs resolved against the index |
-| `creator.mdbook`, `creator.jekyll`, `checker.clippy`, `checker.make`, `creator.cargo`, `creator.npm`, `creator.gem` | sibling files collected around an anchor |
+| `mass_generator.mdbook`, `mass_generator.jekyll`, `checker.clippy`, `checker.make`, `mass_generator.cargo`, `mass_generator.npm`, `mass_generator.gem` | sibling files collected around an anchor |
 | `mass_generator.generic`, `mass_generator.sphinx`, `mass_generator.zola` | a predicted plan over the source set |
 
 **Guard.** `per_file_discovery_over_a_subset_matches_the_full_index`
-(in `src/processor/mod.rs`) configures every `PerFile` processor — 80 of
-the 97 — to scan a fixture written to a temporary directory, and checks
+(in `src/processor/mod.rs`) configures every `PerFile` processor to scan a fixture written to a temporary directory, and checks
 that discovering over half of it gives exactly the full index's products
 for that half. Every `PerFile` processor must produce products from the
 fixture, so none passes vacuously. Marking mdbook (which collects sibling

@@ -50,6 +50,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 | `args` | string[] | `[]` | Extra arguments passed to mdl |
 | `gem_stamp` | string | `"out/processor.mass_generator.gem/root.stamp"` | The gem processor's install stamp for the `Gemfile` mdl comes from; an input when `local_repo`, so mdl runs after the install. Point it at `out/processor.mass_generator.gem/<dir>.stamp` for a `Gemfile` in a subdirectory |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `required_tools` | string[] | `[]` | Extra tools the build needs on PATH beyond the built-in ones (e.g. what a wrapper script shells out to); checked before building and covered by `tool install` and version locking |
 | `dep_auto` | string[] | `[".mdlrc", ".mdl_style.rb"]` | Config files that are inputs when they exist |
 
 ## Batch support

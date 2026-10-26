@@ -122,3 +122,66 @@ fn mdbook_no_project_discovered() {
         stdout
     );
 }
+
+/// Write a minimal mdbook project whose stanza declares
+/// `required_tools = [tool]`.
+fn mdbook_project_requiring(tool: &str) -> TempDir {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        format!(
+            "[processor.mass_generator.mdbook]\nsrc_dirs = [\".\"]\nrequired_tools = [\"{tool}\"]\n"
+        ),
+    )
+    .unwrap();
+    fs::create_dir_all(project_path.join("docs/src")).unwrap();
+    fs::write(
+        project_path.join("docs/book.toml"),
+        "[book]\ntitle = \"Test\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project_path.join("docs/src/SUMMARY.md"),
+        "# Summary\n\n- [Chapter 1](./chapter1.md)\n",
+    )
+    .unwrap();
+    fs::write(
+        project_path.join("docs/src/chapter1.md"),
+        "# Chapter 1\n\nHello world.\n",
+    )
+    .unwrap();
+    temp_dir
+}
+
+/// `required_tools` is honoured by the mdbook mass generator: a declared
+/// tool that is not on PATH fails the build with the missing-tool error.
+#[test]
+fn mdbook_required_tools_missing_fails_build() {
+    require_tool("mdbook");
+    let temp_dir = mdbook_project_requiring("rsconstruct-test-missing-tool");
+    let output = run_rsconstruct_with_env(temp_dir.path(), &["build"], &[("NO_COLOR", "1")]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "build must fail: stderr={stderr}");
+    assert!(
+        stderr.contains("Missing required tools")
+            && stderr.contains(
+                "rsconstruct-test-missing-tool (needed by: processor.mass_generator.mdbook)"
+            ),
+        "expected the missing-tool error: stderr={stderr}"
+    );
+}
+
+/// A declared tool that is on PATH leaves the build unaffected.
+#[test]
+fn mdbook_required_tools_present_builds() {
+    require_tool("mdbook");
+    let temp_dir = mdbook_project_requiring("sh");
+    let output = run_rsconstruct_with_env(temp_dir.path(), &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "build should succeed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

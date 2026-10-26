@@ -83,7 +83,7 @@ optimization = 3
 }
 
 #[test]
-fn incremental_build() {
+fn tera_incremental_build() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
@@ -117,7 +117,7 @@ fn incremental_build() {
 }
 
 #[test]
-fn multiple_templates() {
+fn tera_multiple_templates() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
@@ -161,7 +161,7 @@ fn multiple_templates() {
 }
 
 #[test]
-fn dep_inputs_triggers_rebuild() {
+fn tera_dep_inputs_triggers_rebuild() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
@@ -238,7 +238,7 @@ fn dep_inputs_triggers_rebuild() {
 }
 
 #[test]
-fn dep_inputs_nonexistent_file_fails() {
+fn tera_dep_inputs_nonexistent_file_fails() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
@@ -274,7 +274,7 @@ fn dep_inputs_nonexistent_file_fails() {
 }
 
 #[test]
-fn subdirectory_output() {
+fn tera_subdirectory_output() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
@@ -337,7 +337,7 @@ fn setup_glob_project(template_body: &str) -> TempDir {
 }
 
 #[test]
-fn glob_counts_matching_files() {
+fn tera_glob_counts_matching_files() {
     let project = setup_glob_project("Total: {{ glob(pattern=\"data/**/*.md\") | length }}\n");
     let p = project.path();
 
@@ -361,7 +361,7 @@ fn glob_counts_matching_files() {
 }
 
 #[test]
-fn glob_invalidates_when_file_added() {
+fn tera_glob_invalidates_when_file_added() {
     let project = setup_glob_project("Total: {{ glob(pattern=\"data/**/*.md\") | length }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("data")).unwrap();
@@ -403,7 +403,7 @@ fn glob_invalidates_when_file_added() {
 }
 
 #[test]
-fn glob_invalidates_when_file_removed() {
+fn tera_glob_invalidates_when_file_removed() {
     let project = setup_glob_project("Total: {{ glob(pattern=\"data/**/*.md\") | length }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("data")).unwrap();
@@ -435,7 +435,7 @@ fn glob_invalidates_when_file_removed() {
 }
 
 #[test]
-fn glob_invalidates_when_file_renamed() {
+fn tera_glob_invalidates_when_file_renamed() {
     // Renaming a file with identical content otherwise produces the same
     // content-addressed cache key. The path-set fingerprint mixed into
     // config_hash is what makes this case work.
@@ -467,7 +467,7 @@ fn glob_invalidates_when_file_renamed() {
 }
 
 #[test]
-fn shell_output_without_depends_on_is_rejected() {
+fn tera_shell_output_without_depends_on_is_rejected() {
     let project = setup_glob_project("Count: {{ shell_output(command=\"ls data | wc -l\") }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("data")).unwrap();
@@ -493,7 +493,7 @@ fn shell_output_without_depends_on_is_rejected() {
 }
 
 #[test]
-fn shell_output_with_depends_on_succeeds() {
+fn tera_shell_output_with_depends_on_succeeds() {
     let project = setup_glob_project(
         "Count: {{ shell_output(command=\"ls data | wc -l\", depends_on=[\"data/**/*.md\"]) }}\n",
     );
@@ -514,7 +514,7 @@ fn shell_output_with_depends_on_succeeds() {
 }
 
 #[test]
-fn shell_output_invalidates_on_matching_file_change() {
+fn tera_shell_output_invalidates_on_matching_file_change() {
     // shell_output's depends_on is the only way the analyzer learns which
     // files might affect the command's output. Modifying a depends_on-matched
     // file should bust the cache.
@@ -558,7 +558,7 @@ fn shell_output_invalidates_on_matching_file_change() {
 }
 
 #[test]
-fn shell_output_invalidates_when_command_edited() {
+fn tera_shell_output_invalidates_when_command_edited() {
     // The literal command string is part of the config_hash, so editing the
     // command should bust the cache even when no depends_on file changed.
     let project =
@@ -628,7 +628,7 @@ fn git_init_and_commit(project_path: &std::path::Path) {
 }
 
 #[test]
-fn git_count_files_counts_only_tracked() {
+fn tera_git_count_files_counts_only_tracked() {
     let project = setup_glob_project("Total: {{ git_count_files(pattern=\"data/*.md\") }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("data")).unwrap();
@@ -652,7 +652,7 @@ fn git_count_files_counts_only_tracked() {
 }
 
 #[test]
-fn git_count_files_invalidates_when_file_committed() {
+fn tera_git_count_files_invalidates_when_file_committed() {
     let project = setup_glob_project("Total: {{ git_count_files(pattern=\"data/*.md\") }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("data")).unwrap();
@@ -704,10 +704,10 @@ fn git_count_files_invalidates_when_file_committed() {
 }
 
 #[test]
-fn git_count_files_skips_when_only_untracked_added() {
+fn tera_git_count_files_skips_when_only_untracked_added() {
     // Adding an untracked file does not change the git ls-files output, so
     // the build should skip on the second run. This is the inverse of
-    // glob_invalidates_when_file_added — different semantics, different cache.
+    // tera_glob_invalidates_when_file_added — different semantics, different cache.
     let project = setup_glob_project("Total: {{ git_count_files(pattern=\"data/*.md\") }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("data")).unwrap();
@@ -736,7 +736,7 @@ fn git_count_files_skips_when_only_untracked_added() {
 }
 
 #[test]
-fn glob_skips_when_matched_file_content_changes() {
+fn tera_glob_skips_when_matched_file_content_changes() {
     // glob() consumes names, not content. Editing a file that happens to
     // match the glob must NOT invalidate the product — only adding,
     // removing, or renaming a matched file does.
@@ -763,7 +763,7 @@ fn glob_skips_when_matched_file_content_changes() {
 }
 
 #[test]
-fn git_count_files_skips_when_tracked_file_content_changes() {
+fn tera_git_count_files_skips_when_tracked_file_content_changes() {
     // git_count_files() consumes the count of tracked files, not their
     // content. Editing a tracked matching file (without changing the
     // tracked path set) must NOT invalidate the product.
@@ -801,7 +801,7 @@ fn git_count_files_skips_when_tracked_file_content_changes() {
 // and git_count_files.
 
 #[test]
-fn grep_count_counts_matching_lines() {
+fn tera_grep_count_counts_matching_lines() {
     let project =
         setup_glob_project("TODOs: {{ grep_count(pattern=\"^TODO\", glob=\"src/**/*.txt\") }}\n");
     let p = project.path();
@@ -821,7 +821,7 @@ fn grep_count_counts_matching_lines() {
 }
 
 #[test]
-fn grep_count_invalidates_when_matched_file_content_changes() {
+fn tera_grep_count_invalidates_when_matched_file_content_changes() {
     // Editing a file inside the glob must trigger a rebuild — that's the
     // whole point of grep_count vs glob/git_count_files.
     let project =
@@ -863,7 +863,7 @@ fn grep_count_invalidates_when_matched_file_content_changes() {
 }
 
 #[test]
-fn grep_count_invalidates_when_regex_changes() {
+fn tera_grep_count_invalidates_when_regex_changes() {
     let project =
         setup_glob_project("Hits: {{ grep_count(pattern=\"^TODO\", glob=\"src/**/*.txt\") }}\n");
     let p = project.path();
@@ -893,7 +893,7 @@ fn grep_count_invalidates_when_regex_changes() {
 }
 
 #[test]
-fn glob_in_included_snippet_is_tracked() {
+fn tera_glob_in_included_snippet_is_tracked() {
     // The function call lives in an included snippet, not the top-level
     // template. The analyzer must recurse into includes so the snippet's
     // glob participates in the parent product's cache key.
@@ -959,7 +959,7 @@ fn glob_in_included_snippet_is_tracked() {
 }
 
 #[test]
-fn glob_no_matches_returns_empty_list() {
+fn tera_glob_no_matches_returns_empty_list() {
     let project =
         setup_glob_project("Total: {{ glob(pattern=\"nonexistent/**/*.md\") | length }}\n");
     let p = project.path();
@@ -983,7 +983,7 @@ fn glob_no_matches_returns_empty_list() {
 /// pattern itself and the resolved file list so the user can see exactly
 /// what's being tracked.
 #[test]
-fn show_files_hash_pieces_surfaces_glob_state() {
+fn tera_show_files_hash_pieces_surfaces_glob_state() {
     let project = setup_glob_project("Total: {{ glob(pattern=\"data/*.md\") | length }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("data")).unwrap();
@@ -1037,7 +1037,7 @@ fn show_files_hash_pieces_surfaces_glob_state() {
 /// list of `kind:body` strings, recomputed live (so the field is present
 /// only when --hash-pieces is passed).
 #[test]
-fn show_files_hash_pieces_json_shape() {
+fn tera_show_files_hash_pieces_json_shape() {
     let project = setup_glob_project("Total: {{ glob(pattern=\"data/*.md\") | length }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("data")).unwrap();
@@ -1095,7 +1095,7 @@ fn show_files_hash_pieces_json_shape() {
 /// `hash_pieces` field — keeps the existing JSON contract stable for any
 /// caller that doesn't opt in.
 #[test]
-fn show_files_without_hash_pieces_omits_field() {
+fn tera_show_files_without_hash_pieces_omits_field() {
     let project = setup_glob_project("Total: {{ glob(pattern=\"data/*.md\") | length }}\n");
     let p = project.path();
     fs::create_dir_all(p.join("data")).unwrap();
@@ -1128,7 +1128,7 @@ fn show_files_without_hash_pieces_omits_field() {
 }
 
 #[test]
-fn copyright_years_falls_back_when_no_commits() {
+fn tera_copyright_years_falls_back_when_no_commits() {
     // A fresh repo (or a non-git directory) must not crash copyright_years().
     // We expect the function to fall back to "{current_year}".
     let project = setup_glob_project("© {{ copyright_years() }}\n");
@@ -1153,7 +1153,7 @@ fn copyright_years_falls_back_when_no_commits() {
 }
 
 #[test]
-fn copyright_years_uses_first_commit_year() {
+fn tera_copyright_years_uses_first_commit_year() {
     // With a real git repo and a commit, copyright_years() should produce a
     // range from the first commit's year to the current year.
     let project = setup_glob_project("© {{ copyright_years() }}\n");
@@ -1184,7 +1184,7 @@ fn copyright_years_uses_first_commit_year() {
 }
 
 #[test]
-fn analyzer_tracks_load_python_without_dep_inputs() {
+fn tera_analyzer_tracks_load_python_without_dep_inputs() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
@@ -1230,7 +1230,7 @@ fn analyzer_tracks_load_python_without_dep_inputs() {
 }
 
 #[test]
-fn analyzer_tracks_version_str_default_path() {
+fn tera_analyzer_tracks_version_str_default_path() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
@@ -1278,7 +1278,7 @@ fn analyzer_tracks_version_str_default_path() {
 }
 
 #[test]
-fn analyzer_tracks_version_str_explicit_lua_path() {
+fn tera_analyzer_tracks_version_str_explicit_lua_path() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
@@ -1324,7 +1324,7 @@ fn analyzer_tracks_version_str_explicit_lua_path() {
 }
 
 #[test]
-fn load_toml_and_toml_get_read_values() {
+fn tera_load_toml_and_toml_get_read_values() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
@@ -1359,7 +1359,7 @@ fn load_toml_and_toml_get_read_values() {
 }
 
 #[test]
-fn analyzer_tracks_toml_get_path() {
+fn tera_analyzer_tracks_toml_get_path() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
@@ -1412,7 +1412,7 @@ fn analyzer_tracks_toml_get_path() {
 }
 
 #[test]
-fn toml_get_missing_key_is_an_error() {
+fn tera_toml_get_missing_key_is_an_error() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
@@ -1445,7 +1445,7 @@ fn toml_get_missing_key_is_an_error() {
 }
 
 #[test]
-fn toml_get_on_a_table_is_an_error() {
+fn tera_toml_get_on_a_table_is_an_error() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 

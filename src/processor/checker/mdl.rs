@@ -70,7 +70,10 @@ impl Processor for MdlProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.standard.command.clone(), "ruby".to_string()]
+        crate::processor::with_declared_tools(
+            vec![self.config.standard.command.clone(), "ruby".to_string()],
+            &self.config.standard,
+        )
     }
 
     fn discover(
@@ -148,7 +151,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Install stamp the gem processor writes; an input, so mdl runs after the gems are installed" },
         ],
-        omit_standard_fields: &["formats", "output_dir", "required_tools", "batch"],
+        omit_standard_fields: &["formats", "output_dir", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
         // mdl reads `.mdlrc` from the working directory; its `style` line
         // conventionally names `.mdl_style.rb` next to it, which mdl then

@@ -43,6 +43,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 | `auto_add_words` | bool | `false` | Add misspelled words to `words_file` instead of failing |
 | `args` | string[] | `[]` | Extra arguments passed to aspell |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `required_tools` | string[] | `[]` | Extra tools the build needs on PATH beyond the built-in ones (e.g. what a wrapper script shells out to); checked before building and covered by `tool install` and version locking |
 | `dep_auto` | string[] | `[".aspell.conf", ".aspell.en.pws", ".aspell.en.prepl"]` | Config files that are inputs when they exist |
 
 ## Batch support

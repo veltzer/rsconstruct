@@ -98,10 +98,13 @@ impl Processor for MakoProcessor {
         // console script from that same distribution — probing it is how a
         // library dependency becomes visible to the executable-based tool
         // registry, so `tool install` covers it like any other tool.
-        vec![
-            self.config.standard.command.clone(),
-            "mako-render".to_string(),
-        ]
+        crate::processor::with_declared_tools(
+            vec![
+                self.config.standard.command.clone(),
+                "mako-render".to_string(),
+            ],
+            &self.config.standard,
+        )
     }
 
     fn discover(
@@ -154,7 +157,7 @@ inventory::submit! {
         processor_type: crate::processor::ProcessorType::Generator,
         create: plugin_create,
         fields: &[],
-        omit_standard_fields: &["formats", "args", "output_dir", "required_tools", "batch"],
+        omit_standard_fields: &["formats", "args", "output_dir", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".mako"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "python3", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<MakoConfig>,

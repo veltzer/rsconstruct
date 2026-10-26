@@ -1,9 +1,50 @@
 use std::fs;
 use std::path::Path;
 
-use crate::common::{make_executable, run_rsconstruct_with_env, write_file};
+use crate::common::{make_executable, require_tool, run_rsconstruct_with_env, write_file};
 
 test_checker!(jekyll, tool: "jekyll", processor: "processor.mass_generator.jekyll", no_project);
+
+/// The real `jekyll` (planner and builder both) on a two-page site: the
+/// build writes every planned page, and a second build has nothing to do.
+#[test]
+fn jekyll_builds_a_real_site() {
+    require_tool("jekyll");
+    require_tool("ruby");
+    let temp = tempfile::TempDir::new().unwrap();
+    let root = temp.path();
+    write_file(
+        root,
+        "rsconstruct.toml",
+        "[processor.mass_generator.jekyll]\nsrc_dirs = [\".\"]\n",
+    );
+    write_file(root, "site/_config.yml", "title: Demo\n");
+    write_file(root, "site/index.md", "---\ntitle: Home\n---\n# Home\n");
+    write_file(root, "site/about.md", "---\ntitle: About\n---\n# About\n");
+
+    let output = run_rsconstruct_with_env(root, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "build failed: {}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let index = fs::read_to_string(root.join("site/_site/index.html"))
+        .expect("site/_site/index.html not produced");
+    assert!(
+        index.contains("Home"),
+        "index.html lacks its heading: {index}"
+    );
+    assert!(root.join("site/_site/about.html").is_file());
+
+    let output = run_rsconstruct_with_env(root, &["build", "-v"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("[processor.mass_generator.jekyll] Skipping (unchanged):"),
+        "second build should skip: {stdout}"
+    );
+}
 
 /// A stand-in for the `ruby` the planner runs with: it ignores the embedded
 /// planner script and prints, as the plan, one `<page>.html` per `<page>.md`

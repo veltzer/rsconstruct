@@ -47,7 +47,7 @@ A product represents a single build unit with:
 
 - **Inputs** — source files that the product depends on
 - **Outputs** — files that the product generates
-- **Output directory** (optional) — for creators, the directory whose entire contents are cached and restored as a unit
+- **Output directories** (optional) — for an explicit stanza that declares `output_dirs`, the directories whose contents are cached and restored as one tree (files owned by other products excluded)
 
 ### BuildGraph
 
@@ -320,30 +320,26 @@ src/processor/
 │                   # SimpleChecker, SimpleGenerator, ProcessorBase, …)
 ├── checker/        # One file per checker (ruff.rs, pylint.rs, cppcheck.rs, …)
 │   └── mod.rs      # mod declarations
-├── generator/      # One file per generator (generator.rs, marp.rs, sass.rs, tags.rs, …)
+├── generator/      # One file per generator (generic.rs, marp.rs, sass.rs, tags.rs, …)
 │   └── mod.rs      # Shared helpers: find_templates, output_path, discover_single_format, …
-├── creator/        # One file per creator (cargo.rs, cc.rs, gem.rs, jekyll.rs,
-│   │               # mdbook.rs, npm.rs, pip.rs)
-│   ├── mod.rs      # mod declarations
-│   └── creator.rs  # Generic creator processor
 ├── explicit/       # Explicit processor (user-defined command with declared outputs)
 │   ├── mod.rs
-│   └── explicit.rs
-└── mass_generator/ # Mass generator (tool that enumerates its outputs via predict_command)
-    ├── mod.rs
-    └── mass_generator.rs
+│   └── generic.rs
+└── mass_generator/ # Tools whose outputs are predicted before they run (cargo.rs, cc.rs,
+    │               # gem.rs, jekyll.rs, mdbook.rs, npm.rs, pip.rs, sphinx.rs, zola.rs, …)
+    ├── mod.rs      # mod declarations, shared helpers
+    └── generic.rs  # Generic mass generator (user predict_command)
 ```
 
-Category directories are singular (`checker/`, not `checkers/`), like every other module in the crate; a category that holds a processor named after itself (`generator::generator`, `creator::creator`, `explicit::explicit`, `mass_generator::mass_generator`) carries a `#[allow(clippy::module_inception)]` on that one `mod` line.
+Category directories are singular (`checker/`, not `checkers/`), like every other module in the crate. The config-driven processor of each type lives in that type's `generic.rs` (`generator::generic`, `explicit::generic`, `mass_generator::generic`), matching its name `processor.<type>.generic`.
 
 ### Conventions
 
 - **Every file in `src/processor/` is a real single processor** — no utility-only files anywhere in the tree. Shared helpers live in `mod.rs` or `generator/mod.rs`; processor-specific data tables (e.g. the requirements generator's stdlib list) live in the processor's own file. The tool registry (`src/tools.rs`) and build statistics (`src/stats.rs`) live at the crate root for this reason.
 - **Checkers** use `SimpleChecker` (data-driven, no boilerplate) or implement `Processor` directly for checkers with custom discovery logic (e.g., `clippy`, `script`).
 - **Generators** use `SimpleGenerator` (data-driven with a custom `execute_fn`) or `GeneratorProcessor` for the generic pass-through generator.
-- **Creators** use `CreatorProcessor` for the generic case, or their own struct for creators with special discovery (cargo profiles, npm siblings, etc.).
+- **Mass generators** use `MassGeneratorProcessor` for the generic case (a user `predict_command`), or their own struct for tools whose outputs they predict themselves (cargo profiles, sphinx and mdbook page lists, etc.).
 - **Explicit** is a singleton processor type with its own folder because it is neither a checker nor a generator.
-- **Lua** is the only processor type that hosts external scripts rather than wrapping a fixed external tool. It has its own folder because it carries significant runtime state (the Lua VM).
 - **A processor is one file.** Everything that defines a processor lives in its file: the `Processor` impl (or SimpleChecker/SimpleGenerator params), its config struct, and one `inventory::submit!` plugin entry carrying the whole schema — `fields` (a `FieldSpec` list from which known/checksum/must fields, descriptions, and expected types all derive), `scan_defaults`, `defaults`, and `omit_standard_fields`. Tools missing from the central registry are submitted as `ToolInfo` from the processor file. There are no central per-processor tables: the former 92/71/~120-arm match tables in `config/mod.rs` are deleted, and every default value is encoded exactly once. The remaining out-of-file touch-points (the category `mod` declaration, the docs page, the test file) are enforced by completeness tests in `config/tests.rs`.
 
 ## Determinism

@@ -207,9 +207,10 @@ Some products cannot or should not be distributed:
   per-processor opt-out from caching, which does not exist today.
 - Products that depend on the local filesystem state beyond declared inputs
   (e.g., `git log` style operations).
-- Creators that manage local directories (`npm install`, `cargo build`) —
-  their outputs are directory trees, not files, and their side effects are
-  local.
+- Processors whose effect lands outside their outputs (`npm`, `pip` and
+  `gem` install into a local environment and write only a stamp; their
+  plugins set `caches_outputs: false`) — the side effect is local, and a
+  remote worker would install into the wrong machine.
 - Products faster than the round-trip overhead (most lint checks on small
   files).
 

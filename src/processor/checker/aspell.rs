@@ -134,7 +134,10 @@ impl Processor for AspellProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.standard.command.clone()]
+        crate::processor::with_declared_tools(
+            vec![self.config.standard.command.clone()],
+            &self.config.standard,
+        )
     }
 
     /// A `conf` other than the default is an input of every product and
@@ -222,7 +225,7 @@ inventory::submit! {
                 affects_output: false, required: false,
                 doc: "Path to the personal word list file" },
         ],
-        omit_standard_fields: &["formats", "output_dir", "required_tools"],
+        omit_standard_fields: &["formats", "output_dir"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "aspell", dep_auto: &[".aspell.conf", ".aspell.en.pws", ".aspell.en.prepl"], ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<AspellConfig>,

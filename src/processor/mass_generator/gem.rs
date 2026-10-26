@@ -95,7 +95,10 @@ impl Processor for GemProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.standard.command.clone(), "ruby".to_string()]
+        crate::processor::with_declared_tools(
+            vec![self.config.standard.command.clone(), "ruby".to_string()],
+            &self.config.standard,
+        )
     }
 
     fn discover(
@@ -175,7 +178,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Directory where gems are installed" },
         ],
-        omit_standard_fields: &["formats", "dep_auto", "output_dir", "required_tools", "batch"],
+        omit_standard_fields: &["formats", "dep_auto", "output_dir", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["Gemfile"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "bundle", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<GemConfig>,

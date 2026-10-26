@@ -50,7 +50,7 @@ fn runs(root: &Path) -> usize {
 /// with no inputs; round 1 added a second one; the build then panicked in
 /// `primary_input` ("internal error: product has no inputs").
 #[test]
-fn upstream_generated_literal_input_with_output_dirs_only() {
+fn generic_upstream_generated_literal_input_with_output_dirs_only() {
     let temp_dir = setup(
         r#"[processor.explicit.generic.collect]
 command = "./gen.sh"
@@ -87,7 +87,7 @@ output_dirs = ["outdir"]
 /// the stanza became two products ("3 built"). The product's identity is
 /// its instance, and its input order is the declared order.
 #[test]
-fn mixed_literal_inputs_with_output_dirs_only_is_one_product() {
+fn generic_mixed_literal_inputs_with_output_dirs_only_is_one_product() {
     let temp_dir = setup(
         r#"[processor.explicit.generic.collect]
 command = "./gen.sh"
@@ -120,7 +120,7 @@ output_dirs = ["outdir"]
 /// round 0: the stanza waits for the round that injects them, and is still
 /// a single product.
 #[test]
-fn input_globs_matching_only_upstream_outputs_wait_a_round() {
+fn generic_input_globs_matching_only_upstream_outputs_wait_a_round() {
     let temp_dir = setup(
         r#"[processor.explicit.generic.collect]
 command = "./gen.sh"
@@ -144,7 +144,7 @@ output_dirs = ["outdir"]
 /// processor's declared output is a config error naming the file — it used
 /// to be dropped without a word, and the command ran without it.
 #[test]
-fn missing_literal_input_is_a_config_error() {
+fn generic_missing_literal_input_is_a_config_error() {
     let temp_dir = setup(
         r#"[processor.explicit.generic.collect]
 command = "./gen.sh"
@@ -191,7 +191,7 @@ output_dirs = ["outdir"]
 /// are passed to the command as `--inputs`, so listing the same files
 /// under another spelling is a different run.
 #[test]
-fn input_list_change_is_a_config_change() {
+fn generic_input_list_change_is_a_config_change() {
     let temp_dir = setup(
         r#"[processor.explicit.generic.collect]
 command = "./gen.sh"

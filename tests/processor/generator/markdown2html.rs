@@ -3,7 +3,7 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
-fn markdown_valid_file() {
+fn markdown2html_valid_file() {
     require_tool("markdown");
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -38,7 +38,7 @@ fn markdown_valid_file() {
 }
 
 #[test]
-fn markdown_incremental_skip() {
+fn markdown2html_incremental_skip() {
     require_tool("markdown");
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -71,7 +71,7 @@ fn markdown_incremental_skip() {
 /// A src_dirs entry that does not exist is a config error naming the
 /// processor and the entry, not a silent skip.
 #[test]
-fn markdown_nonexistent_src_dir_is_config_error() {
+fn markdown2html_nonexistent_src_dir_is_config_error() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 

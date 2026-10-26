@@ -94,6 +94,7 @@ dep_inputs = []    # Additional files that trigger rebuilds when changed
 | `src_extensions` | string[] | `["Makefile"]` | File names to match |
 | `src_exclude_paths` | string[] | `[]` | Paths (relative to project root) to exclude |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds (in addition to directory contents) |
+| `required_tools` | string[] | `[]` | Extra tools the build needs on PATH beyond the built-in ones (e.g. what a wrapper script shells out to); checked before building and covered by `tool install` and version locking |
 
 ## Batch support
 

@@ -4,19 +4,18 @@ Runs a tool that enumerates its outputs in advance. The tool's plan command prin
 
 ## Why "mass generator"?
 
-Existing processor types cover a matrix of "how many outputs" and "are they known in advance":
+The processor types cover a matrix of "how many outputs" and "are they known in advance":
 
 | Type               | Outputs known?              | Example                |
 |--------------------|-----------------------------|------------------------|
 | **Generator**      | Yes, 1 per input            | tera: template → file  |
-| **Explicit**       | Yes, user-declared          | custom build step      |
+| **Explicit**       | Yes, user-declared; or opaque (`output_dirs`) | custom build step; mkdocs → `_site/` |
 | **Checker**        | None (pass/fail)            | ruff                   |
-| **Creator**        | No, opaque (`output_dirs`)  | mkdocs → `_site/`      |
 | **Mass generator** | Yes — tool enumerates them  | rssite → `_site/*`     |
 
-A mass generator is the transparent creator: it produces many output files (like a creator), but the tool itself answers *"what will you produce?"* before running. Each predicted file becomes a declared product with its own inputs, cache entry, and dependency edges.
+A mass generator produces many output files from one tool run (like an explicit stanza with `output_dirs`), but the tool itself answers *"what will you produce?"* before running. Each predicted file becomes a declared product with its own inputs, cache entry, and dependency edges.
 
-Names considered:
+Names considered (when the type was designed, beside a since-removed `creator` type for opaque directory-filling tools):
 
 - **mass_generator** — chosen. Says what it does: "generator" (per-file outputs like the generator type), "mass" (many products from one tool invocation).
 - **transparent_creator** — accurate but awkward.
@@ -177,7 +176,7 @@ See [rssite](https://github.com/veltzer/rssite) for a tool built to this contrac
 
 ## Comparison with other processor types
 
-|                            | Creator (opaque)        | Mass generator (transparent)  | Generator (1:1)         |
+|                            | Explicit with `output_dirs` (opaque) | Mass generator (transparent)  | Generator (1:1)         |
 |----------------------------|-------------------------|-------------------------------|-------------------------|
 | Outputs known in advance?  | No                      | Yes                           | Yes                     |
 | Tool invocations per build | 1 if dirty              | 1 if any product is dirty     | N (one per dirty input) |
@@ -186,18 +185,17 @@ See [rssite](https://github.com/veltzer/rssite) for a tool built to this contrac
 | Shared-folder safety       | Via `path_owner` filter | Via declared outputs (normal) | Via declared outputs    |
 | Use case                   | mkdocs, Sphinx          | rssite, cooperative tools     | tera, mako, compilers   |
 
-## Migration from a creator
+## Migration from an `output_dirs` stanza
 
-If a tool exists first as a creator and later grows a plan mode, the migration is config-only:
+If a tool is first run from an explicit stanza with `output_dirs` and later grows a plan mode, the migration is config-only:
 
 ```toml
 # Before
-[processor.creator.generic.mysite]
-command        = "mysite"
-args           = ["build"]
-src_extensions = ["mysite.toml"]
-src_dirs       = ["."]
-output_dirs    = ["_site"]
+[processor.explicit.generic.mysite]
+command     = "mysite"
+args        = ["build"]
+inputs      = ["mysite.toml"]
+output_dirs = ["_site"]
 
 # After
 [processor.mass_generator.generic.mysite]
@@ -208,12 +206,12 @@ predict_args    = ["plan"]
 output_dirs     = ["_site"]
 ```
 
-The anchor-file scan goes away: the manifest names the product inputs (declare the plan's own inputs with the scan fields if you want the [plan cache](#plan-cache)). Downstream processors start getting per-file dependencies without changes on their side.
+The declared `inputs` go away: the manifest names the product inputs (declare the plan's own inputs with the scan fields if you want the [plan cache](#plan-cache)). Downstream processors start getting per-file dependencies without changes on their side.
 
 ## See also
 
 - [Output Prediction](../../internal/output-prediction.md) — design rationale, invariants, and what the implementation left for later
-- [Shared Output Directory](../../internal/shared-output-directory.md) — the ownership rules for opaque creators, which mass generators inherit
+- [Shared Output Directory](../../internal/shared-output-directory.md) — the ownership rules for opaque `output_dirs`, which mass generators inherit
 - [Processor Ordering](../../internal/processor-ordering.md) — sibling discussion about explicit ordering knobs
 - [rssite](https://github.com/veltzer/rssite) — a static site generator built to the manifest contract
 - [`zola plan` patch](https://github.com/veltzer/rsconstruct/tree/master/contrib/zola) — adds a plan mode to zola v0.23.3 so a Zola site can run as a mass generator; verified on an 800-page site

@@ -120,7 +120,10 @@ impl Processor for MarpProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.standard.command.clone(), "node".into()]
+        crate::processor::with_declared_tools(
+            vec![self.config.standard.command.clone(), "node".into()],
+            &self.config.standard,
+        )
     }
 
     fn discover(
@@ -213,7 +216,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
             affects_output: false, required: false,
             doc: "Total attempts (including the first) when marp times out" },
     ],
-    omit_standard_fields: &["required_tools", "batch"],
+    omit_standard_fields: &["batch"],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { command: "marp", output_dir: "out/processor.generator.marp", formats: &["pdf"],
         args: &["--html", "--allow-local-files"], ..crate::config::ProcessorDefaults::EMPTY }),

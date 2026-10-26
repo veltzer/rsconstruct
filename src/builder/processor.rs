@@ -470,7 +470,7 @@ pub struct FieldInfo {
     pub name: &'static str,
     #[serde(rename = "type")]
     ty: &'static str,
-    default: Option<serde_json::Value>,
+    pub default: Option<serde_json::Value>,
     /// Must be set non-empty by the user (`must_fields`).
     required: bool,
     /// Changes what the tool produces, so it is part of the cache key
@@ -503,9 +503,9 @@ pub fn processor_fields(name: &str) -> Vec<FieldInfo> {
             .into_iter()
             .collect();
 
-    let defaults: serde_json::Value = crate::config::ProcessorConfig::defconfig_json(name)
-        .and_then(|j| serde_json::from_str(&j).ok())
-        .unwrap_or(serde_json::Value::Null);
+    // The same defaults `processor defconfig --json` prints, so the table
+    // and the JSON cannot disagree on any field.
+    let defaults = defconfig_value(name).unwrap_or(serde_json::Value::Null);
 
     // Processor-specific fields first, then shared dep/exec, then scan fields.
     proc_descs
@@ -524,18 +524,10 @@ pub fn processor_fields(name: &str) -> Vec<FieldInfo> {
                 _ if field == "max_jobs" => "int",
                 _ => "?",
             };
-            let default = if field == "batch"
-                && let Some(p) = plugin
-                && !p.supports_batch
-            {
-                Some(serde_json::Value::Bool(false))
-            } else {
-                val.cloned()
-            };
             FieldInfo {
                 name: field,
                 ty,
-                default,
+                default: val.cloned(),
                 required: must_fields.contains(field),
                 checksum: checksum_fields.contains(field),
                 description: desc,
@@ -563,26 +555,34 @@ fn print_processor_metadata(name: &str, descriptions: bool) {
     tables::print(&tables::defs::PROCESSOR_FIELDS, descriptions, &rows);
 }
 
+/// The default configuration of processor `name` as JSON, the single source
+/// of the defaults that `processor defconfig` prints in both modes. The
+/// config struct serializes every standard field; the ones this processor
+/// omits are dropped, since the validator would reject them if set (for
+/// `batch`, that is every plugin whose `supports_batch` is false).
+pub fn defconfig_value(name: &str) -> Result<serde_json::Value> {
+    let json = ProcessorConfig::defconfig_json(name)
+        .ok_or_else(|| anyhow::anyhow!("Unknown processor: '{name}'. Run 'rsconstruct processor list' to see available processors."))?;
+    let mut value: serde_json::Value = serde_json::from_str(&json)
+        .with_context(|| format!("{name}: default config is not JSON: {json}"))?;
+    if let (Some(obj), Some(plugin)) = (
+        value.as_object_mut(),
+        crate::registries::processor::find_plugin(name),
+    ) {
+        for omitted in plugin.omit_standard_fields {
+            obj.remove(*omitted);
+        }
+    }
+    Ok(value)
+}
+
 /// Show default configuration for a processor (works without rsconstruct.toml).
 /// In text mode, prints only the parameters table.
 /// In JSON mode (`--json`), prints only the defaults as JSON.
 pub fn processor_defconfig(name: &str, verbose: bool) -> Result<()> {
-    let json = ProcessorConfig::defconfig_json(name)
-        .ok_or_else(|| anyhow::anyhow!("Unknown processor: '{name}'. Run 'rsconstruct processor list' to see available processors."))?;
+    let value = defconfig_value(name)?;
 
     if crate::json_output::is_json_mode() {
-        // The config struct serializes every standard field; drop the ones
-        // this processor omits, which the validator would reject if set.
-        let mut value: serde_json::Value = serde_json::from_str(&json)
-            .with_context(|| format!("{name}: default config is not JSON: {json}"))?;
-        if let (Some(obj), Some(plugin)) = (
-            value.as_object_mut(),
-            crate::registries::processor::find_plugin(name),
-        ) {
-            for omitted in plugin.omit_standard_fields {
-                obj.remove(*omitted);
-            }
-        }
         println!("{}", serde_json::to_string_pretty(&value)?);
     } else {
         print_processor_metadata(name, verbose);

@@ -47,6 +47,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 | `args` | string[] | `[]` | Extra arguments passed to pdfunite |
 | `output_dir` | string | `"out/processor.generator.pdfunite"` | Output directory for merged PDFs |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `required_tools` | string[] | `[]` | Extra tools the build needs on PATH beyond the built-in ones (e.g. what a wrapper script shells out to); checked before building and covered by `tool install` and version locking |
 
 ## Batch support
 

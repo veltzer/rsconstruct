@@ -676,7 +676,7 @@ impl Processor for CcSingleFileProcessor {
             .collect();
         tools.sort();
         tools.dedup();
-        tools
+        crate::processor::with_declared_tools(tools, &self.config.standard)
     }
 
     fn discover(
@@ -741,7 +741,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Additional header search directories" },
         ],
-        omit_standard_fields: &["command", "formats", "args", "required_tools", "batch"],
+        omit_standard_fields: &["command", "formats", "args", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".c", ".cc"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.cc_single_file", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<CcSingleFileConfig>,

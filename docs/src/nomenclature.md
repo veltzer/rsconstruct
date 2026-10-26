@@ -49,7 +49,7 @@ This page defines the terminology used throughout RSConstruct's code, configurat
 | **discover** | Phase where processors scan the file index and register products in the build graph. |
 | **classify** | Phase where each product is classified as skip, restore, or build based on its cache state. |
 | **execute** | Phase where products are built in dependency order. |
-| **anchor file** | A file whose presence triggers a creator processor to run (e.g., `Cargo.toml` for cargo, `requirements.txt` for pip). |
+| **anchor file** | A file whose presence makes a mass generator create its product (e.g., `Cargo.toml` for cargo, `requirements.txt` for pip). |
 
 ## CLI conventions
 

@@ -32,8 +32,9 @@ pub struct Product {
     /// Optional variant/profile name (e.g., compiler profile name).
     /// Also mixed into `cache_key`; kept here for display.
     pub variant: Option<String>,
-    /// Output directories for creators / creators (relative to project root).
-    /// When non-empty, the executor caches/restores these directories instead of individual output files.
+    /// Output directories declared by an explicit stanza's `output_dirs`
+    /// (relative to project root). When non-empty, the executor caches and
+    /// restores these directories as a tree instead of individual output files.
     pub output_dirs: Vec<Arc<PathBuf>>,
     /// Mix the input paths into the descriptor key, not just their content:
     /// the processor's `output_depends_on_input_name` is set. See
@@ -391,8 +392,8 @@ impl BuildGraph {
     }
 
     /// `add_product` with an optional variant/profile name and the output
-    /// directories a creator caches and restores as a whole (empty for
-    /// none).
+    /// directories cached and restored as a whole (an explicit stanza's
+    /// `output_dirs`; empty for none).
     pub fn add_product_with(
         &mut self,
         inputs: Vec<PathBuf>,
@@ -883,8 +884,8 @@ impl BuildGraph {
     /// Return the id of the product that declares `path` as one of its outputs,
     /// or None if no product owns it. O(1) average — backed by a hashmap index.
     ///
-    /// Used by Creators caching a shared output directory: any path owned by a
-    /// different product must be excluded from this Creator's tree so restore
+    /// Used when caching a product's `output_dirs` as a tree: any path owned
+    /// by a different product must be excluded from that tree so restore
     /// never clobbers another processor's file.
     pub fn path_owner(&self, path: &Path) -> Option<usize> {
         let id = self.interner.get(path)?;

@@ -44,6 +44,7 @@ dep_inputs = []
 | `batch` | bool | `true` | Pass all pairs in one invocation |
 | `args` | string[] | `[]` | Extra arguments prepended before file pairs |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `required_tools` | string[] | `[]` | Extra tools the build needs on PATH beyond `command` (what a wrapper script shells out to); checked before building and covered by `tool install` and version locking |
 
 ## Batch support
 

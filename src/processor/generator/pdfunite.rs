@@ -108,7 +108,10 @@ impl Processor for PdfuniteProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.standard.command.clone()]
+        crate::processor::with_declared_tools(
+            vec![self.config.standard.command.clone()],
+            &self.config.standard,
+        )
     }
 
     fn discover(
@@ -223,7 +226,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Directory where the upstream processor wrote the PDFs (one per source file)" },
         ],
-        omit_standard_fields: &["formats", "required_tools", "batch"],
+        omit_standard_fields: &["formats", "batch"],
         // The sources are located by `source_dir`/`source_ext`, not by a
         // scan, so there is no extension to default: of the scan fields only
         // `src_exclude_*`/`src_files` apply to the lookup.

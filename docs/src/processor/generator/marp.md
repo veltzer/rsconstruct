@@ -16,7 +16,7 @@ typical processors — see [Concurrency limiting](#concurrency-limiting) below.
 ## Source Files
 
 - Input: `**/*.md`
-- Output: `out/processor.generator.marp/{format}/{relative_path}.{format}`
+- Output: `out/processor.generator.marp/{relative_path}.{format}`
 
 ## Configuration
 
@@ -39,6 +39,7 @@ max_attempts = 3                       # Total attempts (including the first) wh
 | `args` | string[] | `["--html", "--allow-local-files"]` | Extra arguments passed to marp |
 | `output_dir` | string | `"out/processor.generator.marp"` | Base output directory |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `required_tools` | string[] | `[]` | Extra tools the build needs on PATH beyond the built-in ones (e.g. what a wrapper script shells out to); checked before building and covered by `tool install` and version locking |
 | `max_jobs` | integer | none | Max concurrent marp processes. See [Concurrency limiting](#concurrency-limiting). |
 | `timeout_secs` | integer | `20` | Per-invocation wall-clock timeout in seconds; a marp run that exceeds it is killed and retried |
 | `max_attempts` | integer | `3` | Total attempts (including the first) when marp times out; the product fails after the last one |

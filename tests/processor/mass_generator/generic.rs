@@ -89,7 +89,7 @@ fn build_ok(root: &Path) -> crate::common::BuildResult {
 }
 
 #[test]
-fn mass_generator_builds_every_predicted_file_with_one_tool_run() {
+fn generic_builds_every_predicted_file_with_one_tool_run() {
     let temp_dir = setup_site_project(CONFIG);
     let root = temp_dir.path();
 
@@ -113,7 +113,7 @@ fn mass_generator_builds_every_predicted_file_with_one_tool_run() {
 }
 
 #[test]
-fn mass_generator_skips_everything_when_unchanged() {
+fn generic_skips_everything_when_unchanged() {
     let temp_dir = setup_site_project(CONFIG);
     let root = temp_dir.path();
     build_ok(root);
@@ -125,7 +125,7 @@ fn mass_generator_skips_everything_when_unchanged() {
 }
 
 #[test]
-fn mass_generator_reruns_tool_once_when_one_source_changes() {
+fn generic_reruns_tool_once_when_one_source_changes() {
     let temp_dir = setup_site_project(CONFIG);
     let root = temp_dir.path();
     build_ok(root);
@@ -156,7 +156,7 @@ fn mass_generator_reruns_tool_once_when_one_source_changes() {
 }
 
 #[test]
-fn mass_generator_shared_source_dirties_every_dependent_page() {
+fn generic_shared_source_dirties_every_dependent_page() {
     let temp_dir = setup_site_project(CONFIG);
     let root = temp_dir.path();
     build_ok(root);
@@ -170,7 +170,7 @@ fn mass_generator_shared_source_dirties_every_dependent_page() {
 }
 
 #[test]
-fn mass_generator_restores_from_cache_without_running_tool() {
+fn generic_restores_from_cache_without_running_tool() {
     let temp_dir = setup_site_project(CONFIG);
     let root = temp_dir.path();
     build_ok(root);
@@ -191,7 +191,7 @@ fn mass_generator_restores_from_cache_without_running_tool() {
 }
 
 #[test]
-fn mass_generator_clean_removes_predicted_files_only() {
+fn generic_clean_removes_predicted_files_only() {
     let temp_dir = setup_site_project(CONFIG);
     let root = temp_dir.path();
     build_ok(root);
@@ -210,7 +210,7 @@ fn mass_generator_clean_removes_predicted_files_only() {
 }
 
 #[test]
-fn mass_generator_new_source_becomes_a_new_product() {
+fn generic_new_source_becomes_a_new_product() {
     let temp_dir = setup_site_project(CONFIG);
     let root = temp_dir.path();
     build_ok(root);
@@ -225,7 +225,7 @@ fn mass_generator_new_source_becomes_a_new_product() {
 }
 
 #[test]
-fn mass_generator_strict_mode_rejects_off_plan_file() {
+fn generic_strict_mode_rejects_off_plan_file() {
     let temp_dir = setup_site_project(CONFIG);
     let root = temp_dir.path();
     write_file(root, ".write_extra", "");
@@ -242,7 +242,7 @@ fn mass_generator_strict_mode_rejects_off_plan_file() {
 }
 
 #[test]
-fn mass_generator_strict_mode_rejects_missing_predicted_file() {
+fn generic_strict_mode_rejects_missing_predicted_file() {
     let temp_dir = setup_site_project(CONFIG);
     let root = temp_dir.path();
     write_file(root, ".skip_b", "");
@@ -258,7 +258,7 @@ fn mass_generator_strict_mode_rejects_missing_predicted_file() {
 }
 
 #[test]
-fn mass_generator_tool_failure_is_reported_once_not_rerun() {
+fn generic_tool_failure_is_reported_once_not_rerun() {
     let temp_dir = setup_site_project(CONFIG);
     let root = temp_dir.path();
     write_file(root, ".skip_b", "");
@@ -280,7 +280,7 @@ fn mass_generator_tool_failure_is_reported_once_not_rerun() {
 }
 
 #[test]
-fn mass_generator_loose_manifest_downgrades_mismatch_to_warning() {
+fn generic_loose_manifest_downgrades_mismatch_to_warning() {
     let config = format!("{CONFIG}loose_manifest = true\n");
     let temp_dir = setup_site_project(&config);
     let root = temp_dir.path();
@@ -300,7 +300,7 @@ fn mass_generator_loose_manifest_downgrades_mismatch_to_warning() {
 }
 
 #[test]
-fn mass_generator_rejects_manifest_path_outside_output_dirs() {
+fn generic_rejects_manifest_path_outside_output_dirs() {
     let config = CONFIG.replace("output_dirs = [\"_site\"]", "output_dirs = [\"public\"]");
     let temp_dir = setup_site_project(&config);
     let root = temp_dir.path();
@@ -323,7 +323,7 @@ fn mass_generator_rejects_manifest_path_outside_output_dirs() {
 }
 
 #[test]
-fn mass_generator_reports_failed_plan_command() {
+fn generic_reports_failed_plan_command() {
     let temp_dir = setup_site_project(CONFIG);
     let root = temp_dir.path();
     write_file(
@@ -360,7 +360,7 @@ const CACHED_CONFIG_EXTRA: &str =
     "src_dirs = [\"docs\"]\nsrc_extensions = [\".md\"]\nsrc_files = [\"site.toml\"]\n";
 
 #[test]
-fn mass_generator_reuses_cached_plan_while_inputs_are_unchanged() {
+fn generic_reuses_cached_plan_while_inputs_are_unchanged() {
     let temp_dir = setup_site_project(&format!("{CONFIG}{CACHED_CONFIG_EXTRA}"));
     let root = temp_dir.path();
 
@@ -380,7 +380,7 @@ fn mass_generator_reuses_cached_plan_while_inputs_are_unchanged() {
 }
 
 #[test]
-fn mass_generator_replans_when_a_plan_input_changes() {
+fn generic_replans_when_a_plan_input_changes() {
     let temp_dir = setup_site_project(&format!("{CONFIG}{CACHED_CONFIG_EXTRA}"));
     let root = temp_dir.path();
     build_ok(root);
@@ -403,7 +403,7 @@ fn mass_generator_replans_when_a_plan_input_changes() {
 }
 
 #[test]
-fn mass_generator_without_plan_inputs_plans_every_time() {
+fn generic_without_plan_inputs_plans_every_time() {
     let temp_dir = setup_site_project(CONFIG);
     let root = temp_dir.path();
     build_ok(root);
@@ -417,7 +417,7 @@ fn mass_generator_without_plan_inputs_plans_every_time() {
 }
 
 #[test]
-fn mass_generator_rejects_plan_input_dirs_without_extensions() {
+fn generic_rejects_plan_input_dirs_without_extensions() {
     let temp_dir = setup_site_project(&format!("{CONFIG}src_dirs = [\"docs\"]\n"));
     let output = run_rsconstruct_with_env(temp_dir.path(), &["build"], &[("NO_COLOR", "1")]);
     assert!(!output.status.success(), "{}", combined_output(&output));
@@ -429,7 +429,7 @@ fn mass_generator_rejects_plan_input_dirs_without_extensions() {
 }
 
 #[test]
-fn mass_generator_rejects_corrupt_plan_cache() {
+fn generic_rejects_corrupt_plan_cache() {
     let temp_dir = setup_site_project(&format!("{CONFIG}{CACHED_CONFIG_EXTRA}"));
     let root = temp_dir.path();
     build_ok(root);
@@ -452,7 +452,7 @@ fn mass_generator_rejects_corrupt_plan_cache() {
 /// Another processor writes into `_site/` at the same time. Its file is a
 /// declared output, so the plan check must not report it as off-plan.
 #[test]
-fn mass_generator_shares_output_dir_with_a_declared_neighbor() {
+fn generic_shares_output_dir_with_a_declared_neighbor() {
     let temp_dir = setup_site_project(CONFIG);
     let root = temp_dir.path();
     write_file(
@@ -482,7 +482,7 @@ fn mass_generator_shares_output_dir_with_a_declared_neighbor() {
 /// that lists it as an input runs after the tool — the copy would fail if
 /// it ran first.
 #[test]
-fn mass_generator_outputs_feed_downstream_processors() {
+fn generic_outputs_feed_downstream_processors() {
     let temp_dir = setup_site_project(CONFIG);
     let root = temp_dir.path();
     write_file(
@@ -526,7 +526,7 @@ fn mass_generator_outputs_feed_downstream_processors() {
 /// still tell them apart: the first run of this scenario "restored" the
 /// second file from the first file's blob and wrote the wrong content.
 #[test]
-fn mass_generator_identical_sources_keep_distinct_outputs() {
+fn generic_identical_sources_keep_distinct_outputs() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let root = temp_dir.path();
     write_file(
@@ -582,7 +582,7 @@ fn mass_generator_identical_sources_keep_distinct_outputs() {
 /// computed again over the new input set instead of being replayed from the
 /// round that never saw the file.
 #[test]
-fn mass_generator_replans_when_a_discovery_round_adds_a_plan_input() {
+fn generic_replans_when_a_discovery_round_adds_a_plan_input() {
     let temp_dir = setup_site_project(&format!(
         "{CONFIG}{CACHED_CONFIG_EXTRA}loose_manifest = true\n\n[processor.explicit.generic.page_c]\ncommand = \"./gen.sh\"\ninputs = [\"docs/c.src\"]\noutput_files = [\"docs/c.md\"]\n"
     ));

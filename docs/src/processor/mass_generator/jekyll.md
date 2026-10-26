@@ -49,6 +49,7 @@ dep_auto = []
 | `loose_manifest` | bool | `false` | Warn instead of failing when `jekyll build` writes files not in the plan |
 | `args` | string[] | `[]` | Extra arguments passed to `jekyll build` |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds; each must exist |
+| `required_tools` | string[] | `[]` | Extra tools the build needs on PATH beyond the built-in ones (e.g. what a wrapper script shells out to); checked before building and covered by `tool install` and version locking |
 | `dep_auto` | string[] | `[]` | Like `dep_inputs`, but an entry that does not exist is skipped |
 
 ## Batch support

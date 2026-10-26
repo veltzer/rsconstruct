@@ -1,6 +1,6 @@
 # Output Prediction & MassGenerator
 
-A Creator (mkdocs, Sphinx, Jekyll, Hugo, etc.) declares `output_dirs = ["_site"]` — "I produce something in here, don't ask me what until I've run." This chapter specifies a new processor type, **MassGenerator**, that makes those tools **transparent**: the tool is asked in advance what it will produce, and each planned file is promoted to a declared product output.
+A site or documentation tool (mkdocs, Sphinx, Jekyll, Hugo, etc.) run from an explicit stanza can only declare `output_dirs = ["_site"]` — "I produce something in here, don't ask me what until I've run." (Until 2026-10 such tools were wrapped by a dedicated creator processor type, since removed.) This chapter specifies the processor type **MassGenerator**, which makes those tools **transparent**: the tool is asked in advance what it will produce, and each planned file is promoted to a declared product output.
 
 Once outputs are known up front, per-file caching, precise incremental rebuilds, cross-processor dependencies on generated files, and safe output-conflict detection all come for free.
 
@@ -15,11 +15,12 @@ Related designs:
 
 ## The core idea
 
-Today we treat tools like mkdocs as a black box:
+Without prediction a tool like mkdocs is a black box:
 
 ```toml
-[processor.creator.generic.mkdocs]
+[processor.explicit.generic.mkdocs]
 command     = "mkdocs build --site-dir _site"
+inputs      = ["mkdocs.yml"]
 output_dirs = ["_site"]   # opaque — we only know the directory
 ```
 
@@ -96,7 +97,7 @@ When one or more MassGenerator products are dirty:
 
 **Status note.** "No unexpected files appeared in `output_dirs`" is implemented as a before/after snapshot: a file counts as unexpected when it is new or has a changed mtime since the snapshot taken just before the tool ran, is not in the plan, and is not another product's declared output (the executor hands the set of declared outputs to the `BuildContext` for exactly this query). Files the tool left untouched — a neighbor's output, a committed `CNAME`, an orphan from an older plan — are not reported. That is narrower than "every file in `output_dirs` is in the manifest or owned by someone", and deliberately so: the check is for predictor drift, and only writes the tool just made can be drift.
 
-The "one invocation, many products" idiom is this type's defining execution shape — distinct from both Generator (one invocation per product) and Creator (one invocation, one product).
+The "one invocation, many products" idiom is this type's defining execution shape — distinct from both Generator (one invocation per product) and Explicit (one invocation, one product).
 
 ### 3. Restore phase
 
@@ -191,14 +192,14 @@ loose_manifest = false
 
 ## Interaction with the shared-output-directory design
 
-This new processor type does not replace the Creator / shared-output-directory mechanism. Both coexist:
+This processor type does not replace the explicit `output_dirs` / shared-output-directory mechanism. Both coexist:
 
 | User declares                   | Treated as       | Caching                    | Cross-processor deps    |
 |---------------------------------|------------------|----------------------------|-------------------------|
-| `output_dirs` only              | Creator (opaque) | One tree per build         | Only via declared files |
+| `output_dirs` only (explicit)   | Explicit (opaque) | One tree per build        | Only via declared files |
 | `output_dirs` + `predict_command` | MassGenerator    | Per file                   | Full — all files known  |
 
-Choose Creator when the tool can't enumerate its outputs. Choose MassGenerator when it can.
+Choose an explicit stanza with `output_dirs` when the tool can't enumerate its outputs. Choose MassGenerator when it can.
 
 ## Design invariants (for tool authors)
 
@@ -223,7 +224,7 @@ The complex `path_owner` + tree filtering + previous-tree cleanup mechanism (see
 
 ### 2. True cross-processor dependencies
 
-Downstream processors (linters, compressors, sitemap builders) can declare the MassGenerator's outputs as inputs. The graph connects properly. Impossible with opaque Creators.
+Downstream processors (linters, compressors, sitemap builders) can declare the MassGenerator's outputs as inputs. The graph connects properly. Impossible with an opaque `output_dirs`.
 
 ### 3. Per-file caching
 
@@ -290,7 +291,7 @@ Open question 1 (single-pass `--print-manifest` mode) is not implemented. Open q
 ## See also
 
 - [Mass Generator](../processor/mass_generator/generic.md) — the processor's user-facing documentation
-- [Shared Output Directory](shared-output-directory.md) — how we handle opaque Creators today
+- [Shared Output Directory](shared-output-directory.md) — how an opaque `output_dirs` shares a directory safely
 - [Processor Ordering](processor-ordering.md) — the sibling discussion about explicit ordering
 - [Cross-Processor Dependencies](cross-processor-dependencies.md) — why per-file outputs enable proper dependency graphs
 - [rssite](https://github.com/veltzer/rssite) — static site generator built to implement the MassGenerator contract

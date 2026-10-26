@@ -76,7 +76,10 @@ impl Processor for ClippyProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.cargo.clone()]
+        crate::processor::with_declared_tools(
+            vec![self.config.cargo.clone()],
+            &self.config.standard,
+        )
     }
 
     fn discover(
@@ -98,7 +101,6 @@ impl Processor for ClippyProcessor {
                     excludes: &["/.git/", "/target/", "/.rsconstruct/"],
                 },
                 processor_name: instance_name,
-                output_dir_name: None,
             },
         )
     }
@@ -122,7 +124,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Path to the cargo executable" },
         ],
-        omit_standard_fields: &["formats", "output_dir", "required_tools", "batch"],
+        omit_standard_fields: &["formats", "output_dir", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["Cargo.toml"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "clippy", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<ClippyConfig>,

@@ -226,7 +226,7 @@ fn iyamlschema_incremental_skip() {
 /// up. The URL here is unroutable, so a re-fetch attempt is observable as a
 /// fetch failure — which is the point: the entry was NOT served from cache.
 #[test]
-fn expired_webcache_entry_is_refetched() {
+fn iyamlschema_expired_webcache_entry_is_refetched() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -260,7 +260,7 @@ fn expired_webcache_entry_is_refetched() {
 /// The same entry, still within the TTL, is served from cache without
 /// touching the network.
 #[test]
-fn fresh_webcache_entry_is_served_from_cache() {
+fn iyamlschema_fresh_webcache_entry_is_served_from_cache() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 

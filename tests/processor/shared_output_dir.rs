@@ -1,10 +1,11 @@
 //! Tests for the "shared output directory" scenario.
 //!
-//! A Creator processor (e.g. mkdocs) writes many files into a directory (_site/),
-//! while another processor (e.g. pandoc modelled here with `explicit`) writes a
-//! specific file into the same directory. The Creator's cache must NOT claim
-//! ownership of files declared as outputs by other products — so that restore
-//! never clobbers another processor's output.
+//! An explicit stanza with `output_dirs` (mkdocs, modelled here) writes many
+//! files into a directory (_site/), while another explicit stanza (pandoc)
+//! declares one specific file in the same directory as its output. The tree
+//! cached for the directory must NOT claim ownership of files declared as
+//! outputs by other products — so that restore never clobbers another
+//! processor's output.
 
 use crate::common::run_rsconstruct_with_env;
 use std::fs;
@@ -12,14 +13,14 @@ use tempfile::TempDir;
 
 /// Set up a project with:
 ///   - `explicit.pandoc` owns `_site/about.html`
-///   - `creator.mkdocs`  owns the `_site/` directory (writes index.html + assets/style.css)
+///   - `explicit.mkdocs` owns the `_site/` directory (writes index.html + assets/style.css)
 ///
 /// Both processors contribute to the shared `_site/` folder.
 fn setup_shared_site_project() -> TempDir {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
-    // ---- mkdocs: a creator that builds the whole site, except about.html ----
+    // ---- mkdocs: an `output_dirs` stanza that builds the whole site, except about.html ----
     let mkdocs_script = project_path.join("mkdocs.sh");
     fs::write(
         &mkdocs_script,
@@ -181,7 +182,7 @@ fn shared_dir_clean_and_restore_preserves_ownership() {
 /// Regression test for the core invariant: a product's tree descriptor must
 /// not include files declared as outputs of other products.
 #[test]
-fn creator_tree_does_not_include_foreign_outputs() {
+fn output_dirs_tree_does_not_include_foreign_outputs() {
     let temp_dir = setup_shared_site_project();
     let project_path = temp_dir.path();
 

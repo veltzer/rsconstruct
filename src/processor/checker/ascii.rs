@@ -1,15 +1,15 @@
 use anyhow::Result;
 use std::path::Path;
 
-use crate::config::AsciiConfig;
+use crate::config::CheckerConfig;
 use crate::graph::Product;
 
 pub struct AsciiProcessor {
-    config: AsciiConfig,
+    config: CheckerConfig,
 }
 
 impl AsciiProcessor {
-    pub const fn new(config: AsciiConfig) -> Self {
+    pub const fn new(config: CheckerConfig) -> Self {
         Self { config }
     }
 
@@ -96,7 +96,7 @@ inventory::submit! {
         name: "ascii",
         processor_type: crate::processor::ProcessorType::Checker,
         create: plugin_create,
-        defconfig_json: crate::registries::default_config_json::<crate::config::AsciiConfig>,
+        defconfig_json: crate::registries::default_config_json::<crate::config::CheckerConfig>,
         fields: &[],
         omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),

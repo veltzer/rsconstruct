@@ -64,7 +64,7 @@ prints the `Config changed` notice and restores the stale verdicts anyway.
 ## Execution isolation
 
 A processor's `execute()` must only write to the declared output paths
-(or, for creators, to the expected output directory).
+(or, for an explicit stanza with `output_dirs`, inside those directories).
 It must not modify source files, other products' outputs, or global state.
 
 ## Cleaning
@@ -76,19 +76,17 @@ what *that* product produced. Concretely:
 - **Generators** must remove every file in `product.outputs` and only those
   files. The `clean_outputs()` helper does exactly this with `fs::remove_file`.
   Generators must not recurse into directories.
-- **Creators** must remove every directory in `product.output_dirs`
-  recursively (the contents are unenumerated by design — the external build
-  tool produces an unknown set of files inside). The `clean_output_dir()`
-  helper handles this. Creators must not delete anything outside their
-  declared `output_dirs`.
-- **Explicit** processors run both — files for `output_files`, recursive
-  removal for any user-declared `output_dirs`.
+- **Explicit** processors remove the files of `output_files` and, through the
+  `clean_output_dir()` helper, every directory in `product.output_dirs`
+  recursively (the contents are unenumerated by design — the tool produces
+  an unknown set of files inside). They must not delete anything outside
+  their declared outputs.
 - **Mass generators** remove every predicted file in `product.outputs`,
   like Generators. Their `output_dirs` only bound where predicted files may
   live and are never removed: the directory is shared by design.
 
-Recursive directory removal is reserved for Creators (and the user-declared
-`output_dirs` of Explicit). All other processor types remove individually
+Recursive directory removal is reserved for the user-declared `output_dirs`
+of Explicit. All other processor types remove individually
 declared files and nothing else.
 
 After every product's `clean()` has run, the executor performs an
@@ -105,20 +103,15 @@ Processors should not pre-empt it by removing parent directories themselves
 nothing else" stays clean. Users can disable the sweep with
 `rsconstruct clean outputs --no-empty-dirs`.
 
-## Output directory caching (creators)
+## Output directory caching
 
-Creators that set `output_dir` on their products get automatic
-directory-level caching. After successful execution, the executor walks
-the output directory, stores every file as a content-addressed object,
-and records a manifest with paths, checksums, and Unix permissions.
-On restore, the entire directory is recreated from cache.
-
-The `cache_output_dir` config option (default `true`) controls this.
-When disabled, creators fall back to stamp-file or empty-output
-caching (no directory restore on `rsconstruct clean && rsconstruct build`).
-
-Creators that use output_dir caching must implement `clean()` to
-remove the output directory so it can be restored from cache.
+A product with `output_dirs` (an explicit stanza that declares them) is
+cached as a tree. After successful execution, the executor walks the output
+directories, skips every file another product declares as its output, stores
+each remaining file as a content-addressed object, and records a manifest
+with paths, checksums, and Unix permissions. On restore, those files are
+written back in place. See [Shared Output Directory](shared-output-directory.md)
+for the ownership rules.
 
 ## Error reporting
 

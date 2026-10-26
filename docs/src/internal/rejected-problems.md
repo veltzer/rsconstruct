@@ -11,10 +11,10 @@ Issues flagged during code audits (rounds 7-12) that were assessed and deliberat
 
 ## Pre-1970 mtime cache collision
 
-**File:** `src/object_store/checksums.rs` (lines 25-27)
+**File:** `src/platform.rs` (`FileStamp`, `file_stamp`), used by the mtime cache in `src/checksum.rs`
 **Flagged in:** rounds 9, 10, 11, 12
 
-Files with mtime before Unix epoch (1970) get `unwrap_or_default()` mapping to `(0, 0)`. Two such files could share a cached mtime entry. Pre-1970 timestamps don't occur on real build inputs. The mtime cache is only an optimization — the actual input checksum comparison catches real changes. Not fixing.
+No longer a problem. The flagged code mapped a pre-1970 mtime to `(0, 0)` with `unwrap_or_default()`, so two such files could share a cached mtime entry. The stamp is now read through `MetadataExt` as signed `i64` seconds and nanoseconds (plus ctime, size and inode), so a pre-1970 mtime is a distinct negative value and nothing collapses to zero. Recorded here so the old finding is not raised again.
 
 ## Dependency unchanged logic — no-dep products
 

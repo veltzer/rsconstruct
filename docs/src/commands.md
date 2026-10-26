@@ -281,8 +281,8 @@ two flags after the counts: `builtin`, whether the processor is pure Rust inside
 rsconstruct, and `rust`, whether the code that does the work is written in Rust at
 all — always so for a builtin processor, and for an external one only when the tool
 it runs is (ruff, taplo, rumdl, clippy, cargo, mdbook, pyrefly, rustc). Processors
-that run a user-supplied command (`script`, `explicit`, `generator`, `creator`,
-`mass_generator`) report `rust: false`, since the language is unknown.
+that run a user-supplied command (`script` and the `generic` processors of the
+`generator`, `explicit` and `mass_generator` types) report `rust: false`, since the language is unknown.
 
 ## `rsconstruct init`
 

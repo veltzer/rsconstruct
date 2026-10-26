@@ -12,7 +12,7 @@ each file, generating output in the configured formats.
 ## Source Files
 
 - Input: `**/*.drawio`
-- Output: `out/processor.generator.drawio/{format}/{relative_path}.{format}`
+- Output: `out/processor.generator.drawio/{relative_path}.{format}`
 
 ## Configuration
 

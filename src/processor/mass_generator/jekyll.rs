@@ -30,6 +30,10 @@ require "json"
 require "rubygems"
 
 source_dir, dest_dir, jekyll_cmd = ARGV[0], ARGV[1], ARGV[2]
+# The scratch dir arrives relative to the project root. Jekyll resolves a
+# relative item destination against its own (already absolute) destination,
+# which doubles the path, so hand every consumer below one absolute path.
+dest_dir = File.expand_path(dest_dir)
 real_stdout = $stdout.dup
 $stdout.reopen($stderr)
 
@@ -369,10 +373,13 @@ impl Processor for JekyllProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![
-            self.config.standard.command.clone(),
-            self.config.ruby.clone(),
-        ]
+        crate::processor::with_declared_tools(
+            vec![
+                self.config.standard.command.clone(),
+                self.config.ruby.clone(),
+            ],
+            &self.config.standard,
+        )
     }
 
     fn discover(
@@ -429,7 +436,7 @@ inventory::submit! {
                 affects_output: false, required: false,
                 doc: "Report plan-vs-build mismatches as warnings instead of failing the build" },
         ],
-        omit_standard_fields: &["formats", "required_tools", "batch"],
+        omit_standard_fields: &["formats", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["_config.yml"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "jekyll", output_dir: "_site", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<JekyllConfig>,

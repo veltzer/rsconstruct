@@ -268,6 +268,7 @@ Each source file is compiled once per compiler profile, allowing you to:
 | `src_dirs` | string[] | `[]` | Directories to scan for source files. No default — an unset `src_dirs` scans nothing. |
 | `output_suffix` | string | `".elf"` | Suffix appended to output executables |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `required_tools` | string[] | `[]` | Extra tools the build needs on PATH beyond the profiles' compilers (e.g. what a wrapper compiler shells out to); checked before building and covered by `tool install` and version locking |
 | `compilers` | array | `[]` | Multiple compiler profiles (overrides single-compiler fields) |
 
 ### Compiler Profile Fields

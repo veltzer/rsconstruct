@@ -6,14 +6,15 @@ Multiple processors can write into the same directory — a website `_site/`, a 
 
 A common case:
 
-- **mkdocs** (a Creator) builds a whole site. It produces many files under `_site/` and declares the directory as its `output_dir`. It cannot enumerate individual outputs in advance.
-- **pandoc** (a Generator / Explicit) converts one specific markdown file into `_site/about.html`. It declares that file explicitly as its `output_files`.
+- **mkdocs**, run from an explicit stanza, builds a whole site. It produces many files under `_site/` and the stanza declares the directory in `output_dirs`, because mkdocs cannot enumerate its outputs in advance. (A tool that can predict its files is better wired as a [mass generator](output-prediction.md), whose every file is its own product and needs none of what follows.)
+- **pandoc**, run from another explicit stanza, converts one specific markdown file into `_site/about.html`. It declares that file in `output_files`.
 
 Both contribute to the same directory. A website IS a single folder by design.
 
 ```toml
-[processor.creator.generic.mkdocs]
-command   = "mkdocs build --site-dir _site"
+[processor.explicit.generic.mkdocs]
+command     = "mkdocs build --site-dir _site"
+inputs      = ["mkdocs.yml"]
 output_dirs = ["_site"]
 
 [processor.explicit.generic.pandoc]
@@ -36,7 +37,7 @@ Each problem leads to silent cache corruption: stale content appears to be fresh
 
 > **Every declared output path has exactly one owner — the single product that lists it in `outputs`, `output_files`, or produces it as a named product output.**
 >
-> A directory declared as `output_dir` is *not* an ownership claim on the whole subtree. The Creator only owns the files *it itself produces* that no other product has declared.
+> A directory declared in `output_dirs` is *not* an ownership claim on the whole subtree. The product declaring it owns only the files *it itself produces* that no other product has declared.
 
 This is enforced by a single graph query, `BuildGraph::path_owner(path) -> Option<usize>`, which returns the id of the unique product that declares `path` as one of its outputs (or `None` if nobody does).
 
@@ -56,13 +57,13 @@ A declared output path has at most one owner by construction — if two products
 
 ### 1. Over-claiming at cache store time
 
-When a Creator's tree descriptor is being built in `ObjectStore::store_tree_descriptor`, the walker visits every file under each `output_dir`. For each file, it asks the graph: "Is this path owned by a different product?"
+When the tree descriptor of a product with `output_dirs` is being built in `ObjectStore::store_tree_descriptor`, the walker visits every file under each of those directories. For each file, it asks the graph: "Is this path owned by a different product?"
 
 ```text
 is_foreign(path) = graph.path_owner(path) is Some(owner) and owner != my_product_id
 ```
 
-If `is_foreign(path)` is true, the file is **skipped** — it does not appear as a tree entry. The Creator's cache then contains only files the Creator actually created and that nobody else has laid claim to.
+If `is_foreign(path)` is true, the file is **skipped** — it does not appear as a tree entry. The product's cache then contains only files it actually created and that nobody else has laid claim to.
 
 When pandoc writes `_site/about.html` and mkdocs later caches `_site/`, mkdocs's tree will *not* contain `about.html` because `path_owner("_site/about.html") == pandoc.id != mkdocs.id`.
 
@@ -70,12 +71,12 @@ When pandoc writes `_site/about.html` and mkdocs later caches `_site/`, mkdocs's
 
 Before a product's command runs, `remove_stale_outputs` removes stale outputs so the command can rewrite them fresh (important when a cache restore left read-only hardlinks in place).
 
-The rule for Creators:
+The rule for a product with `output_dirs`:
 
-- **Do NOT wipe `output_dir` wholesale.**
+- **Do NOT wipe the directories wholesale.**
 - Read the previous tree descriptor from the object store.
 - Remove only the files recorded in that previous tree.
-- Re-create the `output_dir` (so the command can assume it exists).
+- Re-create each directory in `output_dirs` (so the command can assume it exists).
 - Leave any file not in the previous tree alone — it belongs to somebody else.
 
 Pseudocode:
@@ -92,11 +93,11 @@ remove_stale_outputs(product, input_checksum):
         if file exists: remove it
 ```
 
-Because the previous tree only ever contained paths the Creator owned, this removal cannot touch files owned by other processors.
+Because the previous tree only ever contained paths the product owned, this removal cannot touch files owned by other processors.
 
 ### 3. Clobbering at restore time
 
-Cache restore for a tree descriptor iterates entries and writes each one in place. It never calls `remove_dir_all` on the `output_dir`. If a file already exists with the correct checksum, the restore skips it (saving I/O).
+Cache restore for a tree descriptor iterates entries and writes each one in place. It never calls `remove_dir_all` on an `output_dirs` entry. If a file already exists with the correct checksum, the restore skips it (saving I/O).
 
 When mkdocs restores its tree:
 
@@ -113,8 +114,8 @@ The system relies on these invariants; each is enforced in code:
 | # | Invariant | Where enforced |
 |---|-----------|----------------|
 | 1 | Every declared output path has at most one owner. | `add_product` / graph validation (output conflict check) |
-| 2 | A Creator's tree descriptor contains only paths not owned by any other product. | `store_tree_descriptor` with `is_foreign` predicate |
-| 3 | Pre-run cleanup removes only files the Creator previously owned. | `remove_stale_outputs` reads `previous_tree_paths` |
+| 2 | An `output_dirs` tree descriptor contains only paths not owned by any other product. | `store_tree_descriptor` with `is_foreign` predicate |
+| 3 | Pre-run cleanup removes only files the product previously owned. | `remove_stale_outputs` reads `previous_tree_paths` |
 | 4 | Cache restore never deletes files it did not cache. | `restore_tree_descriptor` writes in place; no `remove_dir_all` |
 
 When all four hold, processors can freely share an output directory.
@@ -150,23 +151,23 @@ Final state on disk: `index.html`, `assets/style.css`, `about.html`. All three f
 
 Final state is the same as after the first build, without either tool having actually run.
 
-### Building only the Creator (`-p processor.creator.generic.mkdocs`)
+### Building only mkdocs (`-p processor.explicit.generic.mkdocs`)
 
 1. pandoc is not in the run set; `_site/about.html` stays wherever it was (absent if cleaned, present otherwise).
 2. mkdocs runs or restores its tree.
 
-If `_site/` was clean, `about.html` remains absent — which is correct, because the Creator does not claim to produce it. The regression test `creator_tree_does_not_include_foreign_outputs` verifies exactly this.
+If `_site/` was clean, `about.html` remains absent — which is correct, because the mkdocs stanza does not claim to produce it. The regression test `output_dirs_tree_does_not_include_foreign_outputs` (`tests/processor/shared_output_dir.rs`) verifies exactly this.
 
 ## Non-goals
 
-- **Runtime conflict detection for paths the Creator actually wrote but didn't declare.** If a Creator happens to write a file that another Generator also declares, the declared owner wins; the Creator's tree simply won't include that file. We do not error on this.
-- **Ordering constraints.** rsconstruct does not enforce "Generators run before Creator" or vice versa. The snapshot/walk is done after each product finishes, and `path_owner` is a static graph query independent of run order.
+- **Runtime conflict detection for paths a directory-filling tool actually wrote but didn't declare.** If it happens to write a file that another product declares, the declared owner wins; the `output_dirs` tree simply won't include that file. We do not error on this.
+- **Ordering constraints.** rsconstruct does not enforce "the file owner runs before the directory filler" or vice versa. The snapshot/walk is done after each product finishes, and `path_owner` is a static graph query independent of run order.
 - **Partial-directory caching like git trees with subtrees.** The tree descriptor is a flat list of `(path, checksum)` entries, which is enough for this use case.
 
 ## Quick reference for processor authors
 
 If you are writing a new processor:
 
-- **Generator / Explicit**: declare every output file in `output_files`. rsconstruct keeps each of your files safe from Creators that share the directory.
-- **Creator**: declare the shared directory in `output_dirs`. Do NOT assume the directory is empty when your command runs — other processors may have already contributed files to it. Your command should overwrite only what it produces; it should not wipe the directory.
+- **Generator / mass generator / explicit with `output_files`**: declare every output file. rsconstruct keeps each of your files safe from `output_dirs` stanzas that share the directory.
+- **Explicit with `output_dirs`**: declare the shared directory in `output_dirs`. Do NOT assume the directory is empty when your command runs — other processors may have already contributed files to it. Your command should overwrite only what it produces; it should not wipe the directory.
 - **Conflict**: never declare the same path as an output in two different products. That is a graph-build-time error regardless of directory sharing.

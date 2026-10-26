@@ -3,11 +3,11 @@ use regex::Regex;
 use std::path::Path;
 use std::sync::LazyLock;
 
-use crate::config::MarpImagesConfig;
+use crate::config::CheckerConfig;
 use crate::graph::Product;
 
 pub struct MarpImagesProcessor {
-    config: MarpImagesConfig,
+    config: CheckerConfig,
 }
 
 static IMAGE_RE: LazyLock<Regex> = LazyLock::new(|| {
@@ -17,7 +17,7 @@ static IMAGE_RE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 impl MarpImagesProcessor {
-    pub const fn new(config: MarpImagesConfig) -> Self {
+    pub const fn new(config: CheckerConfig) -> Self {
         Self { config }
     }
 
@@ -106,7 +106,7 @@ inventory::submit! {
         omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
         defaults: None,
-        defconfig_json: crate::registries::default_config_json::<crate::config::MarpImagesConfig>,
+        defconfig_json: crate::registries::default_config_json::<crate::config::CheckerConfig>,
         keywords: &["markdown", "marp", "images", "checker", "presentation"],
         description: "Validate image references in Marp markdown presentations",
         is_builtin: true,

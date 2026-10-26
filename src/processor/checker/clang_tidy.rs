@@ -61,7 +61,7 @@ impl crate::processor::Processor for ClangTidyProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec!["clang-tidy".to_string()]
+        crate::processor::with_declared_tools(vec!["clang-tidy".to_string()], &self.config.standard)
     }
 
     fn discover(
@@ -105,7 +105,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Compiler flags forwarded to clang-tidy for parsing" },
         ],
-        omit_standard_fields: &["command", "formats", "output_dir", "required_tools", "batch"],
+        omit_standard_fields: &["command", "formats", "output_dir", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".c", ".cc"], src_exclude_dirs: &[] }),
         // clang-tidy finds `.clang-tidy` in the source file's parent
         // directories (that is the only name its options provider knows).

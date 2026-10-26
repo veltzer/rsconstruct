@@ -134,6 +134,7 @@ mod processor {
         pub mod jinja2;
         pub mod libreoffice;
         pub mod mako;
+        pub mod markdown2html;
         pub mod marp;
         pub mod mermaid;
         pub mod pandoc;
@@ -159,7 +160,6 @@ mod processor {
         pub mod sphinx;
         pub mod zola;
     }
-    pub mod markdown;
     pub mod shared_output_dir;
 }
 
@@ -227,5 +227,65 @@ fn every_test_file_is_registered() {
         missing.is_empty(),
         "test files exist on disk but are not registered in tests/main.rs \
          (they silently never run): {missing:#?}"
+    );
+}
+
+/// Every test in `tests/processor/<type>/<name>.rs` must be named
+/// `<name>_...` (docs/src/internal/coding-standards.md, "Test naming for
+/// processors"), so `cargo nextest run <name>_` selects exactly one
+/// processor's tests. A `test_checker!` invocation generates its names from
+/// its first argument, so that argument must be the file's stem too.
+#[test]
+fn every_processor_test_is_prefixed_with_its_processor_name() {
+    let mut wrong: Vec<String> = Vec::new();
+    for type_entry in std::fs::read_dir("tests/processor").unwrap() {
+        let type_dir = type_entry.unwrap().path();
+        if !type_dir.is_dir() {
+            continue;
+        }
+        for entry in std::fs::read_dir(&type_dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.extension().is_none_or(|e| e != "rs") {
+                continue;
+            }
+            let stem = path.file_stem().unwrap().to_str().unwrap().to_string();
+            let prefix = format!("{stem}_");
+            let src = std::fs::read_to_string(&path).unwrap();
+            let mut after_test_attr = false;
+            for (idx, line) in src.lines().enumerate() {
+                let line = line.trim();
+                let location = format!("{}:{}", path.display(), idx + 1);
+                if let Some(args) = line.strip_prefix("test_checker!(") {
+                    let name = args.split(',').next().unwrap_or("").trim();
+                    if name != stem {
+                        wrong.push(format!("{location}: test_checker!({name}, ...)"));
+                    }
+                    continue;
+                }
+                if line == "#[test]" {
+                    after_test_attr = true;
+                    continue;
+                }
+                if !after_test_attr || line.starts_with("#[") || line.starts_with("//") {
+                    continue;
+                }
+                after_test_attr = false;
+                let Some(rest) = line.split("fn ").nth(1) else {
+                    continue;
+                };
+                let name: String = rest
+                    .chars()
+                    .take_while(|c| c.is_alphanumeric() || *c == '_')
+                    .collect();
+                if !name.starts_with(&prefix) {
+                    wrong.push(format!("{location}: fn {name}"));
+                }
+            }
+        }
+    }
+    wrong.sort();
+    assert!(
+        wrong.is_empty(),
+        "processor tests not prefixed with their processor name (the file stem): {wrong:#?}"
     );
 }

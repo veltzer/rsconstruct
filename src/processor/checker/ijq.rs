@@ -1,15 +1,15 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 
-use crate::config::IjqConfig;
+use crate::config::CheckerConfig;
 use crate::graph::Product;
 
 pub struct IjqProcessor {
-    config: IjqConfig,
+    config: CheckerConfig,
 }
 
 impl IjqProcessor {
-    pub const fn new(config: IjqConfig) -> Self {
+    pub const fn new(config: CheckerConfig) -> Self {
         Self { config }
     }
 
@@ -75,7 +75,7 @@ inventory::submit! {
         name: "ijq",
         processor_type: crate::processor::ProcessorType::Checker,
         create: plugin_create,
-        defconfig_json: crate::registries::default_config_json::<crate::config::IjqConfig>,
+        defconfig_json: crate::registries::default_config_json::<crate::config::CheckerConfig>,
         fields: &[],
         omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".json"], src_exclude_dirs: &[] }),

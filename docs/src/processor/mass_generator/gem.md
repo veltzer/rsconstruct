@@ -41,6 +41,7 @@ dep_inputs = []                        # Additional files that trigger rebuilds 
 | `args` | string[] | `[]` | Extra arguments passed to bundler install |
 | `gem_home` | string | `"gems"` | Directory, relative to the `Gemfile`, where gems are installed; exported as `GEM_HOME` and `GEM_PATH` |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `required_tools` | string[] | `[]` | Extra tools the build needs on PATH beyond the built-in ones (e.g. what a wrapper script shells out to); checked before building and covered by `tool install` and version locking |
 
 ## Batch support
 

@@ -1,15 +1,15 @@
 use anyhow::Result;
 use std::path::Path;
 
-use crate::config::EncodingConfig;
+use crate::config::CheckerConfig;
 use crate::graph::Product;
 
 pub struct EncodingProcessor {
-    config: EncodingConfig,
+    config: CheckerConfig,
 }
 
 impl EncodingProcessor {
-    pub const fn new(config: EncodingConfig) -> Self {
+    pub const fn new(config: CheckerConfig) -> Self {
         Self { config }
     }
 
@@ -99,7 +99,7 @@ inventory::submit! {
         name: "encoding",
         processor_type: crate::processor::ProcessorType::Checker,
         create: plugin_create,
-        defconfig_json: crate::registries::default_config_json::<crate::config::EncodingConfig>,
+        defconfig_json: crate::registries::default_config_json::<crate::config::CheckerConfig>,
         fields: &[],
         omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".bash", ".lua", ".pl", ".pm", ".php", ".md", ".yaml", ".yml", ".json", ".toml", ".xml", ".html", ".htm", ".css", ".scss", ".sass", ".tex", ".txt"], src_exclude_dirs: &[] }),

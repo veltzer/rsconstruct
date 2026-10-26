@@ -4,7 +4,7 @@ use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
 
 #[test]
-fn generator_rebuilds_when_command_file_changes() {
+fn generic_rebuilds_when_command_file_changes() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 

@@ -525,7 +525,10 @@ impl Processor for CargoProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.cargo.clone()]
+        crate::processor::with_declared_tools(
+            vec![self.config.cargo.clone()],
+            &self.config.standard,
+        )
     }
 
     fn discover(
@@ -630,7 +633,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Build profiles to run (e.g. dev, release)" },
         ],
-        omit_standard_fields: &["formats", "dep_auto", "output_dir", "required_tools", "batch"],
+        omit_standard_fields: &["formats", "dep_auto", "output_dir", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["Cargo.toml"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "build", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<CargoConfig>,

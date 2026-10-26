@@ -97,7 +97,7 @@ Reasonable fixes without adding ordering knobs:
 
 1. Have the fix-up processor declare its inputs explicitly as the output files of the generators. Works but requires enumeration.
 2. Re-scan globs after each dependency level so the fix-up step sees newly-generated files. Correct, but costlier.
-3. Make the fix-up a Creator with the whole `dist/` as its `output_dir`. Our shared-output-directory logic handles this cleanly ([see that chapter](shared-output-directory.md)), but now the fix-up operates in-place on files owned by others, which touches the "files owned by other products" rule.
+3. Make the fix-up an explicit stanza with the whole `dist/` in its `output_dirs`. Our shared-output-directory logic handles this cleanly ([see that chapter](shared-output-directory.md)), but now the fix-up operates in-place on files owned by others, which touches the "files owned by other products" rule.
 
 None of these is wonderful, but none requires a new ordering primitive.
 
@@ -133,18 +133,18 @@ Until that case is concrete, the answer is: model ordering through data flow. Th
 
 ## Alternative: Output Prediction
 
-Another way to close the gap without adding ordering knobs: make opaque Creators (mkdocs, Sphinx, Jekyll) **transparent** by discovering their outputs in advance.
+Another way to close the gap without adding ordering knobs: make opaque directory-filling tools (mkdocs, Sphinx, Jekyll) **transparent** by discovering their outputs in advance.
 
-Instead of the Creator declaring `output_dirs = ["_site"]` (opaque — "something goes in here"), it would declare (or generate) the exact file list it will produce:
+Instead of an explicit stanza declaring `output_dirs = ["_site"]` (opaque — "something goes in here"), the processor declares (or generates) the exact file list it will produce:
 
 ```toml
-[processor.creator.generic.mkdocs]
+[processor.mass_generator.generic.mkdocs]
 command         = "mkdocs build --site-dir _site"
-predict_command = "./list-mkdocs-outputs.sh"   # prints one output path per line
+predict_command = "./list-mkdocs-outputs.sh"   # prints the JSON manifest of planned files
 output_dirs     = ["_site"]
 ```
 
-The [mass generator](../processor/mass_generator/generic.md) does exactly this: rsconstruct runs `predict_command` at graph-build time, turns each printed path into a declared `outputs` entry, and the opaque Creator becomes a set of per-file products. After that, the entire "how do we order two processors that both write into `_site/`?" question dissolves — every file has exactly one declared owner, and the normal Generator/data-flow rules apply.
+The [mass generator](../processor/mass_generator/generic.md) does exactly this: rsconstruct runs `predict_command` at graph-build time, turns each printed path into a declared `outputs` entry, and the opaque tool becomes a set of per-file products. Every built-in processor that fills a directory (sphinx, mdbook, jekyll, zola, cargo, ...) is a mass generator for this reason. After that, the entire "how do we order two processors that both write into `_site/`?" question dissolves — every file has exactly one declared owner, and the normal Generator/data-flow rules apply.
 
 **Why this is an alternative to ordering knobs:**
 
@@ -159,5 +159,5 @@ The full tradeoff is explored in the [Output Prediction](output-prediction.md) c
 
 - [Cross-Processor Dependencies](cross-processor-dependencies.md) — how data-flow dependencies work between processors
 - [Shared Output Directory](shared-output-directory.md) — how multiple processors can cooperate on one directory without ordering
-- [Output Prediction](output-prediction.md) — a different approach that makes opaque Creators transparent
+- [Output Prediction](output-prediction.md) — a different approach that makes opaque directory-filling tools transparent
 - [Design Notes](design.md) — broader design principles

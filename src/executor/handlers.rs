@@ -244,7 +244,7 @@ impl Executor<'_> {
             // Generator: single output file → blob
             object_store.store_blob_descriptor(self.build_ctx, &desc_key, &ctx.product.outputs[0])
         } else {
-            // Creator/Explicit or multi-output: always tree.
+            // Explicit with output_dirs, or multi-output: always tree.
             // When walking output_dirs, skip paths declared as outputs of OTHER products —
             // they're owned by some other processor that contributes to the shared directory.
             // The graph is read per path, briefly: the coordinator may need

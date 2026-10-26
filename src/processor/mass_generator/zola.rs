@@ -1432,9 +1432,10 @@ impl Processor for ZolaProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        let mut tools = vec![self.config.standard.command.clone()];
-        tools.extend(self.config.standard.required_tools.iter().cloned());
-        tools
+        crate::processor::with_declared_tools(
+            vec![self.config.standard.command.clone()],
+            &self.config.standard,
+        )
     }
 
     fn discover(

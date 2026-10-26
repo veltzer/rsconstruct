@@ -13,7 +13,7 @@ invocations since LibreOffice only supports a single running instance.
 ## Source Files
 
 - Input: `**/*.odp`
-- Output: `out/processor.generator.libreoffice/{format}/{relative_path}.{format}`
+- Output: `out/processor.generator.libreoffice/{relative_path}.{format}`
 
 ## Configuration
 

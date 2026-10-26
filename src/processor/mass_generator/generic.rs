@@ -56,7 +56,7 @@ struct Manifest {
 }
 
 /// A data-driven processor for tools that enumerate their outputs before
-/// producing them: the transparent counterpart of the opaque Creator.
+/// producing them, so every output is known before the tool runs.
 ///
 /// `predict_command` prints a manifest at discovery time; each entry becomes
 /// one product (`inputs` = the entry's sources, `outputs` = its path), so
@@ -463,16 +463,12 @@ impl Processor for MassGeneratorProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        let mut tools = Vec::new();
-        for tool in [&self.config.standard.command, &self.config.predict_command]
+        let builtin = [&self.config.standard.command, &self.config.predict_command]
             .into_iter()
-            .chain(self.config.standard.required_tools.iter())
-        {
-            if !tool.is_empty() && !tools.contains(tool) {
-                tools.push(tool.clone());
-            }
-        }
-        tools
+            .filter(|tool| !tool.is_empty())
+            .cloned()
+            .collect();
+        crate::processor::with_declared_tools(builtin, &self.config.standard)
     }
 
     fn discover(

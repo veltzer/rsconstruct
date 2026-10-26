@@ -32,25 +32,41 @@ When the user enables a feature, all resources it requires must exist.
 ## Processor naming conventions
 
 Every processor has a single **identity string** (e.g. `ruff`, `clang_tidy`,
-`mdbook`). All artifacts derived from a processor must use that same string
-consistently:
+`mdbook`), the `name` on its plugin entry. Its full name is
+`processor.<type>.<name>` (`processor.checker.clang_tidy`), assembled only by
+`ProcessorPlugin::pname()`. Everything derived from a processor uses that
+same string:
 
 | Artifact | Convention | Example (`clang_tidy`) |
 |---|---|---|
-| Name constant | `pub const UPPER: &str = "name";` in `processor::names` | `CLANG_TIDY: &str = "clang_tidy"` |
-| Source file | `src/processor/checker/{name}.rs` or `generator/{name}.rs` | `checker/clang_tidy.rs` |
-| Processor struct | `{PascalCase}Processor` | `ClangTidyProcessor` |
-| Config struct | `{PascalCase}Config` | `ClangTidyConfig` |
-| Field on `ProcessorConfig` | `pub {name}: {PascalCase}Config` | `pub clang_tidy: ClangTidyConfig` |
-| Match arm in `processor_enabled_field()` | `"{name}" => self.{name}.enabled` | `"clang_tidy" => self.clang_tidy.enabled` |
-| Entry in `default_processors()` | `names::UPPER.into()` | `names::CLANG_TIDY.into()` |
-| Entry in `validate_processor_fields()` | `processor_names::UPPER => {PascalCase}Config::known_fields()` | `processor_names::CLANG_TIDY => ClangTidyConfig::known_fields()` |
-| Entry in `expected_field_type()` | `("{name}", "field") => Some(FieldType::...)` | `("clang_tidy", "compiler_args") => ...` |
-| Entry in `src_dirs()` | `&self.{name}.scan` | `&self.clang_tidy.scan` |
-| Entry in `resolve_scan_defaults()` | `self.{name}.scan.resolve(...)` | `self.clang_tidy.scan.resolve(...)` |
-| Registration in `create_builtin_processors()` | `Builder::register(..., proc_names::UPPER, {PascalCase}Processor::new(cfg.{name}.clone()))` | `Builder::register(..., proc_names::CLANG_TIDY, ClangTidyProcessor::new(cfg.clang_tidy.clone()))` |
-| Re-export in `processor/mod.rs` | `pub use checker::{PascalCase}Processor` | `pub use checker::ClangTidyProcessor` |
-| Install command in `tool_install_command()` | `"{tool}" => Some("...")` | `"clang-tidy" => Some("apt install clang-tidy")` |
+| Source file | `src/processor/<type>/{name}.rs` | `src/processor/checker/clang_tidy.rs` |
+| Processor struct (when it has its own) | `{PascalCase}Processor` | `ClangTidyProcessor` |
+| Config struct (when it has custom fields) | `{PascalCase}Config` | `ClangTidyConfig` |
+| Plugin entry | `inventory::submit! { ProcessorPlugin { name: "{name}", ... } }` in the source file | `name: "clang_tidy"` |
+| Docs page | `docs/src/processor/<type>/{name}.md` | `docs/src/processor/checker/clang_tidy.md` |
+| Test file | `tests/processor/<type>/{name}.rs` | `tests/processor/checker/clang_tidy.rs` |
+
+### Registration: one file, one plugin entry
+
+A processor is one file. Everything that defines it lives in its file under
+`src/processor/<type>/`: the `Processor` impl (or the `SimpleCheckerParams` /
+`SimpleGenerator` parameters it is built from), its config struct, and one
+`inventory::submit!` of a `ProcessorPlugin` (see
+`src/registries/processor.rs`) carrying the whole schema: `processor_type`,
+`create`, `fields` (one `FieldSpec` per custom config field: name, type,
+whether it affects output, doc), `omit_standard_fields`, `scan_defaults`,
+`defaults`, and the capability flags. A tool the central registry in
+`src/tools.rs` lacks gets its `ToolInfo` submitted from the same file.
+`src/processor/checker/svglint.rs` is the minimal template.
+
+There are no central per-processor tables, and none may be added: the
+`fields` list is the single source from which validation, checksum
+membership, `defconfig` and completion derive. The only touch-points outside
+the file are the `mod` declaration in the type's `mod.rs`, the docs page and
+the test file, and completeness tests in `src/config/tests.rs` enforce them
+(`every_processor_file_is_declared`, `every_plugin_has_docs_and_tests`).
+`src/processor/mod.rs` keeps a `names` module of full-name constants only for
+the processors core code refers to by name.
 
 When adding a new processor, use the identity string everywhere. Do not
 abbreviate, rename, or add suffixes (`Gen`, `Bin`, etc.) to any of the
@@ -60,16 +76,21 @@ Never use a `_check` suffix in processor names. Name the processor after the
 tool or library it wraps — do not abstract or rename it (e.g. `zspell` not
 `spellcheck`, `ruff` not `python_lint`).
 
-## Processor `new()` must be infallible
+## Processor construction
 
-Every processor's `fn new(config: XxxConfig) -> Self` must return `Self`, not
-`Result<Self>`. This is enforced at compile time by the registry macro. If
-construction can fail, defer the failure to `execute()` or `discover()`.
+A processor is built by its plugin's `create` function, which deserializes
+the config through `registries::deserialize_and_create` (for an infallible
+`fn new(config) -> Self`, the normal case) or
+`registries::deserialize_and_try_create` (for a constructor that returns
+`Result<Self>`, as `aspell` and `zspell` do to load their dictionaries).
+Prefer the infallible form: a failure that can wait belongs in `discover()`
+or `execute()`, where it is reported against the product.
 
 ## Processor directory layout
 
-Each processor category directory (`src/processor/checker/`,
-`src/processor/generator/`, `src/processor/creator/`) must contain
+Each processor type directory (`src/processor/checker/`,
+`src/processor/generator/`, `src/processor/explicit/`,
+`src/processor/mass_generator/`) must contain
 only processor implementation files — one processor per `.rs` file (plus
 `mod.rs`). Shared utilities, helpers, or supporting code used by multiple
 processors must live in `src/processor/` directly, not inside a category
@@ -249,7 +270,7 @@ should be able to tell which audience the document is for:
   `docs/src/internal/architecture.md`, `docs/src/internal/cache.md`.
 - **Per-processor reference docs live under `docs/src/processor/<type>/`**
   — one subdirectory per processor type (`checker`, `generator`,
-  `creator`, `explicit`, `mass_generator`), each with a `README.md`
+  `explicit`, `mass_generator`), each with a `README.md`
   introducing the type.
   These are user-facing (they document how to configure each processor).
 

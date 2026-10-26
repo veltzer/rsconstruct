@@ -227,7 +227,7 @@ fn script_rebuilds_when_command_file_changes() {
 /// `[build] command_timeout_secs` is off by default: a command that takes
 /// a few seconds runs to completion and the build passes.
 #[test]
-fn command_timeout_is_off_by_default() {
+fn script_command_timeout_is_off_by_default() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
     fs::write(
@@ -255,7 +255,7 @@ fn command_timeout_is_off_by_default() {
 /// With `[build] command_timeout_secs` set, a command that overruns it is
 /// killed and the build fails naming the timeout and the command.
 #[test]
-fn command_timeout_kills_an_overrunning_command_when_set() {
+fn script_command_timeout_kills_an_overrunning_command_when_set() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
     fs::write(

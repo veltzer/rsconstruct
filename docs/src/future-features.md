@@ -6,16 +6,6 @@ architecture.
 
 ## Remote / distributed builds
 
-### Finish the remote cache pull path
-`object_store/operations.rs` already has `try_fetch_object_from_remote` and
-`try_fetch_descriptor_from_remote` scaffolded but marked `#[allow(dead_code)]`
-("not yet called from any read path"). Wiring these into
-`needs_rebuild_descriptor` / `can_restore_descriptor` would give true shared
-caching — CI populates the cache, developers restore from it. Highest-leverage
-item: the scaffolding already exists. The README currently advertises "remote
-caching — share build artifacts across machines", but only the push path works;
-this feature is what makes that claim true.
-
 ### Remote / distributed execution
 The executor already schedules products as their dependencies finish, with
 per-processor concurrency caps.
@@ -86,5 +76,3 @@ run `tools verify` against the lock file, and emit the JSON build events
 ### `rsconstruct migrate`
 Importers from `Makefile`, `CMakeLists.txt`, or `package.json` scripts that
 generate a starter `rsconstruct.toml`.
-</content>
-</invoke>

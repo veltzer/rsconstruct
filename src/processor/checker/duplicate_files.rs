@@ -3,16 +3,16 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::config::{DuplicateFilesConfig, output_config_hash, resolve_extra_inputs};
+use crate::config::{CheckerConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 
 pub struct DuplicateFilesProcessor {
-    config: DuplicateFilesConfig,
+    config: CheckerConfig,
 }
 
 impl DuplicateFilesProcessor {
-    pub const fn new(config: DuplicateFilesConfig) -> Self {
+    pub const fn new(config: CheckerConfig) -> Self {
         Self { config }
     }
 
@@ -128,7 +128,7 @@ inventory::submit! {
         name: "duplicate_files",
         processor_type: crate::processor::ProcessorType::Checker,
         create: plugin_create,
-        defconfig_json: crate::registries::default_config_json::<crate::config::DuplicateFilesConfig>,
+        defconfig_json: crate::registries::default_config_json::<crate::config::CheckerConfig>,
         fields: &[],
         omit_standard_fields: &[
         "command",

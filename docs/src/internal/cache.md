@@ -35,7 +35,7 @@ A blob is pure content — it has no knowledge of where it will be restored. Thi
 
 1. **Rename survival.** If you rename `foo.md` to `bar.md` without changing its content, the cache key (which is content-addressed) is the same. The blob is reused and restored to the new output path (`bar.txt` instead of `foo.txt`). If the blob stored its output path, this wouldn't work.
 
-2. **Deduplication across trees.** Multiple tree entries can point to the same blob under different paths. For example, if two files in a creator's output have identical content, they share the same blob object in the store. The tree records the path; the blob just holds the content.
+2. **Deduplication across trees.** Multiple tree entries can point to the same blob under different paths. For example, if two files in an explicit stanza's output directory have identical content, they share the same blob object in the store. The tree records the path; the blob just holds the content.
 
 ### Trees
 
@@ -67,7 +67,7 @@ or:
 {"type": "marker"}
 ```
 
-The actual file content lives in separate content-addressed blob objects. The cache entry is just a pointer (for generators) or a manifest (for creators).
+The actual file content lives in separate content-addressed blob objects. The cache entry is just a pointer (for a single output file) or a manifest (for a product with several outputs or `output_dirs`).
 
 ### On-disk layout
 
@@ -166,12 +166,14 @@ build after it rebuilds. Tests: `renamed_input_restores_by_default` and
 **Checker:**
 1. Store a `{"type": "marker"}` entry at the cache key
 
-**Generator (single output):**
+**Generator, or mass generator product (single output):**
 1. Store the output file content as a content-addressed blob
 2. Store a `{"type": "blob", "checksum": "..."}` entry at the cache key
 
-**Creator (multiple outputs):**
-1. Walk all output directories and files
+A mass generator runs its tool once, but every predicted file is its own product, so each gets its own blob entry.
+
+**Several outputs, or `output_dirs` (explicit stanzas):**
+1. Walk the declared output files and output directories, skipping files declared as outputs of other products
 2. Store each file as a content-addressed blob
 3. Build the tree entries: `[{"path": "...", "checksum": "...", "mode": ...}, ...]`
 4. Store a `{"type": "tree", "entries": [...]}` entry at the cache key
@@ -184,7 +186,7 @@ build after it rebuilds. Tests: `renamed_input_restores_by_default` and
 1. Read the cache entry, get the blob checksum
 2. Hardlink or copy the blob to the output path
 
-**Creator:**
+**Tree (several outputs or `output_dirs`):**
 1. Read the cache entry, get the tree entries
 2. For each `(path, checksum, mode)`: restore the blob to the path, set permissions
 
@@ -255,7 +257,8 @@ Hardlinks work because blob objects contain raw file content (not wrapped in a d
 
 - **Generators**: Output files deleted. Next build restores via hardlink/copy.
 - **Checkers**: Nothing to delete. Next build skips.
-- **Creators**: Output directories deleted. Next build restores from tree.
+- **Mass generators**: Every predicted file deleted, like a generator's. Next build restores each from its blob.
+- **Explicit**: Declared output files deleted, declared `output_dirs` removed. Next build restores from tree.
 
 **`rsconstruct cache clear`** wipes everything — descriptors and blobs. A cleared cache means "forget everything, rebuild from scratch." The entire `.rsconstruct/` directory is removed, which also takes the auxiliary caches (`mtime.redb`, `deps.redb`, `webcache.redb`) with it. If only blobs were cleared but descriptors survived, the cache would think outputs are available but fail to restore them. Clearing both together avoids this inconsistency.
 

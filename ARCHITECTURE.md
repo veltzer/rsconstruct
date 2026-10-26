@@ -242,7 +242,7 @@ already `Ord`); a single `ProductState` consumed by classify, executor,
 
 ## 3. Capabilities live on the link-time registry entry, so config-dependent capabilities have no home
 
-`supports_batch`, `can_fix`, `max_jobs_cap`, `version`, `is_builtin`, and
+`supports_batch`, `caches_outputs`, `max_jobs_cap`, `version`, `is_builtin`, and
 all four field-metadata accessors are `&'static` fields on
 `ProcessorPlugin`, registered via `inventory::submit!` at link time.
 Anything not compiled into the binary therefore **cannot have
@@ -253,13 +253,14 @@ completion — and whose scripting runtime downgraded real errors to
 warnings. The Lua processor type was removed on 2026-10-17: nothing in the
 fleet used it. What remains is the builtin half of the problem.)
 
-The `script` processor declares `can_fix: false` beside a working `fix()`
-implementation, reconciled by
-`registries::can_fix(name) || processors[name].config_has_fix()` at the
-call site — the static flag can only lie about config-dependent
-capabilities. Every capability now exists as a flag/method pair, and the
-flag lives on the registry for some capabilities, the trait for others,
-and both for two of them, with nothing naming the boundary.
+The sharpest instance was the `fix` capability: the `script` processor
+declared `can_fix: false` beside a working `fix()` implementation,
+reconciled by `registries::can_fix(name) || processors[name].config_has_fix()`
+at the call site, because the static flag could only lie about a
+config-dependent capability. The `fix` command and its hooks have since been
+removed, so that example is gone, but the boundary it exposed is not: the
+flag for a capability lives on the registry, and nothing gives a capability
+that depends on configuration a home of its own.
 
 This is not neglect; it is forced by pairing link-time registration with
 the no-dummy-instances rule. Link-time registration itself is a good trade
@@ -270,9 +271,9 @@ answered twice.
 
 ### Fix shape
 
-Generalize `config_has_fix` into the pattern for all config-dependent
-capabilities instead of an ad-hoc `||` per capability, so capability
-queries have exactly one home.
+When a capability next depends on configuration, give it one query on the
+configured processor that consults the registry flag, instead of an ad-hoc
+`||` at each call site, so capability queries have exactly one home.
 
 ---
 
@@ -284,16 +285,15 @@ re-implement prefixes of it by hand: three independent discovery loops
 (`build_graph_with_processors_impl`, `build_graph_filtered`, an inline copy
 in `analyzer build`), three independent "will this rebuild?"
 implementations (executor policy, `print_product_status`,
-`valid_cache_keys`), two execution loops (`Executor::execute`, `fix`'s own
-batch/single dispatch), and one hand-rolled filesystem walk
+`valid_cache_keys`), and one hand-rolled filesystem walk
 (`clean unknown`). The drift is documented in the code itself: the
 `analyzer build` copy shipped skipping resolve+validate, reported success
 on configs `build` rejects, was patched — and remains a copy.
 
 The sharpest evidence that this is architectural: **interruptibility is a
 property of the executor, not of the process.** `is_interrupted()` polling
-lives in `executor/` (plus watch and the subprocess runner). `fix`,
-`clean unknown`, and `analyzer build` poll it zero times — any driver that
+lives in `executor/` (plus watch and the subprocess runner). `clean
+unknown` and `analyzer build` poll it zero times — any driver that
 skips the executor silently loses Ctrl+C.
 
 `Builder` is the non-abstraction at the center: three fields (`config`,

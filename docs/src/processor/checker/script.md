@@ -41,6 +41,7 @@ src_dirs = ["marp"]
 | `src_extensions` | string[] | `[]` | File extensions to scan for |
 | `src_dirs` | string[] | `[]` | Directories to scan (`[""]` for the whole project) |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `required_tools` | string[] | `[]` | Extra tools the build needs on PATH beyond the built-in ones (e.g. what a wrapper script shells out to); checked before building and covered by `tool install` and version locking |
 | `dep_auto` | string[] | `[]` | Auto-detected input files |
 
 ## Batch support

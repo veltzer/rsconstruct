@@ -803,6 +803,41 @@ fn omitted_standard_fields_are_neither_shown_nor_merely_documented() {
     );
 }
 
+/// `processor defconfig` shows `batch` twice: in the field table and in the
+/// `--json` defaults, and the two must agree. Both must also state the
+/// effective default, i.e. what the executor does when the user sets
+/// nothing: a plugin whose `supports_batch` is false never batches, so it
+/// shows no `batch` field at all, and one that can batch shows the boolean
+/// default its config carries (`true`, or `false` where the plugin's
+/// defaults turn batching off, as cppcheck's do). The table used to say
+/// `false` for `processor.generator.a2x` while the JSON said `true`.
+#[test]
+fn defconfig_table_and_json_agree_on_batch() {
+    let mut bad: Vec<String> = Vec::new();
+    for plugin in all_plugins() {
+        let pname = plugin.pname();
+        let json = crate::builder::processor::defconfig_value(&pname)
+            .unwrap_or_else(|e| panic!("{pname}: no default config: {e:#}"));
+        let json_batch = json.get("batch").cloned();
+        let table_batch = crate::builder::processor::processor_fields(&pname)
+            .into_iter()
+            .find(|f| f.name == "batch")
+            .map(|f| f.default);
+        if table_batch != json_batch.clone().map(Some) {
+            bad.push(format!(
+                "{pname}: table batch default is {table_batch:?}, JSON says {json_batch:?}"
+            ));
+        }
+        match (plugin.supports_batch, &json_batch) {
+            (false, None) | (true, Some(serde_json::Value::Bool(_))) => {}
+            (supports, shown) => bad.push(format!(
+                "{pname}: supports_batch is {supports} but the batch default shown is {shown:?}"
+            )),
+        }
+    }
+    assert!(bad.is_empty(), "batch default disagreements: {bad:#?}");
+}
+
 /// The `docs/src/processor/` subdirectory holding the pages of one
 /// processor type. Pages are grouped by type, so a page filed under the
 /// wrong type counts as missing.
@@ -868,7 +903,6 @@ fn every_plugin_has_docs_and_tests() {
         "processor.generator.imarkdown2html",
         "processor.generator.ipdfunite",
         "processor.checker.itaplo",
-        "processor.generator.markdown2html",
         "processor.checker.marp_images",
         "processor.generator.objdump",
         "processor.checker.prettier",

@@ -78,7 +78,10 @@ impl Processor for RustSingleFileProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.standard.command.clone()]
+        crate::processor::with_declared_tools(
+            vec![self.config.standard.command.clone()],
+            &self.config.standard,
+        )
     }
 
     fn discover(
@@ -150,7 +153,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Suffix appended to output binary names" },
         ],
-        omit_standard_fields: &["formats", "args", "required_tools", "batch"],
+        omit_standard_fields: &["formats", "args", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".rs"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "rustc", output_dir: "out/processor.generator.rust_single_file", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<RustSingleFileConfig>,

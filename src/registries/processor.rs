@@ -1,6 +1,6 @@
 //! Processor plugin registry.
 //!
-//! Every built-in processor (checker, generator, creator, mass-generator) submits
+//! Every built-in processor (checker, generator, explicit, mass-generator) submits
 //! a [`ProcessorPlugin`] entry via `inventory::submit!`. The inventory is collected
 //! at link time.
 
@@ -21,7 +21,7 @@ use crate::processor::{Processor, ProcessorType};
 /// immutable processor.
 pub struct ProcessorPlugin {
     pub name: &'static str,
-    /// Processor type (checker, generator, creator, explicit, mass generator).
+    /// Processor type (checker, generator, explicit, mass generator).
     pub processor_type: ProcessorType,
     /// Implementation version. **Bump this when changes would make the processor
     /// produce different output for the same inputs**, or change which inputs are
@@ -47,8 +47,9 @@ pub struct ProcessorPlugin {
     /// from the derived known/checksum sets, so the validator rejects them.
     pub omit_standard_fields: &'static [&'static str],
     /// Scan defaults (`src_extensions` etc.), applied with provenance before
-    /// deserialization. `None` for processors that scan nothing by default
-    /// (script, creator, generator, explicit).
+    /// deserialization. Processors that scan nothing by default (script and
+    /// the three `generic` processors) give empty lists; `None` means no
+    /// scan defaults at all.
     pub scan_defaults: Option<crate::config::ScanDefaultsData>,
     /// Processor defaults (`command`, `dep_auto`, ...), applied with
     /// provenance before deserialization. `None` when every default is empty.
@@ -66,7 +67,8 @@ pub struct ProcessorPlugin {
     /// processor is (it is rsconstruct itself); an external processor is only
     /// when the tool it runs is (ruff, taplo, rumdl, clippy, cargo, mdbook,
     /// pyrefly, rustc). Processors that run a user-supplied command (script,
-    /// explicit, generator, creator) are `false`: the language is unknown.
+    /// explicit, generator, the generic mass generator) are `false`: the
+    /// language is unknown.
     /// Shown by `processor list` and `status` so the language of the toolchain
     /// can be read off the table.
     pub is_rust: bool,
@@ -129,7 +131,7 @@ pub const NAME_PREFIX: &str = "processor.";
 pub struct ParsedName<'a> {
     pub processor_type: ProcessorType,
     /// The last segment of the processor's own name (`ruff`), unique only
-    /// within its type: `processor.creator.generic` and
+    /// within its type: `processor.generator.generic` and
     /// `processor.explicit.generic` are different processors.
     pub short: &'a str,
     /// The instance segment of a multi-instance name, if any.

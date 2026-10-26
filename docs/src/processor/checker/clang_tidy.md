@@ -32,6 +32,7 @@ dep_inputs = []                           # Additional files that trigger rebuil
 | `args` | string[] | `[]` | Arguments passed to clang-tidy |
 | `compiler_args` | string[] | `[]` | Compiler arguments passed after `--` separator |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `required_tools` | string[] | `[]` | Extra tools the build needs on PATH beyond the built-in ones (e.g. what a wrapper script shells out to); checked before building and covered by `tool install` and version locking |
 | `dep_auto` | string[] | `[".clang-tidy"]` | Config files that are inputs when they exist |
 
 ## Batch support

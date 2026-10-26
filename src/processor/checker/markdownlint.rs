@@ -41,7 +41,10 @@ impl Processor for MarkdownlintProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.standard.command.clone()]
+        crate::processor::with_declared_tools(
+            vec![self.config.standard.command.clone()],
+            &self.config.standard,
+        )
     }
 
     fn discover(
@@ -84,7 +87,7 @@ inventory::submit! {
         processor_type: crate::processor::ProcessorType::Checker,
         create: plugin_create,
         fields: &[],
-        omit_standard_fields: &["formats", "output_dir", "required_tools", "batch"],
+        omit_standard_fields: &["formats", "output_dir", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
         // markdownlint-cli's `projectConfigFiles` (looked up in the working
         // directory) plus the `.markdownlintignore` it reads by default.

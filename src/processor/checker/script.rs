@@ -56,11 +56,12 @@ impl Processor for ScriptProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        if self.config.standard.command.is_empty() {
+        let tools = if self.config.standard.command.is_empty() {
             Vec::new()
         } else {
             vec![self.config.standard.command.clone()]
-        }
+        };
+        crate::processor::with_declared_tools(tools, &self.config.standard)
     }
 
     fn discover(
@@ -127,7 +128,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Path to the checker tool executable" },
         ],
-        omit_standard_fields: &["formats", "output_dir", "required_tools"],
+        omit_standard_fields: &["formats", "output_dir"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[], src_exclude_dirs: &[] }),
         defaults: None,
         defconfig_json: crate::registries::default_config_json::<ScriptConfig>,

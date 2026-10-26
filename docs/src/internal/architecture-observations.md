@@ -28,7 +28,7 @@ references are allowed, duplicate outputs are caught but duplicate *inputs*
 aren't. Cycles are only detected during topological sort, late.
 
 The graph's shape also leaks into the executor: the executor knows about
-`output_dirs` (creators), `variant` (multi-format generators), `config_hash`
+`output_dirs` (explicit stanzas), `variant` (multi-format generators), `config_hash`
 (cache keys), and product IDs. Adding a new product category (say, a
 "phantom" product that exists for scheduling but produces no outputs)
 requires touching both graph and executor.

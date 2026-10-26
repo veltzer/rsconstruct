@@ -15,8 +15,7 @@ use std::time::Duration;
 
 use crate::color;
 use crate::config::{
-    CheckerConfigWithCommand, SimpleCheckerParams, StandardConfig, output_config_hash,
-    resolve_extra_inputs,
+    CheckerConfig, SimpleCheckerParams, StandardConfig, output_config_hash, resolve_extra_inputs,
 };
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
@@ -65,6 +64,26 @@ pub fn parent_dir(path: &Path) -> &Path {
 /// path as-is", where "." would produce a `./`-prefixed path instead.
 pub fn parent_dir_or_empty(path: &Path) -> &Path {
     path.parent().unwrap_or_else(|| Path::new(""))
+}
+
+/// A processor's `required_tools()`: its built-in tools followed by the
+/// user-declared `required_tools` of its standard config, duplicates
+/// dropped with the first occurrence kept. `command` is often a wrapper
+/// script, so the tools it shells out to are only visible if the config
+/// names them; every processor that runs an external command funnels its
+/// list through here so `tool install`/`tool lock`, the tool-version hash and
+/// the missing-tool check see those extras the same way everywhere.
+pub fn with_declared_tools(builtin: Vec<String>, standard: &StandardConfig) -> Vec<String> {
+    let mut tools: Vec<String> = Vec::with_capacity(builtin.len() + standard.required_tools.len());
+    for tool in builtin
+        .into_iter()
+        .chain(standard.required_tools.iter().cloned())
+    {
+        if !tools.contains(&tool) {
+            tools.push(tool);
+        }
+    }
+    tools
 }
 
 // Thread-local holding the current processor's declared tools.
@@ -493,7 +512,7 @@ pub fn ensure_output_dir(output: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Remove the `output_dirs` of a product. Used by creator `clean()` methods.
+/// Remove the `output_dirs` of a product. Used by the explicit processor's `clean()`.
 /// Returns the number of directories removed.
 pub fn clean_output_dir(product: &Product, processor_name: &str, verbose: bool) -> Result<usize> {
     let mut count = 0;
@@ -519,7 +538,8 @@ pub fn clean_output_dir(product: &Product, processor_name: &str, verbose: bool) 
     Ok(count)
 }
 
-/// Build the input list for creators: anchor first, then sibling files
+/// Build the input list for an anchor-file product (the mass generators
+/// `cargo`, `gem`, `jekyll`): anchor first, then sibling files
 /// (excluding the anchor to avoid duplicates), then extra inputs.
 pub fn build_anchor_inputs(
     anchor: &Path,
@@ -537,7 +557,7 @@ pub fn build_anchor_inputs(
     inputs
 }
 
-/// Scan and skip-if-empty, the pattern creators repeat in their `discover()`
+/// Scan and skip-if-empty, the pattern several processors repeat in their `discover()`
 /// methods. Returns None if no files were found, otherwise the file list.
 pub fn scan_or_skip(
     scan: &crate::config::StandardConfig,
@@ -594,7 +614,6 @@ pub struct DirectoryProductOpts<'a, H: serde::Serialize> {
     pub checksum_fields: Vec<&'static str>,
     pub siblings: &'a SiblingFilter<'a>,
     pub processor_name: &'a str,
-    pub output_dir_name: Option<&'a str>,
 }
 
 /// Discover directory-based products: each discovered file anchors a product whose inputs
@@ -603,9 +622,6 @@ pub struct DirectoryProductOpts<'a, H: serde::Serialize> {
 /// Used by processors like `make` and `cargo` where a manifest file (Makefile, Cargo.toml)
 /// represents a build unit and all files in its directory are inputs.
 /// All paths are relative to project root.
-///
-/// When `output_dir_name` is `Some("dir_name")`, the product gets an `output_dir` set to
-/// `anchor_parent/dir_name`, enabling directory-level caching for creators.
 pub fn discover_directory_products(
     graph: &mut BuildGraph,
     opts: DirectoryProductOpts<'_, impl serde::Serialize>,
@@ -618,7 +634,6 @@ pub fn discover_directory_products(
         checksum_fields,
         siblings,
         processor_name,
-        output_dir_name,
     } = opts;
     let files = file_index.scan(scan, true);
     if files.is_empty() {
@@ -646,20 +661,8 @@ pub fn discover_directory_products(
 
         let inputs = build_anchor_inputs(&anchor, &sibling_files, &extra);
 
-        // Without an output directory the outputs are empty: the cache
-        // entry is a success record.
-        let output_dirs: Vec<PathBuf> = output_dir_name
-            .map(|dir_name| anchor_dir.join(dir_name))
-            .into_iter()
-            .collect();
-        graph.add_product_with(
-            inputs,
-            vec![],
-            processor_name,
-            hash.clone(),
-            None,
-            output_dirs,
-        )?;
+        // The outputs are empty: the cache entry is a success record.
+        graph.add_product(inputs, vec![], processor_name, hash.clone())?;
     }
 
     Ok(())
@@ -1018,10 +1021,12 @@ impl ProcessorBase {
 
 /// Trait for processors that can discover products for the build graph.
 ///
-/// Processors come in three types (see [`ProcessorType`]):
+/// Processors come in four types (see [`ProcessorType`]):
 /// - **Generators**: Create output files from inputs (must override `clean()`)
 /// - **Checkers**: Validate inputs without producing outputs (use default `clean()`)
-/// - **Creators**: Produce a mass of output files in a directory without enumerating them
+/// - **Explicit**: One product from declared inputs to declared output files and directories
+/// - **Mass generators**: One tool run whose output files are predicted before it runs,
+///   each its own product
 ///
 /// The processor type, name, and description live in the plugin
 /// registration (`inventory::submit!` of a `ProcessorPlugin`), not on this
@@ -1228,12 +1233,12 @@ pub trait Processor: Sync + Send {
 /// Each trivial checker file (ruff.rs, pylint.rs, etc.) registers an instance
 /// of this struct with its own `SimpleCheckerParams`.
 pub struct SimpleChecker {
-    config: CheckerConfigWithCommand,
+    config: CheckerConfig,
     params: SimpleCheckerParams,
 }
 
 impl SimpleChecker {
-    pub const fn new(config: CheckerConfigWithCommand, params: SimpleCheckerParams) -> Self {
+    pub const fn new(config: CheckerConfig, params: SimpleCheckerParams) -> Self {
         Self { config, params }
     }
 
@@ -1285,9 +1290,7 @@ impl Processor for SimpleChecker {
         for t in self.params.extra_tools {
             tools.push(t.to_string());
         }
-        // User-declared extras, for a `command` that is a wrapper script.
-        tools.extend(self.config.standard.required_tools.iter().cloned());
-        tools
+        with_declared_tools(tools, &self.config.standard)
     }
 
     /// One product per scanned file (`discover_checker_products`).
@@ -1302,10 +1305,13 @@ impl Processor for SimpleChecker {
         instance_name: &str,
     ) -> Result<()> {
         discover_checker_products(
-            graph, &self.config.standard, file_index,
-            &self.config.standard.dep_inputs, &self.config.standard.dep_auto,
+            graph,
+            &self.config.standard,
+            file_index,
+            &self.config.standard.dep_inputs,
+            &self.config.standard.dep_auto,
             &self.config,
-            <crate::config::CheckerConfigWithCommand as crate::config::KnownFields>::checksum_fields(),
+            <crate::config::CheckerConfig as crate::config::KnownFields>::checksum_fields(),
             instance_name,
         )
     }
@@ -1412,9 +1418,7 @@ where
         if let Some(f) = self.params.extra_tools_fn {
             tools.extend(f(&self.config));
         }
-        // User-declared extras, for a `command` that is a wrapper script.
-        tools.extend(self.config.as_ref().required_tools.iter().cloned());
-        tools
+        with_declared_tools(tools, self.config.as_ref())
     }
 
     /// One product per scanned file and format (`discover_multi_format`).
@@ -1554,8 +1558,8 @@ mod tests {
     /// index, restricted to those whose primary input is in a half-subset,
     /// must equal its products from the subset alone. The fixture is also
     /// written to disk (in a temporary directory, by absolute path), since
-    /// some processors read the file during discovery — `creator.cc` and
-    /// `creator.linux_module` parse their YAML manifests. That is allowed:
+    /// some processors read the file during discovery — `mass_generator.cc` and
+    /// `mass_generator.linux_module` parse their YAML manifests. That is allowed:
     /// both index views see the same disk.
     #[test]
     fn per_file_discovery_over_a_subset_matches_the_full_index() {
@@ -1629,6 +1633,20 @@ mod tests {
              comparison checked nothing for them — extend `fixture_processor` until \
              they discover something ({} others were checked)",
             exercised.len()
+        );
+    }
+
+    /// User-declared tools follow the built-in ones, and a name in both
+    /// lists (or twice in one) appears once, at its first position.
+    #[test]
+    fn with_declared_tools_appends_and_dedups() {
+        let standard = StandardConfig {
+            required_tools: vec!["pandoc".into(), "make".into(), "pandoc".into()],
+            ..StandardConfig::default()
+        };
+        assert_eq!(
+            super::with_declared_tools(vec!["make".into(), "ruby".into()], &standard),
+            vec!["make", "ruby", "pandoc"]
         );
     }
 
@@ -1931,7 +1949,6 @@ mod tests {
                     excludes: &[],
                 },
                 processor_name: "processor.checker.make",
-                output_dir_name: None,
             },
         )
         .unwrap();

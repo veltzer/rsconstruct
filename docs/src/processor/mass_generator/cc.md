@@ -183,6 +183,7 @@ checking during discovery.
 | `include_dirs` | string[] | `[]` | Global include directories |
 | `single_invocation` | bool | `false` | Build programs in single compiler invocation |
 | `dep_inputs` | string[] | `[]` | Extra files that trigger rebuilds when changed |
+| `required_tools` | string[] | `[]` | Extra tools the build needs on PATH beyond the compilers and `ar` (e.g. what a wrapper compiler shells out to); checked before building and covered by `tool install` and version locking |
 | `src_dirs` | string[] | `[]` | Directories to scan for cc.yaml files (`[""]` for the whole project) |
 | `src_extensions` | string[] | `["cc.yaml"]` | File patterns to scan for |
 

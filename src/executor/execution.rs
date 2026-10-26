@@ -242,7 +242,7 @@ impl Drop for FinishOnDrop<'_> {
 /// overwrite the read-only file. Removing outputs first ensures the tool
 /// can create fresh files.
 ///
-/// For products with `output_dirs` (Creators), we do NOT wipe entire directories
+/// For products with `output_dirs` (explicit stanzas), we do NOT wipe entire directories
 /// because other processors may contribute files to the same directory. Instead,
 /// we remove just the files recorded in this product's last tree descriptor
 /// (falling back to creating empty dirs if there is no prior tree).
@@ -261,7 +261,7 @@ pub(super) fn remove_stale_outputs(
     input_checksum: &str,
 ) -> anyhow::Result<()> {
     if !product.output_dirs.is_empty() {
-        // Creator-style: remove only files we owned in the previous run.
+        // A tree product: remove only files we owned in the previous run.
         // Files that belong to other processors (sharing the same directory)
         // are left alone and restored/rebuilt independently.
         let cache_key = product.descriptor_key(input_checksum);
@@ -324,8 +324,8 @@ struct ProgressCounters {
 
 /// Context shared by every worker for the whole run.
 struct LevelContext<'b> {
-    /// Read briefly by workers (who owns a path, when caching a creator's
-    /// tree); written by the coordinator when re-analysis adds inputs. A
+    /// Read briefly by workers (who owns a path, when caching an
+    /// `output_dirs` tree); written by the coordinator when re-analysis adds inputs. A
     /// worker runs its tool from its own copy of the product, never holding
     /// this lock.
     graph: &'b RwLock<BuildGraph>,

@@ -94,7 +94,10 @@ impl Processor for NpmProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.standard.command.clone(), "node".to_string()]
+        crate::processor::with_declared_tools(
+            vec![self.config.standard.command.clone(), "node".to_string()],
+            &self.config.standard,
+        )
     }
 
     fn discover(
@@ -145,7 +148,7 @@ inventory::submit! {
         processor_type: crate::processor::ProcessorType::MassGenerator,
         create: plugin_create,
         fields: &[],
-        omit_standard_fields: &["formats", "dep_auto", "output_dir", "required_tools", "batch"],
+        omit_standard_fields: &["formats", "dep_auto", "output_dir", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["package.json"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "npm", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<NpmConfig>,

@@ -329,7 +329,10 @@ impl Processor for MdbookProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.standard.command.clone()]
+        crate::processor::with_declared_tools(
+            vec![self.config.standard.command.clone()],
+            &self.config.standard,
+        )
     }
 
     fn discover(
@@ -380,7 +383,7 @@ inventory::submit! {
                 affects_output: false, required: false,
                 doc: "Report plan-vs-build mismatches as warnings instead of failing the build" },
         ],
-        omit_standard_fields: &["formats", "dep_auto", "required_tools", "batch"],
+        omit_standard_fields: &["formats", "dep_auto", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["book.toml"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "mdbook", output_dir: "book", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<MdbookConfig>,

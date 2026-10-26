@@ -105,11 +105,12 @@ impl Processor for GeneratorProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        if self.config.standard.command.is_empty() {
+        let tools = if self.config.standard.command.is_empty() {
             Vec::new()
         } else {
             vec![self.config.standard.command.clone()]
-        }
+        };
+        crate::processor::with_declared_tools(tools, &self.config.standard)
     }
 
     fn discover(
@@ -179,7 +180,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "File extension for generated output files" },
         ],
-        omit_standard_fields: &["formats", "required_tools"],
+        omit_standard_fields: &["formats"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.generic", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<GeneratorConfig>,

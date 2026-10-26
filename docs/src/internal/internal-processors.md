@@ -23,8 +23,6 @@ Same config as `pdfunite` minus the `pdfunite_bin` field. Batch-capable.
 
 **Crate:** `lopdf`
 
-## Candidates
-
 ### ijq / ijsonlint — JSON validation
 
 Replaces: `jq` (checks JSON parses) and `jsonlint` (Python JSON linter)
@@ -35,7 +33,7 @@ Both tools ultimately just validate that files are well-formed JSON.
 **Crate:** `serde_json` (already in deps)
 **Complexity:** Low — parse file, report error with line/column
 
-### iyq — YAML checked with a jq filter (done)
+### iyq — YAML checked with a jq filter
 
 Replaces: `yq FILTER file` (the jq wrapper; the fleet's `yq` stanzas ran `yq .`)
 
@@ -50,7 +48,7 @@ files under two filters: the same pass/fail verdicts.
 **Complexity:** Low — the engines are the crates; the work is yq's document
 handling
 
-### iprotobuf — Protocol Buffers to Rust (done)
+### iprotobuf — Protocol Buffers to Rust
 
 Replaces: the `protobuf` generator (`protoc --cpp_out`), for Rust output
 
@@ -68,7 +66,7 @@ streaming services, imports): byte-identical without source info.
 **Complexity:** Low — the compiler is the crate; the work is the per-package
 output contract
 
-### iyamllint — YAML linting (done)
+### iyamllint — YAML linting
 
 Replaces: `yamllint` (Python YAML linter)
 
@@ -83,7 +81,7 @@ design), which is what lets the rules be ported line for line.
 details (marks, comment extraction, implicit block sequences) are where
 fidelity is won or lost
 
-### ixmllint — XML well-formedness and XSD validation (done)
+### ixmllint — XML well-formedness and XSD validation
 
 Replaces: `xmllint --noout [--schema x.xsd]` (libxml2)
 
@@ -106,7 +104,7 @@ failure naming it, never a partial check.
 libxml2 behaviours above are what the differential run against xmllint
 pinned down
 
-### iactionlint — GitHub Actions workflow linting (done)
+### iactionlint — GitHub Actions workflow linting
 
 Replaces: `actionlint` (Go), except its `shellcheck` and `pyflakes` rules,
 which run external tools over `run:` scripts.
@@ -128,7 +126,7 @@ workflow files are clean under both tools.
 (go-yaml's node positions, text/scanner columns inside expressions) are
 where fidelity is won or lost
 
-### icpplint — C/C++ style linting (done)
+### icpplint — C/C++ style linting
 
 Replaces: `cpplint` (cpplint 2.0.2, Python)
 
@@ -157,7 +155,7 @@ Python text mode) and the leak of one directory's `linelength`/`root`/
 **Complexity:** High — no parser to port, but 7.9k lines of state-carrying
 regex code where every `[i-1]` and `[:5]` is a decision
 
-### idockerfile — Dockerfile linting (done)
+### idockerfile — Dockerfile linting
 
 Replaces: `hadolint` (hadolint 2.15.1, Haskell), except its ShellCheck
 findings (`SC` codes), which come from a separate program.
@@ -181,7 +179,7 @@ the next instruction (fixed upstream); idockerfile accepts it.
 **Complexity:** High — 71 rules is the easy part; the shell view and the
 parser's whitespace rules are where fidelity is won or lost
 
-### itidy — HTML checking (done)
+### itidy — HTML checking
 
 Replaces: `tidy -errors -q [-config x] [--option value]` (HTML Tidy 5.8.0, C)
 
@@ -210,7 +208,7 @@ blank is decided from a stale byte past its end.
 position depends on the exact token stream; the differential run is the
 only way to know the port is right
 
-### isvglint — SVG linting (done)
+### isvglint — SVG linting
 
 Replaces: `svglint` (svglint 4.2.1, Node), except its `custom` rules,
 which are JavaScript functions.
@@ -246,16 +244,6 @@ Validate that TOML files parse correctly. The `toml` crate is already a dependen
 **Crate:** `toml` (already in deps)
 **Complexity:** Low
 
-### ijson_schema — JSON Schema validation
-
-Replaces: `json_schema` (Python `jsonschema`)
-
-Validate JSON files against JSON Schema definitions. The `jsonschema` Rust crate
-supports JSON Schema draft 2020-12, draft 7, and draft 4.
-
-**Crate:** `jsonschema`
-**Complexity:** Medium — need to load schema files and validate against them
-
 ### imarkdown2html — Markdown to HTML
 
 Replaces: `markdown2html` (external markdown CLI)
@@ -282,7 +270,7 @@ Convert YAML files to pretty-printed JSON.
 **Crate:** `serde_norway`, `serde_json`
 **Complexity:** Low — parse YAML, serialize as JSON
 
-### ijinja2 — Jinja2 templates (done)
+### ijinja2 — Jinja2 templates
 
 Replaces: the `jinja2` generator (Python Jinja2 through `python3 -c`)
 
@@ -314,6 +302,30 @@ with good compatibility.
 **Crate:** `grass`
 **Complexity:** Low — compile input file, write CSS output
 
+### ishellcheck, iluacheck, icheckpatch, icheckstyle, iperlcritic — ported linters
+
+Replace: `shellcheck`, `luacheck`, `checkpatch`, `checkstyle` and `perlcritic`
+
+Each is a port of a specific upstream release, kept in its own engine module
+(`src/engines/shellcheck/` is ShellCheck 0.11.0, `src/engines/luacheck/`
+luacheck 1.2.0, `src/engines/checkpatch/` the kernel's `checkpatch.pl`,
+`src/engines/checkstyle/` checkstyle 8.36.1, `src/engines/perlcritic/`
+`Perl::Critic` 1.156 on PPI 1.284); the module documentation of each says
+what is ported and what is not. Each processor's docs page under
+`docs/src/processor/checker/` records how it was compared with the original.
+
+## Candidates
+
+### ijson_schema — JSON Schema validation
+
+Replaces: nothing yet — the builtin `json_schema` processor checks `propertyOrdering` in schema files, not instances against a schema
+
+Validate JSON files against JSON Schema definitions. The `jsonschema` Rust crate
+supports JSON Schema draft 2020-12, draft 7, and draft 4.
+
+**Crate:** `jsonschema`
+**Complexity:** Medium — need to load schema files and validate against them
+
 ## Not Suitable for Internal Implementation
 
 These processors wrap tools with complex, evolving behavior that would be
@@ -324,7 +336,6 @@ impractical to reimplement:
 - **clippy, cargo** — Rust toolchain components
 - **marp** — Presentation framework (spawns Chromium)
 - **mdbook, jekyll** — Full documentation/site generators
-- **shellcheck** — Shell script analyzer with extensive rule set
 - **aspell** — Spell checker with language dictionaries
 - **chromium, libreoffice, drawio** — GUI applications used for rendering
 - **protobuf** — Protocol buffer compiler

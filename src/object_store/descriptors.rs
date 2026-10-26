@@ -252,7 +252,7 @@ impl ObjectStore {
         Ok(changed)
     }
 
-    /// Store a tree descriptor (creator produced multiple outputs).
+    /// Store a tree descriptor (a product with several outputs or `output_dirs`).
     pub fn store_tree_descriptor(
         &self,
         ctx: &crate::build_context::BuildContext,

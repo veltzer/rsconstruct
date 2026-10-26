@@ -12,7 +12,7 @@ output in the configured formats. Each format produces a separate output file.
 ## Source Files
 
 - Input: `**/*.mmd`
-- Output: `out/processor.generator.mermaid/{format}/{relative_path}.{format}`
+- Output: `out/processor.generator.mermaid/{relative_path}.{format}`
 
 ## Configuration
 

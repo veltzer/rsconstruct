@@ -3,15 +3,15 @@ use serde_json::Value;
 use std::collections::BTreeSet;
 use std::fs;
 
-use crate::config::JsonSchemaConfig;
+use crate::config::CheckerConfig;
 use crate::graph::Product;
 
 pub struct JsonSchemaProcessor {
-    config: JsonSchemaConfig,
+    config: CheckerConfig,
 }
 
 impl JsonSchemaProcessor {
-    pub const fn new(config: JsonSchemaConfig) -> Self {
+    pub const fn new(config: CheckerConfig) -> Self {
         Self { config }
     }
 
@@ -120,7 +120,7 @@ inventory::submit! {
         name: "json_schema",
         processor_type: crate::processor::ProcessorType::Checker,
         create: plugin_create,
-        defconfig_json: crate::registries::default_config_json::<crate::config::JsonSchemaConfig>,
+        defconfig_json: crate::registries::default_config_json::<crate::config::CheckerConfig>,
         fields: &[],
         omit_standard_fields: &[
         "command",

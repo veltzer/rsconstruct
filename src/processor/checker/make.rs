@@ -61,7 +61,10 @@ impl Processor for MakeProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec![self.config.standard.command.clone()]
+        crate::processor::with_declared_tools(
+            vec![self.config.standard.command.clone()],
+            &self.config.standard,
+        )
     }
 
     fn discover(
@@ -83,7 +86,6 @@ impl Processor for MakeProcessor {
                     excludes: &["/.git/", "/out/", "/.rsconstruct/"],
                 },
                 processor_name: instance_name,
-                output_dir_name: None,
             },
         )
     }
@@ -107,7 +109,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Make target to build" },
         ],
-        omit_standard_fields: &["formats", "output_dir", "required_tools", "batch"],
+        omit_standard_fields: &["formats", "output_dir", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["Makefile"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "make", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<MakeConfig>,

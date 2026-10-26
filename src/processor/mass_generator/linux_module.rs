@@ -362,12 +362,7 @@ impl Processor for LinuxModuleProcessor {
         if discovered.needs_uname {
             tools.push("uname".to_string());
         }
-        for tool in &self.config.standard.required_tools {
-            if !tools.contains(tool) {
-                tools.push(tool.clone());
-            }
-        }
-        tools
+        crate::processor::with_declared_tools(tools, &self.config.standard)
     }
 
     fn discover(

@@ -25,9 +25,9 @@ This is one step short of `forbid`. `forbid` cannot be overridden per-item; `den
 
 The crate root carries a block of `#![allow(clippy::*)]` attributes — these are pedantic and nursery lints that the codebase deliberately permits. Each falls into one of three groups (the source comments tag them):
 
-1. **Numeric/cast lints** (3 lints). `cast_possible_truncation`, `cast_precision_loss`, `cast_sign_loss`. These fire on progress-percentage computations and similar internal arithmetic where the values are bounded and not user-controlled. Per-site allows would add noise without adding safety.
-2. **Stylistic / debatable** (~32 lints). Lints where clippy's preferred shape is not obviously better. Examples: `option_if_let_else` (`map_or` form is often less readable), `match_same_arms` (kept distinct for readability), `doc_markdown` (over-eager about backticking ordinary words), `naive_bytecount` (would require adding the `bytecount` crate for one call site).
-3. **Mutex guard tightening** (1 lint). `significant_drop_tightening`. Flags every guard whose scope extends past the last use, even by one statement. In practice our guards are held for short cache lookups and tightening produces busier code without measurable contention reduction. Deliberate policy allow.
+1. **Numeric/cast lints**: `cast_possible_truncation`, `cast_precision_loss`, `cast_sign_loss`, `cast_possible_wrap`. These fire on progress-percentage computations and similar internal arithmetic where the values are bounded and not user-controlled. Per-site allows would add noise without adding safety.
+2. **Stylistic / debatable**: lints where clippy's preferred shape is not obviously better. Examples: `option_if_let_else` (`map_or` form is often less readable), `match_same_arms` (kept distinct for readability), `items_after_statements` (a local `static` regex stays next to the code that uses it).
+3. **Mutex guard tightening**: `significant_drop_tightening`. Flags every guard whose scope extends past the last use, even by one statement. In practice our guards are held for short cache lookups and tightening produces busier code without measurable contention reduction. Deliberate policy allow.
 
 There is no "to-do" group remaining: the previous strictness pass either fixed each pedantic/nursery lint in code or moved it to one of the three buckets above with rationale.
 
@@ -40,66 +40,14 @@ Every `#[allow(...)]` in the codebase MUST:
 3. **Carry a comment explaining why.** The comment answers: "what feature/workflow keeps this thing around despite looking dead?" A silent `#[allow(dead_code)]` is a bug.
 4. **Be periodically re-audited.** Scaffolding becomes production code (allow removed) or is abandoned (code deleted). Long-lived allows are a code smell.
 
-## Current `#[allow]` attributes (at time of writing)
+## Per-item `#[allow]` attributes
 
-After the strictness pass, 5 allows remain. Each is documented in the source and reproduced here with rationale.
+Below the crate-level block, every remaining allow sits on a single item and carries its reason, either as a comment or as the attribute's `reason = "..."`. `grep -rn '#\[allow(' src/` lists them; the set changes as code changes, so this page describes their kinds rather than enumerating them:
 
-### `src/object_store/mod.rs` — `remote_pull` field
+- **Clippy lints that are wrong for one call site**, such as `too_many_arguments` on a function that mirrors an upstream signature, `unnecessary_wraps` on a function whose `Result` is fixed by the `PhaseHook::run` signature, or `naive_bytecount` where a dependency for one count is not worth it.
+- **Ported engines under `src/engines/`**, which follow their upstream's structure and naming: `non_upper_case_globals` and `non_camel_case_types` on names copied from the original, and `dead_code` on the faithful ASTs and generated tables (`hadolint/parser.rs`, `checkstyle/tables`) whose unread fields still document what the upstream parser accepts.
 
-```rust
-/// Whether to pull from remote cache.
-/// Wired into the constructor but not yet consulted by any read path —
-/// remote-pull integration is scaffolded in `operations.rs` (the
-/// `try_fetch_*` helpers) but not yet called from the executor.
-#[allow(dead_code)]
-remote_pull: bool,
-```
-
-**Why kept**: remote-pull is a real, partially-implemented feature. The `try_fetch_*` helpers exist; they're just not wired into `classify_products` / the restore path yet. Removing the field now would mean re-adding it when we wire up the feature. Keeping it with a comment documents what's missing.
-
-**When to remove**: when remote-pull read paths are wired up, or when we formally abandon remote-pull.
-
-### `src/object_store/operations.rs` — three `try_fetch_*` / `try_push_descriptor_*` helpers
-
-```rust
-// Scaffolding for remote-pull: wired into the API surface but not yet
-// called from any read path. Intentional; tracked under remote-pull WIP.
-#[allow(dead_code)]
-pub(super) fn try_fetch_object_from_remote(&self, checksum: &str) -> Result<bool> { ... }
-
-// Scaffolding for remote-pull (for paired fetch-after-push semantics).
-// Not yet called from any write path; tracked under remote-pull WIP.
-#[allow(dead_code)]
-pub(super) fn try_push_descriptor_to_remote(&self, descriptor_key: &str, data: &[u8]) -> Result<()> { ... }
-
-/// Try to fetch a descriptor from remote cache.
-/// Scaffolding for remote-pull; not yet called from any read path.
-#[allow(dead_code)]
-pub(super) fn try_fetch_descriptor_from_remote(&self, descriptor_key: &str) -> Result<Option<Vec<u8>>> { ... }
-```
-
-**Why kept**: same feature as above. These are the building blocks the eventual remote-pull implementation will call. They're tested (implicitly via the types that check they compile), and they work when called — they just aren't called yet.
-
-**When to remove**: same trigger as the `remote_pull` field.
-
-### `src/registries/processor.rs` — `ProcessorPlugin.processor_type` field
-
-```rust
-pub struct ProcessorPlugin {
-    pub name: &'static str,
-    /// Processor type. Declared by every plugin but not yet queried by any
-    /// runtime code path — kept as plugin metadata so future features
-    /// (e.g. `processor list --type=checker`) can filter without touching
-    /// every registration.
-    #[allow(dead_code)]
-    pub processor_type: ProcessorType,
-    ...
-}
-```
-
-**Why kept**: Every `inventory::submit!` for a processor declares a type (`Checker`, `Generator`, `Creator`, `Explicit`). The runtime currently reads `processor_type()` from the `Processor` trait, never from the plugin. But the static plugin metadata is the right place for filtering features like `rsconstruct processor list --type=checker`. Removing the field now would mean adding 93 `processor_type: ...` lines back later when we want the filter.
-
-**When to remove**: never, once the first feature queries it. Until then, the allow is the cheap price of preserving optionality.
+No `#[allow(dead_code)]` guards scaffolding any more. The remote-pull path that an earlier version of this page listed (the `remote_pull` field and the `try_fetch_*` helpers in `src/object_store/`) is wired into the read path, and `ProcessorPlugin.processor_type` is read by the registry's name lookup (`src/registries/processor.rs`) and by the completeness tests, so both allows were removed.
 
 ## What the pass removed
 
