@@ -33,12 +33,11 @@ dep_inputs = []                            # Additional files that trigger rebui
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `args` | string[] | `[]` | Reserved for future use |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
 ## Batch support
 
-The tool processes one file at a time. Each file is checked in a separate invocation.
+Not used: validating in-process has no start-up cost for a batch to share, so files are checked in parallel as separate products.
 
 ## Clean behavior
 

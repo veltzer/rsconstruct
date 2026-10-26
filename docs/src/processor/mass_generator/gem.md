@@ -8,8 +8,13 @@ Installs Ruby dependencies from `Gemfile` files using Bundler.
 
 Discovers `Gemfile` files in the project and runs `bundle install` in each
 directory with `GEM_HOME` and `GEM_PATH` set to `gem_home`, so gems install
-into a directory next to the `Gemfile`. Sibling `.rb` and `.gemspec` files
-are tracked as inputs. After a successful install it writes an install stamp,
+into a directory next to the `Gemfile`. The `Gemfile.lock` and the
+`.gemspec` files under the `Gemfile`'s directory are tracked as inputs: the
+lockfile pins what `bundle install` installs, so a dependency bump that
+touches only it re-runs the install. Bundler may rewrite the lockfile; a
+rewrite with the same content leaves the checksum alone, one with new
+content re-runs the install once more and then settles. After a successful
+install it writes an install stamp,
 `out/processor.mass_generator.gem/root.stamp` for a root `Gemfile` (the directory
 path with `/` turned into `_` otherwise). The stamp is what another
 processor lists as an input to run after the install — the
@@ -17,7 +22,7 @@ processor lists as an input to run after the install — the
 
 ## Source Files
 
-- Input: `**/Gemfile` (plus sibling `.rb`, `.gemspec` files)
+- Input: `**/Gemfile` (plus the sibling `Gemfile.lock` and `.gemspec` files)
 - Output: the install stamp `out/processor.mass_generator.gem/<dir>.stamp`
 
 ## Configuration

@@ -605,3 +605,88 @@ src_dirs = ["src"]
         "outputs built from content that was edited mid-run must not be reused: {second:?}"
     );
 }
+
+/// Two independent products that fail at the same time, without
+/// `--keep-going`. Both are running when the first failure lands, so both
+/// fail; both failures must be reported, each once, each with its
+/// `[processor] product:` prefix — the build used to return the first
+/// error only and lose the other. The JSON summary lists both and counts
+/// both.
+#[test]
+fn concurrent_failures_are_all_reported_without_keep_going() {
+    let temp_dir = TempDir::new().unwrap();
+    let project = temp_dir.path();
+    // The sleep keeps both tools running until both have started, so
+    // neither is skipped because the other already failed.
+    write_tool(
+        project,
+        "failslow",
+        "sleep 1\necho \"tool failed on $*\" >&2\nexit 1\n",
+    );
+    fs::write(
+        project.join("rsconstruct.toml"),
+        r#"[build]
+hash_tool_versions = false
+
+[processor.explicit.generic.one]
+command = "failslow"
+inputs = ["src/a.txt"]
+output_files = ["out/a.out"]
+
+[processor.explicit.generic.two]
+command = "failslow"
+inputs = ["src/b.txt"]
+output_files = ["out/b.out"]
+"#,
+    )
+    .unwrap();
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(project.join("src/a.txt"), "a\n").unwrap();
+    fs::write(project.join("src/b.txt"), "b\n").unwrap();
+
+    let prefixes = [
+        "[processor.explicit.generic.one] ",
+        "[processor.explicit.generic.two] ",
+    ];
+
+    let result = build_with(project, &["-j", "2"]);
+    assert!(!result.exit_success);
+    assert_eq!(result.failed, 2, "{result:?}");
+    assert_eq!(result.errors.len(), 2, "{result:?}");
+    for prefix in prefixes {
+        assert_eq!(
+            result
+                .errors
+                .iter()
+                .filter(|e| e.starts_with(prefix))
+                .count(),
+            1,
+            "one summary error per failed product: {:?}",
+            result.errors
+        );
+    }
+
+    let path_env = format!(
+        "{}:{}",
+        project.join("toolbin").display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let out = crate::common::run_rsconstruct_with_env(
+        project,
+        &["build", "-j", "2"],
+        &[("NO_COLOR", "1"), ("PATH", &path_env)],
+    );
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    for prefix in prefixes {
+        assert_eq!(
+            stderr.matches(prefix).count(),
+            1,
+            "each failure is reported exactly once: {stderr}"
+        );
+    }
+    assert!(
+        stderr.contains("2 products failed:"),
+        "the build's error carries every failure: {stderr}"
+    );
+}

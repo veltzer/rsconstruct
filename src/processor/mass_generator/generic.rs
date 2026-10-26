@@ -8,8 +8,8 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use super::{
-    OnceTool, PlannedOutput, add_planned_products, plan_cache_path, read_plan_cache,
-    require_planned_output, write_plan_cache,
+    OnceTool, PlannedOutput, add_planned_products, plan_cache_path, plan_input_checksum,
+    read_plan_cache, require_planned_output, write_plan_cache,
 };
 use crate::config::{StandardConfig, checksum_fields_of, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
@@ -24,9 +24,8 @@ const MANIFEST_VERSION: u32 = 1;
 
 /// Mass generator config.
 /// Custom fields: `predict_command`, `predict_args`, `output_dirs`, `loose_manifest`.
-/// Unused `StandardConfig` fields: formats, `dep_auto`, `output_dir`, batch. The
-/// scan fields discover no products — the manifest does that — but declare
-/// the files the plan is computed from, which keys the plan cache.
+/// The scan fields discover no products — the manifest does that — but
+/// declare the files the plan is computed from, which keys the plan cache.
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct MassGeneratorConfig {
     /// The tool's plan command: prints the JSON manifest to stdout and
@@ -77,13 +76,18 @@ struct Manifest {
 /// ```
 pub struct MassGeneratorProcessor {
     config: MassGeneratorConfig,
-    /// The parsed plan, obtained once per process. Discovery is a fixed-point
-    /// loop that calls `discover` several times per build; the source tree
-    /// does not change between passes, so neither does the plan. Watch mode
-    /// builds a fresh processor per rebuild, which clears this.
-    manifest: Mutex<Option<Arc<Vec<PlannedOutput>>>>,
+    /// The parsed plan, with the sorted list of declared plan inputs it was
+    /// computed from. Discovery calls `discover` again whenever a round adds
+    /// files to the index (an upstream generator's declared outputs); the
+    /// plan is reused while the declared inputs are the same files and
+    /// computed again when they are not. Watch mode builds a fresh processor
+    /// per rebuild, which clears this.
+    manifest: Mutex<Option<CachedPlan>>,
     tool_run: OnceTool,
 }
+
+/// A plan and the sorted declared plan inputs it was computed from.
+type CachedPlan = (Vec<PathBuf>, Arc<Vec<PlannedOutput>>);
 
 impl MassGeneratorProcessor {
     pub fn new(config: MassGeneratorConfig) -> Result<Self> {
@@ -135,8 +139,9 @@ impl MassGeneratorProcessor {
             .any(|v| v.as_deref().is_some_and(|v| !v.is_empty()))
     }
 
-    /// The plan, obtained once per process: from the plan cache when the
-    /// declared plan inputs are unchanged, otherwise by running
+    /// The plan: reused while the declared plan inputs are the same files
+    /// as when it was computed; otherwise from the plan cache when those
+    /// inputs are unchanged in content too, and otherwise by running
     /// `predict_command`. `discover` has no `BuildContext`, so this is a plain
     /// spawn: the plan command is by contract cheap and side-effect free, and
     /// nothing else runs alongside it at discovery time.
@@ -145,15 +150,22 @@ impl MassGeneratorProcessor {
         instance_name: &str,
         file_index: &FileIndex,
     ) -> Result<Arc<Vec<PlannedOutput>>> {
+        let mut inputs = if self.declares_plan_inputs() {
+            file_index.scan(&self.config.standard, true)
+        } else {
+            Vec::new()
+        };
+        inputs.sort();
         let mut guard = self.manifest.lock();
-        if let Some(entries) = guard.as_ref() {
+        if let Some((planned_from, entries)) = guard.as_ref()
+            && *planned_from == inputs
+        {
             return Ok(Arc::clone(entries));
         }
         if self.config.predict_command.is_empty() {
             anyhow::bail!("'predict_command' is not set for processor '{instance_name}'");
         }
         let cache = if self.declares_plan_inputs() {
-            let inputs = file_index.scan(&self.config.standard, true);
             Some((
                 plan_cache_path(instance_name),
                 self.plan_key(instance_name, &inputs)?,
@@ -181,15 +193,15 @@ impl MassGeneratorProcessor {
         let entries = parse_manifest(raw.as_bytes(), &self.output_dirs())
             .with_context(|| invalid_manifest_context(instance_name, &cmd))?;
         let entries = Arc::new(entries);
-        *guard = Some(Arc::clone(&entries));
+        *guard = Some((inputs, Arc::clone(&entries)));
         Ok(entries)
     }
 
     /// The key a cached plan is valid for: the rsconstruct version (the
     /// cache format and the manifest rules), the instance's whole config
     /// (`predict_command` and its arguments included), and the path and
-    /// content of every declared plan input — so a new, removed or edited
-    /// source file all mean a fresh plan.
+    /// content of every declared plan input (sorted) — so a new, removed or
+    /// edited source file all mean a fresh plan.
     fn plan_key(&self, instance_name: &str, inputs: &[PathBuf]) -> Result<String> {
         let config = serde_json::to_string(&self.config)
             .context("Failed to serialize mass_generator config for the plan key")?;
@@ -198,13 +210,9 @@ impl MassGeneratorProcessor {
             instance_name.to_string(),
             config,
         ];
-        let mut sorted: Vec<&PathBuf> = inputs.iter().collect();
-        sorted.sort();
-        for path in sorted {
-            let data = std::fs::read(path)
-                .with_context(|| format!("Failed to read plan input {}", path.display()))?;
+        for path in inputs {
             parts.push(path.display().to_string());
-            parts.push(crate::checksum::bytes_checksum(&data));
+            parts.push(plan_input_checksum(path)?);
         }
         let refs: Vec<&str> = parts.iter().map(String::as_str).collect();
         Ok(crate::checksum::hash_parts(&refs))
@@ -217,10 +225,12 @@ impl MassGeneratorProcessor {
         instance_name: &str,
     ) -> Result<()> {
         // Discovery obtained the plan before any product could execute.
-        let entries =
-            self.manifest.lock().clone().with_context(|| {
-                format!("[{instance_name}] executed before its plan was loaded")
-            })?;
+        let entries = self
+            .manifest
+            .lock()
+            .as_ref()
+            .map(|(_, entries)| Arc::clone(entries))
+            .with_context(|| format!("[{instance_name}] executed before its plan was loaded"))?;
         let predicted: BTreeSet<&Path> = entries.iter().map(|e| e.path.as_path()).collect();
 
         // The tool rewrites every predicted file, including the ones whose

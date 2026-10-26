@@ -221,3 +221,81 @@ fn doctor_skips_tools_of_disabled_processors() {
     assert_eq!(checks[0]["status"], "fail");
     assert_eq!(checks[0]["category"], "tool");
 }
+
+/// Python and global npm dependencies are judged the way `tool check`
+/// judges them, not by the exit status of a package manager:
+///
+/// - a pip package is asked of the interpreter (`importlib.metadata`), since
+///   a uv-managed venv — the default installer's — has no pip at all. The
+///   fake `pip` here claims every package is installed; the interpreter
+///   knows the declared name is not;
+/// - an `[dependencies].npm` entry is installed with `npm install -g`, so it
+///   is looked for in the global tree. The fake `npm` lists one package
+///   globally and claims success for any project-local query; only the
+///   global one is installed.
+#[test]
+fn doctor_probes_pip_through_python_and_npm_globally() {
+    let temp_dir = setup_project_with_config(
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[dependencies]\npip = [\"rsconstruct-fake-missing-dist\"]\nnpm = [\"rsconstruct-fake-global-pkg\", \"rsconstruct-fake-local-pkg\"]\n",
+    );
+    let project_path = temp_dir.path();
+    fs::create_dir_all(project_path.join("tera.templates")).unwrap();
+
+    let bin_dir = project_path.join("fakebin");
+    fs::create_dir_all(&bin_dir).unwrap();
+    let pip = bin_dir.join("pip");
+    fs::write(&pip, "#!/bin/sh\nexit 0\n").unwrap();
+    make_executable(&pip);
+    let npm = bin_dir.join("npm");
+    fs::write(
+        &npm,
+        "#!/bin/sh\ncase \" $* \" in\n  *\" -g \"*) printf '%s' '{\"dependencies\":{\"rsconstruct-fake-global-pkg\":{\"version\":\"1.0.0\"}}}' ;;\nesac\nexit 0\n",
+    )
+    .unwrap();
+    make_executable(&npm);
+    let path = format!(
+        "{}:{}",
+        bin_dir.display(),
+        std::env::var("PATH").expect("PATH must be set")
+    );
+
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["--json", "doctor"],
+        &[("NO_COLOR", "1"), ("PATH", &path)],
+    );
+    assert!(
+        output.status.success(),
+        "doctor failed to run: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let parsed: Value =
+        serde_json::from_slice(&output.stdout).expect("doctor --json should emit valid JSON");
+    let checks = parsed["checks"]
+        .as_array()
+        .expect("doctor --json should have a checks array");
+    let find = |prefix: &str| {
+        checks
+            .iter()
+            .find(|c| c["name"].as_str().is_some_and(|n| n.starts_with(prefix)))
+            .unwrap_or_else(|| panic!("doctor should report {prefix}: {checks:?}"))
+    };
+
+    let pip_check = find("rsconstruct-fake-missing-dist");
+    assert_eq!(
+        pip_check["status"], "fail",
+        "a package the interpreter cannot import is not installed, whatever `pip` says: {pip_check}"
+    );
+    assert_eq!(pip_check["detail"], "pip");
+
+    assert_eq!(find("rsconstruct-fake-global-pkg")["status"], "ok");
+    let local = find("rsconstruct-fake-local-pkg");
+    assert_eq!(
+        local["status"], "fail",
+        "a package absent from the global tree is not installed: {local}"
+    );
+    assert_eq!(
+        local["install_hint"],
+        "npm install -g rsconstruct-fake-local-pkg"
+    );
+}

@@ -326,3 +326,93 @@ fn cargo_multi_profile() {
         stdout
     );
 }
+
+/// A workspace whose `members` is a glob, as a project under `root`:
+/// `ws/Cargo.toml` (virtual), `ws/crates/foo` (a library) and
+/// `ws/crates/bar` (a binary).
+fn write_glob_workspace(root: &std::path::Path) {
+    fs::create_dir_all(root.join("ws/crates/foo/src")).unwrap();
+    fs::create_dir_all(root.join("ws/crates/bar/src")).unwrap();
+    fs::write(
+        root.join("ws/Cargo.toml"),
+        "[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("ws/crates/foo/Cargo.toml"),
+        "[package]\nname = \"foo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("ws/crates/foo/src/lib.rs"),
+        "pub fn add(a: i32, b: i32) -> i32 { a + b }\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("ws/crates/bar/Cargo.toml"),
+        "[package]\nname = \"bar\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .unwrap();
+    fs::write(root.join("ws/crates/bar/src/main.rs"), "fn main() {}\n").unwrap();
+}
+
+/// `members = ["crates/*"]` is expanded, so the root plans every member's
+/// artifact under the shared `ws/target/`; the member manifests, scanned
+/// too, are left to the root instead of becoming products of their own.
+#[test]
+fn cargo_workspace_members_glob_is_built_from_the_root() {
+    require_tool("cargo");
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    fs::write(project_path.join("rsconstruct.toml"), SINGLE_PROFILE_CONFIG).unwrap();
+    write_glob_workspace(project_path);
+
+    let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "workspace build should succeed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("2 products"),
+        "one product per member artifact (libfoo.rlib, bar), none for the member manifests: {stdout}"
+    );
+    assert!(project_path.join("ws/target/debug/libfoo.rlib").is_file());
+    assert!(project_path.join("ws/target/debug/bar").is_file());
+    assert!(
+        !project_path.join("ws/crates/bar/target").exists(),
+        "no member gets a target dir of its own"
+    );
+}
+
+/// A member crate scanned on its own is built from its directory, and its
+/// artifact is predicted where cargo writes it: the workspace's `target/`,
+/// not `crates/bar/target/`.
+#[test]
+fn cargo_workspace_member_artifact_lands_in_the_workspace_target_dir() {
+    require_tool("cargo");
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.mass_generator.cargo]\nprofiles = [\"dev\"]\nsrc_dirs = [\"ws/crates/bar\"]\n",
+    )
+    .unwrap();
+    write_glob_workspace(project_path);
+
+    let output = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "member build should succeed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("1 products"), "{stdout}");
+    assert!(project_path.join("ws/target/debug/bar").is_file());
+    assert!(!project_path.join("ws/crates/bar/target").exists());
+}

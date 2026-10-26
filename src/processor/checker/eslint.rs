@@ -20,7 +20,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "eslint", processor_type: crate::processor::ProcessorType::Checker, create: create_eslint,
     fields: &[],
-    omit_standard_fields: &[],
+    omit_standard_fields: &["formats", "output_dir"],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { command: "eslint", dep_auto: &[".eslintrc", ".eslintrc.json", ".eslintrc.js", ".eslintrc.yml", ".eslintrc.yaml", ".eslintrc.cjs", "eslint.config.js", "eslint.config.mjs", "eslint.config.cjs"], ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,

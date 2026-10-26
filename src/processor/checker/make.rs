@@ -107,7 +107,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Make target to build" },
         ],
-        omit_standard_fields: &["formats", "output_dir"],
+        omit_standard_fields: &["formats", "output_dir", "required_tools", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["Makefile"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "make", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<MakeConfig>,

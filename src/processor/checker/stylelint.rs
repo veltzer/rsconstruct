@@ -20,7 +20,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "stylelint", processor_type: crate::processor::ProcessorType::Checker, create: create_stylelint,
     fields: &[],
-    omit_standard_fields: &[],
+    omit_standard_fields: &["formats", "output_dir"],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".css", ".scss", ".sass", ".less"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { command: "stylelint", dep_auto: &[".stylelintrc", ".stylelintrc.json", ".stylelintrc.yml", ".stylelintrc.yaml", ".stylelintrc.js", ".stylelintrc.cjs", "stylelint.config.js", "stylelint.config.cjs"], ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,

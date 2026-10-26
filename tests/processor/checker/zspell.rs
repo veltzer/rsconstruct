@@ -172,13 +172,18 @@ fn zspell_clean() {
     assert!(clean_output.status.success());
 }
 
+/// Two misspelled files rebuild together, so zspell (batch-capable) checks
+/// both in one invocation and fails both products. Without `--keep-going`
+/// the build then stops — but every failure that happened is reported,
+/// once, with its `[processor] product:` prefix. The second file's error
+/// used to be dropped on the floor: the build returned only the first
+/// failure, and a misspelling the tool had already found went unreported.
 #[test]
-fn zspell_stops_after_first_error() {
+fn zspell_reports_every_failure_of_a_batch_without_keep_going() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
     // Create two markdown files, both with spelling errors.
-    // "aaa.md" sorts before "bbb.md", so it will be processed first.
     fs::write(
         project_path.join("aaa.md"),
         "# First\n\nThis has a speling error.\n",
@@ -204,24 +209,21 @@ fn zspell_stops_after_first_error() {
         "Build should fail with misspelled words"
     );
 
-    let combined = format!(
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    // Only the first file (aaa.md) should have been checked
-    assert!(
-        combined.contains("speling"),
-        "Should report the error from the first file (aaa.md): {}",
-        combined
-    );
-    assert!(
-        !combined.contains("diferent"),
-        "Should NOT report the error from the second file (bbb.md) — \
-         rsconstruct stops after the first failure: {}",
-        combined
-    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    for (prefix, word) in [
+        ("[processor.checker.zspell] aaa.md:", "speling"),
+        ("[processor.checker.zspell] bbb.md:", "diferent"),
+    ] {
+        assert_eq!(
+            stderr.matches(prefix).count(),
+            1,
+            "each failed product is reported exactly once: {stderr}"
+        );
+        assert!(
+            stderr.contains(word),
+            "the misspelling the tool found must be reported: {stderr}"
+        );
+    }
 }
 
 #[test]

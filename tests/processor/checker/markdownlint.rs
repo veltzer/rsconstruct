@@ -2,6 +2,24 @@ use crate::common::{require_tool, run_rsconstruct_with_env};
 use std::fs;
 use tempfile::TempDir;
 
+/// markdownlint-cli's `projectConfigFiles` (looked up in the working
+/// directory) and the `.markdownlintignore` it reads by default are inputs
+/// when they exist.
+#[test]
+fn markdownlint_default_dep_auto_tracks_every_markdownlint_config_file() {
+    let defconfig = crate::common::processor_defconfig("processor.checker.markdownlint");
+    assert_eq!(
+        defconfig["dep_auto"],
+        serde_json::json!([
+            ".markdownlint.jsonc",
+            ".markdownlint.json",
+            ".markdownlint.yaml",
+            ".markdownlint.yml",
+            ".markdownlintignore"
+        ])
+    );
+}
+
 #[test]
 fn markdownlint_valid_file() {
     require_tool("markdownlint");

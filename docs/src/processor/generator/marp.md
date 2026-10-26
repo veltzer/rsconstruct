@@ -28,6 +28,8 @@ args = ["--html", "--allow-local-files"]  # Additional arguments to pass to marp
 output_dir = "out/processor.generator.marp"                # Output directory
 dep_inputs = []                      # Additional files that trigger rebuilds when changed
 max_jobs = 2                           # Limit concurrent marp instances (each spawns Chromium)
+timeout_secs = 20                      # Kill a marp invocation that runs longer than this
+max_attempts = 3                       # Total attempts (including the first) when marp times out
 ```
 
 | Key | Type | Default | Description |
@@ -38,6 +40,8 @@ max_jobs = 2                           # Limit concurrent marp instances (each s
 | `output_dir` | string | `"out/processor.generator.marp"` | Base output directory |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `max_jobs` | integer | none | Max concurrent marp processes. See [Concurrency limiting](#concurrency-limiting). |
+| `timeout_secs` | integer | `20` | Per-invocation wall-clock timeout in seconds; a marp run that exceeds it is killed and retried |
+| `max_attempts` | integer | `3` | Total attempts (including the first) when marp times out; the product fails after the last one |
 
 ## Concurrency Limiting
 

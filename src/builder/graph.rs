@@ -381,16 +381,19 @@ impl Builder {
     }
 }
 
-/// Normalize user-supplied paths: strip a leading `./` so queries match graph paths
-/// which are stored without that prefix.
+/// Normalize a user-supplied path: strip a leading `./` so the query matches
+/// graph and deps-cache paths, which are stored without that prefix. Shared
+/// by every command that looks a path up (`graph lookup-*`, `product show`,
+/// `analyzer show files`), so `./README.md` and `README.md` are the same
+/// query everywhere.
+pub(super) fn normalize_query_path(file: &str) -> PathBuf {
+    let p = Path::new(file);
+    p.strip_prefix("./").unwrap_or(p).to_path_buf()
+}
+
+/// [`normalize_query_path`] over a list.
 fn normalize_query_paths(files: &[String]) -> Vec<PathBuf> {
-    files
-        .iter()
-        .map(|s| {
-            let p = Path::new(s);
-            p.strip_prefix("./").unwrap_or(p).to_path_buf()
-        })
-        .collect()
+    files.iter().map(|s| normalize_query_path(s)).collect()
 }
 
 /// Recursively collect files whose extension matches `exts` and are not in `referenced`.

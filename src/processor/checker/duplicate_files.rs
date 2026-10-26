@@ -1,7 +1,7 @@
 use anyhow::Result;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::config::{DuplicateFilesConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
@@ -14,6 +14,21 @@ pub struct DuplicateFilesProcessor {
 impl DuplicateFilesProcessor {
     pub const fn new(config: DuplicateFilesConfig) -> Self {
         Self { config }
+    }
+
+    /// The files the product depends on besides the scanned candidates:
+    /// `dep_inputs` and the `dep_auto` files that exist. They trigger a
+    /// re-check when they change but are never compared — a dependency
+    /// that happens to have the same content as a scanned file is not a
+    /// duplicate. `discover` adds them to the product and `execute` takes
+    /// them back out, so both must resolve the same list.
+    fn dependency_inputs(&self) -> Result<Vec<PathBuf>> {
+        let scan = &self.config.standard;
+        let mut names = scan.dep_inputs.clone();
+        for ai in &scan.dep_auto {
+            names.extend(crate::processor::config_file_inputs(ai));
+        }
+        resolve_extra_inputs(&names)
     }
 
     fn check_files(&self, files: &[&Path]) -> Result<()> {
@@ -67,16 +82,18 @@ impl crate::processor::Processor for DuplicateFilesProcessor {
         file_index: &FileIndex,
         instance_name: &str,
     ) -> Result<()> {
-        let scan = &self.config.standard;
-        let mut inputs = file_index.scan(scan, true);
+        let mut inputs = file_index.scan(&self.config.standard, true);
         if inputs.is_empty() {
             return Ok(());
         }
-        let mut all_dep_inputs = scan.dep_inputs.clone();
-        for ai in &scan.dep_auto {
-            all_dep_inputs.extend(crate::processor::config_file_inputs(ai));
+        // A path is one input however many times it is named: a scanned
+        // file listed again in `dep_inputs` would otherwise be compared
+        // with itself and reported as its own duplicate.
+        for dep in self.dependency_inputs()? {
+            if !inputs.contains(&dep) {
+                inputs.push(dep);
+            }
         }
-        inputs.extend(resolve_extra_inputs(&all_dep_inputs)?);
         let hash = Some(output_config_hash(
             &self.config,
             &crate::config::checksum_fields_of(instance_name),
@@ -85,12 +102,17 @@ impl crate::processor::Processor for DuplicateFilesProcessor {
         Ok(())
     }
 
+    /// Compares the scanned files only: the dependencies `discover` added
+    /// are left out, and a path is compared once even if it reached the
+    /// product twice.
     fn execute(&self, _ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
-        let files: Vec<&Path> = product
-            .inputs
-            .iter()
-            .map(std::path::PathBuf::as_path)
-            .collect();
+        let dependencies = self.dependency_inputs()?;
+        let mut files: Vec<&Path> = Vec::with_capacity(product.inputs.len());
+        for input in &product.inputs {
+            if !dependencies.contains(input) && !files.contains(&input.as_path()) {
+                files.push(input.as_path());
+            }
+        }
         self.check_files(&files)
     }
 }
@@ -108,7 +130,14 @@ inventory::submit! {
         create: plugin_create,
         defconfig_json: crate::registries::default_config_json::<crate::config::DuplicateFilesConfig>,
         fields: &[],
-        omit_standard_fields: &[],
+        omit_standard_fields: &[
+        "command",
+        "formats",
+        "args",
+        "output_dir",
+        "required_tools",
+        "batch",
+    ],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".md", ".yaml", ".yml", ".json", ".toml", ".xml", ".html", ".css"], src_exclude_dirs: &[] }),
         defaults: None,
         keywords: &["checker", "duplicates", "files"],

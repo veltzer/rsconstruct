@@ -27,7 +27,6 @@ fn default_zspell_dict_dir() -> String {
 }
 
 /// Zspell config. Custom fields: language, `words_file`, `auto_add_words`, `dict_dir`.
-/// Unused `StandardConfig` fields: command, formats, `output_dir`.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ZspellConfig {
     #[serde(default = "default_zspell_language")]
@@ -328,7 +327,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Directory containing hunspell .aff/.dic files" },
         ],
-        omit_standard_fields: &["command", "formats", "args", "output_dir"],
+        omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
         defaults: None,
         defconfig_json: crate::registries::default_config_json::<ZspellConfig>,

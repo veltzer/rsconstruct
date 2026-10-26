@@ -50,7 +50,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "yaml2json", processor_type: crate::processor::ProcessorType::Generator, create: create_yaml2json,
     fields: &[],
-    omit_standard_fields: &[],
+    omit_standard_fields: &["command", "formats", "args", "batch"],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.yaml2json", ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,

@@ -20,7 +20,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "cppcheck", processor_type: crate::processor::ProcessorType::Checker, create: create_cppcheck,
     fields: &[],
-    omit_standard_fields: &[],
+    omit_standard_fields: &["formats", "output_dir"],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".c", ".cc"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { command: "cppcheck", args: &["--error-exitcode=1", "--enable=warning,style,performance,portability"], dep_auto: &[".cppcheck"], batch: Some(false), ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,

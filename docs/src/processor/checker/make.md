@@ -90,7 +90,7 @@ dep_inputs = []    # Additional files that trigger rebuilds when changed
 | `command` | string | `"make"` | Path or name of the make binary |
 | `args` | string[] | `[]` | Extra arguments passed to every make invocation |
 | `target` | string | `""` | Make target to build (empty = default target) |
-| `src_dirs` | string[] | `[""]` | Directory to scan for Makefiles |
+| `src_dirs` | string[] | `[]` | Directories to scan for Makefiles (`[""]` for the whole project) |
 | `src_extensions` | string[] | `["Makefile"]` | File names to match |
 | `src_exclude_paths` | string[] | `[]` | Paths (relative to project root) to exclude |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds (in addition to directory contents) |

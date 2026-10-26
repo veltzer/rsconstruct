@@ -13,6 +13,13 @@ non-zero exit code fails the product.
 
 Depends on the npm processor — uses the `markdownlint` binary installed by npm.
 
+markdownlint-cli looks for its configuration in the working directory —
+`.markdownlint.jsonc`, `.markdownlint.json`, `.markdownlint.yaml`,
+`.markdownlint.yml` — and reads `.markdownlintignore` by default, so each of
+those is an input of every product when it exists (`dep_auto`): an edit
+re-checks every file, with no `dep_inputs` entry needed. A file named with
+`--config` in `args` is not tracked; list it in `dep_inputs`.
+
 ## Source Files
 
 - Input: `**/*.md`
@@ -32,6 +39,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 | `command` | string | `"markdownlint"` | Path to the markdownlint executable |
 | `args` | string[] | `[]` | Extra arguments passed to markdownlint |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `dep_auto` | string[] | `[".markdownlint.jsonc", ".markdownlint.json", ".markdownlint.yaml", ".markdownlint.yml", ".markdownlintignore"]` | Config files that are inputs when they exist |
 
 ## Batch support
 

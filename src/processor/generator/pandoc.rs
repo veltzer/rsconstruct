@@ -59,13 +59,21 @@ fn validate_pdf_engine(engine: &str) -> Result<()> {
     Ok(())
 }
 
-/// The configured PDF engine is a tool this processor shells out to, so it
-/// has to be declared alongside `command` rather than discovered at run time.
+/// The engine pandoc runs for PDF output when `pdf_engine` is empty.
+const PANDOC_DEFAULT_PDF_ENGINE: &str = "pdflatex";
+
+/// The PDF engine is a tool this processor shells out to, so it has to be
+/// declared alongside `command` rather than discovered at run time. With
+/// `pdf_engine` empty the engine is still needed whenever a `pdf` format is
+/// requested — pandoc's default, pdflatex — and leaving it out let a PDF
+/// stanza pass `doctor` and `tool list-configured` on a machine without TeX.
 fn pdf_engine_tools(config: &PandocConfig) -> Vec<String> {
-    if config.pdf_engine.is_empty() {
-        Vec::new()
-    } else {
+    if !config.pdf_engine.is_empty() {
         vec![config.pdf_engine.clone()]
+    } else if config.standard.formats.iter().any(|f| f == "pdf") {
+        vec![PANDOC_DEFAULT_PDF_ENGINE.to_string()]
+    } else {
+        Vec::new()
     }
 }
 
@@ -130,7 +138,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
             affects_output: true, required: false,
             doc: "PDF engine for --pdf-engine (e.g. xelatex, lualatex). Empty = pandoc default (pdflatex)." },
     ],
-    omit_standard_fields: &[],
+    omit_standard_fields: &["batch"],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.pandoc", formats: &["pdf", "html", "docx"], command: "pandoc", ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<PandocConfig>,

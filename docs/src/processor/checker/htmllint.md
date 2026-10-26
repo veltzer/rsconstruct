@@ -12,6 +12,11 @@ A non-zero exit code from htmllint fails the product.
 
 This processor supports batch mode.
 
+htmllint reads `.htmllintrc` from the working directory (unless `--rc` names
+another file), so the project root's `.htmllintrc` is an input of every
+product when it exists (`dep_auto`): an edit re-checks every file, with no
+`dep_inputs` entry needed.
+
 ## Source Files
 
 - Input: `**/*.html`, `**/*.htm`
@@ -29,6 +34,7 @@ dep_inputs = []
 |-----|------|---------|-------------|
 | `args` | string[] | `[]` | Extra arguments passed to htmllint |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `dep_auto` | string[] | `[".htmllintrc"]` | Config files that are inputs when they exist |
 
 ## Batch support
 

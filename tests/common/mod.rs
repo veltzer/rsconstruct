@@ -89,6 +89,43 @@ pub fn run_rsconstruct_with_env(
     cmd.output().expect("Failed to execute rsconstruct")
 }
 
+/// `rsconstruct --json processor defconfig <pname>`: the processor's default
+/// configuration as JSON. Asserts a plugin's defaults (`dep_auto`,
+/// `output_depends_on_input_name`, ...) without the tool installed and
+/// without a project.
+pub fn processor_defconfig(pname: &str) -> serde_json::Value {
+    processor_json(&["--json", "processor", "defconfig", pname])
+}
+
+/// `rsconstruct --json processor info <pname>`: the plugin's capabilities
+/// (`supports_batch`, ...) — the single entry of the list it prints.
+pub fn processor_info(pname: &str) -> serde_json::Value {
+    let mut entries = processor_json(&["--json", "processor", "info", pname]);
+    let entries = entries
+        .as_array_mut()
+        .expect("processor info prints a list of entries");
+    assert_eq!(entries.len(), 1, "one info entry for {pname}");
+    entries.remove(0)
+}
+
+fn processor_json(args: &[&str]) -> serde_json::Value {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let output = run_rsconstruct_with_env(temp_dir.path(), args, &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "rsconstruct {} failed: {}",
+        args.join(" "),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout).unwrap_or_else(|e| {
+        panic!(
+            "rsconstruct {} printed invalid JSON: {e}\n{}",
+            args.join(" "),
+            String::from_utf8_lossy(&output.stdout)
+        )
+    })
+}
+
 /// Create a temp dir with a rsconstruct.toml containing the given config string.
 pub fn setup_project_with_config(config: &str) -> TempDir {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");

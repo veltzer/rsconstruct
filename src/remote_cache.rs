@@ -114,12 +114,73 @@ impl S3Backend {
     }
 }
 
+/// What an `aws` exit says about the object the command addressed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum S3Outcome {
+    /// The command succeeded: the object is there.
+    Present,
+    /// The command failed because the key does not exist: a cache miss.
+    Absent,
+    /// The command failed for any other reason — expired or missing
+    /// credentials, `AccessDenied`, no such bucket, no network. Never a miss:
+    /// collapsing these to "absent" silently degrades every build to a full
+    /// rebuild with zero diagnostics, so the caller must see them.
+    Failed,
+}
+
+/// Classify an `aws` exit by its status and stderr. The CLI reports the
+/// S3 error code in parentheses — `An error occurred (404) when calling the
+/// HeadObject operation: Not Found` from `s3api head-object`, `fatal error:
+/// An error occurred (404) when calling the HeadObject operation: Key "x"
+/// does not exist` from `s3 cp`, and `(NoSuchKey)` from a `GetObject` —
+/// and only those two codes mean the key is missing. Everything else
+/// (`(403)`, `(AccessDenied)`, `(ExpiredToken)`, `Unable to locate
+/// credentials`, `Could not connect to the endpoint URL`) is a failure.
+fn s3_outcome(success: bool, stderr: &str) -> S3Outcome {
+    if success {
+        S3Outcome::Present
+    } else if stderr.contains("(404)") || stderr.contains("(NoSuchKey)") {
+        S3Outcome::Absent
+    } else {
+        S3Outcome::Failed
+    }
+}
+
+/// The error for an `aws` command that failed for a reason other than a
+/// missing key, carrying the CLI's own diagnosis.
+fn s3_failure(what: &str, uri: &str, output: &std::process::Output) -> anyhow::Error {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    anyhow::anyhow!(
+        "{what} failed for {uri} (aws exit {:?}): {}",
+        output.status.code(),
+        stderr.trim()
+    )
+}
+
 impl RemoteCache for S3Backend {
     fn exists(&self, ctx: &crate::build_context::BuildContext, key: &str) -> Result<bool> {
+        // `s3api head-object`, not `s3 ls`: `ls` matches by prefix, so it
+        // reported `objects/ab/cd` as present when only `objects/ab/cdef`
+        // existed, and it exits 1 for a missing key the same way it exits
+        // for a denied one.
         let mut cmd = Command::new("aws");
-        cmd.args(["s3", "ls", &self.s3_uri(key)]);
+        cmd.args([
+            "s3api",
+            "head-object",
+            "--bucket",
+            &self.bucket,
+            "--key",
+            &self.s3_key(key),
+        ]);
         let output = run_command_capture(ctx, &cmd)?;
-        Ok(output.status.success())
+        match s3_outcome(
+            output.status.success(),
+            &String::from_utf8_lossy(&output.stderr),
+        ) {
+            S3Outcome::Present => Ok(true),
+            S3Outcome::Absent => Ok(false),
+            S3Outcome::Failed => Err(s3_failure("S3 head-object", &self.s3_uri(key), &output)),
+        }
     }
 
     fn upload(
@@ -148,11 +209,13 @@ impl RemoteCache for S3Backend {
         let mut cmd = Command::new("aws");
         cmd.args(["s3", "cp", &self.s3_uri(key), "-"]);
         let output = run_command_capture(ctx, &cmd)?;
-
-        if output.status.success() {
-            Ok(Some(output.stdout))
-        } else {
-            Ok(None)
+        match s3_outcome(
+            output.status.success(),
+            &String::from_utf8_lossy(&output.stderr),
+        ) {
+            S3Outcome::Present => Ok(Some(output.stdout)),
+            S3Outcome::Absent => Ok(None),
+            S3Outcome::Failed => Err(s3_failure("S3 download", &self.s3_uri(key), &output)),
         }
     }
 }
@@ -436,5 +499,50 @@ mod tests {
         assert_eq!(backend2.bucket, "bucket");
         assert_eq!(backend2.prefix, "");
         assert_eq!(backend2.s3_key("objects/ab/cdef"), "objects/ab/cdef");
+    }
+
+    /// Only a missing key is a cache miss. Every other `aws` failure —
+    /// expired credentials, `AccessDenied`, a missing bucket, no network —
+    /// used to come back as "absent" too, which degraded every build to a
+    /// full rebuild without a word; those must be errors.
+    #[test]
+    fn s3_failures_are_classified_by_stderr() {
+        assert_eq!(s3_outcome(true, ""), S3Outcome::Present);
+        assert_eq!(
+            s3_outcome(
+                false,
+                "An error occurred (404) when calling the HeadObject operation: Not Found\n"
+            ),
+            S3Outcome::Absent
+        );
+        assert_eq!(
+            s3_outcome(
+                false,
+                "fatal error: An error occurred (404) when calling the HeadObject operation: \
+                 Key \"objects/ab/cd\" does not exist"
+            ),
+            S3Outcome::Absent
+        );
+        assert_eq!(
+            s3_outcome(
+                false,
+                "An error occurred (NoSuchKey) when calling the GetObject operation: \
+                 The specified key does not exist."
+            ),
+            S3Outcome::Absent
+        );
+        for stderr in [
+            "An error occurred (403) when calling the HeadObject operation: Forbidden",
+            "An error occurred (AccessDenied) when calling the GetObject operation: Access Denied",
+            "An error occurred (ExpiredToken) when calling the HeadObject operation: \
+             The provided token has expired.",
+            "An error occurred (NoSuchBucket) when calling the GetObject operation: \
+             The specified bucket does not exist",
+            "Unable to locate credentials. You can configure credentials by running \"aws configure\".",
+            "Could not connect to the endpoint URL: \"https://s3.example.amazonaws.com/\"",
+            "",
+        ] {
+            assert_eq!(s3_outcome(false, stderr), S3Outcome::Failed, "{stderr:?}");
+        }
     }
 }

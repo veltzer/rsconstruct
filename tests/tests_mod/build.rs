@@ -232,14 +232,28 @@ fn build_stops_on_first_error() {
     .unwrap();
     fs::write(project_path.join("tera.templates/zzz.txt.tera"), "hello").unwrap();
 
-    // Build should fail on aaa.txt.tera and stop
+    // Build should fail on aaa.txt.tera and stop. Both products are ready
+    // at once, so zzz may already be running when aaa fails — and then it
+    // fails too, since rendering registers every template, the broken one
+    // included. Either way nothing succeeds, and every failure that did
+    // happen is counted and reported with its processor prefix (the
+    // summary used to hard-code a single failure).
     let result = run_rsconstruct_json(project_path, &["build"]);
     assert!(!result.exit_success, "Build should fail with bad template");
-    assert_eq!(result.failed, 1, "Should have exactly 1 failure");
-    // zzz.txt should NOT be processed because we stop on first error
+    assert!(result.failed >= 1, "{result:?}");
+    assert_eq!(result.errors.len(), result.failed, "{result:?}");
     assert!(
-        !result.has_product("zzz.txt", "success"),
-        "Second file should NOT be processed after first error"
+        result
+            .errors
+            .iter()
+            .all(|e| e.starts_with("[processor.generator.tera] tera.templates/")),
+        "{:?}",
+        result.errors
+    );
+    assert!(
+        result.products.iter().all(|p| p.status == "failed"),
+        "no product may succeed once the first error stops the build: {:?}",
+        result.products
     );
 }
 
@@ -1738,10 +1752,12 @@ fn output_roots_are_not_indexed() {
 
     // Renamed global output root plus a per-processor output_dir outside it.
     // No .gitignore exists, so only the file index exclusion protects them.
+    // yaml2json is a generator that writes under `output_dir` (tera renders
+    // next to its templates and rejects the field).
     fs::write(
         project_path.join("rsconstruct.toml"),
         "[build]\noutput_dir = \"artifacts\"\n\n\
-         [processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\noutput_dir = \"generated\"\n\n\
+         [processor.generator.yaml2json]\nsrc_dirs = [\"config\"]\noutput_dir = \"generated\"\n\n\
          [processor.checker.ijsonlint]\nsrc_dirs = [\"\"]\n",
     )
     .unwrap();

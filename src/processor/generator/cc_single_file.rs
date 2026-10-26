@@ -342,20 +342,22 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
+use crate::config::{StandardConfig, output_config_hash};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processor::{Processor, format_command, run_command};
+use crate::processor::{Processor, resolve_dep_inputs, run_command};
 
-/// Method for scanning C/C++ header dependencies
-#[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum IncludeScanner {
-    /// Builtin regex-based scanner (fast, no external process)
-    #[default]
-    Builtin,
-    /// Use gcc/g++ -MM (accurate but slower, spawns external process)
-    Compiler,
+/// Whether a source file is C++ rather than C, by extension: the C++
+/// compiler, `cxxflags` and the C++ standard library apply to it. Covers
+/// every extension the compilers themselves treat as C++ (`.C`, upper
+/// case, is C++ to gcc and clang), so a user who adds `.cpp` or `.cxx` to
+/// `src_extensions` gets those files compiled as C++ — selecting on `cc`
+/// alone compiled them with the C compiler and `cflags`.
+fn is_cpp_source(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|s| s.to_str()),
+        Some("cc" | "cpp" | "cxx" | "c++" | "C")
+    )
 }
 
 /// Configuration for a single compiler profile
@@ -381,8 +383,7 @@ pub struct CompilerProfile {
     pub output_suffix: String,
 }
 
-/// `CcSingleFile` config. Custom fields: cc, cxx, cflags, cxxflags, ldflags, `output_suffix`, compilers, `include_paths`, `include_scanner`.
-/// Unused `StandardConfig` fields: command, formats.
+/// `CcSingleFile` config. Custom fields: cc, cxx, cflags, cxxflags, ldflags, `output_suffix`, compilers, `include_paths`.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CcSingleFileConfig {
     /// Legacy single-compiler fields (used when `compilers` is empty)
@@ -404,9 +405,6 @@ pub struct CcSingleFileConfig {
     /// Shared settings across all compilers
     #[serde(default)]
     pub include_paths: Vec<String>,
-    /// Method for scanning header dependencies (builtin or compiler)
-    #[serde(default)]
-    pub include_scanner: IncludeScanner,
     #[serde(flatten)]
     pub standard: StandardConfig,
 }
@@ -449,7 +447,6 @@ impl Default for CcSingleFileConfig {
             output_suffix: ".elf".into(),
             compilers: Vec::new(),
             include_paths: Vec::new(),
-            include_scanner: IncludeScanner::default(),
             standard: StandardConfig::default(),
         }
     }
@@ -472,33 +469,12 @@ impl CcSingleFileProcessor {
         }
     }
 
-    /// Get the first source directory from scan config (relative path)
-    fn source_dir(&self) -> PathBuf {
-        PathBuf::from(
-            self.config
-                .standard
-                .src_dirs()
-                .first()
-                .map_or("", std::string::String::as_str),
-        )
-    }
-
-    /// Check if cc processing should be enabled
-    fn should_process(&self) -> bool {
-        let src = self.source_dir();
-        src.as_os_str().is_empty() || src.exists()
-    }
-
-    /// Find all C/C++ source files. Returns (path, `is_cpp`) pairs.
-    fn find_source_files(&self, file_index: &FileIndex) -> Vec<(PathBuf, bool)> {
-        file_index
-            .scan(&self.config.standard, true)
-            .into_iter()
-            .map(|p| {
-                let is_cpp = p.extension().and_then(|s| s.to_str()) == Some("cc");
-                (p, is_cpp)
-            })
-            .collect()
+    /// Find all C/C++ source files: the scan over every `src_dirs` entry.
+    /// There is no separate "does the source directory exist" guard: it
+    /// looked at `src_dirs[0]` only, so a missing first entry silenced the
+    /// others, and a directory that does not exist scans to nothing anyway.
+    fn find_source_files(&self, file_index: &FileIndex) -> Vec<PathBuf> {
+        file_index.scan(&self.config.standard, true)
     }
 
     /// Get executable path for a source file with a specific compiler profile.
@@ -577,20 +553,8 @@ impl CcSingleFileProcessor {
             cmd.arg(arg);
         }
 
-        if crate::runtime_flags::show_child_processes() {
-            let profile_tag = if profile.name.is_empty() {
-                String::new()
-            } else {
-                format!(":{}", profile.name)
-            };
-            println!(
-                "[{}{}] {}",
-                crate::processor::names::CC_SINGLE_FILE,
-                profile_tag,
-                format_command(&cmd)
-            );
-        }
-
+        // `run_command` prints the command line under --show-child-processes
+        // (`log_command`); printing it here as well showed every compile twice.
         let output = run_command(ctx, &cmd)?;
         check_command_output(&output, format_args!("Compilation of {}", source.display()))
     }
@@ -625,10 +589,6 @@ impl CcSingleFileProcessor {
         for_clean: bool,
         instance_name: &str,
     ) -> Result<()> {
-        if !self.should_process() {
-            return Ok(());
-        }
-
         let source_files = self.find_source_files(file_index);
         if source_files.is_empty() {
             return Ok(());
@@ -645,7 +605,10 @@ impl CcSingleFileProcessor {
         let extra = if for_clean {
             Vec::new()
         } else {
-            resolve_extra_inputs(&self.config.standard.dep_inputs)?
+            resolve_dep_inputs(
+                &self.config.standard.dep_inputs,
+                &self.config.standard.dep_auto,
+            )?
         };
 
         for profile in &self.profiles {
@@ -655,7 +618,7 @@ impl CcSingleFileProcessor {
                 Some(profile.name.as_str())
             };
 
-            for (source, _is_cpp) in &source_files {
+            for source in &source_files {
                 if should_exclude_for_profile(source, &profile.name) {
                     continue;
                 }
@@ -701,7 +664,7 @@ impl Processor for CcSingleFileProcessor {
     }
 
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
-        self.should_process() && !self.find_source_files(file_index).is_empty()
+        !self.find_source_files(file_index).is_empty()
     }
 
     fn required_tools(&self) -> Vec<String> {
@@ -738,9 +701,8 @@ impl Processor for CcSingleFileProcessor {
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         let source = product.primary_input();
         let executable = product.primary_output();
-        let is_cpp = source.extension().and_then(|s| s.to_str()) == Some("cc");
         let profile = self.get_profile_from_product(product)?;
-        self.compile_source(ctx, source, executable, profile, is_cpp)
+        self.compile_source(ctx, source, executable, profile, is_cpp_source(source))
     }
 }
 
@@ -778,11 +740,8 @@ inventory::submit! {
             crate::config::FieldSpec { name: "include_paths", ty: crate::config::FieldType::StringArray,
                 affects_output: true, required: false,
                 doc: "Additional header search directories" },
-            crate::config::FieldSpec { name: "include_scanner", ty: crate::config::FieldType::String,
-                affects_output: true, required: false,
-                doc: "Header dependency scanner: builtin (fast) or compiler (accurate)" },
         ],
-        omit_standard_fields: &["command", "formats", "args"],
+        omit_standard_fields: &["command", "formats", "args", "required_tools", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".c", ".cc"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.cc_single_file", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<CcSingleFileConfig>,

@@ -714,3 +714,35 @@ fn python_analyzer_resolves_relative_imports() {
         "main.py must rebuild when a relatively imported module changes: {stdout}"
     );
 }
+
+/// `analyzer show files ./src/main.c` is the same query as `src/main.c`:
+/// the deps cache stores paths without the `./` shell completion adds.
+#[test]
+fn analyzer_show_files_ignores_a_leading_dot_slash() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    write_project_file(
+        project_path,
+        "rsconstruct.toml",
+        "[processor.checker.encoding]\nsrc_dirs = [\"src\"]\nsrc_extensions = [\".c\"]\n\n[analyzer.icpp]\n",
+    );
+    write_project_file(project_path, "src/main.c", "#include \"a.h\"\n");
+    write_project_file(project_path, "src/a.h", "#define V 1\n");
+    build_ok(project_path);
+
+    let out = run_rsconstruct_with_env(
+        project_path,
+        &["analyzer", "show", "files", "./src/main.c"],
+        &[("NO_COLOR", "1")],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        !stderr.contains("not in dependency cache"),
+        "./ must not hide the entry: {stderr}"
+    );
+    assert!(
+        stdout.contains("src/a.h"),
+        "expected the cached dependency of src/main.c: {stdout}"
+    );
+}

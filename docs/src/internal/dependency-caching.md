@@ -19,7 +19,10 @@ Each cache entry consists of:
     - `dependency_checksums` — SHA-256 hash of each dependency when it was scanned
     - `absent` — paths the scan probed and found missing on the way to its answer
     - `config_fingerprint` — hash of the analyzer's configuration (and run-time
-  resolved search paths) the scan ran under
+  resolved search paths) the scan ran under. Only the config fields in the
+  analyzer's `checksum_fields()` are hashed (`analyzers::config_fingerprint`):
+  a field such as `enabled` or `src_exclude_dirs` selects sources without
+  changing what a scan of one finds, so editing it leaves every entry valid
 
 ## Cache Lookup Algorithm
 

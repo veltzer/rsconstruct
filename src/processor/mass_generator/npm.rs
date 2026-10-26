@@ -9,8 +9,7 @@ use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use crate::processor::{
-    Processor, SiblingFilter, anchor_display_dir, check_command_output, ensure_output_dir,
-    run_in_anchor_dir,
+    Processor, anchor_display_dir, check_command_output, ensure_output_dir, run_in_anchor_dir,
 };
 
 const STAMP_DIR: &str = "out/processor.mass_generator.npm";
@@ -22,6 +21,27 @@ fn stamp_path(anchor_dir: &Path) -> PathBuf {
     }
     let flat = anchor_dir.to_string_lossy().replace('/', "_");
     Path::new(STAMP_DIR).join(format!("{flat}.stamp"))
+}
+
+/// The files `npm install` reads besides `package.json`, all in the package
+/// directory itself: the lockfiles and the per-package npm config.
+const INSTALL_SIBLINGS: &[&str] = &["package-lock.json", "npm-shrinkwrap.json", ".npmrc"];
+
+/// The inputs of the install stamp for `package_json`: the manifest and
+/// whichever of [`INSTALL_SIBLINGS`] the index has next to it. The package's
+/// own `.js`/`.ts` sources are not inputs — editing them changes nothing
+/// about what `npm install` does — and neither is anything in a
+/// subdirectory.
+fn install_inputs(package_json: &Path, file_index: &FileIndex) -> Vec<PathBuf> {
+    let anchor_dir = crate::processor::parent_dir_or_empty(package_json);
+    let mut inputs = vec![package_json.to_path_buf()];
+    for name in INSTALL_SIBLINGS {
+        let path = crate::processor::resolve_anchor_path(anchor_dir, name);
+        if file_index.contains(&path) {
+            inputs.push(path);
+        }
+    }
+    inputs
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -93,30 +113,12 @@ impl Processor for NpmProcessor {
         );
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
-        let siblings = SiblingFilter {
-            extensions: &[".json", ".js", ".ts"],
-            excludes: &["/.git/", "/out/", "/.rsconstruct/", "/node_modules/"],
-        };
-
         let mut planned = Vec::with_capacity(files.len());
         for anchor in files {
-            let anchor_dir = anchor
-                .parent()
-                .map(std::path::Path::to_path_buf)
-                .unwrap_or_default();
-
-            let sibling_files = file_index.query(
-                &anchor_dir,
-                siblings.extensions,
-                siblings.excludes,
-                &[],
-                &[],
-                &[],
-            );
-
-            let inputs = crate::processor::build_anchor_inputs(&anchor, &sibling_files, &[]);
+            let anchor_dir = crate::processor::parent_dir_or_empty(&anchor);
+            let inputs = install_inputs(&anchor, file_index);
             planned.push(PlannedOutput {
-                path: stamp_path(&anchor_dir),
+                path: stamp_path(anchor_dir),
                 sources: inputs,
             });
         }
@@ -143,7 +145,7 @@ inventory::submit! {
         processor_type: crate::processor::ProcessorType::MassGenerator,
         create: plugin_create,
         fields: &[],
-        omit_standard_fields: &["formats", "dep_auto", "output_dir"],
+        omit_standard_fields: &["formats", "dep_auto", "output_dir", "required_tools", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["package.json"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "npm", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<NpmConfig>,
@@ -154,5 +156,74 @@ inventory::submit! {
         supports_batch: false,
         caches_outputs: false,
         max_jobs_cap: Some(1),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `npm install` reads the manifest, the lockfiles and `.npmrc`; the
+    /// package's own sources and nested packages do not change what it
+    /// installs, so editing them must not re-run it.
+    #[test]
+    fn install_inputs_are_the_manifest_lockfiles_and_npmrc_only() {
+        let files: Vec<PathBuf> = [
+            "web/package.json",
+            "web/package-lock.json",
+            "web/.npmrc",
+            "web/index.js",
+            "web/src/app.ts",
+            "web/tsconfig.json",
+            "web/packages/inner/package.json",
+            "web/packages/inner/npm-shrinkwrap.json",
+        ]
+        .iter()
+        .map(PathBuf::from)
+        .collect();
+        let index = FileIndex::from_paths(files);
+        assert_eq!(
+            install_inputs(Path::new("web/package.json"), &index),
+            ["web/package.json", "web/package-lock.json", "web/.npmrc"]
+                .iter()
+                .map(PathBuf::from)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            install_inputs(Path::new("web/packages/inner/package.json"), &index),
+            [
+                "web/packages/inner/package.json",
+                "web/packages/inner/npm-shrinkwrap.json"
+            ]
+            .iter()
+            .map(PathBuf::from)
+            .collect::<Vec<_>>()
+        );
+
+        // Through the registry, so the scan fields carry their defaults;
+        // the scan root is configured, as every project does.
+        let processor = crate::builder::create_processor_for_instance(
+            "processor.mass_generator.npm",
+            &toml::from_str("src_dirs = [\".\"]").unwrap(),
+        )
+        .unwrap()
+        .expect("npm is registered");
+        let mut graph = BuildGraph::new();
+        processor
+            .discover(&mut graph, &index, "processor.mass_generator.npm")
+            .unwrap();
+        assert_eq!(graph.products().len(), 2, "one stamp per package.json");
+        let root = graph
+            .products()
+            .iter()
+            .find(|p| p.primary_input() == Path::new("web/package.json"))
+            .unwrap();
+        assert_eq!(
+            root.inputs,
+            ["web/package.json", "web/package-lock.json", "web/.npmrc"]
+                .iter()
+                .map(PathBuf::from)
+                .collect::<Vec<_>>()
+        );
     }
 }

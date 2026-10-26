@@ -80,6 +80,30 @@ impl OnceTool {
     }
 }
 
+/// The config's `dep_inputs` and `dep_auto` resolved to paths, for the mass
+/// generators that accept `dep_auto` (`jekyll`, `linux_module`): every
+/// `dep_inputs` entry (which must exist, globs expanded), plus each
+/// `dep_auto` entry that exists on disk, each path once. The same merge the
+/// checkers' `discover_checker_products` does; the generators are getting a
+/// shared helper for it in `processor/mod.rs`, and this one can go once that
+/// helper takes a `StandardConfig`.
+pub(super) fn resolve_dep_inputs_and_auto(
+    standard: &crate::config::StandardConfig,
+) -> Result<Vec<PathBuf>> {
+    let mut all: Vec<String> = Vec::new();
+    for dep in standard.dep_inputs.iter().cloned().chain(
+        standard
+            .dep_auto
+            .iter()
+            .flat_map(|auto| crate::processor::config_file_inputs(auto)),
+    ) {
+        if !all.contains(&dep) {
+            all.push(dep);
+        }
+    }
+    crate::config::resolve_extra_inputs(&all)
+}
+
 /// Add one product per planned file. `extra` (the config's `dep_inputs`) is
 /// added to every product's inputs.
 pub fn add_planned_products(
@@ -173,6 +197,23 @@ pub(super) fn read_plan_cache(path: &Path, key: &str) -> Result<Option<String>> 
         )
     })?;
     Ok((cache.key == key).then_some(cache.manifest))
+}
+
+/// The part of a plan key one input file contributes: its content checksum,
+/// or a fixed marker when it is not on disk. An input can be absent for a
+/// legitimate reason: the index lists a file an upstream generator declared
+/// ("virtual") before that generator has run. The marker keys the plan on
+/// "not there yet"; once the file is written the key changes and the plan
+/// is computed again. Any other read failure is an error.
+pub(super) fn plan_input_checksum(path: &Path) -> Result<String> {
+    match std::fs::read(path) {
+        Ok(data) => Ok(crate::checksum::bytes_checksum(&data)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok("absent".to_string()),
+        Err(e) => {
+            Err(anyhow::Error::from(e)
+                .context(format!("Failed to read plan input {}", path.display())))
+        }
+    }
 }
 
 pub(super) fn write_plan_cache(path: &Path, key: &str, manifest: &str) -> Result<()> {

@@ -8,9 +8,15 @@ Builds [mdbook](https://rust-lang.github.io/mdBook/) documentation projects, pla
 
 Discovers `book.toml` files indicating mdbook projects, parses `book.toml` and `SUMMARY.md` along with static assets to compute the output plan under `output_dir`, and runs `mdbook build` with `MDBOOK_OUTPUT__HTML__HASH_FILES=false` into a staging directory when any planned product is dirty. Staged outputs are verified against the plan via `install_staged`.
 
+Every planned file depends on `book.toml`, every file under the source
+directory, the `additional-css`/`additional-js` files, and every file of a
+custom theme — `theme/` next to `book.toml`, or the directory `[output.html]
+theme` names — since a template, stylesheet or font there can change every
+page. A book with no theme directory has no such inputs.
+
 ## Source Files
 
-- Input: `**/book.toml` (plus `SUMMARY.md`, chapter `.md` files, and static assets)
+- Input: `**/book.toml` (plus `SUMMARY.md`, chapter `.md` files, static assets, and the custom theme directory)
 - Output: Planned HTML pages, theme/search/font assets, and copied static files under `book` (or configured `output_dir`)
 
 ## Configuration

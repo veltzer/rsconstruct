@@ -217,7 +217,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Pass -shell-escape to pdflatex (lets .tex files run shell commands)" },
         ],
-        omit_standard_fields: &["formats"],
+        omit_standard_fields: &["formats", "required_tools", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".tex"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "pdflatex", output_dir: "out/processor.generator.pdflatex", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<PdflatexConfig>,

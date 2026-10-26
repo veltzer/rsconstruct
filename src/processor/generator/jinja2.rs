@@ -3,16 +3,15 @@ use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
+use crate::config::{StandardConfig, output_config_hash};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processor::{Processor, check_command_output, run_command};
+use crate::processor::{Processor, check_command_output, resolve_dep_inputs, run_command};
 
 use super::TemplateItem;
 
 /// Jinja2 template processor config. No custom fields.
 /// `command` is the Python interpreter used to render (default: python3).
-/// Unused `StandardConfig` fields: formats, `output_dir`.
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct Jinja2Config {
     #[serde(flatten)]
@@ -40,13 +39,17 @@ fn render_jinja2(
         .replace('\\', "\\\\")
         .replace('\'', "\\'");
 
+    // The context is empty: the environment variables used to be passed in
+    // (`**os.environ`), which made the output depend on whatever the shell
+    // happened to export, untracked by the cache. A value a template needs
+    // comes from a file it includes (tracked through `dep_inputs`).
     let python_script = format!(
         r"
-import jinja2, os
+import jinja2
 loader = jinja2.FileSystemLoader('.')
 env = jinja2.Environment(loader=loader)
 template = env.get_template('{source}')
-output = template.render(**os.environ)
+output = template.render()
 with open('{target}', 'w') as f:
     f.write(output)
 "
@@ -104,7 +107,10 @@ impl Processor for Jinja2Processor {
         instance_name: &str,
     ) -> Result<()> {
         let items = super::find_templates(&self.config.standard, file_index);
-        let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
+        let extra = resolve_dep_inputs(
+            &self.config.standard.dep_inputs,
+            &self.config.standard.dep_auto,
+        )?;
 
         for item in items {
             let mut inputs = Vec::with_capacity(1 + extra.len());
@@ -144,7 +150,7 @@ inventory::submit! {
         processor_type: crate::processor::ProcessorType::Generator,
         create: plugin_create,
         fields: &[],
-        omit_standard_fields: &[],
+        omit_standard_fields: &["formats", "args", "output_dir", "required_tools", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".j2"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "python3", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<Jinja2Config>,

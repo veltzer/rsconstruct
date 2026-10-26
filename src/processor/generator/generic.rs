@@ -5,7 +5,7 @@ use std::process::Command;
 use serde::{Deserialize, Serialize};
 
 use crate::config::StandardConfig;
-use crate::config::{output_config_hash, resolve_extra_inputs};
+use crate::config::output_config_hash;
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use crate::processor::{
@@ -130,14 +130,11 @@ impl Processor for GeneratorProcessor {
             &self.config,
             &crate::config::checksum_fields_of(instance_name),
         ));
-        let mut dep_inputs = self.config.standard.dep_inputs.clone();
-        for ai in &self.config.standard.dep_auto {
-            dep_inputs.extend(config_file_inputs(ai));
-        }
         // If the command is a local file, depend on its contents
-        let command = &self.config.standard.command;
-        dep_inputs.extend(config_file_inputs(command));
-        let extra = resolve_extra_inputs(&dep_inputs)?;
+        let mut dep_inputs = self.config.standard.dep_inputs.clone();
+        dep_inputs.extend(config_file_inputs(&self.config.standard.command));
+        let extra =
+            crate::processor::resolve_dep_inputs(&dep_inputs, &self.config.standard.dep_auto)?;
         let src_dirs = self.config.standard.src_dirs();
 
         for source in &files {
@@ -182,7 +179,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "File extension for generated output files" },
         ],
-        omit_standard_fields: &["formats"],
+        omit_standard_fields: &["formats", "required_tools"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.generic", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<GeneratorConfig>,

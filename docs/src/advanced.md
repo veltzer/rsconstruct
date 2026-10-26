@@ -33,14 +33,16 @@ This monitors all source files and triggers an incremental build whenever a file
 Visualize the build dependency graph in multiple formats:
 
 ```bash
-rsconstruct graph                    # Default text format
-rsconstruct graph --format dot       # Graphviz DOT format
-rsconstruct graph --format mermaid   # Mermaid diagram format
-rsconstruct graph --format json      # JSON format
-rsconstruct graph --view             # Open in browser or viewer
+rsconstruct graph                         # List the graph subcommands
+rsconstruct graph show                    # Print the graph (default: SVG)
+rsconstruct graph show --format text      # Plain text hierarchical view
+rsconstruct graph show --format dot       # Graphviz DOT format
+rsconstruct graph show --format mermaid   # Mermaid diagram format
+rsconstruct graph show --format json      # JSON format
+rsconstruct graph view                    # Open in a viewer (--viewer svg, the default, or mermaid)
 ```
 
-The `--view` flag opens the graph using the configured viewer (set in `rsconstruct.toml`):
+`graph view` opens the graph using the configured viewer (set in `rsconstruct.toml`):
 
 ```toml
 [graph]
@@ -60,16 +62,23 @@ For project-specific exclusions that should not go in `.gitignore`, create a `.r
 
 The syntax is the same as `.gitignore`: `#` for comments, `/` prefix to anchor to the project root, `/` suffix for directories, and `*`/`**` for globs.
 
-## Processor verbosity levels
+## Build output verbosity
 
-Control the detail level of build output with `-v N`:
+By default a build prints only the phase summary lines (`[build] 1 to build, 0 to restore ...`). `-v`/`--verbose` is a boolean flag that adds one line per product, saying whether it was skipped, restored from cache, or processed:
 
-| Level | Output |
-|---|---|
-| **0** (default) | Target basename only: `main.elf` |
-| **1** | Target path: `out/processor.generator.cc_single_file/main.elf`; cc_single_file processor also prints compiler commands |
-| **2** | Adds source path: `out/processor.generator.cc_single_file/main.elf <- src/main.c` |
-| **3** | Adds all inputs: `out/processor.generator.cc_single_file/main.elf <- src/main.c, src/utils.h` |
+```text
+[processor.generator.cc_single_file] Restored from cache: out/processor.generator.cc_single_file/src/hello.elf <- src/hello.c
+```
+
+What those lines show for each file is controlled by three separate flags, not by a verbosity level:
+
+| Flag | Values | Effect |
+|---|---|---|
+| `-O`, `--output-display` | `none` (default), `basename`, `path` | Whether and how the output file is shown |
+| `-I`, `--input-display` | `none`, `source` (default), `all` | Show no inputs, only the primary source file, or every input including headers/dependencies |
+| `-P`, `--path-format` | `basename`, `path` (default) | Show displayed files as bare file names or as project-relative paths |
+
+To see the commands a processor runs, use `--show-child-processes`; to see tool output even on success, use `--show-output`. All of these are [global flags](commands.md#global-flags).
 
 ## Dry run
 

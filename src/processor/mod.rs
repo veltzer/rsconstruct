@@ -459,6 +459,30 @@ pub fn config_file_inputs(path: &str) -> Vec<String> {
     }
 }
 
+/// The files every product of a processor reads besides its own inputs:
+/// the `dep_inputs` (which must exist, globs expanded) plus every
+/// `dep_auto` entry that exists on disk, each file once. This is the one
+/// place the two `StandardConfig` fields are merged, for every processor
+/// shape — the checker and generator helpers below, `SimpleGenerator`, and
+/// each hand-written `discover`. A generator that resolved `dep_inputs` on
+/// its own used to accept `dep_auto` (validated at config load) and then
+/// ignore it, so an edit to a listed file never rebuilt anything.
+pub fn resolve_dep_inputs(dep_inputs: &[String], dep_auto: &[String]) -> Result<Vec<PathBuf>> {
+    // A file named twice (a `config_file` that is also a `dep_auto` entry)
+    // is one input, not two.
+    let mut merged: Vec<String> = Vec::new();
+    for dep in dep_inputs
+        .iter()
+        .cloned()
+        .chain(dep_auto.iter().flat_map(|ai| config_file_inputs(ai)))
+    {
+        if !merged.contains(&dep) {
+            merged.push(dep);
+        }
+    }
+    resolve_extra_inputs(&merged)
+}
+
 /// Create the parent directory of an output path if it doesn't exist.
 /// Used by generator processors before writing output files.
 pub fn ensure_output_dir(output: &Path) -> Result<()> {
@@ -602,7 +626,7 @@ pub fn discover_directory_products(
     }
 
     let hash = Some(output_config_hash(cfg_hash, &checksum_fields));
-    let extra = resolve_extra_inputs(dep_inputs)?;
+    let extra = resolve_dep_inputs(dep_inputs, &scan.dep_auto)?;
 
     for anchor in files {
         let anchor_dir = anchor
@@ -670,20 +694,8 @@ pub fn discover_checker_products(
     if files.is_empty() {
         return Ok(());
     }
-    // A file named twice (a `config_file` that is also a `dep_auto` entry)
-    // is one input, not two.
-    let mut all_dep_inputs: Vec<String> = Vec::new();
-    for dep in dep_inputs
-        .iter()
-        .cloned()
-        .chain(dep_auto.iter().flat_map(|ai| config_file_inputs(ai)))
-    {
-        if !all_dep_inputs.contains(&dep) {
-            all_dep_inputs.push(dep);
-        }
-    }
     let hash = Some(output_config_hash(cfg_hash, checksum_fields));
-    let extra = resolve_extra_inputs(&all_dep_inputs)?;
+    let extra = resolve_dep_inputs(dep_inputs, dep_auto)?;
     for file in files {
         let mut inputs = Vec::with_capacity(1 + extra.len());
         inputs.push(file);
@@ -1855,5 +1867,81 @@ mod tests {
         if let Ok(output) = result {
             assert!(!output.status.success());
         }
+    }
+
+    /// `dep_inputs` and `dep_auto` merge into one deduplicated list: a
+    /// `dep_auto` file that exists is an input, one that does not is
+    /// skipped (the config load already rejected a user-listed missing
+    /// one), and a file named by both is one input.
+    #[test]
+    fn resolve_dep_inputs_merges_dep_auto_that_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let present = dir.path().join("present.toml");
+        let listed = dir.path().join("listed.toml");
+        std::fs::write(&present, "a = 1\n").unwrap();
+        std::fs::write(&listed, "b = 2\n").unwrap();
+        let present_s = present.display().to_string();
+        let listed_s = listed.display().to_string();
+        let missing_s = dir.path().join("missing.toml").display().to_string();
+
+        let resolved = resolve_dep_inputs(
+            std::slice::from_ref(&listed_s),
+            &[present_s, missing_s, listed_s.clone()],
+        )
+        .unwrap();
+        assert_eq!(resolved, vec![listed, present]);
+    }
+
+    /// A directory-anchored product (make, clippy) carries the `dep_auto`
+    /// files of its stanza as inputs, like every other product shape; it
+    /// used to resolve `dep_inputs` alone, so an edit to a `dep_auto` file
+    /// never re-ran the anchor.
+    #[test]
+    fn directory_products_carry_dep_auto_inputs() {
+        let dir = tempfile::tempdir().unwrap();
+        let auto = dir.path().join("shared.mk");
+        std::fs::write(&auto, "CFLAGS=-O2\n").unwrap();
+        let fixture = dir.path().join("proj");
+        std::fs::create_dir_all(&fixture).unwrap();
+        let makefile = fixture.join("Makefile");
+        std::fs::write(&makefile, "all:\n").unwrap();
+
+        let mut scan = StandardConfig {
+            src_dirs: Some(vec![fixture.display().to_string()]),
+            src_extensions: Some(vec!["Makefile".into()]),
+            src_exclude_dirs: Some(Vec::new()),
+            src_exclude_files: Some(Vec::new()),
+            src_exclude_paths: Some(Vec::new()),
+            src_files: Some(Vec::new()),
+            ..StandardConfig::default()
+        };
+        scan.dep_auto = vec![auto.display().to_string()];
+        let file_index = FileIndex::from_paths(vec![makefile]);
+        let mut graph = BuildGraph::new();
+        discover_directory_products(
+            &mut graph,
+            DirectoryProductOpts {
+                scan: &scan,
+                file_index: &file_index,
+                dep_inputs: &scan.dep_inputs,
+                cfg_hash: &scan,
+                checksum_fields: Vec::new(),
+                siblings: &SiblingFilter {
+                    extensions: &["Makefile"],
+                    excludes: &[],
+                },
+                processor_name: "processor.checker.make",
+                output_dir_name: None,
+            },
+        )
+        .unwrap();
+
+        let products = graph.products();
+        assert_eq!(products.len(), 1, "one product per anchor");
+        assert!(
+            products[0].inputs.contains(&auto),
+            "the dep_auto file must be an input: {:?}",
+            products[0].inputs
+        );
     }
 }

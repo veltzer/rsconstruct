@@ -238,3 +238,77 @@ fn product_show_json_shape() {
         "cache_state must be a string"
     );
 }
+
+/// A leading `./` (what shell completion produces) names the same product
+/// as the bare path: lookup by output and by primary input both accept it.
+#[test]
+fn product_show_ignores_a_leading_dot_slash() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let p = temp_dir.path();
+
+    fs::create_dir_all(p.join("tera.templates")).unwrap();
+    fs::write(
+        p.join("rsconstruct.toml"),
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n[analyzer.tera]\n",
+    )
+    .unwrap();
+    fs::write(p.join("tera.templates/report.txt.tera"), "Hello\n").unwrap();
+    let build = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(build.status.success());
+
+    for path in ["./report.txt", "./tera.templates/report.txt.tera"] {
+        let out = run_rsconstruct_with_env(p, &["product", "show", path], &[("NO_COLOR", "1")]);
+        assert!(
+            out.status.success(),
+            "product show {path} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            stdout.contains("primary tera.templates/report.txt.tera"),
+            "product show {path}: {stdout}"
+        );
+    }
+}
+
+/// Only the analyzers that scan a product contribute to its hash pieces.
+/// With `[analyzer.tera]` enabled, a Rust source is not a tera template:
+/// `{{ glob(...) }}` in a Rust string must not show up as a `[tera]` hash
+/// piece, and a `shell_output` call there that the tera analyzer would
+/// reject must not make `product show` fail.
+#[test]
+fn product_show_scans_only_the_analyzers_that_match_the_product() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let p = temp_dir.path();
+
+    fs::create_dir_all(p.join("src")).unwrap();
+    fs::write(
+        p.join("rsconstruct.toml"),
+        "[processor.checker.encoding]\nsrc_dirs = [\"src\"]\nsrc_extensions = [\".rs\"]\n\
+         [analyzer.tera]\n",
+    )
+    .unwrap();
+    fs::write(
+        p.join("src/lib.rs"),
+        "const T: &str = \"{{ glob(pattern=\\\"src/*.rs\\\") }} {{ shell_output(command=\\\"x\\\") }}\";\n",
+    )
+    .unwrap();
+    let build = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        build.status.success(),
+        "build failed: {}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+
+    let out = run_rsconstruct_with_env(p, &["product", "show", "src/lib.rs"], &[("NO_COLOR", "1")]);
+    assert!(
+        out.status.success(),
+        "product show failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("hash_pieces: (none)") && !stdout.contains("[tera]"),
+        "a .rs file is not scanned by the tera analyzer: {stdout}"
+    );
+}

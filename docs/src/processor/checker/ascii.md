@@ -28,7 +28,6 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `args` | string[] | `[]` | Extra arguments (reserved for future use) |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
 ## Batch support

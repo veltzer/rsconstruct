@@ -575,3 +575,49 @@ fn mass_generator_identical_sources_keep_distinct_outputs() {
         "<html>\n"
     );
 }
+
+/// The plan is keyed by the declared plan inputs it was computed from.
+/// When a later discovery round adds a file under them — here `docs/c.md`,
+/// which an explicit stanza generates during the build — the plan is
+/// computed again over the new input set instead of being replayed from the
+/// round that never saw the file.
+#[test]
+fn mass_generator_replans_when_a_discovery_round_adds_a_plan_input() {
+    let temp_dir = setup_site_project(&format!(
+        "{CONFIG}{CACHED_CONFIG_EXTRA}loose_manifest = true\n\n[processor.explicit.generic.page_c]\ncommand = \"./gen.sh\"\ninputs = [\"docs/c.src\"]\noutput_files = [\"docs/c.md\"]\n"
+    ));
+    let root = temp_dir.path();
+    write_file(root, "gen.sh", "#!/bin/bash\ncp docs/c.src docs/c.md\n");
+    make_executable(&root.join("gen.sh"));
+    write_file(root, "docs/c.src", "page c\n");
+
+    // The graph alone: round 0 plans over docs/a.md and docs/b.md, the round
+    // that adds the virtual docs/c.md plans again.
+    let output = run_rsconstruct_with_env(
+        root,
+        &["--json", "product", "show", "_site/a.html"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(
+        output.status.success(),
+        "product show failed: {}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        plan_runs(root),
+        2,
+        "a discovery round that adds a plan input must plan again"
+    );
+
+    // Once built, docs/c.md is on disk: the next graph plans over all three
+    // pages and the generated page has a product of its own.
+    build_ok(root);
+    assert!(root.join("docs/c.md").is_file());
+    let result = build_ok(root);
+    assert!(
+        result.has_product("docs/c.md", "success"),
+        "{:?}",
+        result.products
+    );
+}

@@ -44,8 +44,8 @@ const SITEMAP_SPLIT: usize = 30_000;
 
 /// Zola processor config.
 /// Custom fields: `root`, `loose_manifest`. `output_dir` (standard) overrides
-/// the site's own `output_dir`. Unused `StandardConfig` fields: formats,
-/// `dep_auto`, batch, and the scan fields — zola decides what it reads.
+/// the site's own `output_dir`. The scan fields are unused — zola decides
+/// what it reads.
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct ZolaConfig {
     /// The site directory (holding `config.toml` or `zola.toml`), relative

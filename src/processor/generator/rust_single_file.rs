@@ -4,10 +4,10 @@ use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
+use crate::config::{StandardConfig, output_config_hash};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processor::{Processor, check_command_output, run_command};
+use crate::processor::{Processor, check_command_output, resolve_dep_inputs, run_command};
 
 fn default_rust_single_file_output_suffix() -> String {
     ".elf".into()
@@ -96,7 +96,10 @@ impl Processor for RustSingleFileProcessor {
             &self.config,
             &crate::config::checksum_fields_of(instance_name),
         ));
-        let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
+        let extra = resolve_dep_inputs(
+            &self.config.standard.dep_inputs,
+            &self.config.standard.dep_auto,
+        )?;
 
         for source in &files {
             let output = self.get_output_path(source);
@@ -147,7 +150,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Suffix appended to output binary names" },
         ],
-        omit_standard_fields: &["formats", "args"],
+        omit_standard_fields: &["formats", "args", "required_tools", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".rs"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "rustc", output_dir: "out/processor.generator.rust_single_file", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<RustSingleFileConfig>,

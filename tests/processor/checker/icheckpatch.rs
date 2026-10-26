@@ -21,6 +21,14 @@ fn build(project_path: &Path) -> std::process::Output {
     run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")])
 }
 
+/// Not batched, as the docs say: files are checked in parallel as separate
+/// products. A batch would run them one after another on a single worker.
+#[test]
+fn icheckpatch_does_not_batch() {
+    let info = crate::common::processor_info("processor.checker.icheckpatch");
+    assert_eq!(info["supports_batch"], false);
+}
+
 fn combined_output(output: &std::process::Output) -> String {
     format!(
         "{}{}",

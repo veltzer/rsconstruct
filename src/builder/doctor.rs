@@ -201,9 +201,21 @@ impl Builder {
                 }
             }
 
-            for pkg in &pip_deps {
-                let name = crate::config::normalized_distribution_name(pkg);
-                let found = package_installed(ctx, "pip", &["show", "--quiet", name.as_str()]);
+            // Python packages are judged by the interpreter, with the probe
+            // `tool check` uses: `pip show` fails outright in a uv-managed
+            // venv (the default installer's), which has no pip.
+            let pip_names: Vec<String> = pip_deps
+                .iter()
+                .map(|pkg| crate::config::normalized_distribution_name(pkg))
+                .collect();
+            let installed_pip = if pip_names.is_empty() {
+                std::collections::BTreeMap::new()
+            } else {
+                let names: Vec<&str> = pip_names.iter().map(String::as_str).collect();
+                crate::tool_lock::installed_pip_versions(ctx, &names)
+            };
+            for (pkg, name) in pip_deps.iter().zip(&pip_names) {
+                let found = installed_pip.contains_key(name);
                 if found {
                     record(
                         format!("{pkg} (pip)"),
@@ -229,8 +241,16 @@ impl Builder {
                 }
             }
 
+            // `[dependencies].npm` entries are installed with `npm install
+            // -g`, so they are looked for in the global tree — the same
+            // listing `tool check` reads — not in the project's.
+            let installed_npm = if deps.npm.is_empty() {
+                std::collections::BTreeMap::new()
+            } else {
+                crate::tool_lock::installed_npm_globals(ctx)
+            };
             for pkg in &deps.npm {
-                let found = package_installed(ctx, "npm", &["list", "--depth=0", pkg]);
+                let found = installed_npm.contains_key(pkg);
                 if found {
                     record(
                         format!("{pkg} (npm)"),
@@ -248,7 +268,7 @@ impl Builder {
                         "fail",
                         "dependency",
                         Some("npm".to_string()),
-                        Some(format!("npm install {pkg}")),
+                        Some(format!("npm install -g {pkg}")),
                         &mut ok_count,
                         &mut fail_count,
                         &mut warn_count,
@@ -371,8 +391,9 @@ impl Builder {
     }
 }
 
-/// Whether a package manager reports `pkg` as installed. One helper for the
-/// pip/npm/gem probes, which were three copies of the same block.
+/// Whether a package manager reports `pkg` as installed, by exit status.
+/// The gem probe; pip and npm go through the version listings `tool check`
+/// uses, shared from `tool_lock`.
 fn package_installed(
     ctx: &crate::build_context::BuildContext,
     program: &str,

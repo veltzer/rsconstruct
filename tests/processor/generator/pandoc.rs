@@ -258,3 +258,43 @@ fn pandoc_pdf_deterministic() {
         pdf2.len()
     );
 }
+
+/// With `pdf_engine` empty, a `pdf` format still runs pandoc's default
+/// engine, so `pdflatex` is a required tool of the stanza; without a pdf
+/// format no engine is. The default engine used to be left out, so a PDF
+/// stanza passed `tool list-configured` on a machine without TeX.
+#[test]
+fn pandoc_pdf_format_requires_the_default_engine() {
+    for (formats, expect_engine) in [("[\"pdf\", \"html\"]", true), ("[\"html\"]", false)] {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let project_path = temp_dir.path();
+        fs::write(
+            project_path.join("rsconstruct.toml"),
+            format!("[processor.generator.pandoc]\nformats = {formats}\nsrc_dirs = [\"\"]\n"),
+        )
+        .unwrap();
+        fs::write(project_path.join("doc.md"), "# hi\n").unwrap();
+
+        let output = run_rsconstruct_with_env(
+            project_path,
+            &["tool", "list-configured"],
+            &[("NO_COLOR", "1")],
+        );
+        assert!(
+            output.status.success(),
+            "tool list-configured failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains("pandoc"),
+            "pandoc itself is listed: {stdout}"
+        );
+        assert_eq!(
+            stdout.contains("pdflatex"),
+            expect_engine,
+            "formats = {formats}: pdflatex listed = {}: {stdout}",
+            !expect_engine
+        );
+    }
+}

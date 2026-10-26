@@ -2,6 +2,23 @@ use crate::common::{require_tool, run_rsconstruct_with_env};
 use std::fs;
 use tempfile::TempDir;
 
+/// luacheck's verdict depends on the file's path (`.luacheckrc` applies
+/// options per path, and the default std follows the path), so cached
+/// results are keyed by name as well as content — as for iluacheck, whose
+/// defaults this processor must match.
+#[test]
+fn luacheck_default_output_depends_on_input_name() {
+    let defconfig = crate::common::processor_defconfig("processor.checker.luacheck");
+    assert_eq!(defconfig["output_depends_on_input_name"], true);
+    assert_eq!(defconfig["dep_auto"], serde_json::json!([".luacheckrc"]));
+    let iluacheck = crate::common::processor_defconfig("processor.checker.iluacheck");
+    assert_eq!(
+        defconfig["output_depends_on_input_name"],
+        iluacheck["output_depends_on_input_name"]
+    );
+    assert_eq!(defconfig["dep_auto"], iluacheck["dep_auto"]);
+}
+
 #[test]
 fn luacheck_valid_file() {
     require_tool("luacheck");

@@ -12,6 +12,12 @@ A non-zero exit code from cmakelint fails the product.
 
 This processor supports batch mode.
 
+cmakelint reads `.cmakelintrc` from the working directory by default (then
+`~/.config/cmakelintrc` and `~/.cmakelintrc`, which are outside the project),
+so the project root's `.cmakelintrc` is an input of every product when it
+exists (`dep_auto`): an edit re-checks every file, with no `dep_inputs` entry
+needed.
+
 ## Source Files
 
 - Input: `**/CMakeLists.txt`
@@ -29,6 +35,7 @@ dep_inputs = []
 |-----|------|---------|-------------|
 | `args` | string[] | `[]` | Extra arguments passed to cmakelint |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `dep_auto` | string[] | `[".cmakelintrc"]` | Config files that are inputs when they exist |
 
 ## Batch support
 

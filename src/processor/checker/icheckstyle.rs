@@ -140,16 +140,12 @@ impl crate::processor::Processor for IcheckstyleProcessor {
         Vec::new()
     }
 
+    /// No `execute_batch`: checking in-process has no start-up cost for a
+    /// batch to share, and a batch runs its files one after another on a
+    /// single worker, so files are checked in parallel as separate
+    /// products instead (`supports_batch: false`).
     fn execute(&self, _ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         self.check_file(product.primary_input())
-    }
-
-    fn execute_batch(
-        &self,
-        _ctx: &crate::build_context::BuildContext,
-        products: &[&Product],
-    ) -> Vec<Result<()>> {
-        crate::processor::execute_checker_batch_per_file(products, |file| self.check_file(file))
     }
 }
 
@@ -171,14 +167,21 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "The checkstyle configuration, as checkstyle -c; relative to the project root (checkstyle.xml)" },
         ],
-        omit_standard_fields: &[],
+        omit_standard_fields: &[
+        "command",
+        "formats",
+        "args",
+        "output_dir",
+        "required_tools",
+        "batch",
+    ],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".java"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { dep_auto: &["checkstyle.xml"], ..crate::config::ProcessorDefaults::EMPTY }),
         keywords: &["java", "linter", "checker", "style", "checkstyle", "rust"],
         description: "Check Java code with checkstyle's checks (in-process)",
         is_builtin: true,
         is_rust: true,
-        supports_batch: true,
+        supports_batch: false,
         caches_outputs: true,
         max_jobs_cap: None,
     }

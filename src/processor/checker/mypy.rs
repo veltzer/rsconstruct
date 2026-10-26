@@ -20,7 +20,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "mypy", processor_type: crate::processor::ProcessorType::Checker, create: create_mypy,
     fields: &[],
-    omit_standard_fields: &[],
+    omit_standard_fields: &["formats", "output_dir"],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".py"], src_exclude_dirs: &[] }),
     // Every config file mypy's discovery order consults: an edit to any of
     // them must invalidate cached results. pyproject.toml is where the

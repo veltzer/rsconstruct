@@ -1472,3 +1472,47 @@ fn toml_get_on_a_table_is_an_error() {
     );
     assert!(combined.contains("not a scalar"), "Got: {}", combined);
 }
+
+/// A `dep_auto` file is an input of every tera product (the generator has
+/// its own `discover`, so it resolves the field itself): editing it
+/// rebuilds the template, as editing a `dep_inputs` file does. The field
+/// used to be accepted and ignored by every hand-written generator.
+#[test]
+fn tera_dep_auto_file_edit_rebuilds() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+    fs::write(project_path.join("config/site.toml"), "name = \"a\"\n").unwrap();
+    fs::write(project_path.join("tera.templates/t.txt.tera"), "hello\n").unwrap();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\ndep_auto = [\"config/site.toml\"]\n",
+    )
+    .unwrap();
+
+    let out = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    assert!(
+        out.status.success(),
+        "first build failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let out = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[processor.generator.tera] Skipping (unchanged):"),
+        "an unchanged project must be skipped: {stdout}"
+    );
+
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    fs::write(project_path.join("config/site.toml"), "name = \"b\"\n").unwrap();
+    let out = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    assert!(
+        out.status.success(),
+        "rebuild failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("Processing:") && !stdout.contains("Skipping (unchanged)"),
+        "editing a dep_auto file must rebuild the template: {stdout}"
+    );
+}

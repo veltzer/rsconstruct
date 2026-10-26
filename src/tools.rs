@@ -39,9 +39,14 @@ pub struct InstallCtx {
 impl InstallMethod {
     /// Human-readable preview of what installing this entry's package
     /// would do — first line of the first describe step. Lossy for
-    /// multi-step installs (binary fetches), but adequate for `tool list`.
+    /// multi-step installs (binary fetches), but adequate for `tool list`,
+    /// which is registry-wide and so has no project lock to pin against.
     pub fn command(&self) -> String {
-        let steps = describe(self.method, &[self.package]);
+        let steps = describe(
+            self.method,
+            &[self.package],
+            &std::collections::BTreeMap::new(),
+        );
         steps.first().map_or_else(
             || format!("({}) {}", self.method, self.package),
             |argv| join_argv(argv),
@@ -49,9 +54,24 @@ impl InstallMethod {
     }
 }
 
+impl ToolInfo {
+    /// The method `tool install` uses for this tool: the first one that can
+    /// be run. A `manual` method only carries instructions, so it is passed
+    /// over; None when every method is manual.
+    pub fn default_install_method(&self) -> Option<&'static InstallMethod> {
+        self.install_methods.iter().find(|m| m.method != "manual")
+    }
+}
+
 /// Display the steps that `run(method, packages, ctx)` would execute,
-/// without executing them. Used for logs and previews.
-pub fn describe(method: &str, packages: &[&str]) -> Vec<Vec<String>> {
+/// without executing them. Used for logs and previews. `binary_pins` is
+/// the lock's `[binary]` table (see [`InstallCtx::binary_pins`]): a pinned
+/// recipe is described at its locked URL, exactly as `run` installs it.
+pub fn describe(
+    method: &str,
+    packages: &[&str],
+    binary_pins: &std::collections::BTreeMap<String, crate::tool_lock::BinaryPin>,
+) -> Vec<Vec<String>> {
     let sudo = sudo_argv();
     let strs = |parts: &[&str]| -> Vec<String> { parts.iter().map(|s| (*s).to_string()).collect() };
     let prefix = |head: &[&str], tail: &[&str]| -> Vec<String> {
@@ -122,7 +142,10 @@ pub fn describe(method: &str, packages: &[&str]) -> Vec<Vec<String>> {
             a.extend(packages.iter().map(|s| (*s).to_string()));
             a
         }],
-        "binary" => packages.iter().flat_map(|p| describe_binary(p)).collect(),
+        "binary" => packages
+            .iter()
+            .flat_map(|p| describe_binary(p, binary_pins))
+            .collect(),
         "manual" => packages
             .iter()
             .map(|p| vec!["# manual:".to_string(), (*p).to_string()])
@@ -620,84 +643,217 @@ fn join_argv(argv: &[String]) -> String {
     argv.join(" ")
 }
 
-/// Description of the steps that `run_binary` would execute. Used for
-/// preview/logging only.
-fn describe_binary(pkg: &str) -> Vec<Vec<String>> {
-    match binary_recipe(pkg) {
-        // A .deb goes through apt, not the download/chmod/mv shape below: the
-        // asset URL is resolved from the latest release at install time, so
-        // it can only be described generically here.
-        Some(BinaryRecipe {
-            archive: ArchiveKind::Deb { source },
-            dest,
-            ..
-        }) => {
-            let sudo = sudo_argv();
-            let deb = format!("/tmp/{dest}.deb");
-            let (note, url) = match source {
-                DebSource::GithubRelease {
-                    repo,
-                    asset_pattern,
-                } => (
-                    Some(format!(
-                        "# resolve latest '{asset_pattern}' .deb asset from {repo}"
-                    )),
-                    "<resolved-asset-url>".to_string(),
-                ),
-                DebSource::Url(url) => (None, url.to_string()),
-            };
-            let mut steps: Vec<Vec<String>> = Vec::new();
-            if let Some(note) = note {
-                steps.push(vec![note]);
-            }
-            steps.push(crate::download::curl_argv(&url, &deb));
-            steps.push(
-                sudo.iter()
-                    .chain(["apt-get", "install", "-y", &deb].iter())
-                    .map(|s| (*s).to_string())
-                    .collect(),
-            );
-            steps
+/// The directory `run_binary` downloads and unpacks into.
+const INSTALL_WORK_DIR: &str = "/tmp";
+
+/// Description of the steps that `run_binary` would execute, for the
+/// install plan `tool install` prints and the `-i` prompt shows. Built
+/// from the same [`FetchPlan`] `fetch_binary` executes, at the same URL
+/// `run_binary` downloads (the locked one when `binary_pins` has an entry),
+/// so the preview cannot drift from the install. The one thing it cannot
+/// show is a GitHub-release `.deb`'s asset URL, which is resolved from the
+/// releases API at install time: a preview must not make that call.
+fn describe_binary(
+    pkg: &str,
+    binary_pins: &std::collections::BTreeMap<String, crate::tool_lock::BinaryPin>,
+) -> Vec<Vec<String>> {
+    let Some(recipe) = binary_recipe(pkg) else {
+        return vec![vec![format!("# unknown binary recipe '{pkg}'")]];
+    };
+    let mut steps: Vec<Vec<String>> = Vec::new();
+    let pin = binary_pins.get(pkg);
+    let url = match (pin, &recipe.archive) {
+        (Some(pin), _) => pin.url.clone(),
+        (
+            None,
+            ArchiveKind::Deb {
+                source:
+                    DebSource::GithubRelease {
+                        repo,
+                        asset_pattern,
+                    },
+            },
+        ) => {
+            steps.push(vec![format!(
+                "# resolve latest '{asset_pattern}' .deb asset from {repo}"
+            )]);
+            "<resolved-asset-url>".to_string()
         }
-        Some(BinaryRecipe {
-            url, archive, dest, ..
-        }) => {
-            let tmp = format!("/tmp/{dest}");
-            let dl = format!("/tmp/{dest}.dl");
-            let final_path = format!("/usr/local/bin/{dest}");
-            let download = crate::download::curl_argv(url, &dl);
-            let extract = match archive {
-                ArchiveKind::TarGz { inner } => vec![
-                    "tar".to_string(),
-                    "-xzf".to_string(),
-                    dl,
-                    "-C".to_string(),
-                    "/tmp".to_string(),
-                    inner.to_string(),
-                ],
-                ArchiveKind::Zip { inner } => vec![
-                    "unzip".to_string(),
-                    "-o".to_string(),
-                    dl,
-                    inner.to_string(),
-                    "-d".to_string(),
-                    "/tmp".to_string(),
-                ],
-                ArchiveKind::Gunzip => vec!["gunzip".to_string(), "-f".to_string(), dl],
-                ArchiveKind::Raw => vec!["mv".to_string(), dl, tmp.clone()],
-                ArchiveKind::Deb { .. } => unreachable!("matched by the Deb arm above"),
-            };
-            let chmod = vec!["chmod".to_string(), "+x".to_string(), tmp.clone()];
-            let sudo = sudo_argv();
-            let mv = sudo
-                .iter()
-                .chain(["mv", &tmp, &final_path].iter())
-                .map(|s| (*s).to_string())
-                .collect();
-            vec![download, extract, chmod, mv]
-        }
-        None => vec![vec![format!("# unknown binary recipe '{pkg}'")]],
+        (
+            None,
+            ArchiveKind::Deb {
+                source: DebSource::Url(url),
+            },
+        ) => (*url).to_string(),
+        (None, _) => recipe.url.to_string(),
+    };
+    let plan = fetch_plan(&recipe, &url, INSTALL_WORK_DIR);
+    steps.push(plan.curl);
+    if let Some(pin) = pin {
+        steps.push(vec![format!(
+            "# sha256 of {} must be {} (rsconstruct.lock)",
+            plan.download, pin.sha256
+        )]);
     }
+    steps.extend(plan.unpack.iter().map(Step::argv));
+    steps.push(install_argv(&recipe, &plan.payload));
+    steps
+}
+
+/// One step of turning a downloaded file into an installable one.
+/// `fetch_binary` runs these and `describe_binary` prints them, from the
+/// same [`FetchPlan`], so what is shown is what happens.
+enum Step {
+    /// Spawn argv with the terminal inherited.
+    Exec(Vec<String>),
+    Rename {
+        from: String,
+        to: String,
+    },
+    Remove(String),
+    /// `chmod 0755`.
+    MakeExecutable(String),
+}
+
+impl Step {
+    /// The step as the command it amounts to, for previews.
+    fn argv(&self) -> Vec<String> {
+        match self {
+            Self::Exec(argv) => argv.clone(),
+            Self::Rename { from, to } => vec!["mv".to_string(), from.clone(), to.clone()],
+            Self::Remove(path) => vec!["rm".to_string(), path.clone()],
+            Self::MakeExecutable(path) => {
+                vec!["chmod".to_string(), "+x".to_string(), path.clone()]
+            }
+        }
+    }
+
+    fn run(&self, verbose: bool) -> anyhow::Result<()> {
+        use anyhow::Context as _;
+        match self {
+            Self::Exec(argv) => exec_inherited(
+                &argv.iter().map(String::as_str).collect::<Vec<_>>(),
+                verbose,
+            ),
+            Self::Rename { from, to } => {
+                std::fs::rename(from, to).with_context(|| format!("rename {from} -> {to}"))
+            }
+            Self::Remove(path) => {
+                std::fs::remove_file(path).with_context(|| format!("remove {path}"))
+            }
+            Self::MakeExecutable(path) => {
+                crate::platform::set_permissions_mode(std::path::Path::new(path), 0o755)
+                    .with_context(|| format!("chmod +x {path}"))
+            }
+        }
+    }
+}
+
+/// How a recipe's payload gets from its URL to an installable file under
+/// a work directory.
+struct FetchPlan {
+    /// Where curl puts the download: the archive, the binary itself, or
+    /// the `.deb`.
+    download: String,
+    /// The curl argv that fetches `download`.
+    curl: Vec<String>,
+    /// What turns `download` into `payload`, in order, after the download's
+    /// hash has been checked. Empty for a `.deb`, which apt installs as is.
+    unpack: Vec<Step>,
+    /// The executable ready to move into place, or the `.deb` for apt.
+    payload: String,
+}
+
+/// The plan for `recipe`, downloading `url` into `base`.
+fn fetch_plan(recipe: &BinaryRecipe, url: &str, base: &str) -> FetchPlan {
+    let dest = recipe.dest;
+    let final_tmp = format!("{base}/{dest}");
+    let exec = |parts: &[&str]| Step::Exec(parts.iter().map(|s| (*s).to_string()).collect());
+    let (download, unpack) = match recipe.archive {
+        // A .deb is installed by apt as is: apt pulls the dependency tree
+        // a bare binary would be missing, and the payload is not a single
+        // executable.
+        ArchiveKind::Deb { .. } => {
+            let download = format!("{base}/{dest}.deb");
+            return FetchPlan {
+                curl: crate::download::curl_argv(url, &download),
+                payload: download.clone(),
+                download,
+                unpack: Vec::new(),
+            };
+        }
+        ArchiveKind::TarGz { inner } | ArchiveKind::Zip { inner } => {
+            let download = format!("{base}/{dest}.dl");
+            let extract = match recipe.archive {
+                ArchiveKind::TarGz { .. } => exec(&["tar", "-xzf", &download, "-C", base, inner]),
+                _ => exec(&["unzip", "-o", &download, inner, "-d", base]),
+            };
+            let mut unpack = vec![extract];
+            // The member lands at <base>/<inner>, which need not be <dest>
+            // (oxlint's is named after the target triple).
+            let inner_path = format!("{base}/{inner}");
+            if inner_path != final_tmp {
+                unpack.push(Step::Rename {
+                    from: inner_path,
+                    to: final_tmp.clone(),
+                });
+            }
+            unpack.push(Step::Remove(download.clone()));
+            (download, unpack)
+        }
+        ArchiveKind::Gunzip => {
+            // gunzip insists on a .gz name and strips it: the download is
+            // renamed to <dest>.dl.gz, so gunzip leaves <dest>.dl, which
+            // then moves to <dest>.
+            let download = format!("{base}/{dest}.dl");
+            let gz = format!("{download}.gz");
+            let unpack = vec![
+                Step::Rename {
+                    from: download.clone(),
+                    to: gz.clone(),
+                },
+                exec(&["gunzip", "-f", &gz]),
+                Step::Rename {
+                    from: download.clone(),
+                    to: final_tmp.clone(),
+                },
+            ];
+            (download, unpack)
+        }
+        ArchiveKind::Raw => {
+            let download = format!("{base}/{dest}.dl");
+            let unpack = vec![Step::Rename {
+                from: download.clone(),
+                to: final_tmp.clone(),
+            }];
+            (download, unpack)
+        }
+    };
+    let mut unpack = unpack;
+    unpack.push(Step::MakeExecutable(final_tmp.clone()));
+    FetchPlan {
+        curl: crate::download::curl_argv(url, &download),
+        download,
+        unpack,
+        payload: final_tmp,
+    }
+}
+
+/// The command that installs a fetched payload: apt for a `.deb`, a move
+/// into `/usr/local/bin` for an executable. Shared by `run_binary` and
+/// `describe_binary`.
+fn install_argv(recipe: &BinaryRecipe, payload: &str) -> Vec<String> {
+    let mut argv: Vec<String> = sudo_argv().iter().map(|s| (*s).to_string()).collect();
+    if matches!(recipe.archive, ArchiveKind::Deb { .. }) {
+        argv.extend(["apt-get", "install", "-y", payload].map(str::to_string));
+    } else {
+        argv.extend([
+            "mv".to_string(),
+            payload.to_string(),
+            format!("/usr/local/bin/{}", recipe.dest),
+        ]);
+    }
+    argv
 }
 
 /// The GitHub API's description of `repo`'s latest release.
@@ -800,6 +956,7 @@ pub fn file_sha256(path: &std::path::Path) -> anyhow::Result<String> {
 
 /// A binary recipe's payload, downloaded and unpacked into a work directory
 /// but not yet installed.
+#[derive(Debug)]
 struct FetchedBinary {
     /// SHA-256 of the file as downloaded (the archive, for an archive).
     download_sha256: String,
@@ -807,13 +964,14 @@ struct FetchedBinary {
     payload: String,
 }
 
-/// Download `url` into `base` and unpack `recipe`'s executable from it.
-/// With `expected_sha256`, a download whose hash differs is an error: the
-/// lock said which bytes to install, and these are not they.
+/// Download `url` into `base` and unpack `recipe`'s executable from it,
+/// following [`fetch_plan`]. With `expected_sha256`, a download whose hash
+/// differs is an error: the lock said which bytes to install, and these
+/// are not they.
 ///
-/// Shared by `run_binary` (base `/tmp`, the paths `describe_binary` shows)
-/// and `tool lock` (a private directory), so a locked hash is always the
-/// hash of exactly what an install downloads.
+/// Shared by `run_binary` (base [`INSTALL_WORK_DIR`], the paths
+/// `describe_binary` shows) and `tool lock` (a private directory), so a
+/// locked hash is always the hash of exactly what an install downloads.
 fn fetch_binary(
     recipe: &BinaryRecipe,
     url: &str,
@@ -821,76 +979,26 @@ fn fetch_binary(
     base: &str,
     verbose: bool,
 ) -> anyhow::Result<FetchedBinary> {
-    use anyhow::Context as _;
-    let is_deb = matches!(recipe.archive, ArchiveKind::Deb { .. });
-    let download = if is_deb {
-        format!("{base}/{}.deb", recipe.dest)
-    } else {
-        format!("{base}/{}.dl", recipe.dest)
-    };
-    let final_tmp = format!("{base}/{}", recipe.dest);
-    let dl = crate::download::curl_argv(url, &download);
-    exec_inherited(&dl.iter().map(String::as_str).collect::<Vec<_>>(), verbose)?;
-    let download_sha256 = file_sha256(std::path::Path::new(&download))?;
+    let plan = fetch_plan(recipe, url, base);
+    exec_inherited(
+        &plan.curl.iter().map(String::as_str).collect::<Vec<_>>(),
+        verbose,
+    )?;
+    let download_sha256 = file_sha256(std::path::Path::new(&plan.download))?;
     if let Some(expected) = expected_sha256
         && expected != download_sha256
     {
-        std::fs::remove_file(&download).ok();
+        std::fs::remove_file(&plan.download).ok();
         anyhow::bail!(
             "{url} does not match rsconstruct.lock: sha256 {download_sha256}, locked {expected}"
         );
     }
-    match recipe.archive {
-        // A .deb is installed by apt as is: apt pulls the dependency tree
-        // a bare binary would be missing, and the payload is not a single
-        // executable.
-        ArchiveKind::Deb { .. } => {
-            return Ok(FetchedBinary {
-                download_sha256,
-                payload: download,
-            });
-        }
-        ArchiveKind::TarGz { inner } => {
-            exec_inherited(&["tar", "-xzf", &download, "-C", base, inner], verbose)?;
-            // After tar, the inner file is at <base>/<inner>; rename to final_tmp.
-            let inner_path = format!("{base}/{inner}");
-            if inner_path != final_tmp {
-                std::fs::rename(&inner_path, &final_tmp)
-                    .with_context(|| format!("rename {inner_path} -> {final_tmp}"))?;
-            }
-            std::fs::remove_file(&download).ok();
-        }
-        ArchiveKind::Zip { inner } => {
-            exec_inherited(&["unzip", "-o", &download, inner, "-d", base], verbose)?;
-            // After unzip, the member is at <base>/<inner>; rename to final_tmp.
-            let inner_path = format!("{base}/{inner}");
-            if inner_path != final_tmp {
-                std::fs::rename(&inner_path, &final_tmp)
-                    .with_context(|| format!("rename {inner_path} -> {final_tmp}"))?;
-            }
-            std::fs::remove_file(&download).ok();
-        }
-        ArchiveKind::Gunzip => {
-            // gunzip strips the .gz extension. Our download path ends in
-            // .dl; rename to .dl.gz so gunzip leaves <base>/<dest>.dl, then
-            // move to final_tmp.
-            let gz = format!("{download}.gz");
-            std::fs::rename(&download, &gz)
-                .with_context(|| format!("rename {download} -> {gz}"))?;
-            exec_inherited(&["gunzip", "-f", &gz], verbose)?;
-            std::fs::rename(&download, &final_tmp)
-                .with_context(|| format!("rename {download} -> {final_tmp}"))?;
-        }
-        ArchiveKind::Raw => {
-            std::fs::rename(&download, &final_tmp)
-                .with_context(|| format!("rename {download} -> {final_tmp}"))?;
-        }
+    for step in &plan.unpack {
+        step.run(verbose)?;
     }
-    crate::platform::set_permissions_mode(std::path::Path::new(&final_tmp), 0o755)
-        .with_context(|| format!("chmod +x {final_tmp}"))?;
     Ok(FetchedBinary {
         download_sha256,
-        payload: final_tmp,
+        payload: plan.payload,
     })
 }
 
@@ -927,20 +1035,19 @@ fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
         &recipe,
         &url,
         pin.map(|p| p.sha256.as_str()),
-        "/tmp",
+        INSTALL_WORK_DIR,
         ctx.verbose,
     )?;
-    let sudo = sudo_argv();
-    let mut argv: Vec<&str> = sudo.to_vec();
+    let argv = install_argv(&recipe, &fetched.payload);
+    let result = exec_inherited(
+        &argv.iter().map(String::as_str).collect::<Vec<_>>(),
+        ctx.verbose,
+    );
+    // apt copies the .deb into its cache; `mv` consumes the executable.
     if matches!(recipe.archive, ArchiveKind::Deb { .. }) {
-        argv.extend(["apt-get", "install", "-y", &fetched.payload]);
-        let result = exec_inherited(&argv, ctx.verbose);
         std::fs::remove_file(&fetched.payload).ok();
-        return result;
     }
-    let final_path = format!("/usr/local/bin/{}", recipe.dest);
-    argv.extend(["mv", &fetched.payload, &final_path]);
-    exec_inherited(&argv, ctx.verbose)
+    result
 }
 
 /// Whether `pkg`'s binary recipe can be recorded in rsconstruct.lock. A
@@ -2045,7 +2152,9 @@ mod registry_tests {
 
 /// Return the default install command for a tool, if known.
 pub fn tool_install_command(tool: &str) -> Option<String> {
-    tool_info(tool).and_then(|t| t.install_methods.first().map(InstallMethod::command))
+    tool_info(tool)
+        .and_then(ToolInfo::default_install_method)
+        .map(InstallMethod::command)
 }
 
 /// Return the runtime category for a tool, if known.
@@ -2154,7 +2263,7 @@ mod tests {
     /// state.
     #[test]
     fn apt_describe_shape_is_correct() {
-        let steps = describe("apt", &["cowsay"]);
+        let steps = describe("apt", &["cowsay"], &no_pins());
         assert_eq!(steps.len(), 2);
 
         let update = &steps[0];
@@ -2184,7 +2293,7 @@ mod tests {
     /// install call (still preceded by a single `apt-get update`).
     #[test]
     fn apt_batch_describe_collapses() {
-        let steps = describe("apt", &["foo", "bar", "baz"]);
+        let steps = describe("apt", &["foo", "bar", "baz"], &no_pins());
         assert_eq!(steps.len(), 2);
         let install = &steps[1];
         let pkgmgr_idx = install
@@ -2200,7 +2309,7 @@ mod tests {
     /// prebuilt tarball in a CI cache) is replaced instead of refused.
     #[test]
     fn cargo_describe_is_locked_and_forced_without_sudo() {
-        let steps = describe("cargo", &["cargo-deny", "mdbook"]);
+        let steps = describe("cargo", &["cargo-deny", "mdbook"], &no_pins());
         assert_eq!(steps.len(), 1);
         assert_eq!(
             steps[0],
@@ -2272,7 +2381,7 @@ mod tests {
     /// `pip` describe never uses sudo, regardless of runtime state.
     #[test]
     fn pip_describe_never_has_sudo() {
-        let steps = describe("pip", &["ruff"]);
+        let steps = describe("pip", &["ruff"], &no_pins());
         assert_eq!(steps.len(), 1);
         let argv = &steps[0];
         assert_eq!(argv[0], "pip");
@@ -2291,6 +2400,7 @@ mod tests {
         let steps = describe(
             "uv",
             &["flask==3.1.0", "pywin32==312 ; sys_platform == 'win32'"],
+            &no_pins(),
         );
         assert_eq!(steps.len(), 1);
         let argv = &steps[0];
@@ -2352,7 +2462,7 @@ mod tests {
     #[test]
     fn binary_describe_has_no_shell_metachars() {
         for pkg in &["taplo", "rumdl", "zola", "oxlint", "selene"] {
-            let steps = describe("binary", &[pkg]);
+            let steps = describe("binary", &[pkg], &no_pins());
             assert!(steps.len() >= 3, "binary {pkg} should have >=3 steps");
             for step in &steps {
                 for arg in step {
@@ -2365,5 +2475,173 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// An empty `[binary]` lock table, for describing outside a project.
+    fn no_pins() -> std::collections::BTreeMap<String, crate::tool_lock::BinaryPin> {
+        std::collections::BTreeMap::new()
+    }
+
+    fn argv(parts: &[&str]) -> Vec<String> {
+        parts.iter().map(|s| (*s).to_string()).collect()
+    }
+
+    /// The install plan `tool install` prints must name the URL the install
+    /// downloads: the locked one when rsconstruct.lock has an entry. It used
+    /// to show the recipe's `releases/latest` URL regardless.
+    #[test]
+    fn binary_describe_names_the_pinned_url() {
+        let latest =
+            "https://github.com/tamasfe/taplo/releases/latest/download/taplo-linux-x86_64.gz";
+        let pinned =
+            "https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-linux-x86_64.gz";
+        let mut pins = no_pins();
+        pins.insert(
+            "taplo".to_string(),
+            crate::tool_lock::BinaryPin {
+                url: pinned.to_string(),
+                sha256: "ab12".to_string(),
+                executable_sha256: None,
+                deb_package: None,
+                deb_version: None,
+            },
+        );
+
+        let steps = describe("binary", &["taplo"], &pins);
+        assert_eq!(
+            steps[0].last().map(String::as_str),
+            Some(pinned),
+            "{steps:?}"
+        );
+        assert!(
+            steps[1][0].starts_with('#') && steps[1][0].contains("ab12"),
+            "the locked hash is part of the plan: {steps:?}"
+        );
+
+        let steps = describe("binary", &["taplo"], &no_pins());
+        assert_eq!(
+            steps[0].last().map(String::as_str),
+            Some(latest),
+            "{steps:?}"
+        );
+    }
+
+    /// The described steps are the fetch's steps. Before they were derived
+    /// from one plan, the preview showed `gunzip -f /tmp/taplo.dl` (gunzip
+    /// rejects a name without `.gz`) and left out the rename of a tar
+    /// member that is not named after the tool.
+    #[test]
+    fn binary_describe_shows_the_steps_fetch_takes() {
+        let steps = describe("binary", &["taplo"], &no_pins());
+        assert_eq!(steps.len(), 6, "{steps:?}");
+        assert_eq!(steps[0][0], "curl");
+        assert_eq!(
+            &steps[1..5],
+            &[
+                argv(&["mv", "/tmp/taplo.dl", "/tmp/taplo.dl.gz"]),
+                argv(&["gunzip", "-f", "/tmp/taplo.dl.gz"]),
+                argv(&["mv", "/tmp/taplo.dl", "/tmp/taplo"]),
+                argv(&["chmod", "+x", "/tmp/taplo"]),
+            ]
+        );
+        assert!(
+            steps[5].ends_with(&argv(&["mv", "/tmp/taplo", "/usr/local/bin/taplo"])),
+            "{steps:?}"
+        );
+
+        let steps = describe("binary", &["oxlint"], &no_pins());
+        assert!(
+            steps.contains(&argv(&[
+                "mv",
+                "/tmp/oxlint-x86_64-unknown-linux-gnu",
+                "/tmp/oxlint"
+            ])),
+            "{steps:?}"
+        );
+        assert!(
+            steps.contains(&argv(&["rm", "/tmp/oxlint.dl"])),
+            "{steps:?}"
+        );
+
+        // A member already named after the tool is not renamed onto itself.
+        let steps = describe("binary", &["rumdl"], &no_pins());
+        assert!(
+            !steps.contains(&argv(&["mv", "/tmp/rumdl", "/tmp/rumdl"])),
+            "{steps:?}"
+        );
+    }
+
+    /// Run the plan for real against local files: a gzip asset comes out as
+    /// `<base>/<dest>`, a tarball member not named `dest` is renamed to it,
+    /// nothing is left behind, and a locked hash that differs is refused.
+    #[test]
+    fn fetch_binary_unpacks_gzip_and_renamed_tar_members() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let base = tmp.path().to_string_lossy().into_owned();
+        let src = tmp.path().join("src");
+        std::fs::create_dir_all(&src).unwrap();
+        let is_executable = |path: &str| {
+            let meta = std::fs::metadata(path).unwrap();
+            crate::platform::get_mode(&meta) & 0o111 != 0
+        };
+
+        std::fs::write(src.join("payload"), b"#!/bin/sh\necho gz\n").unwrap();
+        let status = std::process::Command::new("gzip")
+            .arg("-k")
+            .arg(src.join("payload"))
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let recipe = BinaryRecipe {
+            url: "",
+            archive: ArchiveKind::Gunzip,
+            dest: "fake-gz-tool",
+        };
+        let url = format!("file://{}", src.join("payload.gz").display());
+        let fetched = fetch_binary(&recipe, &url, None, &base, false).unwrap();
+        assert_eq!(fetched.payload, format!("{base}/fake-gz-tool"));
+        assert_eq!(
+            std::fs::read(&fetched.payload).unwrap(),
+            b"#!/bin/sh\necho gz\n"
+        );
+        assert!(is_executable(&fetched.payload));
+        assert!(!tmp.path().join("fake-gz-tool.dl").exists());
+        assert!(!tmp.path().join("fake-gz-tool.dl.gz").exists());
+        assert_eq!(
+            fetched.download_sha256,
+            file_sha256(&src.join("payload.gz")).unwrap()
+        );
+
+        std::fs::write(src.join("tool-x86_64-unknown-linux-gnu"), b"tar member").unwrap();
+        let status = std::process::Command::new("tar")
+            .arg("-czf")
+            .arg(src.join("tool.tar.gz"))
+            .arg("-C")
+            .arg(&src)
+            .arg("tool-x86_64-unknown-linux-gnu")
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let recipe = BinaryRecipe {
+            url: "",
+            archive: ArchiveKind::TarGz {
+                inner: "tool-x86_64-unknown-linux-gnu",
+            },
+            dest: "fake-tar-tool",
+        };
+        let url = format!("file://{}", src.join("tool.tar.gz").display());
+        let fetched = fetch_binary(&recipe, &url, None, &base, false).unwrap();
+        assert_eq!(fetched.payload, format!("{base}/fake-tar-tool"));
+        assert_eq!(std::fs::read(&fetched.payload).unwrap(), b"tar member");
+        assert!(is_executable(&fetched.payload));
+        assert!(!tmp.path().join("tool-x86_64-unknown-linux-gnu").exists());
+        assert!(!tmp.path().join("fake-tar-tool.dl").exists());
+
+        let err = fetch_binary(&recipe, &url, Some("0000"), &base, false).unwrap_err();
+        assert!(
+            err.to_string().contains("does not match rsconstruct.lock"),
+            "{err}"
+        );
+        assert!(!tmp.path().join("fake-tar-tool.dl").exists());
     }
 }

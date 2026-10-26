@@ -111,3 +111,107 @@ fn iprotobuf_reports_errors_with_position() {
         "the error must name the type: {text}"
     );
 }
+
+/// A `package` statement inside a block comment does not name the
+/// generated file; the real one does. The statement regex used to run
+/// over the raw text, comments included.
+#[test]
+fn iprotobuf_package_in_block_comment_is_ignored() {
+    let temp_dir = setup_project(CONFIG);
+    let project = temp_dir.path();
+    fs::write(
+        project.join("proto/m.proto"),
+        "syntax = \"proto3\";\n/*\n package old.name;\n*/\n// package other;\npackage real;\nmessage M {\n  int32 a = 1;\n}\n",
+    )
+    .unwrap();
+    let output = build(project);
+    assert!(
+        output.status.success(),
+        "rsconstruct build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let out = project.join("out/processor.generator.iprotobuf");
+    assert!(out.join("real.rs").exists(), "real.rs must be generated");
+    assert!(
+        !out.join("old.name.rs").exists() && !out.join("other.rs").exists(),
+        "a commented-out package must not name an output"
+    );
+}
+
+/// A file imported from an `include_paths` entry outside `src_dirs` is an
+/// input of the product: editing it regenerates the code, and its package's
+/// Rust file is an output. It used to be compiled without being tracked.
+#[test]
+fn iprotobuf_import_outside_src_dirs_is_tracked() {
+    let config = "[processor.generator.iprotobuf]\nsrc_dirs = [\"proto\"]\ninclude_paths = [\"proto\", \"shared\"]\n";
+    let temp_dir = setup_project(config);
+    let project = temp_dir.path();
+    fs::create_dir_all(project.join("shared")).unwrap();
+    fs::write(
+        project.join("shared/common.proto"),
+        "syntax = \"proto3\";\npackage common;\nmessage Common {\n  int32 a = 1;\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("proto/user.proto"),
+        "syntax = \"proto3\";\npackage app;\nimport \"common.proto\";\nmessage User {\n  common.Common c = 1;\n}\n",
+    )
+    .unwrap();
+    let output = build(project);
+    assert!(
+        output.status.success(),
+        "rsconstruct build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let common_rs = project.join("out/processor.generator.iprotobuf/common.rs");
+    let text = fs::read_to_string(&common_rs).expect("common.rs written for the imported package");
+    assert!(text.contains("pub struct Common"), "{text}");
+    assert!(!text.contains("pub b:"), "{text}");
+
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    fs::write(
+        project.join("shared/common.proto"),
+        "syntax = \"proto3\";\npackage common;\nmessage Common {\n  int32 a = 1;\n  int32 b = 2;\n}\n",
+    )
+    .unwrap();
+    let output = run_rsconstruct_with_env(project, &["build", "-v"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "rebuild failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Processing:") && !stdout.contains("Skipping (unchanged)"),
+        "editing an imported file must regenerate: {stdout}"
+    );
+    let text = fs::read_to_string(&common_rs).unwrap();
+    assert!(
+        text.contains("pub b:"),
+        "the new field must be generated: {text}"
+    );
+}
+
+/// An import that no include path holds fails discovery, naming the
+/// importing file and the import.
+#[test]
+fn iprotobuf_unresolvable_import_names_the_importer() {
+    let temp_dir = setup_project(CONFIG);
+    let project = temp_dir.path();
+    fs::write(
+        project.join("proto/user.proto"),
+        "syntax = \"proto3\";\nimport \"nowhere/missing.proto\";\nmessage User {\n  int32 a = 1;\n}\n",
+    )
+    .unwrap();
+    let output = build(project);
+    assert!(!output.status.success(), "an unresolvable import must fail");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        text.contains("proto/user.proto") && text.contains("nowhere/missing.proto"),
+        "the error must name the importer and the import: {text}"
+    );
+}

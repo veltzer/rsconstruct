@@ -64,6 +64,7 @@ mod processor {
         pub mod clippy;
         pub mod cmake;
         pub mod cppcheck;
+        pub mod cpplint;
         pub mod doctest;
         pub mod duplicate_files;
         pub mod eslint;

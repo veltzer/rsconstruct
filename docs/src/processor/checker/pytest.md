@@ -26,7 +26,7 @@ dep_inputs = []                         # Additional files that trigger rebuilds
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `src_extensions` | string[] | `[".py"]` | File extensions to discover |
-| `src_dirs` | string[] | `["tests"]` | Directories to scan for test files |
+| `src_dirs` | string[] | `[]` | Directories to scan for test files; unset scans nothing, so name them (`["tests"]` in the example above) |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
 ## Batch support

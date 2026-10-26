@@ -20,7 +20,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "ruff", processor_type: crate::processor::ProcessorType::Checker, create: create_ruff,
     fields: &[],
-    omit_standard_fields: &[],
+    omit_standard_fields: &["formats", "output_dir"],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".py"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { command: "ruff", dep_auto: &["ruff.toml", ".ruff.toml", "pyproject.toml"], output_depends_on_input_name: true, ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,

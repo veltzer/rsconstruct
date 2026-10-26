@@ -20,9 +20,11 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "hadolint", processor_type: crate::processor::ProcessorType::Checker, create: create_hadolint,
     fields: &[],
-    omit_standard_fields: &[],
+    omit_standard_fields: &["formats", "output_dir"],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["Dockerfile"], src_exclude_dirs: &[] }),
-    defaults: Some(crate::config::ProcessorDefaults { command: "hadolint", ..crate::config::ProcessorDefaults::EMPTY }),
+    // hadolint looks for `$PWD/.hadolint.yaml`, then `$PWD/.hadolint.yml`,
+    // before the user-level locations (the same list as idockerfile).
+    defaults: Some(crate::config::ProcessorDefaults { command: "hadolint", dep_auto: &[".hadolint.yaml", ".hadolint.yml"], ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["docker", "dockerfile", "linter", "container"],
     description: "Lint Dockerfiles using hadolint",

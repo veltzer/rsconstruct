@@ -9,7 +9,6 @@ use crate::graph::{BuildGraph, Product};
 use crate::processor::{Processor, config_file_inputs, execute_checker_batch, run_checker};
 
 /// Script processor config. No custom fields.
-/// Unused `StandardConfig` fields: formats, `output_dir`.
 /// Note: empty command means "no command configured".
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct ScriptConfig {
@@ -128,7 +127,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Path to the checker tool executable" },
         ],
-        omit_standard_fields: &[],
+        omit_standard_fields: &["formats", "output_dir", "required_tools"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[], src_exclude_dirs: &[] }),
         defaults: None,
         defconfig_json: crate::registries::default_config_json::<ScriptConfig>,

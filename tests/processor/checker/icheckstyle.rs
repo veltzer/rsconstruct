@@ -220,6 +220,9 @@ fn reported_messages(output: &std::process::Output) -> Vec<String> {
             Some((_, rest)) => rest,
             None => l,
         })
+        // The reporter names the product before the message (`src/A.java:
+        // [ERROR] src/A.java:1: ...`); the message line itself names the file.
+        .map(|l| l.find("[ERROR] src/").map_or(l, |at| &l[at..]))
         .filter(|l| l.starts_with("[ERROR] src/"))
         .map(str::to_string)
         .collect();
@@ -329,4 +332,12 @@ fn icheckstyle_missing_config_file_fails() {
         "a missing configuration",
         "icheckstyle config_file not found: conf/checks.xml",
     );
+}
+
+/// Not batched, as the docs say: files are checked in parallel as separate
+/// products. A batch would run them one after another on a single worker.
+#[test]
+fn icheckstyle_does_not_batch() {
+    let info = crate::common::processor_info("processor.checker.icheckstyle");
+    assert_eq!(info["supports_batch"], false);
 }

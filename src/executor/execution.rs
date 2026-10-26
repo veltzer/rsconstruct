@@ -22,6 +22,37 @@ use super::{
     ProductAction, ReadyTracker, RestoreOutcome, SharedState, WorkItem,
 };
 
+/// The product failures of a fail-fast build (no `--keep-going`): one
+/// message per failed product, each `[processor] product: error`, in the
+/// order they were recorded.
+///
+/// Without `--keep-going` nothing is printed when a product fails; the
+/// failures are reported once, together, as the build's error. Products run
+/// in parallel, so a level can fail several products before the stop takes
+/// effect, and returning only the first (as the executor once did) lost the
+/// others entirely. Keeping them in one error rather than printing each as
+/// it happens keeps the fail-fast output as it was: the failures appear once,
+/// at the end, next to the exit status — and lets the JSON summary list them
+/// individually.
+#[derive(Debug)]
+pub struct BuildFailures {
+    pub messages: Vec<String>,
+}
+
+impl std::fmt::Display for BuildFailures {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.messages.as_slice() {
+            [single] => f.write_str(single),
+            many => {
+                writeln!(f, "{} products failed:", many.len())?;
+                f.write_str(&many.join("\n"))
+            }
+        }
+    }
+}
+
+impl std::error::Error for BuildFailures {}
+
 /// Compute the effective `max_jobs` for a processor instance. The config
 /// field is capped by the plugin's static `max_jobs_cap`; `None` on either
 /// side means no limit on that side.
@@ -374,16 +405,22 @@ impl Executor<'_> {
                 Ok(stats)
             }
             Err(e) => {
-                // Emit JSON build summary even on failure
+                // Emit JSON build summary even on failure. A fail-fast
+                // build's error carries its product failures one by one;
+                // any other error is the build's single failure.
                 let duration = build_start.elapsed();
+                let messages: Vec<String> = match e.downcast_ref::<BuildFailures>() {
+                    Some(failures) => failures.messages.clone(),
+                    None => vec![format!("{e:#}")],
+                };
                 json_output::emit_build_summary(
                     order.len(),
                     0,
-                    1,
+                    messages.len(),
                     0,
                     0,
                     duration,
-                    &[e.to_string()],
+                    &messages,
                 );
                 Err(e)
             }
@@ -1172,16 +1209,21 @@ impl Executor<'_> {
         stats.failed_count = final_failed.len();
         stats.failed_messages = final_msgs;
 
-        // In non-keep-going mode, return the first error after giving
-        // independent products a chance to execute and be cached
+        // In non-keep-going mode, the failures are the build's error (see
+        // `BuildFailures`), returned after the products already running
+        // got to finish and be cached. Every failure is in it, not just
+        // the first: others may have failed in parallel before the stop.
         if !keep_going && !interrupted {
             let errs = Arc::try_unwrap(shared.errors)
                 .map_err(|_| {
                     anyhow::anyhow!("internal error: outstanding Arc reference to errors")
                 })?
                 .into_inner();
-            if let Some(first_err) = errs.into_iter().next() {
-                return Err(first_err);
+            if !errs.is_empty() {
+                return Err(BuildFailures {
+                    messages: errs.iter().map(|e| format!("{e:#}")).collect(),
+                }
+                .into());
             }
         }
 
@@ -1265,21 +1307,27 @@ impl Executor<'_> {
                     {
                         Ok(cs) => cs,
                         Err(e) => {
+                            // Reported like a failed run (see
+                            // `record_failure`): the same `[processor]
+                            // product:` wording in both modes, a JSON
+                            // product event, and printed now only when
+                            // keeping going.
+                            let msg = self.failure_message(product, &e);
+                            json_output::emit_product_complete(
+                                &self.product_display(product),
+                                &product.processor,
+                                json_output::ProductStatus::Failed,
+                                None,
+                                Some(&format!("{e:#}")),
+                            );
+                            shared.failed_products.lock().insert(id);
                             if keep_going {
-                                let msg = format!(
-                                    "[{}] {}: {}",
-                                    product.processor,
-                                    self.product_display(product),
-                                    e
-                                );
                                 // stderr: errors must survive --json, and must not
                                 // corrupt the JSON event stream on stdout.
                                 crate::output::error(&msg);
-                                shared.failed_products.lock().insert(id);
                                 shared.failed_messages.lock().push(msg);
                             } else {
-                                shared.failed_products.lock().insert(id);
-                                shared.errors.lock().push(e);
+                                shared.errors.lock().push(anyhow::anyhow!(msg));
                             }
                             continue;
                         }

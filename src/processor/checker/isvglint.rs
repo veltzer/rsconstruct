@@ -165,7 +165,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "The attr rule: one table per \"rule::selector\" naming allowed, required and forbidden attributes and their values" },
         ],
-        omit_standard_fields: &[],
+        omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".svg"], src_exclude_dirs: &[] }),
         defaults: None,
         keywords: &["svg", "linter", "xml", "validator", "rust"],

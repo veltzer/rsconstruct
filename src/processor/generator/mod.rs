@@ -31,9 +31,10 @@ use anyhow::Result;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
-use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
+use crate::config::{StandardConfig, output_config_hash};
 use crate::file_index::FileIndex;
 use crate::graph::BuildGraph;
+use crate::processor::resolve_dep_inputs;
 
 /// Represents a single template file to be processed (shared by tera and mako).
 pub(super) struct TemplateItem {
@@ -86,9 +87,42 @@ pub(super) fn find_templates(scan: &StandardConfig, file_index: &FileIndex) -> V
     items
 }
 
+/// The files under `root` with extension `ext`, honouring the standard
+/// `src_exclude_dirs`/`src_exclude_files`/`src_exclude_paths`/`src_files`
+/// fields of `scan` exactly as `FileIndex::scan` does. For a processor
+/// that locates its sources by its own directory field (pdfunite's
+/// `source_dir`) rather than by `src_dirs`; passing empty lists to
+/// `FileIndex::query` instead silently ignored every exclude the user set.
+pub(super) fn query_under(
+    file_index: &FileIndex,
+    root: &Path,
+    ext: &str,
+    scan: &StandardConfig,
+) -> Vec<PathBuf> {
+    fn as_strs(v: &[String]) -> Vec<&str> {
+        v.iter().map(String::as_str).collect()
+    }
+    let exclude_dirs = as_strs(scan.src_exclude_dirs());
+    let exclude_files = as_strs(scan.src_exclude_files());
+    let exclude_paths = as_strs(scan.src_exclude_paths());
+    let src_files = as_strs(scan.src_files());
+    file_index.query(
+        root,
+        &[ext],
+        &exclude_dirs,
+        &exclude_files,
+        &exclude_paths,
+        &src_files,
+    )
+}
+
 /// Parameters shared by multi-format and single-format discover helpers.
 pub struct DiscoverParams<'a, C: Serialize> {
     pub scan: &'a StandardConfig,
+    /// Extra inputs of every product. `scan.dep_auto` is merged in by the
+    /// helpers ([`resolve_dep_inputs`]), so a caller passes its `dep_inputs`
+    /// (or a computed superset of them), never a list that already carries
+    /// the `dep_auto` files.
     pub dep_inputs: &'a [String],
     pub config: &'a C,
     pub output_dir: &'a str,
@@ -136,7 +170,7 @@ pub fn discover_multi_format(
     };
 
     let hash = Some(output_config_hash(params.config, &params.checksum_fields));
-    let extra = resolve_extra_inputs(params.dep_inputs)?;
+    let extra = resolve_dep_inputs(params.dep_inputs, &params.scan.dep_auto)?;
     let src_dirs = params.scan.src_dirs();
 
     for source in &files {

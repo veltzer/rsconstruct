@@ -1410,3 +1410,75 @@ int main() { return 0; }
         "clang_only.elf should exist for clang"
     );
 }
+
+/// `.cpp` and `.cxx` sources added to `src_extensions` are compiled as
+/// C++: with the C++ compiler, which links the C++ standard library the
+/// `<iostream>` code needs. Only `.cc` used to select C++ mode, so these
+/// went to `gcc` and failed to link.
+#[test]
+fn cc_single_file_cpp_and_cxx_extensions_compile_as_cpp() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    fs::create_dir_all(project_path.join("src")).unwrap();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.generator.cc_single_file]\nsrc_dirs = [\"src\"]\nsrc_extensions = [\".c\", \".cc\", \".cpp\", \".cxx\"]\n[analyzer.icpp]\n",
+    )
+    .unwrap();
+    let cpp_source =
+        "#include <iostream>\nint main() { std::cout << \"hi\" << std::endl; return 0; }\n";
+    fs::write(project_path.join("src/a.cpp"), cpp_source).unwrap();
+    fs::write(project_path.join("src/b.cxx"), cpp_source).unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "C++ sources must compile with the C++ compiler: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    for exe in ["src/a.elf", "src/b.elf"] {
+        assert!(
+            project_path
+                .join("out/processor.generator.cc_single_file")
+                .join(exe)
+                .exists(),
+            "{exe} should exist"
+        );
+    }
+}
+
+/// Every `src_dirs` entry is scanned: a first entry that does not exist
+/// (allowed by `allow_missing_src_dirs`) must not silence the others. The
+/// processor used to check `src_dirs[0]` alone and build nothing when it
+/// was missing.
+#[test]
+fn cc_single_file_scans_every_src_dir() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    fs::create_dir_all(project_path.join("src")).unwrap();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[build]\nallow_missing_src_dirs = true\n\n[processor.generator.cc_single_file]\nsrc_dirs = [\"moved_away\", \"src\"]\n[analyzer.icpp]\n",
+    )
+    .unwrap();
+    fs::write(
+        project_path.join("src/main.c"),
+        "int main() { return 0; }\n",
+    )
+    .unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "build failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        project_path
+            .join("out/processor.generator.cc_single_file/src/main.elf")
+            .exists(),
+        "the source under the second src_dirs entry must be compiled"
+    );
+}

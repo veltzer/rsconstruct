@@ -3,16 +3,15 @@ use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
+use crate::config::{StandardConfig, output_config_hash};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processor::{Processor, check_command_output, run_command};
+use crate::processor::{Processor, check_command_output, resolve_dep_inputs, run_command};
 
 use super::TemplateItem;
 
 /// Mako template processor config. No custom fields.
 /// `command` is the Python interpreter used to render (default: python3).
-/// Unused `StandardConfig` fields: formats, `output_dir`.
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct MakoConfig {
     #[serde(flatten)]
@@ -112,7 +111,10 @@ impl Processor for MakoProcessor {
         instance_name: &str,
     ) -> Result<()> {
         let items = super::find_templates(&self.config.standard, file_index);
-        let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
+        let extra = resolve_dep_inputs(
+            &self.config.standard.dep_inputs,
+            &self.config.standard.dep_auto,
+        )?;
 
         for item in items {
             let mut inputs = Vec::with_capacity(1 + extra.len());
@@ -152,7 +154,7 @@ inventory::submit! {
         processor_type: crate::processor::ProcessorType::Generator,
         create: plugin_create,
         fields: &[],
-        omit_standard_fields: &[],
+        omit_standard_fields: &["formats", "args", "output_dir", "required_tools", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".mako"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "python3", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<MakoConfig>,

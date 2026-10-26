@@ -36,7 +36,11 @@ These are not locked:
 
 - **Packages a project lockfile already pins.** A processor tool that `uv.lock`
   or `package-lock.json` pins is installed from that file by `install-deps`,
-  and a second pin here could only disagree with it.
+  and a second pin here could only disagree with it. This holds only while
+  that file is the configured source (`pip_source = "uv-lock"`, `npm_source =
+  "package-lock"`, the defaults): with `pip_source = "pyproject"` or
+  `npm_source = "package-json"` a lockfile on disk pins nothing, so the tool is
+  locked here.
 - **System packages** (`apt`, `dnf`, `pacman`, `brew`, `snap`) come with the OS
   image.
 - **The Chrome `.deb`.** Its vendor URL always serves the current build, so

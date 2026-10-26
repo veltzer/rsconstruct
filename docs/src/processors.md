@@ -23,8 +23,8 @@ args = ["--disable=C0114"]
 
 Only declared processors run — no processors are enabled by default. Use `rsconstruct smart auto` to auto-detect and add relevant processors.
 
-Use `rsconstruct processor list` to see declared processors and descriptions.
-Use `rsconstruct processor list --all` to show all built-in processors, not just those enabled in the project.
+Use `rsconstruct processor list` to see every built-in processor with its type and description (no config needed; `--type <TYPE>` filters by type).
+Use `rsconstruct processor used` to see which processors the current project enables and detects.
 Use `rsconstruct processor files` to see which files each processor discovers.
 
 ## Available Processors

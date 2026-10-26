@@ -139,19 +139,7 @@ impl crate::processor::Processor for TermsProcessor {
             watched_dirs.push(&self.config.dir_terms_ambiguous);
         }
         for dir in watched_dirs {
-            for entry in crate::errors::ctx(
-                fs::read_dir(dir),
-                &format!("Failed to read terms directory {dir}"),
-            )? {
-                let entry = crate::errors::ctx(
-                    entry,
-                    &format!("Failed to read entry in terms directory {dir}"),
-                )?;
-                let path = entry.path();
-                if path.extension().is_some_and(|e| e == "txt") {
-                    dep_inputs.push(path.to_string_lossy().into_owned());
-                }
-            }
+            dep_inputs.extend(term_list_files(dir)?);
         }
         discover_checker_products(
             graph,
@@ -179,6 +167,29 @@ impl crate::processor::Processor for TermsProcessor {
 }
 
 // --- Shared logic used by both the processor and the `rsconstruct term fix` command ---
+
+/// The `.txt` files of a term directory, sorted by path. They become
+/// inputs of every product, and the input order is part of the cache key
+/// (`combined_input_checksum`), so the `fs::read_dir` order — whatever the
+/// filesystem returns — used to make the key filesystem-dependent.
+fn term_list_files(dir: &str) -> Result<Vec<String>> {
+    let mut files = Vec::new();
+    for entry in crate::errors::ctx(
+        fs::read_dir(dir),
+        &format!("Failed to read terms directory {dir}"),
+    )? {
+        let entry = crate::errors::ctx(
+            entry,
+            &format!("Failed to read entry in terms directory {dir}"),
+        )?;
+        let path = entry.path();
+        if path.extension().is_some_and(|e| e == "txt") {
+            files.push(path.to_string_lossy().into_owned());
+        }
+    }
+    files.sort();
+    Ok(files)
+}
 
 /// Load all technical terms from .txt files in the given directory.
 /// Each file has one term per line. Errors if any term appears more than once
@@ -1077,7 +1088,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "If true (default), backticking an ambiguous term is a build error and `term fix` strips those backticks" },
         ],
-        omit_standard_fields: &["command", "formats", "args", "output_dir"],
+        omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
         defaults: None,
         defconfig_json: crate::registries::default_config_json::<TermsConfig>,
@@ -1088,5 +1099,28 @@ inventory::submit! {
         supports_batch: true,
         caches_outputs: true,
         max_jobs_cap: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::term_list_files;
+    use std::fs;
+
+    /// The term files are listed sorted whatever order they were created
+    /// in, and only the `.txt` ones.
+    #[test]
+    fn terms_list_files_sorted_and_txt_only() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["c.txt", "a.txt", "notes.md", "b.txt"] {
+            fs::write(dir.path().join(name), "term\n").unwrap();
+        }
+        let dir_str = dir.path().to_string_lossy().into_owned();
+        let files = term_list_files(&dir_str).unwrap();
+        let names: Vec<&str> = files
+            .iter()
+            .map(|f| f.rsplit('/').next().unwrap())
+            .collect();
+        assert_eq!(names, ["a.txt", "b.txt", "c.txt"]);
     }
 }

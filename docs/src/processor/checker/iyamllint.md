@@ -60,7 +60,7 @@ src_dirs = [".github"]
 | `strict` | bool | `false` | Fail on warnings too, like `yamllint --strict` |
 | `src_dirs` | string[] | `[]` | Directories to scan |
 | `src_extensions` | string[] | `[".yml", ".yaml"]` | File extensions to check |
-| `dep_auto` | string[] | `[".yamllint", ".yamllint.yml", ".yamllint.yaml"]` | Config files whose changes re-check every file |
+| `dep_auto` | string[] | `[".yamllint", ".yamllint.yaml", ".yamllint.yml"]` | Config files whose changes re-check every file |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
 ## Batch support

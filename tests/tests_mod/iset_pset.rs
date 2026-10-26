@@ -160,3 +160,32 @@ fn iset_max_jobs_zero_rejected() {
     );
     assert_eq!(out.status.code(), Some(2), "config errors exit with 2");
 }
+
+/// The section an override-validation error names is the instance's own,
+/// `[processor.generator.tera]`. The instance name already carries the
+/// `processor.` prefix; prefixing it again produced
+/// `[processor.processor.generator.tera]`.
+#[test]
+fn iset_validation_error_names_the_section_once() {
+    let temp = setup_project_with_config("[processor.generator.tera]\n");
+    create_tera_templates(temp.path());
+    let out = run_rsconstruct(
+        temp.path(),
+        &[
+            "build",
+            "--dry-run",
+            "--iset",
+            "processor.generator.tera.max_jobs=0",
+        ],
+    );
+    assert!(!out.status.success(), "max_jobs=0 must be rejected");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("[processor.generator.tera]"),
+        "the error names the instance's section; got: {stderr}"
+    );
+    assert!(
+        !stderr.contains("processor.processor."),
+        "the section name must not be doubled; got: {stderr}"
+    );
+}

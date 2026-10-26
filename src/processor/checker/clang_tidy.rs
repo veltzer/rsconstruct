@@ -8,7 +8,6 @@ use crate::graph::Product;
 use crate::processor::{check_command_output, run_command};
 
 /// `ClangTidy` config. Custom fields: `compiler_args`.
-/// Unused `StandardConfig` fields: command, formats, `output_dir`.
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct ClangTidyConfig {
     #[serde(default)]
@@ -106,9 +105,14 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Compiler flags forwarded to clang-tidy for parsing" },
         ],
-        omit_standard_fields: &["command", "formats", "output_dir"],
+        omit_standard_fields: &["command", "formats", "output_dir", "required_tools", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".c", ".cc"], src_exclude_dirs: &[] }),
-        defaults: None,
+        // clang-tidy finds `.clang-tidy` in the source file's parent
+        // directories (that is the only name its options provider knows).
+        // `compile_commands.json` is not an input: `execute_product` always
+        // passes `--` with `compiler_args`, and with `--` clang-tidy uses that
+        // fixed compilation database and never looks for a `compile_commands.json`.
+        defaults: Some(crate::config::ProcessorDefaults { dep_auto: &[".clang-tidy"], ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<ClangTidyConfig>,
         keywords: &["c", "cpp", "linter", "clang", "checker", "cc", "h", "hpp"],
         description: "Run clang-tidy static analysis on C/C++ source files",

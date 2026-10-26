@@ -194,8 +194,9 @@ Unknown tags found (not in tags):
 
 ### Unused Tags
 
-Every tag defined in `tags_dir/*.txt` must be used by at least one `.md` file.
-This catches stale entries that should be cleaned up:
+With `check_unused = true`, every tag defined in `tags_dir/*.txt` must be used by at
+least one `.md` file, in the build and in `rsconstruct tag check` alike. This catches
+stale entries that should be cleaned up:
 
 ```text
 Unused tags in tags (not used by any file):
@@ -222,6 +223,10 @@ required_field_groups = [                                         # At least one
 required_values = ["level", "category"]                           # Scalar fields validated against tags
 unique_fields = ["title"]                                         # Fields that must be unique across files
 sorted_tags = true                                                # Require list items in sorted order
+check_unused = false                                              # Fail when an allowlisted tag is used by no file
+similar_files_limit = 10                                          # Files `tag suggest` compares against
+suggested_tags_limit = 15                                         # Suggestions `tag suggest` prints at most
+common_tags_limit = 20                                            # Most-common tags shown for an untagged file
 dep_inputs = []                                                 # Additional files that trigger rebuilds
 
 [processor.generator.tags.field_types]
@@ -240,11 +245,16 @@ duration_hours = "number"                                         # Must be nume
 | `unique_fields` | string[] | `[]` | Fields whose values must be unique across all files |
 | `field_types` | map | `{}` | Expected types per field: `"list"`, `"scalar"`, or `"number"` |
 | `sorted_tags` | bool | `false` | Require list items in sorted order within each file |
+| `check_unused` | bool | `false` | Fail the build when a tag in the `tags_dir` allowlist is used by no file (see [Unused Tags](#unused-tags)) |
+| `similar_files_limit` | integer | `10` | How many most-similar files `tag suggest` inspects when generating suggestions |
+| `suggested_tags_limit` | integer | `15` | Maximum number of tag suggestions `tag suggest` prints |
+| `common_tags_limit` | integer | `20` | Maximum number of most-common tags reported when a file has no tags of its own |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
 ## Batch support
 
-Each input file is processed individually, producing its own output file.
+Not applicable: all scanned files, plus the `tags_dir` lists, are the inputs of one
+product whose single output is the database.
 
 ## Subcommands
 
@@ -280,10 +290,17 @@ All support `--json` for machine-readable output.
 
 | Command | Description |
 |---------|-------------|
-| `rsconstruct tag check` | Run all validations without building (fast lint pass) |
+| `rsconstruct tag check` | Run all validations without building (fast lint pass). The same checks as the build, with the same settings: unused tags fail only with `check_unused = true`, `unique_fields` compares list values as a whole |
 | `rsconstruct tag unused` | List tags in `tags_dir` that no file uses |
 | `rsconstruct tag unused --strict` | Same, but exit with error if any unused tags exist (for CI) |
 | `rsconstruct tag validate` | Validate indexed tags against `tags_dir` without rebuilding |
+
+### Maintaining the allowlist
+
+| Command | Description |
+|---------|-------------|
+| `rsconstruct tag collect` | Scan the database and add every tag it holds that the allowlist lacks: a `key:value` tag goes to `tags_dir/<key>.txt`, a bare tag to `tags_dir/tags.txt`; each file is kept sorted, and `tags_dir` is created if missing |
+| `rsconstruct tag merge PATH` | Merge another project's tags directory into `tags_dir`: files present in both are unioned and sorted, files only in `PATH` are copied in, and files only in `tags_dir` are copied back to `PATH` |
 
 ## Clean behavior
 

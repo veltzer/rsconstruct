@@ -148,9 +148,9 @@ main()
 
 /// Sphinx processor config.
 /// Custom fields: `root`, `python`, `loose_manifest`. `output_dir`
-/// (standard) is where the HTML goes. Unused `StandardConfig` fields:
-/// formats, `dep_auto`, batch, and the scan fields — Sphinx decides what it
-/// reads, and every file under `root` is a source of every product.
+/// (standard) is where the HTML goes. The scan fields are unused — Sphinx
+/// decides what it reads, and every file under `root` is a source of every
+/// product.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SphinxConfig {
     /// The Sphinx source directory (holding `conf.py`), relative to the

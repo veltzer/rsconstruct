@@ -14,6 +14,11 @@ A non-zero exit code from hadolint fails the product.
 
 This processor supports batch mode.
 
+hadolint reads `.hadolint.yaml`, then `.hadolint.yml`, from the working
+directory before its user-level locations, so both are inputs of every
+product when they exist (`dep_auto`, the same list as idockerfile): an edit
+re-checks every Dockerfile, with no `dep_inputs` entry needed.
+
 ## Source Files
 
 - Input: `**/Dockerfile`
@@ -31,6 +36,7 @@ dep_inputs = []
 |-----|------|---------|-------------|
 | `args` | string[] | `[]` | Extra arguments passed to hadolint |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `dep_auto` | string[] | `[".hadolint.yaml", ".hadolint.yml"]` | Config files that are inputs when they exist |
 
 ## Batch support
 

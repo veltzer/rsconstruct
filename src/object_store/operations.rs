@@ -23,9 +23,19 @@ impl ObjectStore {
         let (prefix, rest) = checksum.split_at(super::CHECKSUM_PREFIX_LEN.min(checksum.len()));
         let remote_key = format!("objects/{prefix}/{rest}");
 
-        // Check if already exists remotely (avoid redundant uploads)
-        if remote.exists(ctx, &remote_key).unwrap_or(false) {
-            return Ok(());
+        // Check if already exists remotely (avoid redundant uploads). A
+        // failed check is reported like a failed upload: the push is
+        // best-effort, but a broken remote (expired credentials, denied
+        // bucket) must never pass for "not there yet" without a word.
+        match remote.exists(ctx, &remote_key) {
+            Ok(true) => return Ok(()),
+            Ok(false) => {}
+            Err(e) => {
+                crate::output::warn(&format!(
+                    "failed to check remote cache for {remote_key}: {e}"
+                ));
+                return Ok(());
+            }
         }
 
         // Upload (ignore errors - remote cache is best-effort)
@@ -96,9 +106,19 @@ impl ObjectStore {
             return false;
         };
         let (prefix, rest) = checksum.split_at(super::CHECKSUM_PREFIX_LEN.min(checksum.len()));
-        remote
-            .exists(ctx, &format!("objects/{prefix}/{rest}"))
-            .unwrap_or(false)
+        let remote_key = format!("objects/{prefix}/{rest}");
+        // Same policy as `ensure_object`: a broken remote degrades to "not
+        // available" (the build rebuilds locally, which is always correct),
+        // but it is reported, never swallowed.
+        match remote.exists(ctx, &remote_key) {
+            Ok(available) => available,
+            Err(e) => {
+                crate::output::warn(&format!(
+                    "failed to check remote cache for {remote_key}: {e}"
+                ));
+                false
+            }
+        }
     }
 
     /// Try to fetch an object from remote cache
@@ -224,6 +244,52 @@ mod tests {
     use super::super::ObjectStore;
     use crate::build_context::BuildContext;
     use std::fs;
+
+    /// A remote whose every existence check fails, the way `aws` does with
+    /// expired credentials or a denied bucket.
+    struct BrokenRemote;
+
+    impl crate::remote_cache::RemoteCache for BrokenRemote {
+        fn exists(&self, _ctx: &BuildContext, key: &str) -> anyhow::Result<bool> {
+            anyhow::bail!("S3 head-object failed for {key}: (ExpiredToken)")
+        }
+        fn upload(
+            &self,
+            _ctx: &BuildContext,
+            _key: &str,
+            _src: &std::path::Path,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn download_bytes(
+            &self,
+            _ctx: &BuildContext,
+            _key: &str,
+        ) -> anyhow::Result<Option<Vec<u8>>> {
+            Ok(None)
+        }
+    }
+
+    /// A failing existence check is reported and degrades — the push is
+    /// skipped and the object counts as unavailable — but never fails the
+    /// store that is recording a finished product. Before, the error was
+    /// collapsed to "absent" with `unwrap_or(false)` and nobody heard of it.
+    #[test]
+    fn a_failing_exists_check_degrades_without_failing_the_store() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let ctx = BuildContext::new();
+        ctx.set_mtime_check(false);
+        let mut store =
+            ObjectStore::new_with_remote(&tmp.path().join("a"), "a.redb", &tmp.path().join("r"));
+        store.remote = Some(Box::new(BrokenRemote));
+
+        let out = tmp.path().join("out.txt");
+        fs::write(&out, b"produced bytes").unwrap();
+        store.store_blob_descriptor(&ctx, "0bcdbeef", &out).unwrap();
+
+        let checksum = ObjectStore::calculate_checksum_bytes(b"never stored");
+        assert!(!store.object_available(&ctx, &checksum));
+    }
 
     /// The whole point of finding 12's remote-cache item: a machine with a
     /// cold local cache must be able to restore from what another machine

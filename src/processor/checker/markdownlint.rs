@@ -84,9 +84,11 @@ inventory::submit! {
         processor_type: crate::processor::ProcessorType::Checker,
         create: plugin_create,
         fields: &[],
-        omit_standard_fields: &["formats", "output_dir"],
+        omit_standard_fields: &["formats", "output_dir", "required_tools", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
-        defaults: Some(crate::config::ProcessorDefaults { command: "markdownlint", dep_auto: &[".markdownlint.json", ".markdownlint.jsonc", ".markdownlint.yaml"], ..crate::config::ProcessorDefaults::EMPTY }),
+        // markdownlint-cli's `projectConfigFiles` (looked up in the working
+        // directory) plus the `.markdownlintignore` it reads by default.
+        defaults: Some(crate::config::ProcessorDefaults { command: "markdownlint", dep_auto: &[".markdownlint.jsonc", ".markdownlint.json", ".markdownlint.yaml", ".markdownlint.yml", ".markdownlintignore"], ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<MarkdownlintConfig>,
         keywords: &["markdown", "md", "linter", "node", "npm"],
         description: "Lint Markdown files using markdownlint",

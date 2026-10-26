@@ -2,6 +2,17 @@ use crate::common::{require_tool, run_rsconstruct_with_env};
 use std::fs;
 use tempfile::TempDir;
 
+/// mdl reads `.mdlrc` from the working directory, and the `.mdl_style.rb`
+/// its `style` line conventionally names: both are inputs when they exist.
+#[test]
+fn mdl_default_dep_auto_tracks_mdlrc_and_style() {
+    let defconfig = crate::common::processor_defconfig("processor.checker.mdl");
+    assert_eq!(
+        defconfig["dep_auto"],
+        serde_json::json!([".mdlrc", ".mdl_style.rb"])
+    );
+}
+
 #[test]
 fn mdl_valid_file() {
     require_tool("mdl");

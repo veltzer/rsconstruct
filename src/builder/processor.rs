@@ -3,7 +3,7 @@ use crate::cli::ProcessorAction;
 use crate::color;
 use crate::config::ProcessorConfig;
 use crate::tables;
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use std::collections::HashMap;
 use std::fmt::Write;
 
@@ -466,8 +466,8 @@ fn config_diff(name: &str, current: &serde_json::Value) -> serde_json::Value {
 /// One config field of a processor, as `processor defconfig` and
 /// `processor info` show it.
 #[derive(serde::Serialize)]
-struct FieldInfo {
-    name: &'static str,
+pub struct FieldInfo {
+    pub name: &'static str,
     #[serde(rename = "type")]
     ty: &'static str,
     default: Option<serde_json::Value>,
@@ -480,12 +480,17 @@ struct FieldInfo {
 }
 
 /// The config fields of processor `name`: its own fields first, then the
-/// shared dependency/execution fields, then the scan fields.
-fn processor_fields(name: &str) -> Vec<FieldInfo> {
+/// shared dependency/execution fields, then the scan fields. A standard
+/// field the plugin omits (`omit_standard_fields`) is left out of every
+/// group: the validator rejects it, so showing it would advertise a knob
+/// that cannot be set.
+pub fn processor_fields(name: &str) -> Vec<FieldInfo> {
     use crate::config::{SCAN_FIELD_DESCRIPTIONS, SHARED_FIELD_DESCRIPTIONS};
 
     let proc_descs =
         crate::config::ProcessorConfig::field_descriptions_for(name).unwrap_or_default();
+    let plugin = crate::registries::processor::find_plugin(name);
+    let omitted: &[&str] = plugin.map_or(&[], |p| p.omit_standard_fields);
 
     let must_fields: std::collections::HashSet<&str> =
         crate::config::ProcessorConfig::must_fields_for(name)
@@ -502,12 +507,12 @@ fn processor_fields(name: &str) -> Vec<FieldInfo> {
         .and_then(|j| serde_json::from_str(&j).ok())
         .unwrap_or(serde_json::Value::Null);
 
-    let plugin = crate::registries::processor::find_plugin(name);
     // Processor-specific fields first, then shared dep/exec, then scan fields.
     proc_descs
         .into_iter()
         .chain(SHARED_FIELD_DESCRIPTIONS.iter().copied())
         .chain(SCAN_FIELD_DESCRIPTIONS.iter().copied())
+        .filter(|(field, _)| !omitted.contains(field))
         .map(|(field, desc)| {
             let val = defaults.get(field);
             let ty = match val {
@@ -566,7 +571,19 @@ pub fn processor_defconfig(name: &str, verbose: bool) -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("Unknown processor: '{name}'. Run 'rsconstruct processor list' to see available processors."))?;
 
     if crate::json_output::is_json_mode() {
-        println!("{json}");
+        // The config struct serializes every standard field; drop the ones
+        // this processor omits, which the validator would reject if set.
+        let mut value: serde_json::Value = serde_json::from_str(&json)
+            .with_context(|| format!("{name}: default config is not JSON: {json}"))?;
+        if let (Some(obj), Some(plugin)) = (
+            value.as_object_mut(),
+            crate::registries::processor::find_plugin(name),
+        ) {
+            for omitted in plugin.omit_standard_fields {
+                obj.remove(*omitted);
+            }
+        }
+        println!("{}", serde_json::to_string_pretty(&value)?);
     } else {
         print_processor_metadata(name, verbose);
     }

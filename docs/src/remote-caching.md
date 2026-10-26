@@ -24,7 +24,14 @@ Requires:
 - AWS CLI installed (`aws` command)
 - AWS credentials configured (`~/.aws/credentials` or environment variables)
 
-The S3 backend uses `aws s3 cp` and `aws s3 ls` commands.
+The S3 backend uses `aws s3 cp` to transfer objects and `aws s3api
+head-object` to check for one (an exact key check, not the prefix match `aws
+s3 ls` does). Only a missing key — an error code of `404` or `NoSuchKey` — is
+a cache miss. Any other failure (expired or missing credentials, `AccessDenied`,
+a missing bucket, no network) is an error: the build reports it with a warning
+that carries the CLI's own message and falls back to a local rebuild. It is
+never silently treated as a miss, which would degrade every build to a full
+rebuild with nothing to show why.
 
 ### HTTP/HTTPS
 
@@ -116,7 +123,10 @@ Remote cache stores two types of objects, mirroring the local layout:
    Fetched objects are verified against their checksum before being admitted
    to the local content-addressed store, and fetched descriptors must parse;
    a corrupt remote cannot poison the local cache. A remote miss, or an
-   unreachable remote, simply degrades to a local rebuild.
+   unreachable remote, simply degrades to a local rebuild — but only the
+   miss is silent. A remote that fails (bad credentials, denied bucket, no
+   network) is reported with a warning every time it is consulted, so it
+   can never pass for an empty cache.
 4. If rebuild required:
    - Executes the processor
    - Stores outputs in local cache

@@ -21,6 +21,9 @@ These flags can be used with any command:
 | `--all` | Show every column of every table, including the ones hidden by default and the ones the user config leaves out |
 | `--fields` | Print each table's name and column names only, no data |
 | `--phases` | Show build phase messages (discover, add_dependencies, etc.) |
+| `--graph-stats` | Print graph size (product and edge counts) at each major build stage |
+| `--no-mtime-cache` | Disable the persistent mtime checksum cache (useful for CI/CD where the cache won't survive the build and the write overhead isn't worth it) |
+| `--color <COLOR>` | When to use ANSI color output: `auto` (tty only, the default), `always`, or `never`; the `NO_COLOR` env var also sets it to `never` |
 
 Example:
 
@@ -88,6 +91,9 @@ rsconstruct build --verify-tool-versions       # Verify the tools of the process
 rsconstruct build -t "src/*.c"                 # Only build products matching this glob pattern
 rsconstruct build -d src                       # Only build products under this directory
 rsconstruct build --show-all-config-changes    # Show all config changes, not just output-affecting
+rsconstruct build --trace build.json           # Write a Chrome trace JSON file for build visualization (open in chrome://tracing or Perfetto)
+rsconstruct build --iset processor.checker.ruff.max_jobs=2   # Override a per-instance config field (<iname>.<field>=<value>, repeatable; value parsed as TOML)
+rsconstruct build --pset processor.checker.ruff.args='["--fix"]'   # Override a field on every instance of a processor type (<pname>.<field>=<value>, repeatable; errors if no instance exists)
 ```
 
 By default, tool output (compiler messages, linter output) is only shown when a command fails. Use `--show-output` to see all output.
@@ -123,7 +129,6 @@ The `-p` flag supports `@`-prefixed shortcuts that expand to groups of processor
 **By type:**
 - `@checker` — all checker processors (ruff, pylint, shellcheck, etc.)
 - `@generator` — all generator processors (tera, cc_single_file, etc.)
-- `@creator` — all creator processors (pip, npm, cargo, etc.)
 - `@explicit` — all explicit processors
 - `@mass_generator` — all mass generator processors
 
@@ -193,8 +198,7 @@ What gets removed depends on each product's processor type:
 
 - **Checkers** (ruff, cppcheck, shellcheck, terms, …) — produce no outputs, so nothing to delete.
 - **Generators** (tera, tags, mako, jinja2, mermaid, pdflatex, pdfunite, …) — declare concrete output files. Each declared output file is removed individually with `fs::remove_file`. **Directories are never recursed into.**
-- **Creators** (mdbook, jekyll, cargo, npm, gem, cc, …) — invoke an external build that produces an unknown set of files inside a declared output directory (e.g. `book/`, `_site/`, `target/`). The whole declared `output_dir` is removed recursively. This is the only path that recursively deletes a directory, and it only ever affects directories the creator itself declared.
-- **Explicit** — declares both `output_files` and `output_dirs` directly in `rsconstruct.toml`. Files are removed individually; declared `output_dirs` are removed recursively (because the user asked for that).
+- **Explicit** — declares both `output_files` and `output_dirs` directly in `rsconstruct.toml`. Files are removed individually; declared `output_dirs` are removed recursively (because the user asked for that). This is the only path that recursively deletes a directory.
 - **Mass generators** — every file the tool's plan predicted is a declared output and is removed individually. The `output_dirs` a mass generator declares only bound where predicted files may live and are never removed.
 
 #### Empty-directory sweep
@@ -280,20 +284,6 @@ it runs is (ruff, taplo, rumdl, clippy, cargo, mdbook, pyrefly, rustc). Processo
 that run a user-supplied command (`script`, `explicit`, `generator`, `creator`,
 `mass_generator`) report `rust: false`, since the language is unknown.
 
-## `rsconstruct smart auto`
-
-Auto-detect relevant processors and add them to `rsconstruct.toml`. Scans the project for files matching each processor's conventions and checks that the required tools are installed. Only adds new sections — existing processor sections are preserved. **Requires config.**
-
-```bash
-rsconstruct smart auto
-```
-
-Example output:
-
-```text
-Added 3 processor(s): pylint, ruff, shellcheck
-```
-
 ## `rsconstruct init`
 
 **No config needed.** (no subcommands)
@@ -341,9 +331,12 @@ Display the build dependency graph.
 
 | Subcommand | Config required? |
 |------------|-----------------|
+| `lookup-fwd` | Yes |
+| `lookup-rev` | Yes |
 | `show` | Yes |
-| `view` | Yes |
 | `stats` | Yes |
+| `unreferenced` | Yes |
+| `view` | Yes |
 
 ```bash
 rsconstruct graph show                    # Default SVG format
@@ -356,6 +349,9 @@ rsconstruct graph view                    # Open as SVG (default viewer)
 rsconstruct graph view --viewer mermaid   # Open as HTML with Mermaid in browser
 rsconstruct graph view --viewer svg       # Generate and open SVG using Graphviz dot
 rsconstruct graph stats                   # Show graph statistics (products, processors, dependencies)
+rsconstruct graph lookup-fwd src/main.c   # For each input file, show the products that consume it (source -> outputs)
+rsconstruct graph lookup-rev out/processor.generator.cc_single_file/src/main.elf   # For each output file, show the product that produced it (output -> sources)
+rsconstruct graph unreferenced -e .svg,.png   # List files on disk with these extensions that no product in the graph references
 ```
 
 ## `rsconstruct cache`
@@ -433,6 +429,7 @@ rsconstruct analyzer show all                    # Show all cached dependencies
 rsconstruct analyzer show files src/main.c       # Show dependencies for a specific file
 rsconstruct analyzer show files src/a.c src/b.c  # ...for several files
 rsconstruct analyzer show files --hash-pieces src/main.c  # Also show each analyzer's hash pieces
+rsconstruct analyzer show files ./src/main.c     # A leading ./ is ignored
 rsconstruct analyzer show analyzers cpp          # Show dependencies found by the C/C++ analyzer
 rsconstruct analyzer show analyzers cpp python   # ...by several analyzers
 rsconstruct analyzer stats                       # Show statistics by analyzer
@@ -475,27 +472,30 @@ Smart config manipulation commands for managing processor sections in `rsconstru
 
 | Subcommand | Config required? |
 |------------|-----------------|
-| `disable-all` | No |
-| `enable-all` | No |
-| `enable` | No |
+| `auto` | Yes |
 | `disable` | No |
-| `only` | No |
-| `reset` | No |
+| `disable-all` | No |
+| `enable` | No |
+| `enable-all` | No |
 | `enable-detected` | Yes |
 | `enable-if-available` | Yes |
 | `minimal` | Yes |
-| `auto` | Yes |
+| `only` | No |
 | `remove-no-file-processors` | Yes |
+| `reset` | No |
+
+Processor names are always the full name, `processor.<type>.<name>`; a short name such as `pylint` is rejected with "Unknown processor".
 
 ```bash
-rsconstruct smart enable pylint          # Add [processor.checker.pylint] section
-rsconstruct smart disable pylint         # Remove [processor.checker.pylint] section
+rsconstruct smart auto                   # Auto-detect relevant processors (files present, tool installed) and add their sections; existing sections are kept
+rsconstruct smart enable processor.checker.pylint    # Add [processor.checker.pylint] section
+rsconstruct smart disable processor.checker.pylint   # Remove [processor.checker.pylint] section
 rsconstruct smart enable-all             # Add sections for all builtin processors
 rsconstruct smart disable-all            # Remove all processor sections
 rsconstruct smart enable-detected        # Add sections for auto-detected processors
 rsconstruct smart enable-if-available    # Add sections for detected processors with tools installed
 rsconstruct smart minimal                # Remove all, then add only detected processors
-rsconstruct smart only ruff pylint       # Remove all, then add only listed processors
+rsconstruct smart only processor.checker.ruff processor.checker.pylint   # Remove all, then add only listed processors
 rsconstruct smart reset                  # Remove all processor sections
 rsconstruct smart remove-no-file-processors  # Remove processors that don't match any files (skips enabled = false)
 ```
@@ -602,17 +602,18 @@ the processors' built-in metadata, so it needs no `rsconstruct.toml`.
 
 ## `rsconstruct tool`
 
-List or check external tools required by declared processors. All subcommands use config if available; without config, they operate on all built-in processors.
+List or check external tools required by declared processors. `list` reads only the central registry; `check` and `lock` need a project; the rest use config if available and without one operate on all built-in processors.
 
 | Subcommand | Config required? |
 |------------|-----------------|
-| `list` | Uses config if available |
 | `check` | Yes |
-| `lock` | Yes |
+| `graph` | Uses config if available |
 | `install` | Uses config if available |
 | `install-deps` | Uses config if available |
+| `list` | No |
+| `list-configured` | Uses config if available |
+| `lock` | Yes |
 | `stats` | Uses config if available |
-| `graph` | Uses config if available |
 
 ```bash
 rsconstruct tool list              # List all tools known to rsconstruct (from the central registry)
@@ -911,7 +912,7 @@ rsconstruct product show out/processor.generator.cc_single_file/src/main.elf  # 
 rsconstruct product show src/main.c                                            # By primary input
 ```
 
-The path is looked up as an output first; if no product owns it, products that have it as their primary input are shown. Example output:
+The path is looked up as an output first; if no product owns it, products that have it as their primary input are shown. A leading `./` is ignored, so a shell-completed `./README.md` is the same query as `README.md`. The `hash_pieces` section is recomputed live by every analyzer that scans the product (each source of a multi-source product); an analyzer that fails to scan it is an error, not an empty section. Example output:
 
 ```text
 processor: processor.generator.cc_single_file

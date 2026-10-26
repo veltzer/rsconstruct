@@ -137,6 +137,20 @@ impl Processor for AspellProcessor {
         vec![self.config.standard.command.clone()]
     }
 
+    /// A `conf` other than the default is an input of every product and
+    /// must exist (aspell reads it on every run, so its content decides the
+    /// verdict, and a missing one the user named is an error); the default
+    /// `.aspell.conf` is a `dep_auto` input, tracked when it exists.
+    fn extra_dep_inputs(&self) -> Result<Vec<String>> {
+        let named = crate::processor::named_config_file(
+            "aspell",
+            "conf",
+            &self.config.conf,
+            &default_aspell_conf(),
+        )?;
+        Ok(named.into_iter().collect())
+    }
+
     fn discover(
         &self,
         graph: &mut BuildGraph,
@@ -148,12 +162,14 @@ impl Processor for AspellProcessor {
         // when it exists.
         let mut dep_auto = self.config.standard.dep_auto.clone();
         dep_auto.push(self.config.words_file.clone());
+        let mut dep_inputs = self.config.standard.dep_inputs.clone();
+        dep_inputs.extend(self.extra_dep_inputs()?);
 
         crate::processor::discover_checker_products(
             graph,
             &self.config.standard,
             file_index,
-            &self.config.standard.dep_inputs,
+            &dep_inputs,
             &dep_auto,
             &self.config,
             &crate::config::checksum_fields_of(instance_name),
@@ -206,7 +222,7 @@ inventory::submit! {
                 affects_output: false, required: false,
                 doc: "Path to the personal word list file" },
         ],
-        omit_standard_fields: &["formats", "output_dir"],
+        omit_standard_fields: &["formats", "output_dir", "required_tools"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "aspell", dep_auto: &[".aspell.conf", ".aspell.en.pws", ".aspell.en.prepl"], ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<AspellConfig>,

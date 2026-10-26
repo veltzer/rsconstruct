@@ -11,15 +11,14 @@ use tera::{Context as TeraContext, Function, Tera, Value as TeraValue, to_value}
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
+use crate::config::{StandardConfig, output_config_hash};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processor::{Processor, run_command_capture};
+use crate::processor::{Processor, resolve_dep_inputs, run_command_capture};
 
 use super::TemplateItem;
 
 /// Tera template processor config. No custom fields.
-/// Unused `StandardConfig` fields: command, formats, `output_dir`.
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct TeraConfig {
     #[serde(flatten)]
@@ -172,7 +171,10 @@ impl Processor for TeraProcessor {
         instance_name: &str,
     ) -> Result<()> {
         let items = super::find_templates(&self.config.standard, file_index);
-        let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
+        let extra = resolve_dep_inputs(
+            &self.config.standard.dep_inputs,
+            &self.config.standard.dep_auto,
+        )?;
 
         // Capture the includable-template set for execute (see the field doc).
         *self.includable_templates.lock().unwrap() = file_index
@@ -1005,7 +1007,14 @@ inventory::submit! {
         processor_type: crate::processor::ProcessorType::Generator,
         create: plugin_create,
         fields: &[],
-        omit_standard_fields: &[],
+        omit_standard_fields: &[
+            "command",
+            "formats",
+            "args",
+            "output_dir",
+            "required_tools",
+            "batch",
+        ],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".tera"], src_exclude_dirs: &[] }),
         defaults: None,
         defconfig_json: registry::default_config_json::<TeraConfig>,

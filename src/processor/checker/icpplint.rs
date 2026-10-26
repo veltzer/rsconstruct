@@ -272,7 +272,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "The name of the per-directory configuration file, as --config (CPPLINT.cfg)" },
         ],
-        omit_standard_fields: &[],
+        omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".c", ".cc", ".cpp", ".cxx", ".c++", ".cu", ".h", ".hh", ".hpp", ".hxx", ".h++", ".cuh"], src_exclude_dirs: &[] }),
         defaults: None,
         keywords: &["c", "cpp", "linter", "google", "cpplint", "cc", "h", "hpp", "rust"],

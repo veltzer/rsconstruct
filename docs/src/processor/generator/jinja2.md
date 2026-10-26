@@ -4,7 +4,7 @@
 
 Renders Jinja2 template files into output files using the Python Jinja2 template library.
 
-The Rust alternative is [ijinja2](ijinja2.md): the same discovery, output paths and environment-variable context, rendered in-process with minijinja. Switching is `jinja2` → `ijinja2` in the stanza header. A template that leans on Python-only calls (`'{}'.format()`, `%`-formatting, `pprint`) stays here.
+The Rust alternative is [ijinja2](ijinja2.md): the same discovery, output paths and (empty) context, rendered in-process with minijinja. Switching is `jinja2` → `ijinja2` in the stanza header. A template that leans on Python-only calls (`'{}'.format()`, `%`-formatting, `pprint`) stays here.
 
 ## How It Works
 
@@ -19,8 +19,10 @@ templates.jinja2/sub/readme.txt.j2  →  sub/readme.txt
 
 Templates use the [Jinja2](https://jinja.palletsprojects.com/) templating engine. A
 `FileSystemLoader` is configured with the project root as the search directory, so
-templates can include or extend other templates using relative paths. Environment
-variables are passed to the template context.
+templates can include or extend other templates using relative paths. The context is
+empty: templates do not see the environment variables (they used to, which made the
+output depend on whatever the shell exported, untracked by the cache). A value a template
+needs comes from a file it includes, listed in `dep_inputs` so an edit to it rebuilds.
 
 ## Source Files
 

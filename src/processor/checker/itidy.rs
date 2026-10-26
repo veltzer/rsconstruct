@@ -184,7 +184,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Further tidy options as \"name: value\" strings, applied after the config file, like --name value arguments" },
         ],
-        omit_standard_fields: &[],
+        omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".html", ".htm"], src_exclude_dirs: &[] }),
         defaults: None,
         keywords: &["html", "validator", "web", "tidy", "rust"],

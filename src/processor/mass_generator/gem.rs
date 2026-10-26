@@ -114,8 +114,13 @@ impl Processor for GemProcessor {
         );
         let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
 
+        // What `bundle install` resolves from besides the Gemfile: the
+        // gemspecs it references and the lockfile it pins to. The lockfile
+        // is an input even though bundler may rewrite it: a rewrite with the
+        // same content keeps the checksum, and one with new content means
+        // the install changed and the next build re-runs it once.
         let siblings = SiblingFilter {
-            extensions: &[".gemspec"],
+            extensions: &[".gemspec", "Gemfile.lock"],
             excludes: &["/.git/", "/out/", "/.rsconstruct/", "/gems/"],
         };
 
@@ -170,7 +175,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Directory where gems are installed" },
         ],
-        omit_standard_fields: &["formats", "dep_auto", "output_dir"],
+        omit_standard_fields: &["formats", "dep_auto", "output_dir", "required_tools", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["Gemfile"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "bundle", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<GemConfig>,
@@ -194,6 +199,49 @@ mod tests {
         assert_eq!(
             stamp_path(Path::new("tools/lint")),
             PathBuf::from("out/processor.mass_generator.gem/tools_lint.stamp")
+        );
+    }
+
+    /// `Gemfile.lock` pins what `bundle install` installs, so it is an input
+    /// of the stamp next to the gemspecs; the installed gems and unrelated
+    /// Ruby sources are not.
+    #[test]
+    fn gemfile_lock_is_an_input_of_the_install_stamp() {
+        let files: Vec<PathBuf> = [
+            "Gemfile",
+            "Gemfile.lock",
+            "mylib.gemspec",
+            "lib/mylib.rb",
+            "gems/gems/rake-13.0.0/rake.gemspec",
+        ]
+        .iter()
+        .map(PathBuf::from)
+        .collect();
+        // Through the registry, so the scan fields carry their defaults;
+        // the scan root is configured, as every project does.
+        let processor = crate::builder::create_processor_for_instance(
+            "processor.mass_generator.gem",
+            &toml::from_str("src_dirs = [\".\"]").unwrap(),
+        )
+        .unwrap()
+        .expect("gem is registered");
+        let mut graph = BuildGraph::new();
+        processor
+            .discover(
+                &mut graph,
+                &FileIndex::from_paths(files),
+                "processor.mass_generator.gem",
+            )
+            .unwrap();
+        assert_eq!(graph.products().len(), 1);
+        let product = &graph.products()[0];
+        assert_eq!(product.outputs, vec![PathBuf::from(ROOT_STAMP)]);
+        assert_eq!(
+            product.inputs,
+            ["Gemfile", "Gemfile.lock", "mylib.gemspec"]
+                .iter()
+                .map(PathBuf::from)
+                .collect::<Vec<_>>()
         );
     }
 }

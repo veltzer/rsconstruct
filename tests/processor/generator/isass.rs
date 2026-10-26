@@ -73,3 +73,37 @@ fn isass_compiles_partials_when_asked() {
         "skip_partials = false must compile the partial too"
     );
 }
+
+/// A `dep_auto` file is an input of every product of a `SimpleGenerator`
+/// (isass is one): editing it rebuilds the stylesheet. `SimpleGenerator`
+/// used to resolve `dep_inputs` only.
+#[test]
+fn isass_dep_auto_file_edit_rebuilds() {
+    let temp_dir = setup_isass_project(
+        "[processor.generator.isass]\nsrc_dirs = [\"sass\"]\ndep_auto = [\"sass/theme.txt\"]\n",
+    );
+    let project_path = temp_dir.path();
+    fs::write(project_path.join("sass/theme.txt"), "light\n").unwrap();
+
+    build_ok(project_path);
+    let out = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("[processor.generator.isass] Skipping (unchanged):"),
+        "an unchanged project must be skipped: {stdout}"
+    );
+
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    fs::write(project_path.join("sass/theme.txt"), "dark\n").unwrap();
+    let out = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    assert!(
+        out.status.success(),
+        "rebuild failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("Processing:") && !stdout.contains("Skipping (unchanged)"),
+        "editing a dep_auto file must rebuild the stylesheet: {stdout}"
+    );
+}

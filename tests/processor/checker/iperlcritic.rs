@@ -28,6 +28,14 @@ fn build(project_path: &Path) -> std::process::Output {
     run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")])
 }
 
+/// Not batched, as the docs say: files are checked in parallel as separate
+/// products. A batch would run them one after another on a single worker.
+#[test]
+fn iperlcritic_does_not_batch() {
+    let info = crate::common::processor_info("processor.checker.iperlcritic");
+    assert_eq!(info["supports_batch"], false);
+}
+
 fn combined_output(output: &std::process::Output) -> String {
     format!(
         "{}{}",
@@ -215,6 +223,15 @@ fn reported_lines(output: &std::process::Output) -> Vec<String> {
         .map(|l| match l.split_once("[processor.checker.iperlcritic] ") {
             Some((_, rest)) => rest,
             None => l,
+        })
+        // The reporter names the product before the message (`src/a.pl:
+        // src/a.pl:1:1: ...`); the violation line itself names the file (a
+        // `#line` directive may make that another name, as perlcritic prints
+        // it). A violation's own `path:line:col` always holds a colon, so a
+        // bare `src/...` before the first `: ` is the product prefix.
+        .map(|l| match l.split_once(": ") {
+            Some((product, rest)) if product.starts_with("src/") && !product.contains(':') => rest,
+            _ => l,
         })
         .filter(|l| l.starts_with("src/") && l.contains(": ["))
         .map(str::to_string)

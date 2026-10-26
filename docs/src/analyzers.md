@@ -52,7 +52,7 @@ Analyzer results are cached in the dependency cache (`.rsconstruct/deps.redb`). 
 - If neither a source file nor any of its cached dependencies has changed, the cached dependencies are used.
 - If the source or any dependency has changed, or a dependency is gone, the source is re-scanned. Checking the dependencies is what catches a header that gains a new `#include`: the sources that include it are rescanned and pick up the new header.
 - If a file appears where resolution previously found nothing — a `src/x.h` that now shadows the `include/x.h` an `#include "x.h"` used to resolve to, or a local `foo.py` for an `import foo` that used to be external — the source is re-scanned. Analyzers record the paths they probed and found missing.
-- If the analyzer's configuration changes (`include_paths`, `load_paths`, pkg-config output, ...), every source it scanned is re-scanned: an entry is only trusted under the configuration it was scanned with.
+- If the analyzer's configuration changes (`include_paths`, `load_paths`, pkg-config output, ...), every source it scanned is re-scanned: an entry is only trusted under the configuration it was scanned with. Only the fields that change what a scan finds count; `enabled` and `src_exclude_dirs` decide which sources are scanned, not what they depend on, so changing them keeps every entry.
 - The `sass` and `tera` analyzers do not use the cached list at all: they rescan every source on every build.
 - The cache is shared across all analyzers.
 

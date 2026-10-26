@@ -142,6 +142,14 @@ fn reported_findings(output: &std::process::Output) -> Vec<String> {
             Some((_, rest)) => rest,
             None => l,
         })
+        // The reporter names the product before the message (`src/a.sh:
+        // src/a.sh:1:1: ...`); the gcc line itself names the file. A
+        // finding's own `path:line:col` always holds a colon, so a bare
+        // `src/...` before the first `: ` is the product prefix.
+        .map(|l| match l.split_once(": ") {
+            Some((product, rest)) if product.starts_with("src/") && !product.contains(':') => rest,
+            _ => l,
+        })
         .filter(|l| {
             l.starts_with("src/") && l.contains(": ") && l.ends_with(']') && l.contains(" [SC")
         })

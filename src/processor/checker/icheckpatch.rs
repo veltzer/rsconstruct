@@ -63,16 +63,12 @@ impl crate::processor::Processor for IcheckpatchProcessor {
         Vec::new()
     }
 
+    /// No `execute_batch`: checking in-process has no start-up cost for a
+    /// batch to share, and a batch runs its files one after another on a
+    /// single worker, so files are checked in parallel as separate
+    /// products instead (`supports_batch: false`).
     fn execute(&self, _ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         Self::check_file(product.primary_input())
-    }
-
-    fn execute_batch(
-        &self,
-        _ctx: &crate::build_context::BuildContext,
-        products: &[&Product],
-    ) -> Vec<Result<()>> {
-        crate::processor::execute_checker_batch_per_file(products, Self::check_file)
     }
 }
 
@@ -90,14 +86,21 @@ inventory::submit! {
         create: plugin_create,
         defconfig_json: crate::registries::default_config_json::<StandardConfig>,
         fields: &[],
-        omit_standard_fields: &[],
+        omit_standard_fields: &[
+        "command",
+        "formats",
+        "args",
+        "output_dir",
+        "required_tools",
+        "batch",
+    ],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".c", ".h"], src_exclude_dirs: &[] }),
         defaults: None,
         keywords: &["c", "linux", "kernel", "checker", "patch", "checkpatch", "rust"],
         description: "Check C source files with the Linux kernel's checkpatch.pl rules (in-process)",
         is_builtin: true,
         is_rust: true,
-        supports_batch: true,
+        supports_batch: false,
         caches_outputs: true,
         max_jobs_cap: None,
     }

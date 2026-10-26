@@ -4,27 +4,26 @@
 //! every template under `src_dirs` whose name ends in a `src_extensions`
 //! entry is rendered to the same path with the extension removed, the
 //! project root is the loader root (so `{% include %}` and `{% extends %}`
-//! take paths relative to it), and the environment variables are the
-//! context. The engine is configured to match a plain Jinja2
-//! `Environment`: no autoescaping, the trailing newline dropped, undefined
-//! names rendering as nothing.
+//! take paths relative to it), and the context is empty (templates do not
+//! see the environment variables, so the output depends on tracked files
+//! only). The engine is configured to match a plain Jinja2 `Environment`:
+//! no autoescaping, the trailing newline dropped, undefined names rendering
+//! as nothing.
 
-use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
+use crate::config::{StandardConfig, output_config_hash};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processor::Processor;
+use crate::processor::{Processor, resolve_dep_inputs};
 
 use super::TemplateItem;
 
-/// No custom fields. Unused `StandardConfig` fields: command, formats,
-/// `output_dir`.
+/// No custom fields.
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct Ijinja2Config {
     #[serde(flatten)]
@@ -75,9 +74,11 @@ fn render(item: &TemplateItem) -> Result<()> {
     let template = env
         .get_template(&name)
         .with_context(|| format!("Failed to load template {}", item.source_path.display()))?;
-    let vars: BTreeMap<String, String> = std::env::vars().collect();
+    // The context is empty, as in the jinja2 generator: the environment
+    // variables used to be the context, which made the output depend on
+    // whatever the shell happened to export, untracked by the cache.
     let rendered = template
-        .render(minijinja::Value::from_pairs(vars))
+        .render(minijinja::context! {})
         .with_context(|| format!("Failed to render template {}", item.source_path.display()))?;
     fs::write(&item.output_path, rendered)
         .with_context(|| format!("Failed to write output: {}", item.output_path.display()))
@@ -342,7 +343,10 @@ impl Processor for Ijinja2Processor {
         instance_name: &str,
     ) -> Result<()> {
         let items = super::find_templates(&self.config.standard, file_index);
-        let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
+        let extra = resolve_dep_inputs(
+            &self.config.standard.dep_inputs,
+            &self.config.standard.dep_auto,
+        )?;
         for item in items {
             let mut inputs = Vec::with_capacity(1 + extra.len());
             inputs.push(item.source_path.clone());
@@ -382,7 +386,14 @@ inventory::submit! {
         processor_type: crate::processor::ProcessorType::Generator,
         create: plugin_create,
         fields: &[],
-        omit_standard_fields: &["command"],
+        omit_standard_fields: &[
+        "command",
+        "formats",
+        "args",
+        "output_dir",
+        "required_tools",
+        "batch",
+    ],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".j2"], src_exclude_dirs: &[] }),
         defaults: None,
         defconfig_json: crate::registries::default_config_json::<Ijinja2Config>,

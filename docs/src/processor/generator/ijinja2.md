@@ -13,7 +13,7 @@ templates.jinja2/app.config.j2      →  app.config
 templates.jinja2/sub/readme.txt.j2  →  sub/readme.txt
 ```
 
-The project root is the template root, so `{% include %}`, `{% extends %}` and `{% import %}` take paths relative to it (`{% include 'templates.jinja2/parts/header.inc' %}`). The environment variables are the context: `{{ HOME }}` is the home directory, `{{ MISSING }}` renders as nothing and `{{ MISSING | default('x') }}` as `x`. The engine is set up like a plain Jinja2 `Environment`: no autoescaping (not even for `.html` outputs), the single trailing newline of a template dropped, blocks and lines trimmed only where `-` asks for it.
+The project root is the template root, so `{% include %}`, `{% extends %}` and `{% import %}` take paths relative to it (`{% include 'templates.jinja2/parts/header.inc' %}`). The context is empty, as in the jinja2 generator: templates do not see the environment variables (the output would otherwise depend on whatever the shell exported, untracked by the cache), so `{{ HOME }}` renders as nothing and `{{ HOME | default('x') }}` as `x`. The engine is set up like a plain Jinja2 `Environment`: no autoescaping (not even for `.html` outputs), the single trailing newline of a template dropped, blocks and lines trimmed only where `-` asks for it.
 
 ### What minijinja renders differently
 

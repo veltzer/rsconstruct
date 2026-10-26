@@ -41,19 +41,22 @@ fn ijinja2_basic_render() {
     assert_eq!(content, "Hello, World!\nCount: 5");
 }
 
+/// The context is empty — an environment variable (`TITLE`, set for the
+/// build) is undefined inside a template, as in the jinja2 generator — and
+/// includes resolve from the project root.
 #[test]
-fn ijinja2_environment_is_the_context_and_includes_resolve_from_the_root() {
+fn ijinja2_context_is_empty_and_includes_resolve_from_the_root() {
     let temp_dir = setup_project();
     let project = temp_dir.path();
     fs::create_dir_all(project.join("templates.jinja2/sub")).unwrap();
     fs::write(
         project.join("templates.jinja2/header.inc"),
-        "== {{ TITLE | upper }} ==\n",
+        "== {{ TITLE }} ==\n",
     )
     .unwrap();
     fs::write(
         project.join("templates.jinja2/sub/page.md.j2"),
-        "{% include 'templates.jinja2/header.inc' %}{% for i in range(3) %}{{ i }}{% if not loop.last %}, {% endif %}{% endfor %}\n{{ MISSING }}|{{ MISSING | default('none') }}\n",
+        "{% include 'templates.jinja2/header.inc' %}{% for i in range(3) %}{{ i }}{% if not loop.last %}, {% endif %}{% endfor %}\n{{ TITLE }}|{{ TITLE | default('none') }}\n",
     )
     .unwrap();
     let output = build(project, &[("TITLE", "docs")]);
@@ -64,7 +67,7 @@ fn ijinja2_environment_is_the_context_and_includes_resolve_from_the_root() {
     );
     let content = fs::read_to_string(project.join("sub/page.md")).expect("output written");
     // The included file's own trailing newline is dropped too, as in Jinja2.
-    assert_eq!(content, "== DOCS ==0, 1, 2\n|none");
+    assert_eq!(content, "==  ==0, 1, 2\n|none");
 }
 
 /// The filters whose Jinja2 argument lists ijinja2 supplies itself; the

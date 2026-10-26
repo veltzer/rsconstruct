@@ -243,27 +243,10 @@ pub fn collect_wanted(
     deps: &crate::config::DependenciesConfig,
     root: &Path,
 ) -> Result<Wanted> {
-    let uv_owned: BTreeSet<String> = {
-        let uv_lock = root.join("uv.lock");
-        if deps.pip_source == crate::config::PipSource::UvLock && uv_lock.exists() {
-            crate::config::uv_lock_pinned_deps(&uv_lock)?
-                .iter()
-                .map(|req| crate::config::normalized_distribution_name(req))
-                .collect()
-        } else {
-            BTreeSet::new()
-        }
-    };
-    let npm_owned: BTreeSet<String> = {
-        let package_lock = root.join("package-lock.json");
-        if package_lock.exists() {
-            crate::config::package_lock_pins(&package_lock)?
-                .into_keys()
-                .collect()
-        } else {
-            BTreeSet::new()
-        }
-    };
+    let LockfileOwned {
+        pip: uv_owned,
+        npm: npm_owned,
+    } = lockfile_owned(deps, root)?;
 
     let mut wanted = Wanted::default();
     let mut names: Vec<&String> = processors.keys().collect();
@@ -277,8 +260,8 @@ pub fn collect_wanted(
             if tool.contains('/') {
                 continue;
             }
-            let Some(method) =
-                crate::tools::tool_info(&tool).and_then(|info| info.install_methods.first())
+            let Some(method) = crate::tools::tool_info(&tool)
+                .and_then(crate::tools::ToolInfo::default_install_method)
             else {
                 continue;
             };
@@ -304,6 +287,39 @@ pub fn collect_wanted(
         }
     }
     Ok(wanted)
+}
+
+/// The packages a project lockfile pins, which rsconstruct.lock therefore
+/// leaves alone.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct LockfileOwned {
+    /// PEP 503-normalized names pinned by uv.lock.
+    pip: BTreeSet<String>,
+    /// Names pinned by package-lock.json.
+    npm: BTreeSet<String>,
+}
+
+/// What uv.lock and package-lock.json own, each only when install-deps
+/// actually installs from it: a lockfile that is on disk but not the
+/// configured source (`pip_source = "pyproject"`, `npm_source =
+/// "package-json"`) pins nothing, so its packages must be locked here or
+/// they float.
+fn lockfile_owned(deps: &crate::config::DependenciesConfig, root: &Path) -> Result<LockfileOwned> {
+    let mut owned = LockfileOwned::default();
+    let uv_lock = root.join("uv.lock");
+    if deps.pip_source == crate::config::PipSource::UvLock && uv_lock.exists() {
+        owned.pip = crate::config::uv_lock_pinned_deps(&uv_lock)?
+            .iter()
+            .map(|req| crate::config::normalized_distribution_name(req))
+            .collect();
+    }
+    let package_lock = root.join("package-lock.json");
+    if deps.npm_source == crate::config::NpmSource::PackageLock && package_lock.exists() {
+        owned.npm = crate::config::package_lock_pins(&package_lock)?
+            .into_keys()
+            .collect();
+    }
+    Ok(owned)
 }
 
 /// Fail when the pre-rsconstruct.lock file is still around.
@@ -749,8 +765,10 @@ impl std::fmt::Display for Mismatch {
 
 /// The Python packages installed in the environment `python3` on PATH
 /// belongs to (the one install-deps and `tool install` install into),
-/// with their versions, among `names`.
-fn installed_pip_versions(ctx: &BuildContext, names: &[&str]) -> BTreeMap<String, String> {
+/// with their versions, among `names`. Asks the interpreter itself, not
+/// `pip show`: a uv-managed venv (the default installer's) has no pip.
+/// Shared with `doctor`.
+pub fn installed_pip_versions(ctx: &BuildContext, names: &[&str]) -> BTreeMap<String, String> {
     const SCRIPT: &str = "\
 import sys, importlib.metadata as m
 for n in sys.argv[1:]:
@@ -771,8 +789,10 @@ for n in sys.argv[1:]:
         .collect()
 }
 
-/// Globally installed npm packages and their versions.
-fn installed_npm_globals(ctx: &BuildContext) -> BTreeMap<String, String> {
+/// Globally installed npm packages and their versions. `-g`, because
+/// `[dependencies].npm` entries are installed with `npm install -g`.
+/// Shared with `doctor`.
+pub fn installed_npm_globals(ctx: &BuildContext) -> BTreeMap<String, String> {
     let mut cmd = std::process::Command::new("npm");
     cmd.args(["ls", "-g", "--depth=0", "--json"]);
     // npm ls exits non-zero on any problem in the global tree while still
@@ -809,7 +829,9 @@ fn installed_gem_versions(ctx: &BuildContext, name: &str) -> Vec<String> {
 }
 
 /// Parse `gem list` output (`name (1.2.0, default: 1.1.0)`) into the
-/// versions installed of `name`.
+/// versions installed of `name`. A native gem lists its platform after the
+/// version (`ffi (1.17.4 x86_64-linux-gnu, 1.17.3)`); only the version is
+/// kept, since that is what the lock records.
 fn parse_gem_list(listing: &str, name: &str) -> Vec<String> {
     listing
         .lines()
@@ -818,8 +840,13 @@ fn parse_gem_list(listing: &str, name: &str) -> Vec<String> {
         .map(|versions| {
             versions
                 .split(',')
-                .map(|v| v.trim().trim_start_matches("default:").trim().to_string())
-                .filter(|v| !v.is_empty())
+                .filter_map(|v| {
+                    v.trim()
+                        .trim_start_matches("default:")
+                        .split_whitespace()
+                        .next()
+                        .map(str::to_string)
+                })
                 .collect()
         })
         .unwrap_or_default()
@@ -1238,5 +1265,57 @@ mod tests {
         );
         assert_eq!(parse_gem_list("", "mdl"), Vec::<String>::new());
         assert_eq!(parse_gem_list("mdlx (1.0)\n", "mdl"), Vec::<String>::new());
+    }
+
+    /// A native gem's platform follows the version inside the parentheses.
+    /// Keeping it made the drift check report `1.17.4 x86_64-linux-gnu`
+    /// against a `1.17.4` pin as a mismatch.
+    #[test]
+    fn gem_list_drops_platform_suffixes() {
+        assert_eq!(
+            parse_gem_list("ffi (1.17.4 x86_64-linux-gnu, 1.17.3)\n", "ffi"),
+            vec!["1.17.4", "1.17.3"]
+        );
+        assert_eq!(
+            parse_gem_list("ffi (default: 1.17.4 x86_64-linux-gnu)\n", "ffi"),
+            vec!["1.17.4"]
+        );
+    }
+
+    /// A lockfile owns its packages only when install-deps installs from
+    /// it. With `npm_source = "package-json"`, a package-lock.json on disk
+    /// pins nothing, so the packages it names must still be locked here —
+    /// before this, `tool lock` dropped them and they floated.
+    #[test]
+    fn lockfiles_own_packages_only_when_they_are_the_source() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        fs::write(
+            tmp.path().join("package-lock.json"),
+            r#"{"lockfileVersion": 3, "packages": {"node_modules/markdownlint-cli": {"version": "0.45.0"}}}"#,
+        )
+        .unwrap();
+        fs::write(
+            tmp.path().join("uv.lock"),
+            "version = 1\n\n[[package]]\nname = \"ruff\"\nversion = \"0.14.0\"\nsource = { registry = \"https://pypi.org/simple\" }\n",
+        )
+        .unwrap();
+
+        let defaults = crate::config::DependenciesConfig::default();
+        let owned = lockfile_owned(&defaults, tmp.path()).unwrap();
+        assert_eq!(
+            owned.npm.iter().collect::<Vec<_>>(),
+            vec!["markdownlint-cli"]
+        );
+        assert_eq!(owned.pip.iter().collect::<Vec<_>>(), vec!["ruff"]);
+
+        let floating = crate::config::DependenciesConfig {
+            npm_source: crate::config::NpmSource::PackageJson,
+            pip_source: crate::config::PipSource::Pyproject,
+            ..Default::default()
+        };
+        assert_eq!(
+            lockfile_owned(&floating, tmp.path()).unwrap(),
+            LockfileOwned::default()
+        );
     }
 }

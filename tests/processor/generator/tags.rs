@@ -1179,3 +1179,62 @@ fn tags_check_reports_issues() {
         stderr
     );
 }
+
+/// `tag check` runs the build's validation: an unused tag is an issue only
+/// with `check_unused = true`. It used to fail on unused tags regardless.
+#[test]
+fn tags_check_honours_check_unused() {
+    let md = [("a.md", "---\ntags:\n  - tools:active\n---\n")];
+    let lists = [("tools.txt", "active\nobsolete\n")];
+
+    let lenient = setup_tags_project(&md, &lists);
+    let output = run_rsconstruct_with_env(lenient.path(), &["tag", "check"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "check must pass with check_unused off: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let strict = setup_tags_project_with_config(
+        &md,
+        &lists,
+        "[processor.generator.tags]\ncheck_unused = true\nsrc_dirs = [\".\"]\n",
+    );
+    let output = run_rsconstruct_with_env(strict.path(), &["tag", "check"], &[("NO_COLOR", "1")]);
+    assert!(
+        !output.status.success(),
+        "check must fail with check_unused on"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("obsolete"),
+        "should report 'obsolete' as unused: {stderr}"
+    );
+}
+
+/// `unique_fields` compares list values as a whole, in the build and in
+/// `tag check` alike; `tag check` used to look at scalar values only.
+#[test]
+fn tags_check_unique_fields_compares_lists() {
+    let config = "[processor.generator.tags]\nunique_fields = [\"authors\"]\nsrc_dirs = [\".\"]\n";
+    let temp_dir = setup_tags_project_with_config(
+        &[
+            ("a.md", "---\nauthors:\n  - alice\n  - bob\n---\n"),
+            ("b.md", "---\nauthors:\n  - alice\n  - bob\n---\n"),
+        ],
+        &[],
+        config,
+    );
+    for args in [&["tag", "check"][..], &["build"][..]] {
+        let output = run_rsconstruct_with_env(temp_dir.path(), args, &[("NO_COLOR", "1")]);
+        assert!(
+            !output.status.success(),
+            "{args:?} must fail on a duplicated list value"
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("alice,bob") && stderr.contains("a.md") && stderr.contains("b.md"),
+            "{args:?} should name the value and both files: {stderr}"
+        );
+    }
+}

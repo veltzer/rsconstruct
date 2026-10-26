@@ -19,6 +19,8 @@ marp/courses/rust/02-types.md  ->  out/processor.generator.marp/courses/rust/02-
 
 The input PDFs are declared as the product's inputs, so the merge runs after the upstream processor has produced them and reruns when any of them changes.
 
+The sources are located by `source_dir` and `source_ext`, not by `src_dirs` / `src_extensions`; the standard `src_exclude_dirs`, `src_exclude_files`, `src_exclude_paths` and `src_files` fields apply to that lookup as they do to a scan.
+
 Bookmarks (outlines) of the input PDFs are not carried over to the merged PDF.
 
 ## Source Files

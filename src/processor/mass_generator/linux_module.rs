@@ -11,9 +11,9 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     OnceTool, PlannedOutput, add_planned_products, fresh_state_dir, install_staged,
-    require_planned_output,
+    require_planned_output, resolve_dep_inputs_and_auto,
 };
-use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
+use crate::config::{StandardConfig, output_config_hash};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use crate::processor::{Processor, anchor_display_dir, check_command_output, run_command};
@@ -60,15 +60,28 @@ const fn default_linux_module_w() -> u32 {
 }
 
 /// Linux module config. No custom fields.
-/// Unused `StandardConfig` fields: command, formats, `output_dir`, args.
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct LinuxModuleConfig {
     #[serde(flatten)]
     pub standard: StandardConfig,
 }
 
+/// The tools the discovered manifests say a build runs: each manifest's
+/// `make`, and `uname` when any manifest leaves `kdir` unset (the default
+/// kdir comes from `uname -r`). `None` until `discover` has read a manifest.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct ManifestTools {
+    make: BTreeSet<String>,
+    needs_uname: bool,
+}
+
 pub struct LinuxModuleProcessor {
     config: LinuxModuleConfig,
+    /// Filled during `discover`, so `required_tools()` names the `make` each
+    /// manifest actually runs (the build's tool check and the declared-tools
+    /// guard run after discovery). Before discovery it can only know the
+    /// defaults.
+    manifest_tools: Mutex<Option<ManifestTools>>,
     runs: Mutex<BTreeMap<PathBuf, Arc<OnceTool>>>,
 }
 
@@ -76,6 +89,7 @@ impl LinuxModuleProcessor {
     pub const fn new(config: LinuxModuleConfig) -> Self {
         Self {
             config,
+            manifest_tools: Mutex::new(None),
             runs: Mutex::new(BTreeMap::new()),
         }
     }
@@ -151,7 +165,84 @@ impl LinuxModuleProcessor {
         Ok(())
     }
 
-    /// Build a single kernel module into `staging`. Runs make in the module's source directory.
+    /// The kbuild invocation `make -C <kdir> [ARCH=..] [CROSS_COMPILE=..]
+    /// M=<module_dir>`, in the module directory, with `target` and any
+    /// extra arguments to follow.
+    fn kbuild_command(manifest: &LinuxModuleManifest, kdir: &str, module_dir: &Path) -> Command {
+        let mut cmd = Command::new(&manifest.make);
+        cmd.arg("-C").arg(kdir);
+        if let Some(ref arch) = manifest.arch {
+            cmd.arg(format!("ARCH={arch}"));
+        }
+        if let Some(ref cross) = manifest.cross_compile {
+            cmd.arg(format!("CROSS_COMPILE={cross}"));
+        }
+        cmd.arg(format!("M={}", module_dir.display()));
+        cmd.current_dir(module_dir);
+        cmd
+    }
+
+    /// Run `make modules` and read the built `.ko` (bytes and mode) into
+    /// memory. It has to be read before the cleanup: kbuild's `clean`
+    /// recursively deletes every `.ko` under `M=<module_dir>`.
+    fn make_module(
+        ctx: &crate::build_context::BuildContext,
+        manifest: &LinuxModuleManifest,
+        kdir: &str,
+        module_dir: &Path,
+        module: &LinuxModuleModuleDef,
+    ) -> Result<(Vec<u8>, u32)> {
+        let mut cmd = Self::kbuild_command(manifest, kdir, module_dir);
+        cmd.arg(format!("V={}", manifest.v));
+        cmd.arg(format!("W={}", manifest.w));
+        cmd.arg("modules");
+        let output = run_command(ctx, &cmd)?;
+        check_command_output(&output, format_args!("make modules for {}", module.name))?;
+
+        let ko_src = module_dir.join(format!("{}.ko", module.name));
+        let ko_bytes = fs::read(&ko_src).map_err(|e| anyhow::anyhow!(
+            "make reported success but did not produce {} (check the module name in linux-module.yaml): {}",
+            ko_src.display(), e
+        ))?;
+        let ko_mode = fs::metadata(&ko_src)
+            .map(|m| crate::platform::get_mode(&m))
+            .with_context(|| format!("Failed to stat {}", ko_src.display()))?;
+        Ok((ko_bytes, ko_mode))
+    }
+
+    /// Remove what a build left in the source directory: `make clean` for
+    /// kbuild's intermediates (`.o`, `.mod`, `.cmd` files, the `.ko`), then
+    /// the generated `Kbuild`. Both run even when the first fails, so a
+    /// failed `make clean` never leaves the `Kbuild` behind as well.
+    fn clean_module_dir(
+        ctx: &crate::build_context::BuildContext,
+        manifest: &LinuxModuleManifest,
+        kdir: &str,
+        module_dir: &Path,
+        module: &LinuxModuleModuleDef,
+    ) -> Result<()> {
+        let mut clean_cmd = Self::kbuild_command(manifest, kdir, module_dir);
+        clean_cmd.arg("clean");
+        let cleaned = run_command(ctx, &clean_cmd).and_then(|output| {
+            check_command_output(&output, format_args!("make clean for {}", module.name))
+        });
+        let kbuild = module_dir.join("Kbuild");
+        let removed = fs::remove_file(&kbuild)
+            .with_context(|| format!("Failed to remove generated {}", kbuild.display()));
+        match (cleaned, removed) {
+            (Ok(()), Ok(())) => Ok(()),
+            (Err(e), Ok(())) | (Ok(()), Err(e)) => Err(e),
+            (Err(clean_err), Err(remove_err)) => Err(anyhow::anyhow!(
+                "{clean_err:#}\n  (removing the generated Kbuild also failed: {remove_err:#})"
+            )),
+        }
+    }
+
+    /// Build a single kernel module into `staging`. Runs make in the
+    /// module's source directory, and cleans that directory up afterwards
+    /// whether or not the build succeeded: a failed `make modules` must not
+    /// leave the generated `Kbuild` and kbuild's intermediates in the source
+    /// tree.
     fn build_module(
         ctx: &crate::build_context::BuildContext,
         manifest: &LinuxModuleManifest,
@@ -173,62 +264,20 @@ impl LinuxModuleProcessor {
         };
 
         Self::write_kbuild(&module_dir, module)?;
+        let built = Self::make_module(ctx, manifest, &kdir, &module_dir, module);
+        let cleaned = Self::clean_module_dir(ctx, manifest, &kdir, &module_dir, module);
+        let (ko_bytes, ko_mode) = match (built, cleaned) {
+            (Ok(ko), Ok(())) => ko,
+            (Ok(_), Err(clean_err)) => return Err(clean_err),
+            (Err(build_err), Ok(())) => return Err(build_err),
+            (Err(build_err), Err(clean_err)) => {
+                return Err(anyhow::anyhow!(
+                    "{build_err:#}\n  (cleaning the source directory afterwards also failed: {clean_err:#})"
+                ));
+            }
+        };
 
-        let mut cmd = Command::new(&manifest.make);
-        cmd.arg("-C").arg(&kdir);
-        if let Some(ref arch) = manifest.arch {
-            cmd.arg(format!("ARCH={arch}"));
-        }
-        if let Some(ref cross) = manifest.cross_compile {
-            cmd.arg(format!("CROSS_COMPILE={cross}"));
-        }
-        cmd.arg(format!("M={}", module_dir.display()));
-        cmd.arg(format!("V={}", manifest.v));
-        cmd.arg(format!("W={}", manifest.w));
-        cmd.arg("modules");
-        cmd.current_dir(&module_dir);
-
-        let output = run_command(ctx, &cmd)?;
-        check_command_output(&output, format_args!("make modules for {}", module.name))?;
-
-        // Read the built .ko into memory before `make clean`: kbuild's clean
-        // recursively deletes every .ko under `M=<module_dir>`.
         let ko_name = format!("{}.ko", module.name);
-        let ko_src = module_dir.join(&ko_name);
-        let ko_bytes = fs::read(&ko_src).map_err(|e| anyhow::anyhow!(
-            "make reported success but did not produce {} (check the module name in linux-module.yaml): {}",
-            ko_src.display(), e
-        ))?;
-        let ko_mode = fs::metadata(&ko_src)
-            .ok()
-            .map(|m| crate::platform::get_mode(&m));
-
-        // Clean up build artifacts from the source directory.
-        let mut clean_cmd = Command::new(&manifest.make);
-        clean_cmd.arg("-C").arg(&kdir);
-        if let Some(ref arch) = manifest.arch {
-            clean_cmd.arg(format!("ARCH={arch}"));
-        }
-        if let Some(ref cross) = manifest.cross_compile {
-            clean_cmd.arg(format!("CROSS_COMPILE={cross}"));
-        }
-        clean_cmd.arg(format!("M={}", module_dir.display()));
-        clean_cmd.arg("clean");
-        clean_cmd.current_dir(&module_dir);
-        let clean_output = run_command(ctx, &clean_cmd)?;
-        check_command_output(
-            &clean_output,
-            format_args!("make clean for {}", module.name),
-        )?;
-
-        // Remove the Kbuild we generated
-        fs::remove_file(module_dir.join("Kbuild")).with_context(|| {
-            format!(
-                "Failed to remove generated Kbuild in {}",
-                module_dir.display()
-            )
-        })?;
-
         crate::errors::ctx(
             fs::create_dir_all(staging),
             &format!("Failed to create staging dir: {}", staging.display()),
@@ -236,10 +285,8 @@ impl LinuxModuleProcessor {
         let ko_dst = staging.join(&ko_name);
         fs::write(&ko_dst, &ko_bytes)
             .with_context(|| format!("Failed to write {ko_name} to staging"))?;
-        if let Some(mode) = ko_mode {
-            crate::platform::set_permissions_mode(&ko_dst, mode)
-                .with_context(|| format!("Failed to set mode on {}", ko_dst.display()))?;
-        }
+        crate::platform::set_permissions_mode(&ko_dst, ko_mode)
+            .with_context(|| format!("Failed to set mode on {}", ko_dst.display()))?;
 
         Ok(())
     }
@@ -298,8 +345,29 @@ impl Processor for LinuxModuleProcessor {
         true
     }
 
+    /// After discovery: the `make` of every discovered manifest, `uname`
+    /// when any of them leaves `kdir` unset, then the config's
+    /// `required_tools`. Before discovery the manifests are unread, and the
+    /// list is what the manifest defaults imply: `make` and `uname`.
     fn required_tools(&self) -> Vec<String> {
-        vec!["make".to_string(), "uname".to_string()]
+        let discovered = self
+            .manifest_tools
+            .lock()
+            .clone()
+            .unwrap_or_else(|| ManifestTools {
+                make: BTreeSet::from([default_make_tool()]),
+                needs_uname: true,
+            });
+        let mut tools: Vec<String> = discovered.make.into_iter().collect();
+        if discovered.needs_uname {
+            tools.push("uname".to_string());
+        }
+        for tool in &self.config.standard.required_tools {
+            if !tools.contains(tool) {
+                tools.push(tool.clone());
+            }
+        }
+        tools
     }
 
     fn discover(
@@ -315,7 +383,7 @@ impl Processor for LinuxModuleProcessor {
             &self.config,
             &crate::config::checksum_fields_of(instance_name),
         );
-        let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
+        let extra = resolve_dep_inputs_and_auto(&self.config.standard)?;
 
         let mut planned = Vec::new();
         for yaml_path in files {
@@ -325,6 +393,12 @@ impl Processor for LinuxModuleProcessor {
                     anyhow::bail!("Failed to parse {}: {}", yaml_path.display(), e);
                 }
             };
+            {
+                let mut tools = self.manifest_tools.lock();
+                let tools = tools.get_or_insert_with(ManifestTools::default);
+                tools.make.insert(manifest.make.clone());
+                tools.needs_uname |= manifest.kdir.is_none();
+            }
 
             let anchor_dir = crate::processor::parent_dir_or_empty(&yaml_path);
             let output_dir = Self::output_dir_for(&yaml_path);
@@ -366,7 +440,7 @@ inventory::submit! {
         processor_type: crate::processor::ProcessorType::MassGenerator,
         create: plugin_create,
         fields: &[],
-        omit_standard_fields: &[],
+        omit_standard_fields: &["command", "formats", "args", "output_dir", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["linux-module.yaml"], src_exclude_dirs: &[] }),
         defaults: None,
         defconfig_json: crate::registries::default_config_json::<LinuxModuleConfig>,

@@ -13,6 +13,15 @@ A non-zero exit code from rumdl fails the product.
 This processor supports batch mode, allowing multiple files to be checked in a
 single rumdl invocation for better performance.
 
+Every configuration file rumdl's discovery reads from the working directory is
+an input of every product when it exists (`dep_auto`): its own `.rumdl.toml`,
+`rumdl.toml`, `.config/rumdl.toml` and `pyproject.toml` (`[tool.rumdl]`), and
+— when none of those is present — the markdownlint configuration it falls back
+to (`.markdownlint-cli2.jsonc`/`.yaml`/`.yml`, `.markdownlint.json`/`.jsonc`/
+`.yaml`/`.yml`, `markdownlint.json`/`.jsonc`/`.yaml`). An edit re-checks every
+file, with no `dep_inputs` entry needed. A file named with `--config` in `args`
+is not tracked; list it in `dep_inputs`.
+
 ## Source Files
 
 - Input: `**/*.md`
@@ -32,6 +41,7 @@ dep_inputs = []                            # Additional files that trigger rebui
 | `command` | string | `"rumdl"` | The rumdl executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to rumdl |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `dep_auto` | string[] | (the list above) | Config files that are inputs when they exist |
 
 ## Batch support
 

@@ -46,7 +46,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "sass", processor_type: crate::processor::ProcessorType::Generator, create: create_sass,
     fields: &[],
-    omit_standard_fields: &[],
+    omit_standard_fields: &["formats", "batch"],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".scss", ".sass"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.sass", command: "sass", ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,

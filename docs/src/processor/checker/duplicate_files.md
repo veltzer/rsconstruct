@@ -18,6 +18,8 @@ The error is reported under the first file of the product. Since any change to a
 
 All empty files have the same hash, so **two empty files are duplicates** (for example two empty `__init__.py` files in different packages). Exclude them with `src_exclude_files`, or narrow `src_dirs`.
 
+Only the scanned files are compared. `dep_inputs` and `dep_auto` files are dependencies, not candidates: a change to one re-runs the comparison, but they are never hashed against the scanned set, so a dependency that happens to have the same content as a scanned file is not a duplicate. A path is compared once however many times it reaches the product — a scanned file listed again in `dep_inputs` is not reported as its own duplicate.
+
 ## Source Files
 
 - Input: files under `src_dirs` with one of the default extensions: `.py .rs .js .ts .c .cc .h .hh .java .rb .go .sh .md .yaml .yml .json .toml .xml .html .css`
@@ -38,7 +40,8 @@ src_exclude_files = ["__init__.py"]
 | `src_dirs` | string[] | `[]` | Directories to scan |
 | `src_extensions` | string[] | (list above) | File extensions to compare |
 | `src_exclude_files` | string[] | `[]` | File names to leave out of the comparison |
-| `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `dep_inputs` | string[] | `[]` | Extra files whose changes trigger a re-check; never compared themselves |
+| `dep_auto` | string[] | `[]` | Files that are dependencies when they exist; never compared themselves |
 
 ## Batch support
 

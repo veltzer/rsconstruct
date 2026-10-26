@@ -717,6 +717,92 @@ fn every_field_spec_is_well_formed() {
     assert!(bad.is_empty(), "malformed FieldSpec entries: {bad:#?}");
 }
 
+/// The standard field names a processor file's doc comment lists after
+/// "Unused `StandardConfig` fields:", up to the end of that sentence; empty
+/// when the file has no such sentence. Words in the sentence that are not
+/// standard fields ("and the scan fields") are ignored.
+fn documented_unused_standard_fields(source: &str) -> Vec<String> {
+    use crate::config::KnownFields as _;
+    const PHRASE: &str = "Unused `StandardConfig` fields:";
+    let prose: String = source
+        .lines()
+        .filter_map(|l| l.trim_start().strip_prefix("///"))
+        .map(str::trim)
+        .collect::<Vec<_>>()
+        .join(" ");
+    let Some(at) = prose.find(PHRASE) else {
+        return Vec::new();
+    };
+    let sentence = prose[at + PHRASE.len()..].split('.').next().unwrap_or("");
+    sentence
+        .split(',')
+        .map(|word| word.trim().trim_start_matches("and ").trim_matches('`'))
+        .filter(|word| crate::config::StandardConfig::known_fields().contains(word))
+        .map(str::to_string)
+        .collect()
+}
+
+/// `omit_standard_fields` is the one statement of which standard fields a
+/// processor never reads, and two other places must agree with it. The
+/// field table of `processor defconfig`/`processor info` must not show an
+/// omitted field: the validator rejects it, so the table would advertise a
+/// knob that cannot be set (it used to show `batch` and `dep_auto` for
+/// every processor). And a processor file's own doc comment must not call
+/// a field unused while the plugin still accepts it: five processors said
+/// "Unused `StandardConfig` fields: command, formats, `output_dir`" over
+/// an empty `omit_standard_fields`, so the fields were silently ignored.
+///
+/// `batch` has a third authority: the executor reads it only when the
+/// plugin's `supports_batch` is true (`effective_supports_batch`), so a
+/// plugin that cannot batch must omit the field and one that can must
+/// keep it.
+#[test]
+fn omitted_standard_fields_are_neither_shown_nor_merely_documented() {
+    let mut bad: Vec<String> = Vec::new();
+    for plugin in all_plugins() {
+        let pname = plugin.pname();
+        let omits_batch = plugin.omit_standard_fields.contains(&"batch");
+        if plugin.supports_batch && omits_batch {
+            bad.push(format!(
+                "{pname}: supports_batch is true but omit_standard_fields lists 'batch'"
+            ));
+        }
+        if !plugin.supports_batch && !omits_batch {
+            bad.push(format!(
+                "{pname}: supports_batch is false, so 'batch' is never read and must be omitted"
+            ));
+        }
+        for field in crate::builder::processor::processor_fields(&pname) {
+            if plugin.omit_standard_fields.contains(&field.name) {
+                bad.push(format!(
+                    "{pname}: field table shows omitted field '{}'",
+                    field.name
+                ));
+            }
+        }
+        let source_file = format!(
+            "src/processor/{}/{}.rs",
+            docs_dir_for(plugin.processor_type),
+            plugin.name
+        );
+        let source = std::fs::read_to_string(&source_file)
+            .unwrap_or_else(|e| panic!("{pname}: cannot read {source_file}: {e}"));
+        for field in documented_unused_standard_fields(&source) {
+            if !plugin.omit_standard_fields.contains(&field.as_str()) {
+                bad.push(format!(
+                    "{pname}: doc comment calls '{field}' unused but omit_standard_fields \
+                     does not list it, so the validator still accepts it"
+                ));
+            }
+        }
+    }
+    bad.sort();
+    assert!(
+        bad.is_empty(),
+        "omit_standard_fields disagreements: {bad:#?}"
+    );
+}
+
 /// The `docs/src/processor/` subdirectory holding the pages of one
 /// processor type. Pages are grouped by type, so a page filed under the
 /// wrong type counts as missing.
@@ -767,15 +853,16 @@ fn defconfig_applies_defaults_for_every_plugin() {
 /// compiler; `prettier` once shipped silently half-registered exactly this
 /// way. Every processor has its docs page, so that check has no exceptions;
 /// grandfathered test-file gaps are allowlisted — shrink that list, never
-/// grow it.
+/// grow it. An allowlisted processor that has gained its test file fails
+/// too: the entry is stale and must go, or the list silently stops
+/// shrinking (`cpplint` and `explicit.generic` sat on it with their test
+/// files in place).
 #[test]
 fn every_plugin_has_docs_and_tests() {
     const TESTS_ALLOWLIST: &[&str] = &[
         "processor.checker.checkpatch",
         "processor.generator.chromium",
-        "processor.checker.cpplint",
         "processor.checker.encoding",
-        "processor.explicit.generic",
         "processor.checker.ijq",
         "processor.checker.ijsonlint",
         "processor.generator.imarkdown2html",
@@ -789,6 +876,7 @@ fn every_plugin_has_docs_and_tests() {
     ];
 
     let mut missing: Vec<String> = Vec::new();
+    let mut stale: Vec<String> = Vec::new();
     for plugin in all_plugins() {
         let pname = plugin.pname();
         // Docs and tests mirror the source tree: one directory per type, one
@@ -799,9 +887,13 @@ fn every_plugin_has_docs_and_tests() {
             missing.push(format!("{pname}: no {docs_page}"));
         }
         let test_file = format!("tests/processor/{dir}/{}.rs", plugin.name);
-        if !TESTS_ALLOWLIST.contains(&pname.as_str()) && !std::path::Path::new(&test_file).exists()
-        {
+        let has_test = std::path::Path::new(&test_file).exists();
+        let allowlisted = TESTS_ALLOWLIST.contains(&pname.as_str());
+        if !allowlisted && !has_test {
             missing.push(format!("{pname}: no {test_file}"));
+        }
+        if allowlisted && has_test {
+            stale.push(format!("{pname}: {test_file} exists"));
         }
     }
     missing.sort();
@@ -809,6 +901,11 @@ fn every_plugin_has_docs_and_tests() {
         missing.is_empty(),
         "processors missing their out-of-file touch-points (add the file, or — for \
          pre-existing gaps only — the allowlist entry): {missing:#?}"
+    );
+    stale.sort();
+    assert!(
+        stale.is_empty(),
+        "stale TESTS_ALLOWLIST entries (the test file exists; remove the entry): {stale:#?}"
     );
 }
 

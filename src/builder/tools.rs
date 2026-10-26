@@ -380,8 +380,7 @@ fn run_tools_command(
                             methods.join(" | ")
                         }
                     } else {
-                        info.install_methods
-                            .first()
+                        info.default_install_method()
                             .map_or_else(|| "?".to_string(), crate::tools::InstallMethod::command)
                     };
                     row.push(install_str);
@@ -443,7 +442,7 @@ fn run_tools_command(
                         methods.join(" | ")
                     }
                 } else {
-                    info.and_then(|i| i.install_methods.first())
+                    info.and_then(crate::tools::ToolInfo::default_install_method)
                         .map_or_else(|| "?".to_string(), crate::tools::InstallMethod::command)
                 };
                 println!(
@@ -663,11 +662,13 @@ fn run_tools_command(
                     if which::which(info.name).is_ok() {
                         continue;
                     }
-                    // Prefer any automatable method over a manual one. clojure
-                    // lists manual first (the official Linux route) but also
-                    // carries a real brew method — taking `.first()` blindly
-                    // would strand it as uninstallable on a host that has brew.
-                    match info.install_methods.iter().find(|m| m.method != "manual") {
+                    // The same choice every other install path makes: the
+                    // first method that can be run. A tool with only manual
+                    // methods has none (the registry currently has no manual
+                    // method at all; the test
+                    // `tools_install_all_has_no_manual_only_entries` keeps it
+                    // that way).
+                    match info.default_install_method() {
                         Some(method) => missing.push((info.name, method)),
                         None => manual_only.push(info),
                     }
@@ -710,7 +711,7 @@ fn run_tools_command(
             } else if let Some(ref name) = name {
                 // Install a specific tool
                 if let Some(info) = crate::tools::tool_info(name) {
-                    if let Some(method) = info.install_methods.first() {
+                    if let Some(method) = info.default_install_method() {
                         vec![(info.name, method)]
                     } else {
                         eprintln!("{}: No install method for '{}'", color::red("Error"), name);
@@ -756,24 +757,22 @@ fn run_tools_command(
                     }
                     // Present on PATH counts as installed, unless CI found
                     // it at a version other than the locked one.
-                    let drifted = crate::tools::tool_info(tool_name)
-                        .and_then(|info| info.install_methods.first())
-                        .is_some_and(|m| drift.contains(&drift_key(m.method, m.package)));
+                    let info = crate::tools::tool_info(tool_name);
+                    let method = info.and_then(crate::tools::ToolInfo::default_install_method);
+                    let drifted =
+                        method.is_some_and(|m| drift.contains(&drift_key(m.method, m.package)));
                     if which::which(tool_name).is_ok() && !drifted {
                         continue;
                     }
-                    match crate::tools::tool_info(tool_name) {
-                        Some(info) if !info.install_methods.is_empty() => {
-                            missing.push((info.name, &info.install_methods[0]));
-                        }
-                        _ => {
-                            eprintln!(
-                                "{}: No install method for '{}'",
-                                color::red("Error"),
-                                tool_name
-                            );
-                            any_unknown = true;
-                        }
+                    if let (Some(info), Some(method)) = (info, method) {
+                        missing.push((info.name, method));
+                    } else {
+                        eprintln!(
+                            "{}: No install method for '{}'",
+                            color::red("Error"),
+                            tool_name
+                        );
+                        any_unknown = true;
                     }
                 }
                 if any_unknown {
@@ -829,7 +828,7 @@ fn run_tools_command(
                     color::bold(&format!("[{method}]")),
                     packages.join(", ")
                 );
-                for argv in crate::tools::describe(method, &packages) {
+                for argv in crate::tools::describe(method, &packages, &ctx.binary_pins) {
                     println!("       {}", color::dim(&argv.join(" ")));
                 }
             }
@@ -1105,8 +1104,11 @@ fn run_tools_command(
                 .gem
                 .iter()
                 .filter(|pkg| {
-                    let installed = package_probe_succeeds(ctx, "gem", &["list", "-i", pkg])
-                        && !drift.contains(&drift_key("gem", pkg));
+                    // `--exact`: without it `gem list -i rack` is a substring
+                    // match that rack-test alone satisfies.
+                    let installed =
+                        package_probe_succeeds(ctx, "gem", &["list", "-i", "--exact", pkg])
+                            && !drift.contains(&drift_key("gem", pkg));
                     if installed {
                         skipped.push(format!("[gem] {pkg}"));
                     }
@@ -1154,10 +1156,15 @@ fn run_tools_command(
                 return Ok(());
             }
 
+            let ctx = crate::tools::InstallCtx {
+                verbose,
+                use_eatmydata,
+                binary_pins: lock.binary,
+            };
             println!("{}:", color::bold("Dependencies to install"));
             for (method, packages) in &groups {
                 let pkgs_ref: Vec<&str> = packages.iter().map(String::as_str).collect();
-                let preview = crate::tools::describe(method, &pkgs_ref);
+                let preview = crate::tools::describe(method, &pkgs_ref, &ctx.binary_pins);
                 let line = preview.first().map(|a| a.join(" ")).unwrap_or_default();
                 println!(
                     "  {} {}",
@@ -1184,11 +1191,6 @@ fn run_tools_command(
                 }
             }
 
-            let ctx = crate::tools::InstallCtx {
-                verbose,
-                use_eatmydata,
-                binary_pins: lock.binary,
-            };
             let mut any_failed = false;
             for (method, packages) in &groups {
                 let pkgs_ref: Vec<&str> = packages.iter().map(String::as_str).collect();
@@ -1197,8 +1199,10 @@ fn run_tools_command(
                         println!("{} [{}] {}", color::green("✓"), method, packages.join(", "));
                     }
                     Err(e) => {
+                        // `{:#}` walks the whole cause chain; see the note
+                        // in Install above.
                         println!(
-                            "{} [{}] {}: {}",
+                            "{} [{}] {}: {:#}",
                             color::red("✗"),
                             method,
                             packages.join(", "),

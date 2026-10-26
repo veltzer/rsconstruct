@@ -26,9 +26,17 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "rumdl", processor_type: crate::processor::ProcessorType::Checker, create: create_rumdl,
     fields: &[],
-    omit_standard_fields: &[],
+    omit_standard_fields: &["formats", "output_dir"],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
-    defaults: Some(crate::config::ProcessorDefaults { command: "rumdl", dep_auto: &[".rumdl.toml"], ..crate::config::ProcessorDefaults::EMPTY }),
+    // rumdl's config discovery from the working directory: its own files and
+    // `pyproject.toml` (`[tool.rumdl]`) first, and when none of those is
+    // present, a markdownlint / markdownlint-cli2 configuration.
+    defaults: Some(crate::config::ProcessorDefaults { command: "rumdl", dep_auto: &[
+        ".rumdl.toml", "rumdl.toml", ".config/rumdl.toml", "pyproject.toml",
+        ".markdownlint-cli2.jsonc", ".markdownlint-cli2.yaml", ".markdownlint-cli2.yml",
+        ".markdownlint.json", ".markdownlint.jsonc", ".markdownlint.yaml", ".markdownlint.yml",
+        "markdownlint.json", "markdownlint.jsonc", "markdownlint.yaml",
+    ], ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["markdown", "md", "linter", "rust"],
     description: "Lint Markdown files using rumdl",

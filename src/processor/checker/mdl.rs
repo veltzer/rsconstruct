@@ -148,9 +148,12 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Install stamp the gem processor writes; an input, so mdl runs after the gems are installed" },
         ],
-        omit_standard_fields: &["formats", "output_dir"],
+        omit_standard_fields: &["formats", "output_dir", "required_tools", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
-        defaults: Some(crate::config::ProcessorDefaults { command: "mdl", dep_auto: &[".mdlrc"], ..crate::config::ProcessorDefaults::EMPTY }),
+        // mdl reads `.mdlrc` from the working directory; its `style` line
+        // conventionally names `.mdl_style.rb` next to it, which mdl then
+        // loads too, so both are inputs when present.
+        defaults: Some(crate::config::ProcessorDefaults { command: "mdl", dep_auto: &[".mdlrc", ".mdl_style.rb"], ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<MdlConfig>,
         keywords: &["markdown", "md", "linter", "ruby", "gem"],
         description: "Lint Markdown files using mdl (markdownlint)",

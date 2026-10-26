@@ -39,7 +39,7 @@ src_dirs = ["marp"]
 | `command` | string | (required) | The command to run |
 | `args` | string[] | `[]` | Extra arguments passed before file paths |
 | `src_extensions` | string[] | `[]` | File extensions to scan for |
-| `src_dirs` | string[] | `[""]` | Directory to scan (empty = project root) |
+| `src_dirs` | string[] | `[]` | Directories to scan (`[""]` for the whole project) |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `dep_auto` | string[] | `[]` | Auto-detected input files |
 

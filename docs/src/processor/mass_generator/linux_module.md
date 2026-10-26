@@ -18,7 +18,10 @@ cached product. When any module for a manifest is dirty, the processor:
 2. Runs `make -C <kdir> M=<absolute-source-dir> modules` to compile.
 3. Reads the resulting `.ko` into a staging directory.
 4. Runs `make ... clean` and removes the generated `Kbuild` so the source
-   directory stays clean.
+   directory stays clean. This runs whether or not step 2 succeeded: a
+   failed compile must not leave the `Kbuild` and kbuild's intermediates
+   (`.o`, `.mod`, `.cmd` files) in the source tree. If the cleanup fails as
+   well, the error reports both.
 5. Verifies the staged `.ko` files against the plan and installs them to
    `out/processor.mass_generator.linux_module/<yaml-relative-dir>/`.
 
@@ -111,13 +114,23 @@ ccflags-y := -DDEBUG       # only if extra_cflags is non-empty
 
 This file is removed after building (whether the build succeeds or fails).
 
+## Required Tools
+
+The tools a build runs come from the manifests, not from a fixed list: after
+discovery, `required_tools()` names each manifest's `make` (so a manifest
+with `make: /opt/kbuild/bin/kmake` declares that binary, and the tool check
+looks for it, not for `make`), plus `uname` when any manifest leaves `kdir`
+unset, plus the config's `required_tools`. Before discovery the manifests
+are unread, and the list is what their defaults imply: `make` and `uname`.
+
 ## Configuration
 
 ```toml
 [processor.mass_generator.linux_module]
 enabled = true           # Enable/disable (default: true)
-loose_manifest = false   # Warn instead of failing on plan mismatch (default: false)
-dep_inputs = []          # Extra files that trigger rebuilds
+dep_inputs = []          # Extra files that trigger rebuilds; each must exist
+dep_auto = []            # Like dep_inputs, but a missing entry is skipped
+required_tools = []      # Extra tools the build needs on PATH
 ```
 
 ### Configuration Reference
@@ -125,11 +138,12 @@ dep_inputs = []          # Extra files that trigger rebuilds
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `enabled` | bool | `true` | Enable/disable the processor |
-| `loose_manifest` | bool | `false` | Warn instead of failing when staged outputs do not match the plan |
-| `dep_inputs` | string[] | `[]` | Extra files that trigger rebuilds when changed |
-| `src_dirs` | string[] | `[""]` | Directory to scan for linux-module.yaml files |
+| `dep_inputs` | string[] | `[]` | Extra files that trigger rebuilds when changed; each must exist |
+| `dep_auto` | string[] | `[]` | Like `dep_inputs`, but an entry that does not exist is skipped |
+| `required_tools` | string[] | `[]` | Extra tools the build needs, added to the manifests' `make` |
+| `src_dirs` | string[] | `[]` | Directories to scan for linux-module.yaml files (`[""]` for the whole project) |
 | `src_extensions` | string[] | `["linux-module.yaml"]` | File patterns to scan for |
-| `src_exclude_dirs` | string[] | common excludes | Directories to skip during scanning |
+| `src_exclude_dirs` | string[] | `[]` | Directories to skip during scanning |
 
 ## Batch support
 
@@ -144,7 +158,7 @@ any source file or the yaml manifest changes.
 
 ## Prerequisites
 
-- `make` must be installed
+- The `make` each manifest names (`make` by default) must be installed
 - Kernel headers must be installed for the target kernel version
   (`apt install linux-headers-generic` on Ubuntu)
 - For cross-compilation, the appropriate cross-compiler toolchain must be

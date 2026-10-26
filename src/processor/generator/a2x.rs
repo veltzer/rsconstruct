@@ -68,7 +68,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "a2x", processor_type: crate::processor::ProcessorType::Generator, create: create_a2x,
     fields: &[],
-    omit_standard_fields: &[],
+    omit_standard_fields: &["formats", "batch"],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".txt"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.a2x", command: "a2x", ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,

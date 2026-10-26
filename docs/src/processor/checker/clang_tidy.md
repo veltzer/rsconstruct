@@ -24,7 +24,7 @@ separately to avoid cross-file analysis issues with unrelated files.
 [processor.checker.clang_tidy]
 args = ["-checks=*"]                        # Arguments passed to clang-tidy
 compiler_args = ["-std=c++17"]              # Arguments passed after -- to the compiler
-dep_inputs = [".clang-tidy"]              # Additional files that trigger rebuilds when changed
+dep_inputs = []                           # Additional files that trigger rebuilds when changed
 ```
 
 | Key | Type | Default | Description |
@@ -32,6 +32,7 @@ dep_inputs = [".clang-tidy"]              # Additional files that trigger rebuil
 | `args` | string[] | `[]` | Arguments passed to clang-tidy |
 | `compiler_args` | string[] | `[]` | Compiler arguments passed after `--` separator |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `dep_auto` | string[] | `[".clang-tidy"]` | Config files that are inputs when they exist |
 
 ## Batch support
 
@@ -49,13 +50,16 @@ compiler_args = ["-std=c++17", "-I/usr/include/mylib", "-DDEBUG"]
 
 ## Using .clang-tidy File
 
-Clang-tidy automatically reads configuration from a `.clang-tidy` file in the
-project root. Add it to `dep_inputs` so changes trigger rebuilds:
+Clang-tidy reads its configuration from the `.clang-tidy` file it finds in the
+source file's parent directories. The project root's `.clang-tidy` is an input
+of every product when it exists (`dep_auto`), so an edit to it re-checks every
+file with no `dep_inputs` entry needed. A `.clang-tidy` in a subdirectory, or a
+file named with `--config-file` in `args`, is not tracked; list it in
+`dep_inputs`.
 
-```toml
-[processor.checker.clang_tidy]
-dep_inputs = [".clang-tidy"]
-```
+`compile_commands.json` is not an input: the processor always passes `--`
+with `compiler_args`, and with `--` clang-tidy uses that fixed set of flags
+instead of looking for a compilation database.
 
 ## Clean behavior
 

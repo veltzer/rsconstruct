@@ -74,7 +74,7 @@ inventory::submit! {
         create: plugin_create,
         defconfig_json: crate::registries::default_config_json::<crate::config::ItaploConfig>,
         fields: &[],
-        omit_standard_fields: &[],
+        omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".toml"], src_exclude_dirs: &[] }),
         defaults: None,
         keywords: &["toml", "formatter", "linter", "validator"],

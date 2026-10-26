@@ -52,7 +52,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "markdown2html", processor_type: crate::processor::ProcessorType::Generator, create: create_markdown2html,
     fields: &[],
-    omit_standard_fields: &[],
+    omit_standard_fields: &["formats", "batch"],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.markdown2html", command: "markdown", ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,

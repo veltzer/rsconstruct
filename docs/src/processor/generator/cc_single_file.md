@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Compiles C (`.c`) and C++ (`.cc`) source files into executables, one source file per executable.
+Compiles C (`.c`) and C++ (`.cc`) source files into executables, one source file per executable. A file is C++ by extension — `.cc`, `.cpp`, `.cxx`, `.c++` or `.C` — and gets the C++ compiler and `cxxflags`; everything else gets the C compiler and `cflags`. The default `src_extensions` is `[".c", ".cc"]`; add `.cpp`/`.cxx` to it to compile those too.
 
 ## How It Works
 
@@ -15,8 +15,11 @@ src/a/b.c        →  out/processor.generator.cc_single_file/a/b.elf
 src/app.cc       →  out/processor.generator.cc_single_file/app.elf
 ```
 
-Header dependencies are automatically tracked via compiler-generated `.d` files
-(`-MMD -MF`). When a header changes, all source files that include it are rebuilt.
+Header dependencies are tracked by the [cpp](../../analyzers/cpp.md) /
+[icpp](../../analyzers/icpp.md) analyzer, which scans `#include` directives and adds the
+headers as inputs. When a header changes, all source files that include it are rebuilt.
+Every entry of `src_dirs` is scanned; a missing entry is a config error unless
+`[build] allow_missing_src_dirs = true`, in which case the other entries still build.
 
 ## Source Files
 
@@ -210,7 +213,6 @@ include_paths = []        # Additional -I paths (relative to project root)
 src_dirs = ["src"]          # Source directory (required; no default)
 output_suffix = ".elf"    # Suffix for output executables (default: ".elf")
 dep_inputs = []         # Additional files that trigger rebuilds when changed
-include_scanner = "builtin" # Method for scanning header dependencies (default: "builtin")
 ```
 
 ### Multiple Compilers
@@ -266,7 +268,6 @@ Each source file is compiled once per compiler profile, allowing you to:
 | `src_dirs` | string[] | `[]` | Directories to scan for source files. No default — an unset `src_dirs` scans nothing. |
 | `output_suffix` | string | `".elf"` | Suffix appended to output executables |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
-| `include_scanner` | string | `"builtin"` | Method for scanning header dependencies |
 | `compilers` | array | `[]` | Multiple compiler profiles (overrides single-compiler fields) |
 
 ### Compiler Profile Fields
@@ -287,31 +288,11 @@ Each entry in the `compilers` array can have:
 
 Each input file is processed individually, producing its own output file.
 
-## Include Scanner
+## Header dependencies
 
-The `include_scanner` option controls how header dependencies are discovered:
-
-| Value | Description |
-|-------|-------------|
-| `builtin` | Fast regex-based scanner (default). Parses `#include` directives directly without spawning external processes. Handles `#include "file"` and `#include <file>` forms. |
-| `compiler` | Uses `gcc -MM` / `g++ -MM` to scan dependencies. More accurate for complex cases (computed includes, conditional compilation) but slower as it spawns a compiler process per source file. |
-
-### Builtin scanner behavior
-
-The builtin scanner:
-- Recursively follows `#include` directives
-- Searches include paths in order: source file directory, configured `include_paths`, project root
-- Skips system headers (`/usr/...`, `/lib/...`)
-- Only tracks project-local headers (relative paths)
-
-### When to use compiler scanner
-
-Use `include_scanner = "compiler"` if you have:
-- Computed includes: `#include MACRO_THAT_EXPANDS_TO_FILENAME`
-- Complex conditional compilation affecting which headers are included
-- Headers outside the standard search paths that the builtin scanner misses
-
-The builtin scanner may occasionally report extra dependencies (false positives), which is safe—it just means some files might rebuild unnecessarily. It will not miss dependencies (false negatives) for standard `#include` patterns.
+Header scanning is not a setting of this processor: it is done by the
+[cpp](../../analyzers/cpp.md) or [icpp](../../analyzers/icpp.md) analyzer, whose
+`include_paths` (and, for `cpp`, compiler and flag) fields control how `#include` directives are resolved.
 
 ## Clean behavior
 

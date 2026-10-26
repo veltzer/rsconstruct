@@ -7,14 +7,17 @@ Installs Node.js dependencies from `package.json` files using npm.
 ## How It Works
 
 Discovers `package.json` files in the project and runs `npm install` in each
-directory. Sibling `.json`, `.js`, and `.ts` files are tracked as inputs so
-changes trigger reinstallation. After a successful install it writes a
+directory. The inputs are the files `npm install` reads: `package.json`,
+and whichever of `package-lock.json`, `npm-shrinkwrap.json` and `.npmrc`
+sit next to it. The package's own `.js`/`.ts` sources and nested packages
+are not inputs — editing them changes nothing about what gets installed, so
+it must not re-run the install. After a successful install it writes a
 deterministic install stamp, `out/processor.mass_generator.npm/root.stamp` for a
 root `package.json` (or `<dir>.stamp` with `/` turned into `_` otherwise).
 
 ## Source Files
 
-- Input: `**/package.json` (plus sibling `.json`, `.js`, `.ts` files)
+- Input: `**/package.json` (plus the sibling `package-lock.json`, `npm-shrinkwrap.json`, `.npmrc`)
 - Output: the install stamp `out/processor.mass_generator.npm/<dir>.stamp`
 
 ## Configuration

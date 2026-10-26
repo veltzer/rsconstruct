@@ -20,9 +20,13 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "luacheck", processor_type: crate::processor::ProcessorType::Checker, create: create_luacheck,
     fields: &[],
-    omit_standard_fields: &[],
+    omit_standard_fields: &["formats", "output_dir"],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".lua"], src_exclude_dirs: &[] }),
-    defaults: Some(crate::config::ProcessorDefaults { command: "luacheck", dep_auto: &[".luacheckrc"], ..crate::config::ProcessorDefaults::EMPTY }),
+    // `.luacheckrc` applies options per path (`files["glob"]`) and luacheck
+    // picks a default std from the path (`*_spec.lua` under `spec/`), so the
+    // verdict depends on the file's name, not only its content — as for
+    // iluacheck.
+    defaults: Some(crate::config::ProcessorDefaults { command: "luacheck", dep_auto: &[".luacheckrc"], output_depends_on_input_name: true, ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["lua", "linter", "checker"],
     description: "Lint Lua files using luacheck",

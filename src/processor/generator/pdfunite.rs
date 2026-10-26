@@ -5,10 +5,10 @@ use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
+use crate::config::{StandardConfig, output_config_hash};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processor::{Processor, check_command_output, run_command};
+use crate::processor::{Processor, check_command_output, resolve_dep_inputs, run_command};
 
 fn default_pdfunite_source_dir() -> String {
     "marp/courses".into()
@@ -56,7 +56,8 @@ impl PdfuniteProcessor {
 
     /// Source files under `source_dir` with the configured extension, grouped
     /// by their containing directory (sorted, so both the directory order and
-    /// the merge order within a directory are deterministic).
+    /// the merge order within a directory are deterministic). The standard
+    /// `src_exclude_*` and `src_files` fields apply as they do to a scan.
     ///
     /// Goes through `FileIndex` rather than walking the filesystem: that is
     /// what makes `.rsconstructignore` apply and lets virtual files produced
@@ -68,8 +69,12 @@ impl PdfuniteProcessor {
         } else {
             format!(".{}", self.config.source_ext)
         };
-        let base = Path::new(&self.config.source_dir);
-        let files = file_index.query(base, &[&ext], &[], &[], &[], &[]);
+        let files = super::query_under(
+            file_index,
+            Path::new(&self.config.source_dir),
+            &ext,
+            &self.config.standard,
+        );
 
         let mut by_dir: BTreeMap<PathBuf, Vec<PathBuf>> = BTreeMap::new();
         for file in files {
@@ -118,7 +123,10 @@ impl Processor for PdfuniteProcessor {
             &self.config,
             &crate::config::checksum_fields_of(instance_name),
         ));
-        let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
+        let extra = resolve_dep_inputs(
+            &self.config.standard.dep_inputs,
+            &self.config.standard.dep_auto,
+        )?;
 
         // Compute upstream scan dir once
         let upstream_scan_dir = Path::new(&self.config.source_dir)
@@ -207,16 +215,19 @@ inventory::submit! {
         fields: &[
             crate::config::FieldSpec { name: "source_dir", ty: crate::config::FieldType::String,
                 affects_output: true, required: false,
-                doc: "Directory containing course YAML files listing PDFs to merge" },
+                doc: "Directory whose subdirectories hold the source files; each subdirectory becomes one merged PDF" },
             crate::config::FieldSpec { name: "source_ext", ty: crate::config::FieldType::String,
                 affects_output: true, required: false,
-                doc: "Extension of source files used to find PDFs" },
+                doc: "Extension of the source files under source_dir whose rendered PDFs are merged" },
             crate::config::FieldSpec { name: "source_output_dir", ty: crate::config::FieldType::String,
                 affects_output: true, required: false,
-                doc: "Directory where source PDFs (to be merged) are located" },
+                doc: "Directory where the upstream processor wrote the PDFs (one per source file)" },
         ],
-        omit_standard_fields: &["formats"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["course.yaml"], src_exclude_dirs: &[] }),
+        omit_standard_fields: &["formats", "required_tools", "batch"],
+        // The sources are located by `source_dir`/`source_ext`, not by a
+        // scan, so there is no extension to default: of the scan fields only
+        // `src_exclude_*`/`src_files` apply to the lookup.
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "pdfunite", output_dir: "out/processor.generator.pdfunite", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<PdfuniteConfig>,
         keywords: &["pdf", "merger", "generator"],

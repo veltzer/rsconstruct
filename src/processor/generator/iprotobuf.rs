@@ -12,15 +12,16 @@
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use anyhow::{Context, Result, anyhow};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
+use crate::config::{StandardConfig, output_config_hash};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processor::Processor;
+use crate::processor::{Processor, resolve_dep_inputs};
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct IprotobufConfig {
@@ -77,11 +78,8 @@ impl IprotobufProcessor {
     /// the package's dotted path with each component in snake case, or `_`
     /// for a file with no `package` statement.
     fn generated_file_name(proto: &Path) -> Result<String> {
-        let text = std::fs::read_to_string(proto)
-            .with_context(|| format!("Failed to read {}", proto.display()))?;
-        let re = Regex::new(r"(?m)^\s*package\s+([A-Za-z_][A-Za-z0-9_.]*)\s*;")
-            .context("package regex")?;
-        let name = re.captures(&text).map_or_else(
+        let text = proto_text(proto)?;
+        let name = PACKAGE.captures(&text).map_or_else(
             || "_".to_string(),
             |c| {
                 c[1].split('.')
@@ -92,6 +90,58 @@ impl IprotobufProcessor {
             },
         );
         Ok(format!("{name}.rs"))
+    }
+
+    /// The `.proto` files the `roots` import, directly or through other
+    /// imports, resolved against the include paths; sorted, without the
+    /// roots themselves. A file under `src_dirs` is a scanned input already,
+    /// but an import resolved from a user-set `include_paths` outside them
+    /// was compiled (`include_imports`) without being an input, so an edit
+    /// to it rebuilt nothing. The well-known types (`google/protobuf/*`) are
+    /// built into protox and need no file; any other import that no include
+    /// path holds is an error naming the importer, as protox would report a
+    /// moment later without saying which file asked for it.
+    fn resolve_imports(&self, roots: &[PathBuf]) -> Result<Vec<PathBuf>> {
+        let include_paths = self.include_paths();
+        let mut seen: BTreeSet<PathBuf> = roots.iter().cloned().collect();
+        let mut queue: Vec<PathBuf> = roots.to_vec();
+        let mut imported = Vec::new();
+        while let Some(file) = queue.pop() {
+            let text = proto_text(&file)?;
+            for cap in IMPORT.captures_iter(&text) {
+                let name = &cap[1];
+                let resolved = include_paths
+                    .iter()
+                    .map(|dir| {
+                        if dir == Path::new(".") {
+                            PathBuf::from(name)
+                        } else {
+                            dir.join(name)
+                        }
+                    })
+                    .find(|p| p.is_file());
+                let Some(path) = resolved else {
+                    if name.starts_with("google/protobuf/") {
+                        continue;
+                    }
+                    let searched: Vec<String> = include_paths
+                        .iter()
+                        .map(|p| p.display().to_string())
+                        .collect();
+                    anyhow::bail!(
+                        "iprotobuf: {} imports \"{name}\", which none of the include paths hold ({})",
+                        file.display(),
+                        searched.join(", ")
+                    );
+                };
+                if seen.insert(path.clone()) {
+                    queue.push(path.clone());
+                    imported.push(path);
+                }
+            }
+        }
+        imported.sort();
+        Ok(imported)
     }
 
     fn compile(&self, files: &[PathBuf]) -> Result<()> {
@@ -123,6 +173,76 @@ impl IprotobufProcessor {
             .compile_fds(fds)
             .with_context(|| format!("Failed to generate Rust code into {}", out_dir.display()))
     }
+}
+
+/// `package a.b;` at the start of a line, in comment-free text.
+static PACKAGE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?m)^\s*package\s+([A-Za-z_][A-Za-z0-9_.]*)\s*;").expect("package regex")
+});
+
+/// `import "x.proto";`, with the optional `public` or `weak` modifier.
+static IMPORT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?m)^\s*import\s+(?:public\s+|weak\s+)?"([^"]+)"\s*;"#).expect("import regex")
+});
+
+/// The text of a `.proto` file with its comments removed, for the
+/// statement regexes above.
+fn proto_text(proto: &Path) -> Result<String> {
+    let text = std::fs::read_to_string(proto)
+        .with_context(|| format!("Failed to read {}", proto.display()))?;
+    Ok(strip_comments(&text))
+}
+
+/// `text` with every comment outside a string literal removed: `//` to the
+/// end of the line, and `/* ... */` blocks, whose newlines are kept so the
+/// `(?m)^` anchors of the statement regexes still see line starts. The
+/// regexes used to run over the raw text, so a `package old.name;` left in
+/// a block comment named the generated file.
+fn strip_comments(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' | '\'' => {
+                // A string literal is copied through, escapes included.
+                out.push(c);
+                while let Some(s) = chars.next() {
+                    out.push(s);
+                    if s == '\\' {
+                        if let Some(escaped) = chars.next() {
+                            out.push(escaped);
+                        }
+                    } else if s == c {
+                        break;
+                    }
+                }
+            }
+            '/' if chars.peek() == Some(&'/') => {
+                for s in chars.by_ref() {
+                    if s == '\n' {
+                        out.push('\n');
+                        break;
+                    }
+                }
+            }
+            '/' if chars.peek() == Some(&'*') => {
+                chars.next();
+                out.push(' ');
+                let mut prev = ' ';
+                for s in chars.by_ref() {
+                    if s == '\n' {
+                        out.push('\n');
+                    }
+                    if prev == '*' && s == '/' {
+                        break;
+                    }
+                    prev = s;
+                }
+            }
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 /// heck's snake case, as prost-build applies it to package components.
@@ -183,16 +303,23 @@ impl Processor for IprotobufProcessor {
         if files.is_empty() {
             return Ok(());
         }
+        // Imported files are compiled too (`include_imports`), so they are
+        // inputs, and prost-build writes their packages' files as well.
+        let imported = self.resolve_imports(&files)?;
         let out_dir = Path::new(self.output_dir());
         let mut outputs: BTreeSet<PathBuf> = BTreeSet::new();
-        for f in &files {
+        for f in files.iter().chain(&imported) {
             outputs.insert(out_dir.join(Self::generated_file_name(f)?));
         }
         if !self.config.descriptor_set.is_empty() {
             outputs.insert(PathBuf::from(&self.config.descriptor_set));
         }
-        let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
+        let extra = resolve_dep_inputs(
+            &self.config.standard.dep_inputs,
+            &self.config.standard.dep_auto,
+        )?;
         let mut inputs = files;
+        inputs.extend(imported);
         inputs.extend_from_slice(&extra);
         graph.add_product(
             inputs,
@@ -237,7 +364,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Where to write the compiled FileDescriptorSet (protoc --descriptor_set_out). Empty: not written" },
         ],
-        omit_standard_fields: &["command"],
+        omit_standard_fields: &["command", "formats", "args", "required_tools", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".proto"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.iprotobuf", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<IprotobufConfig>,

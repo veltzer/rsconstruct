@@ -25,9 +25,30 @@ When any tracked file changes, rsconstruct will re-run cargo.
 
 ### Workspaces
 
-For Cargo workspaces, each `Cargo.toml` (root and members) is discovered as a
-separate anchor. To build only the workspace root, use `src_exclude_paths` to skip
-member directories, or configure `src_dirs` / `src_files` to limit discovery.
+Cargo keeps one `target/` per workspace, in the workspace root's directory,
+and the processor predicts artifacts where cargo writes them:
+
+- **A workspace root** plans the artifacts of what a plain `cargo build` in
+  its directory builds: every member of a virtual manifest (no `[package]`),
+  only the root package of a manifest that has one, `default-members` when
+  the manifest sets it (`.` standing for the root), and every member plus the
+  root when `args` contains `--workspace` (or `--all`). `[workspace] members`
+  globs (`crates/*`) are expanded and `exclude` is honoured; a member listed
+  without a `Cargo.toml` is an error, as it is for cargo.
+- **A member crate** discovered on its own (its root not scanned, or not
+  building it) is built from its own directory, and its artifacts are planned
+  under the *workspace root's* `target/<profile_dir>/`. The root is the one
+  `[package] workspace` names, else the nearest ancestor `Cargo.toml` with a
+  `[workspace]` that lists the crate (an `exclude`d crate is standalone). A
+  workspace root above the project root is not seen.
+- **A member whose root is scanned too** and whose root build includes it is
+  left to the root: the root already plans its artifact, and a second cargo
+  run from the member directory would race the first on the shared `target/`.
+
+A `.cargo/config.toml` `build.target-dir` or `CARGO_TARGET_DIR` that moves
+`target/` elsewhere is not read; the processor assumes cargo's default
+layout. A `check`/`clippy` stamp (see below) stays under the crate's own
+`target/<profile_dir>/`, so every crate of a workspace keeps a stamp of its own.
 
 ## Source Files
 
@@ -53,9 +74,9 @@ dep_inputs = []          # Additional files that trigger rebuilds
 | `command` | string | `"build"` | Cargo subcommand to run |
 | `args` | string[] | `[]` | Extra arguments passed to cargo |
 | `profiles` | string[] | `["dev", "release"]` | Cargo profiles to build |
-| `src_dirs` | string[] | `[""]` | Directory to scan for Cargo.toml files |
+| `src_dirs` | string[] | `[]` | Directories to scan for Cargo.toml files (`[""]` for the whole project) |
 | `src_extensions` | string[] | `["Cargo.toml"]` | File names to match |
-| `src_exclude_dirs` | string[] | `["/.git/", "/target/", ...]` | Directory patterns to exclude |
+| `src_exclude_dirs` | string[] | `[]` | Directory patterns to exclude |
 | `src_exclude_paths` | string[] | `[]` | Paths (relative to project root) to exclude |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
@@ -92,18 +113,19 @@ profiles = ["dev"]
 command = "check"
 ```
 
-### Workspace Root Only
+### Whole Workspace From a Root Package
 
 ```toml
 [processor.mass_generator.cargo]
-src_exclude_paths = ["crates/"]
+args = ["--workspace"]
 ```
 
 ## Notes
 
 - Each top-level crate artifact in `target/<profile_dir>/` is cached as a blob in the object store, while `target/<profile_dir>/deps` stays untouched so Cargo retains its own incremental compilation state
 - The `target/` directory is automatically excluded from input scanning
-- For monorepos with multiple Rust projects, each Cargo.toml is built separately
+- For monorepos with multiple Rust projects, each Cargo.toml is built separately; the crates of one workspace share its `target/` (see [Workspaces](#workspaces))
+- A command that produces no artifact (`check`, `clippy`) gets one stamp file, `target/<profile_dir>/.rsconstruct-<command>.stamp` under the crate's own directory, as its product
 
 ## Clean behavior
 

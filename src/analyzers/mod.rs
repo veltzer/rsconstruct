@@ -665,9 +665,129 @@ pub fn probed_before(candidates: &[PathBuf], found: Option<&PathBuf>) -> Vec<Pat
 }
 
 /// `fingerprint_parts` for an analyzer whose resolution depends on its
-/// config alone: the config, serialized.
-pub fn config_fingerprint<T: serde::Serialize>(config: &T) -> Result<Vec<String>> {
-    Ok(vec![
-        toml::to_string(config).context("Failed to serialize analyzer config")?,
-    ])
+/// config alone: one part per field of the config's `checksum_fields()`,
+/// in that order, as `name = <toml value>`.
+///
+/// Only those fields are hashed. Every other field (`enabled`,
+/// `src_exclude_dirs`) decides whether or which sources are scanned, never
+/// what a scan of a given source finds, so changing one must not void every
+/// cached entry — hashing the whole serialized config used to do exactly
+/// that. A checksum field the config does not serialize is a bug in the
+/// field list and fails here, at the analyzer's first use.
+pub fn config_fingerprint<T: serde::Serialize + crate::config::KnownFields>(
+    config: &T,
+) -> Result<Vec<String>> {
+    let value = toml::Value::try_from(config).context("Failed to serialize analyzer config")?;
+    let table = value
+        .as_table()
+        .context("Analyzer config did not serialize to a TOML table")?;
+    T::checksum_fields()
+        .iter()
+        .map(|field| {
+            let value = table.get(*field).with_context(|| {
+                format!("Analyzer checksum field '{field}' is not a field of the config")
+            })?;
+            Ok(format!("{field} = {value}"))
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{
+        CppAnalyzerConfig, IcppAnalyzerConfig, KnownFields, MarkdownAnalyzerConfig,
+        PythonAnalyzerConfig, SassAnalyzerConfig, TeraAnalyzerConfig,
+    };
+
+    /// Fields that only choose which sources get scanned never enter the
+    /// fingerprint: toggling them keeps every cached entry valid.
+    #[test]
+    fn config_fingerprint_ignores_fields_that_do_not_affect_a_scan() {
+        let base = IcppAnalyzerConfig::default();
+        let excluded = IcppAnalyzerConfig {
+            src_exclude_dirs: vec!["/vendor/".to_string()],
+            enabled: false,
+            ..Default::default()
+        };
+        assert_eq!(
+            config_fingerprint(&base).unwrap(),
+            config_fingerprint(&excluded).unwrap()
+        );
+
+        let cpp_excluded = CppAnalyzerConfig {
+            src_exclude_dirs: vec!["/kernel/".to_string()],
+            ..Default::default()
+        };
+        assert_eq!(
+            config_fingerprint(&CppAnalyzerConfig::default()).unwrap(),
+            config_fingerprint(&cpp_excluded).unwrap()
+        );
+    }
+
+    /// A field that changes what a scan resolves changes the fingerprint,
+    /// and the part names the field so `analyzer show` output is readable.
+    #[test]
+    fn config_fingerprint_follows_fields_that_affect_a_scan() {
+        let base = IcppAnalyzerConfig::default();
+        let with_paths = IcppAnalyzerConfig {
+            include_paths: vec!["vendor/include".to_string()],
+            ..Default::default()
+        };
+        let angle = IcppAnalyzerConfig {
+            follow_angle_brackets: true,
+            ..Default::default()
+        };
+
+        let base_parts = config_fingerprint(&base).unwrap();
+        let path_parts = config_fingerprint(&with_paths).unwrap();
+        assert_ne!(base_parts, path_parts);
+        assert_ne!(base_parts, config_fingerprint(&angle).unwrap());
+        assert!(
+            path_parts
+                .iter()
+                .any(|p| p == "include_paths = [\"vendor/include\"]"),
+            "{path_parts:?}"
+        );
+
+        let sass = SassAnalyzerConfig {
+            load_paths: vec!["styles".to_string()],
+            ..Default::default()
+        };
+        assert_ne!(
+            config_fingerprint(&SassAnalyzerConfig::default()).unwrap(),
+            config_fingerprint(&sass).unwrap()
+        );
+        let mut python = PythonAnalyzerConfig::default();
+        python.search_paths.push("lib".to_string());
+        assert_ne!(
+            config_fingerprint(&PythonAnalyzerConfig::default()).unwrap(),
+            config_fingerprint(&python).unwrap()
+        );
+    }
+
+    /// Every analyzer's `checksum_fields` names fields the config actually
+    /// serializes (a typo would fail every build at analyzer setup), and
+    /// never the fields that only select sources.
+    #[test]
+    fn every_analyzer_checksum_field_list_is_consistent() {
+        fn check<T: serde::Serialize + KnownFields + Default>() {
+            let parts = config_fingerprint(&T::default()).unwrap();
+            assert_eq!(parts.len(), T::checksum_fields().len());
+            for field in T::checksum_fields() {
+                assert!(
+                    T::known_fields().contains(field),
+                    "checksum field '{field}' is not a known field"
+                );
+                assert_ne!(*field, "enabled");
+                assert_ne!(*field, "src_exclude_dirs");
+            }
+        }
+        check::<CppAnalyzerConfig>();
+        check::<IcppAnalyzerConfig>();
+        check::<PythonAnalyzerConfig>();
+        check::<MarkdownAnalyzerConfig>();
+        check::<SassAnalyzerConfig>();
+        check::<TeraAnalyzerConfig>();
+    }
 }

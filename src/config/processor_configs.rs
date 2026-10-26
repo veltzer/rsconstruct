@@ -174,8 +174,9 @@ impl KnownFields for StandardConfig {
     }
 }
 
-/// Simple checker config. No custom fields.
-/// Unused `StandardConfig` fields: formats, `output_dir`.
+/// Simple checker config. No custom fields. A checker produces no files,
+/// so every `SimpleChecker` plugin lists formats and `output_dir` in its
+/// `omit_standard_fields`.
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct CheckerConfig {
     #[serde(flatten)]

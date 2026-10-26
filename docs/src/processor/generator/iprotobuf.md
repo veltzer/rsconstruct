@@ -13,7 +13,7 @@ proto/greet.proto   (package greet.v1)   →  out/processor.generator.iprotobuf/
 proto/loose.proto   (no package)         →  out/processor.generator.iprotobuf/_.rs
 ```
 
-The files of one package land in the same Rust file, which is why the stanza is one product: adding a message to any `.proto` regenerates the set. Well-known types map to the `prost-types` crate rather than being generated. With `descriptor_set` set, the compiled `FileDescriptorSet` is written there too, the file `protoc --include_imports --descriptor_set_out` produces (without source locations, as protoc writes it by default).
+The files of one package land in the same Rust file, which is why the stanza is one product: adding a message to any `.proto` regenerates the set. The `import` statements are followed (transitively, comments ignored): a file imported from an `include_paths` entry outside `src_dirs` is an input of the product too, so editing it regenerates the set, and its package's Rust file is a declared output. An import that no include path holds fails discovery with the importing file named; the well-known types need no file. Well-known types map to the `prost-types` crate rather than being generated. With `descriptor_set` set, the compiled `FileDescriptorSet` is written there too, the file `protoc --include_imports --descriptor_set_out` produces (without source locations, as protoc writes it by default).
 
 ### Fidelity
 

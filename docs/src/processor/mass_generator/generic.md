@@ -72,6 +72,8 @@ The scan fields discover no products — the manifest's `sources` decide every p
 
 `predict_command` runs at every graph build — `build`, `status`, `graph`, `clean outputs`. When the config declares the plan's inputs through `src_dirs` (with `src_extensions`) and/or `src_files`, rsconstruct caches the manifest in `.rsconstruct/mass_generator/<instance>.json`, keyed by the rsconstruct version, the instance's whole config, and the path and content of every declared input file. A later build whose key matches reuses the cached manifest and does not run `predict_command`; a new, removed or edited input file — or any config change — runs it again. Without declared inputs, nothing is cached and the plan runs every time.
 
+Within one graph build the plan is kept in memory, keyed by the list of declared input files it was computed from. Discovery runs `discover` again whenever a round adds files to the index (another processor's declared outputs); the plan is reused while the declared inputs are the same files and computed again when a round added one under them. A declared input that is not on disk yet (a file an upstream processor will generate) keys the plan as "absent"; once it exists the key changes and `predict_command` runs again.
+
 The declaration is a promise: the plan must be a function of those files alone. A file the plan reads that is not declared (a template directory, a config file) can change the plan without invalidating the cache, so declare everything the tool's plan mode reads. A cache file that does not parse is an error naming the file; delete it to re-plan.
 
 ## Manifest format

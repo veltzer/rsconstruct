@@ -18,6 +18,13 @@ input of every product — so the graph runs mdl only after `bundle install`
 succeeded, and a reinstall re-checks every file. Without `local_repo`, mdl
 is the system install and does not depend on the gem processor.
 
+mdl reads `.mdlrc` from the working directory, and its `style` line
+conventionally names `.mdl_style.rb` next to it, which mdl then loads too, so
+both are inputs of every product when they exist (`dep_auto`): an edit
+re-checks every file, with no `dep_inputs` entry needed. A style file under
+another name, or one given with `--style` in `args`, is not tracked; list it
+in `dep_inputs`.
+
 ## Source Files
 
 - Input: `**/*.md`
@@ -43,6 +50,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 | `args` | string[] | `[]` | Extra arguments passed to mdl |
 | `gem_stamp` | string | `"out/processor.mass_generator.gem/root.stamp"` | The gem processor's install stamp for the `Gemfile` mdl comes from; an input when `local_repo`, so mdl runs after the install. Point it at `out/processor.mass_generator.gem/<dir>.stamp` for a `Gemfile` in a subdirectory |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `dep_auto` | string[] | `[".mdlrc", ".mdl_style.rb"]` | Config files that are inputs when they exist |
 
 ## Batch support
 

@@ -2,6 +2,16 @@ use crate::common::{require_tool, run_rsconstruct_with_env};
 use std::fs;
 use tempfile::TempDir;
 
+/// clang-tidy finds `.clang-tidy` in the source file's parent directories,
+/// so the project root's copy is an input when it exists. Not
+/// `compile_commands.json`: the processor always passes `--`, which makes
+/// clang-tidy use that fixed compilation database instead.
+#[test]
+fn clang_tidy_default_dep_auto_tracks_clang_tidy_file() {
+    let defconfig = crate::common::processor_defconfig("processor.checker.clang_tidy");
+    assert_eq!(defconfig["dep_auto"], serde_json::json!([".clang-tidy"]));
+}
+
 #[test]
 fn clang_tidy_valid_c_file() {
     require_tool("clang-tidy");

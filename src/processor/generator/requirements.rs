@@ -14,10 +14,10 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::analyzers::python::scan_python_imports;
-use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
+use crate::config::{StandardConfig, output_config_hash};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processor::{Processor, ensure_output_dir};
+use crate::processor::{Processor, ensure_output_dir, resolve_dep_inputs};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 /// Requirements generator config. Produces a requirements.txt from Python imports.
@@ -124,7 +124,10 @@ impl Processor for RequirementsProcessor {
             return Ok(());
         }
 
-        let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
+        let extra = resolve_dep_inputs(
+            &self.config.standard.dep_inputs,
+            &self.config.standard.dep_auto,
+        )?;
         let mut inputs = Vec::with_capacity(files.len() + extra.len());
         inputs.extend(files);
         inputs.extend_from_slice(&extra);
@@ -765,7 +768,14 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Project-relative source roots resolved when classifying imports as local" },
         ],
-        omit_standard_fields: &["command", "formats", "args", "output_dir"],
+        omit_standard_fields: &[
+        "command",
+        "formats",
+        "args",
+        "output_dir",
+        "required_tools",
+        "batch",
+    ],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".py"], src_exclude_dirs: &[] }),
         defaults: None,
         defconfig_json: crate::registries::default_config_json::<RequirementsConfig>,

@@ -2,12 +2,12 @@
 
 ## Purpose
 
-Converts AsciiDoc files to PDF (or other formats) using [a2x](https://asciidoc-py.github.io/).
+Converts AsciiDoc files to PDF using [a2x](https://asciidoc-py.github.io/).
 
 ## How It Works
 
-Discovers `.txt` (AsciiDoc) files in the project and runs `a2x` on each file,
-producing output in the configured format.
+Discovers `.txt` (AsciiDoc) files in the project and runs `a2x -f pdf` on each
+file. The output format is fixed to PDF; there is no format field.
 
 ## Source Files
 
@@ -18,8 +18,7 @@ producing output in the configured format.
 
 ```toml
 [processor.generator.a2x]
-a2x = "a2x"                           # The a2x command to run
-format = "pdf"                         # Output format (pdf, xhtml, dvi, ps, epub, mobi)
+command = "a2x"                        # The a2x command to run
 args = []                              # Additional arguments to pass to a2x
 output_dir = "out/processor.generator.a2x"                # Output directory
 dep_inputs = []                      # Additional files that trigger rebuilds when changed
@@ -27,8 +26,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `a2x` | string | `"a2x"` | The a2x executable to run |
-| `format` | string | `"pdf"` | Output format |
+| `command` | string | `"a2x"` | The a2x executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to a2x |
 | `output_dir` | string | `"out/processor.generator.a2x"` | Output directory |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

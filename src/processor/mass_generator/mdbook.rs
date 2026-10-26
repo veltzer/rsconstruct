@@ -194,6 +194,21 @@ impl MdbookProcessor {
             }
         }
 
+        // A custom theme: every file in it (templates, css, js, fonts) can
+        // change every page, so each is a source of every output. The
+        // directory is `theme/` next to `book.toml` unless `[output.html]
+        // theme` names another; a book without one has no such files.
+        let theme_rel = html
+            .and_then(|h| h.get("theme"))
+            .and_then(toml::Value::as_str)
+            .unwrap_or("theme");
+        let theme_dir = resolve_anchor_path(anchor_dir, theme_rel);
+        for file in files_under(&theme_dir)? {
+            if !sources.contains(&file) {
+                sources.push(file);
+            }
+        }
+
         let outputs = relative
             .iter()
             .map(|rel| PlannedOutput {
@@ -365,7 +380,7 @@ inventory::submit! {
                 affects_output: false, required: false,
                 doc: "Report plan-vs-build mismatches as warnings instead of failing the build" },
         ],
-        omit_standard_fields: &["formats", "dep_auto"],
+        omit_standard_fields: &["formats", "dep_auto", "required_tools", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["book.toml"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "mdbook", output_dir: "book", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<MdbookConfig>,
@@ -389,5 +404,85 @@ mod tests {
         let links = extract_summary_links(summary);
         let htmls: Vec<String> = links.iter().filter_map(|l| md_path_to_html(l)).collect();
         assert_eq!(htmls, vec!["index.html", "ch1.html", "sub/index.html"]);
+    }
+
+    /// A book in `dir` with one chapter, `book_toml` as its manifest text.
+    fn write_book(dir: &Path, book_toml: &str) -> PathBuf {
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(dir.join("book.toml"), book_toml).unwrap();
+        std::fs::write(
+            dir.join("src/SUMMARY.md"),
+            "# Summary\n\n- [Ch 1](ch1.md)\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("src/ch1.md"), "# Ch 1\n").unwrap();
+        dir.join("book.toml")
+    }
+
+    /// The sources every planned file depends on, for the book at `book_toml`.
+    fn plan_sources(book_toml: &Path) -> Vec<PathBuf> {
+        let processor = MdbookProcessor::new(MdbookConfig::default());
+        let plan = processor.plan_book(book_toml).unwrap();
+        let first = &plan.outputs[0];
+        for output in &plan.outputs {
+            assert_eq!(
+                output.sources, first.sources,
+                "every output shares the sources"
+            );
+        }
+        first.sources.clone()
+    }
+
+    /// Theme files (the default `theme/` or the `[output.html] theme`
+    /// directory) are copied into or rendered through every page, so they
+    /// are sources of every planned output; a book with no theme directory
+    /// has none.
+    #[test]
+    fn custom_theme_files_are_sources_of_every_output() {
+        let tmp = tempfile::TempDir::new().unwrap();
+
+        let plain = tmp.path().join("plain");
+        let book_toml = write_book(&plain, "[book]\ntitle = \"Plain\"\n");
+        let sources = plan_sources(&book_toml);
+        assert!(
+            sources
+                .iter()
+                .all(|s| s.starts_with(&plain) && !s.starts_with(plain.join("theme"))),
+            "{sources:?}"
+        );
+
+        let themed = tmp.path().join("themed");
+        let book_toml = write_book(&themed, "[book]\ntitle = \"Themed\"\n");
+        std::fs::create_dir_all(themed.join("theme/css")).unwrap();
+        std::fs::write(themed.join("theme/index.hbs"), "{{{ content }}}\n").unwrap();
+        std::fs::write(themed.join("theme/css/chrome.css"), "body {}\n").unwrap();
+        let sources = plan_sources(&book_toml);
+        assert!(
+            sources.contains(&themed.join("theme/index.hbs")),
+            "{sources:?}"
+        );
+        assert!(
+            sources.contains(&themed.join("theme/css/chrome.css")),
+            "{sources:?}"
+        );
+
+        let custom = tmp.path().join("custom");
+        let book_toml = write_book(
+            &custom,
+            "[book]\ntitle = \"Custom\"\n\n[output.html]\ntheme = \"my-theme\"\n",
+        );
+        std::fs::create_dir_all(custom.join("my-theme")).unwrap();
+        std::fs::write(custom.join("my-theme/head.hbs"), "<meta>\n").unwrap();
+        std::fs::create_dir_all(custom.join("theme")).unwrap();
+        std::fs::write(custom.join("theme/index.hbs"), "unused\n").unwrap();
+        let sources = plan_sources(&book_toml);
+        assert!(
+            sources.contains(&custom.join("my-theme/head.hbs")),
+            "{sources:?}"
+        );
+        assert!(
+            !sources.contains(&custom.join("theme/index.hbs")),
+            "the default theme dir is not read when [output.html] theme names another: {sources:?}"
+        );
     }
 }

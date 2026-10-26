@@ -13,8 +13,13 @@ A non-zero exit code from pylint fails the product.
 This processor supports batch mode, allowing multiple files to be checked in a
 single pylint invocation for better performance.
 
-If a `.pylintrc` file exists in the project root, it is automatically added as an
-extra input so that configuration changes trigger rebuilds.
+Every configuration file pylint looks up in the working directory is an input
+of every product when it exists (`dep_auto`): `pylintrc`, `pylintrc.toml`,
+`.pylintrc`, `.pylintrc.toml`, `pyproject.toml` (`[tool.pylint]`),
+`setup.cfg` and `tox.ini` (`[pylint.*]` sections) — pylint's own lookup list,
+in its order. An edit to any of them re-checks every file, with no
+`dep_inputs` entry needed. A file named with `--rcfile` in `args` is not
+tracked; list it in `dep_inputs`.
 
 ## Source Files
 
@@ -26,13 +31,14 @@ extra input so that configuration changes trigger rebuilds.
 ```toml
 [processor.checker.pylint]
 args = []                                  # Additional arguments to pass to pylint
-dep_inputs = []                          # Additional files that trigger rebuilds (e.g. ["pyproject.toml"])
+dep_inputs = []                          # Additional files that trigger rebuilds
 ```
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `args` | string[] | `[]` | Extra arguments passed to pylint |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `dep_auto` | string[] | `["pylintrc", "pylintrc.toml", ".pylintrc", ".pylintrc.toml", "pyproject.toml", "setup.cfg", "tox.ini"]` | Config files that are inputs when they exist |
 | `output_depends_on_input_name` | bool | `true` | Key cached results by file path as well as content, because pylint derives the module name and import resolution from the path. A renamed file is re-checked instead of reusing its old verdict. See [`output_depends_on_input_name`](../../configuration.md) |
 
 ## Batch support

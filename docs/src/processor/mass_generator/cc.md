@@ -161,7 +161,6 @@ cxxflags = []             # Additional global C++ flags
 ldflags = []              # Additional global linker flags
 include_dirs = []         # Additional global -I paths
 single_invocation = false # Use single-invocation mode (default: false)
-loose_manifest = false    # Warn instead of failing on plan mismatch (default: false)
 dep_inputs = []           # Extra files that trigger rebuilds
 ```
 
@@ -183,9 +182,8 @@ checking during discovery.
 | `ldflags` | string[] | `[]` | Global linker flags |
 | `include_dirs` | string[] | `[]` | Global include directories |
 | `single_invocation` | bool | `false` | Build programs in single compiler invocation |
-| `loose_manifest` | bool | `false` | Warn instead of failing when staged outputs do not match the plan |
 | `dep_inputs` | string[] | `[]` | Extra files that trigger rebuilds when changed |
-| `src_dirs` | string[] | `[""]` | Directory to scan for cc.yaml files |
+| `src_dirs` | string[] | `[]` | Directories to scan for cc.yaml files (`[""]` for the whole project) |
 | `src_extensions` | string[] | `["cc.yaml"]` | File patterns to scan for |
 
 ## Batch support

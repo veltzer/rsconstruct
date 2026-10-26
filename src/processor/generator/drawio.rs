@@ -53,7 +53,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "drawio", processor_type: crate::processor::ProcessorType::Generator, create: create_drawio,
     fields: &[],
-    omit_standard_fields: &[],
+    omit_standard_fields: &["batch"],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".drawio"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.drawio", formats: &["png"], command: "drawio", ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,

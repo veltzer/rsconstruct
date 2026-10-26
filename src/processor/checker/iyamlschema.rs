@@ -274,7 +274,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Require YAML keys to appear in the order defined by the schema" },
         ],
-        omit_standard_fields: &["command", "formats", "args", "output_dir"],
+        omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] }),
         defaults: None,
         defconfig_json: crate::registries::default_config_json::<IyamlschemaConfig>,

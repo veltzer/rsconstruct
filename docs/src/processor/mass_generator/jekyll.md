@@ -14,6 +14,15 @@ under `output_dir` (`_site` by default, relative to `_config.yml`). When any
 product is dirty, runs `jekyll build --disable-disk-cache -d <staging>` once
 and verifies the staged outputs against the plan via `install_staged`.
 
+The plan of a site is keyed by the inputs it was computed from: every file
+under the site directory (plus `dep_inputs` and `dep_auto`). Discovery runs
+again whenever a round adds files to the index — an upstream processor
+declaring a page inside the site — and a site whose inputs changed is
+planned again, so every page then depends on the generated file and its
+producer runs first. A declared file that is not on disk yet keys the plan
+as "absent"; once it is written the key changes and the site is planned
+again, now seeing the page.
+
 ## Source Files
 
 - Input: `**/_config.yml` (plus sibling site files)
@@ -29,6 +38,7 @@ output_dir = "_site"
 loose_manifest = false
 args = []
 dep_inputs = []
+dep_auto = []
 ```
 
 | Key | Type | Default | Description |
@@ -38,7 +48,8 @@ dep_inputs = []
 | `output_dir` | string | `"_site"` | Output directory for generated site files, relative to `_config.yml` |
 | `loose_manifest` | bool | `false` | Warn instead of failing when `jekyll build` writes files not in the plan |
 | `args` | string[] | `[]` | Extra arguments passed to `jekyll build` |
-| `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds; each must exist |
+| `dep_auto` | string[] | `[]` | Like `dep_inputs`, but an entry that does not exist is skipped |
 
 ## Batch support
 

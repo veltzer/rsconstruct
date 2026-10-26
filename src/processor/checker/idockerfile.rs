@@ -231,7 +231,7 @@ inventory::submit! {
                 affects_output: true, required: false,
                 doc: "Fail only on findings at least this severe: error, warning, info, style, none. Empty: the config file's, else info" },
         ],
-        omit_standard_fields: &[],
+        omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["Dockerfile"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { dep_auto: &[".hadolint.yaml", ".hadolint.yml"], ..crate::config::ProcessorDefaults::EMPTY }),
         keywords: &["docker", "dockerfile", "linter", "hadolint", "rust"],

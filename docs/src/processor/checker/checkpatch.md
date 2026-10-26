@@ -34,7 +34,7 @@ dep_inputs = []
 
 ## Batch support
 
-The tool processes one file at a time. Each file is checked in a separate invocation.
+The tool accepts multiple files on the command line. When batching is enabled (default), rsconstruct passes all files in a single invocation for better performance.
 
 ## Clean behavior
 

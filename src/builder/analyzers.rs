@@ -447,7 +447,7 @@ impl Builder {
                             None
                         };
                         for file_arg in &files {
-                            let file_path = PathBuf::from(file_arg);
+                            let file_path = super::graph::normalize_query_path(file_arg);
                             let entries = deps_cache.get_raw_for_path(&file_path);
                             if entries.is_empty() {
                                 if !json_mode {
@@ -460,12 +460,23 @@ impl Builder {
                             } else {
                                 found_any = true;
                                 for (deps, analyzer) in entries {
-                                    let pieces = if let Some(ref a) = analyzers {
-                                        a.get(&analyzer).and_then(|inst| {
-                                            inst.scan_hash_pieces(ctx, &file_path).ok().flatten()
-                                        })
-                                    } else {
-                                        None
+                                    // The entry proves this analyzer scanned
+                                    // the file, so a failing rescan is an
+                                    // error to report, not a silent "no
+                                    // pieces".
+                                    let pieces = match &analyzers {
+                                        Some(a) => match a.get(&analyzer) {
+                                            Some(inst) => inst
+                                                .scan_hash_pieces(ctx, &file_path)
+                                                .with_context(|| {
+                                                    format!(
+                                                        "Analyzer '{analyzer}' failed to scan {} for hash pieces",
+                                                        file_path.display()
+                                                    )
+                                                })?,
+                                            None => None,
+                                        },
+                                        None => None,
                                     };
                                     if json_mode {
                                         collected.push((file_path.clone(), deps, analyzer, pieces));

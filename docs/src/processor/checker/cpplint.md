@@ -14,6 +14,12 @@ the cache. A non-zero exit code from cpplint fails the product.
 
 This processor supports batch mode.
 
+cpplint reads `CPPLINT.cfg` from the file's directory and every parent, so the
+project root's `CPPLINT.cfg` is an input of every product when it exists
+(`dep_auto`): an edit to it re-checks every file, with no `dep_inputs` entry
+needed. A `CPPLINT.cfg` in a subdirectory is not tracked; list it in
+`dep_inputs`.
+
 ## Source Files
 
 - Input: `src/**/*.c`, `src/**/*.cc`, `src/**/*.h`, `src/**/*.hh`
@@ -31,10 +37,11 @@ dep_inputs = []
 |-----|------|---------|-------------|
 | `args` | string[] | `[]` | Extra arguments passed to cpplint |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
+| `dep_auto` | string[] | `["CPPLINT.cfg"]` | Config files that are inputs when they exist |
 
 ## Batch support
 
-The tool processes one file at a time. Each file is checked in a separate invocation.
+The tool accepts multiple files on the command line. When batching is enabled (default), rsconstruct passes all files in a single invocation for better performance.
 
 ## Clean behavior
 

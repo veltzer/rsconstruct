@@ -971,8 +971,9 @@ impl Config {
         let mut errors = Vec::new();
         for inst in &self.processor.instances {
             if let Some(table) = inst.config_toml.as_table() {
-                let section_label = format!("processor.{}", inst.instance_name);
-                validate_single_processor(&inst.pname, &section_label, table, &mut errors);
+                // instance_name is already the full section name
+                // (`processor.checker.ruff`, `processor.checker.ascii.one`).
+                validate_single_processor(&inst.pname, &inst.instance_name, table, &mut errors);
             }
         }
         if !errors.is_empty() {

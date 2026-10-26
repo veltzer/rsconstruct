@@ -300,6 +300,16 @@ For each product:
    `.rsconstruct/objects/`)
 5. On failure: report error (or continue if `--keep-going`)
 
+**Failure reporting:** every product failure is reported exactly once, as
+`[processor] product: error`, in both modes. With `--keep-going` each is
+printed on stderr as it happens and listed again in the summary. Without it,
+nothing is printed as it happens: the failures become the build's error
+(`executor::execution::BuildFailures`), printed once at the end next to the
+exit status. Products run in parallel, so several can fail before the stop
+takes effect; the error carries all of them (returning only the first used
+to lose the rest), and the `--json` build summary lists each as its own
+entry with `failed` equal to their number.
+
 ## Processor source layout
 
 All processor code lives under `src/processor/`. The folder structure mirrors processor type:

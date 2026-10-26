@@ -9,15 +9,15 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     OnceTool, PlannedOutput, add_planned_products, fresh_state_dir, install_staged,
-    plan_cache_path, read_plan_cache, remove_dir_if_present, require_planned_output,
-    write_plan_cache,
+    plan_cache_path, plan_input_checksum, read_plan_cache, remove_dir_if_present,
+    require_planned_output, resolve_dep_inputs_and_auto, write_plan_cache,
 };
-use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
+use crate::config::{StandardConfig, output_config_hash};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use crate::processor::{
-    Processor, SiblingFilter, anchor_display_dir, check_command_output, log_command,
-    resolve_anchor_path, run_in_anchor_dir,
+    Processor, anchor_display_dir, check_command_output, log_command, resolve_anchor_path,
+    run_in_anchor_dir,
 };
 
 const PLAN_VERSION: u32 = 1;
@@ -114,8 +114,25 @@ struct SitePlan {
 
 pub struct JekyllProcessor {
     config: JekyllConfig,
-    plans: Mutex<BTreeMap<PathBuf, Arc<SitePlan>>>,
+    /// The plan of each site, with the sorted inputs (sources and extra
+    /// inputs) it was computed from. Discovery runs `discover` again
+    /// whenever a round adds files to the index — an upstream generator
+    /// writing a page into the site — and a site whose inputs changed is
+    /// planned again; one whose inputs are the same keeps its plan.
+    plans: Mutex<BTreeMap<PathBuf, CachedSitePlan>>,
     runs: Mutex<BTreeMap<PathBuf, Arc<OnceTool>>>,
+}
+
+/// A site's plan and the sorted inputs it was computed from.
+type CachedSitePlan = (Vec<PathBuf>, Arc<SitePlan>);
+
+/// `sources` and `extra` as one sorted, deduplicated list: the identity of
+/// the inputs a plan was computed from.
+fn plan_inputs(sources: &[PathBuf], extra: &[PathBuf]) -> Vec<PathBuf> {
+    let mut all: Vec<PathBuf> = sources.iter().chain(extra).cloned().collect();
+    all.sort();
+    all.dedup();
+    all
 }
 
 impl JekyllProcessor {
@@ -143,8 +160,11 @@ impl JekyllProcessor {
         extra: &[PathBuf],
         instance_name: &str,
     ) -> Result<Arc<SitePlan>> {
+        let inputs = plan_inputs(sources, extra);
         let mut guard = self.plans.lock();
-        if let Some(plan) = guard.get(config_yml) {
+        if let Some((planned_from, plan)) = guard.get(config_yml)
+            && *planned_from == inputs
+        {
             return Ok(Arc::clone(plan));
         }
 
@@ -152,7 +172,7 @@ impl JekyllProcessor {
         let output_dir = resolve_anchor_path(anchor_dir, &self.config.standard.output_dir);
         let flat = config_yml.to_string_lossy().replace('/', "_");
         let cache_id = format!("{instance_name}.{flat}");
-        let key = self.plan_key(&cache_id, sources, extra)?;
+        let key = self.plan_key(&cache_id, &inputs)?;
         let cache_path = plan_cache_path(&cache_id);
         let invalid = || format!("[{instance_name}] the jekyll planner printed an invalid plan");
 
@@ -177,11 +197,14 @@ impl JekyllProcessor {
             outputs,
             relative,
         });
-        guard.insert(config_yml.to_path_buf(), Arc::clone(&plan));
+        guard.insert(config_yml.to_path_buf(), (inputs, Arc::clone(&plan)));
         Ok(plan)
     }
 
-    fn plan_key(&self, cache_id: &str, sources: &[PathBuf], extra: &[PathBuf]) -> Result<String> {
+    /// The key a cached plan is valid for: the rsconstruct version, the
+    /// site, the whole config, and the path and content of every input
+    /// (`plan_inputs`), so a new, removed or edited file means a fresh plan.
+    fn plan_key(&self, cache_id: &str, inputs: &[PathBuf]) -> Result<String> {
         let config = serde_json::to_string(&self.config)
             .context("Failed to serialize jekyll config for the plan key")?;
         let mut parts: Vec<String> = vec![
@@ -189,14 +212,9 @@ impl JekyllProcessor {
             cache_id.to_string(),
             config,
         ];
-        let mut all: Vec<&PathBuf> = sources.iter().chain(extra).collect();
-        all.sort();
-        all.dedup();
-        for path in all {
-            let data = std::fs::read(path)
-                .with_context(|| format!("Failed to read plan input {}", path.display()))?;
+        for path in inputs {
             parts.push(path.display().to_string());
-            parts.push(crate::checksum::bytes_checksum(&data));
+            parts.push(plan_input_checksum(path)?);
         }
         let refs: Vec<&str> = parts.iter().map(String::as_str).collect();
         Ok(crate::checksum::hash_parts(&refs))
@@ -240,7 +258,7 @@ impl JekyllProcessor {
             .plans
             .lock()
             .get(config_yml)
-            .cloned()
+            .map(|(_, plan)| Arc::clone(plan))
             .with_context(|| format!("[{instance_name}] executed before its plan was loaded"))?;
         let flat = config_yml.to_string_lossy().replace('/', "_");
         let staging = fresh_state_dir(instance_name, &format!(".{flat}.staging"))?;
@@ -270,6 +288,35 @@ impl JekyllProcessor {
             self.config.loose_manifest,
         )
     }
+}
+
+/// Directories under a site that hold no sources: the build's own output,
+/// Jekyll's cache, and rsconstruct's.
+const SITE_EXCLUDES: &[&str] = &[
+    "/.git/",
+    "/out/",
+    "/.rsconstruct/",
+    "/_site/",
+    "/.jekyll-cache/",
+];
+
+/// Every indexed file under `anchor_dir` outside [`SITE_EXCLUDES`]: a
+/// Jekyll site reads all of them (pages, posts, layouts, includes, data,
+/// static files), so each is a source of every planned page. The index is
+/// filtered directly: `FileIndex::query` matches names by extension or by
+/// exact name and has no "any file" entry — the `extensions: [""]` this
+/// used to pass matched nothing, leaving `_config.yml` the sole input.
+fn site_files(file_index: &FileIndex, anchor_dir: &Path) -> Vec<PathBuf> {
+    file_index
+        .files()
+        .iter()
+        .filter(|path| anchor_dir.as_os_str().is_empty() || path.starts_with(anchor_dir))
+        .filter(|path| {
+            let text = format!("/{}", path.display());
+            !SITE_EXCLUDES.iter().any(|dir| text.contains(dir))
+        })
+        .cloned()
+        .collect()
 }
 
 fn parse_plan(raw: &str) -> Result<BTreeSet<String>> {
@@ -341,32 +388,11 @@ impl Processor for JekyllProcessor {
             &self.config,
             &crate::config::checksum_fields_of(instance_name),
         );
-        let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
-        let siblings = SiblingFilter {
-            extensions: &[""],
-            excludes: &[
-                "/.git/",
-                "/out/",
-                "/.rsconstruct/",
-                "/_site/",
-                "/.jekyll-cache/",
-            ],
-        };
-
+        let extra = resolve_dep_inputs_and_auto(&self.config.standard)?;
         let mut all_planned = Vec::new();
         for config_yml in files {
-            let anchor_dir = config_yml
-                .parent()
-                .map(std::path::Path::to_path_buf)
-                .unwrap_or_default();
-            let sibling_files = file_index.query(
-                &anchor_dir,
-                siblings.extensions,
-                siblings.excludes,
-                &[],
-                &[],
-                &[],
-            );
+            let anchor_dir = crate::processor::parent_dir_or_empty(&config_yml);
+            let sibling_files = site_files(file_index, anchor_dir);
             let sources = crate::processor::build_anchor_inputs(&config_yml, &sibling_files, &[]);
             let plan = self.plan_site(&config_yml, &sources, &extra, instance_name)?;
             all_planned.extend(plan.outputs.clone());
@@ -403,7 +429,7 @@ inventory::submit! {
                 affects_output: false, required: false,
                 doc: "Report plan-vs-build mismatches as warnings instead of failing the build" },
         ],
-        omit_standard_fields: &[],
+        omit_standard_fields: &["formats", "required_tools", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["_config.yml"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "jekyll", output_dir: "_site", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<JekyllConfig>,

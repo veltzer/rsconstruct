@@ -16,6 +16,10 @@ output PDF.
 This processor is designed for course/module workflows where slide decks in
 subdirectories are combined into course bundles.
 
+The sources are located by `source_dir` and `source_ext`, not by `src_dirs` /
+`src_extensions`; the standard `src_exclude_dirs`, `src_exclude_files`,
+`src_exclude_paths` and `src_files` fields apply to that lookup as they do to a scan.
+
 ## Source Files
 
 - Input: PDFs from upstream processor (e.g., `out/processor.generator.marp/{subdir}/*.pdf`)
@@ -46,7 +50,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 
 ## Batch support
 
-Each input file is processed individually, producing its own output file.
+Each directory is merged individually, producing its own output file. Merges run one at a time (`max_jobs` is capped at 1).
 
 ## Clean behavior
 

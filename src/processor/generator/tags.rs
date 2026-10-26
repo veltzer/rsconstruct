@@ -7,10 +7,10 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{StandardConfig, output_config_hash, resolve_extra_inputs};
+use crate::config::{StandardConfig, output_config_hash};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
-use crate::processor::Processor;
+use crate::processor::{Processor, resolve_dep_inputs};
 use crate::tables;
 
 fn default_tags_output() -> String {
@@ -145,7 +145,10 @@ impl Processor for TagsProcessor {
             return Ok(());
         }
 
-        let extra = resolve_extra_inputs(&self.config.standard.dep_inputs)?;
+        let extra = resolve_dep_inputs(
+            &self.config.standard.dep_inputs,
+            &self.config.standard.dep_auto,
+        )?;
         let mut inputs = Vec::with_capacity(files.len() + extra.len() + 1);
         inputs.extend(files);
         inputs.extend_from_slice(&extra);
@@ -153,17 +156,7 @@ impl Processor for TagsProcessor {
         // Add tag list files as inputs so edits trigger rebuild
         let dir = Path::new(&self.config.tags_dir);
         if dir.is_dir() {
-            for entry in fs::read_dir(dir)
-                .with_context(|| format!("Failed to read tags_dir: {}", self.config.tags_dir))?
-            {
-                let entry = entry.with_context(|| {
-                    format!("Failed to read entry in tags_dir: {}", self.config.tags_dir)
-                })?;
-                let path = entry.path();
-                if path.extension().and_then(|e| e.to_str()) == Some("txt") {
-                    inputs.push(path);
-                }
-            }
+            inputs.extend(tag_list_files(dir)?);
         }
 
         let output = PathBuf::from(&self.config.output);
@@ -186,405 +179,465 @@ impl Processor for TagsProcessor {
         // Ensure output directory exists
         crate::processor::ensure_output_dir(output_path)?;
 
-        // Collect frontmatter from all input .md files
-        let mut all_frontmatter: HashMap<String, serde_json::Value> = HashMap::new();
-        let mut tag_to_files: HashMap<String, BTreeSet<String>> = HashMap::new();
-        let mut duplicate_tags: Vec<(String, String)> = Vec::new(); // (file, tag)
-        let mut unsorted_tags: Vec<(String, String, String, String)> = Vec::new(); // (file, field, a, b)
+        let md_files = markdown_files(&product.inputs);
+        let scan = validate_frontmatter(&self.config, &md_files)?;
+        scan.fail_on_issues()?;
+        write_tags_db(output_path, &scan)
+    }
+}
 
-        for input in &product.inputs {
-            let ext = input.extension().and_then(|e| e.to_str()).unwrap_or("");
-            if ext != "md" {
-                continue;
+/// The `.txt` files of `tags_dir`, sorted by path. They become inputs of
+/// the product, and the input order is part of the cache key
+/// (`combined_input_checksum`), so the `fs::read_dir` order — whatever the
+/// filesystem returns — used to make the key filesystem-dependent.
+fn tag_list_files(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    for entry in fs::read_dir(dir)
+        .with_context(|| format!("Failed to read tags directory: {}", dir.display()))?
+    {
+        let entry = entry.with_context(|| {
+            format!("Failed to read entry in tags directory: {}", dir.display())
+        })?;
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("txt") {
+            files.push(path);
+        }
+    }
+    files.sort();
+    Ok(files)
+}
+
+/// The frontmatter of every markdown file and the tag index built from
+/// it, plus every validation issue found: one entry per failed check,
+/// each a complete message (a header line and indented details). Built by
+/// [`validate_frontmatter`], the one validation pass behind both the build
+/// (`execute`) and `rsconstruct tag check` — the two used to carry their
+/// own copies, and drifted: `tag check` failed on unused tags with
+/// `check_unused` off, and ignored list values in `unique_fields`.
+struct TagScan {
+    all_frontmatter: HashMap<String, serde_json::Value>,
+    tag_to_files: HashMap<String, BTreeSet<String>>,
+    issues: Vec<String>,
+}
+
+impl TagScan {
+    /// Fail with every issue found, or pass when there is none.
+    fn fail_on_issues(&self) -> Result<()> {
+        if self.issues.is_empty() {
+            return Ok(());
+        }
+        bail!("{}", self.issues.join("\n"));
+    }
+}
+
+/// The `.md` files among a product's inputs (the rest are the tag lists
+/// and the `dep_inputs`).
+fn markdown_files(inputs: &[PathBuf]) -> Vec<&Path> {
+    inputs
+        .iter()
+        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("md"))
+        .map(PathBuf::as_path)
+        .collect()
+}
+
+/// Whether a frontmatter field counts as present for `required_fields`
+/// and `required_field_groups`: set, and not an empty list or string.
+fn field_present(obj: Option<&serde_json::Map<String, serde_json::Value>>, field: &str) -> bool {
+    obj.is_some_and(|o| {
+        o.get(field).is_some_and(|v| match v {
+            serde_json::Value::Array(a) => !a.is_empty(),
+            serde_json::Value::String(s) => !s.is_empty(),
+            serde_json::Value::Null => false,
+            _ => true,
+        })
+    })
+}
+
+/// Parse the frontmatter of `md_files` and run every validation the config
+/// asks for. A file that cannot be read is an error; a failed validation is
+/// an issue in the returned scan, so the caller reports all of them at once.
+fn validate_frontmatter(config: &TagsConfig, md_files: &[&Path]) -> Result<TagScan> {
+    // Collect frontmatter from all input .md files
+    let mut all_frontmatter: HashMap<String, serde_json::Value> = HashMap::new();
+    let mut tag_to_files: HashMap<String, BTreeSet<String>> = HashMap::new();
+    let mut duplicate_tags: Vec<(String, String)> = Vec::new(); // (file, tag)
+    let mut unsorted_tags: Vec<(String, String, String, String)> = Vec::new(); // (file, field, a, b)
+    let mut issues: Vec<String> = Vec::new();
+
+    for input in md_files {
+        let content = fs::read_to_string(input)
+            .with_context(|| format!("Failed to read {}", input.display()))?;
+
+        if let Some(fm) = parse_frontmatter(&content) {
+            let file_key = input.display().to_string();
+            let mut file_tags: HashSet<String> = HashSet::new();
+
+            // Index all frontmatter fields:
+            // - list fields: each item becomes a tag (e.g. "docker" from tags: [docker])
+            // - scalar fields: indexed as "key:value" (e.g. "level:intermediate")
+            if let Some(obj) = fm.as_object() {
+                for (key, value) in obj {
+                    match value {
+                        serde_json::Value::Array(items) => {
+                            // Check sorted order if enabled
+                            if config.sorted_tags {
+                                let strs: Vec<&str> =
+                                    items.iter().filter_map(|i| i.as_str()).collect();
+                                for pair in strs.windows(2) {
+                                    if pair[0] > pair[1] {
+                                        unsorted_tags.push((
+                                            file_key.clone(),
+                                            key.clone(),
+                                            pair[0].to_string(),
+                                            pair[1].to_string(),
+                                        ));
+                                        break;
+                                    }
+                                }
+                            }
+                            for item in items {
+                                if let Some(s) = item.as_str() {
+                                    if !file_tags.insert(s.to_string()) {
+                                        duplicate_tags.push((file_key.clone(), s.to_string()));
+                                    }
+                                    tag_to_files
+                                        .entry(s.to_string())
+                                        .or_default()
+                                        .insert(file_key.clone());
+                                }
+                            }
+                        }
+                        serde_json::Value::String(s) => {
+                            let tag = format!("{key}:{s}");
+                            if !file_tags.insert(tag.clone()) {
+                                duplicate_tags.push((file_key.clone(), tag.clone()));
+                            }
+                            tag_to_files
+                                .entry(tag)
+                                .or_default()
+                                .insert(file_key.clone());
+                        }
+                        // parse_simple_yaml produces only String values for scalars,
+                        // so Number/Bool/Null/Object cannot occur here.
+                        _ => {}
+                    }
+                }
             }
-            let content = fs::read_to_string(input)
-                .with_context(|| format!("Failed to read {}", input.display()))?;
 
-            if let Some(fm) = parse_frontmatter(&content) {
-                let file_key = input.display().to_string();
-                let mut file_tags: HashSet<String> = HashSet::new();
+            all_frontmatter.insert(file_key, fm);
+        }
+    }
 
-                // Index all frontmatter fields:
-                // - list fields: each item becomes a tag (e.g. "docker" from tags: [docker])
-                // - scalar fields: indexed as "key:value" (e.g. "level:intermediate")
-                if let Some(obj) = fm.as_object() {
-                    for (key, value) in obj {
-                        match value {
-                            serde_json::Value::Array(items) => {
-                                // Check sorted order if enabled
-                                if self.config.sorted_tags {
-                                    let strs: Vec<&str> =
-                                        items.iter().filter_map(|i| i.as_str()).collect();
-                                    for pair in strs.windows(2) {
-                                        if pair[0] > pair[1] {
-                                            unsorted_tags.push((
-                                                file_key.clone(),
-                                                key.clone(),
-                                                pair[0].to_string(),
-                                                pair[1].to_string(),
-                                            ));
-                                            break;
-                                        }
-                                    }
-                                }
-                                for item in items {
-                                    if let Some(s) = item.as_str() {
-                                        if !file_tags.insert(s.to_string()) {
-                                            duplicate_tags.push((file_key.clone(), s.to_string()));
-                                        }
-                                        tag_to_files
-                                            .entry(s.to_string())
-                                            .or_default()
-                                            .insert(file_key.clone());
-                                    }
-                                }
-                            }
-                            serde_json::Value::String(s) => {
-                                let tag = format!("{key}:{s}");
-                                if !file_tags.insert(tag.clone()) {
-                                    duplicate_tags.push((file_key.clone(), tag.clone()));
-                                }
-                                tag_to_files
-                                    .entry(tag)
-                                    .or_default()
-                                    .insert(file_key.clone());
-                            }
-                            // parse_simple_yaml produces only String values for scalars,
-                            // so Number/Bool/Null/Object cannot occur here.
-                            _ => {}
+    // Check required frontmatter fields
+    if !config.required_fields.is_empty() {
+        let mut missing: Vec<(String, Vec<String>)> = Vec::new(); // (file, missing_fields)
+        for input in md_files {
+            let file_key = input.display().to_string();
+            let obj = all_frontmatter.get(&file_key).and_then(|v| v.as_object());
+            let file_missing: Vec<String> = config
+                .required_fields
+                .iter()
+                .filter(|field| !field_present(obj, field))
+                .cloned()
+                .collect();
+            if !file_missing.is_empty() {
+                missing.push((file_key, file_missing));
+            }
+        }
+        if !missing.is_empty() {
+            missing.sort_by(|a, b| a.0.cmp(&b.0));
+            let mut msg = String::from("Missing required frontmatter fields:\n");
+            for (file, fields) in &missing {
+                let _ = writeln!(msg, "  {}: {}", file, fields.join(", "));
+            }
+            issues.push(msg.trim_end().to_string());
+        }
+    }
+
+    // Check required field groups
+    if !config.required_field_groups.is_empty() {
+        let mut failing: Vec<(String, Vec<String>)> = Vec::new();
+        for input in md_files {
+            let file_key = input.display().to_string();
+            let obj = all_frontmatter.get(&file_key).and_then(|v| v.as_object());
+            let satisfies_any = config
+                .required_field_groups
+                .iter()
+                .any(|group| group.iter().all(|field| field_present(obj, field)));
+            if !satisfies_any {
+                let group_strs: Vec<String> = config
+                    .required_field_groups
+                    .iter()
+                    .map(|g| format!("[{}]", g.join(", ")))
+                    .collect();
+                failing.push((file_key, group_strs));
+            }
+        }
+        if !failing.is_empty() {
+            failing.sort_by(|a, b| a.0.cmp(&b.0));
+            let mut msg =
+                String::from("Files missing required field groups (must satisfy at least one):\n");
+            for (file, groups) in &failing {
+                let _ = writeln!(msg, "  {}: none of {}", file, groups.join(" or "));
+            }
+            issues.push(msg.trim_end().to_string());
+        }
+    }
+
+    // Check for duplicate tags within files
+    if !duplicate_tags.is_empty() {
+        duplicate_tags.sort();
+        let mut msg = String::from("Duplicate tags found within files:\n");
+        for (file, tag) in &duplicate_tags {
+            let _ = writeln!(msg, "  {tag} in {file}");
+        }
+        issues.push(msg.trim_end().to_string());
+    }
+
+    // The allowed set from tags_dir, when there is one.
+    let dir = Path::new(&config.tags_dir);
+    let allowed: Option<HashSet<String>> = if dir.is_dir() {
+        Some(load_tags_dir(dir)?)
+    } else {
+        None
+    };
+
+    // Validate tags against the allowed set
+    if let Some(allowed) = &allowed {
+        let mut unknown: Vec<(String, Vec<String>)> = Vec::new();
+        for (tag, files) in &tag_to_files {
+            if !tag_matches_allowed(tag, allowed) {
+                unknown.push((tag.clone(), files.iter().cloned().collect()));
+            }
+        }
+        if !unknown.is_empty() {
+            unknown.sort_by(|a, b| a.0.cmp(&b.0));
+            let mut msg = format!("Unknown tags found (not in {}):\n", config.tags_dir);
+            for (tag, files) in &unknown {
+                let _ = write!(msg, "  {tag}");
+                if let Some(suggestion) = find_similar_tag(tag, allowed) {
+                    let _ = write!(msg, " (did you mean '{suggestion}'?)");
+                }
+                msg.push('\n');
+                for file in files {
+                    let _ = writeln!(msg, "    - {file}");
+                }
+            }
+            issues.push(msg.trim_end().to_string());
+        }
+
+        // Check for unused tags (in allowlist but not used by any file)
+        if config.check_unused {
+            let used_tags: HashSet<&String> = tag_to_files.keys().collect();
+            let mut unused: Vec<&String> =
+                allowed.iter().filter(|t| !used_tags.contains(t)).collect();
+            if !unused.is_empty() {
+                unused.sort();
+                let mut msg = format!(
+                    "Unused tags in {} (not used by any file):\n",
+                    config.tags_dir
+                );
+                for tag in &unused {
+                    let _ = writeln!(msg, "  {tag}");
+                }
+                issues.push(msg.trim_end().to_string());
+            }
+        }
+    }
+
+    // Check sorted tags
+    if config.sorted_tags && !unsorted_tags.is_empty() {
+        unsorted_tags.sort();
+        let mut msg = String::from("List tags are not in sorted order:\n");
+        for (file, field, a, b) in &unsorted_tags {
+            let _ = writeln!(
+                msg,
+                "  {file} field '{field}': '{b}' should come after '{a}'"
+            );
+        }
+        issues.push(msg.trim_end().to_string());
+    }
+
+    // Check required_values (scalar fields must have values in tags dir;
+    // without a tags dir no value is valid)
+    if !config.required_values.is_empty() {
+        let none = HashSet::new();
+        let allowed = allowed.as_ref().unwrap_or(&none);
+        let mut invalid: Vec<(String, String, String)> = Vec::new(); // (file, field, value)
+        for (file_key, fm) in &all_frontmatter {
+            if let Some(obj) = fm.as_object() {
+                for field in &config.required_values {
+                    if let Some(serde_json::Value::String(val)) = obj.get(field) {
+                        let tag = format!("{field}:{val}");
+                        if !allowed.contains(&tag) {
+                            invalid.push((file_key.clone(), field.clone(), val.clone()));
                         }
                     }
                 }
-
-                all_frontmatter.insert(file_key, fm);
             }
         }
-
-        // Check required frontmatter fields
-        if !self.config.required_fields.is_empty() {
-            let mut missing: Vec<(String, Vec<String>)> = Vec::new(); // (file, missing_fields)
-            for input in &product.inputs {
-                let ext = input.extension().and_then(|e| e.to_str()).unwrap_or("");
-                if ext != "md" {
-                    continue;
-                }
-                let file_key = input.display().to_string();
-                let fm = all_frontmatter.get(&file_key);
-                let obj = fm.and_then(|v| v.as_object());
-                let mut file_missing: Vec<String> = Vec::new();
-                for field in &self.config.required_fields {
-                    let has_field = obj.is_some_and(|o| {
-                        o.get(field).is_some_and(|v| match v {
-                            serde_json::Value::Array(a) => !a.is_empty(),
-                            serde_json::Value::String(s) => !s.is_empty(),
-                            serde_json::Value::Null => false,
-                            _ => true,
-                        })
-                    });
-                    if !has_field {
-                        file_missing.push(field.clone());
-                    }
-                }
-                if !file_missing.is_empty() {
-                    missing.push((file_key, file_missing));
-                }
-            }
-            if !missing.is_empty() {
-                missing.sort_by(|a, b| a.0.cmp(&b.0));
-                let mut msg = String::from("Missing required frontmatter fields:\n");
-                for (file, fields) in &missing {
-                    let _ = writeln!(msg, "  {}: {}", file, fields.join(", "));
-                }
-                bail!("{}", msg.trim_end());
-            }
-        }
-
-        // Check required field groups
-        if !self.config.required_field_groups.is_empty() {
-            let mut failing: Vec<(String, Vec<String>)> = Vec::new();
-            for input in &product.inputs {
-                let ext = input.extension().and_then(|e| e.to_str()).unwrap_or("");
-                if ext != "md" {
-                    continue;
-                }
-                let file_key = input.display().to_string();
-                let fm = all_frontmatter.get(&file_key);
-                let obj = fm.and_then(|v| v.as_object());
-                let satisfies_any = self.config.required_field_groups.iter().any(|group| {
-                    group.iter().all(|field| {
-                        obj.is_some_and(|o| {
-                            o.get(field).is_some_and(|v| match v {
-                                serde_json::Value::Array(a) => !a.is_empty(),
-                                serde_json::Value::String(s) => !s.is_empty(),
-                                serde_json::Value::Null => false,
-                                _ => true,
-                            })
-                        })
-                    })
-                });
-                if !satisfies_any {
-                    let group_strs: Vec<String> = self
-                        .config
-                        .required_field_groups
-                        .iter()
-                        .map(|g| format!("[{}]", g.join(", ")))
-                        .collect();
-                    failing.push((file_key, group_strs));
-                }
-            }
-            if !failing.is_empty() {
-                failing.sort_by(|a, b| a.0.cmp(&b.0));
-                let mut msg = String::from(
-                    "Files missing required field groups (must satisfy at least one):\n",
-                );
-                for (file, groups) in &failing {
-                    let _ = writeln!(msg, "  {}: none of {}", file, groups.join(" or "));
-                }
-                bail!("{}", msg.trim_end());
-            }
-        }
-
-        // Check for duplicate tags within files
-        if !duplicate_tags.is_empty() {
-            duplicate_tags.sort();
-            let mut msg = String::from("Duplicate tags found within files:\n");
-            for (file, tag) in &duplicate_tags {
-                let _ = writeln!(msg, "  {tag} in {file}");
-            }
-            bail!("{}", msg.trim_end());
-        }
-
-        // Validate tags against allowed set from tags_dir
-        let dir = Path::new(&self.config.tags_dir);
-        if dir.is_dir() {
-            let allowed = load_tags_dir(dir)?;
-            let mut unknown: Vec<(String, Vec<String>)> = Vec::new();
-            for (tag, files) in &tag_to_files {
-                if !tag_matches_allowed(tag, &allowed) {
-                    unknown.push((tag.clone(), files.iter().cloned().collect()));
-                }
-            }
-            if !unknown.is_empty() {
-                unknown.sort_by(|a, b| a.0.cmp(&b.0));
-                let mut msg = format!("Unknown tags found (not in {}):\n", self.config.tags_dir);
-                for (tag, files) in &unknown {
-                    let _ = write!(msg, "  {tag}");
-                    if let Some(suggestion) = find_similar_tag(tag, &allowed) {
-                        let _ = write!(msg, " (did you mean '{suggestion}'?)");
-                    }
-                    msg.push('\n');
-                    for file in files {
-                        let _ = writeln!(msg, "    - {file}");
-                    }
-                }
-                bail!("{}", msg.trim_end());
-            }
-
-            // Check for unused tags (in allowlist but not used by any file)
-            if self.config.check_unused {
-                let used_tags: HashSet<&String> = tag_to_files.keys().collect();
-                let mut unused: Vec<&String> =
-                    allowed.iter().filter(|t| !used_tags.contains(t)).collect();
-                if !unused.is_empty() {
-                    unused.sort();
-                    let mut msg = format!(
-                        "Unused tags in {} (not used by any file):\n",
-                        self.config.tags_dir
-                    );
-                    for tag in &unused {
-                        let _ = writeln!(msg, "  {tag}");
-                    }
-                    bail!("{}", msg.trim_end());
-                }
-            }
-        }
-
-        // Check sorted tags
-        if self.config.sorted_tags && !unsorted_tags.is_empty() {
-            unsorted_tags.sort();
-            let mut msg = String::from("List tags are not in sorted order:\n");
-            for (file, field, a, b) in &unsorted_tags {
+        if !invalid.is_empty() {
+            invalid.sort();
+            let mut msg = String::from("Invalid values for validated fields:\n");
+            for (file, field, val) in &invalid {
                 let _ = writeln!(
                     msg,
-                    "  {file} field '{field}': '{b}' should come after '{a}'"
+                    "  {}: {}={} (not in {}/{}.txt)",
+                    file, field, val, config.tags_dir, field
                 );
             }
-            bail!("{}", msg.trim_end());
+            issues.push(msg.trim_end().to_string());
         }
-
-        // Check required_values (scalar fields must have values in tags dir)
-        if !self.config.required_values.is_empty() {
-            let dir = Path::new(&self.config.tags_dir);
-            let allowed = if dir.is_dir() {
-                load_tags_dir(dir)?
-            } else {
-                HashSet::new()
-            };
-            let mut invalid: Vec<(String, String, String)> = Vec::new(); // (file, field, value)
-            for (file_key, fm) in &all_frontmatter {
-                if let Some(obj) = fm.as_object() {
-                    for field in &self.config.required_values {
-                        if let Some(serde_json::Value::String(val)) = obj.get(field) {
-                            let tag = format!("{field}:{val}");
-                            if !allowed.contains(&tag) {
-                                invalid.push((file_key.clone(), field.clone(), val.clone()));
-                            }
-                        }
-                    }
-                }
-            }
-            if !invalid.is_empty() {
-                invalid.sort();
-                let mut msg = String::from("Invalid values for validated fields:\n");
-                for (file, field, val) in &invalid {
-                    let _ = writeln!(
-                        msg,
-                        "  {}: {}={} (not in {}/{}.txt)",
-                        file, field, val, self.config.tags_dir, field
-                    );
-                }
-                bail!("{}", msg.trim_end());
-            }
-        }
-
-        // Check unique_fields
-        if !self.config.unique_fields.is_empty() {
-            let mut field_values: HashMap<(&str, String), Vec<String>> = HashMap::new();
-            for (file_key, fm) in &all_frontmatter {
-                if let Some(obj) = fm.as_object() {
-                    for field in &self.config.unique_fields {
-                        if let Some(val) = obj.get(field) {
-                            let val_str = match val {
-                                serde_json::Value::String(s) => s.clone(),
-                                serde_json::Value::Array(items) => {
-                                    let strs: Vec<&str> =
-                                        items.iter().filter_map(|i| i.as_str()).collect();
-                                    strs.join(",")
-                                }
-                                _ => continue,
-                            };
-                            field_values
-                                .entry((field.as_str(), val_str))
-                                .or_default()
-                                .push(file_key.clone());
-                        }
-                    }
-                }
-            }
-            let mut dupes: Vec<(String, String, Vec<String>)> = Vec::new();
-            for ((field, val), files) in &field_values {
-                if files.len() > 1 {
-                    let mut sorted_files = files.clone();
-                    sorted_files.sort();
-                    dupes.push((field.to_string(), val.clone(), sorted_files));
-                }
-            }
-            if !dupes.is_empty() {
-                dupes.sort();
-                let mut msg = String::from("Duplicate values for unique fields:\n");
-                for (field, val, files) in &dupes {
-                    let _ = writeln!(msg, "  {field}='{val}' in:");
-                    for file in files {
-                        let _ = writeln!(msg, "    - {file}");
-                    }
-                }
-                bail!("{}", msg.trim_end());
-            }
-        }
-
-        // Check field_types
-        if !self.config.field_types.is_empty() {
-            let mut type_errors: Vec<(String, String, String, String)> = Vec::new(); // (file, field, expected, actual)
-            for (file_key, fm) in &all_frontmatter {
-                if let Some(obj) = fm.as_object() {
-                    for (field, expected_type) in &self.config.field_types {
-                        if let Some(val) = obj.get(field) {
-                            let actual_ok = match expected_type.as_str() {
-                                "list" => matches!(val, serde_json::Value::Array(_)),
-                                "scalar" => matches!(val, serde_json::Value::String(_)),
-                                "number" => {
-                                    if let serde_json::Value::String(s) = val {
-                                        s.parse::<f64>().is_ok()
-                                    } else {
-                                        false
-                                    }
-                                }
-                                _ => true,
-                            };
-                            if !actual_ok {
-                                let actual = match val {
-                                    serde_json::Value::Array(_) => "list",
-                                    serde_json::Value::String(s) => {
-                                        if s.parse::<f64>().is_ok() {
-                                            "number"
-                                        } else {
-                                            "scalar"
-                                        }
-                                    }
-                                    _ => "unknown",
-                                };
-                                type_errors.push((
-                                    file_key.clone(),
-                                    field.clone(),
-                                    expected_type.clone(),
-                                    actual.to_string(),
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-            if !type_errors.is_empty() {
-                type_errors.sort();
-                let mut msg = String::from("Field type mismatches:\n");
-                for (file, field, expected, actual) in &type_errors {
-                    let _ = writeln!(msg, "  {file}: '{field}' expected {expected}, got {actual}");
-                }
-                bail!("{}", msg.trim_end());
-            }
-        }
-
-        // Delete old database to avoid stale entries from previous builds
-        if output_path.exists() {
-            fs::remove_file(output_path).with_context(|| {
-                format!(
-                    "Failed to remove old tags database: {}",
-                    output_path.display()
-                )
-            })?;
-        }
-        let db = crate::db::open_or_recreate(output_path, "tags database")?;
-
-        let write_txn = db
-            .begin_write()
-            .context("Failed to begin write transaction")?;
-        {
-            let mut fm_table = write_txn
-                .open_table(FRONTMATTER)
-                .context("Failed to open frontmatter table")?;
-            for (file, value) in &all_frontmatter {
-                let json = serde_json::to_string(value).expect(crate::errors::JSON_SERIALIZE);
-                fm_table
-                    .insert(file.as_str(), json.as_str())
-                    .context("Failed to insert frontmatter")?;
-            }
-        }
-        {
-            let mut tag_table = write_txn
-                .open_table(TAG_INDEX)
-                .context("Failed to open tag_index table")?;
-            for (tag, files) in &tag_to_files {
-                let files_vec: Vec<&String> = files.iter().collect();
-                let json = serde_json::to_string(&files_vec).expect(crate::errors::JSON_SERIALIZE);
-                tag_table
-                    .insert(tag.as_str(), json.as_str())
-                    .context("Failed to insert tag index")?;
-            }
-        }
-        crate::errors::ctx(write_txn.commit(), "Failed to commit tags database")?;
-
-        Ok(())
     }
+
+    // Check unique_fields: a list value counts as a whole, so two files
+    // with the same list of items collide.
+    if !config.unique_fields.is_empty() {
+        let mut field_values: HashMap<(&str, String), Vec<String>> = HashMap::new();
+        for (file_key, fm) in &all_frontmatter {
+            if let Some(obj) = fm.as_object() {
+                for field in &config.unique_fields {
+                    if let Some(val) = obj.get(field) {
+                        let val_str = match val {
+                            serde_json::Value::String(s) => s.clone(),
+                            serde_json::Value::Array(items) => {
+                                let strs: Vec<&str> =
+                                    items.iter().filter_map(|i| i.as_str()).collect();
+                                strs.join(",")
+                            }
+                            _ => continue,
+                        };
+                        field_values
+                            .entry((field.as_str(), val_str))
+                            .or_default()
+                            .push(file_key.clone());
+                    }
+                }
+            }
+        }
+        let mut dupes: Vec<(String, String, Vec<String>)> = Vec::new();
+        for ((field, val), files) in &field_values {
+            if files.len() > 1 {
+                let mut sorted_files = files.clone();
+                sorted_files.sort();
+                dupes.push((field.to_string(), val.clone(), sorted_files));
+            }
+        }
+        if !dupes.is_empty() {
+            dupes.sort();
+            let mut msg = String::from("Duplicate values for unique fields:\n");
+            for (field, val, files) in &dupes {
+                let _ = writeln!(msg, "  {field}='{val}' in:");
+                for file in files {
+                    let _ = writeln!(msg, "    - {file}");
+                }
+            }
+            issues.push(msg.trim_end().to_string());
+        }
+    }
+
+    // Check field_types
+    if !config.field_types.is_empty() {
+        let mut type_errors: Vec<(String, String, String, String)> = Vec::new(); // (file, field, expected, actual)
+        for (file_key, fm) in &all_frontmatter {
+            if let Some(obj) = fm.as_object() {
+                for (field, expected_type) in &config.field_types {
+                    if let Some(val) = obj.get(field) {
+                        let actual_ok = match expected_type.as_str() {
+                            "list" => matches!(val, serde_json::Value::Array(_)),
+                            "scalar" => matches!(val, serde_json::Value::String(_)),
+                            "number" => {
+                                if let serde_json::Value::String(s) = val {
+                                    s.parse::<f64>().is_ok()
+                                } else {
+                                    false
+                                }
+                            }
+                            _ => true,
+                        };
+                        if !actual_ok {
+                            let actual = match val {
+                                serde_json::Value::Array(_) => "list",
+                                serde_json::Value::String(s) => {
+                                    if s.parse::<f64>().is_ok() {
+                                        "number"
+                                    } else {
+                                        "scalar"
+                                    }
+                                }
+                                _ => "unknown",
+                            };
+                            type_errors.push((
+                                file_key.clone(),
+                                field.clone(),
+                                expected_type.clone(),
+                                actual.to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        if !type_errors.is_empty() {
+            type_errors.sort();
+            let mut msg = String::from("Field type mismatches:\n");
+            for (file, field, expected, actual) in &type_errors {
+                let _ = writeln!(msg, "  {file}: '{field}' expected {expected}, got {actual}");
+            }
+            issues.push(msg.trim_end().to_string());
+        }
+    }
+
+    Ok(TagScan {
+        all_frontmatter,
+        tag_to_files,
+        issues,
+    })
+}
+
+/// Write the frontmatter and tag index of a scan to the database at
+/// `output_path`, replacing the previous database so no stale entries of
+/// an earlier build survive.
+fn write_tags_db(output_path: &Path, scan: &TagScan) -> Result<()> {
+    if output_path.exists() {
+        fs::remove_file(output_path).with_context(|| {
+            format!(
+                "Failed to remove old tags database: {}",
+                output_path.display()
+            )
+        })?;
+    }
+    let db = crate::db::open_or_recreate(output_path, "tags database")?;
+
+    let write_txn = db
+        .begin_write()
+        .context("Failed to begin write transaction")?;
+    {
+        let mut fm_table = write_txn
+            .open_table(FRONTMATTER)
+            .context("Failed to open frontmatter table")?;
+        for (file, value) in &scan.all_frontmatter {
+            let json = serde_json::to_string(value).expect(crate::errors::JSON_SERIALIZE);
+            fm_table
+                .insert(file.as_str(), json.as_str())
+                .context("Failed to insert frontmatter")?;
+        }
+    }
+    {
+        let mut tag_table = write_txn
+            .open_table(TAG_INDEX)
+            .context("Failed to open tag_index table")?;
+        for (tag, files) in &scan.tag_to_files {
+            let files_vec: Vec<&String> = files.iter().collect();
+            let json = serde_json::to_string(&files_vec).expect(crate::errors::JSON_SERIALIZE);
+            tag_table
+                .insert(tag.as_str(), json.as_str())
+                .context("Failed to insert tag index")?;
+        }
+    }
+    crate::errors::ctx(write_txn.commit(), "Failed to commit tags database")?;
+
+    Ok(())
 }
 
 /// Parse YAML frontmatter from a markdown file.
@@ -1406,7 +1459,9 @@ pub fn orphan_files(db_path: &str) -> Result<()> {
     Ok(())
 }
 
-/// Run all tag validations without building.
+/// Run all tag validations without building: the same pass as the build
+/// ([`validate_frontmatter`]), over the scanned files, so the two cannot
+/// disagree about what is an issue.
 pub fn check_tags(config: &TagsConfig, warn_symlinks: bool) -> Result<()> {
     let file_index = crate::file_index::FileIndex::build(warn_symlinks)?;
     let files = file_index.scan(&config.standard, true);
@@ -1414,229 +1469,26 @@ pub fn check_tags(config: &TagsConfig, warn_symlinks: bool) -> Result<()> {
         println!("No files to check.");
         return Ok(());
     }
+    let md_files: Vec<&Path> = files.iter().map(PathBuf::as_path).collect();
+    let scan = validate_frontmatter(config, &md_files)?;
 
-    // Parse all frontmatter
-    let mut all_frontmatter: HashMap<String, serde_json::Value> = HashMap::new();
-    let mut tag_to_files: HashMap<String, BTreeSet<String>> = HashMap::new();
-    let mut errors: Vec<String> = Vec::new();
-
-    for input in &files {
-        let content = fs::read_to_string(input)
-            .with_context(|| format!("Failed to read {}", input.display()))?;
-        if let Some(fm) = parse_frontmatter(&content) {
-            let file_key = input.display().to_string();
-            let mut file_tags: HashSet<String> = HashSet::new();
-
-            if let Some(obj) = fm.as_object() {
-                for (key, value) in obj {
-                    match value {
-                        serde_json::Value::Array(items) => {
-                            // Check sorted order
-                            if config.sorted_tags {
-                                let strs: Vec<&str> =
-                                    items.iter().filter_map(|i| i.as_str()).collect();
-                                for pair in strs.windows(2) {
-                                    if pair[0] > pair[1] {
-                                        errors.push(format!(
-                                            "Unsorted: {} field '{}': '{}' before '{}'",
-                                            file_key, key, pair[0], pair[1]
-                                        ));
-                                        break;
-                                    }
-                                }
-                            }
-                            for item in items {
-                                if let Some(s) = item.as_str() {
-                                    if !file_tags.insert(s.to_string()) {
-                                        errors.push(format!("Duplicate tag: {s} in {file_key}"));
-                                    }
-                                    tag_to_files
-                                        .entry(s.to_string())
-                                        .or_default()
-                                        .insert(file_key.clone());
-                                }
-                            }
-                        }
-                        serde_json::Value::String(s) => {
-                            let tag = format!("{key}:{s}");
-                            if !file_tags.insert(tag.clone()) {
-                                errors.push(format!("Duplicate tag: {tag} in {file_key}"));
-                            }
-                            tag_to_files
-                                .entry(tag)
-                                .or_default()
-                                .insert(file_key.clone());
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            all_frontmatter.insert(file_key, fm);
-        }
+    if !scan.issues.is_empty() {
+        bail!(
+            "{} issue(s) found:\n{}",
+            scan.issues.len(),
+            scan.issues.join("\n")
+        );
     }
-
-    // Required fields
-    for input in &files {
-        let file_key = input.display().to_string();
-        let fm = all_frontmatter.get(&file_key);
-        let obj = fm.and_then(|v| v.as_object());
-        for field in &config.required_fields {
-            let has_field = obj.is_some_and(|o| {
-                o.get(field).is_some_and(|v| match v {
-                    serde_json::Value::Array(a) => !a.is_empty(),
-                    serde_json::Value::String(s) => !s.is_empty(),
-                    serde_json::Value::Null => false,
-                    _ => true,
-                })
-            });
-            if !has_field {
-                errors.push(format!("Missing required field '{field}' in {file_key}"));
-            }
-        }
-    }
-
-    // Required field groups
-    if !config.required_field_groups.is_empty() {
-        for input in &files {
-            let file_key = input.display().to_string();
-            let fm = all_frontmatter.get(&file_key);
-            let obj = fm.and_then(|v| v.as_object());
-            let satisfies_any = config.required_field_groups.iter().any(|group| {
-                group.iter().all(|field| {
-                    obj.is_some_and(|o| {
-                        o.get(field).is_some_and(|v| match v {
-                            serde_json::Value::Array(a) => !a.is_empty(),
-                            serde_json::Value::String(s) => !s.is_empty(),
-                            serde_json::Value::Null => false,
-                            _ => true,
-                        })
-                    })
-                })
-            });
-            if !satisfies_any {
-                let group_strs: Vec<String> = config
-                    .required_field_groups
-                    .iter()
-                    .map(|g| format!("[{}]", g.join(", ")))
-                    .collect();
-                errors.push(format!(
-                    "Missing required field group in {}: none of {}",
-                    file_key,
-                    group_strs.join(" or ")
-                ));
-            }
-        }
-    }
-
-    // Unknown tags
-    let dir = Path::new(&config.tags_dir);
-    if dir.is_dir() {
-        let allowed = load_tags_dir(dir)?;
-
-        for (tag, tag_files) in &tag_to_files {
-            if !allowed.contains(tag) {
-                let files_str: Vec<&str> =
-                    tag_files.iter().map(std::string::String::as_str).collect();
-                errors.push(format!("Unknown tag '{}' in {}", tag, files_str.join(", ")));
-            }
-        }
-
-        // Unused tags
-        let used_tags: HashSet<&String> = tag_to_files.keys().collect();
-        for tag in &allowed {
-            if !used_tags.contains(tag) {
-                errors.push(format!("Unused tag '{}' in {}", tag, config.tags_dir));
-            }
-        }
-
-        // Required values
-        for (file_key, fm) in &all_frontmatter {
-            if let Some(obj) = fm.as_object() {
-                for field in &config.required_values {
-                    if let Some(serde_json::Value::String(val)) = obj.get(field) {
-                        let tag = format!("{field}:{val}");
-                        if !allowed.contains(&tag) {
-                            errors.push(format!(
-                                "Invalid value {}={} in {} (not in {}/{}.txt)",
-                                field, val, file_key, config.tags_dir, field
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Unique fields
-    if !config.unique_fields.is_empty() {
-        let mut field_values: HashMap<(String, String), Vec<String>> = HashMap::new();
-        for (file_key, fm) in &all_frontmatter {
-            if let Some(obj) = fm.as_object() {
-                for field in &config.unique_fields {
-                    if let Some(serde_json::Value::String(val)) = obj.get(field) {
-                        field_values
-                            .entry((field.clone(), val.clone()))
-                            .or_default()
-                            .push(file_key.clone());
-                    }
-                }
-            }
-        }
-        for ((field, val), dup_files) in &field_values {
-            if dup_files.len() > 1 {
-                errors.push(format!(
-                    "Duplicate {}='{}' in {}",
-                    field,
-                    val,
-                    dup_files.join(", ")
-                ));
-            }
-        }
-    }
-
-    // Field types
-    for (file_key, fm) in &all_frontmatter {
-        if let Some(obj) = fm.as_object() {
-            for (field, expected_type) in &config.field_types {
-                if let Some(val) = obj.get(field) {
-                    let ok = match expected_type.as_str() {
-                        "list" => matches!(val, serde_json::Value::Array(_)),
-                        "scalar" => matches!(val, serde_json::Value::String(_)),
-                        "number" => {
-                            matches!(val, serde_json::Value::String(s) if s.parse::<f64>().is_ok())
-                        }
-                        _ => true,
-                    };
-                    if !ok {
-                        errors.push(format!(
-                            "Type mismatch: '{field}' in {file_key} expected {expected_type}"
-                        ));
-                    }
-                }
-            }
-        }
-    }
-
-    if errors.is_empty() {
-        if crate::json_output::is_json_mode() {
-            let out = serde_json::json!({
-                "ok": true,
-                "files_checked": all_frontmatter.len(),
-                "issues": serde_json::Value::Array(Vec::new()),
-            });
-            println!("{}", serde_json::to_string_pretty(&out)?);
-        } else {
-            println!("All checks passed ({} files).", all_frontmatter.len());
-        }
+    if crate::json_output::is_json_mode() {
+        let out = serde_json::json!({
+            "ok": true,
+            "files_checked": scan.all_frontmatter.len(),
+            "issues": serde_json::Value::Array(Vec::new()),
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
     } else {
-        errors.sort();
-        let mut msg = format!("{} issue(s) found:\n", errors.len());
-        for err in &errors {
-            let _ = writeln!(msg, "  {err}");
-        }
-        bail!("{}", msg.trim_end());
+        println!("All checks passed ({} files).", scan.all_frontmatter.len());
     }
-
     Ok(())
 }
 
@@ -1815,17 +1667,8 @@ pub fn load_tags_dir(dir: &Path) -> Result<HashSet<String>> {
     let mut tags = HashSet::new();
     let mut tag_source: HashMap<String, String> = HashMap::new();
     let mut duplicates: Vec<(String, String, String)> = Vec::new(); // (tag, file1, file2)
-    let mut entries: Vec<_> = fs::read_dir(dir)
-        .with_context(|| format!("Failed to read tags directory: {}", dir.display()))?
-        .collect::<Result<Vec<_>, _>>()
-        .with_context(|| format!("Failed to read entry in tags directory: {}", dir.display()))?;
-    entries.sort_by_key(std::fs::DirEntry::file_name);
 
-    for entry in entries {
-        let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("txt") {
-            continue;
-        }
+    for path in tag_list_files(dir)? {
         let filename = path.file_name().unwrap().to_string_lossy().to_string();
         let category = path
             .file_stem()
@@ -2302,7 +2145,14 @@ inventory::submit! {
                 affects_output: false, required: false,
                 doc: "Maximum 'most common tags' reported when a file has no tags of its own" },
         ],
-        omit_standard_fields: &["command", "formats", "args", "output_dir"],
+        omit_standard_fields: &[
+        "command",
+        "formats",
+        "args",
+        "output_dir",
+        "required_tools",
+        "batch",
+    ],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
         defaults: None,
         defconfig_json: crate::registries::default_config_json::<TagsConfig>,

@@ -13,17 +13,16 @@ project/
 ├── templates.mako/   # .mako template files
 ├── src/              # C/C++ source files
 ├── out/
-│   ├── cc_single_file/ # Compiled executables
-│   ├── ruff/         # Ruff lint stub files
-│   ├── pylint/       # Pylint lint stub files
-│   ├── cppcheck/      # C/C++ lint stub files
-│   ├── zspell/   # Zspell stub files
-│   └── make/         # Make stub files
+│   └── processor.generator.cc_single_file/   # Compiled executables (one directory per generating processor, named after it)
 └── .rsconstruct/             # Cache directory
-    ├── index.json    # Cache index
-    ├── objects/       # Cached build artifacts
-    └── deps/          # Dependency files
+    ├── db.redb       # Cache index (processor configs, product -> cached tree)
+    ├── descriptors/  # Per-product descriptors: which cached objects make up each product's outputs
+    ├── objects/      # Content-addressed cached build artifacts
+    ├── deps.redb     # Dependency cache (analyzer results)
+    └── mtime.redb    # Persistent mtime checksum cache
 ```
+
+Checkers (ruff, pylint, cppcheck, zspell, make, ...) write nothing under `out/`; only generators and the other output-producing types get a directory there.
 
 ## Conventions
 
@@ -41,10 +40,10 @@ Similarly, files in `templates.mako/` with `.mako` extensions are rendered via t
 
 ### C/C++ sources
 
-Files in the source directory (default `src/`) are compiled to executables under `out/processor.generator.cc_single_file/`, preserving the directory structure:
+Files in the configured source directories (`src_dirs`, e.g. `["src"]`) are compiled to executables under `out/processor.generator.cc_single_file/`, preserving the directory structure:
 
-- `src/main.c` produces `out/processor.generator.cc_single_file/main.elf`
-- `src/utils/helper.cc` produces `out/processor.generator.cc_single_file/utils/helper.elf`
+- `src/main.c` produces `out/processor.generator.cc_single_file/src/main.elf`
+- `src/utils/helper.cc` produces `out/processor.generator.cc_single_file/src/utils/helper.elf`
 
 ### Python files
 
@@ -52,4 +51,4 @@ Python files are linted by `processor.checker.ruff` or `processor.checker.pylint
 
 ### Build artifacts
 
-All build outputs go into `out/`. The cache lives in `.rsconstruct/`. Use `rsconstruct clean` to remove every declared output (preserving the cache) — directories left empty afterward are also pruned, so `out/` typically disappears too. Use `rsconstruct clean all` to remove `out/` and `.rsconstruct/` outright. See [`rsconstruct clean`](commands.md#rsconstruct-clean) for the full breakdown of clean behavior.
+All build outputs go into `out/`. The cache lives in `.rsconstruct/`. Use `rsconstruct clean outputs` to remove every declared output (preserving the cache) — directories left empty afterward are also pruned, so `out/` typically disappears too. Use `rsconstruct clean all` to remove `out/` and `.rsconstruct/` outright. See [`rsconstruct clean`](commands.md#rsconstruct-clean) for the full breakdown of clean behavior.

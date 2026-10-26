@@ -150,3 +150,30 @@ fn jinja2_clean() {
         "Output should be removed after clean"
     );
 }
+
+/// Templates render with an empty context: an environment variable is
+/// undefined inside a template (`**os.environ` used to be the context,
+/// which made the output depend on untracked shell state).
+#[test]
+fn jinja2_templates_do_not_see_the_environment() {
+    let temp_dir = setup_jinja2_project();
+    let project_path = temp_dir.path();
+    fs::write(
+        project_path.join("templates.jinja2/env.txt.j2"),
+        "{{ RSC_LEAK_PROBE }}|{{ RSC_LEAK_PROBE | default('unset') }}\n",
+    )
+    .unwrap();
+
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["build"],
+        &[("NO_COLOR", "1"), ("RSC_LEAK_PROBE", "leaked")],
+    );
+    assert!(
+        output.status.success(),
+        "rsconstruct build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let content = fs::read_to_string(project_path.join("env.txt")).expect("output written");
+    assert_eq!(content, "|unset");
+}

@@ -44,9 +44,9 @@ dep_inputs = []        # Additional files that trigger rebuilds
 | `cargo` | string | `"cargo"` | Path or name of the cargo binary |
 | `command` | string | `"clippy"` | Cargo subcommand to run |
 | `args` | string[] | `[]` | Extra arguments passed to cargo clippy |
-| `src_dirs` | string[] | `[""]` | Directory to scan for Cargo.toml files |
+| `src_dirs` | string[] | `[]` | Directories to scan for Cargo.toml files (`[""]` for the whole project) |
 | `src_extensions` | string[] | `["Cargo.toml"]` | File names to match |
-| `src_exclude_dirs` | string[] | `["/.git/", "/target/", ...]` | Directory patterns to exclude |
+| `src_exclude_dirs` | string[] | `[]` | Directory patterns to exclude |
 | `src_exclude_paths` | string[] | `[]` | Paths (relative to project root) to exclude |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 

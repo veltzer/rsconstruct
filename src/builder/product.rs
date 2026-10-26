@@ -11,13 +11,13 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 
 use crate::color;
 use crate::deps_cache::DepsCache;
 use crate::graph::{BuildGraph, Product};
 
-use super::Builder;
+use super::{Builder, sorted_keys};
 
 impl Builder {
     /// Implement `rsconstruct product show <path>`.
@@ -28,7 +28,7 @@ impl Builder {
         verbose: bool,
     ) -> Result<()> {
         let graph = self.build_graph_for_cache(ctx)?;
-        let target = PathBuf::from(path);
+        let target = super::graph::normalize_query_path(path);
 
         let product = resolve_product(&graph, &target).ok_or_else(|| {
             anyhow::anyhow!(
@@ -37,23 +37,58 @@ impl Builder {
             )
         })?;
 
-        let deps_cache = DepsCache::open()?;
-        // Group analyzer-attributed inputs by analyzer name. The analyzer
-        // attaches deps to the *primary input*, so that's the lookup key.
-        let analyzer_entries = deps_cache.get_raw_for_path(product.primary_input());
-        let analyzer_inputs: BTreeMap<String, Vec<PathBuf>> = analyzer_entries
-            .iter()
-            .map(|(deps, name)| (name.clone(), deps.clone()))
-            .collect();
-
-        // Recompute hash pieces live, per analyzer. Only analyzers that
-        // contribute pieces (Tera today) return Some.
+        // The sources each active analyzer scans for this product: the
+        // primary input for most, every C source of a `cc.yaml` product for
+        // the C/C++ analyzers, nothing for an analyzer the product does not
+        // concern. Scanning only these keeps a `.rs` file out of the tera
+        // analyzer: `{{ glob(...) }}` in a Rust string is not a hash piece
+        // of its product, and a Tera syntax error in it is not an error.
         let analyzers = self.create_analyzers(false)?;
+        let mut sources: Vec<PathBuf> = vec![product.primary_input().to_path_buf()];
+        for analyzer in analyzers.values() {
+            for source in analyzer.match_sources(product) {
+                if !sources.contains(&source) {
+                    sources.push(source);
+                }
+            }
+        }
+
+        // Group analyzer-attributed inputs by analyzer name. The analyzer
+        // attaches deps to the source it scanned, so each source is a
+        // lookup key; a product with several scanned sources gets the
+        // union, as the build gave it.
+        let deps_cache = DepsCache::open()?;
+        let mut analyzer_inputs: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
+        for source in &sources {
+            for (deps, name) in deps_cache.get_raw_for_path(source) {
+                let entry = analyzer_inputs.entry(name).or_default();
+                for dep in deps {
+                    if !entry.contains(&dep) {
+                        entry.push(dep);
+                    }
+                }
+            }
+        }
+
+        // Recompute hash pieces live, per analyzer, over the sources it
+        // matches, in the order the build concatenates them (see
+        // `Analysis::reanalyze`). Only analyzers that contribute pieces
+        // (Tera today) return Some. A scan failure is the user's problem to
+        // see, not something to render as "(none)".
         let mut hash_pieces: BTreeMap<String, Vec<String>> = BTreeMap::new();
-        for (name, analyzer) in &analyzers {
-            if let Ok(Some(pieces)) = analyzer.scan_hash_pieces(ctx, product.primary_input())
-                && !pieces.is_empty()
-            {
+        for name in sorted_keys(&analyzers) {
+            let analyzer = &analyzers[name];
+            let mut pieces: Vec<String> = Vec::new();
+            for source in analyzer.match_sources(product) {
+                let scanned = analyzer.scan_hash_pieces(ctx, &source).with_context(|| {
+                    format!(
+                        "Analyzer '{name}' failed to scan {} for hash pieces",
+                        source.display()
+                    )
+                })?;
+                pieces.extend(scanned.unwrap_or_default());
+            }
+            if !pieces.is_empty() {
                 hash_pieces.insert(name.clone(), pieces);
             }
         }

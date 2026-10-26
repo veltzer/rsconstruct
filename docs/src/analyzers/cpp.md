@@ -11,7 +11,7 @@ Scans C/C++ source files for `#include` directives and adds header file dependen
 - Recursive header scanning (follows includes in header files)
 - Queries compiler for system include paths (only tracks project-local headers)
 - Handles both `#include "file"` (relative to source) and `#include <file>` (searches include paths)
-- Supports builtin regex scanning and compiler-based scanning (`gcc -MM`)
+- Compiler-based scanning (`gcc -MM`), so macros and conditional includes are resolved the way the compiler resolves them; the in-process scanner is the separate [icpp](icpp.md) analyzer
 - Uses the dependency cache for incremental builds
 - Scans every `.c`/`.cc`/`.cpp`/`.cxx` input of a product, not only the
   first: a [cc](../processor/mass_generator/cc.md) or
@@ -27,7 +27,7 @@ The cpp analyzer queries the compiler for its include search paths using `gcc -E
 
 ```toml
 [analyzer.cpp]
-include_scanner       = "builtin"         # or "compiler" for gcc -MM
+enabled               = true              # false keeps the stanza but skips the analyzer
 include_paths         = ["include", "src"]
 pkg_config            = ["gtk+-3.0", "libcurl"]
 include_path_commands = ["gcc -print-file-name=plugin"]

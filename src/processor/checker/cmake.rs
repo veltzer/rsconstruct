@@ -20,9 +20,11 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     version: 1,
     name: "cmake", processor_type: crate::processor::ProcessorType::Checker, create: create_cmake,
     fields: &[],
-    omit_standard_fields: &[],
+    omit_standard_fields: &["formats", "output_dir"],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["CMakeLists.txt"], src_exclude_dirs: &[] }),
-    defaults: Some(crate::config::ProcessorDefaults { command: "cmakelint", ..crate::config::ProcessorDefaults::EMPTY }),
+    // cmakelint reads `$PWD/.cmakelintrc` by default (then the user-level
+    // `~/.config/cmakelintrc` and `~/.cmakelintrc`, which are not inputs).
+    defaults: Some(crate::config::ProcessorDefaults { command: "cmakelint", dep_auto: &[".cmakelintrc"], ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["cmake", "builder", "c", "cpp", "checker"],
     description: "Lint CMake files using cmakelint",

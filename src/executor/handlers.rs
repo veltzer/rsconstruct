@@ -13,10 +13,14 @@ impl Executor<'_> {
 
     /// Record a product failure into shared state.
     ///
-    /// In keep-going mode: prints the error, records the message for the summary.
-    /// In fail-fast mode: stores the error for later propagation.
-    /// If `mark_processor_failed` is true, also records the processor name
-    /// so its products are skipped in subsequent levels.
+    /// The message is `[processor] product: error` in both modes (see
+    /// [`failure_message`](super::Executor::failure_message)). In keep-going
+    /// mode it is printed at once and kept for the summary. In fail-fast mode
+    /// it is kept for the build's error, which reports every failure of the
+    /// run (see `collect_build_stats`); nothing prints it earlier, so each
+    /// failure is reported exactly once in either mode. If
+    /// `mark_processor_failed` is true, the processor name is also recorded so
+    /// its remaining products are skipped in fail-fast mode.
     fn record_failure(
         &self,
         ctx: &HandlerContext,
@@ -30,12 +34,9 @@ impl Executor<'_> {
         // them so no later read serves a pre-write checksum.
         crate::checksum::forget_in_session(self.build_ctx, &ctx.product.outputs);
 
-        // Wrap the error with the processor name so users can always identify the source.
-        // Use {:#} to include the full anyhow error chain (e.g. tera rendering details).
-        let prefixed_error = anyhow::anyhow!("[{}] {:#}", ctx.proc_name, error);
+        let msg = self.failure_message(ctx.product, &error);
 
         if ctx.keep_going {
-            let msg = format!("{}: {}", self.product_display(ctx.product), prefixed_error);
             // stderr: errors must survive --json, and must not corrupt the
             // JSON event stream on stdout.
             crate::output::error(&msg);
@@ -47,8 +48,25 @@ impl Executor<'_> {
                     .lock()
                     .insert(ctx.proc_name.to_string());
             }
-            ctx.shared.errors.lock().push(prefixed_error);
+            ctx.shared.errors.lock().push(anyhow::anyhow!(msg));
         }
+    }
+
+    /// The one wording of a product failure: `[processor] product: error`,
+    /// with the full anyhow chain (`{:#}`) so tera rendering details and IO
+    /// causes are kept. Used by every path that records a failure, so a
+    /// user can always tell which processor and product an error belongs to
+    /// and the text is the same with and without `--keep-going`.
+    pub(super) fn failure_message(
+        &self,
+        product: &crate::graph::Product,
+        error: &anyhow::Error,
+    ) -> String {
+        format!(
+            "[{}] {}: {error:#}",
+            product.processor,
+            self.product_display(product)
+        )
     }
 
     /// Handle the "skip (unchanged)" case for a product.

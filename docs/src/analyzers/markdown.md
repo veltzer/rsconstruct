@@ -19,5 +19,5 @@ This ensures that when an image or linked file changes, any Markdown product tha
 
 ```toml
 [analyzer.markdown]
-# currently no tunables
+enabled = true   # the only field; false keeps the stanza but skips the analyzer
 ```
