@@ -44,3 +44,25 @@ cp target/debug/rsconstruct "${CARGO_HOME:-${HOME}/.cargo}/bin/rsconstruct"
 # authenticated rate limit (see the comment on that step in ci.yml). Unset
 # locally, where one machine never approaches the anonymous 60/hour.
 rsconstruct tool install --all
+
+# drawio is an Electron app with no headless mode: `drawio --export` exits
+# with "Missing X server or $DISPLAY" on a runner, which has no display
+# (run 40274839273, drawio_builds_png_and_svg). So the job gets a virtual
+# one. Xvfb runs in the background for the rest of the job - the runner
+# reaps it at job end - and DISPLAY reaches the Build step through
+# GITHUB_ENV. -displayfd makes Xvfb pick a free display and write its number
+# once the server accepts connections, so reading it from the fifo is both
+# the readiness wait and the hand-off; an empty read means Xvfb died before
+# coming up, which fails this step.
+sudo apt-get install -y xvfb
+fifo="$(mktemp -u)"
+mkfifo "${fifo}"
+setsid Xvfb -displayfd 3 -nolisten tcp -screen 0 1280x1024x24 3>"${fifo}" >/dev/null 2>&1 &
+display=""
+read -r display <"${fifo}" || true
+rm -f "${fifo}"
+if [[ -z "${display}" ]]; then
+	echo "Xvfb failed to start" >&2
+	exit 1
+fi
+echo "DISPLAY=:${display}" >>"${GITHUB_ENV}"
