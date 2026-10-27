@@ -11,6 +11,11 @@ fn no_user_config_dir() -> std::path::PathBuf {
     std::env::temp_dir().join("rsconstruct-tests-no-user-config")
 }
 
+/// The tool store tests install into, never the developer's own.
+fn test_tool_store() -> std::path::PathBuf {
+    std::env::temp_dir().join("rsconstruct-tests-tool-store")
+}
+
 /// Assert that an external tool is available on PATH.
 /// Panics if the tool is missing — a missing tool must fail the test,
 /// never silently skip it. Only presence is checked (some tools, like
@@ -61,10 +66,14 @@ pub fn setup_test_project() -> TempDir {
 /// rsconstruct.lock, which no fixture project carries, so a suite running on
 /// a runner would otherwise test different behavior than the same suite run
 /// locally. A test about CI behavior sets `CI` itself.
+///
+/// The tool store is redirected too, so no test installs into (or links
+/// from) the developer's own; a test that needs a store sets its own.
 pub fn rsconstruct_command(dir: &Path) -> Command {
     let rsconstruct_path = env!("CARGO_BIN_EXE_rsconstruct");
     let mut cmd = Command::new(rsconstruct_path);
     cmd.env("XDG_CONFIG_HOME", no_user_config_dir());
+    cmd.env("RSCONSTRUCT_TOOL_STORE", test_tool_store());
     cmd.env_remove("CI");
     cmd.current_dir(dir);
     cmd

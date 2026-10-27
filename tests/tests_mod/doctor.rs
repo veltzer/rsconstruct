@@ -2,16 +2,20 @@ use crate::common::{make_executable, run_rsconstruct_with_env, setup_project_wit
 use serde_json::Value;
 use std::fs;
 
-/// A `[dependencies] cargo` entry is a crate, judged by `cargo install
-/// --list`: a name no crate carries is reported missing, and the fix doctor
-/// names is the same `cargo install --locked` that install-deps runs.
+/// A `[dependencies] cargo` entry is a crate installed into the project's
+/// tool directory, so that is where doctor looks: one there is ok, one
+/// absent is reported missing, and the fix doctor names is install-deps.
 #[test]
-fn doctor_checks_cargo_dependencies_against_cargo_install_list() {
+fn doctor_checks_cargo_dependencies_in_the_project_tool_directory() {
     let temp_dir = setup_project_with_config(
-        "[dependencies]\ncargo = [\"rsconstruct-fake-missing-crate\"]\n\n[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n",
+        "[dependencies]\ncargo = [\"rsconstruct-fake-installed-crate\", \"rsconstruct-fake-missing-crate\"]\n\n[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n",
     );
     let project_path = temp_dir.path();
     fs::create_dir_all(project_path.join("tera.templates")).unwrap();
+    fs::create_dir_all(
+        project_path.join(".rsconstruct/tools/pkgs/cargo/rsconstruct-fake-installed-crate@1.0.0"),
+    )
+    .unwrap();
 
     let output =
         run_rsconstruct_with_env(project_path, &["--json", "doctor"], &[("NO_COLOR", "1")]);
@@ -20,20 +24,17 @@ fn doctor_checks_cargo_dependencies_against_cargo_install_list() {
     let checks = parsed["checks"]
         .as_array()
         .expect("doctor --json should have a checks array");
-    let missing = checks
-        .iter()
-        .find(|c| {
-            c["name"]
-                .as_str()
-                .is_some_and(|n| n.starts_with("rsconstruct-fake-missing-crate"))
-        })
-        .expect("doctor should report the declared crate");
+    let find = |prefix: &str| {
+        checks
+            .iter()
+            .find(|c| c["name"].as_str().is_some_and(|n| n.starts_with(prefix)))
+            .unwrap_or_else(|| panic!("doctor should report {prefix}: {checks:?}"))
+    };
+    assert_eq!(find("rsconstruct-fake-installed-crate")["status"], "ok");
+    let missing = find("rsconstruct-fake-missing-crate");
     assert_eq!(missing["status"], "fail");
     assert_eq!(missing["category"], "dependency");
-    assert_eq!(
-        missing["install_hint"],
-        "cargo install --locked --force rsconstruct-fake-missing-crate"
-    );
+    assert_eq!(missing["install_hint"], "rsconstruct tool install-deps");
 }
 
 /// A package.json dependency is a project-local install: doctor judges it
@@ -222,24 +223,28 @@ fn doctor_skips_tools_of_disabled_processors() {
     assert_eq!(checks[0]["category"], "tool");
 }
 
-/// Python and global npm dependencies are judged the way `tool check`
-/// judges them, not by the exit status of a package manager:
+/// Python and npm dependencies are judged the way `tool check` judges them,
+/// not by the exit status of a package manager:
 ///
 /// - a pip package is asked of the interpreter (`importlib.metadata`), since
 ///   a uv-managed venv — the default installer's — has no pip at all. The
 ///   fake `pip` here claims every package is installed; the interpreter
 ///   knows the declared name is not;
-/// - an `[dependencies].npm` entry is installed with `npm install -g`, so it
-///   is looked for in the global tree. The fake `npm` lists one package
-///   globally and claims success for any project-local query; only the
-///   global one is installed.
+/// - an `[dependencies].npm` entry is installed into the project's tool
+///   directory, so it is looked for there. The fake `npm` lists one package
+///   globally and claims success for any other query; a global copy does
+///   not count, only the one in the project does.
 #[test]
-fn doctor_probes_pip_through_python_and_npm_globally() {
+fn doctor_probes_pip_through_python_and_npm_in_the_project() {
     let temp_dir = setup_project_with_config(
-        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[dependencies]\npip = [\"rsconstruct-fake-missing-dist\"]\nnpm = [\"rsconstruct-fake-global-pkg\", \"rsconstruct-fake-local-pkg\"]\n",
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[dependencies]\npip = [\"rsconstruct-fake-missing-dist\"]\nnpm = [\"rsconstruct-fake-global-pkg\", \"rsconstruct-fake-project-pkg\"]\n",
     );
     let project_path = temp_dir.path();
     fs::create_dir_all(project_path.join("tera.templates")).unwrap();
+    fs::create_dir_all(
+        project_path.join(".rsconstruct/tools/pkgs/npm/rsconstruct-fake-project-pkg@1.0.0"),
+    )
+    .unwrap();
 
     let bin_dir = project_path.join("fakebin");
     fs::create_dir_all(&bin_dir).unwrap();
@@ -288,14 +293,11 @@ fn doctor_probes_pip_through_python_and_npm_globally() {
     );
     assert_eq!(pip_check["detail"], "pip");
 
-    assert_eq!(find("rsconstruct-fake-global-pkg")["status"], "ok");
-    let local = find("rsconstruct-fake-local-pkg");
+    assert_eq!(find("rsconstruct-fake-project-pkg")["status"], "ok");
+    let global = find("rsconstruct-fake-global-pkg");
     assert_eq!(
-        local["status"], "fail",
-        "a package absent from the global tree is not installed: {local}"
+        global["status"], "fail",
+        "a package only in the global tree is not installed for the project: {global}"
     );
-    assert_eq!(
-        local["install_hint"],
-        "npm install -g rsconstruct-fake-local-pkg"
-    );
+    assert_eq!(global["install_hint"], "rsconstruct tool install-deps");
 }

@@ -187,10 +187,14 @@ fn project_wanted(
 }
 
 /// The project's lock, synced for an install: filled in outside CI, required
-/// to match in CI. Also returns the locked tools whose installed copy is not
-/// the locked one — in CI those are reinstalled, so a runner image's
-/// preinstalled version never stands in for the locked one. Outside CI
-/// that set is empty: a tool already on the machine is left alone.
+/// to match in CI. Also returns the locked tools installed outside the
+/// project's tool directory whose installed copy is not the locked one and
+/// may be replaced: Python packages when `python3` is the project's own
+/// virtualenv (or in CI), `.deb` binaries only in CI — outside it they
+/// belong to the machine, and replacing one would change it under every
+/// other project. Those left alone are reported, never passed off as
+/// installed. The project's tool directory is not judged here: syncing it
+/// with the lock is what installing does.
 fn lock_for_install(
     ctx: &crate::build_context::BuildContext,
     wanted: &tool_lock::Wanted,
@@ -202,15 +206,177 @@ fn lock_for_install(
     let mode = tool_lock::LockMode::for_environment();
     let synced = tool_lock::sync(ctx, wanted, mode, verbose)?;
     synced.report();
-    let drift = if mode == tool_lock::LockMode::Locked {
-        tool_lock::mismatches(ctx, &synced.lock, wanted)
-            .into_iter()
-            .map(|m| (m.method, m.name))
-            .collect()
-    } else {
-        std::collections::BTreeSet::new()
-    };
+    let in_ci = mode == tool_lock::LockMode::Locked;
+    let python_replaceable = in_ci || crate::tools::python_env_is_inside(std::path::Path::new("."));
+    let mut drift = std::collections::BTreeSet::new();
+    for m in tool_lock::mismatches(ctx, &synced.lock, wanted) {
+        let (replaceable, why_not) = match m.method.as_str() {
+            "pip" => (
+                python_replaceable,
+                "python3 is not this project's virtualenv",
+            ),
+            "binary" if !crate::tools::binary_is_repo_local(&m.name) => {
+                (in_ci, "a system package, replaced only in CI")
+            }
+            _ => continue,
+        };
+        if replaceable {
+            drift.insert((m.method, m.name));
+        } else if m.installed.is_some() {
+            crate::output::warn(&format!("{m}: left alone ({why_not})"));
+        }
+    }
     Ok((synced.lock, drift))
+}
+
+/// The project's tool directory: what it must hold, and how that compares
+/// with what it holds now.
+struct ProjectTools {
+    packages: std::collections::BTreeSet<crate::tool_store::Package>,
+    plan: crate::tool_store::Plan,
+}
+
+impl ProjectTools {
+    /// Whether the tool directory installs `package` for `method`.
+    fn covers(&self, method: &str, package: &str) -> bool {
+        self.packages
+            .iter()
+            .any(|p| p.method == method && p.name == package)
+    }
+}
+
+/// What the project's tool directory must hold: every locked crate, npm
+/// package, gem and non-`.deb` binary at its locked version, plus the
+/// `[dependencies]` entries that name their own version.
+fn project_tools(
+    builder: &Builder,
+    wanted: &tool_lock::Wanted,
+    lock: &tool_lock::ToolLock,
+) -> Result<ProjectTools> {
+    use crate::tool_store::Package;
+    let mut packages = std::collections::BTreeSet::new();
+    for (method, names) in [
+        ("cargo", &wanted.cargo),
+        ("gem", &wanted.gem),
+        ("npm", &wanted.npm),
+    ] {
+        for name in names {
+            let version = lock.version(method, name).with_context(|| {
+                format!("{method} {name} has no entry in {}", tool_lock::LOCK_FILE)
+            })?;
+            packages.insert(Package::new(method, name, version));
+        }
+    }
+    for name in &wanted.binary {
+        if !crate::tools::binary_is_repo_local(name) {
+            continue;
+        }
+        let version = lock
+            .binary
+            .get(name)
+            .and_then(tool_lock::binary_version)
+            .with_context(|| {
+                format!(
+                    "binary {name} has no executable hash in {}",
+                    tool_lock::LOCK_FILE
+                )
+            })?;
+        packages.insert(Package::new("binary", name, &version));
+    }
+    let deps = &builder.config.dependencies;
+    for (method, list) in [
+        ("cargo", &deps.cargo),
+        ("gem", &deps.gem),
+        ("npm", &deps.npm),
+    ] {
+        for request in list {
+            if let Some((name, version)) = tool_lock::split_versioned(method, request) {
+                packages.insert(Package::new(method, &name, &version));
+            }
+        }
+    }
+    let plan = crate::tool_store::plan(std::path::Path::new("."), &packages);
+    Ok(ProjectTools { packages, plan })
+}
+
+/// Print the project's tool directory as an install is about to leave it:
+/// `✓` in place, `+` to be linked in, `-` to be removed. Nothing when the
+/// project installs nothing there.
+fn print_project_tools(tools: &ProjectTools) {
+    let plan = &tools.plan;
+    if tools.packages.is_empty() && plan.stale.is_empty() {
+        return;
+    }
+    println!(
+        "{}:",
+        color::bold(&format!(
+            "Project tools ({})",
+            crate::tool_store::REPO_TOOLS_DIR
+        ))
+    );
+    for pkg in &plan.present {
+        println!("  {} {}", color::green("✓"), pkg);
+    }
+    for pkg in &plan.missing {
+        println!("  {} {}", color::bold("+"), pkg);
+    }
+    for stale in &plan.stale {
+        println!("  {} {}", color::bold("-"), stale);
+    }
+    println!();
+}
+
+/// Bring the project's tool directory in line with `tools`, installing into
+/// the tool store whatever it lacks.
+fn apply_project_tools(
+    tools: &ProjectTools,
+    lock: &tool_lock::ToolLock,
+    verbose: bool,
+) -> Result<()> {
+    if tools.packages.is_empty() && tools.plan.stale.is_empty() {
+        return Ok(());
+    }
+    let store = crate::tool_store::store_root()?;
+    let ctx = crate::tools::InstallCtx {
+        verbose,
+        use_eatmydata: false,
+        binary_pins: lock.binary.clone(),
+    };
+    let install = |pkg: &crate::tool_store::Package, prefix: &std::path::Path| {
+        crate::tools::install_into_prefix(pkg, prefix, &ctx)
+    };
+    crate::tool_store::sync(
+        std::path::Path::new("."),
+        &store,
+        &tools.packages,
+        &install,
+        &mut |pkg, fresh| {
+            let how = if fresh {
+                "installed into the tool store, then linked"
+            } else {
+                "linked from the tool store"
+            };
+            println!(
+                "{} {} {}",
+                color::green("✓"),
+                pkg,
+                color::dim(&format!("({how})"))
+            );
+        },
+    )
+}
+
+/// Ask `Proceed? [y/N]` on the terminal; true on yes.
+fn confirm() -> Result<bool> {
+    print!("Proceed? [y/N] ");
+    std::io::stdout()
+        .flush()
+        .context("Failed to flush stdout before install prompt")?;
+    let mut answer = String::new();
+    std::io::stdin()
+        .read_line(&mut answer)
+        .context("Failed to read install prompt answer")?;
+    Ok(matches!(answer.trim().to_lowercase().as_str(), "y" | "yes"))
 }
 
 /// The key a `(method, package)` install has in a mismatch set: Python
@@ -638,13 +804,30 @@ fn run_tools_command(
         ToolAction::Install { name, all, .. } => {
             // In a project, installs follow rsconstruct.lock. `--all` is the
             // config-independent registry sweep and has no lock to follow.
-            let (lock, drift) = match builder {
+            let (lock, drift, wanted) = match builder {
                 Some(b) if !all => {
                     let wanted = project_wanted(b, processors, is_enabled)?;
                     let (lock, drift) = lock_for_install(ctx, &wanted, verbose)?;
-                    (Some(lock), drift)
+                    (Some(lock), drift, Some(wanted))
                 }
-                _ => (None, std::collections::BTreeSet::new()),
+                _ => (None, std::collections::BTreeSet::new(), None),
+            };
+            // A plain `tool install` in a project syncs the project's tool
+            // directory with the lock (crates, npm packages, gems, release
+            // binaries) and installs only the rest onto the machine. A named
+            // tool or `--all` is a machine install and does not touch it.
+            let project = match (builder, &lock, &wanted) {
+                (Some(b), Some(lock), Some(wanted)) if name.is_none() => {
+                    let project = project_tools(b, wanted, lock)?;
+                    print_project_tools(&project);
+                    if install_interactive && project.plan.has_work() && !confirm()? {
+                        println!("Aborted.");
+                        return Ok(());
+                    }
+                    apply_project_tools(&project, lock, verbose)?;
+                    Some(project)
+                }
+                _ => None,
             };
             // Collect missing tools with their install info
             let missing_tools: Vec<(&str, &crate::tools::InstallMethod)> = if all {
@@ -755,10 +938,19 @@ fn run_tools_command(
                     if !is_installable_tool_name(tool_name) {
                         continue;
                     }
-                    // Present on PATH counts as installed, unless CI found
-                    // it at a version other than the locked one.
+                    // Present on PATH counts as installed, unless it was
+                    // found at a version other than the locked one that may
+                    // be replaced (see `lock_for_install`). A tool the
+                    // project's tool directory holds was synced above.
                     let info = crate::tools::tool_info(tool_name);
                     let method = info.and_then(crate::tools::ToolInfo::default_install_method);
+                    if method.is_some_and(|m| {
+                        project
+                            .as_ref()
+                            .is_some_and(|p| p.covers(m.method, m.package))
+                    }) {
+                        continue;
+                    }
                     let drifted =
                         method.is_some_and(|m| drift.contains(&drift_key(m.method, m.package)));
                     if which::which(tool_name).is_ok() && !drifted {
@@ -1047,23 +1239,6 @@ fn run_tools_command(
                 }
             }
 
-            let npm_missing: Vec<String> = config
-                .npm
-                .iter()
-                .filter(|pkg| {
-                    let installed = package_probe_succeeds(ctx, "npm", &["ls", "-g", pkg])
-                        && !drift.contains(&drift_key("npm", pkg));
-                    if installed {
-                        skipped.push(format!("[npm] {pkg}"));
-                    }
-                    !installed
-                })
-                .map(|pkg| lock.pinned("npm", pkg))
-                .collect();
-            if !npm_missing.is_empty() {
-                groups.push(("npm", npm_missing));
-            }
-
             // The project's own Node.js set: package.json declares the
             // names, and in package-lock mode `npm ci` installs exactly the
             // pinned closure into ./node_modules (the PATH augmentation at
@@ -1100,48 +1275,11 @@ fn run_tools_command(
                 }
             }
 
-            let gem_missing: Vec<String> = config
-                .gem
-                .iter()
-                .filter(|pkg| {
-                    // `--exact`: without it `gem list -i rack` is a substring
-                    // match that rack-test alone satisfies.
-                    let installed =
-                        package_probe_succeeds(ctx, "gem", &["list", "-i", "--exact", pkg])
-                            && !drift.contains(&drift_key("gem", pkg));
-                    if installed {
-                        skipped.push(format!("[gem] {pkg}"));
-                    }
-                    !installed
-                })
-                .map(|pkg| lock.pinned("gem", pkg))
-                .collect();
-            if !gem_missing.is_empty() {
-                groups.push(("gem", gem_missing));
-            }
-
-            // Crates are judged by `cargo install --list`, one call for the
-            // whole set, rather than by a binary on PATH: the listing is
-            // exact and a crate's binary need not carry its name.
-            if !config.cargo.is_empty() {
-                let installed = crate::tools::installed_cargo_crates(ctx)?;
-                let cargo_missing: Vec<String> = config
-                    .cargo
-                    .iter()
-                    .filter(|pkg| {
-                        let present = installed.contains_key(pkg.as_str())
-                            && !drift.contains(&drift_key("cargo", pkg));
-                        if present {
-                            skipped.push(format!("[cargo] {pkg}"));
-                        }
-                        !present
-                    })
-                    .map(|pkg| lock.pinned("cargo", pkg))
-                    .collect();
-                if !cargo_missing.is_empty() {
-                    groups.push(("cargo", cargo_missing));
-                }
-            }
+            // `[dependencies]` cargo, npm and gem entries, and every other
+            // locked crate, npm package, gem and release binary, go into the
+            // project's tool directory. That is synced last: crates and gems
+            // may build native code against the system packages above.
+            let project = project_tools(builder, &wanted, &lock)?;
 
             if !skipped.is_empty() {
                 println!("{}:", color::dim("Already installed (skipping)"));
@@ -1150,8 +1288,11 @@ fn run_tools_command(
                 }
                 println!();
             }
+            print_project_tools(&project);
 
-            if groups.is_empty() {
+            if groups.is_empty() && !project.plan.has_work() {
+                // Nothing to install, but bin/ is rebuilt all the same.
+                apply_project_tools(&project, &lock, verbose)?;
                 println!("{}", color::green("All dependencies already installed."));
                 return Ok(());
             }
@@ -1159,20 +1300,24 @@ fn run_tools_command(
             let ctx = crate::tools::InstallCtx {
                 verbose,
                 use_eatmydata,
-                binary_pins: lock.binary,
+                binary_pins: lock.binary.clone(),
             };
-            println!("{}:", color::bold("Dependencies to install"));
-            for (method, packages) in &groups {
-                let pkgs_ref: Vec<&str> = packages.iter().map(String::as_str).collect();
-                let preview = crate::tools::describe(method, &pkgs_ref, &ctx.binary_pins);
-                let line = preview.first().map(|a| a.join(" ")).unwrap_or_default();
-                println!(
-                    "  {} {}",
-                    color::bold(&format!("[{method}]")),
-                    color::dim(&line)
-                );
+            // The project tools to install were listed above; this is the
+            // rest, when there is any.
+            if !groups.is_empty() {
+                println!("{}:", color::bold("Dependencies to install"));
+                for (method, packages) in &groups {
+                    let pkgs_ref: Vec<&str> = packages.iter().map(String::as_str).collect();
+                    let preview = crate::tools::describe(method, &pkgs_ref, &ctx.binary_pins);
+                    let line = preview.first().map(|a| a.join(" ")).unwrap_or_default();
+                    println!(
+                        "  {} {}",
+                        color::bold(&format!("[{method}]")),
+                        color::dim(&line)
+                    );
+                }
+                println!();
             }
-            println!();
 
             // Non-interactive by default; see the note in Install above.
             if interactive {
@@ -1211,6 +1356,15 @@ fn run_tools_command(
                         any_failed = true;
                     }
                 }
+            }
+            if let Err(e) = apply_project_tools(&project, &lock, verbose) {
+                println!(
+                    "{} [{}]: {:#}",
+                    color::red("✗"),
+                    crate::tool_store::REPO_TOOLS_DIR,
+                    e
+                );
+                any_failed = true;
             }
 
             if any_failed {

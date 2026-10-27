@@ -583,7 +583,7 @@ pub enum ToolAction {
         #[arg(long)]
         view: bool,
     },
-    /// Install missing external tools (uses config if available)
+    /// Install missing external tools; in a project, bring .rsconstruct/tools to the lock (uses config if available)
     Install {
         /// Tool name to install (omit to install missing tools for enabled processors)
         name: Option<String>,

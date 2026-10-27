@@ -735,3 +735,89 @@ fn tools_install_all_conflicts_with_tool_name() {
         "expected a clap conflict error, got: {stderr}",
     );
 }
+
+/// A locked release binary goes into the project's tool directory, linked
+/// from the tool store, and is the copy every later command uses — ahead of
+/// anything else on PATH. The store is pre-filled here with a stand-in
+/// `rumdl` under the version the lock names, so nothing is downloaded.
+/// `cache clear` keeps the tools, and a lock that names another version is
+/// reported by `tool check` instead of passing on whatever is installed.
+#[test]
+fn locked_tools_are_installed_into_the_project_from_the_store() {
+    let project = setup_project_with_config("[processor.checker.rumdl]\nsrc_dirs = [\"docs\"]\n");
+    let root = project.path();
+    std::fs::create_dir_all(root.join("docs")).unwrap();
+    std::fs::write(root.join("docs/a.md"), "# A\n").unwrap();
+    let lock = |exe_sha: &str| {
+        format!(
+            "version = 1\n\n[binary.rumdl]\nurl = \"https://example.invalid/rumdl.tar.gz\"\n\
+             sha256 = \"aa\"\nexecutable_sha256 = \"{exe_sha}\"\n"
+        )
+    };
+    std::fs::write(root.join("rsconstruct.lock"), lock("feed")).unwrap();
+
+    let scratch = tempfile::TempDir::new().unwrap();
+    let store = scratch.path().join("store");
+    let ran = scratch.path().join("ran");
+    let stored = store.join("binary/rumdl@sha256-feed/bin/rumdl");
+    std::fs::create_dir_all(stored.parent().unwrap()).unwrap();
+    std::fs::write(
+        &stored,
+        format!("#!/bin/sh\necho \"$@\" >> {}\n", ran.display()),
+    )
+    .unwrap();
+    crate::common::make_executable(&stored);
+    let store_env = store.to_str().unwrap();
+    let run = |args: &[&str], ci: bool| {
+        let mut env = vec![("NO_COLOR", "1"), ("RSCONSTRUCT_TOOL_STORE", store_env)];
+        if ci {
+            env.push(("CI", "true"));
+        }
+        run_rsconstruct_with_env(root, args, &env)
+    };
+    let ok = |out: &std::process::Output, what: &str| {
+        assert!(
+            out.status.success(),
+            "{what} failed:\n{}\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+
+    let out = run(&["tool", "install"], false);
+    ok(&out, "tool install");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("binary rumdl sha256-feed (linked from the tool store)"),
+        "{stdout}"
+    );
+    let linked = root.join(".rsconstruct/tools/bin/rumdl");
+    let ino =
+        |p: &std::path::Path| std::os::unix::fs::MetadataExt::ino(&std::fs::metadata(p).unwrap());
+    assert_eq!(
+        ino(&linked),
+        ino(&stored),
+        "the project's copy is not a hard link"
+    );
+
+    ok(&run(&["tool", "check"], false), "tool check");
+    ok(&run(&["build"], true), "CI build");
+    let calls = std::fs::read_to_string(&ran).expect("the project's rumdl never ran");
+    assert!(calls.contains("a.md"), "{calls}");
+
+    ok(&run(&["cache", "clear"], false), "cache clear");
+    assert!(linked.exists(), "cache clear removed the project's tools");
+    ok(
+        &run(&["tool", "check"], false),
+        "tool check after cache clear",
+    );
+
+    std::fs::write(root.join("rsconstruct.lock"), lock("beef")).unwrap();
+    let out = run(&["tool", "check"], false);
+    assert!(!out.status.success(), "tool check accepted a drifted tool");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("binary rumdl — locked sha256-beef, installed sha256-feed"),
+        "{stderr}"
+    );
+}

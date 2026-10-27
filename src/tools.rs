@@ -290,6 +290,109 @@ pub fn run(method: &str, packages: &[&str], ctx: &InstallCtx) -> anyhow::Result<
     }
 }
 
+/// Install `pkg` into the empty directory `prefix`, the way a project's
+/// tool directory holds it (see `tool_store`): its executables end up in
+/// `prefix/bin`, and nothing outside `prefix` is written — so no sudo, and
+/// no global state for another project to disagree with.
+pub fn install_into_prefix(
+    pkg: &crate::tool_store::Package,
+    prefix: &std::path::Path,
+    ctx: &InstallCtx,
+) -> anyhow::Result<()> {
+    let root = prefix.to_string_lossy();
+    let (name, version) = (pkg.name.as_str(), pkg.version.as_str());
+    let request = format!("{name}@{version}");
+    match pkg.method.as_str() {
+        // --locked for the reason given at `cargo_install_argv`; no --force,
+        // the root is empty.
+        "cargo" => exec_inherited_env(
+            &["cargo", "install", "--locked", "--root", &root, &request],
+            &[],
+            ctx.verbose,
+        ),
+        // --global with --prefix: the global layout (lib/node_modules plus
+        // bin/ shims) under a prefix of our choosing.
+        "npm" => exec_inherited_env(
+            &["npm", "install", "--global", "--prefix", &root, &request],
+            &[],
+            ctx.verbose,
+        ),
+        // GEM_HOME/GEM_PATH name only the prefix, so every dependency is
+        // installed into it rather than satisfied by whatever gems this
+        // machine happens to have; the result runs anywhere GEM_PATH
+        // includes it (see `tool_store::augment_env`).
+        "gem" => {
+            let bin = prefix.join("bin");
+            exec_inherited_env(
+                &[
+                    "gem",
+                    "install",
+                    "--install-dir",
+                    &root,
+                    "--bindir",
+                    &bin.to_string_lossy(),
+                    "--no-document",
+                    "--version",
+                    version,
+                    name,
+                ],
+                &[("GEM_HOME", &root), ("GEM_PATH", &root)],
+                ctx.verbose,
+            )
+        }
+        "binary" => install_binary_into_prefix(name, version, prefix, ctx),
+        other => anyhow::bail!("install method '{other}' does not install into a project"),
+    }
+}
+
+/// The `binary` case of [`install_into_prefix`]: download the locked asset,
+/// check both hashes the lock records, and put the executable in
+/// `prefix/bin`. `version` is `sha256-<executable hash>`, as
+/// `tool_store::Package` records a binary.
+fn install_binary_into_prefix(
+    name: &str,
+    version: &str,
+    prefix: &std::path::Path,
+    ctx: &InstallCtx,
+) -> anyhow::Result<()> {
+    use anyhow::Context as _;
+    let recipe = binary_recipe(name)
+        .ok_or_else(|| anyhow::anyhow!("no binary install recipe for '{name}'"))?;
+    let pin = ctx
+        .binary_pins
+        .get(name)
+        .with_context(|| format!("binary {name} has no rsconstruct.lock entry"))?;
+    let work = prefix.join(".work");
+    std::fs::create_dir_all(&work)
+        .with_context(|| format!("Failed to create {}", work.display()))?;
+    let fetched = fetch_binary(
+        &recipe,
+        &pin.url,
+        Some(&pin.sha256),
+        &work.to_string_lossy(),
+        ctx.verbose,
+    )?;
+    let payload = std::path::Path::new(&fetched.payload);
+    let sha = file_sha256(payload)?;
+    if version != format!("sha256-{sha}") {
+        anyhow::bail!(
+            "the executable unpacked from {} has sha256 {sha}, but rsconstruct.lock wants {version}",
+            pin.url
+        );
+    }
+    let bin = prefix.join("bin");
+    std::fs::create_dir_all(&bin).with_context(|| format!("Failed to create {}", bin.display()))?;
+    let dest = bin.join(recipe.dest);
+    std::fs::rename(payload, &dest).with_context(|| {
+        format!(
+            "Failed to move {} into place as {}",
+            payload.display(),
+            dest.display()
+        )
+    })?;
+    std::fs::remove_dir_all(&work).with_context(|| format!("Failed to remove {}", work.display()))
+}
+
 fn sudo_argv() -> &'static [&'static str] {
     if crate::platform::needs_sudo() {
         &["sudo"]
@@ -305,10 +408,11 @@ fn sudo_argv() -> &'static [&'static str] {
 /// same name that it did not install itself — without it cargo refuses with
 /// "binary `x` already exists in destination", which is exactly what a CI
 /// cache holding a prebuilt nextest tarball produced once the crate list
-/// took over. It never causes extra work: only crates absent from `cargo
-/// install --list` (or tools absent from PATH) reach this command, so the
-/// build was going to happen anyway. Used by both `describe` and `run` so
-/// the printed plan matches what executes.
+/// took over. It never causes extra work: only tools absent from PATH reach
+/// this command, so the build was going to happen anyway. This is the
+/// machine install of `tool install <name>` and `--all`; a project's crates
+/// go into its tool directory instead (see [`install_into_prefix`]). Used by
+/// both `describe` and `run` so the printed plan matches what executes.
 fn cargo_install_argv() -> Vec<String> {
     vec![
         "cargo".to_string(),
@@ -316,52 +420,6 @@ fn cargo_install_argv() -> Vec<String> {
         "--locked".to_string(),
         "--force".to_string(),
     ]
-}
-
-/// The crate names `cargo install` has put into `$CARGO_HOME/bin`, from
-/// `cargo install --list`. This is how `[dependencies].cargo` entries are
-/// judged present: by crate, not by a binary on PATH, because the listing
-/// is exact and a crate's binary need not carry its name. A binary obtained
-/// any other way (a prebuilt tarball, a distro package) is not in the
-/// listing and so does not count.
-pub fn installed_cargo_crates(
-    ctx: &crate::build_context::BuildContext,
-) -> anyhow::Result<std::collections::BTreeMap<String, String>> {
-    use anyhow::Context as _;
-    let mut cmd = std::process::Command::new("cargo");
-    cmd.args(["install", "--list"]);
-    let out = crate::processor::run_command_capture(ctx, &cmd)
-        .context("failed to run `cargo install --list` — is cargo installed?")?;
-    if !out.status.success() {
-        anyhow::bail!(
-            "`cargo install --list` failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
-    Ok(parse_cargo_install_list(&String::from_utf8_lossy(
-        &out.stdout,
-    )))
-}
-
-/// Parse `cargo install --list` output into the installed crates and their
-/// versions. The listing has one unindented `name vX.Y.Z[ (source)]:` line
-/// per crate, each followed by indented lines naming the binaries it ships;
-/// only the unindented lines carry crate names.
-pub fn parse_cargo_install_list(listing: &str) -> std::collections::BTreeMap<String, String> {
-    listing
-        .lines()
-        .filter(|line| !line.is_empty() && !line.starts_with(char::is_whitespace))
-        .filter_map(|line| {
-            let mut words = line.split_whitespace();
-            let name = words.next()?;
-            let version = words
-                .next()
-                .map(|v| v.trim_end_matches(':'))
-                .map(|v| v.strip_prefix('v').unwrap_or(v))
-                .unwrap_or_default();
-            Some((name.to_string(), version.to_string()))
-        })
-        .collect()
 }
 
 /// The argv prefix for installing gems. Appends `--user-install` when a
@@ -435,6 +493,19 @@ fn uv_pip_install_argv_for(in_venv: bool, user_prefix: Option<&str>) -> Vec<Stri
 struct PythonProbe {
     in_venv: bool,
     user_prefix: Option<String>,
+    /// `sys.prefix`: for a venv interpreter, the venv's directory.
+    prefix: Option<std::path::PathBuf>,
+}
+
+/// Whether `python3` on PATH belongs to a virtualenv inside `root` — the
+/// project's own environment, which (unlike a shared or system one) can be
+/// brought to the project's locked versions without touching anyone else.
+pub fn python_env_is_inside(root: &std::path::Path) -> bool {
+    let probe = python_probe();
+    let (Some(prefix), Ok(root)) = (probe.prefix, root.canonicalize()) else {
+        return false;
+    };
+    probe.in_venv && prefix.canonicalize().is_ok_and(|p| p.starts_with(&root))
 }
 
 fn python_probe() -> PythonProbe {
@@ -447,7 +518,8 @@ fn python_probe() -> PythonProbe {
                     "import sys, sysconfig, site; \
                     print(int(sys.prefix != sys.base_prefix)); \
                     print(sysconfig.get_path('purelib')); \
-                    print(site.getuserbase())",
+                    print(site.getuserbase()); \
+                    print(sys.prefix)",
                 ])
                 .output()
             else {
@@ -461,6 +533,11 @@ fn python_probe() -> PythonProbe {
             let in_venv = lines.next().is_some_and(|l| l == "1");
             let purelib = lines.next().map_or("", str::trim);
             let user_base = lines.next().map_or("", str::trim);
+            let prefix = lines
+                .next()
+                .map(str::trim)
+                .filter(|p| !p.is_empty())
+                .map(std::path::PathBuf::from);
             let user_prefix = if in_venv
                 || purelib.is_empty()
                 || user_base.is_empty()
@@ -473,6 +550,7 @@ fn python_probe() -> PythonProbe {
             PythonProbe {
                 in_venv,
                 user_prefix,
+                prefix,
             }
         })
         .clone()
@@ -548,7 +626,7 @@ pub fn augment_path_with_node_modules_bin() {
 
 /// `path` with `dir` moved to the front, or `None` when it is already
 /// first. An occurrence further back is dropped rather than duplicated.
-fn path_with_prepended_dir(
+pub fn path_with_prepended_dir(
     path: &std::ffi::OsStr,
     dir: &std::path::Path,
 ) -> Option<std::ffi::OsString> {
@@ -921,12 +999,18 @@ fn resolve_latest_deb_asset(repo: &str, asset_pattern: &str) -> anyhow::Result<S
 /// `sudo mv` / `sudo apt-get`, which need the terminal for a password
 /// prompt, so these steps cannot go through the capturing central runner.
 fn exec_inherited(argv: &[&str], verbose: bool) -> anyhow::Result<()> {
+    exec_inherited_env(argv, &[], verbose)
+}
+
+/// [`exec_inherited`] with extra environment variables for the child.
+fn exec_inherited_env(argv: &[&str], env: &[(&str, &str)], verbose: bool) -> anyhow::Result<()> {
     use anyhow::Context as _;
     if verbose {
         println!("Running: {}", argv.join(" "));
     }
     let status = std::process::Command::new(argv[0])
         .args(&argv[1..])
+        .envs(env.iter().copied())
         .status()
         .with_context(|| format!("failed to spawn: {}", argv.join(" ")))?;
     if !status.success() {
@@ -1064,10 +1148,10 @@ pub fn binary_is_pinnable(pkg: &str) -> bool {
     })
 }
 
-/// The name a binary recipe installs as (`/usr/local/bin/<dest>`, or the
-/// command a `.deb` provides), for probing what is installed.
-pub fn binary_dest(pkg: &str) -> Option<&'static str> {
-    binary_recipe(pkg).map(|r| r.dest)
+/// Whether `pkg`'s binary installs into a project's tool directory: every
+/// recipe but a `.deb`, which apt installs onto the machine.
+pub fn binary_is_repo_local(pkg: &str) -> bool {
+    binary_recipe(pkg).is_some_and(|r| !matches!(r.archive, ArchiveKind::Deb { .. }))
 }
 
 /// Resolve `pkg`'s binary to the exact asset of today's latest release and
@@ -2322,29 +2406,6 @@ mod tests {
                 "mdbook"
             ]
         );
-    }
-
-    /// `cargo install --list` names each crate on an unindented line and
-    /// its binaries on indented ones; only the crate names come out, with
-    /// the version and any source suffix dropped.
-    #[test]
-    fn parse_cargo_install_list_takes_crate_names_and_versions() {
-        let listing = "cargo-deny v0.20.2:\n    cargo-deny\n\
-                       ripgrep v14.1.0:\n    rg\n\
-                       uv v0.9.0 (https://github.com/astral-sh/uv#abcdef12):\n    uv\n    uvx\n";
-        let crates = parse_cargo_install_list(listing);
-        assert_eq!(
-            crates
-                .iter()
-                .map(|(n, v)| (n.as_str(), v.as_str()))
-                .collect::<Vec<_>>(),
-            vec![
-                ("cargo-deny", "0.20.2"),
-                ("ripgrep", "14.1.0"),
-                ("uv", "0.9.0")
-            ]
-        );
-        assert!(parse_cargo_install_list("").is_empty());
     }
 
     #[test]

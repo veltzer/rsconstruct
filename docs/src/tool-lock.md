@@ -13,13 +13,13 @@ hand.
 
 ## What it locks
 
-| Section | Installed by | Pinned as |
-|---------|--------------|-----------|
-| `[cargo]` | `cargo install --locked` | `name@version` |
-| `[pip]` | `pip` / `uv pip install` | `name==version` (PEP 503-normalized keys) |
-| `[npm]` | `npm install -g` | `name@version` |
-| `[gem]` | `gem install` | `name:version` |
-| `[binary.<name>]` | the `binary` install method | exact asset URL plus SHA-256 |
+| Section | Installed by | Into | Pinned as |
+|---------|--------------|------|-----------|
+| `[cargo]` | `cargo install --locked --root` | the project ([below](#where-tools-are-installed)) | `name@version` |
+| `[pip]` | `pip` / `uv pip install` | the active Python environment | `name==version` (PEP 503-normalized keys) |
+| `[npm]` | `npm install --global --prefix` | the project | `name@version` |
+| `[gem]` | `gem install --install-dir` | the project | `name:version` |
+| `[binary.<name>]` | the `binary` install method | the project; a `.deb` onto the machine | exact asset URL plus SHA-256 |
 
 Entries come from two places:
 
@@ -60,7 +60,7 @@ rsconstruct's source (zola, checkpatch.pl, …) are recorded at that URL.
 | `tool lock` | add missing entries, drop unused ones, keep the rest | same (but run it outside CI) |
 | `tool lock --upgrade` | re-resolve every entry to its latest release | same |
 | `tool lock --upgrade <name>...` | like `tool lock`, plus re-resolve only the named tools; an unknown name is an error | same |
-| `tool install`, `tool install-deps` | fill in missing entries, then install missing tools at their locked versions | the lock must match exactly; a tool installed at a different version is reinstalled at the locked one |
+| `tool install`, `tool install-deps` | fill in missing entries, then bring the project's tools to their locked versions | the lock must match exactly, then the same |
 | `tool check` | the lock must match and every locked tool must be installed at its version | same |
 | `build` | not consulted (`--verify-tool-versions` runs the build check) | runs the build check before building |
 
@@ -79,9 +79,17 @@ still be needed by a processor outside it. `tool check` is the exact,
 whole-project test — a lock entry nothing needs any more fails it, not the
 build.
 
-**Outside CI, rsconstruct never replaces a tool you already have.** It installs
-what is missing at the locked version, and `tool check` reports drift, but a
-tool already on your machine at another version is left alone.
+**Every project runs its locked versions, in CI and on your machine alike.**
+Crates, npm packages, gems and release binaries are installed into the project
+itself (see [below](#where-tools-are-installed)), so a project at one version
+of a tool and a project at another never get in each other's way, and an
+install can always bring a project to exactly its lock. Python packages follow
+the same rule inside the project's own virtualenv: when `python3` is a venv
+under the project directory (or in CI), one at another version is reinstalled
+at the locked one. A Python environment shared with other work, and `.deb`
+binaries, which belong to the machine, are replaced only in CI; outside it a
+mismatch there is reported as a warning naming both versions, and `tool check`
+fails on it.
 
 **In CI a lock problem is an error, never a rewrite.** A lock written on a
 runner would never be committed, so each runner would resolve its own versions,
@@ -94,6 +102,49 @@ nothing else; give it names (`--upgrade ruff cargo-deny`) to move only those,
 the way `cargo update -p` does. A name selects the tool under every install
 method the project locks it for. A normal build, install or `tool lock` never moves an entry
 that is already locked.
+
+## Where tools are installed
+
+A tool installed onto the machine is shared by every project there, so two
+projects that lock different releases of it cannot both be right — whichever
+was installed last wins for both, silently. rsconstruct therefore installs the
+tools it gets from a registry into the project, the way uv installs a
+project's Python packages into its `.venv`:
+
+```text
+.rsconstruct/tools/pkgs/<method>/<name>@<version>/   one install per package
+.rsconstruct/tools/bin/<exe>                         the executables, first on PATH
+```
+
+At startup, in a project directory, rsconstruct puts `.rsconstruct/tools/bin`
+first on `PATH` for itself and every tool it runs, so the project's copy wins
+over anything installed elsewhere. `cargo <subcommand>` processors (`cargo
+deny`, `cargo nextest`) run the project's `cargo-<subcommand>` directly,
+because cargo itself looks in `$CARGO_HOME/bin` before `PATH`. A gem's entry in
+`bin/` is a small launcher that runs it with `GEM_HOME` and `GEM_PATH` naming
+only its own package, because rubygems activates the newest version of a gem
+found anywhere on its path.
+
+`tool install` and `tool install-deps` keep the directory in step with the
+lock: they add what is missing, replace what moved, remove what the lock no
+longer names, and print each package with `✓` (in place), `+` (added) or `-`
+(removed). `cache clear` and `clean all` leave `.rsconstruct/tools` alone; it
+holds tools, not build state.
+
+**The tool store.** Each version is installed once per machine, into the store
+— `$RSCONSTRUCT_TOOL_STORE`, else `$XDG_CACHE_HOME/rsconstruct/tools`, else
+`~/.cache/rsconstruct/tools` — and every project that locks it gets a
+hard-linked copy: no second download or compile, and no second copy on disk.
+Where a hard link is impossible (the store on another filesystem) the files are
+copied. Store files are read-only, since a hard link shares the file with every
+other project.
+
+What stays on the machine: system packages (`apt` and friends) and the `.deb`
+binary recipes, which the OS package manager owns, and Python packages, which
+go into the active environment — the project's virtualenv, set up before
+rsconstruct runs. `tool install <name>` and `tool install --all` are machine
+installs too: they install a named tool, or the whole registry, for the
+machine, and do not touch any project's tool directory.
 
 ## rsconstruct itself is not locked
 

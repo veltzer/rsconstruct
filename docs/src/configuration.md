@@ -56,7 +56,7 @@ shells = ["bash"]
 pip = ["pyyaml", "jinja2"]    # Python packages
 npm = ["eslint", "prettier"]  # Node.js packages
 gem = ["mdl"]                 # Ruby gems
-cargo = ["cargo-deny"]        # Crates from crates.io (cargo install --locked)
+cargo = ["cargo-deny"]        # Crates from crates.io, into .rsconstruct/tools
 system = ["pandoc", "graphviz"]  # System packages (checked but not auto-installed)
 
 [pages]
@@ -429,10 +429,10 @@ Declare project dependencies by package manager. Used by `rsconstruct doctor` to
 | `pip` | array of strings | `[]` | Python packages to install via `pip install`. Supports version specifiers (e.g., `"ruff>=0.4"`). |
 | `pip_source` | string | `"uv-lock"` | Where the Python package set comes from: `"uv-lock"` installs the pinned closure from `uv.lock`; `"pyproject"` resolves the names pyproject.toml declares at install time. |
 | `python_installer` | string | `"uv"` | Which tool installs the Python package set: `"uv"` runs `uv pip install --python python3`; `"pip"` runs `pip install`. See below for why the two differ on the same lock. |
-| `npm` | array of strings | `[]` | Node.js packages to install globally via `npm install -g`, on top of the project's own package.json set. |
+| `npm` | array of strings | `[]` | Node.js command-line packages installed into the project's tool directory, `.rsconstruct/tools` (see [Tool Lock](tool-lock.md#where-tools-are-installed)), on top of the project's own package.json set. |
 | `npm_source` | string | `"package-lock"` | Where the project's Node.js package set comes from: `"package-lock"` installs the closure package-lock.json pins with `npm ci`; `"package-json"` resolves package.json's ranges with `npm install`. |
-| `gem` | array of strings | `[]` | Ruby gems to install via `gem install`. |
-| `cargo` | array of strings | `[]` | Crates to install from crates.io via `cargo install --locked`, by crate name (e.g. `"cargo-deny"`, `"cargo-nextest"`, `"mdbook"`). Bare names only; the version floats. See below. |
+| `gem` | array of strings | `[]` | Ruby gems installed into the project's tool directory, `.rsconstruct/tools`. |
+| `cargo` | array of strings | `[]` | Crates from crates.io installed into the project's tool directory with `cargo install --locked`, by crate name (e.g. `"cargo-deny"`, `"cargo-nextest"`, `"mdbook"`). Bare names; rsconstruct.lock pins the version. See below. |
 | `system` | array of strings | `[]` | System packages installed via the detected package manager (`apt-get`, `dnf`, `pacman`, or `brew`). |
 
 #### Python dependencies come from `uv.lock` by default
@@ -520,9 +520,10 @@ invoking `stylelint` or `mmdc` plainly, and `tool install` sees the locked
 copy and does not install a global one. This is what `npm run` does for
 scripts.
 
-`[dependencies].npm` remains for a package that must be global; it is
-installed with `npm install -g` alongside, and is not the place for a
-project's own tools.
+`[dependencies].npm` is for a command-line package the project does not
+declare in package.json. It is installed into the project's tool directory,
+`.rsconstruct/tools`, at the version rsconstruct.lock pins, never globally:
+see [Tool Lock](tool-lock.md#where-tools-are-installed).
 
 #### Rust crates are a list, not tools
 
@@ -530,21 +531,21 @@ A cargo subcommand or other Rust-built tool a build runs (`cargo-deny`,
 `cargo-nextest`, `mdbook`) is a crate on crates.io, and crates.io is a
 package registry like PyPI or npm. So these are declared as a plain list
 under `cargo`, by crate name, and are not entries in the tool registry.
-`install-deps` installs the missing ones in one `cargo install --locked`
-call: `--locked` builds each crate with the Cargo.lock it was published
-with, so a given crate version yields the same binary everywhere, while the
-version itself floats to the latest release — the manifest carries bare
-names, as everywhere else in the fleet.
+The manifest carries bare names, as everywhere else in the fleet, and
+rsconstruct.lock pins each crate's version. `install-deps` installs each
+crate into the project's tool directory, `.rsconstruct/tools`, with `cargo
+install --locked --root`: `--locked` builds the crate with the Cargo.lock it
+was published with, so a given crate version yields the same binary
+everywhere. The build happens once per machine, into the tool store, and
+every project locking that version links it from there (see [Tool
+Lock](tool-lock.md#where-tools-are-installed)).
 
-Presence is judged by `cargo install --list`, by crate name, not by a binary
-on PATH. That is exact (a crate's binary need not carry its name: `ripgrep`
-ships `rg`) and it is cheap, where an unconditional `cargo install` would
-rebuild every crate that has a newer release on each run. The flip side is
-that a binary obtained any other way — a prebuilt tarball, a distro package
-— is not in the listing and is treated as missing; the install passes
-`--force` so such a binary is replaced rather than refused with "binary
-already exists in destination" (a CI cache holding a prebuilt nextest did
-exactly that). `doctor` reports each declared crate the same way.
+Presence is judged by the project's tool directory, by crate name and
+version, not by a binary on PATH or `cargo install --list`: a crate installed
+globally, at whatever version, does not count. `doctor` reports each declared
+crate the same way. A `cargo <subcommand>` processor (`cargo deny`, `cargo
+nextest`) runs the project's `cargo-<subcommand>` directly, since cargo would
+look in `$CARGO_HOME/bin` before `PATH` and find a global one first.
 
 Components rustup manages (`rustfmt`, `clippy`) are not crates and do not
 belong in this list.

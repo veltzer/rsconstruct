@@ -241,38 +241,45 @@ impl Builder {
                 }
             }
 
-            // `[dependencies].npm` entries are installed with `npm install
-            // -g`, so they are looked for in the global tree — the same
-            // listing `tool check` reads — not in the project's.
-            let installed_npm = if deps.npm.is_empty() {
-                std::collections::BTreeMap::new()
-            } else {
-                crate::tool_lock::installed_npm_globals(ctx)
-            };
-            for pkg in &deps.npm {
-                let found = installed_npm.contains_key(pkg);
-                if found {
-                    record(
-                        format!("{pkg} (npm)"),
-                        "ok",
-                        "dependency",
-                        None,
-                        None,
-                        &mut ok_count,
-                        &mut fail_count,
-                        &mut warn_count,
-                    );
-                } else {
-                    record(
-                        format!("{pkg} not installed"),
-                        "fail",
-                        "dependency",
-                        Some("npm".to_string()),
-                        Some(format!("npm install -g {pkg}")),
-                        &mut ok_count,
-                        &mut fail_count,
-                        &mut warn_count,
-                    );
+            // `[dependencies]` cargo, npm and gem entries are installed into
+            // the project's tool directory, so that is where they are looked
+            // for — the same place `tool check` reads — not on the machine.
+            // Whether each is at its locked version is `tool check`'s job.
+            let in_project = crate::tool_store::installed_versions(std::path::Path::new("."));
+            for (method, list) in [
+                ("cargo", &deps.cargo),
+                ("gem", &deps.gem),
+                ("npm", &deps.npm),
+            ] {
+                for pkg in list {
+                    let name = crate::tool_lock::split_versioned(method, pkg)
+                        .map_or_else(|| pkg.clone(), |(name, _)| name);
+                    if in_project.contains_key(&(method.to_string(), name)) {
+                        record(
+                            format!("{pkg} ({method})"),
+                            "ok",
+                            "dependency",
+                            None,
+                            None,
+                            &mut ok_count,
+                            &mut fail_count,
+                            &mut warn_count,
+                        );
+                    } else {
+                        record(
+                            format!(
+                                "{pkg} not installed in {}",
+                                crate::tool_store::REPO_TOOLS_DIR
+                            ),
+                            "fail",
+                            "dependency",
+                            Some(method.to_string()),
+                            Some("rsconstruct tool install-deps".to_string()),
+                            &mut ok_count,
+                            &mut fail_count,
+                            &mut warn_count,
+                        );
+                    }
                 }
             }
 
@@ -304,64 +311,6 @@ impl Builder {
                     );
                 }
             }
-
-            for pkg in &deps.gem {
-                let found = package_installed(ctx, "gem", &["list", "--installed", "--exact", pkg]);
-                if found {
-                    record(
-                        format!("{pkg} (gem)"),
-                        "ok",
-                        "dependency",
-                        None,
-                        None,
-                        &mut ok_count,
-                        &mut fail_count,
-                        &mut warn_count,
-                    );
-                } else {
-                    record(
-                        format!("{pkg} not installed"),
-                        "fail",
-                        "dependency",
-                        Some("gem".to_string()),
-                        Some(format!("gem install {pkg}")),
-                        &mut ok_count,
-                        &mut fail_count,
-                        &mut warn_count,
-                    );
-                }
-            }
-
-            // Crates are judged by `cargo install --list`, the same probe
-            // install-deps uses, not by a binary on PATH.
-            if !deps.cargo.is_empty() {
-                let installed = crate::tools::installed_cargo_crates(ctx)?;
-                for pkg in &deps.cargo {
-                    if installed.contains_key(pkg) {
-                        record(
-                            format!("{pkg} (cargo)"),
-                            "ok",
-                            "dependency",
-                            None,
-                            None,
-                            &mut ok_count,
-                            &mut fail_count,
-                            &mut warn_count,
-                        );
-                    } else {
-                        record(
-                            format!("{pkg} not installed"),
-                            "fail",
-                            "dependency",
-                            Some("cargo".to_string()),
-                            Some(format!("cargo install --locked --force {pkg}")),
-                            &mut ok_count,
-                            &mut fail_count,
-                            &mut warn_count,
-                        );
-                    }
-                }
-            }
         }
 
         let total = ok_count + fail_count;
@@ -389,19 +338,6 @@ impl Builder {
 
         Ok(())
     }
-}
-
-/// Whether a package manager reports `pkg` as installed, by exit status.
-/// The gem probe; pip and npm go through the version listings `tool check`
-/// uses, shared from `tool_lock`.
-fn package_installed(
-    ctx: &crate::build_context::BuildContext,
-    program: &str,
-    args: &[&str],
-) -> bool {
-    let mut cmd = Command::new(program);
-    cmd.args(args);
-    crate::processor::run_command_capture(ctx, &cmd).is_ok_and(|o| o.status.success())
 }
 
 /// Try to get the version string of a tool by running `tool --version`.

@@ -53,8 +53,11 @@ impl ClippyProcessor {
             .config
             .standard
             .require_command(crate::processor::names::CLIPPY)?;
-        let mut cmd = Command::new(&self.config.cargo);
-        cmd.arg(subcommand);
+        let mut cmd = cargo_command(
+            &self.config.cargo,
+            subcommand,
+            self.project_subcommand().map(|(_, exe)| exe),
+        );
         for arg in &self.config.standard.args {
             cmd.arg(arg);
         }
@@ -64,6 +67,42 @@ impl ClippyProcessor {
             format_args!("cargo {} in {}", subcommand, anchor_display_dir(cargo_toml)),
         )
     }
+
+    /// The project's own `cargo-<subcommand>` executable, by name and path,
+    /// when its tool directory holds one (see [`cargo_command`]).
+    fn project_subcommand(&self) -> Option<(String, std::path::PathBuf)> {
+        let subcommand = self
+            .config
+            .standard
+            .require_command(crate::processor::names::CLIPPY)
+            .ok()?;
+        let name = format!("cargo-{subcommand}");
+        crate::tool_store::repo_tool(&name).map(|exe| (name, exe))
+    }
+}
+
+/// The command for `cargo <subcommand>`. When the project's tool directory
+/// holds `cargo-<subcommand>` (`project_exe`, a crate from `[dependencies]
+/// cargo`), that binary is run directly, exactly as cargo itself would run
+/// it: as `cargo-<subcommand> <subcommand> ...`, with `CARGO` naming the
+/// cargo to call back. Going through cargo would not do: cargo looks for
+/// external subcommands in `$CARGO_HOME/bin` before PATH, so a globally
+/// installed cargo-deny would win over the project's locked one.
+fn cargo_command(
+    cargo: &str,
+    subcommand: &str,
+    project_exe: Option<std::path::PathBuf>,
+) -> Command {
+    let mut cmd = match project_exe {
+        Some(exe) => {
+            let mut cmd = Command::new(exe);
+            cmd.env("CARGO", cargo);
+            cmd
+        }
+        None => Command::new(cargo),
+    };
+    cmd.arg(subcommand);
+    cmd
 }
 
 impl Processor for ClippyProcessor {
@@ -75,11 +114,15 @@ impl Processor for ClippyProcessor {
         crate::processor::ProcessorBase::config_json(&self.config)
     }
 
+    /// cargo, plus the project's `cargo-<subcommand>` when that is what runs
+    /// — so it is declared, and its identity is part of the cache key: a
+    /// locked cargo-deny moving to a new release re-runs `cargo deny`.
     fn required_tools(&self) -> Vec<String> {
-        crate::processor::with_declared_tools(
-            vec![self.config.cargo.clone()],
-            &self.config.standard,
-        )
+        let mut builtin = vec![self.config.cargo.clone()];
+        if let Some((name, _)) = self.project_subcommand() {
+            builtin.push(name);
+        }
+        crate::processor::with_declared_tools(builtin, &self.config.standard)
     }
 
     fn discover(
@@ -107,6 +150,40 @@ impl Processor for ClippyProcessor {
 
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
         self.execute_clippy(ctx, product.primary_input())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cargo_command;
+
+    fn argv(cmd: &std::process::Command) -> Vec<String> {
+        std::iter::once(cmd.get_program())
+            .chain(cmd.get_args())
+            .map(|s| s.to_string_lossy().into_owned())
+            .collect()
+    }
+
+    /// A project-installed subcommand is run directly; anything else goes
+    /// through cargo.
+    #[test]
+    fn project_subcommands_bypass_cargo_home() {
+        let exe = std::path::PathBuf::from("/p/.rsconstruct/tools/bin/cargo-deny");
+        let cmd = cargo_command("cargo", "deny", Some(exe));
+        assert_eq!(
+            argv(&cmd),
+            vec!["/p/.rsconstruct/tools/bin/cargo-deny", "deny"]
+        );
+        let cargo_env = cmd
+            .get_envs()
+            .find(|(k, _)| *k == "CARGO")
+            .and_then(|(_, v)| v);
+        assert_eq!(cargo_env, Some(std::ffi::OsStr::new("cargo")));
+
+        assert_eq!(
+            argv(&cargo_command("cargo", "clippy", None)),
+            vec!["cargo", "clippy"]
+        );
     }
 }
 

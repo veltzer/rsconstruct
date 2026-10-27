@@ -55,3 +55,6 @@ The exceptions are:
 
 - `NO_COLOR` — RSConstruct respects this standard env var to disable colored output, which is a display concern and does not affect build output.
 - `RSCONSTRUCT_THREADS` — Sets the number of parallel jobs (equivalent to `-j`). Priority: CLI `-j` flag > `RSCONSTRUCT_THREADS` env var > `[build] parallel` config. This is a performance tuning concern and does not affect build correctness or output.
+- `RSCONSTRUCT_TOOL_STORE` — Where the machine-wide tool store lives (default `$XDG_CACHE_HOME/rsconstruct/tools`, else `~/.cache/rsconstruct/tools`); see [Tool Lock](tool-lock.md#where-tools-are-installed). It decides only where a tool version is installed before being linked into the project, never which version: that is rsconstruct.lock's. Set it where tools are baked into an image and a job may run there with another `$HOME`.
+
+In a project directory, rsconstruct also *sets* `PATH` for itself and the tools it runs: `.rsconstruct/tools/bin`, the project's installed tools, goes first, so the version the project's lock names is the one that runs.

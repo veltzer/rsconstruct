@@ -226,7 +226,10 @@ cleaned.
 ### `rsconstruct clean all`
 
 Without `-p`, removes the output directory (`out/` by default) and
-`.rsconstruct/` outright: every output and the whole cache. With `-p`,
+`.rsconstruct/` outright: every output and the whole cache. The one thing
+kept is `.rsconstruct/tools/`, the project's installed tools (see
+[Tool Lock](tool-lock.md#where-tools-are-installed)), which are not build
+state. With `-p`,
 removes everything of the selected processors only: their output files, as
 `clean outputs` does, and the cache entries for their products, so the next
 build runs them again instead of restoring them. Use the `-p` form to make
@@ -369,7 +372,7 @@ Manage the build cache.
 | `remove-stale` | Yes |
 
 ```bash
-rsconstruct cache clear         # Clear the entire cache
+rsconstruct cache clear         # Clear the entire cache (.rsconstruct/ except the installed tools in .rsconstruct/tools/)
 rsconstruct cache size          # Show cache size
 rsconstruct cache trim          # Remove unreferenced objects
 rsconstruct cache list          # List all cache entries and their status
@@ -624,12 +627,12 @@ rsconstruct tool check             # Verify rsconstruct.lock covers the project 
 rsconstruct tool lock              # Write rsconstruct.lock: add missing entries, drop unused ones, keep the rest
 rsconstruct tool lock --upgrade    # Re-resolve every rsconstruct.lock entry to its latest release
 rsconstruct tool lock --upgrade ruff cargo-deny   # Re-resolve only these entries
-rsconstruct tool install           # Install missing external tools for enabled processors
-rsconstruct tool install ruff      # Install a specific tool by name
-rsconstruct tool install --all     # Install every tool in the registry, ignoring the config (no config needed)
+rsconstruct tool install           # Bring .rsconstruct/tools to the lock, then install the enabled processors' other tools
+rsconstruct tool install ruff      # Install a specific tool by name, onto the machine
+rsconstruct tool install --all     # Install every tool in the registry onto the machine, ignoring the config (no config needed)
 rsconstruct tool install -i        # Ask for confirmation first (default: install without asking)
 rsconstruct tool install --no-eatmydata        # Don't wrap apt/dnf/pacman with eatmydata
-rsconstruct tool install-deps      # Install declared [dependencies] (pip set from uv.lock, npm set from package-lock.json by default) in fixed order: system → pip → npm → gem → cargo
+rsconstruct tool install-deps      # Install declared [dependencies] (pip set from uv.lock, npm set from package-lock.json by default) in fixed order: system → pip → npm → .rsconstruct/tools (cargo, npm and gem entries)
 rsconstruct tool install-deps -i   # Ask for confirmation first (default: install without asking)
 rsconstruct tool install-deps --no-eatmydata   # Don't wrap apt/dnf/pacman with eatmydata
 rsconstruct tool stats             # Show tool availability and language runtime breakdown
@@ -641,8 +644,12 @@ rsconstruct tool graph --view      # Open tool graph in browser
 
 In a project, `install`, `install-deps`, `check` and `lock` work from
 `rsconstruct.lock`: installs request each tool at its locked version, and in CI
-a lock that does not match the project is an error. See
-[Tool Lock](tool-lock.md).
+a lock that does not match the project is an error. Crates, npm packages, gems
+and release binaries are installed into the project's own `.rsconstruct/tools`,
+hard-linked from a machine-wide store, and that directory's `bin/` is first on
+`PATH` for everything rsconstruct runs, so each project runs exactly its
+locked versions. Both `install` and `install-deps` bring the whole directory
+in line with the lock. See [Tool Lock](tool-lock.md#where-tools-are-installed).
 
 The project's tools are those of its enabled processors. A stanza with
 `enabled = false` is kept precisely so its tool need not be installed, so

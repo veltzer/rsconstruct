@@ -35,7 +35,7 @@ use crate::errors;
 use crate::registries as registry;
 use variables::substitute_variables;
 
-const CONFIG_FILE: &str = "rsconstruct.toml";
+pub const CONFIG_FILE: &str = "rsconstruct.toml";
 /// Optional per-repo overlay merged over `rsconstruct.toml` at load time.
 /// Lets many repos share one canonical main config while keeping
 /// repo-specific sections (dependencies, explicit generators, excludes)

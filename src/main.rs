@@ -98,6 +98,7 @@ mod runtime_flags;
 mod stats;
 mod tables;
 mod tool_lock;
+mod tool_store;
 mod tools;
 mod watcher;
 mod webcache;
@@ -116,10 +117,13 @@ use std::time::Instant;
 fn main() -> std::process::ExitCode {
     platform::reset_sigpipe();
     // Must run before any thread exists (see platform::set_env): make
-    // user-installed gem executables and the project's own node_modules
-    // executables resolvable for tool probes and every child process.
+    // user-installed gem executables, the project's own node_modules
+    // executables and the project's tool directory resolvable for tool
+    // probes and every child process. The tool directory goes last so it
+    // ends up first: the project's locked tools win over everything else.
     tools::augment_path_with_user_gem_bins();
     tools::augment_path_with_node_modules_bin();
+    tool_store::augment_env();
 
     let (result, show_status) = run();
     let exit_code = match result {

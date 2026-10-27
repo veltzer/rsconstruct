@@ -83,10 +83,11 @@ pub struct DependenciesConfig {
     /// lock.
     #[serde(default)]
     pub python_installer: PythonInstaller,
-    /// Node.js packages installed globally with `npm install -g`, on top of
+    /// Node.js command-line packages installed into the project's tool
+    /// directory (`.rsconstruct/tools`, see `tool_store`), on top of
     /// whatever the project's own package.json declares. The manifest is
-    /// the normal home for a Node dependency; this list is for a package
-    /// that must be global.
+    /// the normal home for a Node dependency; this list is for a tool the
+    /// project does not declare there.
     #[serde(default)]
     pub npm: Vec<String>,
     /// Source of the project's Node.js package set: `"package-lock"`
@@ -94,16 +95,17 @@ pub struct DependenciesConfig {
     /// `"package-json"` resolves package.json's ranges with `npm install`.
     #[serde(default)]
     pub npm_source: NpmSource,
-    /// Ruby gems (installed via gem)
+    /// Ruby gems, installed into the project's tool directory.
     #[serde(default)]
     pub gem: Vec<String>,
-    /// Crates installed from crates.io with `cargo install --locked`, by
-    /// crate name: the cargo subcommands and other Rust-built tools the
-    /// project's build runs (`cargo-deny`, `cargo-nextest`, `mdbook`).
-    /// Bare names only — the version floats to the latest release, and
-    /// `--locked` builds each crate with its own Cargo.lock. Presence is
-    /// judged by `cargo install --list`, so a crate whose binary has a
-    /// different name (`ripgrep` → `rg`) is handled the same.
+    /// Crates from crates.io, by crate name: the cargo subcommands and
+    /// other Rust-built tools the project's build runs (`cargo-deny`,
+    /// `cargo-nextest`, `mdbook`). Installed into the project's tool
+    /// directory with `cargo install --locked`, at the version
+    /// rsconstruct.lock pins; `--locked` builds each crate with its own
+    /// Cargo.lock. Presence is judged by that directory, by crate, so a
+    /// crate whose binary has a different name (`ripgrep` → `rg`) is
+    /// handled the same.
     #[serde(default)]
     pub cargo: Vec<String>,
     /// System packages (checked via `which`, not auto-installed)

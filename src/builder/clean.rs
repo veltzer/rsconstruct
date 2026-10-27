@@ -271,8 +271,9 @@ impl Builder {
     }
 
     /// `clean all` without `-p`: remove the build output and cache
-    /// directories (.rsconstruct/ and out/) outright. With `dry_run`, name
-    /// them and remove nothing.
+    /// directories (.rsconstruct/ and out/) outright — all of .rsconstruct/
+    /// but the project's installed tools in .rsconstruct/tools/, which are
+    /// not build state. With `dry_run`, name them and remove nothing.
     pub fn distclean(&self, dry_run: bool) -> Result<()> {
         crate::output::info(&color::bold(if dry_run {
             "Would remove build directories..."
@@ -290,8 +291,12 @@ impl Builder {
                 crate::output::info(&format!("Would remove {}/", dir.display()));
                 continue;
             }
-            fs::remove_dir_all(&dir)
-                .with_context(|| format!("Failed to remove {}/ directory", dir.display()))?;
+            if dir == std::path::Path::new(".rsconstruct") {
+                crate::tool_store::clear_state_dir(&dir)?;
+            } else {
+                fs::remove_dir_all(&dir)
+                    .with_context(|| format!("Failed to remove {}/ directory", dir.display()))?;
+            }
             crate::output::info(&format!("Removed {}", dir.display()));
         }
 

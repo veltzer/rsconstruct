@@ -5,7 +5,6 @@
 //! command bodies live here; `run()` keeps only the dispatch.
 
 use anyhow::Result;
-use std::fs;
 
 use crate::builder::Builder;
 use crate::cli::CacheAction;
@@ -15,15 +14,10 @@ use crate::{checksum, color, json_output, webcache};
 pub fn handle(ctx: &crate::build_context::BuildContext, action: CacheAction) -> Result<()> {
     match action {
         CacheAction::Clear => {
-            // Delete .rsconstruct directory directly — must work even if the
-            // database is corrupted and Builder::new() would fail.
-            let rsconstruct_dir = std::path::Path::new(".rsconstruct");
-            if rsconstruct_dir.exists() {
-                crate::errors::ctx(
-                    fs::remove_dir_all(rsconstruct_dir),
-                    "Failed to remove .rsconstruct directory",
-                )?;
-            }
+            // Delete .rsconstruct directly — must work even if the database
+            // is corrupted and Builder::new() would fail. Its tools/ stays:
+            // the project's installed tools are not cache.
+            crate::tool_store::clear_state_dir(std::path::Path::new(".rsconstruct"))?;
             if json_output::is_json_mode() {
                 println!("{}", serde_json::json!({ "cleared": true }));
             } else {

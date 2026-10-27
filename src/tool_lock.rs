@@ -26,6 +26,11 @@
 //! it is an error: a lock written on a runner is never committed, so each
 //! runner would resolve its own versions. Moving locked entries to newer
 //! releases is `rsconstruct tool lock --upgrade` and nothing else.
+//!
+//! Crates, npm packages, gems and non-`.deb` binaries are installed into
+//! the project itself (see `tool_store`), so each project runs exactly its
+//! locked versions, in CI and on a developer machine alike. Python packages
+//! go into the active environment, and `.deb` binaries onto the machine.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -132,6 +137,11 @@ impl ToolLock {
         }
     }
 
+    /// The locked version of `name` under the versioned `method`.
+    pub fn version(&self, method: &str, name: &str) -> Option<&String> {
+        self.versions(method).get(&lock_key(method, name))
+    }
+
     /// `package` as an install request for `method`, pinned to its locked
     /// version: `name@1.2.3` for cargo and npm, `name==1.2.3` for pip/uv
     /// (extras kept), `name:1.2.3` for gem. Returned unchanged when the
@@ -176,6 +186,22 @@ fn is_bare(method: &str, package: &str) -> bool {
         "cargo" => !package.contains('@'),
         _ => false,
     }
+}
+
+/// A cargo, npm or gem request that names its own version (`pkg@1.2.0`,
+/// `@scope/pkg@2.0.0`, `rake:13.0`), split into name and version. None for a
+/// bare name, which the lock pins instead, and for other methods.
+pub fn split_versioned(method: &str, package: &str) -> Option<(String, String)> {
+    let (name, version) = match method {
+        "cargo" => package.split_once('@')?,
+        "npm" => match package.rfind('@') {
+            Some(i) if i > 0 => (&package[..i], &package[i + 1..]),
+            _ => return None,
+        },
+        "gem" => package.split_once(':')?,
+        _ => return None,
+    };
+    (!name.is_empty() && !version.is_empty()).then(|| (name.to_string(), version.to_string()))
 }
 
 /// Everything a project's lock must hold: the tools its configured
@@ -789,85 +815,31 @@ for n in sys.argv[1:]:
         .collect()
 }
 
-/// Globally installed npm packages and their versions. `-g`, because
-/// `[dependencies].npm` entries are installed with `npm install -g`.
-/// Shared with `doctor`.
-pub fn installed_npm_globals(ctx: &BuildContext) -> BTreeMap<String, String> {
-    let mut cmd = std::process::Command::new("npm");
-    cmd.args(["ls", "-g", "--depth=0", "--json"]);
-    // npm ls exits non-zero on any problem in the global tree while still
-    // printing it, so the exit status is not consulted.
-    let Ok(out) = crate::processor::run_command_capture(ctx, &cmd) else {
-        return BTreeMap::new();
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&out.stdout) else {
-        return BTreeMap::new();
-    };
-    json.get("dependencies")
-        .and_then(serde_json::Value::as_object)
-        .map(|deps| {
-            deps.iter()
-                .filter_map(|(name, entry)| {
-                    entry
-                        .get("version")
-                        .and_then(serde_json::Value::as_str)
-                        .map(|v| (name.clone(), v.to_string()))
-                })
-                .collect()
-        })
-        .unwrap_or_default()
+/// The installed version of a pinned `.deb` binary, as dpkg reports it.
+fn installed_deb_version(ctx: &BuildContext, package: &str) -> Option<String> {
+    let mut cmd = std::process::Command::new("dpkg-query");
+    cmd.args(["-W", "-f", "${Version}", package]);
+    let out = crate::processor::run_command_capture(ctx, &cmd).ok()?;
+    let version = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (out.status.success() && !version.is_empty()).then_some(version)
 }
 
-/// The installed versions of gem `name` (several can coexist).
-fn installed_gem_versions(ctx: &BuildContext, name: &str) -> Vec<String> {
-    let mut cmd = std::process::Command::new("gem");
-    cmd.args(["list", "--local", "--exact", name]);
-    let Ok(out) = crate::processor::run_command_capture(ctx, &cmd) else {
-        return Vec::new();
-    };
-    parse_gem_list(&String::from_utf8_lossy(&out.stdout), name)
-}
-
-/// Parse `gem list` output (`name (1.2.0, default: 1.1.0)`) into the
-/// versions installed of `name`. A native gem lists its platform after the
-/// version (`ffi (1.17.4 x86_64-linux-gnu, 1.17.3)`); only the version is
-/// kept, since that is what the lock records.
-fn parse_gem_list(listing: &str, name: &str) -> Vec<String> {
-    listing
-        .lines()
-        .find_map(|line| line.strip_prefix(name)?.trim().strip_prefix('('))
-        .and_then(|rest| rest.strip_suffix(')'))
-        .map(|versions| {
-            versions
-                .split(',')
-                .filter_map(|v| {
-                    v.trim()
-                        .trim_start_matches("default:")
-                        .split_whitespace()
-                        .next()
-                        .map(str::to_string)
-                })
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-/// What is installed for a pinned binary: the executable's SHA-256, or a
-/// `.deb`'s installed package version.
-fn installed_binary_identity(ctx: &BuildContext, name: &str, pin: &BinaryPin) -> Option<String> {
-    if let Some(package) = &pin.deb_package {
-        let mut cmd = std::process::Command::new("dpkg-query");
-        cmd.args(["-W", "-f", "${Version}", package]);
-        let out = crate::processor::run_command_capture(ctx, &cmd).ok()?;
-        let version = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        return (out.status.success() && !version.is_empty()).then_some(version);
+/// How the project's tool directory records a pinned binary: by the
+/// SHA-256 of its executable. None for a `.deb`, which is not installed
+/// there.
+pub fn binary_version(pin: &BinaryPin) -> Option<String> {
+    if pin.deb_package.is_some() {
+        return None;
     }
-    let path = which::which(crate::tools::binary_dest(name)?).ok()?;
-    crate::tools::file_sha256(&path).ok()
+    pin.executable_sha256
+        .as_ref()
+        .map(|sha| format!("sha256-{sha}"))
 }
 
 /// The locked tools among `wanted` whose installed copy is not the locked
-/// one.
+/// one. Crates, npm packages, gems and non-`.deb` binaries are judged by
+/// the project's tool directory, Python packages by the active environment,
+/// and `.deb` binaries by dpkg.
 pub fn mismatches(ctx: &BuildContext, lock: &ToolLock, wanted: &Wanted) -> Vec<Mismatch> {
     let mut found = Vec::new();
     let mut push = |method: &str, name: &str, locked: &str, installed: Option<String>| {
@@ -879,13 +851,18 @@ pub fn mismatches(ctx: &BuildContext, lock: &ToolLock, wanted: &Wanted) -> Vec<M
         });
     };
 
-    if !wanted.cargo.is_empty() {
-        let installed = crate::tools::installed_cargo_crates(ctx).unwrap_or_default();
-        for name in &wanted.cargo {
-            if let Some(locked) = lock.cargo.get(name) {
-                let have = installed.get(name);
-                if have != Some(locked) {
-                    push("cargo", name, locked, have.cloned());
+    let in_project = crate::tool_store::installed_versions(Path::new("."));
+    let project_version = |method: &str, name: &str| -> Option<String> {
+        in_project
+            .get(&(method.to_string(), name.to_string()))
+            .map(|versions| versions.join(", "))
+    };
+    for method in ["cargo", "gem", "npm"] {
+        for name in wanted.names(method) {
+            if let Some(locked) = lock.versions(method).get(name) {
+                let have = project_version(method, name);
+                if have.as_ref() != Some(locked) {
+                    push(method, name, locked, have);
                 }
             }
         }
@@ -902,43 +879,21 @@ pub fn mismatches(ctx: &BuildContext, lock: &ToolLock, wanted: &Wanted) -> Vec<M
             }
         }
     }
-    if !wanted.npm.is_empty() {
-        let installed = installed_npm_globals(ctx);
-        for name in &wanted.npm {
-            if let Some(locked) = lock.npm.get(name) {
-                let have = installed.get(name);
-                if have != Some(locked) {
-                    push("npm", name, locked, have.cloned());
-                }
-            }
-        }
-    }
-    for name in &wanted.gem {
-        if let Some(locked) = lock.gem.get(name) {
-            let have = installed_gem_versions(ctx, name);
-            if !have.contains(locked) {
-                push(
-                    "gem",
-                    name,
-                    locked,
-                    (!have.is_empty()).then(|| have.join(", ")),
-                );
-            }
-        }
-    }
     for name in &wanted.binary {
-        if let Some(pin) = lock.binary.get(name) {
-            let (locked, have) = match (&pin.deb_version, &pin.executable_sha256) {
-                (Some(version), _) => (version.clone(), installed_binary_identity(ctx, name, pin)),
-                (None, Some(sha)) => (
-                    format!("sha256 {sha}"),
-                    installed_binary_identity(ctx, name, pin).map(|s| format!("sha256 {s}")),
-                ),
-                (None, None) => continue,
-            };
-            if have.as_ref() != Some(&locked) {
-                push("binary", name, &locked, have);
+        let Some(pin) = lock.binary.get(name) else {
+            continue;
+        };
+        let (locked, have) = match (&pin.deb_package, &pin.deb_version) {
+            (Some(package), Some(version)) => {
+                (version.clone(), installed_deb_version(ctx, package))
             }
+            _ => match binary_version(pin) {
+                Some(version) => (version, project_version("binary", name)),
+                None => continue,
+            },
+        };
+        if have.as_ref() != Some(&locked) {
+            push("binary", name, &locked, have);
         }
     }
     found
@@ -1258,28 +1213,40 @@ mod tests {
     }
 
     #[test]
-    fn gem_list_parses_plain_and_default_versions() {
+    fn split_versioned_takes_explicit_versions_only() {
+        let split = |m: &str, p: &str| split_versioned(m, p);
+        let pair = |n: &str, v: &str| Some((n.to_string(), v.to_string()));
         assert_eq!(
-            parse_gem_list("mdl (0.13.0, default: 0.12.0)\n", "mdl"),
-            vec!["0.13.0", "0.12.0"]
+            split("cargo", "cargo-deny@0.18.3"),
+            pair("cargo-deny", "0.18.3")
         );
-        assert_eq!(parse_gem_list("", "mdl"), Vec::<String>::new());
-        assert_eq!(parse_gem_list("mdlx (1.0)\n", "mdl"), Vec::<String>::new());
+        assert_eq!(
+            split("npm", "@scope/tool@2.0.0"),
+            pair("@scope/tool", "2.0.0")
+        );
+        assert_eq!(split("gem", "rake:13.0"), pair("rake", "13.0"));
+        assert_eq!(split("npm", "@scope/tool"), None);
+        assert_eq!(split("cargo", "cargo-deny"), None);
+        assert_eq!(split("pip", "ruff==0.1"), None);
     }
 
-    /// A native gem's platform follows the version inside the parentheses.
-    /// Keeping it made the drift check report `1.17.4 x86_64-linux-gnu`
-    /// against a `1.17.4` pin as a mismatch.
+    /// A non-`.deb` binary is recorded by its executable's hash; a `.deb`
+    /// is not installed into the project at all.
     #[test]
-    fn gem_list_drops_platform_suffixes() {
+    fn binary_version_is_the_executable_hash() {
+        let lock = sample_lock();
         assert_eq!(
-            parse_gem_list("ffi (1.17.4 x86_64-linux-gnu, 1.17.3)\n", "ffi"),
-            vec!["1.17.4", "1.17.3"]
+            binary_version(&lock.binary["rumdl"]).as_deref(),
+            Some("sha256-bb")
         );
-        assert_eq!(
-            parse_gem_list("ffi (default: 1.17.4 x86_64-linux-gnu)\n", "ffi"),
-            vec!["1.17.4"]
-        );
+        let deb = BinaryPin {
+            url: "https://example.com/x.deb".to_string(),
+            sha256: "aa".to_string(),
+            executable_sha256: None,
+            deb_package: Some("x".to_string()),
+            deb_version: Some("1.0".to_string()),
+        };
+        assert_eq!(binary_version(&deb), None);
     }
 
     /// A lockfile owns its packages only when install-deps installs from
